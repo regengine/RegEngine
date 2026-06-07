@@ -31,22 +31,22 @@ import hmac
 import json
 import os
 import re
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from .database import get_session
-from .dependencies import get_current_user
-from .sqlalchemy_models import AuditLogModel, UserModel, MembershipModel
-from .models import TenantContext
 from .audit import AuditLogger
 from .audit_integrity import verify_chain
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import AuditLogModel, MembershipModel, UserModel
 
 logger = structlog.get_logger("audit_export")
 
@@ -56,9 +56,7 @@ router = APIRouter(prefix="/v1/audit", tags=["audit"])
 # Purpose values are an enum on the request boundary so we can log /
 # aggregate them. Adding a value here is intentional: it defines the
 # compliance justifications ops must review during export-log audits.
-_ALLOWED_EXPORT_PURPOSES = frozenset(
-    {"compliance_investigation", "security_incident", "user_request"}
-)
+_ALLOWED_EXPORT_PURPOSES = frozenset({"compliance_investigation", "security_incident", "user_request"})
 
 _ANONYMIZATION_MARKER_ACTION = "gdpr_anonymize_user"
 _ANONYMIZATION_MARKER_KIND = "per_user_anonymization_order"
@@ -88,9 +86,7 @@ _PII_KEY_SUBSTRINGS = frozenset(
 )
 _SECRET_KEY_SUBSTRINGS = frozenset({"password", "secret", "token"})
 _EMAIL_PATTERN = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w.-]+\.[A-Za-z]{2,}")
-_PHONE_PATTERN = re.compile(
-    r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)"
-)
+_PHONE_PATTERN = re.compile(r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)")
 
 
 def _mask_identifier(value: Any) -> Optional[str]:
@@ -149,9 +145,7 @@ def _redact_metadata_value(value: Any, *, force: bool = False) -> Any:
             if key_is_pii and _metadata_key_is_secret(key):
                 redacted[key] = _PII_REDACTION
             else:
-                redacted[key] = _redact_metadata_value(
-                    nested_value, force=force or key_is_pii
-                )
+                redacted[key] = _redact_metadata_value(nested_value, force=force or key_is_pii)
         return redacted
     if isinstance(value, list):
         return [_redact_metadata_value(item, force=force) for item in value]
@@ -162,9 +156,7 @@ def _redact_metadata_value(value: Any, *, force: bool = False) -> Any:
             return _mask_identifier(value)
         return _PII_REDACTION
     if isinstance(value, str):
-        redacted = _EMAIL_PATTERN.sub(
-            lambda match: _mask_email(match.group(0)) or "", value
-        )
+        redacted = _EMAIL_PATTERN.sub(lambda match: _mask_email(match.group(0)) or "", value)
         return _PHONE_PATTERN.sub(_PII_REDACTION, redacted)
     return value
 
@@ -184,31 +176,19 @@ def _collect_anonymized_actor_ids(rows: list[Any], tenant_id: UUID) -> set[str]:
         raw_details = metadata.get("details")
         details = raw_details if isinstance(raw_details, dict) else {}
         marker_payloads = (metadata, details)
-        is_marker = (
-            getattr(row, "action", None) == _ANONYMIZATION_MARKER_ACTION
-            or any(
-                payload.get("marker_kind") == _ANONYMIZATION_MARKER_KIND
-                for payload in marker_payloads
-            )
+        is_marker = getattr(row, "action", None) == _ANONYMIZATION_MARKER_ACTION or any(
+            payload.get("marker_kind") == _ANONYMIZATION_MARKER_KIND for payload in marker_payloads
         )
         if not is_marker:
             continue
         redacted_tenant_id = next(
-            (
-                payload.get("redacted_tenant_id")
-                for payload in marker_payloads
-                if payload.get("redacted_tenant_id")
-            ),
+            (payload.get("redacted_tenant_id") for payload in marker_payloads if payload.get("redacted_tenant_id")),
             None,
         )
         if redacted_tenant_id and str(redacted_tenant_id) != tenant_text:
             continue
         redacted_user_id = next(
-            (
-                payload.get("redacted_user_id")
-                for payload in marker_payloads
-                if payload.get("redacted_user_id")
-            ),
+            (payload.get("redacted_user_id") for payload in marker_payloads if payload.get("redacted_user_id")),
             None,
         )
         redacted_user_id = redacted_user_id or getattr(row, "resource_id", None)
@@ -257,9 +237,7 @@ def _export_resource_id(row: Any, anonymized_actor_ids: set[str]) -> Any:
     return resource_id
 
 
-def _caller_has_pii_export_permission(
-    user: UserModel, db: Session, tenant_id: UUID
-) -> bool:
+def _caller_has_pii_export_permission(user: UserModel, db: Session, tenant_id: UUID) -> bool:
     """Return True when the caller's role includes ``audit.export.pii``.
 
     Sysadmins bypass the role check. For non-sysadmins we look at the
@@ -289,6 +267,7 @@ def _caller_has_pii_export_permission(
 
 class AuditExportResponse(BaseModel):
     """Response for audit log export endpoint."""
+
     export: dict[str, Any]
     entries: list[dict[str, Any]]
     integrity: dict[str, Any]
@@ -307,18 +286,12 @@ def export_audit_logs(
             "can audit the auditor. (#1385)"
         ),
     ),
-    start: Optional[str] = Query(
-        None, description="Start of time range (ISO 8601). Defaults to 30 days ago."
-    ),
-    end: Optional[str] = Query(
-        None, description="End of time range (ISO 8601). Defaults to now."
-    ),
+    start: Optional[str] = Query(None, description="Start of time range (ISO 8601). Defaults to 30 days ago."),
+    end: Optional[str] = Query(None, description="End of time range (ISO 8601). Defaults to now."),
     event_category: Optional[str] = Query(None, description="Filter by category"),
     severity: Optional[str] = Query(None, description="Filter by minimum severity"),
     limit: int = Query(10000, le=50000, description="Max records to return"),
-    include_verification: bool = Query(
-        False, description="Run chain verification and include results"
-    ),
+    include_verification: bool = Query(False, description="Run chain verification and include results"),
     include_pii: bool = Query(
         False,
         description=(
@@ -350,10 +323,7 @@ def export_audit_logs(
     if purpose not in _ALLOWED_EXPORT_PURPOSES:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid purpose. Must be one of: "
-                + ", ".join(sorted(_ALLOWED_EXPORT_PURPOSES))
-            ),
+            detail=("Invalid purpose. Must be one of: " + ", ".join(sorted(_ALLOWED_EXPORT_PURPOSES))),
         )
 
     # Get tenant context from RLS session
@@ -363,9 +333,7 @@ def export_audit_logs(
 
     # Decide PII mode. include_pii=True + permission -> raw PII.
     # Anything else -> masked.
-    caller_has_pii_perm = _caller_has_pii_export_permission(
-        current_user, db, tenant_id
-    )
+    caller_has_pii_perm = _caller_has_pii_export_permission(current_user, db, tenant_id)
     pii_mode_requested = bool(include_pii)
     raw_pii_allowed = pii_mode_requested and caller_has_pii_perm
     if pii_mode_requested and not caller_has_pii_perm:
@@ -381,10 +349,7 @@ def export_audit_logs(
         end_dt = datetime.fromisoformat(end) if end else now
         start_dt = datetime.fromisoformat(start) if start else (end_dt - timedelta(days=30))
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid date format. Use ISO 8601 (e.g., 2026-01-01T00:00:00Z)"
-        )
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO 8601 (e.g., 2026-01-01T00:00:00Z)")
 
     # Build query
     conditions = [
@@ -397,8 +362,7 @@ def export_audit_logs(
         valid_categories = {"auth", "data", "admin", "system", "api"}
         if event_category not in valid_categories:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid event_category. Must be one of: {', '.join(valid_categories)}"
+                status_code=400, detail=f"Invalid event_category. Must be one of: {', '.join(valid_categories)}"
             )
         conditions.append(AuditLogModel.event_category == event_category)
 
@@ -407,18 +371,12 @@ def export_audit_logs(
         min_level = severity_levels.get(severity)
         if min_level is None:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid severity. Must be one of: {', '.join(severity_levels.keys())}"
+                status_code=400, detail=f"Invalid severity. Must be one of: {', '.join(severity_levels.keys())}"
             )
         allowed = [k for k, v in severity_levels.items() if v <= min_level]
         conditions.append(AuditLogModel.severity.in_(allowed))
 
-    stmt = (
-        select(AuditLogModel)
-        .where(and_(*conditions))
-        .order_by(AuditLogModel.id.asc())
-        .limit(limit)
-    )
+    stmt = select(AuditLogModel).where(and_(*conditions)).order_by(AuditLogModel.id.asc()).limit(limit)
     rows = db.execute(stmt).scalars().all()
 
     anonymized_actor_ids = _load_anonymized_actor_ids(db, tenant_id, rows)
@@ -454,9 +412,7 @@ def export_audit_logs(
                     "user_agent": actor_ua,
                     "pii_masked": not show_raw_pii,
                     "anonymized_at": (
-                        row.anonymized_at.isoformat()
-                        if row_anonymized and hasattr(row, "anonymized_at")
-                        else None
+                        row.anonymized_at.isoformat() if row_anonymized and hasattr(row, "anonymized_at") else None
                     ),
                 },
                 "event": {

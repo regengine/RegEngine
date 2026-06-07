@@ -6,14 +6,14 @@ Supports: SOC2, ISO27001, NIST CSF, PCI-DSS, and more
 
 import asyncio
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add app to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.neo4j_utils import Neo4jClient
 import structlog
+from app.neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("graph-loader")
 
@@ -173,7 +173,7 @@ FRAMEWORKS = {
 async def load_framework(session, name: str, data: dict):
     """Load a single framework and its controls"""
     logger.info("loading_framework", framework=name)
-    
+
     try:
         # Create framework node
         await session.run(
@@ -189,7 +189,7 @@ async def load_framework(session, name: str, data: dict):
             category=data["category"],
             description=data["description"],
         )
-        
+
         # Create control nodes and relationships
         for control in data["controls"]:
             await session.run(
@@ -207,13 +207,9 @@ async def load_framework(session, name: str, data: dict):
                 description=control.get("description", ""),
                 effort_hours=control.get("effort_hours", 4.0),
             )
-        
-        logger.info(
-            "framework_loaded",
-            framework=name,
-            controls=len(data["controls"])
-        )
-        
+
+        logger.info("framework_loaded", framework=name, controls=len(data["controls"]))
+
     except Exception as exc:
         logger.exception("framework_load_failed", framework=name, error=str(exc))
         raise
@@ -224,10 +220,10 @@ async def create_relationships():
     client = None
     try:
         client = Neo4jClient(database=Neo4jClient.get_global_database_name())
-        
+
         async with client.session() as session:
             logger.info("creating_relationships")
-            
+
             # Create MAPS_TO relationships for frameworks with >20% overlap
             await session.run("""
                 MATCH (f1:Framework)-[:HAS_CONTROL]->(c1:Control)
@@ -245,9 +241,9 @@ async def create_relationships():
                     r.last_updated = datetime()
                 RETURN f1.name, f2.name, overlap, strength
             """)
-            
+
             logger.info("relationships_created")
-            
+
     except Exception as exc:
         logger.exception("relationship_creation_failed", error=str(exc))
         raise
@@ -261,45 +257,41 @@ async def verify_load():
     client = None
     try:
         client = Neo4jClient(database=Neo4jClient.get_global_database_name())
-        
+
         async with client.session() as session:
             # Count frameworks
             result = await session.run("MATCH (f:Framework) RETURN count(f) as count")
             data = await result.single()
             framework_count = data["count"]
-            
+
             # Count controls
             result = await session.run("MATCH (c:Control) RETURN count(c) as count")
             data = await result.single()
             control_count = data["count"]
-            
+
             # Count relationships
-            result = await session.run(
-                "MATCH (:Framework)-[r:HAS_CONTROL]->(:Control) RETURN count(r) as count"
-            )
+            result = await session.run("MATCH (:Framework)-[r:HAS_CONTROL]->(:Control) RETURN count(r) as count")
             data = await result.single()
             has_control_count = data["count"]
-            
-            result = await session.run(
-                "MATCH (:Framework)-[r:MAPS_TO]->(:Framework) RETURN count(r) as count"
-            )
+
+            result = await session.run("MATCH (:Framework)-[r:MAPS_TO]->(:Framework) RETURN count(r) as count")
             data = await result.single()
             maps_to_count = data["count"]
-            
+
             logger.info(
                 "load_verified",
                 frameworks=framework_count,
                 controls=control_count,
                 has_control=has_control_count,
-                maps_to=maps_to_count
+                maps_to=maps_to_count,
             )
-            
+
             print(f"\n✅ Load verification:")
             print(f"   Frameworks: {framework_count}")
             print(f"   Controls: {control_count}")
             print(f"   HAS_CONTROL relationships: {has_control_count}")
             print(f"   MAPS_TO relationships: {maps_to_count}")
-            
+
     except Exception as exc:
         logger.exception("verification_failed", error=str(exc))
         raise
@@ -312,29 +304,29 @@ async def main():
     """Main loading function"""
     logger.info("framework_loading_starting", frameworks=len(FRAMEWORKS))
     print(f"\n📊 Loading {len(FRAMEWORKS)} compliance frameworks...")
-    
+
     client = None
     try:
         client = Neo4jClient(database=Neo4jClient.get_global_database_name())
-        
+
         async with client.session() as session:
             for name, data in FRAMEWORKS.items():
                 await load_framework(session, name, data)
                 print(f"   ✅ {name}")
-        
+
         await client.close()
-        
+
         # Create relationships
         print("\n🔗 Creating framework relationships...")
         await create_relationships()
-        
+
         # Verify
         await verify_load()
-        
+
         logger.info("framework_loading_complete")
         print("\n✅ All frameworks loaded successfully!")
         print("   Next step: Start the Graph service with 'uvicorn app.main:app --reload --port 8003'")
-        
+
     except Exception as exc:
         logger.exception("loading_failed", error=str(exc))
         print(f"\n❌ Loading failed: {exc}")

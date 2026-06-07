@@ -16,18 +16,25 @@ class TestExtractFsmaFacts:
     @pytest.mark.parametrize(
         "month",
         [
-            "January", "February", "March", "April",
-            "May", "June", "July", "August",
-            "September", "October", "November", "December",
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
         ],
     )
     def test_fsma_facts_all_months(self, month):
         """Every calendar month must be matched when compliance context is present."""
         text = f"The compliance date is {month} 15, 2026 per FDA enforcement guidance."
         facts = extract_fsma_facts(text)
-        assert any(
-            f["type"] == "REGULATORY_DATE" for f in facts
-        ), f"REGULATORY_DATE not extracted for {month}"
+        assert any(f["type"] == "REGULATORY_DATE" for f in facts), f"REGULATORY_DATE not extracted for {month}"
 
     def test_fsma_facts_january_and_july_still_work(self):
         """Original January/July dates must continue to match."""

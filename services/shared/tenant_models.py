@@ -152,7 +152,9 @@ class CustomerProduct(BaseModel):
     product_name: str = Field(..., min_length=1, max_length=200)
     description: str = Field(..., min_length=1)
     product_type: ProductType
-    jurisdictions: list[str] = Field(..., min_length=1, description="Jurisdictions where product operates (e.g., US, EU, UK)")
+    jurisdictions: list[str] = Field(
+        ..., min_length=1, description="Jurisdictions where product operates (e.g., US, EU, UK)"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: Optional[UUID] = None

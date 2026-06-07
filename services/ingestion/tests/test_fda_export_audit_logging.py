@@ -36,7 +36,6 @@ from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export.queries import AuditLogWriteError, log_recall_export
 from app.fda_export.router import router as fda_router
 
-
 # ---------------------------------------------------------------------------
 # Fakes lifted from the existing test_fda_export_router.py suite, extended
 # with log_export call capture.
@@ -187,6 +186,7 @@ def unauthed_client(monkeypatch):
 # #1205 — audit trail identity + timestamp
 # ---------------------------------------------------------------------------
 
+
 def test_1205_export_captures_user_id_in_log_export_call(authed_client):
     """The persistence.log_export call must carry the authenticated
     user's key_id in ``generated_by`` and the structured logger line
@@ -244,18 +244,13 @@ def test_1205_emits_structured_audit_log_line(authed_client, caplog):
         headers={"X-Request-ID": "req-42", "User-Agent": "pytest-test/1.0"},
     )
     assert resp.status_code == 200
-    audit_records = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_audit"
-    ]
+    audit_records = [r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_audit"]
     assert audit_records, "expected an fda_export_audit structured log line"
     rec = audit_records[0]
     assert getattr(rec, "user_id", None) == "test-user-key-abc123"
     assert getattr(rec, "request_id", None) == "req-42"
     assert getattr(rec, "user_agent", None) == "pytest-test/1.0"
-    assert getattr(rec, "initiated_at_utc", "").startswith("20"), (
-        "initiated_at_utc must be ISO-8601 UTC"
-    )
+    assert getattr(rec, "initiated_at_utc", "").startswith("20"), "initiated_at_utc must be ISO-8601 UTC"
     assert getattr(rec, "export_hash", None)
     assert getattr(rec, "filters_applied", {}).get("tlc") == "TLC-2026-001"
 
@@ -263,6 +258,7 @@ def test_1205_emits_structured_audit_log_line(authed_client, caplog):
 # ---------------------------------------------------------------------------
 # #1209 — recall export filter enforcement
 # ---------------------------------------------------------------------------
+
 
 def test_1209_recall_export_rejects_end_date_only(authed_client):
     """A recall request with only ``end_date`` must return 400, not a
@@ -345,6 +341,7 @@ def test_1209_recall_export_accepts_identifier_plus_date_range(authed_client):
 # #1222 — KDE coverage gate
 # ---------------------------------------------------------------------------
 
+
 def test_1222_coverage_below_threshold_returns_409_without_bypass(authed_client):
     """The fixtures' sample event has ship_to_location missing, which
     puts KDE coverage below the 80% threshold. A request without
@@ -383,8 +380,7 @@ def test_1222_coverage_bypass_allowed_with_explicit_flag(authed_client, caplog):
     )
     assert resp.status_code == 200
     bypass_records = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_coverage_gate_bypass"
+        r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_coverage_gate_bypass"
     ]
     assert bypass_records, "expected a coverage_gate_bypass WARNING"
     rec = bypass_records[0]
@@ -395,6 +391,7 @@ def test_1222_coverage_bypass_allowed_with_explicit_flag(authed_client, caplog):
 # ---------------------------------------------------------------------------
 # #1215 — log_recall_export no longer swallows exceptions
 # ---------------------------------------------------------------------------
+
 
 def test_1215_log_recall_export_raises_audit_log_write_error():
     """Direct-call: a simulated DB outage must raise

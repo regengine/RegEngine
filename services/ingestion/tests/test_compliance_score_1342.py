@@ -32,10 +32,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import OperationalError, ProgrammingError
-
 from app import compliance_score as cs
 from app.compliance_score import (
     ComplianceScoreResponse,
@@ -47,7 +43,9 @@ from app.compliance_score import (
     _query_scoring_data,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -59,7 +57,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     bypass = lambda: None
     app.dependency_overrides[_verify_api_key] = bypass
     install_tenant_context_override(app, default_tenant="11111111-1111-1111-1111-111111111111")
@@ -134,13 +134,26 @@ class _RouteSession:
 
 
 class TestComputeGrade:
-    @pytest.mark.parametrize("score,expected", [
-        (100, "A"), (95, "A"), (90, "A"),
-        (89, "B"), (85, "B"), (80, "B"),
-        (79, "C"), (75, "C"), (70, "C"),
-        (69, "D"), (65, "D"), (60, "D"),
-        (59, "F"), (10, "F"), (0, "F"),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected",
+        [
+            (100, "A"),
+            (95, "A"),
+            (90, "A"),
+            (89, "B"),
+            (85, "B"),
+            (80, "B"),
+            (79, "C"),
+            (75, "C"),
+            (70, "C"),
+            (69, "D"),
+            (65, "D"),
+            (60, "D"),
+            (59, "F"),
+            (10, "F"),
+            (0, "F"),
+        ],
+    )
     def test_boundaries(self, score, expected):
         assert _compute_grade(score) == expected
 
@@ -192,51 +205,69 @@ class TestComputeScoresChainIntegrity:
         assert "All entries verified" in scores["chain_integrity"][1]
 
     def test_verification_failed_with_errors(self):
-        scores = _compute_scores(_base_data(
-            chain_verified=False,
-            chain_verification_errors=["block 3 hash mismatch", "block 7 bad link"],
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=False,
+                chain_verification_errors=["block 3 hash mismatch", "block 7 bad link"],
+            )
+        )
         # 2 errors × 25 = 50 penalty → score 50
         assert scores["chain_integrity"][0] == 50
         assert "TAMPER DETECTED" in scores["chain_integrity"][1]
         assert "block 3 hash mismatch" in scores["chain_integrity"][1]
 
     def test_verification_failed_no_error_detail(self):
-        scores = _compute_scores(_base_data(
-            chain_verified=False,
-            chain_verification_errors=[],
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=False,
+                chain_verification_errors=[],
+            )
+        )
         # 0 errors → 0 penalty, but "TAMPER DETECTED" still appears
         assert scores["chain_integrity"][0] == 100
         assert "TAMPER DETECTED" in scores["chain_integrity"][1]
 
     def test_verification_failed_penalty_capped(self):
         # 20 errors × 25 = 500, capped at 100
-        scores = _compute_scores(_base_data(
-            chain_verified=False,
-            chain_verification_errors=["e"] * 20,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=False,
+                chain_verification_errors=["e"] * 20,
+            )
+        )
         assert scores["chain_integrity"][0] == 0
 
     def test_unknown_verify_with_gaps(self):
-        scores = _compute_scores(_base_data(
-            chain_verified=None, chain_gaps=3, chain_length=10,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=None,
+                chain_gaps=3,
+                chain_length=10,
+            )
+        )
         # 3 × 10 = 30 penalty → 70
         assert scores["chain_integrity"][0] == 70
         assert "3 gap" in scores["chain_integrity"][1]
 
     def test_unknown_verify_capped_gap_penalty(self):
-        scores = _compute_scores(_base_data(
-            chain_verified=None, chain_gaps=50, chain_length=100,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=None,
+                chain_gaps=50,
+                chain_length=100,
+            )
+        )
         # penalty capped at 50 → score 50
         assert scores["chain_integrity"][0] == 50
 
     def test_unknown_verify_no_gaps(self):
-        scores = _compute_scores(_base_data(
-            chain_verified=None, chain_gaps=0, chain_length=10,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=None,
+                chain_gaps=0,
+                chain_length=10,
+            )
+        )
         # pending crypto verification → 90
         assert scores["chain_integrity"][0] == 90
         assert "pending" in scores["chain_integrity"][1]
@@ -260,17 +291,27 @@ class TestComputeScoresKdeCompleteness:
         assert "4 blank" in scores["kde_completeness"][1]
 
     def test_all_filled_with_time_penalty(self):
-        scores = _compute_scores(_base_data(
-            total_kdes=10, filled_kdes=10, events_missing_time=5, event_count=10,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_kdes=10,
+                filled_kdes=10,
+                events_missing_time=5,
+                event_count=10,
+            )
+        )
         # kde_score=100, time_penalty=min(10, int(5/10*10))=5 → 95
         assert scores["kde_completeness"][0] == 95
         assert "5 events lack precise time" in scores["kde_completeness"][1]
 
     def test_partial_with_time_penalty(self):
-        scores = _compute_scores(_base_data(
-            total_kdes=10, filled_kdes=8, events_missing_time=10, event_count=10,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_kdes=10,
+                filled_kdes=8,
+                events_missing_time=10,
+                event_count=10,
+            )
+        )
         # kde_score=80, time_penalty=min(10, int(10/10*10))=10 → 70
         assert scores["kde_completeness"][0] == 70
 
@@ -282,40 +323,48 @@ class TestComputeScoresCteCompleteness:
         assert "No CTEs tracked" in scores["cte_completeness"][1]
 
     def test_partial_fallback_seven(self):
-        scores = _compute_scores(_base_data(
-            distinct_cte_types=5,
-            missing_cte_types=["initial_packing", "first_land_based_receiving"],
-            active_cte_types=None,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                distinct_cte_types=5,
+                missing_cte_types=["initial_packing", "first_land_based_receiving"],
+                active_cte_types=None,
+            )
+        )
         # 5/7 = 71
         assert scores["cte_completeness"][0] == 71
         assert "5/7" in scores["cte_completeness"][1]
         assert "first_land_based_receiving" in scores["cte_completeness"][1]
 
     def test_all_tracked_with_default_seven(self):
-        scores = _compute_scores(_base_data(
-            distinct_cte_types=7,
-            missing_cte_types=[],
-            active_cte_types=None,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                distinct_cte_types=7,
+                missing_cte_types=[],
+                active_cte_types=None,
+            )
+        )
         assert scores["cte_completeness"][0] == 100
         assert "All 7 CTE types" in scores["cte_completeness"][1]
 
     def test_active_cte_types_override(self):
         """Tenant with only 3 active CTE types scores 100% at 3/3."""
-        scores = _compute_scores(_base_data(
-            distinct_cte_types=3,
-            missing_cte_types=[],
-            active_cte_types=["receiving", "shipping", "transformation"],
-        ))
+        scores = _compute_scores(
+            _base_data(
+                distinct_cte_types=3,
+                missing_cte_types=[],
+                active_cte_types=["receiving", "shipping", "transformation"],
+            )
+        )
         assert scores["cte_completeness"][0] == 100
 
     def test_active_cte_types_partial(self):
-        scores = _compute_scores(_base_data(
-            distinct_cte_types=2,
-            missing_cte_types=["transformation"],
-            active_cte_types=["receiving", "shipping", "transformation"],
-        ))
+        scores = _compute_scores(
+            _base_data(
+                distinct_cte_types=2,
+                missing_cte_types=["transformation"],
+                active_cte_types=["receiving", "shipping", "transformation"],
+            )
+        )
         # 2/3 = 66
         assert scores["cte_completeness"][0] == 66
         assert "2/3" in scores["cte_completeness"][1]
@@ -354,35 +403,47 @@ class TestComputeScoresObligationCoverage:
         assert "seed regulatory data" in scores["obligation_coverage"][1]
 
     def test_full_coverage_no_alerts(self):
-        scores = _compute_scores(_base_data(
-            total_obligation_rules=10, applicable_obligation_rules=10,
-            open_obligation_alerts=0,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_obligation_rules=10,
+                applicable_obligation_rules=10,
+                open_obligation_alerts=0,
+            )
+        )
         # 10/10*80 = 80 + 20 bonus = 100
         assert scores["obligation_coverage"][0] == 100
 
     def test_full_coverage_with_alerts(self):
-        scores = _compute_scores(_base_data(
-            total_obligation_rules=10, applicable_obligation_rules=10,
-            open_obligation_alerts=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_obligation_rules=10,
+                applicable_obligation_rules=10,
+                open_obligation_alerts=5,
+            )
+        )
         # 10/10*80 = 80 - min(5*3, 30) = 80 - 15 = 65
         assert scores["obligation_coverage"][0] == 65
         assert "5 open compliance alert" in scores["obligation_coverage"][1]
 
     def test_partial_coverage_alert_cap(self):
-        scores = _compute_scores(_base_data(
-            total_obligation_rules=10, applicable_obligation_rules=5,
-            open_obligation_alerts=20,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_obligation_rules=10,
+                applicable_obligation_rules=5,
+                open_obligation_alerts=20,
+            )
+        )
         # 5/10*80 = 40 - min(20*3, 30) = 40 - 30 = 10
         assert scores["obligation_coverage"][0] == 10
 
     def test_partial_no_alerts_bonus(self):
-        scores = _compute_scores(_base_data(
-            total_obligation_rules=10, applicable_obligation_rules=5,
-            open_obligation_alerts=0,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                total_obligation_rules=10,
+                applicable_obligation_rules=5,
+                open_obligation_alerts=0,
+            )
+        )
         # 5/10*80 = 40 + 20 = 60
         assert scores["obligation_coverage"][0] == 60
 
@@ -394,108 +455,139 @@ class TestComputeScoresExportReadiness:
         assert "no data" in scores["export_readiness"][1]
 
     def test_fully_ready(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=True,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=True,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=5,
+            )
+        )
         # 40 (verified) + 30 (kde) + 30 (≥3 CTEs) = 100
         assert scores["export_readiness"][0] == 100
         assert "FDA export ready" in scores["export_readiness"][1]
 
     def test_chain_not_verified_but_intact(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=None,  # verification couldn't run
-            chain_length=10, chain_gaps=0,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=None,  # verification couldn't run
+                chain_length=10,
+                chain_gaps=0,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=5,
+            )
+        )
         # 30 + 30 + 30 = 90 — score ≥80 so "FDA export ready" wins
         assert scores["export_readiness"][0] == 90
         assert "FDA export ready" in scores["export_readiness"][1]
 
     def test_chain_not_verified_surfaces_issue_when_below_80(self):
         """When score <80, the chain-unverified issue surfaces in the detail."""
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=None,
-            chain_length=10, chain_gaps=0,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=2,  # +15, pulls total below 80
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=None,
+                chain_length=10,
+                chain_gaps=0,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=2,  # +15, pulls total below 80
+            )
+        )
         # 30 + 30 + 15 = 75
         assert scores["export_readiness"][0] == 75
         assert "chain not cryptographically verified" in scores["export_readiness"][1]
         assert "limited CTE coverage" in scores["export_readiness"][1]
 
     def test_no_chain_integrity(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=None,
-            chain_length=0, chain_gaps=0,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=None,
+                chain_length=0,
+                chain_gaps=0,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=5,
+            )
+        )
         # 0 (chain) + 30 + 30 = 60 → fails "FDA export ready"
         assert scores["export_readiness"][0] == 60
         assert "chain integrity" in scores["export_readiness"][1]
 
     def test_kde_gap_flagged(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=True,
-            total_kdes=10, filled_kdes=5,  # 0.5 ratio
-            distinct_cte_types=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=True,
+                total_kdes=10,
+                filled_kdes=5,  # 0.5 ratio
+                distinct_cte_types=5,
+            )
+        )
         # 40 + int(0.5*30)=15 + 30 = 85
         assert scores["export_readiness"][0] == 85
         # export_score=85 >= 80 so "FDA export ready" wins (edge case)
         # Actually detail = "FDA export ready" when score >= 80 even if KDE gap noted
 
     def test_kde_gap_sub_80(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=None,
-            chain_length=10, chain_gaps=0,
-            total_kdes=10, filled_kdes=3,  # 0.3 → 9 pts
-            distinct_cte_types=2,  # 15 pts
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=None,
+                chain_length=10,
+                chain_gaps=0,
+                total_kdes=10,
+                filled_kdes=3,  # 0.3 → 9 pts
+                distinct_cte_types=2,  # 15 pts
+            )
+        )
         # 30 + 9 + 15 = 54
         assert scores["export_readiness"][0] == 54
         assert "KDE gaps" in scores["export_readiness"][1]
         assert "limited CTE coverage" in scores["export_readiness"][1]
 
     def test_no_kdes(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=True,
-            total_kdes=0, filled_kdes=0,
-            distinct_cte_types=5,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=True,
+                total_kdes=0,
+                filled_kdes=0,
+                distinct_cte_types=5,
+            )
+        )
         # 40 + 0 + 30 = 70
         assert scores["export_readiness"][0] == 70
         assert "no KDEs" in scores["export_readiness"][1]
 
     def test_no_cte_types(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=True,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=0,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=True,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=0,
+            )
+        )
         # 40 + 30 + 0 = 70
         assert scores["export_readiness"][0] == 70
         assert "no CTE types" in scores["export_readiness"][1]
 
     def test_limited_cte_coverage(self):
-        scores = _compute_scores(_base_data(
-            event_count=10,
-            chain_verified=True,
-            total_kdes=10, filled_kdes=10,
-            distinct_cte_types=1,
-        ))
+        scores = _compute_scores(
+            _base_data(
+                event_count=10,
+                chain_verified=True,
+                total_kdes=10,
+                filled_kdes=10,
+                distinct_cte_types=1,
+            )
+        )
         # 40 + 30 + 15 = 85
         assert scores["export_readiness"][0] == 85
 
@@ -629,22 +721,35 @@ class TestQueryScoringDataHappyPath:
                 "obligation_cte_rules ocr": _row(["harvesting", "cooling", "shipping"]),
                 "fsma.cte_kdes": _row(50, 45),
                 "fsma.hash_chain\n            WHERE": _row(10, 10, "abc123"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(2,),
-                "FROM obligations WHERE tenant_id": _row(3,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    2,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    3,
+                ),
                 "checkable_rules AS": _row(8, 10),
-                "fsma.compliance_alerts": _row(1,),
-                "food_traceability_list": _row(20,),
+                "fsma.compliance_alerts": _row(
+                    1,
+                ),
+                "food_traceability_list": _row(
+                    20,
+                ),
             },
         )
 
         # Stub CTEPersistence.verify_chain
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -652,7 +757,11 @@ class TestQueryScoringDataHappyPath:
         assert data["event_count"] == 10
         assert data["distinct_cte_types"] == 5
         assert set(data["cte_types_present"]) == {
-            "harvesting", "cooling", "shipping", "receiving", "transformation",
+            "harvesting",
+            "cooling",
+            "shipping",
+            "receiving",
+            "transformation",
         }
         assert set(data["missing_cte_types"]) == {"initial_packing", "first_land_based_receiving"}
         assert data["active_cte_types"] == ["harvesting", "cooling", "shipping"]
@@ -674,20 +783,29 @@ class TestQueryScoringDataHappyPath:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(0, 0, None),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(0, 0),
                 "fsma.hash_chain\n            WHERE": _row(0, None, None),
-                "FROM obligations WHERE tenant_id": _row(0,),
-                "food_traceability_list": _row(0,),
+                "FROM obligations WHERE tenant_id": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    0,
+                ),
             },
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -702,27 +820,38 @@ class TestQueryScoringDataDegrades:
     def test_active_cte_types_query_fails(self, monkeypatch):
         session = _RouteSession(
             route={
-                "fsma.cte_events\n            WHERE": _row(
-                    5, 3, ["harvesting", "cooling", "shipping"]
-                ),
+                "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting", "cooling", "shipping"]),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
             raise_on={"obligation_cte_rules ocr": ProgrammingError("x", None, Exception())},
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -736,25 +865,41 @@ class TestQueryScoringDataDegrades:
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
             raise_on={"obligation_cte_rules ocr": ProgrammingError("x", None, Exception())},
         )
+
         # Make rollback itself raise
         def _bad_rollback():
             raise RuntimeError("rollback failed")
+
         session.rollback = _bad_rollback  # type: ignore
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -764,14 +909,24 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
             raise_on={
                 "FROM obligations WHERE tenant_id": OperationalError("x", None, Exception()),
@@ -779,10 +934,14 @@ class TestQueryScoringDataDegrades:
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -792,23 +951,39 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
             raise_on={"checkable_rules AS": OperationalError("x", None, Exception())},
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -819,23 +994,37 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "food_traceability_list": _row(10,),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
             raise_on={"fsma.compliance_alerts": OperationalError("x", None, Exception())},
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -845,23 +1034,37 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
             },
             raise_on={"food_traceability_list": OperationalError("x", None, Exception())},
         )
 
         class _FakePersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, errors=[])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FakePersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -871,23 +1074,39 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
         )
 
         class _BadPersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 raise OperationalError("fail", None, Exception())
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _BadPersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -899,19 +1118,32 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
         )
 
         import builtins
+
         real_import = builtins.__import__
 
         def _bad_import(name, *a, **kw):
@@ -927,23 +1159,39 @@ class TestQueryScoringDataDegrades:
         session = _RouteSession(
             route={
                 "fsma.cte_events\n            WHERE": _row(5, 3, ["harvesting"]),
-                "obligation_cte_rules ocr": _row(None,),
+                "obligation_cte_rules ocr": _row(
+                    None,
+                ),
                 "fsma.cte_kdes": _row(10, 10),
                 "fsma.hash_chain\n            WHERE": _row(5, 5, "x"),
-                "LAG(sequence_num)": _row(0,),
-                "EXTRACT(HOUR": _row(0,),
-                "FROM obligations WHERE tenant_id": _row(1,),
+                "LAG(sequence_num)": _row(
+                    0,
+                ),
+                "EXTRACT(HOUR": _row(
+                    0,
+                ),
+                "FROM obligations WHERE tenant_id": _row(
+                    1,
+                ),
                 "checkable_rules AS": _row(5, 5),
-                "fsma.compliance_alerts": _row(0,),
-                "food_traceability_list": _row(10,),
+                "fsma.compliance_alerts": _row(
+                    0,
+                ),
+                "food_traceability_list": _row(
+                    10,
+                ),
             },
         )
 
         class _FailPersistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=False, errors=["bad block 3"])
+
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _FailPersistence)
 
         data = _query_scoring_data(session, "t1")
@@ -966,6 +1214,7 @@ class TestGetComplianceScoreEndpoint:
     def test_db_unavailable_returns_zero_f(self, client, monkeypatch):
         """When shared.database.SessionLocal import raises, returns F."""
         import builtins
+
         real_import = builtins.__import__
 
         def _bad_import(name, *a, **kw):
@@ -993,6 +1242,7 @@ class TestGetComplianceScoreEndpoint:
                 return session
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _BadSessionLocal())
 
         def _raise(*a, **k):
@@ -1013,6 +1263,7 @@ class TestGetComplianceScoreEndpoint:
         session.close = MagicMock()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         fake_data = _base_data(event_count=10, chain_verified=True, last_chain_hash="x" * 64)
@@ -1035,6 +1286,7 @@ class TestGetComplianceScoreEndpoint:
         session.close = MagicMock()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         # _query_scoring_data succeeds, but _compute_scores blows up
@@ -1059,6 +1311,7 @@ class TestGetComplianceScoreEndpoint:
 class TestGetPendingReviewsEndpoint:
     def test_db_unavailable(self, client, monkeypatch):
         import builtins
+
         real_import = builtins.__import__
 
         def _bad_import(name, *a, **kw):
@@ -1087,6 +1340,7 @@ class TestGetPendingReviewsEndpoint:
         )
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
@@ -1111,6 +1365,7 @@ class TestGetPendingReviewsEndpoint:
         )
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
@@ -1125,6 +1380,7 @@ class TestGetPendingReviewsEndpoint:
         )
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
@@ -1140,6 +1396,7 @@ class TestGetPendingReviewsEndpoint:
         session = _RouteSession(scalar_route={})  # all scalar() return None
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
@@ -1181,7 +1438,10 @@ class TestPydanticModels:
 
     def test_compliance_score_response_defaults(self):
         r = ComplianceScoreResponse(
-            tenant_id="t", overall_score=50, grade="C", breakdown={},
+            tenant_id="t",
+            overall_score=50,
+            grade="C",
+            breakdown={},
         )
         assert r.next_actions == []
         assert r.events_analyzed == 0
@@ -1190,9 +1450,15 @@ class TestPydanticModels:
     def test_compliance_score_response_score_bounds(self):
         with pytest.raises(Exception):
             ComplianceScoreResponse(
-                tenant_id="t", overall_score=-1, grade="F", breakdown={},
+                tenant_id="t",
+                overall_score=-1,
+                grade="F",
+                breakdown={},
             )
         with pytest.raises(Exception):
             ComplianceScoreResponse(
-                tenant_id="t", overall_score=101, grade="A", breakdown={},
+                tenant_id="t",
+                overall_score=101,
+                grade="A",
+                breakdown={},
             )

@@ -5,8 +5,10 @@ These tests verify that critical security issues have been resolved:
 - MISSING-001: Rate limiting enforced
 - SEC-002: CORS properly configured
 """
+
 import pytest
 from fastapi.testclient import TestClient
+
 from services.admin.main import app as admin_app
 
 admin_client = TestClient(admin_app)
@@ -18,10 +20,7 @@ ADMIN_PROTECTED_ENDPOINT = "/v1/admin/keys"
 @pytest.mark.security
 def test_admin_bypass_removed():
     """Verify hardcoded 'admin' key is now rejected."""
-    response = admin_client.get(
-        ADMIN_PROTECTED_ENDPOINT,
-        headers={"X-Admin-Key": "admin"}
-    )
+    response = admin_client.get(ADMIN_PROTECTED_ENDPOINT, headers={"X-Admin-Key": "admin"})
     assert response.status_code == 401, "Admin bypass should be removed"
     # Admin service installs shared.error_handling which wraps errors as
     # {"error": {"type": "http_401", "message": ...}} instead of the
@@ -52,6 +51,7 @@ def test_valid_admin_key_works():
 
     # Force in-memory key store so CI doesn't need the api_keys table
     import shared.auth as _auth_mod
+
     original_env = os.environ.get("ENABLE_DB_API_KEYS")
     original_regengine_env = os.environ.get("REGENGINE_ENV")
     original_admin_key = os.environ.get("ADMIN_MASTER_KEY")

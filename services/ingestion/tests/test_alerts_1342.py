@@ -4,22 +4,20 @@ Part of the #1342 ingestion coverage sweep. Covers dynamic column-allowlist
 assembly, FDA recall alert reading, fsma.compliance_alerts reading,
 acknowledge flow (primary + fallback), rules, and summary.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-
 from app import alerts as alerts_mod
 from app.alerts import (
+    _ALLOWED_ALERT_COLUMNS,
+    DEFAULT_RULES,
     Alert,
     AlertRule,
     AlertsResponse,
-    DEFAULT_RULES,
-    _ALLOWED_ALERT_COLUMNS,
     _category_for_alert_type,
     _fetch_alerts_from_db,
     _fetch_fda_recall_alerts,
@@ -30,8 +28,9 @@ from app.alerts import (
     router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -129,9 +128,19 @@ def _cols_result(cols: list[str]) -> _FakeResult:
 
 class TestLoadAlertColumns:
     def test_intersects_with_allowlist(self):
-        session = _FakeSession(responses=[_cols_result([
-            "id", "severity", "created_at", "foo", "DROP_TABLE",
-        ])])
+        session = _FakeSession(
+            responses=[
+                _cols_result(
+                    [
+                        "id",
+                        "severity",
+                        "created_at",
+                        "foo",
+                        "DROP_TABLE",
+                    ]
+                )
+            ]
+        )
         cols = _load_alert_columns(session)
         assert cols == {"id", "severity", "created_at"}
 
@@ -196,6 +205,7 @@ class TestToIso:
 
     def test_aware_datetime_converted_to_utc(self):
         from datetime import timedelta
+
         tz = timezone(timedelta(hours=5))
         aware = datetime(2026, 4, 17, 15, 0, tzinfo=tz)
         assert _to_iso(aware) == aware.astimezone(timezone.utc).isoformat()
@@ -270,10 +280,12 @@ class TestFetchFdaRecallAlerts:
             acknowledged_by=None,
             resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),          # table exists check
-            _FakeResult(rows=[row]),        # recall query
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),  # table exists check
+                _FakeResult(rows=[row]),  # recall query
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         assert len(alerts) == 1
         a = alerts[0]
@@ -290,17 +302,30 @@ class TestFetchFdaRecallAlerts:
         match = {"matched_by": ["supplier:acme"]}
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            id="a1", source_type="FDA_RECALL", source_id="s",
-            title="Recall", summary="s", severity="MEDIUM",
-            countdown_start=None, countdown_end=None, countdown_hours=None,
-            required_actions={}, status="ACTIVE",
-            match_reason=match, raw_data=raw, created_at=now,
-            acknowledged_at=None, acknowledged_by=None, resolved_at=None,
+            id="a1",
+            source_type="FDA_RECALL",
+            source_id="s",
+            title="Recall",
+            summary="s",
+            severity="MEDIUM",
+            countdown_start=None,
+            countdown_end=None,
+            countdown_hours=None,
+            required_actions={},
+            status="ACTIVE",
+            match_reason=match,
+            raw_data=raw,
+            created_at=now,
+            acknowledged_at=None,
+            acknowledged_by=None,
+            resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         assert alerts[0].metadata["match_tier"] == "supplier"
         assert alerts[0].metadata["countdown_start"] is None
@@ -310,17 +335,30 @@ class TestFetchFdaRecallAlerts:
         match = {"matched_by": ["category:leafy_greens"]}
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            id="a1", source_type="FDA_RECALL", source_id="s",
-            title=None, summary=None, severity=None,
-            countdown_start=now, countdown_end=now, countdown_hours=12,
-            required_actions={}, status="RESOLVED",
-            match_reason=match, raw_data=raw, created_at=now,
-            acknowledged_at=None, acknowledged_by=None, resolved_at=None,
+            id="a1",
+            source_type="FDA_RECALL",
+            source_id="s",
+            title=None,
+            summary=None,
+            severity=None,
+            countdown_start=now,
+            countdown_end=now,
+            countdown_hours=12,
+            required_actions={},
+            status="RESOLVED",
+            match_reason=match,
+            raw_data=raw,
+            created_at=now,
+            acknowledged_at=None,
+            acknowledged_by=None,
+            resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         # No lot_code/supplier in matched_by → default stays "category"
         assert alerts[0].metadata["match_tier"] == "category"
@@ -335,18 +373,30 @@ class TestFetchFdaRecallAlerts:
         match = {}
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            id="a1", source_type="FDA_RECALL", source_id="s",
+            id="a1",
+            source_type="FDA_RECALL",
+            source_id="s",
             title="[Class I] Acme Corp - kale",
-            summary="s", severity="CRITICAL",
-            countdown_start=None, countdown_end=None, countdown_hours=None,
-            required_actions={}, status="ACKNOWLEDGED",
-            match_reason=match, raw_data=raw, created_at=now,
-            acknowledged_at=now, acknowledged_by="user-1", resolved_at=None,
+            summary="s",
+            severity="CRITICAL",
+            countdown_start=None,
+            countdown_end=None,
+            countdown_hours=None,
+            required_actions={},
+            status="ACKNOWLEDGED",
+            match_reason=match,
+            raw_data=raw,
+            created_at=now,
+            acknowledged_at=now,
+            acknowledged_by="user-1",
+            resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         assert alerts[0].metadata["recalling_firm"] == "Acme Corp"
         assert alerts[0].acknowledged is True
@@ -358,18 +408,30 @@ class TestFetchFdaRecallAlerts:
         match = {}
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            id="a1", source_type="FDA_RECALL", source_id="s",
+            id="a1",
+            source_type="FDA_RECALL",
+            source_id="s",
             title="[Class I] NoSeparator",
-            summary="s", severity="MEDIUM",
-            countdown_start=None, countdown_end=None, countdown_hours=None,
-            required_actions={}, status="ACTIVE",
-            match_reason=match, raw_data=raw, created_at=now,
-            acknowledged_at=None, acknowledged_by=None, resolved_at=None,
+            summary="s",
+            severity="MEDIUM",
+            countdown_start=None,
+            countdown_end=None,
+            countdown_hours=None,
+            required_actions={},
+            status="ACTIVE",
+            match_reason=match,
+            raw_data=raw,
+            created_at=now,
+            acknowledged_at=None,
+            acknowledged_by=None,
+            resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         # "NoSeparator" has no " - " split, so firm_part[0] = "NoSeparator"
         assert alerts[0].metadata["recalling_firm"] == "NoSeparator"
@@ -377,19 +439,30 @@ class TestFetchFdaRecallAlerts:
     def test_nondict_raw_data_falls_back_to_empty(self):
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            id="a1", source_type="FDA_RECALL", source_id="s",
-            title="t", summary="s", severity="MEDIUM",
-            countdown_start=None, countdown_end=None, countdown_hours=None,
-            required_actions={}, status="ACTIVE",
+            id="a1",
+            source_type="FDA_RECALL",
+            source_id="s",
+            title="t",
+            summary="s",
+            severity="MEDIUM",
+            countdown_start=None,
+            countdown_end=None,
+            countdown_hours=None,
+            required_actions={},
+            status="ACTIVE",
             match_reason="not-a-dict",
             raw_data="not-a-dict",
             created_at=now,
-            acknowledged_at=None, acknowledged_by=None, resolved_at=None,
+            acknowledged_at=None,
+            acknowledged_by=None,
+            resolved_at=None,
         )
-        session = _FakeSession(responses=[
-            _FakeResult(row=(1,)),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=(1,)),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_fda_recall_alerts(session, "t1")
         assert alerts[0].metadata["recall_number"] == ""
         assert alerts[0].metadata["fda_url"] == ""
@@ -413,20 +486,38 @@ class TestFetchAlertsFromDb:
     def test_uses_org_id_when_tenant_id_missing(self):
         # org_id path — provides required columns
         cols = [
-            "id", "org_id", "severity", "alert_type", "title", "message",
-            "created_at", "resolved", "resolved_at", "resolved_by", "details",
+            "id",
+            "org_id",
+            "severity",
+            "alert_type",
+            "title",
+            "message",
+            "created_at",
+            "resolved",
+            "resolved_at",
+            "resolved_by",
+            "details",
         ]
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            alert_id="a1", alert_type="temp_excursion", severity="critical",
-            title="T", message="msg", created_at=now,
-            resolved=True, resolved_at=now, resolved_by="user-1",
-            details={"x": 1}, event_ref=None,
+            alert_id="a1",
+            alert_type="temp_excursion",
+            severity="critical",
+            title="T",
+            message="msg",
+            created_at=now,
+            resolved=True,
+            resolved_at=now,
+            resolved_by="user-1",
+            details={"x": 1},
+            event_ref=None,
         )
-        session = _FakeSession(responses=[
-            _cols_result(cols),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _cols_result(cols),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_alerts_from_db(session, "t1")
         assert len(alerts) == 1
         a = alerts[0]
@@ -438,21 +529,37 @@ class TestFetchAlertsFromDb:
 
     def test_tenant_id_path_with_fallback_message_title(self):
         cols = [
-            "id", "tenant_id", "severity", "alert_type", "created_at",
-            "acknowledged", "acknowledged_at", "acknowledged_by", "metadata",
+            "id",
+            "tenant_id",
+            "severity",
+            "alert_type",
+            "created_at",
+            "acknowledged",
+            "acknowledged_at",
+            "acknowledged_by",
+            "metadata",
             "event_id",
         ]
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            alert_id="a1", alert_type=None, severity=None,
-            title=None, message=None, created_at=now,
-            resolved=False, resolved_at=None, resolved_by=None,
-            details=None, event_ref="evt-99",
+            alert_id="a1",
+            alert_type=None,
+            severity=None,
+            title=None,
+            message=None,
+            created_at=now,
+            resolved=False,
+            resolved_at=None,
+            resolved_by=None,
+            details=None,
+            event_ref="evt-99",
         )
-        session = _FakeSession(responses=[
-            _cols_result(cols),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _cols_result(cols),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_alerts_from_db(session, "t1")
         a = alerts[0]
         assert a.rule_id == "compliance_alert"
@@ -465,20 +572,37 @@ class TestFetchAlertsFromDb:
 
     def test_details_dict_merged_with_event_ref(self):
         cols = [
-            "id", "tenant_id", "severity", "alert_type", "title",
-            "message", "created_at", "resolved", "details", "cte_event_id",
+            "id",
+            "tenant_id",
+            "severity",
+            "alert_type",
+            "title",
+            "message",
+            "created_at",
+            "resolved",
+            "details",
+            "cte_event_id",
         ]
         now = datetime(2026, 4, 17, tzinfo=timezone.utc)
         row = _Row(
-            alert_id="a1", alert_type="kde_missing", severity="warning",
-            title="T", message="m", created_at=now,
-            resolved=False, resolved_at=None, resolved_by=None,
-            details={"kde": "lot_code"}, event_ref="evt-1",
+            alert_id="a1",
+            alert_type="kde_missing",
+            severity="warning",
+            title="T",
+            message="m",
+            created_at=now,
+            resolved=False,
+            resolved_at=None,
+            resolved_by=None,
+            details={"kde": "lot_code"},
+            event_ref="evt-1",
         )
-        session = _FakeSession(responses=[
-            _cols_result(cols),
-            _FakeResult(rows=[row]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _cols_result(cols),
+                _FakeResult(rows=[row]),
+            ]
+        )
         alerts = _fetch_alerts_from_db(session, "t1")
         assert alerts[0].metadata == {"kde": "lot_code", "event_id": "evt-1"}
 
@@ -488,12 +612,17 @@ class TestFetchAlertsFromDb:
 # ---------------------------------------------------------------------------
 
 
-def _alert(aid, severity="warning", category="compliance", acknowledged=False,
-           triggered="2026-04-17T10:00:00+00:00"):
+def _alert(aid, severity="warning", category="compliance", acknowledged=False, triggered="2026-04-17T10:00:00+00:00"):
     return Alert(
-        id=aid, rule_id="r", rule_name="Rule", severity=severity,
-        category=category, title="t", message="m",
-        triggered_at=triggered, acknowledged=acknowledged,
+        id=aid,
+        rule_id="r",
+        rule_name="Rule",
+        severity=severity,
+        category=category,
+        title="t",
+        message="m",
+        triggered_at=triggered,
+        acknowledged=acknowledged,
     )
 
 
@@ -506,11 +635,13 @@ class TestGetAlertsEndpoint:
     def test_merges_fsma_and_fda_alerts_and_dedupes(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [_alert("shared"), _alert("b")],
         )
         monkeypatch.setattr(
-            alerts_mod, "_fetch_fda_recall_alerts",
+            alerts_mod,
+            "_fetch_fda_recall_alerts",
             lambda db, tid: [_alert("shared", severity="critical"), _alert("a")],
         )
         client = TestClient(_build_app())
@@ -525,7 +656,8 @@ class TestGetAlertsEndpoint:
     def test_severity_filter(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [_alert("a", severity="critical"), _alert("b", severity="warning")],
         )
         monkeypatch.setattr(alerts_mod, "_fetch_fda_recall_alerts", lambda db, tid: [])
@@ -538,7 +670,8 @@ class TestGetAlertsEndpoint:
     def test_category_filter(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [
                 _alert("a", category="temperature"),
                 _alert("b", category="compliance"),
@@ -554,7 +687,8 @@ class TestGetAlertsEndpoint:
     def test_acknowledged_filter(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [
                 _alert("a", acknowledged=True),
                 _alert("b", acknowledged=False),
@@ -571,8 +705,9 @@ class TestGetAlertsEndpoint:
     def test_pagination(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
-            lambda db, tid: [_alert(f"a{i}", triggered=f"2026-04-{i+10}T00:00:00+00:00") for i in range(5)],
+            alerts_mod,
+            "_fetch_alerts_from_db",
+            lambda db, tid: [_alert(f"a{i}", triggered=f"2026-04-{i + 10}T00:00:00+00:00") for i in range(5)],
         )
         monkeypatch.setattr(alerts_mod, "_fetch_fda_recall_alerts", lambda db, tid: [])
         client = TestClient(_build_app())
@@ -584,6 +719,7 @@ class TestGetAlertsEndpoint:
     def test_db_unavailable_swallowed(self, monkeypatch):
         def _boom():
             raise RuntimeError("db down")
+
         monkeypatch.setattr(alerts_mod, "get_db_safe", _boom)
         client = TestClient(_build_app())
         resp = client.get("/api/v1/alerts/t1")
@@ -593,6 +729,7 @@ class TestGetAlertsEndpoint:
 
     def test_http_exception_in_fetch_propagates(self, monkeypatch):
         from fastapi import HTTPException
+
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
 
         def _raise(db, tid):
@@ -622,13 +759,21 @@ class TestAcknowledgeAlert:
         assert session.closed is True
 
     def test_public_fails_falls_back_to_fsma_success(self, monkeypatch):
-        session = _FakeSession(responses=[
-            RuntimeError("public missing"),              # primary update raises
-            _cols_result([                                # load alert columns
-                "id", "tenant_id", "severity", "resolved", "resolved_at",
-            ]),
-            _FakeResult(row=("fsma-1",)),                # fsma update returns row
-        ])
+        session = _FakeSession(
+            responses=[
+                RuntimeError("public missing"),  # primary update raises
+                _cols_result(
+                    [  # load alert columns
+                        "id",
+                        "tenant_id",
+                        "severity",
+                        "resolved",
+                        "resolved_at",
+                    ]
+                ),
+                _FakeResult(row=("fsma-1",)),  # fsma update returns row
+            ]
+        )
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: session)
         client = TestClient(_build_app())
         resp = client.post("/api/v1/alerts/t1/alert-42/acknowledge")
@@ -637,13 +782,20 @@ class TestAcknowledgeAlert:
         assert session.committed is True
 
     def test_public_empty_then_fsma_success(self, monkeypatch):
-        session = _FakeSession(responses=[
-            _FakeResult(row=None),                        # primary update misses
-            _cols_result([
-                "id", "org_id", "severity", "resolved",
-            ]),
-            _FakeResult(row=("fsma-1",)),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=None),  # primary update misses
+                _cols_result(
+                    [
+                        "id",
+                        "org_id",
+                        "severity",
+                        "resolved",
+                    ]
+                ),
+                _FakeResult(row=("fsma-1",)),
+            ]
+        )
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: session)
         client = TestClient(_build_app())
         resp = client.post("/api/v1/alerts/t1/alert-42/acknowledge")
@@ -651,31 +803,37 @@ class TestAcknowledgeAlert:
         assert session.committed is True
 
     def test_fallback_missing_tenant_scope_column(self, monkeypatch):
-        session = _FakeSession(responses=[
-            _FakeResult(row=None),                        # primary miss
-            _cols_result(["id", "severity", "resolved"]),  # no tenant_id or org_id
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=None),  # primary miss
+                _cols_result(["id", "severity", "resolved"]),  # no tenant_id or org_id
+            ]
+        )
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: session)
         client = TestClient(_build_app())
         resp = client.post("/api/v1/alerts/t1/alert-42/acknowledge")
         assert resp.status_code == 500
 
     def test_fallback_missing_resolved_column(self, monkeypatch):
-        session = _FakeSession(responses=[
-            _FakeResult(row=None),
-            _cols_result(["id", "tenant_id", "severity"]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=None),
+                _cols_result(["id", "tenant_id", "severity"]),
+            ]
+        )
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: session)
         client = TestClient(_build_app())
         resp = client.post("/api/v1/alerts/t1/alert-42/acknowledge")
         assert resp.status_code == 501
 
     def test_fallback_alert_not_found(self, monkeypatch):
-        session = _FakeSession(responses=[
-            _FakeResult(row=None),
-            _cols_result(["id", "tenant_id", "severity", "resolved"]),
-            _FakeResult(row=None),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(row=None),
+                _cols_result(["id", "tenant_id", "severity", "resolved"]),
+                _FakeResult(row=None),
+            ]
+        )
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: session)
         client = TestClient(_build_app())
         resp = client.post("/api/v1/alerts/t1/missing/acknowledge")
@@ -709,14 +867,16 @@ class TestSummaryEndpoint:
     def test_aggregates_by_severity_and_category(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [
                 _alert("a", severity="critical", category="temperature"),
                 _alert("b", severity="warning", category="compliance"),
             ],
         )
         monkeypatch.setattr(
-            alerts_mod, "_fetch_fda_recall_alerts",
+            alerts_mod,
+            "_fetch_fda_recall_alerts",
             lambda db, tid: [_alert("c", severity="critical", category="fda_recall", acknowledged=True)],
         )
         client = TestClient(_build_app())
@@ -731,11 +891,13 @@ class TestSummaryEndpoint:
     def test_dedupes_across_sources(self, monkeypatch):
         monkeypatch.setattr(alerts_mod, "get_db_safe", lambda: _FakeSession())
         monkeypatch.setattr(
-            alerts_mod, "_fetch_alerts_from_db",
+            alerts_mod,
+            "_fetch_alerts_from_db",
             lambda db, tid: [_alert("shared", severity="warning")],
         )
         monkeypatch.setattr(
-            alerts_mod, "_fetch_fda_recall_alerts",
+            alerts_mod,
+            "_fetch_fda_recall_alerts",
             lambda db, tid: [_alert("shared", severity="critical")],
         )
         client = TestClient(_build_app())

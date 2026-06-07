@@ -24,14 +24,14 @@ validate_batch          – batch validation helper
 """
 
 import re
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Tuple
-from dataclasses import dataclass, field
-
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class IdentifierType(str, Enum):
     TLC = "TLC"
@@ -50,6 +50,7 @@ class ValidationSeverity(str, Enum):
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ValidationError:
@@ -72,12 +73,10 @@ class ValidationResult:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _gs1_check_digit(digits: str) -> int:
     """Calculate GS1 check digit for a numeric string (without the check digit)."""
-    total = sum(
-        int(d) * (3 if i % 2 else 1)
-        for i, d in enumerate(reversed(digits))
-    )
+    total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(reversed(digits)))
     return (10 - (total % 10)) % 10
 
 
@@ -97,6 +96,7 @@ def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) ->
 # ---------------------------------------------------------------------------
 # Individual validators
 # ---------------------------------------------------------------------------
+
 
 def validate_gln(gln: str) -> ValidationResult:
     """Validate GS1 Global Location Number (13 digits with check digit)."""
@@ -123,8 +123,10 @@ def validate_gln(gln: str) -> ValidationResult:
         return chk
 
     return ValidationResult(
-        is_valid=True, identifier_type=IdentifierType.GLN,
-        original_value=gln, normalized_value=clean,
+        is_valid=True,
+        identifier_type=IdentifierType.GLN,
+        original_value=gln,
+        normalized_value=clean,
     )
 
 
@@ -159,8 +161,11 @@ def validate_gtin(gtin: str) -> ValidationResult:
         warnings.append(f"Normalized from GTIN-{len(clean)} to GTIN-14")
 
     return ValidationResult(
-        is_valid=True, identifier_type=IdentifierType.GTIN,
-        original_value=gtin, normalized_value=normalized, warnings=warnings,
+        is_valid=True,
+        identifier_type=IdentifierType.GTIN,
+        original_value=gtin,
+        normalized_value=normalized,
+        warnings=warnings,
     )
 
 
@@ -200,14 +205,16 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
                 is_valid=False,
                 identifier_type=IdentifierType.TLC,
                 original_value=raw,
-                errors=[ValidationError(
-                    field="tlc",
-                    message=(
-                        "TLC does not match production pattern "
-                        "(expected 14-digit GTIN prefix + alphanumeric lot suffix, "
-                        "e.g. '00012345678901-LotA')"
-                    ),
-                )],
+                errors=[
+                    ValidationError(
+                        field="tlc",
+                        message=(
+                            "TLC does not match production pattern "
+                            "(expected 14-digit GTIN prefix + alphanumeric lot suffix, "
+                            "e.g. '00012345678901-LotA')"
+                        ),
+                    )
+                ],
             )
     else:
         # Permissive mode: reject obviously invalid characters
@@ -219,8 +226,11 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
         warnings.append("TLC is unusually long (>50 characters)")
 
     return ValidationResult(
-        is_valid=True, identifier_type=IdentifierType.TLC,
-        original_value=raw, normalized_value=cleaned, warnings=warnings,
+        is_valid=True,
+        identifier_type=IdentifierType.TLC,
+        original_value=raw,
+        normalized_value=cleaned,
+        warnings=warnings,
     )
 
 
@@ -249,14 +259,17 @@ def validate_sscc(sscc: str) -> ValidationResult:
         return chk
 
     return ValidationResult(
-        is_valid=True, identifier_type=IdentifierType.SSCC,
-        original_value=sscc, normalized_value=clean,
+        is_valid=True,
+        identifier_type=IdentifierType.SSCC,
+        original_value=sscc,
+        normalized_value=clean,
     )
 
 
 # ---------------------------------------------------------------------------
 # Public GS1 helpers
 # ---------------------------------------------------------------------------
+
 
 def calculate_gs1_check_digit(digits: str) -> int:
     """Calculate the GS1 check digit for a numeric string (sans check digit).
@@ -299,6 +312,7 @@ def extract_company_prefix(gtin14: str, prefix_length: int = 7) -> str:
 # ---------------------------------------------------------------------------
 # Auto-detecting dispatcher
 # ---------------------------------------------------------------------------
+
 
 def detect_identifier_type(value: str) -> IdentifierType:
     """Best-effort auto-detection of identifier type from its format."""
@@ -355,6 +369,7 @@ def validate_identifier(
 # Batch validation
 # ---------------------------------------------------------------------------
 
+
 def validate_batch(
     identifiers: List[Tuple[str, Optional[IdentifierType]]],
     *,
@@ -362,6 +377,5 @@ def validate_batch(
 ) -> List[ValidationResult]:
     """Validate a list of ``(value, expected_type)`` tuples."""
     return [
-        validate_identifier(value, expected_type=expected_type, strict=strict)
-        for value, expected_type in identifiers
+        validate_identifier(value, expected_type=expected_type, strict=strict) for value, expected_type in identifiers
     ]

@@ -53,7 +53,6 @@ from app.scrapers.state_adaptors import fda_enforcement as mod  # noqa: E402
 from app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
 from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers — fake httpx.Response
 # ---------------------------------------------------------------------------
@@ -173,9 +172,7 @@ def passthrough_validate_url(monkeypatch):
 
 
 class TestListSources:
-    def test_parses_rss_and_yields_sources(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_parses_rss_and_yields_sources(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         responses.append(_FakeResponse(content=RSS_XML))
 
@@ -190,9 +187,7 @@ class TestListSources:
         # discovery_date is an ISO string — just confirm format looks right.
         assert "T" in sources[0].metadata["discovery_date"]
 
-    def test_missing_title_and_pubdate_use_defaults(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_missing_title_and_pubdate_use_defaults(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         responses.append(_FakeResponse(content=RSS_XML))
 
@@ -202,9 +197,7 @@ class TestListSources:
         assert sources[1].title == "Unknown Warning Letter"
         assert sources[1].metadata["published_date"] is None
 
-    def test_uses_configured_rss_url_and_user_agent(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_uses_configured_rss_url_and_user_agent(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         responses.append(_FakeResponse(content=RSS_XML))
 
@@ -215,9 +208,7 @@ class TestListSources:
         assert calls[0]["timeout"] == 30
         assert calls[0]["headers"] == {"User-Agent": "RegEngine/1.0"}
 
-    def test_empty_link_text_skipped(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_empty_link_text_skipped(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         xml = b"""<?xml version="1.0"?>
 <rss><channel>
@@ -231,9 +222,7 @@ class TestListSources:
         assert len(sources) == 1
         assert sources[0].url == "https://www.fda.gov/letter/ok"
 
-    def test_ssrf_rejected_urls_skip_item_without_crashing(
-        self, scraper, capture_httpx_get, monkeypatch
-    ):
+    def test_ssrf_rejected_urls_skip_item_without_crashing(self, scraper, capture_httpx_get, monkeypatch):
         calls, responses = capture_httpx_get
         responses.append(_FakeResponse(content=RSS_XML))
 
@@ -252,21 +241,15 @@ class TestListSources:
         urls = [s.url for s in sources]
         assert urls == ["https://www.fda.gov/letter/2"]
 
-    def test_rss_http_error_returns_nothing_no_raise(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_rss_http_error_returns_nothing_no_raise(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(raise_for_status_error=RuntimeError("bad gateway"))
-        )
+        responses.append(_FakeResponse(raise_for_status_error=RuntimeError("bad gateway")))
 
         # Must NOT raise — scheduler must keep running.
         sources = list(scraper.list_sources())
         assert sources == []
 
-    def test_malformed_xml_returns_nothing_no_raise(
-        self, scraper, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_malformed_xml_returns_nothing_no_raise(self, scraper, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         responses.append(_FakeResponse(content=b"<not-valid-xml>"))
 
@@ -280,12 +263,8 @@ class TestListSources:
 
 
 HTML_NO_PDF = b"<html><body><p>Warning letter body...</p></body></html>"
-HTML_WITH_PDF = (
-    b'<html><body><a href="warning.pdf">Download PDF</a></body></html>'
-)
-HTML_WITH_PDF_ABS = (
-    b'<html><body><a href="https://www.fda.gov/cdn/warning.pdf">Download PDF</a></body></html>'
-)
+HTML_WITH_PDF = b'<html><body><a href="warning.pdf">Download PDF</a></body></html>'
+HTML_WITH_PDF_ABS = b'<html><body><a href="https://www.fda.gov/cdn/warning.pdf">Download PDF</a></body></html>'
 
 
 @pytest.fixture
@@ -299,9 +278,7 @@ def source():
 
 
 class TestFetch:
-    def test_html_only_returns_fetched_item(
-        self, scraper, source, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_html_only_returns_fetched_item(self, scraper, source, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         responses.append(
             _FakeResponse(
@@ -316,9 +293,7 @@ class TestFetch:
         assert item.content_bytes == HTML_NO_PDF
         assert item.content_type == "text/html; charset=utf-8"
 
-    def test_pdf_link_triggers_deep_fetch(
-        self, scraper, source, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_pdf_link_triggers_deep_fetch(self, scraper, source, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         # First call: landing page HTML with relative PDF link.
         responses.append(
@@ -346,27 +321,17 @@ class TestFetch:
         assert pdf_call["url"].endswith("/warning.pdf")
         assert pdf_call["timeout"] == 45  # PDF fetch gets a longer timeout
 
-    def test_pdf_link_absolute_url_used_verbatim(
-        self, scraper, source, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_pdf_link_absolute_url_used_verbatim(self, scraper, source, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(content=HTML_WITH_PDF_ABS, headers={"Content-Type": "text/html"})
-        )
-        responses.append(
-            _FakeResponse(content=b"%PDF", headers={"Content-Type": "application/pdf"})
-        )
+        responses.append(_FakeResponse(content=HTML_WITH_PDF_ABS, headers={"Content-Type": "text/html"}))
+        responses.append(_FakeResponse(content=b"%PDF", headers={"Content-Type": "application/pdf"}))
 
         scraper.fetch(source)
         assert calls[1]["url"] == "https://www.fda.gov/cdn/warning.pdf"
 
-    def test_pdf_link_ssrf_rejected_falls_back_to_html(
-        self, scraper, source, capture_httpx_get, monkeypatch
-    ):
+    def test_pdf_link_ssrf_rejected_falls_back_to_html(self, scraper, source, capture_httpx_get, monkeypatch):
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"})
-        )
+        responses.append(_FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"}))
 
         # Accept the landing URL, reject the PDF URL.
         def _selective(url: str) -> str:
@@ -386,12 +351,8 @@ class TestFetch:
         self, scraper, source, capture_httpx_get, passthrough_validate_url
     ):
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"})
-        )
-        responses.append(
-            _FakeResponse(raise_for_status_error=RuntimeError("pdf 500"))
-        )
+        responses.append(_FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"}))
+        responses.append(_FakeResponse(raise_for_status_error=RuntimeError("pdf 500")))
 
         item = scraper.fetch(source)
         # Fallback: we keep the HTML content and type, don't propagate
@@ -399,13 +360,12 @@ class TestFetch:
         assert item.content_bytes == HTML_WITH_PDF
         assert item.content_type == "text/html"
 
-    def test_landing_page_ssrf_returns_empty_fetched_item(
-        self, scraper, source, capture_httpx_get, monkeypatch
-    ):
+    def test_landing_page_ssrf_returns_empty_fetched_item(self, scraper, source, capture_httpx_get, monkeypatch):
         calls, responses = capture_httpx_get
 
         monkeypatch.setattr(
-            mod, "validate_url",
+            mod,
+            "validate_url",
             lambda url: (_ for _ in ()).throw(mod.SSRFError("blocked")),
         )
 
@@ -420,27 +380,19 @@ class TestFetch:
         self, scraper, source, capture_httpx_get, passthrough_validate_url
     ):
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(raise_for_status_error=RuntimeError("503 upstream"))
-        )
+        responses.append(_FakeResponse(raise_for_status_error=RuntimeError("503 upstream")))
 
         item = scraper.fetch(source)
         assert item.source is source
         assert item.content_bytes == b""
         assert item.content_type is None
 
-    def test_pdf_regex_case_insensitive(
-        self, scraper, source, capture_httpx_get, passthrough_validate_url
-    ):
+    def test_pdf_regex_case_insensitive(self, scraper, source, capture_httpx_get, passthrough_validate_url):
         calls, responses = capture_httpx_get
         # Uppercase ".PDF" must still match.
         html = b'<html><a href="warning.PDF">pdf</a></html>'
-        responses.append(
-            _FakeResponse(content=html, headers={"Content-Type": "text/html"})
-        )
-        responses.append(
-            _FakeResponse(content=b"%PDF", headers={"Content-Type": "application/pdf"})
-        )
+        responses.append(_FakeResponse(content=html, headers={"Content-Type": "text/html"}))
+        responses.append(_FakeResponse(content=b"%PDF", headers={"Content-Type": "application/pdf"}))
 
         item = scraper.fetch(source)
         assert item.content_type == "application/pdf"

@@ -23,6 +23,7 @@ def get_db_connection():
     """Create a database connection from DATABASE_URL env var."""
     try:
         from sqlalchemy import create_engine, text
+
         db_url = os.getenv("DATABASE_URL")
         if not db_url:
             print("ERROR: DATABASE_URL environment variable not set")
@@ -41,12 +42,14 @@ def get_db_connection():
 def check_hash_chain_continuity(conn, text_fn) -> tuple[bool, str]:
     """Verify the FSMA 204 CTE hash chain has no gaps or tampering."""
     try:
-        result = conn.execute(text_fn("""
+        result = conn.execute(
+            text_fn("""
             SELECT COUNT(*) as total,
                    COUNT(CASE WHEN prev_hash IS NULL AND sequence_number > 1 THEN 1 END) as broken_links
             FROM fsma.cte_events
             WHERE prev_hash IS NOT NULL OR sequence_number = 1
-        """))
+        """)
+        )
         row = result.fetchone()
         if row is None:
             return True, "No CTE events found (empty chain — OK)"
@@ -94,14 +97,16 @@ def check_tenant_isolation(conn, text_fn) -> tuple[bool, str]:
     """Verify no cross-tenant data leakage exists."""
     try:
         # Check if any single record appears in multiple tenants (shouldn't happen)
-        result = conn.execute(text_fn("""
+        result = conn.execute(
+            text_fn("""
             SELECT COUNT(*) FROM (
                 SELECT event_id, COUNT(DISTINCT tenant_id) as tenant_count
                 FROM fsma.cte_events
                 GROUP BY event_id
                 HAVING COUNT(DISTINCT tenant_id) > 1
             ) violations
-        """))
+        """)
+        )
         count = result.scalar()
         if count and count > 0:
             return False, f"CRITICAL: {count} events found in multiple tenants"
@@ -117,7 +122,8 @@ def main():
         description="Validate data integrity after chaos/resilience tests.",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show detailed output for each check",
     )

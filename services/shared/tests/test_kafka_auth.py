@@ -12,7 +12,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from shared.kafka_auth import (
     BODY_FIELD_PRODUCER_SERVICE,
     BODY_FIELD_SIGNED_AT,
@@ -22,14 +21,13 @@ from shared.kafka_auth import (
     ENV_SIGNING_KEY,
     ENV_STRICT,
     HEADER_PRODUCER_SERVICE,
-    HEADER_SIGNATURE,
     HEADER_SIG_VERSION,
+    HEADER_SIGNATURE,
     KafkaAuthError,
     get_allowed_producers,
     sign_event,
     verify_event,
 )
-
 
 TEST_KEY = b"test-signing-key-32-bytes-long--"
 OTHER_KEY = b"other-signing-key-also-32-bytes-"
@@ -78,9 +76,7 @@ def test_verify_accepts_raw_json_bytes() -> None:
     import json as _json
 
     payload = {"tenant_id": "t1", "doc_id": "d1"}
-    signed_body, headers = sign_event(
-        payload, producer_service="ingestion-service", signing_key=TEST_KEY
-    )
+    signed_body, headers = sign_event(payload, producer_service="ingestion-service", signing_key=TEST_KEY)
     raw_bytes = _json.dumps(signed_body).encode("utf-8")
 
     evt, producer = verify_event(
@@ -146,10 +142,7 @@ def test_verify_rejects_header_tamper() -> None:
         producer_service="ingestion-service",
         signing_key=TEST_KEY,
     )
-    tampered_headers = [
-        (name, b"deadbeef" * 8 if name == HEADER_SIGNATURE else value)
-        for name, value in headers
-    ]
+    tampered_headers = [(name, b"deadbeef" * 8 if name == HEADER_SIGNATURE else value) for name, value in headers]
     with pytest.raises(KafkaAuthError) as excinfo:
         verify_event(
             signed_body,
@@ -193,8 +186,7 @@ def test_verify_rejects_producer_service_header_body_mismatch() -> None:
     )
     # Swap the header producer claim but leave body + sig intact.
     tampered_headers = [
-        (name, b"scheduler-service" if name == HEADER_PRODUCER_SERVICE else value)
-        for name, value in headers
+        (name, b"scheduler-service" if name == HEADER_PRODUCER_SERVICE else value) for name, value in headers
     ]
     with pytest.raises(KafkaAuthError) as excinfo:
         verify_event(
@@ -270,10 +262,7 @@ def test_verify_rejects_unsupported_version() -> None:
         producer_service="ingestion-service",
         signing_key=TEST_KEY,
     )
-    munged = [
-        (n, b"v99" if n == HEADER_SIG_VERSION else v)
-        for n, v in headers
-    ]
+    munged = [(n, b"v99" if n == HEADER_SIG_VERSION else v) for n, v in headers]
     with pytest.raises(KafkaAuthError) as excinfo:
         verify_event(signed_body, munged, topic="t", signing_key=TEST_KEY)
     assert excinfo.value.reason == "unsupported_sig_version"
@@ -499,9 +488,7 @@ def test_signing_key_env_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
         producer_service="ingestion-service",
     )
     # Round-trips with the same env key.
-    evt, _ = verify_event(
-        signed_body, headers, topic="t"
-    )
+    evt, _ = verify_event(signed_body, headers, topic="t")
     assert evt["tenant_id"] == "t1"
 
 
@@ -774,9 +761,13 @@ def test_max_signature_age_env_override(monkeypatch: pytest.MonkeyPatch) -> None
         signing_key=TEST_KEY,
         now_fn=lambda: T0,
     )
-    later = T0.replace(minute=0, second=0) + (datetime(1, 1, 2, tzinfo=timezone.utc) - datetime(1, 1, 1, tzinfo=timezone.utc)) * 0
+    later = (
+        T0.replace(minute=0, second=0)
+        + (datetime(1, 1, 2, tzinfo=timezone.utc) - datetime(1, 1, 1, tzinfo=timezone.utc)) * 0
+    )
     # 90 seconds after signing — past the 60s window.
     from datetime import timedelta as _td
+
     later = T0 + _td(seconds=90)
     with pytest.raises(KafkaAuthError) as excinfo:
         verify_event(
@@ -802,6 +793,7 @@ def test_verify_freshness_non_strict_warns_but_passes(
         now_fn=lambda: T0,
     )
     from datetime import timedelta as _td
+
     later = T0 + _td(minutes=30)  # 30 min — well past default window
     evt, producer = verify_event(
         signed_body,

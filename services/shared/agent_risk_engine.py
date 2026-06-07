@@ -10,13 +10,11 @@ from __future__ import annotations
 from typing import Any, Literal, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-
 from shared.agent_artifacts import (
     HUMAN_REVIEW_CONFIDENCE_THRESHOLD,
     AgentArtifact,
     ExportReadinessSummaryPayload,
 )
-
 
 ArtifactGapCode = Literal[
     "low_confidence",
@@ -76,13 +74,7 @@ def calculate_risk_score(artifact_data: AgentArtifact | Mapping[str, Any]) -> Ri
     artifact_type_risk = _artifact_type_risk(artifact)
     evidence_gap_risk = 15.0 if _missing_evidence_anchor(artifact) else 0.0
     rule_gap_risk = 10.0 if _missing_rule_reference(artifact) else 0.0
-    uncapped = (
-        confidence_risk
-        + review_risk
-        + artifact_type_risk
-        + evidence_gap_risk
-        + rule_gap_risk
-    )
+    uncapped = confidence_risk + review_risk + artifact_type_risk + evidence_gap_risk + rule_gap_risk
     return RiskScoreBreakdown(
         score=_round_score(min(100.0, uncapped)),
         uncapped_score=_round_score(uncapped),
@@ -110,8 +102,7 @@ def calculate_compliance_gaps(
             ComplianceGap(
                 code="low_confidence",
                 message=(
-                    "Artifact confidence is below the human-review threshold "
-                    f"({HUMAN_REVIEW_CONFIDENCE_THRESHOLD})."
+                    f"Artifact confidence is below the human-review threshold ({HUMAN_REVIEW_CONFIDENCE_THRESHOLD})."
                 ),
             )
         )

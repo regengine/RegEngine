@@ -8,6 +8,7 @@ Complements test_retrieval_tenant_scope.py (Kafka envelope propagation)
 by covering any future in-process state stores (retry maps, embedding
 caches, extraction buffers).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -17,10 +18,10 @@ import pytest
 from sqlalchemy import Column, Float, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-
 # ---------------------------------------------------------------------------
 # Minimal schema: simulates an NLP extraction result cache
 # ---------------------------------------------------------------------------
+
 
 class Base(DeclarativeBase):
     pass
@@ -45,6 +46,7 @@ class ExtractionResult(Base):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def engine():
     eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -66,6 +68,7 @@ def db(engine):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _insert_extraction(db: Session, tenant_id: str, document_id: str = "doc-001") -> ExtractionResult:
     row = ExtractionResult(
@@ -114,9 +117,7 @@ def test_extraction_not_visible_across_tenants(db: Session, tenant_a: str, tenan
     _insert_extraction(db, tenant_a, document_id=doc_id)
 
     result = _query_by_tenant(db, tenant_b, doc_id)
-    assert result == [], (
-        f"tenant_b={tenant_b!r} must not see extractions from tenant_a={tenant_a!r}"
-    )
+    assert result == [], f"tenant_b={tenant_b!r} must not see extractions from tenant_a={tenant_a!r}"
 
 
 @pytest.mark.parametrize("tenant_a,tenant_b", TENANT_PAIRS)
@@ -147,6 +148,7 @@ def test_same_document_id_different_tenants_are_separate(db: Session, tenant_a: 
 # ---------------------------------------------------------------------------
 # Consumer routing — in-process retry state isolation
 # ---------------------------------------------------------------------------
+
 
 class TestConsumerRetryStateIsolation:
     """Simulates the in-process retry counter map that the NLP consumer maintains.

@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # /export/history
 # ---------------------------------------------------------------------------
@@ -55,8 +54,6 @@ class ExportVerifyResponse(BaseModel):
     hashes_match: bool
     original_record_count: int
     current_record_count: int
-    data_integrity: str = Field(
-        description="VERIFIED if hashes match, MISMATCH_DETECTED otherwise"
-    )
+    data_integrity: str = Field(description="VERIFIED if hashes match, MISMATCH_DETECTED otherwise")
     original_generated_at: Optional[str] = None
     verified_at: str

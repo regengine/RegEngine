@@ -23,11 +23,13 @@ module skips cleanly.
 Run via:
     pytest tests/migrations/test_audit_append_only_v066.py -v
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+
 from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
@@ -36,7 +38,6 @@ pytest.importorskip("testcontainers.postgres")
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.exc import DBAPIError, InternalError, ProgrammingError  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_SQL = REPO_ROOT / "alembic" / "sql" / "V066__audit_logs_append_only.sql"
@@ -55,13 +56,15 @@ def pg_engine():
             # Minimal audit_logs shape sufficient to exercise the trigger.
             # Real prod schema has more columns but the trigger is row-scoped
             # and doesn't inspect individual column values.
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE public.audit_logs (
                     id BIGSERIAL PRIMARY KEY,
                     tenant_id UUID NOT NULL,
                     integrity_hash TEXT NOT NULL
                 )
-            """))
+            """)
+            )
             conn.execute(text(MIGRATION_SQL.read_text()))
         yield engine
         engine.dispose()
@@ -73,11 +76,13 @@ def pg_engine():
 def seed_row(pg_engine):
     """Insert one row and yield its id; clean up via break-glass."""
     with pg_engine.begin() as conn:
-        row_id = conn.execute(text("""
+        row_id = conn.execute(
+            text("""
             INSERT INTO audit_logs (tenant_id, integrity_hash)
             VALUES (gen_random_uuid(), 'seed')
             RETURNING id
-        """)).scalar_one()
+        """)
+        ).scalar_one()
     yield row_id
     # Teardown: break-glass DELETE so each test starts clean.
     with pg_engine.begin() as conn:

@@ -13,19 +13,18 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
-from sqlalchemy import bindparam, text
-from sqlalchemy.orm import Session
-
 from shared.canonical_event import (
-    TraceabilityEvent,
     IngestionRun,
     IngestionRunStatus,
     RawPayloadTooLargeError,
+    TraceabilityEvent,
     _raw_payload_max_bytes,
 )
-from shared.cte_persistence import compute_chain_hash
-from shared.canonical_persistence.models import CanonicalStoreResult
 from shared.canonical_persistence import legacy_dual_write as migration
+from shared.canonical_persistence.models import CanonicalStoreResult
+from shared.cte_persistence import compute_chain_hash
+from sqlalchemy import bindparam, text
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("canonical-persistence")
 
@@ -76,6 +75,7 @@ class CanonicalEventStore:
         if self._session_dialect_name() == "sqlite":
             return
         from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
         set_tenant_guc(self.session, tenant_id)
 
     # ------------------------------------------------------------------
@@ -143,7 +143,11 @@ class CanonicalEventStore:
         return str(run.id)
 
     def complete_ingestion_run(
-        self, run_id: str, tenant_id: str, accepted: int, rejected: int,
+        self,
+        run_id: str,
+        tenant_id: str,
+        accepted: int,
+        rejected: int,
         errors: Optional[List[Dict]] = None,
     ) -> None:
         """Mark an ingestion run as completed.
@@ -243,9 +247,12 @@ class CanonicalEventStore:
 
             if existing:
                 return CanonicalStoreResult(
-                    success=True, event_id=str(existing[0]),
-                    sha256_hash=existing[1], chain_hash=existing[2],
-                    idempotent=True, errors=[],
+                    success=True,
+                    event_id=str(existing[0]),
+                    sha256_hash=existing[1],
+                    chain_hash=existing[2],
+                    idempotent=True,
+                    errors=[],
                 )
 
         # --- Get chain head ---
@@ -284,9 +291,12 @@ class CanonicalEventStore:
             ).fetchone()
             if existing:
                 return CanonicalStoreResult(
-                    success=True, event_id=str(existing[0]),
-                    sha256_hash=existing[1], chain_hash=existing[2],
-                    idempotent=True, errors=[],
+                    success=True,
+                    event_id=str(existing[0]),
+                    sha256_hash=existing[1],
+                    chain_hash=existing[2],
+                    idempotent=True,
+                    errors=[],
                 )
 
         # --- Mark superseded event (fix #1262) ---
@@ -318,9 +328,12 @@ class CanonicalEventStore:
         # --- Insert hash chain entry ---
         if not self.skip_chain_write:
             self._insert_chain_entry(
-                tenant_id=tenant_id, event_id=str(event.event_id),
-                sequence_num=next_sequence, event_hash=event.sha256_hash,
-                previous_chain_hash=previous_chain_hash, chain_hash=chain_hash,
+                tenant_id=tenant_id,
+                event_id=str(event.event_id),
+                sequence_num=next_sequence,
+                event_hash=event.sha256_hash,
+                previous_chain_hash=previous_chain_hash,
+                chain_hash=chain_hash,
             )
 
         # --- Dual-write to legacy table (TEMPORARY — see migration.py) ---
@@ -364,9 +377,13 @@ class CanonicalEventStore:
         )
 
         return CanonicalStoreResult(
-            success=True, event_id=str(event.event_id),
-            sha256_hash=event.sha256_hash, chain_hash=chain_hash,
-            idempotent=False, errors=[], legacy_event_id=legacy_id,
+            success=True,
+            event_id=str(event.event_id),
+            sha256_hash=event.sha256_hash,
+            chain_hash=chain_hash,
+            idempotent=False,
+            errors=[],
+            legacy_event_id=legacy_id,
         )
 
     # ------------------------------------------------------------------
@@ -419,7 +436,7 @@ class CanonicalEventStore:
             """
         ).bindparams(bindparam("keys", expanding=True))
         for chunk_start in range(0, len(idemp_keys), 100):
-            chunk = idemp_keys[chunk_start:chunk_start + 100]
+            chunk = idemp_keys[chunk_start : chunk_start + 100]
             if not chunk:
                 continue
             rows = self.session.execute(
@@ -453,30 +470,43 @@ class CanonicalEventStore:
         for evt in events:
             if evt.idempotency_key and evt.idempotency_key in existing_map:
                 eid, sha, ch = existing_map[evt.idempotency_key]
-                results.append(CanonicalStoreResult(
-                    success=True, event_id=eid, sha256_hash=sha,
-                    chain_hash=ch, idempotent=True, errors=[],
-                ))
+                results.append(
+                    CanonicalStoreResult(
+                        success=True,
+                        event_id=eid,
+                        sha256_hash=sha,
+                        chain_hash=ch,
+                        idempotent=True,
+                        errors=[],
+                    )
+                )
                 continue
 
             chain_hash = compute_chain_hash(evt.sha256_hash, previous_chain_hash)
             evt.chain_hash = chain_hash
 
-            chain_entries.append({
-                "tenant_id": tenant_id,
-                "cte_event_id": str(evt.event_id),
-                "sequence_num": next_sequence,
-                "event_hash": evt.sha256_hash,
-                "previous_chain_hash": previous_chain_hash,
-                "chain_hash": chain_hash,
-            })
+            chain_entries.append(
+                {
+                    "tenant_id": tenant_id,
+                    "cte_event_id": str(evt.event_id),
+                    "sequence_num": next_sequence,
+                    "event_hash": evt.sha256_hash,
+                    "previous_chain_hash": previous_chain_hash,
+                    "chain_hash": chain_hash,
+                }
+            )
 
             new_events.append(evt)
-            results.append(CanonicalStoreResult(
-                success=True, event_id=str(evt.event_id),
-                sha256_hash=evt.sha256_hash, chain_hash=chain_hash,
-                idempotent=False, errors=[],
-            ))
+            results.append(
+                CanonicalStoreResult(
+                    success=True,
+                    event_id=str(evt.event_id),
+                    sha256_hash=evt.sha256_hash,
+                    chain_hash=chain_hash,
+                    idempotent=False,
+                    errors=[],
+                )
+            )
 
             previous_chain_hash = chain_hash
             next_sequence += 1
@@ -491,13 +521,10 @@ class CanonicalEventStore:
         # sha256_hash / chain_hash values for them (#1266).
         inserted_event_ids: set[str] = set()
         for chunk_start in range(0, len(new_events), 50):
-            chunk = new_events[chunk_start:chunk_start + 50]
+            chunk = new_events[chunk_start : chunk_start + 50]
             inserted_event_ids |= self._batch_insert_canonical_events(chunk)
 
-        lost_race_events = [
-            evt for evt in new_events
-            if str(evt.event_id) not in inserted_event_ids
-        ]
+        lost_race_events = [evt for evt in new_events if str(evt.event_id) not in inserted_event_ids]
 
         if lost_race_events:
             # Re-select the winning rows (by idempotency_key) and patch
@@ -508,10 +535,7 @@ class CanonicalEventStore:
             for idx, evt in enumerate(events):
                 if evt.idempotency_key:
                     idemp_to_result_idx[evt.idempotency_key] = idx
-            idemp_keys = [
-                evt.idempotency_key for evt in lost_race_events
-                if evt.idempotency_key
-            ]
+            idemp_keys = [evt.idempotency_key for evt in lost_race_events if evt.idempotency_key]
             if idemp_keys:
                 _winner_select = text(
                     """
@@ -521,7 +545,7 @@ class CanonicalEventStore:
                     """
                 ).bindparams(bindparam("keys", expanding=True))
                 for chunk_start in range(0, len(idemp_keys), 100):
-                    chunk_keys = idemp_keys[chunk_start:chunk_start + 100]
+                    chunk_keys = idemp_keys[chunk_start : chunk_start + 100]
                     rows = self.session.execute(
                         _winner_select,
                         {"tid": tenant_id, "keys": chunk_keys},
@@ -547,17 +571,12 @@ class CanonicalEventStore:
         # row we lost to a concurrent writer already has its chain entry
         # written by the winner, so emitting another would double-grow
         # the chain.
-        chain_entries_to_write = [
-            ce for ce in chain_entries
-            if str(ce["cte_event_id"]) in inserted_event_ids
-        ]
+        chain_entries_to_write = [ce for ce in chain_entries if str(ce["cte_event_id"]) in inserted_event_ids]
         for chunk_start in range(0, len(chain_entries_to_write), 100):
-            chunk = chain_entries_to_write[chunk_start:chunk_start + 100]
+            chunk = chain_entries_to_write[chunk_start : chunk_start + 100]
             self._batch_insert_chain_entries(chunk)
 
-        inserted_events = [
-            evt for evt in new_events if str(evt.event_id) in inserted_event_ids
-        ]
+        inserted_events = [evt for evt in new_events if str(evt.event_id) in inserted_event_ids]
         for evt in inserted_events:
             self._create_transformation_links(evt)
 
@@ -661,8 +680,10 @@ class CanonicalEventStore:
                 logger.warning(
                     "transformation_link_create_failed",
                     extra={
-                        "event_id": event_id, "input_tlc": input_tlc,
-                        "output_tlc": output_tlc, "error": str(exc),
+                        "event_id": event_id,
+                        "input_tlc": input_tlc,
+                        "output_tlc": output_tlc,
+                        "error": str(exc),
                     },
                 )
 
@@ -670,8 +691,10 @@ class CanonicalEventStore:
             logger.info(
                 "transformation_links_created",
                 extra={
-                    "event_id": event_id, "output_tlc": output_tlc,
-                    "input_count": len(input_lot_codes), "tenant_id": tenant_id,
+                    "event_id": event_id,
+                    "output_tlc": output_tlc,
+                    "input_count": len(input_lot_codes),
+                    "tenant_id": tenant_id,
                 },
             )
 
@@ -732,14 +755,18 @@ class CanonicalEventStore:
                     truncated = True
                     break
                 output_tlc = row[0]
-                results.append({
-                    "input_tlc": current_tlc, "output_tlc": output_tlc,
-                    "transformation_event_id": str(row[1]), "process_type": row[2],
-                    "output_quantity": float(row[3]) if row[3] else None,
-                    "output_unit": row[4],
-                    "confidence_score": float(row[5]) if row[5] else 1.0,
-                    "depth": depth + 1,
-                })
+                results.append(
+                    {
+                        "input_tlc": current_tlc,
+                        "output_tlc": output_tlc,
+                        "transformation_event_id": str(row[1]),
+                        "process_type": row[2],
+                        "output_quantity": float(row[3]) if row[3] else None,
+                        "output_unit": row[4],
+                        "confidence_score": float(row[5]) if row[5] else 1.0,
+                        "depth": depth + 1,
+                    }
+                )
                 if output_tlc not in visited:
                     queue.append((output_tlc, depth + 1))
 
@@ -801,14 +828,18 @@ class CanonicalEventStore:
                     truncated = True
                     break
                 input_tlc = row[0]
-                results.append({
-                    "input_tlc": input_tlc, "output_tlc": current_tlc,
-                    "transformation_event_id": str(row[1]), "process_type": row[2],
-                    "input_quantity": float(row[3]) if row[3] else None,
-                    "input_unit": row[4],
-                    "confidence_score": float(row[5]) if row[5] else 1.0,
-                    "depth": depth + 1,
-                })
+                results.append(
+                    {
+                        "input_tlc": input_tlc,
+                        "output_tlc": current_tlc,
+                        "transformation_event_id": str(row[1]),
+                        "process_type": row[2],
+                        "input_quantity": float(row[3]) if row[3] else None,
+                        "input_unit": row[4],
+                        "confidence_score": float(row[5]) if row[5] else 1.0,
+                        "depth": depth + 1,
+                    }
+                )
                 if input_tlc not in visited:
                     queue.append((input_tlc, depth + 1))
 
@@ -877,17 +908,22 @@ class CanonicalEventStore:
             return None
 
         result: Dict[str, Any] = {
-            "event_id": str(row[0]), "tenant_id": str(row[1]),
-            "source_system": row[2], "source_record_id": row[3],
+            "event_id": str(row[0]),
+            "tenant_id": str(row[1]),
+            "source_system": row[2],
+            "source_record_id": row[3],
             "event_type": row[4],
             "event_timestamp": row[5].isoformat() if row[5] else None,
             "event_timezone": row[6],
-            "product_reference": row[7], "lot_reference": row[8],
+            "product_reference": row[7],
+            "lot_reference": row[8],
             "traceability_lot_code": row[9],
             "quantity": float(row[10]) if row[10] else 0,
             "unit_of_measure": row[11],
-            "from_entity_reference": row[12], "to_entity_reference": row[13],
-            "from_facility_reference": row[14], "to_facility_reference": row[15],
+            "from_entity_reference": row[12],
+            "to_entity_reference": row[13],
+            "from_facility_reference": row[14],
+            "to_facility_reference": row[15],
             "transport_reference": row[16],
             "kdes": row[17] if isinstance(row[17], dict) else json.loads(row[17] or "{}"),
             "normalized_payload": row[19] if isinstance(row[19], dict) else json.loads(row[19] or "{}"),
@@ -895,7 +931,9 @@ class CanonicalEventStore:
             "confidence_score": float(row[21]) if row[21] else 1.0,
             "status": row[22],
             "supersedes_event_id": str(row[23]) if row[23] else None,
-            "schema_version": row[24], "sha256_hash": row[25], "chain_hash": row[26],
+            "schema_version": row[24],
+            "sha256_hash": row[25],
+            "chain_hash": row[26],
             "created_at": row[27].isoformat() if row[27] else None,
             "amended_at": row[28].isoformat() if row[28] else None,
         }
@@ -904,16 +942,16 @@ class CanonicalEventStore:
         # PII leaks when a new consumer is added without thinking about
         # tenant scope / auth posture.
         if include_raw_payload:
-            result["raw_payload"] = (
-                row[18] if isinstance(row[18], dict)
-                else json.loads(row[18] or "{}")
-            )
+            result["raw_payload"] = row[18] if isinstance(row[18], dict) else json.loads(row[18] or "{}")
 
         return result
 
     def query_events_by_tlc(
-        self, tenant_id: str, tlc: str,
-        start_date: Optional[str] = None, end_date: Optional[str] = None,
+        self,
+        tenant_id: str,
+        tlc: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Query canonical events for a TLC within a date range.
 
@@ -953,13 +991,19 @@ class CanonicalEventStore:
 
         return [
             {
-                "event_id": str(r[0]), "event_type": r[1],
-                "traceability_lot_code": r[2], "product_reference": r[3],
-                "quantity": float(r[4]) if r[4] else 0, "unit_of_measure": r[5],
-                "from_facility_reference": r[6], "to_facility_reference": r[7],
+                "event_id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_reference": r[3],
+                "quantity": float(r[4]) if r[4] else 0,
+                "unit_of_measure": r[5],
+                "from_facility_reference": r[6],
+                "to_facility_reference": r[7],
                 "event_timestamp": r[8].isoformat() if r[8] else None,
-                "sha256_hash": r[9], "chain_hash": r[10],
-                "source_system": r[11], "status": r[12],
+                "sha256_hash": r[9],
+                "chain_hash": r[10],
+                "source_system": r[11],
+                "status": r[12],
                 "kdes": r[13] if isinstance(r[13], dict) else json.loads(r[13] or "{}"),
                 "provenance_metadata": r[14] if isinstance(r[14], dict) else json.loads(r[14] or "{}"),
                 "confidence_score": float(r[15]) if r[15] else 1.0,
@@ -1077,9 +1121,7 @@ class CanonicalEventStore:
             "epcis_biz_step": event.epcis_biz_step,
         }
 
-    def _batch_insert_canonical_events(
-        self, events: List[TraceabilityEvent]
-    ) -> set[str]:
+    def _batch_insert_canonical_events(self, events: List[TraceabilityEvent]) -> set[str]:
         """Batch insert canonical events, tolerant of idempotency races.
 
         Appends ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING`` so
@@ -1103,8 +1145,8 @@ class CanonicalEventStore:
 
         col_names = list(self._event_to_params(events[0]).keys())
         sql = f"""
-            INSERT INTO fsma.traceability_events ({', '.join(col_names)})
-            VALUES {', '.join(values_clauses)}
+            INSERT INTO fsma.traceability_events ({", ".join(col_names)})
+            VALUES {", ".join(values_clauses)}
             ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
             RETURNING event_id
         """
@@ -1112,8 +1154,13 @@ class CanonicalEventStore:
         return {str(r[0]) for r in rows}
 
     def _insert_chain_entry(
-        self, tenant_id: str, event_id: str, sequence_num: int,
-        event_hash: str, previous_chain_hash: Optional[str], chain_hash: str,
+        self,
+        tenant_id: str,
+        event_id: str,
+        sequence_num: int,
+        event_hash: str,
+        previous_chain_hash: Optional[str],
+        chain_hash: str,
     ) -> None:
         """Insert a hash chain entry."""
         self.session.execute(
@@ -1127,9 +1174,12 @@ class CanonicalEventStore:
                 )
             """),
             {
-                "tenant_id": tenant_id, "cte_event_id": event_id,
-                "sequence_num": sequence_num, "event_hash": event_hash,
-                "previous_chain_hash": previous_chain_hash, "chain_hash": chain_hash,
+                "tenant_id": tenant_id,
+                "cte_event_id": event_id,
+                "sequence_num": sequence_num,
+                "event_hash": event_hash,
+                "previous_chain_hash": previous_chain_hash,
+                "chain_hash": chain_hash,
             },
         )
 
@@ -1138,18 +1188,21 @@ class CanonicalEventStore:
         values_clauses = []
         params: Dict[str, Any] = {}
         for i, entry in enumerate(entries):
-            values_clauses.append(
-                f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})"
+            values_clauses.append(f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})")
+            params.update(
+                {
+                    f"tid_{i}": entry["tenant_id"],
+                    f"eid_{i}": entry["cte_event_id"],
+                    f"seq_{i}": entry["sequence_num"],
+                    f"eh_{i}": entry["event_hash"],
+                    f"pch_{i}": entry["previous_chain_hash"],
+                    f"ch_{i}": entry["chain_hash"],
+                }
             )
-            params.update({
-                f"tid_{i}": entry["tenant_id"], f"eid_{i}": entry["cte_event_id"],
-                f"seq_{i}": entry["sequence_num"], f"eh_{i}": entry["event_hash"],
-                f"pch_{i}": entry["previous_chain_hash"], f"ch_{i}": entry["chain_hash"],
-            })
         sql = f"""
             INSERT INTO fsma.hash_chain (
                 tenant_id, cte_event_id, sequence_num,
                 event_hash, previous_chain_hash, chain_hash
-            ) VALUES {', '.join(values_clauses)}
+            ) VALUES {", ".join(values_clauses)}
         """
         self.session.execute(text(sql), params)

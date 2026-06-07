@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pytest
+from shared import db_type_assertions as dta
 from sqlalchemy import Column, Integer, MetaData, String
-from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.dialects.postgresql import TEXT, UUID
+from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.orm import declarative_base
 
 from services.admin.app.sqlalchemy_models import GUID
-from shared import db_type_assertions as dta
 
 
 class _FakeDialect:
@@ -121,10 +121,7 @@ def test_missing_audit_hash_input_columns_are_critical(monkeypatch):
     assert "audit_logs.severity" in message
     assert "audit_logs.endpoint" in message
     assert "audit_logs.prev_hash" in message
-    assert all(
-        drift["reason"] == "audit_hash_chain_column"
-        for drift in log.errors[0][1]["drifts"]
-    )
+    assert all(drift["reason"] == "audit_hash_chain_column" for drift in log.errors[0][1]["drifts"])
 
 
 def test_noncritical_drift_is_warned_and_returned(monkeypatch):

@@ -13,6 +13,7 @@ up by pointing the poster at IPs that ``BLOCKED_NETWORKS`` covers and
 asserting an ``SSRFError`` (or its ``ValueError`` cousin) propagates
 before any socket is opened.
 """
+
 from __future__ import annotations
 
 import sys
@@ -29,9 +30,8 @@ pytest.importorskip("httpx")
 # Import directly from the package so we get the same module identity
 # that ``shared.safe_http`` imports — avoids drift if a sibling test
 # stuffed something into ``sys.modules['shared.url_validation']``.
-from shared.url_validation import SSRFError  # noqa: E402
-
 import app.webhook_outbox as wo  # noqa: E402
+from shared.url_validation import SSRFError  # noqa: E402
 
 
 def test_default_http_poster_rejects_metadata_ip() -> None:
@@ -50,12 +50,7 @@ def test_default_http_poster_rejects_metadata_ip() -> None:
         )
     # Sanity: the error mentions the blocked address or a validation phrase.
     msg = str(exc_info.value).lower()
-    assert (
-        "169.254" in msg
-        or "blocked" in msg
-        or "validation" in msg
-        or "ssrf" in msg
-    ), msg
+    assert "169.254" in msg or "blocked" in msg or "validation" in msg or "ssrf" in msg, msg
 
 
 def test_default_http_poster_rejects_rfc1918() -> None:
@@ -67,9 +62,4 @@ def test_default_http_poster_rejects_rfc1918() -> None:
             {},
         )
     msg = str(exc_info.value).lower()
-    assert (
-        "10.0.0" in msg
-        or "blocked" in msg
-        or "validation" in msg
-        or "ssrf" in msg
-    ), msg
+    assert "10.0.0" in msg or "blocked" in msg or "validation" in msg or "ssrf" in msg, msg

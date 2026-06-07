@@ -17,9 +17,8 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
 from app import routes_ingest
+from fastapi import HTTPException
 
 
 class _ChunkingUploadFile:
@@ -31,8 +30,7 @@ class _ChunkingUploadFile:
     cap.
     """
 
-    def __init__(self, total_size: int, *, filename: str = "big.pdf",
-                 content_type: str = "application/pdf"):
+    def __init__(self, total_size: int, *, filename: str = "big.pdf", content_type: str = "application/pdf"):
         self._total = total_size
         self._pos = 0
         self.filename = filename
@@ -91,8 +89,7 @@ def test_ingest_file_oversize_short_circuits_with_413(monkeypatch):
     # cap. Allow one extra chunk for the chunk that tripped the guard.
     one_chunk = 1 << 20
     assert upload.bytes_read <= routes_ingest.MAX_PAYLOAD_BYTES + one_chunk, (
-        f"handler buffered {upload.bytes_read} bytes; expected early "
-        f"termination near {routes_ingest.MAX_PAYLOAD_BYTES}"
+        f"handler buffered {upload.bytes_read} bytes; expected early termination near {routes_ingest.MAX_PAYLOAD_BYTES}"
     )
     # And it must be substantially less than the full oversize payload.
     assert upload.bytes_read < oversize
@@ -108,7 +105,8 @@ def test_ingest_file_under_limit_succeeds_in_size_check(monkeypatch):
     # Stub _process_and_emit so we don't actually parse anything; the test
     # only cares that the streaming size check did not 413.
     monkeypatch.setattr(
-        routes_ingest, "_process_and_emit",
+        routes_ingest,
+        "_process_and_emit",
         lambda **kwargs: MagicMock(name="event"),
     )
 
@@ -139,9 +137,7 @@ def test_ingest_regulation_oversize_short_circuits_with_413(monkeypatch):
     monkeypatch.setattr(routes_ingest.redis, "from_url", lambda *a, **kw: MagicMock())
 
     oversize = (100 * 1024 * 1024) + (2 * 1024 * 1024)  # 102 MiB
-    upload = _ChunkingUploadFile(
-        total_size=oversize, filename="reg.pdf", content_type="application/pdf"
-    )
+    upload = _ChunkingUploadFile(total_size=oversize, filename="reg.pdf", content_type="application/pdf")
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(

@@ -17,6 +17,7 @@ row that didn't first pass through :func:`safe_cell`.
 See ``docs/audits/GH_ISSUES_CONSOLIDATION_2026_04_17.md`` §2 EPIC-L
 for the consolidated plan this package implements.
 """
+
 from __future__ import annotations
 
 from .csv_safety import (

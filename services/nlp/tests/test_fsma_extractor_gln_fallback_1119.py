@@ -61,9 +61,7 @@ def extractor() -> FSMAExtractor:
 
 
 class TestGLNFallbackDoesNotMirrorToTLCSource_Issue1119:
-    def test_single_unlabeled_gln_does_not_mirror_to_tlc_source(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_single_unlabeled_gln_does_not_mirror_to_tlc_source(self, extractor: FSMAExtractor) -> None:
         """One unlabeled GLN must populate ship_from only — never
         tlc_source. The pre-fix code mirrored the same value into both
         slots, which destroys provenance in multi-hop chains."""
@@ -77,17 +75,12 @@ class TestGLNFallbackDoesNotMirrorToTLCSource_Issue1119:
             "GLN — packer != shipper in multi-hop supply chains (#1119)"
         )
 
-    def test_two_unlabeled_glns_populate_ship_but_not_tlc_source(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_two_unlabeled_glns_populate_ship_but_not_tlc_source(self, extractor: FSMAExtractor) -> None:
         """With two unlabeled GLNs the positional fallback maps them to
         ship_from and ship_to, but tlc_source_gln stays None because
         there is no textual signal that either party is the TLC
         originator."""
-        text = (
-            "BOL header. GLN: 0012345678905.\n"
-            "Body: delivery address GLN 0098765432108. 40 cases shipped."
-        )
+        text = "BOL header. GLN: 0012345678905.\nBody: delivery address GLN 0098765432108. 40 cases shipped."
 
         roles = extractor._extract_gln_roles(text)
 
@@ -99,9 +92,7 @@ class TestGLNFallbackDoesNotMirrorToTLCSource_Issue1119:
             "packer (#1119)"
         )
 
-    def test_explicit_packed_by_label_populates_tlc_source_distinctly(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_explicit_packed_by_label_populates_tlc_source_distinctly(self, extractor: FSMAExtractor) -> None:
         """With explicit role labels the TLC source resolves to the
         PACKER, not the SHIPPER — the two values must be distinct."""
         text = (

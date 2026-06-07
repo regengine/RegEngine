@@ -11,6 +11,7 @@ the browser. These tests lock in the fix:
 - When no trusted claim is set, a sole active membership is used.
 - Multi-tenant users without an app_metadata claim are refused.
 """
+
 from __future__ import annotations
 
 # Admin-test sys.path bootstrap (#1435).
@@ -31,15 +32,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-
 USER_ID = uuid.uuid4()
 TENANT_A = uuid.uuid4()
 TENANT_B = uuid.uuid4()
 
 
-def _fake_sb_user(
-    *, app_metadata: dict | None = None, user_metadata: dict | None = None
-):
+def _fake_sb_user(*, app_metadata: dict | None = None, user_metadata: dict | None = None):
     user = SimpleNamespace()
     user.id = str(USER_ID)
     user.app_metadata = app_metadata if app_metadata is not None else {}
@@ -155,16 +153,15 @@ def test_app_metadata_tenant_used(monkeypatch):
 @pytest.mark.security
 def test_supabase_invalid_jwt_rejected_after_local_fallback(monkeypatch):
     """Invalid Supabase tokens are still 401 after RegEngine JWT fallback fails."""
-    from services.admin.app import dependencies as deps
     from jwt.exceptions import InvalidTokenError
+
+    from services.admin.app import dependencies as deps
 
     class AuthApiError(Exception):
         __module__ = "gotrue.errors"
 
     fake_sb = MagicMock()
-    fake_sb.auth.get_user.side_effect = AuthApiError(
-        "invalid JWT: unable to parse or verify signature"
-    )
+    fake_sb.auth.get_user.side_effect = AuthApiError("invalid JWT: unable to parse or verify signature")
     monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
 
     decode_access_token = MagicMock(side_effect=InvalidTokenError("invalid local JWT"))
@@ -190,9 +187,7 @@ def test_supabase_invalid_jwt_can_fall_back_to_regengine_jwt(monkeypatch):
         __module__ = "gotrue.errors"
 
     fake_sb = MagicMock()
-    fake_sb.auth.get_user.side_effect = AuthApiError(
-        "invalid JWT: unable to parse or verify signature"
-    )
+    fake_sb.auth.get_user.side_effect = AuthApiError("invalid JWT: unable to parse or verify signature")
     monkeypatch.setattr(deps, "get_supabase", lambda: fake_sb)
     monkeypatch.setattr(deps, "check_revoked_async", AsyncMock(return_value=False))
 

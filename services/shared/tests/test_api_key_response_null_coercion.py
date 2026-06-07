@@ -10,10 +10,10 @@ on the SQLAlchemy columns made those defaults the expected value.
 The fix adds pydantic ``@field_validator(mode='before')`` that coerces
 NULL → the same default the ORM would have applied on insert.
 """
+
 from datetime import datetime, timezone
 
 import pytest
-
 from shared.api_key_store import APIKeyResponse
 
 

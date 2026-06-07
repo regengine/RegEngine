@@ -25,7 +25,6 @@ from app.epcis.validation import (  # noqa: E402
     _validate_gln_format,
 )
 
-
 # ---------------------------------------------------------------------------
 # GS1 check-digit reference values
 # ---------------------------------------------------------------------------
@@ -37,11 +36,11 @@ from app.epcis.validation import (  # noqa: E402
 # (semantically invalid but passes the check-digit test — out of scope
 # for this gate, flagged here so the regression surface is explicit).
 _VALID_GLN = "0614141999996"
-_INVALID_CHECK_DIGIT = "0614141999990"   # (a) last digit tampered 6→0
-_TRANSPOSED_DIGITS = "0614141999892"     # (b) body-digit tamper (98→89)
-_ALL_ZEROS = "0000000000000"             # (c) check digit 0 is valid;
-                                         # caller must still guard against
-                                         # semantically-empty GLNs.
+_INVALID_CHECK_DIGIT = "0614141999990"  # (a) last digit tampered 6→0
+_TRANSPOSED_DIGITS = "0614141999892"  # (b) body-digit tamper (98→89)
+_ALL_ZEROS = "0000000000000"  # (c) check digit 0 is valid;
+# caller must still guard against
+# semantically-empty GLNs.
 
 
 # ---------------------------------------------------------------------------

@@ -40,11 +40,11 @@ class GitHubClient:
         if self._github is None:
             try:
                 from github import Github
+
                 self._github = Github(self.token)
             except ImportError:
                 raise ImportError(
-                    "PyGithub is required for GitHub integration. "
-                    "Install it with: pip install PyGithub>=2.1.0"
+                    "PyGithub is required for GitHub integration. Install it with: pip install PyGithub>=2.1.0"
                 )
         return self._github
 
@@ -54,8 +54,7 @@ class GitHubClient:
         if self._repo is None:
             if not self.repo_name:
                 raise ValueError(
-                    "Repository name required. Set GITHUB_REPO env var "
-                    "or pass repo_name to GitHubClient()"
+                    "Repository name required. Set GITHUB_REPO env var or pass repo_name to GitHubClient()"
                 )
             self._repo = self.github.get_repo(self.repo_name)
         return self._repo
@@ -73,15 +72,17 @@ class GitHubClient:
 
         issues = []
         for issue in self.repo.get_issues(**kwargs)[:limit]:
-            issues.append({
-                "number": issue.number,
-                "title": issue.title,
-                "body": issue.body or "",
-                "labels": [l.name for l in issue.labels],
-                "state": issue.state,
-                "created_at": issue.created_at.isoformat(),
-                "url": issue.html_url,
-            })
+            issues.append(
+                {
+                    "number": issue.number,
+                    "title": issue.title,
+                    "body": issue.body or "",
+                    "labels": [l.name for l in issue.labels],
+                    "state": issue.state,
+                    "created_at": issue.created_at.isoformat(),
+                    "url": issue.html_url,
+                }
+            )
 
         logger.info("issues_listed", count=len(issues), state=state)
         return issues
@@ -173,7 +174,7 @@ class GitHubClient:
         pr = self.repo.get_pull(pr_number)
         ref = pr.head.sha
         status = self.repo.get_combined_status(ref)
-        return status.state # 'success', 'failure', 'pending', etc.
+        return status.state  # 'success', 'failure', 'pending', etc.
 
 
 class IssueLabelClassifier:
@@ -212,6 +213,7 @@ class IssueLabelClassifier:
 
     def __init__(self, llm_client=None):
         from regengine.swarm.llm import LLMClientFactory
+
         self.llm = llm_client or LLMClientFactory.create()
 
     def classify(self, title: str, body: str) -> Dict[str, Any]:

@@ -72,9 +72,7 @@ def _make_event(lot: str) -> dict:
         "cbvmda:lotNumber": lot,
         "fsma:traceabilityLotCode": f"00012345678901-{lot}",
     }
-    evt["extension"]["quantityList"][0]["epcClass"] = (
-        f"urn:epc:class:lgtin:0614141.107346.{lot}"
-    )
+    evt["extension"]["quantityList"][0]["epcClass"] = f"urn:epc:class:lgtin:0614141.107346.{lot}"
     return evt
 
 
@@ -149,9 +147,9 @@ def _fake_normalize_epcis_event(event: dict, tenant_id: str) -> Any:
 
 @pytest.fixture(autouse=True)
 def _reset_and_install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
-    import shared.cte_persistence as _cte_mod
     import shared.canonical_event as _canon_mod
     import shared.canonical_persistence as _store_mod
+    import shared.cte_persistence as _cte_mod
     import shared.rules_engine as _rules_mod
 
     _RecordingCTEPersistence.stored_events = []
@@ -200,13 +198,10 @@ class TestBatchAtomicityOnMidBatchDbFailure:
         # WARN log mentions the offending index and the tenant.
         warn_messages = [r.message for r in caplog.records if r.levelname == "WARNING"]
         assert any(
-            "epcis_batch_rollback" in m and "failed_index=1" in m and "tenant-1156" in m
-            for m in warn_messages
+            "epcis_batch_rollback" in m and "failed_index=1" in m and "tenant-1156" in m for m in warn_messages
         ), f"missing structured rollback warning; got: {warn_messages}"
 
-    def test_happy_path_commits_once_for_three_good_events(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_happy_path_commits_once_for_three_good_events(self, monkeypatch: pytest.MonkeyPatch) -> None:
         session = MagicMock()
         monkeypatch.setattr(persistence_mod, "get_db_safe", lambda: session)
 
@@ -231,16 +226,12 @@ class TestBatchTransactionalEnvGate:
         assert persistence_mod._batch_transactional() is True
 
     @pytest.mark.parametrize("val", ["1", "true", "yes", "on", "atomic"])
-    def test_truthy_variants_are_atomic(
-        self, monkeypatch: pytest.MonkeyPatch, val: str
-    ) -> None:
+    def test_truthy_variants_are_atomic(self, monkeypatch: pytest.MonkeyPatch, val: str) -> None:
         monkeypatch.setenv("EPCIS_BATCH_TRANSACTIONAL", val)
         assert persistence_mod._batch_transactional() is True
 
     @pytest.mark.parametrize("val", ["0", "false", "no", "off", "partial"])
-    def test_falsy_variants_opt_out(
-        self, monkeypatch: pytest.MonkeyPatch, val: str
-    ) -> None:
+    def test_falsy_variants_opt_out(self, monkeypatch: pytest.MonkeyPatch, val: str) -> None:
         monkeypatch.setenv("EPCIS_BATCH_TRANSACTIONAL", val)
         assert persistence_mod._batch_transactional() is False
 
@@ -251,9 +242,7 @@ class TestBatchTransactionalEnvGate:
 class TestRouterModeDefaultsRespectEnvGate:
     """``mode`` query param absent → router resolves via ``_batch_transactional``."""
 
-    def test_no_mode_with_env_true_dispatches_to_atomic(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_mode_with_env_true_dispatches_to_atomic(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = {"atomic": 0, "partial": 0}
 
         def _fake_atomic(tenant: str, events: list[dict]) -> list:
@@ -268,7 +257,8 @@ class TestRouterModeDefaultsRespectEnvGate:
         monkeypatch.setattr(router_mod, "_ingest_single_event", _fake_single)
         monkeypatch.setattr(router_mod, "_batch_transactional", lambda: True)
         monkeypatch.setattr(
-            router_mod, "_resolve_authenticated_tenant",
+            router_mod,
+            "_resolve_authenticated_tenant",
             lambda request, x, y: "tenant-router",
         )
 
@@ -278,16 +268,18 @@ class TestRouterModeDefaultsRespectEnvGate:
         fake_request = MagicMock()
         resp = asyncio.run(
             router_mod.ingest_epcis_batch(
-                request=fake_request, body=body, mode=None,
-                x_tenant_id="tenant-router", x_regengine_api_key="k", _=None,
+                request=fake_request,
+                body=body,
+                mode=None,
+                x_tenant_id="tenant-router",
+                x_regengine_api_key="k",
+                _=None,
             )
         )
         assert resp.status_code == 201
         assert calls == {"atomic": 1, "partial": 0}
 
-    def test_no_mode_with_env_false_dispatches_to_partial(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_mode_with_env_false_dispatches_to_partial(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = {"atomic": 0, "partial": 0}
 
         def _fake_atomic(tenant: str, events: list[dict]) -> list:
@@ -302,7 +294,8 @@ class TestRouterModeDefaultsRespectEnvGate:
         monkeypatch.setattr(router_mod, "_ingest_single_event", _fake_single)
         monkeypatch.setattr(router_mod, "_batch_transactional", lambda: False)
         monkeypatch.setattr(
-            router_mod, "_resolve_authenticated_tenant",
+            router_mod,
+            "_resolve_authenticated_tenant",
             lambda request, x, y: "tenant-router",
         )
 
@@ -312,8 +305,12 @@ class TestRouterModeDefaultsRespectEnvGate:
         fake_request = MagicMock()
         resp = asyncio.run(
             router_mod.ingest_epcis_batch(
-                request=fake_request, body=body, mode=None,
-                x_tenant_id="tenant-router", x_regengine_api_key="k", _=None,
+                request=fake_request,
+                body=body,
+                mode=None,
+                x_tenant_id="tenant-router",
+                x_regengine_api_key="k",
+                _=None,
             )
         )
         assert resp.status_code == 201

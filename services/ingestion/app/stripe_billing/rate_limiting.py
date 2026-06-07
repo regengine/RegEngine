@@ -57,8 +57,8 @@ def _get_redis():
     if _redis_client is not None:
         return _redis_client
     try:
-        from app.config import get_settings
         import redis as redis_lib
+        from app.config import get_settings
 
         settings = get_settings()
         _redis_client = redis_lib.from_url(
@@ -70,9 +70,7 @@ def _get_redis():
         _redis_client.ping()
         return _redis_client
     except Exception:
-        logger.debug(
-            "Redis unavailable for stripe webhook rate limiting, using in-memory fallback"
-        )
+        logger.debug("Redis unavailable for stripe webhook rate limiting, using in-memory fallback")
         _redis_failed = True
         return None
 
@@ -124,10 +122,7 @@ def _trusted_proxy_cidrs() -> list:
     (specific) wins over ``TRUSTED_PROXY_CIDRS`` (shared). Unset = XFF
     ignored; the raw socket address is used.
     """
-    raw = (
-        os.getenv("STRIPE_TRUSTED_PROXY_CIDRS", "").strip()
-        or os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
-    )
+    raw = os.getenv("STRIPE_TRUSTED_PROXY_CIDRS", "").strip() or os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
     if not raw:
         return []
     cidrs = []
@@ -173,9 +168,7 @@ def _client_ip(request) -> str:
     client_host = request.client.host if request.client else None
 
     if _is_trusted_proxy(client_host):
-        forwarded = request.headers.get("X-Forwarded-For") or request.headers.get(
-            "x-forwarded-for"
-        )
+        forwarded = request.headers.get("X-Forwarded-For") or request.headers.get("x-forwarded-for")
         if forwarded:
             first_hop = forwarded.split(",")[0].strip()
             if first_hop and _looks_like_ip(first_hop):

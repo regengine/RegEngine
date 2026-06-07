@@ -4,6 +4,7 @@ Each test creates a minimal fake migration file in a temp directory and
 invokes the helper functions directly (not via subprocess) so the suite
 stays fast and IDE-friendly.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -63,7 +64,7 @@ class TestLooksSequential:
 
     def test_non_12_char_not_flagged(self):
         """IDs that aren't exactly 12 chars are not flagged as sequential."""
-        assert not _looks_sequential("a1b2c3d4e5")    # 10 chars  # pragma: allowlist secret
+        assert not _looks_sequential("a1b2c3d4e5")  # 10 chars  # pragma: allowlist secret
         assert not _looks_sequential("a1b2c3d4e5f6a7")  # 14 chars  # pragma: allowlist secret
 
     def test_non_arithmetic_not_flagged(self):
@@ -80,12 +81,7 @@ class TestLooksSequential:
 def _write_migration(tmp_path: Path, filename: str, rev_id: str) -> Path:
     """Write a minimal Alembic migration file with the given revision ID."""
     f = tmp_path / filename
-    f.write_text(
-        f'revision: str = "{rev_id}"\n'
-        'down_revision = None\n'
-        'branch_labels = None\n'
-        'depends_on = None\n'
-    )
+    f.write_text(f'revision: str = "{rev_id}"\ndown_revision = None\nbranch_labels = None\ndepends_on = None\n')
     return f
 
 

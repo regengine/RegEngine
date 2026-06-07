@@ -23,12 +23,13 @@ Usage:
     start_task_worker()   # call in FastAPI lifespan startup
     stop_task_worker()    # call in FastAPI lifespan shutdown
 """
+
 from __future__ import annotations
 
 import os
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
@@ -70,8 +71,8 @@ LOCK_TIMEOUT_MINUTES = int(os.getenv("TASK_LOCK_TIMEOUT_MINUTES", "15"))
 # (which costs duplicate LLM calls / duplicate graph upserts).
 TASK_TIMEOUTS_SECONDS: Dict[str, int] = {
     "nlp_extraction": 300,  # up to 5 min for a long document
-    "graph_update": 120,    # Neo4j cluster hiccups
-    "review_item": 30,      # near-instant, trivial DB write
+    "graph_update": 120,  # Neo4j cluster hiccups
+    "review_item": 30,  # near-instant, trivial DB write
 }
 
 # Fallback for task types not present in TASK_TIMEOUTS_SECONDS.
@@ -95,6 +96,7 @@ WORKER_ID = f"worker-{os.getpid()}"
 
 # ── Task handlers ────────────────────────────────────────────────
 
+
 def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
     """Extract entities from an ingested document.
 
@@ -102,6 +104,7 @@ def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
     """
     try:
         from services.nlp.app.extractor import extract_entities
+
         doc_id = payload.get("document_id")
         text = payload.get("text", "")
         if not doc_id or not text:
@@ -123,6 +126,7 @@ def _handle_review_item(payload: Dict[str, Any]) -> None:
     """
     try:
         from services.admin.app.metrics import get_hallucination_tracker
+
         tracker = get_hallucination_tracker()
         tracker.record(
             document_id=payload.get("document_id", ""),
@@ -149,13 +153,16 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any]], None]] = {
 # The worker must never claim them even if they somehow end up with
 # status='pending'. Keep this list narrowly scoped and update it when a
 # new non-handler task_type starts sharing the queue.
-NON_WORKER_TASK_TYPES = frozenset({
-    "recall_drill",  # #1199 — recall drill history rows
-    "recall",        # #1199 — recall state machine rows (future)
-})
+NON_WORKER_TASK_TYPES = frozenset(
+    {
+        "recall_drill",  # #1199 — recall drill history rows
+        "recall",  # #1199 — recall state machine rows (future)
+    }
+)
 
 
 # ── Core worker loop ─────────────────────────────────────────────
+
 
 def _claim_task(db) -> Optional[Dict[str, Any]]:
     """Atomically claim the next pending task using SELECT ... FOR UPDATE SKIP LOCKED.
@@ -243,6 +250,7 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
 
 def _complete_task(db, task_id: int) -> None:
     from sqlalchemy import text
+
     db.execute(
         text("""
             UPDATE fsma.task_queue
@@ -500,6 +508,7 @@ def _worker_loop() -> None:
 
 # ── Public API ───────────────────────────────────────────────────
 
+
 def enqueue_task(
     task_type: str,
     payload: Dict[str, Any],
@@ -527,9 +536,10 @@ def enqueue_task(
     * Review item:    ``f"review_item:{document_id}:{entity_type}"``
     """
     try:
+        import json
+
         from shared.database import SessionLocal
         from sqlalchemy import text
-        import json
 
         db = SessionLocal()
         try:
@@ -713,9 +723,7 @@ def stop_task_worker(timeout_seconds: Optional[int] = None) -> None:
     if _worker_thread is None:
         return
 
-    effective_timeout = (
-        timeout_seconds if timeout_seconds is not None else SHUTDOWN_TIMEOUT_SECONDS
-    )
+    effective_timeout = timeout_seconds if timeout_seconds is not None else SHUTDOWN_TIMEOUT_SECONDS
     _worker_thread.join(timeout=effective_timeout)
 
     # If the worker is still alive the handler is stuck — sample the

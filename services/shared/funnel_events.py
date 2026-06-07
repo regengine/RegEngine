@@ -146,10 +146,7 @@ def get_funnel_stage_metrics(*, db_session: Any = None) -> list[dict[str, Any]]:
             session = _open_session()
         except Exception as exc:  # pragma: no cover - environment-specific
             logger.warning("funnel_metrics_session_open_failed error=%s", str(exc))
-            return [
-                {"name": stage, "count": 0, "conversion_from_previous_pct": 0.0}
-                for stage in FUNNEL_STAGE_ORDER
-            ]
+            return [{"name": stage, "count": 0, "conversion_from_previous_pct": 0.0} for stage in FUNNEL_STAGE_ORDER]
 
     try:
         rows = session.execute(

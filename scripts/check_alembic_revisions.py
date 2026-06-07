@@ -29,6 +29,7 @@ Exit code 0 = clean.  Non-zero = violation found.
 Usage:
     python scripts/check_alembic_revisions.py
 """
+
 from __future__ import annotations
 
 import re
@@ -46,9 +47,7 @@ _REV_RE = re.compile(r"""revision(?::\s*str)?\s*=\s*['"]([0-9a-fA-F]+)['"]""")
 # or a tuple.  We only use the single-string form for orphan detection —
 # tuple down_revisions (merge migrations) are rare in this codebase and
 # the parse below extracts the first string if present.
-_DOWN_RE = re.compile(
-    r"""down_revision(?::[^=]+)?\s*=\s*(None|['"]([0-9a-fA-F]+)['"]|\(.*?\))"""
-)
+_DOWN_RE = re.compile(r"""down_revision(?::[^=]+)?\s*=\s*(None|['"]([0-9a-fA-F]+)['"]|\(.*?\))""")
 
 # Known-handcrafted revision IDs grandfathered from pre-2026-04-20 migrations
 # still present in alembic/versions/ after the #1855 consolidation.
@@ -156,14 +155,9 @@ def main() -> int:
         if len(paths) > 1:
             files = ", ".join(rel(p) for p in paths)
             if rev_id in KNOWN_DUPLICATE_IDS:
-                warnings.append(
-                    f"pre-existing duplicate revision '{rev_id}' in "
-                    f"{len(paths)} files: {files}"
-                )
+                warnings.append(f"pre-existing duplicate revision '{rev_id}' in {len(paths)} files: {files}")
                 continue
-            failures.append(
-                f"DUPLICATE revision '{rev_id}' in {len(paths)} files: {files}"
-            )
+            failures.append(f"DUPLICATE revision '{rev_id}' in {len(paths)} files: {files}")
 
     # Check 2: orphan down_revision pointers — down_revision references a
     # revision ID that does not exist in the versions directory.  This is
@@ -183,14 +177,9 @@ def main() -> int:
     pointed_at = {d for _, _, d in down_rows if d is not None}
     heads = sorted(rev for rev in all_revs if rev not in pointed_at)
     if len(heads) > 1:
-        files_per_head = {
-            h: ", ".join(rel(p) for p in rev_map[h]) for h in heads
-        }
+        files_per_head = {h: ", ".join(rel(p) for p in rev_map[h]) for h in heads}
         detail = "; ".join(f"{h} in {files_per_head[h]}" for h in heads)
-        failures.append(
-            f"MULTIPLE HEADS ({len(heads)}): {detail} — "
-            "the revision DAG must have exactly one head"
-        )
+        failures.append(f"MULTIPLE HEADS ({len(heads)}): {detail} — the revision DAG must have exactly one head")
     elif len(heads) == 0:
         failures.append(
             "NO HEAD — every revision is referenced by some down_revision. "
@@ -226,7 +215,7 @@ def main() -> int:
             "\n"
             "For DUPLICATE IDs: each migration must have a unique revision value.\n"
             "Reassign duplicates by editing the file and picking a new random ID:\n"
-            "    python3 -c \"import uuid; print(uuid.uuid4().hex[:12])\"\n"
+            '    python3 -c "import uuid; print(uuid.uuid4().hex[:12])"\n'
             "\n"
             "For ORPHAN down_revision: the revision your migration extends must\n"
             "exist in alembic/versions/.  Either fix the down_revision value or\n"

@@ -14,17 +14,12 @@ The fixture style mirrors ``test_supplier_onboarding_routes.py``
 ``PermissionChecker.__call__`` patched so we can exercise both
 permitted and denied paths without a real roles/memberships table).
 """
+
 from __future__ import annotations
 
 from uuid import UUID
 
 import pytest
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     AuditLogModel,
     SupplierCTEEventModel,
@@ -35,7 +30,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -61,9 +60,7 @@ def _make_db(is_demo: bool) -> tuple[Session, list]:
     for t in tables:
         t.create(bind=engine)
 
-    session_local = sessionmaker(
-        bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True
-    )
+    session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = session_local()
     session.add(
         TenantModel(
@@ -120,22 +117,16 @@ def _install_app(
     def _deny_stub(self, user=Depends(get_current_user), db=Depends(get_session)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    monkeypatch.setattr(
-        PermissionChecker, "__call__", _permit_stub if permit else _deny_stub
-    )
+    monkeypatch.setattr(PermissionChecker, "__call__", _permit_stub if permit else _deny_stub)
 
     # Tenant context + graph sync shims.
-    monkeypatch.setattr(
-        funnel_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID
-    )
+    monkeypatch.setattr(funnel_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(
         funnel_routes.supplier_graph_sync,
         "record_facility_ftl_scoping",
         lambda **_kw: None,
     )
-    monkeypatch.setattr(
-        funnel_routes.supplier_graph_sync, "record_cte_event", lambda **_kw: None
-    )
+    monkeypatch.setattr(funnel_routes.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
 
     # Reset the per-process rate limiter between tests — the
     # BruteForceLimiter is module-global, so the in-memory counter
@@ -154,9 +145,7 @@ def test_denied_without_permission_returns_403(monkeypatch: pytest.MonkeyPatch):
     try:
         app = _install_app(session, monkeypatch, permit=False)
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            resp = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
         assert resp.status_code == 403
     finally:
         session.close()
@@ -168,9 +157,7 @@ def test_non_demo_tenant_returns_403(monkeypatch: pytest.MonkeyPatch):
     try:
         app = _install_app(session, monkeypatch, permit=True)
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            resp = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
         assert resp.status_code == 403
         body = resp.json()
         assert body["detail"]["error"] == "not_a_demo_tenant"
@@ -213,14 +200,10 @@ def test_rate_limit_429_on_second_call(monkeypatch: pytest.MonkeyPatch):
     try:
         app = _install_app(session, monkeypatch, permit=True)
         with TestClient(app) as client:
-            first = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            first = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
             assert first.status_code == 200, first.text
 
-            second = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            second = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
             assert second.status_code == 429
             assert second.json()["detail"]["error"] == "rate_limited"
     finally:
@@ -241,37 +224,31 @@ def test_happy_path_writes_audit_and_deletes(monkeypatch: pytest.MonkeyPatch):
     )
     session.commit()
     pre = session.execute(
-        select(SupplierFunnelEventModel).where(
-            SupplierFunnelEventModel.supplier_user_id == TEST_USER_ID
-        )
+        select(SupplierFunnelEventModel).where(SupplierFunnelEventModel.supplier_user_id == TEST_USER_ID)
     ).all()
     assert len(pre) == 1
 
     try:
         app = _install_app(session, monkeypatch, permit=True)
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            resp = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
         assert resp.status_code == 200, resp.text
 
         # Baseline funnel event was wiped (the reset deletes all
         # supplier-owned funnel events, facilities, CTEs, TLCs).
         session.expire_all()
         remaining = session.execute(
-            select(SupplierFunnelEventModel).where(
-                SupplierFunnelEventModel.event_name == "baseline"
-            )
+            select(SupplierFunnelEventModel).where(SupplierFunnelEventModel.event_name == "baseline")
         ).all()
         assert remaining == []
 
         # Audit entry with the right event_type and the pre-counts
         # recorded in metadata.
-        audit_rows = session.execute(
-            select(AuditLogModel).where(
-                AuditLogModel.event_type == "supplier.demo.reset"
-            )
-        ).scalars().all()
+        audit_rows = (
+            session.execute(select(AuditLogModel).where(AuditLogModel.event_type == "supplier.demo.reset"))
+            .scalars()
+            .all()
+        )
         assert len(audit_rows) == 1
         md = audit_rows[0].metadata_
         assert md["confirm_phrase_matched"] is True
@@ -301,14 +278,10 @@ def test_audit_failure_aborts_delete(monkeypatch: pytest.MonkeyPatch):
         import app.supplier_funnel_routes as funnel_routes
 
         # Force audit logging to signal failure.
-        monkeypatch.setattr(
-            funnel_routes.AuditLogger, "log_event", staticmethod(lambda *a, **k: None)
-        )
+        monkeypatch.setattr(funnel_routes.AuditLogger, "log_event", staticmethod(lambda *a, **k: None))
 
         with TestClient(app) as client:
-            resp = client.post(
-                "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-            )
+            resp = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
         assert resp.status_code == 500
         assert resp.json()["detail"]["error"] == "audit_write_failed"
 
@@ -316,16 +289,12 @@ def test_audit_failure_aborts_delete(monkeypatch: pytest.MonkeyPatch):
         # deleted because the audit step failed.
         session.expire_all()
         survivors = session.execute(
-            select(SupplierFunnelEventModel).where(
-                SupplierFunnelEventModel.event_name == "must-survive"
-            )
+            select(SupplierFunnelEventModel).where(SupplierFunnelEventModel.event_name == "must-survive")
         ).all()
         assert len(survivors) == 1
 
         # And the rate limit budget was NOT consumed — a follow-up
         # call (after restoring audit) should not be 429.
-        assert not funnel_routes._DEMO_RESET_RATE_LIMIT.is_limited(
-            f"{TEST_TENANT_ID}:{TEST_USER_ID}"
-        )
+        assert not funnel_routes._DEMO_RESET_RATE_LIMIT.is_limited(f"{TEST_TENANT_ID}:{TEST_USER_ID}")
     finally:
         session.close()

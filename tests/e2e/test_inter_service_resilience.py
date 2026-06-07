@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import time
+
 import pytest
 import requests
 
@@ -51,6 +52,7 @@ BYPASS_HEADERS = {
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def wait_for_service(url: str, timeout: int = 5) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -76,6 +78,7 @@ def skip_if_unavailable(*services: tuple[str, str]):
 
 # ── Fixtures ─────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module", autouse=True)
 def check_compliance_service():
     """Ensure compliance service is reachable."""
@@ -84,16 +87,20 @@ def check_compliance_service():
 
 # ── Test 1: Service Health with Correct Ports ────────────────────
 
+
 class TestServiceHealthPorts:
     """Verify services respond on the correct ports (post-PR #266 fix)."""
 
-    @pytest.mark.parametrize("service_name,url", [
-        ("compliance", COMPLIANCE_URL),
-        ("graph", GRAPH_URL),
-        ("admin", ADMIN_URL),
-        ("ingestion", INGESTION_URL),
-        ("nlp", NLP_URL),
-    ])
+    @pytest.mark.parametrize(
+        "service_name,url",
+        [
+            ("compliance", COMPLIANCE_URL),
+            ("graph", GRAPH_URL),
+            ("admin", ADMIN_URL),
+            ("ingestion", INGESTION_URL),
+            ("nlp", NLP_URL),
+        ],
+    )
     def test_health_on_correct_port(self, service_name: str, url: str):
         """Each service should respond on its Docker-assigned port."""
         try:
@@ -104,6 +111,7 @@ class TestServiceHealthPorts:
 
 
 # ── Test 2: Compliance Endpoints (FSMA 204) ──────────────────────
+
 
 class TestComplianceFSMA:
     """Test FSMA 204 compliance endpoints work end-to-end."""
@@ -164,6 +172,7 @@ class TestComplianceFSMA:
 
 
 # ── Test 3: Compliance Validation ────────────────────────────────
+
 
 class TestComplianceValidation:
     """Test FSMA 204 config validation endpoint."""
@@ -230,6 +239,7 @@ class TestComplianceValidation:
 
 # ── Test 4: Authentication Required ──────────────────────────────
 
+
 class TestAuthenticationEnforcement:
     """Verify endpoints require authentication."""
 
@@ -241,9 +251,7 @@ class TestAuthenticationEnforcement:
             timeout=5,
         )
         # Should get 401 or 403, not 200
-        assert r.status_code in (401, 403), (
-            f"Expected auth rejection, got {r.status_code}"
-        )
+        assert r.status_code in (401, 403), f"Expected auth rejection, got {r.status_code}"
 
     def test_checklists_without_api_key_rejects(self):
         """Checklists endpoint should require auth."""
@@ -256,6 +264,7 @@ class TestAuthenticationEnforcement:
 
 
 # ── Test 5: Compliance → Graph Error Passthrough ─────────────────
+
 
 class TestErrorPassthrough:
     """Verify that graph service errors are properly proxied (not generic 502)."""
@@ -283,6 +292,7 @@ class TestErrorPassthrough:
 
 
 # ── Test 6: Tenant Header Propagation ────────────────────────────
+
 
 class TestTenantHeaderPropagation:
     """Verify tenant context headers are accepted and processed."""

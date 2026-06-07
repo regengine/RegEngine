@@ -69,6 +69,7 @@ def _install_run_consumer_mocks(
     # Reset shutdown so other tests that may have flipped it don't prevent us
     # from running the loop even once.
     from services.nlp.app import consumer as consumer_mod
+
     consumer_mod._shutdown_event.clear()
 
     consumer = MagicMock(name="KafkaConsumer")
@@ -122,6 +123,7 @@ def test_poison_pill_flush_timeout_does_not_commit(monkeypatch: pytest.MonkeyPat
     )
 
     from services.nlp.app.consumer import run_consumer
+
     run_consumer()
 
     # DLQ send happened (send() was called on the DLQ topic).
@@ -147,6 +149,7 @@ def test_poison_pill_successful_flush_does_commit(monkeypatch: pytest.MonkeyPatc
     )
 
     from services.nlp.app.consumer import run_consumer
+
     run_consumer()
 
     assert producer.send.called, "DLQ send must happen"
@@ -171,6 +174,7 @@ def test_every_dlq_call_is_followed_by_flush_before_commit():
     reintroduce the #1085 gap without the test suite catching it.
     """
     from services.nlp.app import consumer as consumer_mod
+
     source = Path(consumer_mod.__file__).read_text(encoding="utf-8")
     lines = source.splitlines()
 
@@ -183,9 +187,7 @@ def test_every_dlq_call_is_followed_by_flush_before_commit():
         # def is one of the helpers, this line is inside its body.
         for j in range(idx, -1, -1):
             line = lines[j]
-            if line.startswith("def _send_to_dlq(") or line.startswith(
-                "def _send_to_fsma_dlq("
-            ):
+            if line.startswith("def _send_to_dlq(") or line.startswith("def _send_to_fsma_dlq("):
                 return True
             if line.startswith("def ") and j < idx:
                 return False
@@ -209,13 +211,11 @@ def test_every_dlq_call_is_followed_by_flush_before_commit():
             if "consumer.commit(" in w:
                 if not saw_flush_5s:
                     violations.append(
-                        f"line {i+1}: DLQ call not followed by "
-                        f"producer.flush(timeout=5.0) before consumer.commit()"
+                        f"line {i + 1}: DLQ call not followed by producer.flush(timeout=5.0) before consumer.commit()"
                     )
                 break
 
     assert not violations, (
         "#1085 regression — at least one DLQ call in the consumer loop is not "
-        "followed by producer.flush(timeout=5.0) before consumer.commit():\n  "
-        + "\n  ".join(violations)
+        "followed by producer.flush(timeout=5.0) before consumer.commit():\n  " + "\n  ".join(violations)
     )

@@ -9,6 +9,7 @@ The central invariant: ``compliant is None`` is NEVER a reject, in any
 mode. Blocking an event on non-evaluation would silently break ingestion
 for tenants without seeded rules and for non-FTL products.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -20,10 +21,10 @@ from services.shared.rules.enforcement import (
 )
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-
 # ---------------------------------------------------------------------------
 # Fixtures — summary builders
 # ---------------------------------------------------------------------------
+
 
 def _result(
     *,
@@ -95,20 +96,24 @@ def _summary_no_verdict_not_ftl() -> EvaluationSummary:
 # current_mode()
 # ---------------------------------------------------------------------------
 
+
 class TestCurrentMode:
     def test_default_is_off(self, monkeypatch):
         monkeypatch.delenv("RULES_ENGINE_ENFORCE", raising=False)
         assert current_mode() == EnforcementMode.OFF
 
-    @pytest.mark.parametrize("value,expected", [
-        ("off", EnforcementMode.OFF),
-        ("OFF", EnforcementMode.OFF),
-        ("  off  ", EnforcementMode.OFF),
-        ("cte_only", EnforcementMode.CTE_ONLY),
-        ("CTE_ONLY", EnforcementMode.CTE_ONLY),
-        ("all", EnforcementMode.ALL),
-        ("ALL", EnforcementMode.ALL),
-    ])
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            ("off", EnforcementMode.OFF),
+            ("OFF", EnforcementMode.OFF),
+            ("  off  ", EnforcementMode.OFF),
+            ("cte_only", EnforcementMode.CTE_ONLY),
+            ("CTE_ONLY", EnforcementMode.CTE_ONLY),
+            ("all", EnforcementMode.ALL),
+            ("ALL", EnforcementMode.ALL),
+        ],
+    )
     def test_valid_values_parsed(self, monkeypatch, value, expected):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", value)
         assert current_mode() == expected
@@ -130,6 +135,7 @@ class TestCurrentMode:
 # should_reject() — OFF mode
 # ---------------------------------------------------------------------------
 
+
 class TestShouldRejectOff:
     """In OFF mode, never reject — matches current prod behavior."""
 
@@ -137,13 +143,16 @@ class TestShouldRejectOff:
     def _off(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
 
-    @pytest.mark.parametrize("summary_factory", [
-        _summary_compliant_true,
-        _summary_compliant_false_critical,
-        _summary_compliant_false_warning_only,
-        _summary_no_verdict_empty_rules,
-        _summary_no_verdict_not_ftl,
-    ])
+    @pytest.mark.parametrize(
+        "summary_factory",
+        [
+            _summary_compliant_true,
+            _summary_compliant_false_critical,
+            _summary_compliant_false_warning_only,
+            _summary_no_verdict_empty_rules,
+            _summary_no_verdict_not_ftl,
+        ],
+    )
     def test_never_rejects(self, summary_factory):
         reject, reason = should_reject(summary_factory())
         assert reject is False
@@ -153,6 +162,7 @@ class TestShouldRejectOff:
 # ---------------------------------------------------------------------------
 # should_reject() — CTE_ONLY mode
 # ---------------------------------------------------------------------------
+
 
 class TestShouldRejectCteOnly:
     """CTE_ONLY rejects only when critical_failures is non-empty."""
@@ -196,6 +206,7 @@ class TestShouldRejectCteOnly:
 # should_reject() — ALL mode
 # ---------------------------------------------------------------------------
 
+
 class TestShouldRejectAll:
     """ALL mode rejects any compliant=False, including warning-only failures."""
 
@@ -231,6 +242,7 @@ class TestShouldRejectAll:
 # ---------------------------------------------------------------------------
 # Reason formatting
 # ---------------------------------------------------------------------------
+
 
 class TestReasonFormat:
     def test_reason_includes_rule_id_and_why(self, monkeypatch):

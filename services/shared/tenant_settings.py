@@ -11,7 +11,7 @@ All functions catch exceptions and return fallback values — never crash the AP
 
 import json
 import logging
-from typing import Optional, Any
+from typing import Any, Optional
 
 from sqlalchemy import text
 
@@ -22,6 +22,7 @@ def _get_db():
     """Get database session. Returns None if unavailable."""
     try:
         from shared.database import SessionLocal
+
         return SessionLocal()
     except Exception as exc:
         logger.error("db_session_unavailable error=%s", str(exc))
@@ -47,12 +48,9 @@ _ALLOWED_JSONB_TABLES: dict[str, str] = {
 # which relied on _validate_table_column() being called on every path.
 
 _SELECT_JSONB_QUERIES: dict[tuple[str, str], str] = {
-    ("tenant_settings", "settings"):
-        "SELECT settings FROM fsma.tenant_settings WHERE tenant_id = :tid",
-    ("tenant_notification_prefs", "prefs"):
-        "SELECT prefs FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid",
-    ("tenant_onboarding", "state"):
-        "SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid",
+    ("tenant_settings", "settings"): "SELECT settings FROM fsma.tenant_settings WHERE tenant_id = :tid",
+    ("tenant_notification_prefs", "prefs"): "SELECT prefs FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid",
+    ("tenant_onboarding", "state"): "SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid",
 }
 
 _UPSERT_JSONB_QUERIES: dict[tuple[str, str], str] = {
@@ -145,7 +143,7 @@ def get_tenant_data(tenant_id: str, namespace: str, key: str) -> Optional[dict]:
     try:
         row = db.execute(
             text("SELECT data FROM fsma.tenant_data WHERE tenant_id = :tid AND namespace = :ns AND key = :k"),
-            {"tid": tenant_id, "ns": namespace, "k": key}
+            {"tid": tenant_id, "ns": namespace, "k": key},
         ).fetchone()
         if not row or not row[0]:
             return None
@@ -172,7 +170,7 @@ def set_tenant_data(tenant_id: str, namespace: str, key: str, data: dict) -> boo
                 ON CONFLICT (tenant_id, namespace, key) DO UPDATE
                 SET data = :data, updated_at = now()
             """),
-            {"tid": tenant_id, "ns": namespace, "k": key, "data": data_json}
+            {"tid": tenant_id, "ns": namespace, "k": key, "data": data_json},
         )
         db.commit()
         return True
@@ -191,8 +189,10 @@ def list_tenant_data(tenant_id: str, namespace: str) -> list[dict]:
         return []
     try:
         rows = db.execute(
-            text("SELECT key, data FROM fsma.tenant_data WHERE tenant_id = :tid AND namespace = :ns ORDER BY created_at"),
-            {"tid": tenant_id, "ns": namespace}
+            text(
+                "SELECT key, data FROM fsma.tenant_data WHERE tenant_id = :tid AND namespace = :ns ORDER BY created_at"
+            ),
+            {"tid": tenant_id, "ns": namespace},
         ).fetchall()
         results = []
         for row in rows:
@@ -215,7 +215,7 @@ def delete_tenant_data(tenant_id: str, namespace: str, key: str) -> bool:
     try:
         db.execute(
             text("DELETE FROM fsma.tenant_data WHERE tenant_id = :tid AND namespace = :ns AND key = :k"),
-            {"tid": tenant_id, "ns": namespace, "k": key}
+            {"tid": tenant_id, "ns": namespace, "k": key},
         )
         db.commit()
         return True

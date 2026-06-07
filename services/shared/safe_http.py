@@ -24,7 +24,6 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 import structlog
-
 from shared.url_validation import SSRFError, validate_url
 
 logger = structlog.get_logger("safe-http")
@@ -69,9 +68,7 @@ class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
         # Rewrite URL host -> pinned IP literal so the OS does not re-resolve.
         original_url = request.url
         # Bracket IPv6 literals
-        ip_literal = (
-            f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
-        )
+        ip_literal = f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
         new_netloc = ip_literal
         if original_url.port is not None:
             new_netloc = f"{ip_literal}:{original_url.port}"
@@ -80,8 +77,7 @@ class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
         # Preserve Host header so the remote server routes correctly.
         request.headers["Host"] = (
             f"{self._original_host}:{original_url.port}"
-            if original_url.port is not None
-            and original_url.port not in (80, 443)
+            if original_url.port is not None and original_url.port not in (80, 443)
             else self._original_host
         )
         return await super().handle_async_request(request)
@@ -97,15 +93,12 @@ class _IPPinnedSyncTransport(httpx.HTTPTransport):
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:  # type: ignore[override]
         original_url = request.url
-        ip_literal = (
-            f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
-        )
+        ip_literal = f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
         rewritten = original_url.copy_with(host=ip_literal)
         request.url = rewritten
         request.headers["Host"] = (
             f"{self._original_host}:{original_url.port}"
-            if original_url.port is not None
-            and original_url.port not in (80, 443)
+            if original_url.port is not None and original_url.port not in (80, 443)
             else self._original_host
         )
         return super().handle_request(request)
@@ -209,9 +202,7 @@ def safe_httpx_get_sync(
             last_response = response
             continue
         return response
-    raise SSRFError(
-        f"Too many redirects (>{max_redirects}); last hop: {current_url}"
-    )
+    raise SSRFError(f"Too many redirects (>{max_redirects}); last hop: {current_url}")
 
 
 def safe_httpx_post_sync(
@@ -262,9 +253,7 @@ async def safe_httpx_post_async(
     Does NOT follow redirects (see :func:`safe_httpx_post_sync` rationale).
     """
     current_url = validator(url)
-    async with safe_httpx_client(
-        url=current_url, timeout=timeout, http2=http2, headers=headers
-    ) as client:
+    async with safe_httpx_client(url=current_url, timeout=timeout, http2=http2, headers=headers) as client:
         return await client.post(current_url, json=json, data=data)
 
 
@@ -286,9 +275,7 @@ async def follow_redirects_safely(
     """
     current_url = validator(url)
     for hop in range(max_hops + 1):
-        client = safe_httpx_client(
-            url=current_url, timeout=timeout, http2=http2, headers=headers
-        )
+        client = safe_httpx_client(url=current_url, timeout=timeout, http2=http2, headers=headers)
         # First do a HEAD-equivalent: issue GET but don't stream body if redirect
         response = await client.get(current_url)
         if response.is_redirect:
@@ -338,9 +325,7 @@ def safe_fetch_content(
         raise ValueError(f"URL validation failed: {str(e)}") from e
 
     try:
-        response = safe_httpx_get_sync(
-            url, headers=headers or STANDARD_BROWSER_HEADERS, timeout=timeout
-        )
+        response = safe_httpx_get_sync(url, headers=headers or STANDARD_BROWSER_HEADERS, timeout=timeout)
     except SSRFError as e:
         logger.warning("ssrf_error_during_fetch", url=url, error=str(e))
         raise ValueError(f"URL validation failed: {str(e)}") from e
@@ -350,9 +335,7 @@ def safe_fetch_content(
         "content": response.content,
         "status_code": response.status_code,
         "headers": dict(response.headers),
-        "content_type": response.headers.get(
-            "Content-Type", "application/octet-stream"
-        ),
+        "content_type": response.headers.get("Content-Type", "application/octet-stream"),
     }
 
 

@@ -11,7 +11,6 @@ from uuid import uuid4
 import pytest
 from jsonschema import Draft202012Validator, ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
-
 from shared.agent_artifacts import (
     AgentArtifact,
     AgentArtifactContext,
@@ -21,7 +20,6 @@ from shared.agent_artifacts import (
     ReviewRoutingSuggestionPayload,
     ValidationExplanationPayload,
 )
-
 
 SCHEMA_PATH = Path("data-schemas/events/agent.artifact.schema.json")
 SHA256 = "a" * 64

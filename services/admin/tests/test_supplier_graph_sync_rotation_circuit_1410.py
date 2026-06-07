@@ -28,7 +28,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from app import supplier_graph_sync as sgs_module
 from app.supplier_graph_sync import SupplierGraphSync
 
@@ -78,9 +77,7 @@ class _RecordingDriver:
         self._raise_on_run = raise_on_run
 
     def session(self):
-        return _RecordingSession(
-            self.calls, record=self._record, raise_on_run=self._raise_on_run
-        )
+        return _RecordingSession(self.calls, record=self._record, raise_on_run=self._raise_on_run)
 
     def close(self):
         self.closed = True
@@ -358,9 +355,7 @@ def test_breaker_opens_after_threshold_failures_and_short_circuits():
             expires_at=datetime(2026, 3, 2, 12, 0, tzinfo=timezone.utc),
             created_by="user-1",
         )
-    assert driver.session_calls == threshold, (
-        "breaker did not short-circuit: admin is still hammering a down Neo4j"
-    )
+    assert driver.session_calls == threshold, "breaker did not short-circuit: admin is still hammering a down Neo4j"
 
 
 def test_breaker_short_circuits_reads_too():
@@ -432,6 +427,7 @@ def test_happy_path_read_with_breaker_wired():
             {"id": "2", "name": "Vegetables", "ctes": ["harvesting", "shipping"]},
         ]
     }
+
     # Pinned driver variant — avoids credentials stubbing.
     class _QueryDriver:
         def session(self_inner):  # noqa: N805
@@ -486,6 +482,7 @@ def test_bulk_upload_style_caller_broad_catch_is_preserved(fake_neo4j, creds_sou
     lands on the warning path. The raw exception must still reach the
     breaker first (asserted via failure_count).
     """
+
     class _FailingDriver:
         def __init__(self):
             self.closed = False

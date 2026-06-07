@@ -13,12 +13,13 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
+from shared.rate_limit import limiter
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .dependencies import get_current_user
-from .database import get_session
 from .audit import AuditLogger
+from .database import get_session
+from .dependencies import get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import (
     AuditLogModel,
@@ -32,7 +33,6 @@ from .sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
-from shared.rate_limit import limiter
 
 logger = structlog.get_logger("data_export")
 
@@ -82,11 +82,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     # -------------------------------------------------------------------------
     # 2. Memberships with role names (two separate queries for easy mocking)
     # -------------------------------------------------------------------------
-    membership_rows = (
-        db.query(MembershipModel)
-        .filter(MembershipModel.user_id == user_uuid)
-        .all()
-    )
+    membership_rows = db.query(MembershipModel).filter(MembershipModel.user_id == user_uuid).all()
     memberships: List[Dict[str, Any]] = []
     for m in membership_rows:
         role = db.get(RoleModel, m.role_id)
@@ -146,13 +142,17 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     # -------------------------------------------------------------------------
     tool_leads: List[Dict[str, Any]] = []
     try:
-        rows = db.execute(
-            text(
-                "SELECT email, domain, first_tool_used, access_count, created_at, verified_at "
-                "FROM tool_leads WHERE LOWER(email) = LOWER(:email)"
-            ),
-            {"email": user.email},
-        ).mappings().all()
+        rows = (
+            db.execute(
+                text(
+                    "SELECT email, domain, first_tool_used, access_count, created_at, verified_at "
+                    "FROM tool_leads WHERE LOWER(email) = LOWER(:email)"
+                ),
+                {"email": user.email},
+            )
+            .mappings()
+            .all()
+        )
         for row in rows:
             tool_leads.append(
                 {
@@ -185,9 +185,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
             "created_at": _serialize(f.created_at),
             "updated_at": _serialize(f.updated_at),
         }
-        for f in db.query(SupplierFacilityModel)
-        .filter(SupplierFacilityModel.supplier_user_id == user_uuid)
-        .all()
+        for f in db.query(SupplierFacilityModel).filter(SupplierFacilityModel.supplier_user_id == user_uuid).all()
     ]
 
     supplier_traceability_lots = [
@@ -208,9 +206,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     ]
 
     supplier_cte_events_count = (
-        db.query(SupplierCTEEventModel)
-        .filter(SupplierCTEEventModel.supplier_user_id == user_uuid)
-        .count()
+        db.query(SupplierCTEEventModel).filter(SupplierCTEEventModel.supplier_user_id == user_uuid).count()
     )
 
     supplier_funnel_events = [
@@ -262,8 +258,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     # 8. S3 object count note (no presigned URLs)
     # -------------------------------------------------------------------------
     s3_note = (
-        "S3 object count is not available inline. "
-        "Contact support to request a bulk download of your uploaded files."
+        "S3 object count is not available inline. Contact support to request a bulk download of your uploaded files."
     )
 
     return {

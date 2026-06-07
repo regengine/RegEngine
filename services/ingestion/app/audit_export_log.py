@@ -19,9 +19,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("audit-export-log")
 
@@ -122,7 +122,9 @@ class ActivityFeedResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _query_exports(tenant_id: str, start_date: Optional[str], end_date: Optional[str], limit: int) -> Optional[list[dict]]:
+def _query_exports(
+    tenant_id: str, start_date: Optional[str], end_date: Optional[str], limit: int
+) -> Optional[list[dict]]:
     """Query fda_export_log from database."""
     try:
         from shared.database import SessionLocal
@@ -160,7 +162,11 @@ def _query_exports(tenant_id: str, start_date: Optional[str], end_date: Optional
                     "export_type": row[2],
                     "record_count": row[3] or 0,
                     "sha256_hash": row[4],
-                    "created_at": row[5].isoformat() if hasattr(row[5], "isoformat") else str(row[5]) if row[5] else None,
+                    "created_at": row[5].isoformat()
+                    if hasattr(row[5], "isoformat")
+                    else str(row[5])
+                    if row[5]
+                    else None,
                     "traceability_lot_code": row[6],
                     "format": row[7],
                 }
@@ -176,9 +182,10 @@ def _query_exports(tenant_id: str, start_date: Optional[str], end_date: Optional
 def _query_verifications(tenant_id: str, limit: int) -> Optional[list[dict]]:
     """Query chain_verification_log from database, with in-memory fallback."""
     try:
+        import json
+
         from shared.database import SessionLocal
         from sqlalchemy import text
-        import json
 
         db = SessionLocal()
         try:
@@ -200,7 +207,11 @@ def _query_verifications(tenant_id: str, limit: int) -> Optional[list[dict]]:
                     "chain_valid": row[2],
                     "chain_length": row[3] or 0,
                     "errors": json.loads(row[4]) if isinstance(row[4], str) else (row[4] or []),
-                    "completed_at": row[5].isoformat() if hasattr(row[5], "isoformat") else str(row[5]) if row[5] else None,
+                    "completed_at": row[5].isoformat()
+                    if hasattr(row[5], "isoformat")
+                    else str(row[5])
+                    if row[5]
+                    else None,
                 }
                 for row in rows
             ]
@@ -222,14 +233,16 @@ def _get_verification_fallback(tenant_id: str, limit: int) -> list[dict]:
         with _verification_lock:
             for job_id, job in _verification_jobs.items():
                 if job.get("tenant_id") == tenant_id and job.get("status") == "completed":
-                    results.append({
-                        "id": job_id,
-                        "tenant_id": tenant_id,
-                        "chain_valid": job.get("chain_valid"),
-                        "chain_length": job.get("chain_length", 0),
-                        "errors": job.get("errors", []),
-                        "completed_at": job.get("completed_at"),
-                    })
+                    results.append(
+                        {
+                            "id": job_id,
+                            "tenant_id": tenant_id,
+                            "chain_valid": job.get("chain_valid"),
+                            "chain_length": job.get("chain_length", 0),
+                            "errors": job.get("errors", []),
+                            "completed_at": job.get("completed_at"),
+                        }
+                    )
     except ImportError:
         pass
 
@@ -373,18 +386,20 @@ async def get_activity_feed(
     exports_raw = _query_exports(tenant_id, None, None, limit=page_size * 2)
     if exports_raw:
         for exp in exports_raw:
-            activities.append({
-                "id": exp["id"],
-                "tenant_id": tenant_id,
-                "activity_type": "export",
-                "summary": f"FDA export: {exp.get('export_type', 'standard')} — {exp.get('record_count', 0)} records",
-                "timestamp": exp.get("created_at") or "",
-                "details": {
-                    "sha256_hash": exp.get("sha256_hash"),
-                    "format": exp.get("format"),
-                    "traceability_lot_code": exp.get("traceability_lot_code"),
-                },
-            })
+            activities.append(
+                {
+                    "id": exp["id"],
+                    "tenant_id": tenant_id,
+                    "activity_type": "export",
+                    "summary": f"FDA export: {exp.get('export_type', 'standard')} — {exp.get('record_count', 0)} records",
+                    "timestamp": exp.get("created_at") or "",
+                    "details": {
+                        "sha256_hash": exp.get("sha256_hash"),
+                        "format": exp.get("format"),
+                        "traceability_lot_code": exp.get("traceability_lot_code"),
+                    },
+                }
+            )
 
     # 2. Verifications
     verifications_raw = _query_verifications(tenant_id, limit=page_size * 2)
@@ -392,18 +407,20 @@ async def get_activity_feed(
         verifications_raw = _get_verification_fallback(tenant_id, limit=page_size * 2)
     for ver in verifications_raw:
         status = "passed" if ver.get("chain_valid") else "failed"
-        activities.append({
-            "id": ver["id"],
-            "tenant_id": tenant_id,
-            "activity_type": "verification",
-            "summary": f"Chain verification {status}: {ver.get('chain_length', 0)} entries",
-            "timestamp": ver.get("completed_at") or "",
-            "details": {
-                "chain_valid": ver.get("chain_valid"),
-                "chain_length": ver.get("chain_length"),
-                "error_count": len(ver.get("errors", [])),
-            },
-        })
+        activities.append(
+            {
+                "id": ver["id"],
+                "tenant_id": tenant_id,
+                "activity_type": "verification",
+                "summary": f"Chain verification {status}: {ver.get('chain_length', 0)} entries",
+                "timestamp": ver.get("completed_at") or "",
+                "details": {
+                    "chain_valid": ver.get("chain_valid"),
+                    "chain_length": ver.get("chain_length"),
+                    "error_count": len(ver.get("errors", [])),
+                },
+            }
+        )
 
     # 3. Ingestions
     ingestions = _query_ingestions(tenant_id, limit=page_size * 2)
@@ -422,7 +439,10 @@ async def get_activity_feed(
 
     logger.info(
         "activity_feed tenant_id=%s total=%d page=%d page_size=%d",
-        tenant_id, total, page, page_size,
+        tenant_id,
+        total,
+        page,
+        page_size,
     )
 
     return ActivityFeedResponse(

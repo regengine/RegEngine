@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-
 from shared.audit_logging import (
     AuditActor,
     AuditEvent,

@@ -10,7 +10,7 @@ import abc
 import json
 import os
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -25,22 +25,25 @@ logger = structlog.get_logger("swarm.agent")
 
 # ── Message Types ─────────────────────────────────────────
 
+
 class MessageType(Enum):
     """Types of messages that flow between agents."""
-    TASK = "task"                    # New task assignment
-    PLAN = "plan"                    # Structured plan from PlannerAgent
-    CODE = "code"                    # Code output from CoderAgent
-    REVIEW = "review"               # Review feedback from ReviewerAgent
-    TEST_RESULT = "test_result"     # Test results from TesterAgent
-    FEEDBACK = "feedback"           # Improvement request (triggers loop)
-    HANDOFF = "handoff"             # Agent-to-agent handoff
-    STATUS = "status"               # Status update
-    ERROR = "error"                 # Error report
+
+    TASK = "task"  # New task assignment
+    PLAN = "plan"  # Structured plan from PlannerAgent
+    CODE = "code"  # Code output from CoderAgent
+    REVIEW = "review"  # Review feedback from ReviewerAgent
+    TEST_RESULT = "test_result"  # Test results from TesterAgent
+    FEEDBACK = "feedback"  # Improvement request (triggers loop)
+    HANDOFF = "handoff"  # Agent-to-agent handoff
+    STATUS = "status"  # Status update
+    ERROR = "error"  # Error report
 
 
 @dataclass
 class AgentMessage:
     """Typed message envelope for inter-agent communication."""
+
     sender: str
     receiver: str
     message_type: MessageType
@@ -64,6 +67,7 @@ class AgentMessage:
 
 
 # ── Agent Memory ──────────────────────────────────────────
+
 
 class AgentMemory:
     """Persistent memory via JSON append-log.
@@ -119,6 +123,7 @@ class AgentMemory:
 
 
 # ── Base Agent ────────────────────────────────────────────
+
 
 class BaseAgent(abc.ABC):
     """Abstract base for all autonomous agents.
@@ -198,6 +203,7 @@ class BaseAgent(abc.ABC):
         try:
             # LLM generate is currently sync, but we call it in an async wrapper to maintain interface
             import asyncio
+
             response = await asyncio.to_thread(self.llm.generate, prompt, self.system_prompt)
             self.log.info("llm_response", length=len(response), context=context_label)
             return response
@@ -210,6 +216,7 @@ class BaseAgent(abc.ABC):
         self.log.info("llm_json_call", context=context_label, model=self.llm.model)
         try:
             import asyncio
+
             response = await asyncio.to_thread(self.llm.generate_json, prompt, self.system_prompt)
             self.log.info("llm_json_response", keys=list(response.keys()), context=context_label)
             return response

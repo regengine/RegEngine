@@ -118,9 +118,7 @@ class TestTenantIdPropagation:
             tenants_seen.add(call.kwargs["value"]["tenant_id"])
         assert tenants_seen == {tenant_a, tenant_b}
 
-    def test_null_tenant_id_still_produces_envelope_with_placeholder_header(
-        self, mock_producer
-    ):
+    def test_null_tenant_id_still_produces_envelope_with_placeholder_header(self, mock_producer):
         """Messages without a tenant_id (e.g. legacy pipeline) still route —
         but the header is present (empty) so downstream can detect and
         reject rather than default-match."""
@@ -169,6 +167,7 @@ class TestTenantScopedRetrievalContract:
         the tenant-scope tests, this should fail.
         """
         import pkgutil
+
         import services.nlp.app as nlp_app
 
         mod_names = {m.name for m in pkgutil.iter_modules(nlp_app.__path__)}

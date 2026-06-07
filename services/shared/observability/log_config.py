@@ -23,9 +23,9 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from contextvars import ContextVar
 
 import structlog
-from contextvars import ContextVar
 
 # ---------------------------------------------------------------------------
 # Per-request context variables

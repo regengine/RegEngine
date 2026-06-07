@@ -33,14 +33,13 @@ service_dir = Path(__file__).resolve().parents[2] / "services" / "graph"
 sys.path.insert(0, str(service_dir))
 
 from app.hierarchy_builder import (  # noqa: E402
-    InvalidJurisdictionCodeError,
     _JURISDICTION_CODE_RE,
     _MAX_JURISDICTION_CODE_LENGTH,
+    InvalidJurisdictionCodeError,
     _validate_jurisdiction_code,
     build_jurisdiction_hierarchy,
     parent_code_for,
 )
-
 
 # ── 1. Validator whitelist ────────────────────────────────────────────────
 
@@ -57,16 +56,16 @@ def test_validator_accepts_well_formed_codes(code):
 @pytest.mark.parametrize(
     "code",
     [
-        "",                    # empty
-        "us-ca",               # lowercase
-        "US--CA",              # empty segment
-        "US/CA",               # disallowed separator
-        "US CA",               # whitespace
-        "US;DROP TABLE",       # injection-shaped input
-        "US'OR'1'='1",         # injection-shaped input
-        "US<script>",          # XSS-shaped input
-        "A" * 64,              # oversize single segment
-        "US-" + ("A" * 32),    # oversize with separator
+        "",  # empty
+        "us-ca",  # lowercase
+        "US--CA",  # empty segment
+        "US/CA",  # disallowed separator
+        "US CA",  # whitespace
+        "US;DROP TABLE",  # injection-shaped input
+        "US'OR'1'='1",  # injection-shaped input
+        "US<script>",  # XSS-shaped input
+        "A" * 64,  # oversize single segment
+        "US-" + ("A" * 32),  # oversize with separator
     ],
 )
 def test_validator_rejects_malformed_codes(code):
@@ -170,13 +169,9 @@ def test_builder_sets_global_jurisdiction_label():
     assert cypher_calls, "Expected MERGE calls"
     for cypher in cypher_calls:
         assert ":GlobalJurisdiction" in cypher, (
-            f"#1304: every MERGE must label the node :GlobalJurisdiction. "
-            f"Missing in: {cypher}"
+            f"#1304: every MERGE must label the node :GlobalJurisdiction. Missing in: {cypher}"
         )
-        assert "scope = 'global'" in cypher, (
-            f"#1304: every MERGE must set scope='global'. "
-            f"Missing in: {cypher}"
-        )
+        assert "scope = 'global'" in cypher, f"#1304: every MERGE must set scope='global'. Missing in: {cypher}"
 
 
 def test_builder_emits_both_node_and_edge_for_parent_child():
@@ -250,6 +245,7 @@ def test_module_docstring_documents_invariant():
     """Part of the fix is documentation discoverability: anyone who
     opens the module should see the invariant before they touch it."""
     import app.hierarchy_builder as mod
+
     doc = mod.__doc__ or ""
     # Look for key phrases that capture the invariant.
     assert "GLOBAL" in doc.upper(), doc

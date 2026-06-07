@@ -12,13 +12,11 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from shared.neo4j_tenant_context import (
     TenantScopedNeo4jSession,
     require_tenant_id_in_cypher,
     session_with_tenant,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fakes that mimic the neo4j Python driver contract
@@ -59,24 +57,18 @@ class _FakeDriver:
 
 
 def test_require_tenant_id_allows_scoped_merge():
-    require_tenant_id_in_cypher(
-        "MERGE (a:Facility {facility_id: $facility_id, tenant_id: $tenant_id})"
-    )
+    require_tenant_id_in_cypher("MERGE (a:Facility {facility_id: $facility_id, tenant_id: $tenant_id})")
 
 
 def test_require_tenant_id_rejects_unscoped_merge():
     with pytest.raises(ValueError) as exc:
-        require_tenant_id_in_cypher(
-            "MERGE (a:Facility {facility_id: $facility_id})"
-        )
+        require_tenant_id_in_cypher("MERGE (a:Facility {facility_id: $facility_id})")
     assert "tenant_id" in str(exc.value)
 
 
 def test_require_tenant_id_case_insensitive():
     # "TENANT_ID" still counts — we don't want to be tripped by query style.
-    require_tenant_id_in_cypher(
-        "MATCH (x:Thing) WHERE x.TENANT_ID = $t RETURN x"
-    )
+    require_tenant_id_in_cypher("MATCH (x:Thing) WHERE x.TENANT_ID = $t RETURN x")
 
 
 # ---------------------------------------------------------------------------

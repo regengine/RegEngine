@@ -16,11 +16,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 
-_AUTH_HEADERS = {
-    "X-RegEngine-API-Key": os.getenv(
-        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
-    )
-}
+_AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
 # ============================================================================
@@ -129,9 +125,7 @@ class TestTimeArrowInTraceForward:
         return client
 
     @pytest.mark.asyncio
-    async def test_trace_forward_includes_time_violations(
-        self, mock_neo4j_client, mock_neo4j_session
-    ):
+    async def test_trace_forward_includes_time_violations(self, mock_neo4j_client, mock_neo4j_session):
         """trace_forward should include time_violations in result."""
         from services.graph.app.fsma_utils import trace_forward
 
@@ -163,18 +157,14 @@ class TestTimeArrowInTraceForward:
         )
         mock_neo4j_session.run.return_value = mock_result
 
-        result = await trace_forward(
-            mock_neo4j_client, "LOT-001", max_depth=10, enforce_time_arrow=True
-        )
+        result = await trace_forward(mock_neo4j_client, "LOT-001", max_depth=10, enforce_time_arrow=True)
 
         # Result should have time_violations field
         assert hasattr(result, "time_violations")
         assert hasattr(result, "risk_flags")
 
     @pytest.mark.asyncio
-    async def test_trace_forward_default_enforces_time_arrow(
-        self, mock_neo4j_client, mock_neo4j_session
-    ):
+    async def test_trace_forward_default_enforces_time_arrow(self, mock_neo4j_client, mock_neo4j_session):
         """trace_forward should enforce time arrow by default."""
         from services.graph.app.fsma_utils import trace_forward
 
@@ -200,6 +190,7 @@ class TestCryptoChainIntegrity:
     def _load_merkle():
         """Import the merkle module (kept as helper for test compatibility)."""
         from services.graph.app.evidence import merkle
+
         return merkle
 
     def test_compute_event_hash_deterministic(self):
@@ -222,14 +213,23 @@ class TestCryptoChainIntegrity:
         """append_to_chain must set previous_hash and _next_merkle_hash."""
         merkle = self._load_merkle()
 
-        e1 = merkle.append_to_chain({
-            "event_id": "e1", "event_type": "CREATION",
-            "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
-        })
-        e2 = merkle.append_to_chain({
-            "event_id": "e2", "event_type": "SHIPPING",
-            "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
-        }, previous_hash=e1["_next_merkle_hash"])
+        e1 = merkle.append_to_chain(
+            {
+                "event_id": "e1",
+                "event_type": "CREATION",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-01T00:00:00Z",
+            }
+        )
+        e2 = merkle.append_to_chain(
+            {
+                "event_id": "e2",
+                "event_type": "SHIPPING",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-02T00:00:00Z",
+            },
+            previous_hash=e1["_next_merkle_hash"],
+        )
 
         assert e1["previous_hash"] is None
         assert e2["previous_hash"] == e1["_next_merkle_hash"]
@@ -238,14 +238,23 @@ class TestCryptoChainIntegrity:
         """A correctly chained sequence must verify as valid."""
         merkle = self._load_merkle()
 
-        e1 = merkle.append_to_chain({
-            "event_id": "e1", "event_type": "CREATION",
-            "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
-        })
-        e2 = merkle.append_to_chain({
-            "event_id": "e2", "event_type": "SHIPPING",
-            "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
-        }, previous_hash=e1["_next_merkle_hash"])
+        e1 = merkle.append_to_chain(
+            {
+                "event_id": "e1",
+                "event_type": "CREATION",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-01T00:00:00Z",
+            }
+        )
+        e2 = merkle.append_to_chain(
+            {
+                "event_id": "e2",
+                "event_type": "SHIPPING",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-02T00:00:00Z",
+            },
+            previous_hash=e1["_next_merkle_hash"],
+        )
 
         result = merkle.verify_chain_integrity([e1, e2])
         assert result["valid"] is True
@@ -256,14 +265,23 @@ class TestCryptoChainIntegrity:
         """Modifying any field after chaining must be detected."""
         merkle = self._load_merkle()
 
-        e1 = merkle.append_to_chain({
-            "event_id": "e1", "event_type": "CREATION",
-            "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
-        })
-        e2 = merkle.append_to_chain({
-            "event_id": "e2", "event_type": "SHIPPING",
-            "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
-        }, previous_hash=e1["_next_merkle_hash"])
+        e1 = merkle.append_to_chain(
+            {
+                "event_id": "e1",
+                "event_type": "CREATION",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-01T00:00:00Z",
+            }
+        )
+        e2 = merkle.append_to_chain(
+            {
+                "event_id": "e2",
+                "event_type": "SHIPPING",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-02T00:00:00Z",
+            },
+            previous_hash=e1["_next_merkle_hash"],
+        )
 
         # Tamper with e2
         e2["event_type"] = "RECEIVING"
@@ -276,14 +294,23 @@ class TestCryptoChainIntegrity:
         """A broken previous_hash link must be detected."""
         merkle = self._load_merkle()
 
-        e1 = merkle.append_to_chain({
-            "event_id": "e1", "event_type": "CREATION",
-            "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
-        })
-        e2 = merkle.append_to_chain({
-            "event_id": "e2", "event_type": "SHIPPING",
-            "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
-        }, previous_hash="0000000000000000000000000000000000000000000000000000000000000000")
+        e1 = merkle.append_to_chain(
+            {
+                "event_id": "e1",
+                "event_type": "CREATION",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-01T00:00:00Z",
+            }
+        )
+        e2 = merkle.append_to_chain(
+            {
+                "event_id": "e2",
+                "event_type": "SHIPPING",
+                "tlc": "TLC-001",
+                "timestamp": "2025-01-02T00:00:00Z",
+            },
+            previous_hash="0000000000000000000000000000000000000000000000000000000000000000",
+        )
 
         result = merkle.verify_chain_integrity([e1, e2])
         assert result["valid"] is False
@@ -359,20 +386,21 @@ class TestMassBalanceEndpointReturns501:
 
     def test_mass_balance_lot_returns_501(self, mock_auth):
         """GET /mass-balance/{tlc} must return 501."""
+        import uuid
+
         from fastapi import FastAPI
-        from services.graph.app.fsma_routes import fsma_router
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
         app.include_router(fsma_router)
         app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant", "key_id": "test-key",
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
         }
-        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID(
-            "00000000-0000-0000-0000-000000000001"
-        )
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
         response = client.get(
@@ -383,20 +411,21 @@ class TestMassBalanceEndpointReturns501:
 
     def test_mass_balance_event_returns_501(self, mock_auth):
         """GET /mass-balance/event/{event_id} must return 501."""
+        import uuid
+
         from fastapi import FastAPI
-        from services.graph.app.fsma_routes import fsma_router
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
         app.include_router(fsma_router)
         app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant", "key_id": "test-key",
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
         }
-        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID(
-            "00000000-0000-0000-0000-000000000001"
-        )
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
         response = client.get(
@@ -459,9 +488,7 @@ class TestTraceForwardWithPhysicsEngine:
             )
             yield mock
 
-    def test_trace_forward_includes_risk_flags(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_trace_forward_includes_risk_flags(self, mock_auth, mock_neo4j_client, mock_trace_forward):
         """Trace forward should include risk_flags in response."""
         from fastapi import FastAPI
 
@@ -470,9 +497,10 @@ class TestTraceForwardWithPhysicsEngine:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
@@ -493,9 +521,7 @@ class TestTraceForwardWithPhysicsEngine:
         assert "risk_flags" in data
         assert "MASS_IMBALANCE" in data["risk_flags"]
 
-    def test_trace_forward_includes_time_violations(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_trace_forward_includes_time_violations(self, mock_auth, mock_neo4j_client, mock_trace_forward):
         """Trace forward should include time_violations in response."""
         from fastapi import FastAPI
 
@@ -504,9 +530,10 @@ class TestTraceForwardWithPhysicsEngine:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
@@ -526,9 +553,7 @@ class TestTraceForwardWithPhysicsEngine:
 
         assert "time_violations" in data
 
-    def test_trace_forward_accepts_enforce_time_arrow_param(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_trace_forward_accepts_enforce_time_arrow_param(self, mock_auth, mock_neo4j_client, mock_trace_forward):
         """Trace forward should accept enforce_time_arrow parameter."""
         from fastapi import FastAPI
 
@@ -537,9 +562,10 @@ class TestTraceForwardWithPhysicsEngine:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",

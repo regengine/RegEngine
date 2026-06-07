@@ -24,11 +24,10 @@ import time
 from collections import defaultdict
 from typing import Optional, Protocol
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.middleware import SlowAPIMiddleware
 from fastapi import FastAPI
-
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 # ---------------------------------------------------------------------------
 # slowapi route-level limiter (unchanged public API)
@@ -99,11 +98,7 @@ class BruteForceLimiter:
     @staticmethod
     def _try_connect_redis() -> Optional[_RedisLike]:
         """Try to connect to Redis; return None if unavailable."""
-        url = (
-            os.getenv("REGENGINE_REDIS_URL")
-            or os.getenv("REDIS_URL")
-            or os.getenv("UPSTASH_REDIS_REST_URL")
-        )
+        url = os.getenv("REGENGINE_REDIS_URL") or os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
         if not url:
             return None
         try:  # pragma: no cover -- depends on Redis being available
@@ -139,9 +134,7 @@ class BruteForceLimiter:
         # In-memory fallback (per-process, matches legacy behavior)
         now = time.time()
         with self._mem_lock:
-            self._mem_failures[subject] = [
-                t for t in self._mem_failures[subject] if now - t < self._window
-            ]
+            self._mem_failures[subject] = [t for t in self._mem_failures[subject] if now - t < self._window]
             return len(self._mem_failures[subject]) >= self._max
 
     def record_failure(self, subject: str) -> int:
@@ -162,9 +155,7 @@ class BruteForceLimiter:
         with self._mem_lock:
             self._mem_failures[subject].append(now)
             if len(self._mem_failures[subject]) > self._max * 4:
-                self._mem_failures[subject] = self._mem_failures[subject][
-                    -(self._max * 2):
-                ]
+                self._mem_failures[subject] = self._mem_failures[subject][-(self._max * 2) :]
             return len(self._mem_failures[subject])
 
     def reset(self, subject: str) -> None:

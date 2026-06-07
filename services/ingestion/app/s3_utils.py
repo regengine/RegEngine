@@ -39,9 +39,7 @@ _MAX_KEY_COMPONENT_CHARS = 120
 def is_object_storage_configured() -> bool:
     """Return True when object-storage credentials are present in settings."""
     settings = get_settings()
-    return bool(
-        settings.object_storage_access_key_id and settings.object_storage_secret_access_key
-    )
+    return bool(settings.object_storage_access_key_id and settings.object_storage_secret_access_key)
 
 
 def _client() -> BaseClient:
@@ -123,14 +121,10 @@ def put_json(bucket: str, key: str, payload: Any) -> str:
                 # Fall through to original error raise
 
         logger.error("s3_put_failed", bucket=bucket, key=key, error=str(exc))
-        raise HTTPException(
-            status_code=500, detail="Failed to store data in S3"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to store data in S3") from exc
 
 
-def put_bytes(
-    bucket: str, key: str, content: bytes, content_type: str = "application/octet-stream"
-) -> str:
+def put_bytes(bucket: str, key: str, content: bytes, content_type: str = "application/octet-stream") -> str:
     """Upload raw bytes to S3 and return the object URI."""
 
     try:
@@ -151,9 +145,7 @@ def put_bytes(
                 # Fall through
 
         logger.error("s3_put_failed", bucket=bucket, key=key, error=str(exc))
-        raise HTTPException(
-            status_code=500, detail="Failed to store data in S3"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Failed to store data in S3") from exc
 
 
 def _json_serializer(value: Any) -> Any:
@@ -382,14 +374,16 @@ def list_raw_documents(
         )
         for page in page_iterator:
             for obj in page.get("Contents", []):
-                documents.append({
-                    "key": obj["Key"],
-                    "size": obj["Size"],
-                    "last_modified": obj["LastModified"].isoformat()
-                    if isinstance(obj["LastModified"], datetime)
-                    else str(obj["LastModified"]),
-                    "s3_uri": f"s3://{bucket}/{obj['Key']}",
-                })
+                documents.append(
+                    {
+                        "key": obj["Key"],
+                        "size": obj["Size"],
+                        "last_modified": obj["LastModified"].isoformat()
+                        if isinstance(obj["LastModified"], datetime)
+                        else str(obj["LastModified"]),
+                        "s3_uri": f"s3://{bucket}/{obj['Key']}",
+                    }
+                )
         return documents
     except ClientError as exc:
         error_code = exc.response["Error"]["Code"]

@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel
-
 from shared.agent_artifacts import (
     AgentArtifact,
     AgentArtifactContext,
@@ -22,7 +21,6 @@ from shared.agent_risk_engine import (
     calculate_risk_score,
     evaluate_agent_risk,
 )
-
 
 SHA256 = "c" * 64
 

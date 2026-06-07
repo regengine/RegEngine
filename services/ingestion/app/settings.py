@@ -13,10 +13,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-
-from .webhook_compat import require_tenant_context
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
+
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("settings")
 
@@ -26,6 +26,7 @@ router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
 
 class CompanyProfile(BaseModel):
     """Company profile settings."""
+
     company_name: str = ""
     company_type: str = "distributor"
     primary_contact: str = ""
@@ -38,6 +39,7 @@ class CompanyProfile(BaseModel):
 
 class DataRetention(BaseModel):
     """Data retention settings."""
+
     cte_retention_days: int = 1095  # 3 years (FSMA requirement)
     audit_log_retention_days: int = 2555  # 7 years
     export_retention_days: int = 365
@@ -46,6 +48,7 @@ class DataRetention(BaseModel):
 
 class IntegrationStatus(BaseModel):
     """Third-party integration status."""
+
     id: str
     name: str
     category: str  # iot, erp, retailer, monitoring
@@ -55,6 +58,7 @@ class IntegrationStatus(BaseModel):
 
 class SettingsResponse(BaseModel):
     """Complete settings response."""
+
     tenant_id: str
     profile: CompanyProfile
     data_retention: DataRetention
@@ -70,7 +74,9 @@ def _default_settings(tenant_id: str) -> SettingsResponse:
         profile=CompanyProfile(),
         data_retention=DataRetention(),
         integrations=[
-            IntegrationStatus(id="sensitech", name="Sensitech TempTale", category="iot", status="connected", last_sync=now.isoformat()),
+            IntegrationStatus(
+                id="sensitech", name="Sensitech TempTale", category="iot", status="connected", last_sync=now.isoformat()
+            ),
             IntegrationStatus(id="tive", name="Tive Trackers", category="iot", status="disconnected"),
             IntegrationStatus(id="sap", name="SAP S/4HANA", category="erp", status="disconnected"),
             IntegrationStatus(id="netsuite", name="Oracle NetSuite", category="erp", status="disconnected"),
@@ -78,8 +84,22 @@ def _default_settings(tenant_id: str) -> SettingsResponse:
             IntegrationStatus(id="kroger", name="Kroger 84.51°", category="retailer", status="disconnected"),
         ],
         api_keys=[
-            {"id": "key-001", "name": "Production API Key", "prefix": "rge_live_", "created": now.isoformat(), "last_used": now.isoformat(), "status": "active"},
-            {"id": "key-002", "name": "Test API Key", "prefix": "rge_test_", "created": now.isoformat(), "last_used": None, "status": "active"},
+            {
+                "id": "key-001",
+                "name": "Production API Key",
+                "prefix": "rge_live_",
+                "created": now.isoformat(),
+                "last_used": now.isoformat(),
+                "status": "active",
+            },
+            {
+                "id": "key-002",
+                "name": "Test API Key",
+                "prefix": "rge_test_",
+                "created": now.isoformat(),
+                "last_used": None,
+                "status": "active",
+            },
         ],
         plan={
             "id": "professional",

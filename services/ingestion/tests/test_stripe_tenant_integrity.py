@@ -13,7 +13,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from app import stripe_billing
 from app.authz import IngestionPrincipal
 from app.stripe_billing import webhooks as webhooks_mod

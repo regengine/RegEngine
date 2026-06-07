@@ -27,8 +27,10 @@ router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 # Models
 # ---------------------------------------------------------------------------
 
+
 class FieldMapping(BaseModel):
     """Maps source field paths to RegEngine canonical fields."""
+
     cte_type: str = Field(default="cte_type", description="Source field for CTE type")
     traceability_lot_code: str = Field(default="traceability_lot_code")
     product_description: str = Field(default="product_description")
@@ -40,6 +42,7 @@ class FieldMapping(BaseModel):
 
 class WebhookPayload(BaseModel):
     """Incoming webhook payload with optional field mapping override."""
+
     events: List[Dict[str, Any]] = Field(..., description="Array of event objects")
     field_mapping: Optional[FieldMapping] = Field(
         default=None,
@@ -49,6 +52,7 @@ class WebhookPayload(BaseModel):
 
 class WebhookResponse(BaseModel):
     """Response from webhook ingestion."""
+
     received: int
     mapped: int
     errors: List[str] = Field(default_factory=list)
@@ -57,6 +61,7 @@ class WebhookResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_nested(obj: Dict[str, Any], path: str) -> Any:
     """Extract a value from a nested dict using dot notation (e.g., 'header.docDate')."""
@@ -94,6 +99,7 @@ def _apply_mapping(event: Dict[str, Any], mapping: FieldMapping) -> Dict[str, An
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/webhook/{connector_id}",

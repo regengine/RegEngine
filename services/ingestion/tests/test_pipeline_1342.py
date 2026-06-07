@@ -46,7 +46,6 @@ sys.path.insert(0, str(service_dir))
 from app import pipeline as mod  # noqa: E402
 from app.pipeline import ScraperPipeline  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Spies
 # ---------------------------------------------------------------------------
@@ -96,10 +95,17 @@ class _StructlogSpy:
     def _record(self, level: str, event: str, **kw: Any) -> None:
         self.calls.append((level, event, kw))
 
-    def debug(self, event, **kw): self._record("debug", event, **kw)
-    def info(self, event, **kw): self._record("info", event, **kw)
-    def warning(self, event, **kw): self._record("warning", event, **kw)
-    def error(self, event, **kw): self._record("error", event, **kw)
+    def debug(self, event, **kw):
+        self._record("debug", event, **kw)
+
+    def info(self, event, **kw):
+        self._record("info", event, **kw)
+
+    def warning(self, event, **kw):
+        self._record("warning", event, **kw)
+
+    def error(self, event, **kw):
+        self._record("error", event, **kw)
 
     def by_event(self, event: str) -> list[tuple[str, str, dict]]:
         return [c for c in self.calls if c[1] == event]
@@ -280,9 +286,7 @@ class TestHappyPath:
         # same contents).
         assert result == ev
 
-    def test_returned_event_is_same_object_emitted(
-        self, make_pipeline, log_spy
-    ):
+    def test_returned_event_is_same_object_emitted(self, make_pipeline, log_spy):
         # Callers in scraper_job.py do `event = pipeline.process_content(...)`
         # then push fields into the event. Pin identity so a refactor
         # that dicts-out to a new object doesn't silently break those
@@ -357,9 +361,7 @@ class TestHappyPath:
         # doc_id matches the emitted event.
         assert kw["doc_id"] == kafka.emits[0]["payload"]["doc_id"]
 
-    def test_falsy_content_type_defaults_to_octet_stream(
-        self, make_pipeline, log_spy
-    ):
+    def test_falsy_content_type_defaults_to_octet_stream(self, make_pipeline, log_spy):
         # S3 needs a Content-Type for anything useful on retrieval;
         # caller might pass "" when the scraper can't figure it out.
         p, s3, kafka = make_pipeline()
@@ -376,9 +378,7 @@ class TestHappyPath:
         # S3 needs it for on-disk metadata.
         assert kafka.emits[0]["payload"]["content_type"] == ""
 
-    def test_non_ascii_jurisdiction_and_url_pass_through(
-        self, make_pipeline, log_spy
-    ):
+    def test_non_ascii_jurisdiction_and_url_pass_through(self, make_pipeline, log_spy):
         # Some state adapter keys are oddly shaped; key building uses
         # plain f-string so the pipeline should not try to encode.
         p, s3, kafka = make_pipeline()
@@ -400,9 +400,7 @@ class TestHappyPath:
 
 class TestErrorPaths:
     def test_s3_failure_logs_error_and_reraises(self, make_pipeline, log_spy):
-        p, s3, kafka = make_pipeline(
-            s3_raise=RuntimeError("bucket missing")
-        )
+        p, s3, kafka = make_pipeline(s3_raise=RuntimeError("bucket missing"))
         with pytest.raises(RuntimeError, match="bucket missing"):
             p.process_content(
                 content=b"x",
@@ -422,15 +420,11 @@ class TestErrorPaths:
         assert kw["url"] == "https://ny.gov/x"
         assert "bucket missing" in kw["error"]
 
-    def test_kafka_failure_logs_error_and_reraises(
-        self, make_pipeline, log_spy
-    ):
+    def test_kafka_failure_logs_error_and_reraises(self, make_pipeline, log_spy):
         # S3 succeeds, Kafka explodes — still re-raise. We get an
         # orphaned S3 object but no event; scraper_job treats the whole
         # job as failed and the next retry will re-upload.
-        p, s3, kafka = make_pipeline(
-            kafka_raise=ConnectionError("broker down")
-        )
+        p, s3, kafka = make_pipeline(kafka_raise=ConnectionError("broker down"))
         with pytest.raises(ConnectionError, match="broker down"):
             p.process_content(
                 content=b"x",
@@ -456,9 +450,7 @@ class TestErrorPaths:
             KeyError("missing"),
         ],
     )
-    def test_any_uncaught_s3_exception_propagates(
-        self, make_pipeline, log_spy, exc
-    ):
+    def test_any_uncaught_s3_exception_propagates(self, make_pipeline, log_spy, exc):
         # The except clause is ``except Exception`` — it catches the
         # error, logs, and re-raises the *original* exception
         # (``raise e``), not a wrapped one. Pin identity so a refactor

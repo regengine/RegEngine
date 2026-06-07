@@ -21,17 +21,17 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .config import get_settings
+from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
+from .webhook_compat import ingest_events, require_tenant_context
 from .webhook_models import (
     IngestEvent,
     IngestResponse,
     WebhookCTEType,
     WebhookPayload,
 )
-from .shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
-from .webhook_compat import ingest_events, require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("sensitech-parser")
 
@@ -40,6 +40,7 @@ router = APIRouter(prefix="/api/v1/ingest/iot", tags=["IoT Import"])
 
 class TemperatureReading(BaseModel):
     """A single parsed temperature reading."""
+
     timestamp: str
     temperature_celsius: float
     alarm_status: str = "OK"
@@ -48,6 +49,7 @@ class TemperatureReading(BaseModel):
 
 class TemperatureExcursion(BaseModel):
     """A temperature excursion detected during parsing."""
+
     timestamp: str
     temperature_celsius: float
     threshold_celsius: float
@@ -57,6 +59,7 @@ class TemperatureExcursion(BaseModel):
 
 class SensitechImportResponse(BaseModel):
     """Response from Sensitech import."""
+
     readings_parsed: int = 0
     events_created: int = 0
     excursions_detected: int = 0
@@ -118,12 +121,14 @@ def _parse_sensitech_csv(content: str) -> list[TemperatureReading]:
             temp_str = row[temp_idx].strip().replace("°C", "").replace("°F", "").strip()
             temperature = float(temp_str)
 
-            readings.append(TemperatureReading(
-                timestamp=row[time_idx].strip(),
-                temperature_celsius=temperature,
-                alarm_status=row[alarm_idx].strip() if alarm_idx is not None and alarm_idx < len(row) else "OK",
-                serial_number=row[serial_idx].strip() if serial_idx is not None and serial_idx < len(row) else None,
-            ))
+            readings.append(
+                TemperatureReading(
+                    timestamp=row[time_idx].strip(),
+                    temperature_celsius=temperature,
+                    alarm_status=row[alarm_idx].strip() if alarm_idx is not None and alarm_idx < len(row) else "OK",
+                    serial_number=row[serial_idx].strip() if serial_idx is not None and serial_idx < len(row) else None,
+                )
+            )
         except (ValueError, IndexError):
             continue  # Skip unparseable rows
 
@@ -183,21 +188,25 @@ def _detect_excursions(
 
     for r in readings:
         if r.temperature_celsius > cold_threshold:
-            excursions.append(TemperatureExcursion(
-                timestamp=r.timestamp,
-                temperature_celsius=r.temperature_celsius,
-                threshold_celsius=cold_threshold,
-                serial_number=r.serial_number,
-                severity="CRITICAL" if r.temperature_celsius > cold_threshold + 3 else "WARNING",
-            ))
+            excursions.append(
+                TemperatureExcursion(
+                    timestamp=r.timestamp,
+                    temperature_celsius=r.temperature_celsius,
+                    threshold_celsius=cold_threshold,
+                    serial_number=r.serial_number,
+                    severity="CRITICAL" if r.temperature_celsius > cold_threshold + 3 else "WARNING",
+                )
+            )
         elif r.temperature_celsius < freeze_threshold:
-            excursions.append(TemperatureExcursion(
-                timestamp=r.timestamp,
-                temperature_celsius=r.temperature_celsius,
-                threshold_celsius=freeze_threshold,
-                serial_number=r.serial_number,
-                severity="WARNING",
-            ))
+            excursions.append(
+                TemperatureExcursion(
+                    timestamp=r.timestamp,
+                    temperature_celsius=r.temperature_celsius,
+                    threshold_celsius=freeze_threshold,
+                    serial_number=r.serial_number,
+                    severity="WARNING",
+                )
+            )
 
     return excursions
 
@@ -226,13 +235,12 @@ async def import_sensitech(
 
     # Validate CTE type
     if cte_type.lower() not in ("cooling", "receiving"):
-        raise HTTPException(
-            status_code=400,
-            detail="cte_type must be 'cooling' or 'receiving' for temperature data"
-        )
+        raise HTTPException(status_code=400, detail="cte_type must be 'cooling' or 'receiving' for temperature data")
 
     # Parse CSV
-    content = (await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Sensitech CSV")).decode("utf-8-sig")
+    content = (await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Sensitech CSV")).decode(
+        "utf-8-sig"
+    )
     readings = _parse_sensitech_csv(content)
 
     if not readings:

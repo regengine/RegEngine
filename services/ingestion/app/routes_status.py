@@ -6,17 +6,21 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
+import redis
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-import redis
-
 from shared.auth import APIKey, require_api_key
+
 from .config import get_settings
-from .routes import get_db_manager
 from .models import (
-    IngestionStatusResponse, DocumentAnalysisResponse, JobStatusResponse,
-    JobLogsResponse, ListDocumentsResponse, VerifyDocumentResponse
+    DocumentAnalysisResponse,
+    IngestionStatusResponse,
+    JobLogsResponse,
+    JobStatusResponse,
+    ListDocumentsResponse,
+    VerifyDocumentResponse,
 )
+from .routes import get_db_manager
 
 logger = structlog.get_logger("ingestion")
 router = APIRouter(tags=["ingestion-status"])

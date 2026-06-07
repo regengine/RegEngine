@@ -15,7 +15,6 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-
 class FSMAApplicabilityEngine:
     """
     Engine for FSMA 204 applicability and exemption evaluation.
@@ -47,9 +46,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -62,9 +67,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -77,9 +87,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -92,9 +108,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -107,9 +129,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -122,9 +150,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -137,9 +171,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Cooling", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Cooling Location Identifier", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Cooling Location Identifier",
+                "Field Identification",
             ],
         },
         {
@@ -152,9 +192,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Field Identification",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Field Identification",
             ],
         },
         {
@@ -167,9 +212,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Harvesting", "Initial Packing", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1325, §1.1330, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Seed Source", "Growing Location",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Seed Source",
+                "Growing Location",
             ],
         },
         {
@@ -182,9 +232,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -197,9 +252,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -212,9 +272,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -227,9 +292,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["First Land-Based Receiving", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1335, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Vessel Name", "Harvest Area", "Landing Port",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Vessel Name",
+                "Harvest Area",
+                "Landing Port",
             ],
         },
         {
@@ -242,9 +313,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["First Land-Based Receiving", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1335, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Vessel Name", "Harvest Area", "Landing Port",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Vessel Name",
+                "Harvest Area",
+                "Landing Port",
             ],
         },
         {
@@ -257,9 +334,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["First Land-Based Receiving", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1335, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Vessel Name", "Harvest Area", "Landing Port",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Vessel Name",
+                "Harvest Area",
+                "Landing Port",
             ],
         },
         {
@@ -272,9 +355,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -287,9 +375,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["First Land-Based Receiving", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1335, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Harvest Area", "Vessel or Container ID",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Harvest Area",
+                "Vessel or Container ID",
             ],
         },
         {
@@ -302,9 +395,15 @@ class FSMAApplicabilityEngine:
             "ctes": ["First Land-Based Receiving", "Shipping", "Receiving", "Transformation"],
             "cfr_sections": "§1.1335, §1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Harvest Area", "Harvest Tag", "NSSP Dealer Certificate",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Harvest Area",
+                "Harvest Tag",
+                "NSSP Dealer Certificate",
             ],
         },
         {
@@ -317,9 +416,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Shipping", "Receiving"],
             "cfr_sections": "§1.1340, §1.1345",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "TLC Source Location or Reference", "Farm/Flock Identifier",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "TLC Source Location or Reference",
+                "Farm/Flock Identifier",
             ],
         },
         {
@@ -332,9 +436,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -347,9 +456,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -362,9 +476,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
         {
@@ -377,9 +496,14 @@ class FSMAApplicabilityEngine:
             "ctes": ["Receiving", "Transformation", "Shipping"],
             "cfr_sections": "§1.1340, §1.1345, §1.1350",
             "kdes": [
-                "Traceability Lot Code (TLC)", "Location Identifier (GLN)", "Date/Time",
-                "Quantity & UOM", "Product Description", "Reference Document Type & Number",
-                "Input TLCs", "New TLC Assigned",
+                "Traceability Lot Code (TLC)",
+                "Location Identifier (GLN)",
+                "Date/Time",
+                "Quantity & UOM",
+                "Product Description",
+                "Reference Document Type & Number",
+                "Input TLCs",
+                "New TLC Assigned",
             ],
         },
     ]
@@ -458,18 +582,18 @@ class FSMAApplicabilityEngine:
 
     # Set of exemption IDs for O(1) lookup
     _FULL_EXEMPT_IDS: set = {
-        "small-producer", "kill-step", "direct-to-consumer",
-        "small-retail", "rarely-consumed-raw", "usda-jurisdiction",
+        "small-producer",
+        "kill-step",
+        "direct-to-consumer",
+        "small-retail",
+        "rarely-consumed-raw",
+        "usda-jurisdiction",
     }
 
     def __init__(self) -> None:
         # Build lookup dict for fast access
-        self._category_map: Dict[str, Dict[str, Any]] = {
-            c["id"]: c for c in self.FTL_CATEGORIES
-        }
-        self._exemption_map: Dict[str, Dict[str, Any]] = {
-            e["id"]: e for e in self.EXEMPTION_DEFINITIONS
-        }
+        self._category_map: Dict[str, Dict[str, Any]] = {c["id"]: c for c in self.FTL_CATEGORIES}
+        self._exemption_map: Dict[str, Dict[str, Any]] = {e["id"]: e for e in self.EXEMPTION_DEFINITIONS}
 
     # ------------------------------------------------------------------
     # Public API
@@ -522,10 +646,7 @@ class FSMAApplicabilityEngine:
             "covered_categories": covered,
             "not_covered_categories": not_covered,
             "high_outbreak_count": len(high_outbreak),
-            "reason": (
-                "Handles items on the FDA Food Traceability List" if is_applicable
-                else "No FTL items handled"
-            ),
+            "reason": ("Handles items on the FDA Food Traceability List" if is_applicable else "No FTL items handled"),
         }
 
     def evaluate_exemptions(self, answers: Dict[str, bool]) -> Dict[str, Any]:

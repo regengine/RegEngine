@@ -19,7 +19,13 @@ from ..fda_export_service import (
     _build_fda_package,
     _generate_csv,
 )
-
+from .coverage import _enforce_kde_coverage_gate
+from .formatters import (
+    build_csv_response,
+    build_package_response,
+    generate_csv_and_hash,
+    make_timestamp,
+)
 from .queries import (
     AuditLogWriteError,
     build_recall_where_clause,
@@ -27,13 +33,6 @@ from .queries import (
     log_recall_export,
     rows_to_event_dicts,
 )
-from .formatters import (
-    build_csv_response,
-    build_package_response,
-    generate_csv_and_hash,
-    make_timestamp,
-)
-from .coverage import _enforce_kde_coverage_gate
 
 logger = logging.getLogger("fda-export")
 
@@ -97,8 +96,7 @@ async def export_recall_filtered_handler(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Both start_date and end_date are required when either is "
-                "provided. Supply both bounds or omit both."
+                "Both start_date and end_date are required when either is provided. Supply both bounds or omit both."
             ),
         )
     if start_date and end_date and end_date < start_date:
@@ -109,8 +107,8 @@ async def export_recall_filtered_handler(
 
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
@@ -138,12 +136,18 @@ async def export_recall_filtered_handler(
 
         if not rows:
             filters_used = []
-            if product: filters_used.append(f"product='{product}'")
-            if location: filters_used.append(f"location='{location}'")
-            if tlc: filters_used.append(f"tlc='{tlc}'")
-            if event_type: filters_used.append(f"event_type='{event_type}'")
-            if start_date: filters_used.append(f"from={start_date}")
-            if end_date: filters_used.append(f"to={end_date}")
+            if product:
+                filters_used.append(f"product='{product}'")
+            if location:
+                filters_used.append(f"location='{location}'")
+            if tlc:
+                filters_used.append(f"tlc='{tlc}'")
+            if event_type:
+                filters_used.append(f"event_type='{event_type}'")
+            if start_date:
+                filters_used.append(f"from={start_date}")
+            if end_date:
+                filters_used.append(f"to={end_date}")
             raise HTTPException(
                 status_code=404,
                 detail=f"No records found matching recall filters: {', '.join(filters_used)}",

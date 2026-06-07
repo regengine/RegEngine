@@ -1,12 +1,13 @@
+import logging
+import os
+import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import uuid
+
 import jwt
 from cachetools import TTLCache
 from passlib.context import CryptContext
-import os
-import secrets
-import logging
 
 _logger = logging.getLogger("auth_utils")
 
@@ -51,6 +52,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60"))
 
+
 # #1069 — reject JWTs without a ``jti`` claim. ``revoke_token()`` can only
 # flag tokens by jti, so a pre-jti (legacy) token is un-revocable for its
 # full natural TTL. Forcing re-auth on these tokens closes the gap. Set
@@ -60,6 +62,7 @@ SESSION_IDLE_TIMEOUT_MINUTES = int(os.getenv("SESSION_IDLE_TIMEOUT_MINUTES", "60
 # bounds the rollback window).
 def _require_jti_default() -> bool:
     return os.getenv("AUTH_ALLOW_LEGACY_JTI_FREE", "").lower() not in ("true", "1", "yes")
+
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
@@ -245,9 +248,7 @@ def decode_access_token(token: str) -> dict:
 
         # kid present but not in our registry — key may have expired
         _logger.warning("jwt_unknown_kid: %s", kid)
-        raise jwt.exceptions.InvalidSignatureError(
-            f"Token signed with unknown or expired key: {kid}"
-        )
+        raise jwt.exceptions.InvalidSignatureError(f"Token signed with unknown or expired key: {kid}")
 
     # Legacy token (no kid) or registry not yet initialized:
     # Try all verification keys, then fall back to static SECRET_KEY
@@ -290,9 +291,7 @@ def _check_revoked(payload: dict) -> dict:
     jti = payload.get("jti")
     if not jti:
         if _require_jti_default():
-            raise jwt.exceptions.InvalidTokenError(
-                "Token missing jti claim — please re-authenticate"
-            )
+            raise jwt.exceptions.InvalidTokenError("Token missing jti claim — please re-authenticate")
         return payload  # rollback path — legacy tokens still pass through
 
     # In-process fast path. Populated by revoke_token() on this worker
@@ -358,6 +357,7 @@ async def revoke_all_for_kid(kid: str) -> None:
     If the revoked key was the only active key, a new one is auto-generated.
     """
     from shared.jwt_key_registry import get_key_registry
+
     registry = await get_key_registry()
     revoked = await registry.revoke_key(kid, revoked_by="admin-api")
     if revoked:
@@ -378,6 +378,7 @@ async def revoke_all_jwt_keys() -> int:
     Returns count of keys revoked.
     """
     from shared.jwt_key_registry import get_key_registry
+
     registry = await get_key_registry()
     count = await registry.revoke_all_keys(revoked_by="admin-api-emergency")
     # Refresh sync cache
@@ -398,6 +399,8 @@ def create_refresh_token() -> str:
     # Opaque token for database storage
     return secrets.token_urlsafe(64)
 
+
 def hash_token(token: str) -> str:
     import hashlib
+
     return hashlib.sha256(token.encode()).hexdigest()

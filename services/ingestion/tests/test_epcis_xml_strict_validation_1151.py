@@ -31,7 +31,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000abc"
 
 
@@ -47,6 +46,7 @@ def client() -> TestClient:
     tests can focus on validation behaviour."""
     from app.epcis.router import router
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
     app = FastAPI()
@@ -181,9 +181,7 @@ def test_all_valid_events_still_accepted(client, monkeypatch):
             for i, _ in enumerate(events)
         ]
 
-    monkeypatch.setattr(
-        router_mod, "_ingest_batch_events_db_atomic", _fake_batch
-    )
+    monkeypatch.setattr(router_mod, "_ingest_batch_events_db_atomic", _fake_batch)
 
     resp = client.post(
         "/api/v1/epcis/events/xml",
@@ -193,10 +191,7 @@ def test_all_valid_events_still_accepted(client, monkeypatch):
         },
         content=_valid_epcis_xml(),
     )
-    assert resp.status_code in (200, 201), (
-        f"Expected 200/201 on all-valid payload, got {resp.status_code}: "
-        f"{resp.text}"
-    )
+    assert resp.status_code in (200, 201), f"Expected 200/201 on all-valid payload, got {resp.status_code}: {resp.text}"
     body = resp.json()
     assert body.get("total") == 1
     assert body.get("created") == 1
@@ -245,9 +240,7 @@ def test_lenient_mode_still_persists_with_warning(client, monkeypatch, caplog):
             for i, _ in enumerate(events)
         ]
 
-    monkeypatch.setattr(
-        router_mod, "_ingest_batch_events_db_atomic", _fake_batch
-    )
+    monkeypatch.setattr(router_mod, "_ingest_batch_events_db_atomic", _fake_batch)
 
     with caplog.at_level(logging.WARNING, logger="epcis-ingestion"):
         resp = client.post(
@@ -261,27 +254,15 @@ def test_lenient_mode_still_persists_with_warning(client, monkeypatch, caplog):
 
     # Lenient mode does NOT 422 at parse — the event is passed to the
     # downstream orchestrator so the legacy onboarding flow still works.
-    assert resp.status_code != 422, (
-        "Lenient mode should not 422 at parse time"
-    )
+    assert resp.status_code != 422, "Lenient mode should not 422 at parse time"
     # A WARNING must have been emitted per invalid event.
-    warning_messages = [
-        record.getMessage()
-        for record in caplog.records
-        if record.levelno == logging.WARNING
-    ]
-    assert any(
-        "epcis_xml_event_validation_failed_lenient" in msg
-        for msg in warning_messages
-    ), (
-        "Expected a 'lenient' warning log per invalid event. "
-        f"Got warnings: {warning_messages}"
+    warning_messages = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+    assert any("epcis_xml_event_validation_failed_lenient" in msg for msg in warning_messages), (
+        f"Expected a 'lenient' warning log per invalid event. Got warnings: {warning_messages}"
     )
     # The event was forwarded to the persistence layer (not silently
     # dropped from the event list).
-    assert len(captured_events) == 1, (
-        "Lenient mode must still forward the event to persistence"
-    )
+    assert len(captured_events) == 1, "Lenient mode must still forward the event to persistence"
 
 
 # ---------------------------------------------------------------------------
@@ -302,9 +283,7 @@ def test_persistence_refuses_unvalidated_in_strict_mode(monkeypatch):
     monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)
 
     # Force FSMAEvent validation to fail so ``fsma_validated`` is None.
-    monkeypatch.setattr(
-        persistence_mod, "_validate_as_fsma_event", lambda normalized, tenant: None
-    )
+    monkeypatch.setattr(persistence_mod, "_validate_as_fsma_event", lambda normalized, tenant: None)
 
     valid_event = {
         "type": "ObjectEvent",
@@ -341,9 +320,7 @@ def test_persistence_refuses_unvalidated_also_with_strict_validation_env(
 
     monkeypatch.setenv("STRICT_FSMA_VALIDATION", "true")
     monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)
-    monkeypatch.setattr(
-        persistence_mod, "_validate_as_fsma_event", lambda normalized, tenant: None
-    )
+    monkeypatch.setattr(persistence_mod, "_validate_as_fsma_event", lambda normalized, tenant: None)
 
     valid_event = {
         "type": "ObjectEvent",

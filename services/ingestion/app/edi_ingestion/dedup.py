@@ -95,7 +95,9 @@ def check_and_record_interchange(
     except Exception as exc:
         logger.warning(
             "edi_dedup_redis_error sender=%s isa13=%s error=%s",
-            sender_id, isa13, str(exc),
+            sender_id,
+            isa13,
+            str(exc),
         )
         return False, None
 

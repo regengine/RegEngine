@@ -7,9 +7,10 @@ so the tenant binding remains parameterized and transaction-scoped.
 
 from __future__ import annotations
 
-import pytest
-from uuid import uuid4
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
+
+import pytest
 
 
 class TestSessionScopeTenantIsolation:
@@ -179,7 +180,7 @@ class TestTenantIdValidation:
             return MockSession()
 
         tracker = HallucinationTracker(session_factory, None)
-        
+
         # Standard UUID format
         tenant_id = "550e8400-e29b-41d4-a716-446655440000"
 
@@ -195,7 +196,7 @@ class TestTenantIdValidation:
     def test_session_scope_sql_injection_protection(self):
         """
         Verify that tenant_id is safely handled.
-        
+
         Note: In production, tenant_id should be validated as a UUID before
         reaching this point. The helper now uses a parameterized binding
         rather than interpolating the value into SQL text.
@@ -222,7 +223,7 @@ class TestTenantIdValidation:
             return MockSession()
 
         tracker = HallucinationTracker(session_factory, None)
-        
+
         # This should be a valid UUID in production
         tenant_id = "550e8400-e29b-41d4-a716-446655440000"
 

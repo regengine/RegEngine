@@ -47,7 +47,6 @@ from app.fda_export.queries import (  # noqa: E402
     v2_rows_to_event_dicts,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake DB-session primitives
 # ---------------------------------------------------------------------------
@@ -75,8 +74,7 @@ class _FakeSession:
     count + edges responses in order.
     """
 
-    def __init__(self, *, results=None, raise_on_insert=False,
-                 raise_on_rollback=False):
+    def __init__(self, *, results=None, raise_on_insert=False, raise_on_rollback=False):
         self.executes: list[tuple[Any, Any]] = []
         self.commits = 0
         self.rollbacks = 0
@@ -153,9 +151,17 @@ class TestEndBoundUtc:
 
 class TestFetchExportLogHistory:
     def test_returns_rows_from_session_execute(self):
-        row = ("id-1", "recall", "TLC-X", "2026-04-01", "2026-04-10",
-               42, "hash", "user@example.com",
-               datetime(2026, 4, 17, tzinfo=timezone.utc))
+        row = (
+            "id-1",
+            "recall",
+            "TLC-X",
+            "2026-04-01",
+            "2026-04-10",
+            42,
+            "hash",
+            "user@example.com",
+            datetime(2026, 4, 17, tzinfo=timezone.utc),
+        )
         session = _FakeSession(results=[_Result(rows=[row])])
 
         rows = fetch_export_log_history(session, "tenant-42", 25)
@@ -244,68 +250,51 @@ class TestFormatExportLogRows:
 
 class TestBuildRecallWhereClause:
     def test_tenant_only_base_conditions(self):
-        where, params = build_recall_where_clause(
-            "tenant-42", None, None, None, None, None, None
-        )
+        where, params = build_recall_where_clause("tenant-42", None, None, None, None, None, None)
         assert where == "e.tenant_id = :tid"
         assert params == {"tid": "tenant-42"}
 
     def test_product_filter_adds_like(self):
-        where, params = build_recall_where_clause(
-            "t", "Strawberries", None, None, None, None, None
-        )
+        where, params = build_recall_where_clause("t", "Strawberries", None, None, None, None, None)
         assert "LOWER(e.product_description) LIKE LOWER(:product)" in where
         assert params["product"] == "%Strawberries%"
 
     def test_location_filter_matches_name_or_gln(self):
-        where, params = build_recall_where_clause(
-            "t", None, "Warehouse-A", None, None, None, None
-        )
+        where, params = build_recall_where_clause("t", None, "Warehouse-A", None, None, None, None)
         assert "LOWER(e.location_name) LIKE LOWER(:loc)" in where
         assert "e.location_gln LIKE :loc_exact" in where
         assert params["loc"] == "%Warehouse-A%"
         assert params["loc_exact"] == "%Warehouse-A%"
 
     def test_tlc_without_percent_gets_wrapped(self):
-        where, params = build_recall_where_clause(
-            "t", None, None, "TLC-XYZ", None, None, None
-        )
+        where, params = build_recall_where_clause("t", None, None, "TLC-XYZ", None, None, None)
         assert "e.traceability_lot_code LIKE :tlc" in where
         assert params["tlc"] == "%TLC-XYZ%"
 
     def test_tlc_with_percent_passes_through(self):
         # User-supplied wildcard is respected (advanced recall use).
-        where, params = build_recall_where_clause(
-            "t", None, None, "TLC-%", None, None, None
-        )
+        where, params = build_recall_where_clause("t", None, None, "TLC-%", None, None, None)
         assert params["tlc"] == "TLC-%"
 
     def test_event_type_equality(self):
-        where, params = build_recall_where_clause(
-            "t", None, None, None, "shipping", None, None
-        )
+        where, params = build_recall_where_clause("t", None, None, None, "shipping", None, None)
         assert "e.event_type = :etype" in where
         assert params["etype"] == "shipping"
 
     def test_start_date_adds_ge_condition(self):
-        where, params = build_recall_where_clause(
-            "t", None, None, None, None, "2026-04-01", None
-        )
+        where, params = build_recall_where_clause("t", None, None, None, None, "2026-04-01", None)
         assert "e.event_timestamp >= :start" in where
         assert params["start"] == "2026-04-01"
 
     def test_end_date_adds_strict_lt_at_next_day_utc(self):
         # #1224 — must be strict ``<`` with next-day UTC bound.
-        where, params = build_recall_where_clause(
-            "t", None, None, None, None, None, "2026-04-10"
-        )
+        where, params = build_recall_where_clause("t", None, None, None, None, None, "2026-04-10")
         assert "e.event_timestamp < :end" in where
         assert params["end"] == "2026-04-11T00:00:00+00:00"
 
     def test_all_filters_combine_with_and(self):
         where, params = build_recall_where_clause(
-            "tenant-1", "Prod", "Loc", "TLC", "shipping",
-            "2026-04-01", "2026-04-10"
+            "tenant-1", "Prod", "Loc", "TLC", "shipping", "2026-04-01", "2026-04-10"
         )
         clauses = where.split(" AND ")
         # 1 base + 6 extras = 7 clauses total (location adds one clause
@@ -322,9 +311,7 @@ class TestBuildRecallWhereClause:
 
     def test_empty_strings_treated_as_unset(self):
         # Empty strings are falsy, so no extra clauses.
-        where, params = build_recall_where_clause(
-            "t", "", "", "", "", "", ""
-        )
+        where, params = build_recall_where_clause("t", "", "", "", "", "", "")
         assert where == "e.tenant_id = :tid"
         assert params == {"tid": "t"}
 
@@ -501,8 +488,7 @@ class TestLogRecallExport:
         assert params["sd"] == "2026-04-01"
         assert params["ed"] == "2026-04-10"
 
-        audit_records = [r for r in caplog.records
-                         if r.message == "fda_recall_export_audit"]
+        audit_records = [r for r in caplog.records if r.message == "fda_recall_export_audit"]
         assert len(audit_records) == 1
         audit = audit_records[0]
         assert audit.tenant_id == "tenant-42"
@@ -626,8 +612,7 @@ class TestLogRecallExport:
                     request_id="r",
                 )
 
-        err_records = [r for r in caplog.records
-                       if r.message == "fda_recall_export_audit_log_failed"]
+        err_records = [r for r in caplog.records if r.message == "fda_recall_export_audit_log_failed"]
         assert len(err_records) == 1
         err = err_records[0]
         assert err.levelname == "ERROR"
@@ -650,8 +635,7 @@ class TestLogRecallExport:
                     start_date=None,
                     end_date=None,
                 )
-        err = [r for r in caplog.records
-               if r.message == "fda_recall_export_audit_log_failed"][0]
+        err = [r for r in caplog.records if r.message == "fda_recall_export_audit_log_failed"][0]
         assert err.export_hash is None
 
 
@@ -685,23 +669,17 @@ class TestBuildV2WhereClause:
         assert params["etype"] == "receiving"
 
     def test_start_date_filter(self):
-        where, params = build_v2_where_clause(
-            "t", None, None, "2026-04-01", None
-        )
+        where, params = build_v2_where_clause("t", None, None, "2026-04-01", None)
         assert "e.event_timestamp >= :start" in where
         assert params["start"] == "2026-04-01"
 
     def test_end_date_uses_next_day_utc_bound(self):
-        where, params = build_v2_where_clause(
-            "t", None, None, None, "2026-04-10"
-        )
+        where, params = build_v2_where_clause("t", None, None, None, "2026-04-10")
         assert "e.event_timestamp < :end" in where
         assert params["end"] == "2026-04-11T00:00:00+00:00"
 
     def test_all_filters_combined(self):
-        where, params = build_v2_where_clause(
-            "t", "TLC-ABC", "shipping", "2026-04-01", "2026-04-10"
-        )
+        where, params = build_v2_where_clause("t", "TLC-ABC", "shipping", "2026-04-01", "2026-04-10")
         clauses = where.split(" AND ")
         assert len(clauses) == 5
         assert params == {
@@ -736,9 +714,7 @@ class TestFetchV2Events:
 
 
 class TestV2RowsToEventDicts:
-    def _make_row(self, *, ts=None, ingested=None, kdes=None,
-                  provenance=None, rule_results=None,
-                  chain_hash="chain-x"):
+    def _make_row(self, *, ts=None, ingested=None, kdes=None, provenance=None, rule_results=None, chain_hash="chain-x"):
         return (
             "event-id",
             "shipping",
@@ -765,7 +741,8 @@ class TestV2RowsToEventDicts:
             {"rule_name": "r1", "passed": True, "why_failed": None},
         ]
         row = self._make_row(
-            ts=ts, ingested=ingested,
+            ts=ts,
+            ingested=ingested,
             kdes={"a": "b"},
             provenance={"src": "edi"},
             rule_results=rule_results,
@@ -798,13 +775,9 @@ class TestV2RowsToEventDicts:
 
     def test_rule_results_as_json_string_is_parsed(self):
         # PostgreSQL can return jsonb as str in some drivers.
-        row = self._make_row(
-            rule_results='[{"rule_name": "r1", "passed": false}]'
-        )
+        row = self._make_row(rule_results='[{"rule_name": "r1", "passed": false}]')
         events = v2_rows_to_event_dicts([row])
-        assert events[0]["rule_results"] == [
-            {"rule_name": "r1", "passed": False}
-        ]
+        assert events[0]["rule_results"] == [{"rule_name": "r1", "passed": False}]
 
     def test_malformed_json_rule_results_becomes_empty_list(self):
         row = self._make_row(rule_results="{not-json")
@@ -870,8 +843,7 @@ class TestLogV2Export:
         assert params["generated_by"] == "u"
         assert params["cnt"] == 3
 
-        audit = [r for r in caplog.records
-                 if r.message == "fda_v2_export_audit"][0]
+        audit = [r for r in caplog.records if r.message == "fda_v2_export_audit"][0]
         assert audit.export_type == "v2_spreadsheet"
         assert audit.filters_applied == {
             "tlc": "TLC-X",
@@ -958,8 +930,7 @@ class TestLogV2Export:
                     user_id="u",
                     request_id="r",
                 )
-        err = [r for r in caplog.records
-               if r.message == "fda_v2_export_audit_log_failed"][0]
+        err = [r for r in caplog.records if r.message == "fda_v2_export_audit_log_failed"][0]
         assert err.export_hash == "b" * 16
 
     def test_db_failure_with_empty_hash_logs_none(self, caplog):
@@ -976,8 +947,7 @@ class TestLogV2Export:
                     start_date=None,
                     end_date=None,
                 )
-        err = [r for r in caplog.records
-               if r.message == "fda_v2_export_audit_log_failed"][0]
+        err = [r for r in caplog.records if r.message == "fda_v2_export_audit_log_failed"][0]
         assert err.export_hash is None
 
 
@@ -989,32 +959,28 @@ class TestLogV2Export:
 class TestFetchTraceGraphData:
     def _persistence(self, linked):
         """Persistence stub with a scripted transformation-link expansion."""
-        return SimpleNamespace(
-            _expand_tlcs_via_transformation_links=lambda tenant_id, seed_tlc, depth: list(linked)
-        )
+        return SimpleNamespace(_expand_tlcs_via_transformation_links=lambda tenant_id, seed_tlc, depth: list(linked))
 
     def test_happy_path_builds_nodes_edges_and_totals(self):
         # Scripted expansion: seed plus 2 linked TLCs.
         persistence = self._persistence(["TLC-A", "TLC-B", "TLC-C"])
 
         count_rows = [
-            ("TLC-A", 3,
-             datetime(2026, 4, 1, tzinfo=timezone.utc),
-             datetime(2026, 4, 5, tzinfo=timezone.utc)),
+            ("TLC-A", 3, datetime(2026, 4, 1, tzinfo=timezone.utc), datetime(2026, 4, 5, tzinfo=timezone.utc)),
             ("TLC-B", 1, None, None),
         ]
         link_rows = [
             ("TLC-A", "TLC-B", "transform", 0.95),
             ("TLC-B", "TLC-C", "transform", None),
         ]
-        session = _FakeSession(results=[
-            _Result(rows=count_rows),
-            _Result(rows=link_rows),
-        ])
-
-        result = fetch_trace_graph_data(
-            session, persistence, "tenant-42", "TLC-A", 3
+        session = _FakeSession(
+            results=[
+                _Result(rows=count_rows),
+                _Result(rows=link_rows),
+            ]
         )
+
+        result = fetch_trace_graph_data(session, persistence, "tenant-42", "TLC-A", 3)
 
         assert result["seed_tlc"] == "TLC-A"
         assert result["tenant_id"] == "tenant-42"
@@ -1047,8 +1013,7 @@ class TestFetchTraceGraphData:
 
         # Edges were normalized: confidence_score=None preserved as None,
         # 0.95 becomes float.
-        edges_by_pair = {(e["input_tlc"], e["output_tlc"]): e
-                         for e in result["edges"]}
+        edges_by_pair = {(e["input_tlc"], e["output_tlc"]): e for e in result["edges"]}
         assert edges_by_pair[("TLC-A", "TLC-B")]["confidence_score"] == 0.95
         assert edges_by_pair[("TLC-B", "TLC-C")]["confidence_score"] is None
         assert edges_by_pair[("TLC-A", "TLC-B")]["process_type"] == "transform"
@@ -1060,9 +1025,7 @@ class TestFetchTraceGraphData:
         persistence = self._persistence([])
         session = _FakeSession(results=[_Result(rows=[])])  # only edges query
 
-        result = fetch_trace_graph_data(
-            session, persistence, "tenant-42", "TLC-SEED", 2
-        )
+        result = fetch_trace_graph_data(session, persistence, "tenant-42", "TLC-SEED", 2)
         assert len(session.executes) == 1  # only the edges SELECT
         assert result["node_count"] == 0
         assert result["edge_count"] == 0
@@ -1072,17 +1035,17 @@ class TestFetchTraceGraphData:
 
     def test_seed_only_no_other_tlcs_returns_seed_node(self):
         persistence = self._persistence(["TLC-SOLO"])
-        count_rows = [("TLC-SOLO", 5,
-                       datetime(2026, 4, 1, tzinfo=timezone.utc),
-                       datetime(2026, 4, 2, tzinfo=timezone.utc))]
-        session = _FakeSession(results=[
-            _Result(rows=count_rows),
-            _Result(rows=[]),
-        ])
-
-        result = fetch_trace_graph_data(
-            session, persistence, "tenant", "TLC-SOLO", 1
+        count_rows = [
+            ("TLC-SOLO", 5, datetime(2026, 4, 1, tzinfo=timezone.utc), datetime(2026, 4, 2, tzinfo=timezone.utc))
+        ]
+        session = _FakeSession(
+            results=[
+                _Result(rows=count_rows),
+                _Result(rows=[]),
+            ]
         )
+
+        result = fetch_trace_graph_data(session, persistence, "tenant", "TLC-SOLO", 1)
         assert result["node_count"] == 1
         assert result["nodes"][0]["is_seed"] is True
         assert result["nodes"][0]["role"] == "seed"
@@ -1092,10 +1055,12 @@ class TestFetchTraceGraphData:
     def test_count_query_uses_dynamic_placeholders(self):
         # Verify the dynamic-placeholder construction matches tlc count.
         persistence = self._persistence(["A", "B", "C", "D"])
-        session = _FakeSession(results=[
-            _Result(rows=[]),  # count rows
-            _Result(rows=[]),  # edge rows
-        ])
+        session = _FakeSession(
+            results=[
+                _Result(rows=[]),  # count rows
+                _Result(rows=[]),  # edge rows
+            ]
+        )
         fetch_trace_graph_data(session, persistence, "t", "A", 2)
 
         _stmt, params = session.executes[0]
@@ -1110,13 +1075,13 @@ class TestFetchTraceGraphData:
         # TLC-UP is linked but has no seed→UP edge, so it's classified
         # as upstream (i.e., the seed is downstream of it).
         persistence = self._persistence(["TLC-SEED", "TLC-UP"])
-        session = _FakeSession(results=[
-            _Result(rows=[]),  # no counts
-            _Result(rows=[("TLC-UP", "TLC-SEED", "transform", 0.5)]),
-        ])
-        result = fetch_trace_graph_data(
-            session, persistence, "t", "TLC-SEED", 2
+        session = _FakeSession(
+            results=[
+                _Result(rows=[]),  # no counts
+                _Result(rows=[("TLC-UP", "TLC-SEED", "transform", 0.5)]),
+            ]
         )
+        result = fetch_trace_graph_data(session, persistence, "t", "TLC-SEED", 2)
         nodes_by_tlc = {n["tlc"]: n for n in result["nodes"]}
         # Seed→UP doesn't exist, so TLC-UP is upstream.
         assert nodes_by_tlc["TLC-UP"]["role"] == "upstream"
@@ -1124,10 +1089,12 @@ class TestFetchTraceGraphData:
 
     def test_edges_query_receives_tlc_list_as_array(self):
         persistence = self._persistence(["A", "B"])
-        session = _FakeSession(results=[
-            _Result(rows=[]),  # counts
-            _Result(rows=[]),  # edges
-        ])
+        session = _FakeSession(
+            results=[
+                _Result(rows=[]),  # counts
+                _Result(rows=[]),  # edges
+            ]
+        )
         fetch_trace_graph_data(session, persistence, "tenant", "A", 1)
 
         # Second execute is the edges query.
@@ -1139,9 +1106,11 @@ class TestFetchTraceGraphData:
         persistence = self._persistence(["A", "B", "C"])
         count_rows = [("A", 10, None, None), ("B", 7, None, None)]
         # C has no stats — defaults to 0 so total = 17
-        session = _FakeSession(results=[
-            _Result(rows=count_rows),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            results=[
+                _Result(rows=count_rows),
+                _Result(rows=[]),
+            ]
+        )
         result = fetch_trace_graph_data(session, persistence, "t", "A", 1)
         assert result["total_events"] == 17

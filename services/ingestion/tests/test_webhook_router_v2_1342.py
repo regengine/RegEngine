@@ -38,7 +38,6 @@ from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.webhook_models import IngestEvent  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
@@ -122,14 +121,11 @@ class _FakePersistence:
         if self.batch_raises is not None:
             raise self.batch_raises
         return [
-            _StoreResult(event_id=_uuid_for_index(i + 1), sha="a" * 64, chain="b" * 64)
-            for i, _ in enumerate(events)
+            _StoreResult(event_id=_uuid_for_index(i + 1), sha="a" * 64, chain="b" * 64) for i, _ in enumerate(events)
         ]
 
     def store_event(self, *, tenant_id, event_type, traceability_lot_code, **_kw):
-        self.store_calls.append(
-            {"tenant_id": tenant_id, "event_type": event_type, "tlc": traceability_lot_code}
-        )
+        self.store_calls.append({"tenant_id": tenant_id, "event_type": event_type, "tlc": traceability_lot_code})
         if self.store_raises is not None:
             raise self.store_raises
         return _StoreResult(event_id=_uuid_for_index(len(self.store_calls)))
@@ -288,6 +284,7 @@ def _build_app() -> FastAPI:
         auth_mode="test",
     )
     from app.subscription_gate import require_active_subscription
+
     app.dependency_overrides[require_active_subscription] = lambda: None
     return app
 
@@ -298,9 +295,7 @@ def _client(
     session: Optional[_FakeSession] = None,
     persistence: Optional[_FakePersistence] = None,
 ) -> tuple[TestClient, _FakeSession, _FakePersistence]:
-    session, persistence = _install_shared_stubs(
-        monkeypatch, session=session, persistence=persistence
-    )
+    session, persistence = _install_shared_stubs(monkeypatch, session=session, persistence=persistence)
     # Defang rate limiting everywhere it matters.
     monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
     monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
@@ -315,6 +310,7 @@ def _client(
     # Override the DB-session dependency with our fake.
     def _override_db():
         yield session
+
     app.dependency_overrides[get_db_session] = _override_db
     return TestClient(app), session, persistence
 
@@ -511,9 +507,7 @@ class TestCheckRateLimit:
         assert captured["bucket_suffix"] == "webhooks.ingest"
 
     def test_block_raises_429(self, monkeypatch):
-        monkeypatch.setattr(
-            wr, "consume_tenant_rate_limit", lambda **kw: (False, 0)
-        )
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **kw: (False, 0))
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc:
@@ -616,8 +610,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "shipping", "ship_to_location",
-                        "present", "desc", "Ship-to required", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "shipping",
+                        "ship_to_location",
+                        "present",
+                        "desc",
+                        "Ship-to required",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -643,8 +643,14 @@ class TestCheckObligations:
                     self._first = False
                     rows = [
                         (
-                            "rule-1", "obl-1", "shipping", "ship_to_location",
-                            "present", "desc", "Ship-to required", "CRITICAL",
+                            "rule-1",
+                            "obl-1",
+                            "shipping",
+                            "ship_to_location",
+                            "present",
+                            "desc",
+                            "Ship-to required",
+                            "CRITICAL",
                         )
                     ]
                     return _FakeExecuteResult(rows)
@@ -652,9 +658,7 @@ class TestCheckObligations:
 
         data = _make_shipping_event()
         data["kdes"].pop("ship_to_location")
-        alerts = wr._check_obligations(
-            _RulesSession(), IngestEvent(**data), "evt-1", "tenant-a"
-        )
+        alerts = wr._check_obligations(_RulesSession(), IngestEvent(**data), "evt-1", "tenant-a")
         assert alerts and alerts[0]["severity"] == "critical"
         assert inserts  # the INSERT was executed
 
@@ -663,8 +667,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "shipping", None,
-                        "tlc_assigned", "desc", "TLC must exist", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "shipping",
+                        None,
+                        "tlc_assigned",
+                        "desc",
+                        "TLC must exist",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -684,8 +694,14 @@ class TestCheckObligations:
                     self._rules_served = True
                     rows = [
                         (
-                            "rule-1", "obl-1", "shipping", None,
-                            "tlc_not_reassigned", "desc", "No reassign", "LOW",
+                            "rule-1",
+                            "obl-1",
+                            "shipping",
+                            None,
+                            "tlc_not_reassigned",
+                            "desc",
+                            "No reassign",
+                            "LOW",
                         )
                     ]
                     return _FakeExecuteResult(rows)
@@ -703,8 +719,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "all", None,
-                        "tlc_not_reassigned", "desc", "No reassign", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "all",
+                        None,
+                        "tlc_not_reassigned",
+                        "desc",
+                        "No reassign",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -712,9 +734,7 @@ class TestCheckObligations:
         data = _make_shipping_event()
         data["cte_type"] = "harvesting"
         data["kdes"] = {"harvest_date": "2026-03-10", "reference_document": "HD"}
-        alerts = wr._check_obligations(
-            _RulesSession(), IngestEvent(**data), "evt-1", "tenant-a"
-        )
+        alerts = wr._check_obligations(_RulesSession(), IngestEvent(**data), "evt-1", "tenant-a")
         assert alerts == []
 
     def test_downstream_transmitted_receiving_with_source_passes(self):
@@ -722,8 +742,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "receiving", None,
-                        "downstream_transmitted", "desc", "Upstream ok", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "receiving",
+                        None,
+                        "downstream_transmitted",
+                        "desc",
+                        "Upstream ok",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -738,9 +764,7 @@ class TestCheckObligations:
             "tlc_source_reference": "SRC-1",
             "ship_from_location": "Upstream Farm",
         }
-        alerts = wr._check_obligations(
-            _RulesSession(), IngestEvent(**data), "evt-1", "tenant-a"
-        )
+        alerts = wr._check_obligations(_RulesSession(), IngestEvent(**data), "evt-1", "tenant-a")
         assert alerts == []
 
     def test_downstream_transmitted_shipping_with_dest_passes(self):
@@ -748,8 +772,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "shipping", None,
-                        "downstream_transmitted", "desc", "Dest ok", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "shipping",
+                        None,
+                        "downstream_transmitted",
+                        "desc",
+                        "Dest ok",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -762,8 +792,14 @@ class TestCheckObligations:
             def execute(self, *a, **kw):
                 rows = [
                     (
-                        "rule-1", "obl-1", "all", None,
-                        "downstream_transmitted", "desc", "N/A", "LOW",
+                        "rule-1",
+                        "obl-1",
+                        "all",
+                        None,
+                        "downstream_transmitted",
+                        "desc",
+                        "N/A",
+                        "LOW",
                     )
                 ]
                 return _FakeExecuteResult(rows)
@@ -771,9 +807,7 @@ class TestCheckObligations:
         data = _make_shipping_event()
         data["cte_type"] = "harvesting"
         data["kdes"] = {"harvest_date": "2026-03-10", "reference_document": "HD"}
-        alerts = wr._check_obligations(
-            _RulesSession(), IngestEvent(**data), "evt-1", "tenant-a"
-        )
+        alerts = wr._check_obligations(_RulesSession(), IngestEvent(**data), "evt-1", "tenant-a")
         assert alerts == []
 
     def test_record_exists_rule_always_passes(self):
@@ -787,8 +821,14 @@ class TestCheckObligations:
                     self._first = False
                     rows = [
                         (
-                            "rule-1", "obl-1", "shipping", None,
-                            "record_exists", "desc", "Chain ok", "LOW",
+                            "rule-1",
+                            "obl-1",
+                            "shipping",
+                            None,
+                            "record_exists",
+                            "desc",
+                            "Chain ok",
+                            "LOW",
                         )
                     ]
                     return _FakeExecuteResult(rows)
@@ -809,8 +849,14 @@ class TestCheckObligations:
                     self._rules_served = True
                     rows = [
                         (
-                            "rule-1", "obl-1", "shipping", "ship_to_location",
-                            "present", "desc", "Need ship-to", "LOW",
+                            "rule-1",
+                            "obl-1",
+                            "shipping",
+                            "ship_to_location",
+                            "present",
+                            "desc",
+                            "Need ship-to",
+                            "LOW",
                         )
                     ]
                     return _FakeExecuteResult(rows)
@@ -820,9 +866,7 @@ class TestCheckObligations:
 
         data = _make_shipping_event()
         data["kdes"].pop("ship_to_location")
-        alerts = wr._check_obligations(
-            _RulesSession(), IngestEvent(**data), "evt-1", "tenant-a"
-        )
+        alerts = wr._check_obligations(_RulesSession(), IngestEvent(**data), "evt-1", "tenant-a")
         assert alerts and alerts[0]["severity"] == "warning"
 
     def test_outer_exception_returns_empty(self, monkeypatch):
@@ -1002,9 +1046,7 @@ class TestRedisHelpers:
         assert ltrimmed and ltrimmed[0][0] == "neo4j-sync"
         assert ltrimmed[0][2] == -1
 
-    def test_publish_graph_sync_ltrim_failure_does_not_count_as_publish_failure(
-        self, monkeypatch
-    ):
+    def test_publish_graph_sync_ltrim_failure_does_not_count_as_publish_failure(self, monkeypatch):
         """LTRIM bound is best-effort; the rpush already succeeded."""
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", "true")
         monkeypatch.setenv("REDIS_URL", "redis://fake:6379/0")
@@ -1029,9 +1071,7 @@ class TestRedisHelpers:
         assert wr._graph_sync_successes == before_success + 1
         assert wr._graph_sync_failures == before_failure
 
-    def test_publish_graph_sync_max_queue_invalid_env_falls_back_to_default(
-        self, monkeypatch
-    ):
+    def test_publish_graph_sync_max_queue_invalid_env_falls_back_to_default(self, monkeypatch):
         """A garbage ``NEO4J_SYNC_MAX_QUEUE`` falls back to 100k."""
         monkeypatch.setenv("NEO4J_SYNC_MAX_QUEUE", "not-a-number")
         assert wr._neo4j_sync_max_queue() == 100_000
@@ -1438,10 +1478,7 @@ class TestIngestEndpoint:
         body = resp.json()
         assert body["accepted"] == 1
         assert body["rejected"] == 1
-        assert any(
-            r["status"] == "rejected" and "Duplicate event in batch" in r["errors"][0]
-            for r in body["events"]
-        )
+        assert any(r["status"] == "rejected" and "Duplicate event in batch" in r["errors"][0] for r in body["events"])
 
     def test_replay_window_rejects_stale_events(self, monkeypatch):
         client, _session, _persistence = _client(monkeypatch)
@@ -1472,9 +1509,7 @@ class TestIngestEndpoint:
         assert body["rejected"] == 1
         assert any("ship_date" in r["errors"][0] for r in body["events"])
 
-    def test_batch_persist_failure_falls_back_to_per_event_and_accepts(
-        self, monkeypatch
-    ):
+    def test_batch_persist_failure_falls_back_to_per_event_and_accepts(self, monkeypatch):
         """When ``store_events_batch`` raises, we fall through to
         ``store_event`` per record and still record ``accepted``."""
         session = _FakeSession()
@@ -1509,8 +1544,7 @@ class TestIngestEndpoint:
         assert body["rejected"] == 1
         # F-3: response now carries an opaque correlation id, not raw exc text.
         assert any(
-            "Internal storage error" in r["errors"][0] and "correlation:" in r["errors"][0]
-            for r in body["events"]
+            "Internal storage error" in r["errors"][0] and "correlation:" in r["errors"][0] for r in body["events"]
         )
         # The raw exception text must NOT leak into the response.
         assert not any("per-event broke" in r["errors"][0] for r in body["events"])
@@ -1766,8 +1800,14 @@ class TestRecentEventsEndpoint:
             pass
 
         row = (
-            "evt-1", "shipping", "TLC-1", "Romaine",
-            12.0, "cases", "Valley Fresh", "test",
+            "evt-1",
+            "shipping",
+            "TLC-1",
+            "Romaine",
+            12.0,
+            "cases",
+            "Valley Fresh",
+            "test",
             datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc),
         )
 

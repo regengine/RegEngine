@@ -10,7 +10,6 @@ from typing import Any, Mapping, Sequence
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
 
-
 SHA256_HEX_PATTERN = r"^[A-Fa-f0-9]{64}$"
 SHA256_HEX_RE = re.compile(SHA256_HEX_PATTERN)
 
@@ -95,9 +94,7 @@ def verify_receipt_chain(
     for position, receipt in enumerate(receipts, start=1):
         try:
             parsed_receipts.append(
-                receipt
-                if isinstance(receipt, IngestionRunReceipt)
-                else IngestionRunReceipt.model_validate(receipt)
+                receipt if isinstance(receipt, IngestionRunReceipt) else IngestionRunReceipt.model_validate(receipt)
             )
         except ValidationError as exc:
             errors.append(f"position {position} invalid receipt: {exc.errors()}")
@@ -105,31 +102,18 @@ def verify_receipt_chain(
     previous: IngestionRunReceipt | None = None
     for expected_sequence, receipt in enumerate(parsed_receipts, start=1):
         if receipt.sequence_num != expected_sequence:
-            errors.append(
-                f"expected sequence {expected_sequence}, got {receipt.sequence_num}"
-            )
+            errors.append(f"expected sequence {expected_sequence}, got {receipt.sequence_num}")
 
         if not _is_sha256_hex(receipt.payload_hash):
-            errors.append(
-                f"sequence {receipt.sequence_num} payload_hash is not a SHA-256 hex string"
-            )
+            errors.append(f"sequence {receipt.sequence_num} payload_hash is not a SHA-256 hex string")
         if not _is_sha256_hex(receipt.receipt_hash):
-            errors.append(
-                f"sequence {receipt.sequence_num} receipt_hash is not a SHA-256 hex string"
-            )
-        if receipt.previous_receipt_hash is not None and not _is_sha256_hex(
-            receipt.previous_receipt_hash
-        ):
-            errors.append(
-                "sequence "
-                f"{receipt.sequence_num} previous_receipt_hash is not a SHA-256 hex string"
-            )
+            errors.append(f"sequence {receipt.sequence_num} receipt_hash is not a SHA-256 hex string")
+        if receipt.previous_receipt_hash is not None and not _is_sha256_hex(receipt.previous_receipt_hash):
+            errors.append(f"sequence {receipt.sequence_num} previous_receipt_hash is not a SHA-256 hex string")
 
         if previous is None:
             if receipt.previous_receipt_hash is not None:
-                errors.append(
-                    f"sequence {receipt.sequence_num} previous_receipt_hash must be null"
-                )
+                errors.append(f"sequence {receipt.sequence_num} previous_receipt_hash must be null")
         elif receipt.previous_receipt_hash != previous.receipt_hash:
             errors.append(
                 "sequence "

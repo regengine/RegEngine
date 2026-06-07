@@ -6,8 +6,8 @@ These are critical safety alerts that often require 24-hour response.
 
 from __future__ import annotations
 
-import time
 import re
+import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -143,9 +143,7 @@ class FDARecallsScraper(BaseScraper):
         report_date = result.get("report_date", "")
         if report_date:
             try:
-                published_date = datetime.strptime(report_date, "%Y%m%d").replace(
-                    tzinfo=timezone.utc
-                )
+                published_date = datetime.strptime(report_date, "%Y%m%d").replace(tzinfo=timezone.utc)
             except ValueError:
                 published_date = datetime.now(timezone.utc)
         else:

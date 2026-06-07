@@ -31,6 +31,7 @@ Use this from EVERY KDE_READ audit emission site::
         # If policy is buffered, handle_audit_failure persists to the buffer
         # table and returns; caller continues.
 """
+
 from __future__ import annotations
 
 import json
@@ -101,10 +102,7 @@ def handle_audit_failure(
             status_code=503,
             detail={
                 "error": "audit_log_unavailable",
-                "message": (
-                    "Audit logging is unavailable; request denied per audit "
-                    "policy."
-                ),
+                "message": ("Audit logging is unavailable; request denied per audit policy."),
             },
         )
 
@@ -172,10 +170,9 @@ def _persist_audit_buffer(
     the caller (``handle_audit_failure``) treats that as a double-failure
     and returns 503.
     """
-    from sqlalchemy import text
-
     # Imported lazily so importing this module does not require a DB.
     from shared.database import get_db_safe  # type: ignore
+    from sqlalchemy import text
 
     session = get_db_safe()
     if session is None:

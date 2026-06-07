@@ -5,7 +5,6 @@ import io
 
 from fastapi import HTTPException
 
-
 CSV_HEADERS = [
     "record_type",
     "facility_name",
@@ -31,10 +30,70 @@ def _csv_template_bytes() -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(CSV_HEADERS)
-    writer.writerow(["facility", "", "Salinas Packhouse", "1200 Abbott St", "Salinas", "CA", "93901", "12345678901", "Grower,Packer", "", "", "", "", "", "", "", ""])
+    writer.writerow(
+        [
+            "facility",
+            "",
+            "Salinas Packhouse",
+            "1200 Abbott St",
+            "Salinas",
+            "CA",
+            "93901",
+            "12345678901",
+            "Grower,Packer",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+    )
     writer.writerow(["ftl_scope", "Salinas Packhouse", "", "", "", "", "", "", "", "2", "", "", "", "", "", "", ""])
-    writer.writerow(["tlc", "Salinas Packhouse", "", "", "", "", "", "", "", "", "TLC-2026-SAL-1001", "Baby Spinach", "active", "", "", "", ""])
-    writer.writerow(["event", "Salinas Packhouse", "", "", "", "", "", "", "", "", "TLC-2026-SAL-1001", "", "", "shipping", "2026-03-03T12:00:00Z", '{"quantity": 120, "unit_of_measure": "cases", "reference_document": "BOL-1001"}', ""])
+    writer.writerow(
+        [
+            "tlc",
+            "Salinas Packhouse",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "TLC-2026-SAL-1001",
+            "Baby Spinach",
+            "active",
+            "",
+            "",
+            "",
+            "",
+        ]
+    )
+    writer.writerow(
+        [
+            "event",
+            "Salinas Packhouse",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "TLC-2026-SAL-1001",
+            "",
+            "",
+            "shipping",
+            "2026-03-03T12:00:00Z",
+            '{"quantity": 120, "unit_of_measure": "cases", "reference_document": "BOL-1001"}',
+            "",
+        ]
+    )
     return buffer.getvalue().encode("utf-8")
 
 
@@ -48,7 +107,9 @@ def _xlsx_template_bytes() -> bytes:
     facilities_sheet = workbook.active
     facilities_sheet.title = "facilities"
     facilities_sheet.append(["name", "street", "city", "state", "postal_code", "fda_registration_number", "roles"])
-    facilities_sheet.append(["Salinas Packhouse", "1200 Abbott St", "Salinas", "CA", "93901", "12345678901", "Grower,Packer"])
+    facilities_sheet.append(
+        ["Salinas Packhouse", "1200 Abbott St", "Salinas", "CA", "93901", "12345678901", "Grower,Packer"]
+    )
 
     ftl_sheet = workbook.create_sheet("ftl_scope")
     ftl_sheet.append(["facility_name", "category_id"])
@@ -72,7 +133,7 @@ def _xlsx_template_bytes() -> bytes:
     )
 
     reference_sheet = workbook.create_sheet("reference")
-    reference_sheet.append(["FTL category_id", "Description"]) 
+    reference_sheet.append(["FTL category_id", "Description"])
     for category_id, description in [
         ("1", "Fruits (fresh-cut)"),
         ("2", "Vegetables (leafy greens)"),
@@ -88,7 +149,7 @@ def _xlsx_template_bytes() -> bytes:
         reference_sheet.append([category_id, description])
 
     reference_sheet.append([])
-    reference_sheet.append(["Supported cte_type values", ""]) 
+    reference_sheet.append(["Supported cte_type values", ""])
     for cte_type in [
         "shipping",
         "receiving",
@@ -98,7 +159,7 @@ def _xlsx_template_bytes() -> bytes:
         "initial_packing",
         "first_receiver",
     ]:
-        reference_sheet.append([cte_type, ""]) 
+        reference_sheet.append([cte_type, ""])
 
     output = io.BytesIO()
     workbook.save(output)

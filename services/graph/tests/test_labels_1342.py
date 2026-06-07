@@ -124,12 +124,8 @@ class TestInitializeLabelBatchNoRecord:
 
         test_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
-        with patch(
-            "services.graph.app.routers.labels.Neo4jClient", mock_neo4j_class
-        ):
-            mock_neo4j_class.get_tenant_database_name = MagicMock(
-                return_value="test-db"
-            )
+        with patch("services.graph.app.routers.labels.Neo4jClient", mock_neo4j_class):
+            mock_neo4j_class.get_tenant_database_name = MagicMock(return_value="test-db")
             with pytest.raises(HTTPException) as exc_info:
                 await initialize_label_batch(
                     request=request,

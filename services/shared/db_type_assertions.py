@@ -65,8 +65,7 @@ class CriticalSchemaDriftError(RuntimeError):
     def __init__(self, drifts: list[SchemaDrift]):
         self.drifts = drifts
         summary = ", ".join(
-            f"{drift.qualified_column}: expected {drift.expected}, got {drift.actual}"
-            for drift in drifts
+            f"{drift.qualified_column}: expected {drift.expected}, got {drift.actual}" for drift in drifts
         )
         super().__init__(f"Critical ORM/database schema drift detected: {summary}")
 

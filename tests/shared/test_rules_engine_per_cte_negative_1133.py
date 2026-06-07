@@ -34,10 +34,8 @@ from datetime import date
 from typing import Any, Dict
 
 import pytest
-
 from shared.rules.engine import RulesEngine
 from shared.rules.types import RuleDefinition
-
 
 # ---------------------------------------------------------------------------
 # Helpers (kept narrow — a full rule/event factory lives in
@@ -150,9 +148,7 @@ _CTE_REQUIRED_KDE: list[tuple[str, str, str]] = [
     _CTE_REQUIRED_KDE,
     ids=[f"{c}-missing-{f.split('.')[-1]}" for c, f, _ in _CTE_REQUIRED_KDE],
 )
-def test_missing_required_kde_yields_failure(
-    cte_type: str, field_path: str, citation: str
-):
+def test_missing_required_kde_yields_failure(cte_type: str, field_path: str, citation: str):
     """RulesEngine must emit ``fail`` (not ``pass``, not ``skip``) when
     a CTE event is missing the signature KDE for its regulation.
 
@@ -192,8 +188,7 @@ def test_missing_required_kde_yields_failure(
     # would mean no_verdict_reason fired, which shouldn't happen once
     # a rule has actually been evaluated.
     assert summary.compliant is False, (
-        f"Missing {field_path} produced compliant={summary.compliant!r} "
-        f"for {cte_type} — should be False (#1102/#1347)."
+        f"Missing {field_path} produced compliant={summary.compliant!r} for {cte_type} — should be False (#1102/#1347)."
     )
 
 
@@ -202,9 +197,7 @@ def test_missing_required_kde_yields_failure(
     _CTE_REQUIRED_KDE,
     ids=[f"{c}-present-{f.split('.')[-1]}" for c, f, _ in _CTE_REQUIRED_KDE],
 )
-def test_present_required_kde_yields_pass(
-    cte_type: str, field_path: str, citation: str
-):
+def test_present_required_kde_yields_pass(cte_type: str, field_path: str, citation: str):
     """Happy-path counterpart: when the required KDE IS present the
     same rule must pass. Together with the negative case this pins
     the evaluator's contract for each CTE — not just "fails when
@@ -238,8 +231,7 @@ def test_present_required_kde_yields_pass(
         f"skipped={summary.skipped} errored={summary.errored}"
     )
     assert summary.compliant is True, (
-        f"All-present {cte_type} event should be compliant=True, got "
-        f"{summary.compliant!r}"
+        f"All-present {cte_type} event should be compliant=True, got {summary.compliant!r}"
     )
 
 

@@ -12,11 +12,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from ..shared.tenant_resolution import resolve_tenant_id
 from ..webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
-
 from .normalization import (
     _normalize_epcis_to_cte,
 )
@@ -24,8 +23,8 @@ from .persistence import (
     _allow_in_memory_fallback,
     _batch_transactional,
     _fallback_store_for,
-    _ingest_batch_events_db_atomic,
     _fetch_event_from_db,
+    _ingest_batch_events_db_atomic,
     _ingest_single_event,
     _list_events_from_db,
 )
@@ -131,16 +130,13 @@ async def ingest_epcis_batch(
         )
 
     resolved_tenant = (
-        _.tenant_id
-        if _ is not None
-        else _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
+        _.tenant_id if _ is not None else _resolve_authenticated_tenant(request, x_tenant_id, x_regengine_api_key)
     )
 
     if mode == "atomic":
         results = _ingest_batch_events_db_atomic(resolved_tenant, body.events)
         processed = [
-            {"index": idx, "status_code": status_code, **payload}
-            for idx, (payload, status_code) in enumerate(results)
+            {"index": idx, "status_code": status_code, **payload} for idx, (payload, status_code) in enumerate(results)
         ]
         created = [payload for payload, status_code in results if status_code == 201]
         return JSONResponse(
@@ -202,6 +198,7 @@ async def get_epcis_event(
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         import logging
+
         logger = logging.getLogger("epcis-ingestion")
         logger.warning("epcis_get_db_failed_using_fallback error=%s", str(exc))
 
@@ -234,10 +231,12 @@ async def export_epcis_events(
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         import logging
+
         logger = logging.getLogger("epcis-ingestion")
         logger.warning("epcis_export_db_failed_using_fallback error=%s", str(exc))
 
     if not events and _allow_in_memory_fallback():
+
         def _parse_iso(value: str | None) -> datetime | None:
             if not value:
                 return None
@@ -347,8 +346,7 @@ async def ingest_epcis_xml(
     if mode == "atomic":
         results = _ingest_batch_events_db_atomic(resolved_tenant, events)
         processed = [
-            {"index": idx, "status_code": status_code, **payload}
-            for idx, (payload, status_code) in enumerate(results)
+            {"index": idx, "status_code": status_code, **payload} for idx, (payload, status_code) in enumerate(results)
         ]
         created = [payload for payload, status_code in results if status_code == 201]
         return JSONResponse(

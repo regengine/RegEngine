@@ -173,7 +173,7 @@ class TestPatternRule:
         """Should accept matching pattern."""
         from shared.input_validation import PatternRule
 
-        rule = PatternRule(pattern=r'^[a-z]+$')
+        rule = PatternRule(pattern=r"^[a-z]+$")
         result = rule.validate("hello", "test")
 
         assert result == "hello"
@@ -182,7 +182,7 @@ class TestPatternRule:
         """Should reject non-matching."""
         from shared.input_validation import PatternRule, ValidationError
 
-        rule = PatternRule(pattern=r'^[a-z]+$', message="Letters only")
+        rule = PatternRule(pattern=r"^[a-z]+$", message="Letters only")
 
         with pytest.raises(ValidationError, match="Letters only"):
             rule.validate("hello123", "test")
@@ -202,18 +202,18 @@ class TestInjectionRule:
 
     def test_detect_sql_injection(self):
         """Should detect SQL injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_sql=True)
 
         with pytest.raises(InjectionAttemptError) as exc:
             rule.validate("'; DROP TABLE users; --", "query")
-        
+
         assert exc.value.injection_type == "SQL"
 
     def test_detect_sql_union(self):
         """Should detect SQL UNION injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_sql=True)
 
@@ -222,7 +222,7 @@ class TestInjectionRule:
 
     def test_detect_sql_or_injection(self):
         """Should detect SQL OR injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_sql=True)
 
@@ -231,29 +231,29 @@ class TestInjectionRule:
 
     def test_detect_nosql_injection(self):
         """Should detect NoSQL injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_nosql=True)
 
         with pytest.raises(InjectionAttemptError) as exc:
             rule.validate('{"$gt": ""}', "query")
-        
+
         assert exc.value.injection_type == "NoSQL"
 
     def test_detect_command_injection(self):
         """Should detect command injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_command=True)
 
         with pytest.raises(InjectionAttemptError) as exc:
             rule.validate("test; rm -rf /", "filename")
-        
+
         assert exc.value.injection_type == "Command"
 
     def test_detect_command_substitution(self):
         """Should detect command substitution."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_command=True)
 
@@ -262,13 +262,13 @@ class TestInjectionRule:
 
     def test_detect_header_injection(self):
         """Should detect header injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_header=True)
 
         with pytest.raises(InjectionAttemptError) as exc:
             rule.validate("test\r\nSet-Cookie: session=evil", "header")
-        
+
         assert exc.value.injection_type == "Header"
 
 
@@ -520,7 +520,7 @@ class TestInputValidator:
 
     def test_check_injection(self):
         """Should check for injections."""
-        from shared.input_validation import InputValidator, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InputValidator
 
         validator = InputValidator()
 
@@ -543,9 +543,9 @@ class TestInputValidator:
     def test_validate_dict(self):
         """Should validate dictionaries."""
         from shared.input_validation import (
-            InputValidator,
-            IdentifierField,
             EmailField,
+            IdentifierField,
+            InputValidator,
         )
 
         validator = InputValidator()
@@ -567,9 +567,9 @@ class TestInputValidator:
     def test_validate_dict_errors(self):
         """Should collect all errors."""
         from shared.input_validation import (
-            InputValidator,
-            IdentifierField,
             EmailField,
+            IdentifierField,
+            InputValidator,
             ValidationError,
         )
 
@@ -586,7 +586,7 @@ class TestInputValidator:
 
         with pytest.raises(ValidationError) as exc:
             validator.validate_dict(data, schema)
-        
+
         assert "MULTIPLE_VALIDATION_ERRORS" in exc.value.code
 
 
@@ -595,7 +595,7 @@ class TestValidateInputDecorator:
 
     def test_sync_function(self):
         """Should validate sync function params."""
-        from shared.input_validation import validate_input, IdentifierField
+        from shared.input_validation import IdentifierField, validate_input
 
         @validate_input(user_id=IdentifierField())
         def get_user(user_id: str):
@@ -607,7 +607,7 @@ class TestValidateInputDecorator:
     @pytest.mark.asyncio
     async def test_async_function(self):
         """Should validate async function params."""
-        from shared.input_validation import validate_input, IdentifierField
+        from shared.input_validation import IdentifierField, validate_input
 
         @validate_input(user_id=IdentifierField())
         async def get_user_async(user_id: str):
@@ -618,7 +618,7 @@ class TestValidateInputDecorator:
 
     def test_validation_error_in_decorator(self):
         """Should raise validation error."""
-        from shared.input_validation import validate_input, EmailField, ValidationError
+        from shared.input_validation import EmailField, ValidationError, validate_input
 
         @validate_input(email=EmailField())
         def send_email(email: str):
@@ -633,7 +633,7 @@ class TestSecurityScenarios:
 
     def test_sql_injection_login(self):
         """Should block SQL injection in login."""
-        from shared.input_validation import InputValidator, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InputValidator
 
         validator = InputValidator()
 
@@ -652,7 +652,7 @@ class TestSecurityScenarios:
 
     def test_nosql_injection_mongodb(self):
         """Should block NoSQL injection."""
-        from shared.input_validation import InjectionRule, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InjectionRule
 
         rule = InjectionRule(check_nosql=True)
 
@@ -668,7 +668,7 @@ class TestSecurityScenarios:
 
     def test_command_injection_filename(self):
         """Should block command injection in filenames."""
-        from shared.input_validation import InputValidator, InjectionAttemptError
+        from shared.input_validation import InjectionAttemptError, InputValidator
 
         validator = InputValidator()
 

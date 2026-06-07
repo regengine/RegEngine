@@ -69,14 +69,10 @@ class WorkflowBase:
         )
         row = result.mappings().fetchone()
         if not row:
-            raise ValueError(
-                f"Request case {request_case_id} not found for tenant {tenant_id}."
-            )
+            raise ValueError(f"Request case {request_case_id} not found for tenant {tenant_id}.")
         return dict(row)
 
-    def _get_scope_event_ids(
-        self, tenant_id: str, case: Dict[str, Any]
-    ) -> List[str]:
+    def _get_scope_event_ids(self, tenant_id: str, case: Dict[str, Any]) -> List[str]:
         """Get event IDs matching the case scope criteria."""
         conditions = ["te.tenant_id = :tenant_id", "te.status = 'active'"]
         params: Dict[str, Any] = {"tenant_id": tenant_id}
@@ -89,14 +85,11 @@ class WorkflowBase:
             conditions.append("te.product_reference = ANY(:products)")
             params["products"] = products
         if lots:
-            conditions.append(
-                "(te.lot_reference = ANY(:lots) OR te.traceability_lot_code = ANY(:lots))"
-            )
+            conditions.append("(te.lot_reference = ANY(:lots) OR te.traceability_lot_code = ANY(:lots))")
             params["lots"] = lots
         if facilities:
             conditions.append(
-                "(te.from_facility_reference = ANY(:facilities) "
-                "OR te.to_facility_reference = ANY(:facilities))"
+                "(te.from_facility_reference = ANY(:facilities) OR te.to_facility_reference = ANY(:facilities))"
             )
             params["facilities"] = facilities
 
@@ -135,9 +128,7 @@ class WorkflowBase:
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
-            failed_rules = [
-                row_to_serializable(r) for r in fr_result.mappings().fetchall()
-            ]
+            failed_rules = [row_to_serializable(r) for r in fr_result.mappings().fetchall()]
 
             ev_result = self.db.execute(
                 text("""
@@ -166,9 +157,7 @@ class WorkflowBase:
                 "event_ids": event_ids or [],
             },
         )
-        unresolved = [
-            row_to_serializable(r) for r in exc_result.mappings().fetchall()
-        ]
+        unresolved = [row_to_serializable(r) for r in exc_result.mappings().fetchall()]
 
         gap_owners: Dict[str, List[str]] = {}
         for exc in unresolved:
@@ -215,14 +204,8 @@ class WorkflowBase:
         prior_event_ids = set(prior_contents.get("event_ids", []))
         new_event_ids = set(new_contents.get("event_ids", []))
 
-        prior_exc_ids = {
-            str(e.get("case_id", ""))
-            for e in prior_contents.get("exception_cases", [])
-        }
-        new_exc_ids = {
-            str(e.get("case_id", ""))
-            for e in new_contents.get("exception_cases", [])
-        }
+        prior_exc_ids = {str(e.get("case_id", "")) for e in prior_contents.get("exception_cases", [])}
+        new_exc_ids = {str(e.get("case_id", "")) for e in new_contents.get("exception_cases", [])}
 
         prior_summary = prior_contents.get("summary", {})
         new_summary = new_contents.get("summary", {})

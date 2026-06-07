@@ -10,7 +10,6 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-
 from shared.schemas import Jurisdiction
 from shared.tenant_models import (
     ControlMapping,
@@ -36,9 +35,7 @@ class OverlayWriter:
         """
         self.tenant_id = tenant_id
         self.db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-        self.publisher = (
-            GraphEventPublisher()
-        )  # Initialize Kafka publisher for audit events
+        self.publisher = GraphEventPublisher()  # Initialize Kafka publisher for audit events
         logger.info(
             "overlay_writer_initialized",
             tenant_id=str(tenant_id),
@@ -64,11 +61,7 @@ class OverlayWriter:
         params = {
             "code": jurisdiction.code,
             "name": jurisdiction.name,
-            "scope": (
-                jurisdiction.scope.value
-                if hasattr(jurisdiction.scope, "value")
-                else jurisdiction.scope
-            ),
+            "scope": (jurisdiction.scope.value if hasattr(jurisdiction.scope, "value") else jurisdiction.scope),
             "parent_code": jurisdiction.parent_code,
         }
         client = Neo4jClient(database=self.db_name)
@@ -97,9 +90,7 @@ class OverlayWriter:
             ValueError: If tenant_id doesn't match
         """
         if control.tenant_id != self.tenant_id:
-            raise ValueError(
-                f"Control tenant_id {control.tenant_id} does not match writer tenant_id {self.tenant_id}"
-            )
+            raise ValueError(f"Control tenant_id {control.tenant_id} does not match writer tenant_id {self.tenant_id}")
 
         query, params = control.to_cypher_create()
 
@@ -118,9 +109,7 @@ class OverlayWriter:
                 )
 
                 # Emit Kafka audit event for control creation
-                self.publisher.publish_control_event(
-                    tenant_id=str(self.tenant_id), control_data=control.dict()
-                )
+                self.publisher.publish_control_event(tenant_id=str(self.tenant_id), control_data=control.dict())
 
                 return control
         finally:
@@ -139,9 +128,7 @@ class OverlayWriter:
             ValueError: If tenant_id doesn't match
         """
         if product.tenant_id != self.tenant_id:
-            raise ValueError(
-                f"Product tenant_id {product.tenant_id} does not match writer tenant_id {self.tenant_id}"
-            )
+            raise ValueError(f"Product tenant_id {product.tenant_id} does not match writer tenant_id {self.tenant_id}")
 
         query, params = product.to_cypher_create()
 
@@ -180,9 +167,7 @@ class OverlayWriter:
             ValueError: If tenant_id doesn't match or control doesn't exist
         """
         if mapping.tenant_id != self.tenant_id:
-            raise ValueError(
-                f"Mapping tenant_id {mapping.tenant_id} does not match writer tenant_id {self.tenant_id}"
-            )
+            raise ValueError(f"Mapping tenant_id {mapping.tenant_id} does not match writer tenant_id {self.tenant_id}")
 
         query, params = mapping.to_cypher_create()
 
@@ -193,9 +178,7 @@ class OverlayWriter:
                 created = await result.single()
 
                 if not created:
-                    raise ValueError(
-                        f"Failed to create mapping - control {mapping.control_id} may not exist"
-                    )
+                    raise ValueError(f"Failed to create mapping - control {mapping.control_id} may not exist")
 
                 logger.info(
                     "control_mapping_created",
@@ -207,9 +190,7 @@ class OverlayWriter:
                 )
 
                 # Emit Kafka audit event for mapping creation
-                self.publisher.publish_mapping_event(
-                    tenant_id=str(self.tenant_id), mapping_data=mapping.dict()
-                )
+                self.publisher.publish_mapping_event(tenant_id=str(self.tenant_id), mapping_data=mapping.dict())
 
                 return mapping
         finally:
@@ -228,9 +209,7 @@ class OverlayWriter:
             ValueError: If tenant_id doesn't match or nodes don't exist
         """
         if link.tenant_id != self.tenant_id:
-            raise ValueError(
-                f"Link tenant_id {link.tenant_id} does not match writer tenant_id {self.tenant_id}"
-            )
+            raise ValueError(f"Link tenant_id {link.tenant_id} does not match writer tenant_id {self.tenant_id}")
 
         query, params = link.to_cypher_create()
 
@@ -395,9 +374,7 @@ async def create_tenant_control(tenant_id: UUID, control: TenantControl) -> Tena
     return await writer.create_tenant_control(control)
 
 
-async def create_customer_product(
-    tenant_id: UUID, product: CustomerProduct
-) -> CustomerProduct:
+async def create_customer_product(tenant_id: UUID, product: CustomerProduct) -> CustomerProduct:
     """Convenience function to create a customer product.
 
     Args:
@@ -411,9 +388,7 @@ async def create_customer_product(
     return await writer.create_customer_product(product)
 
 
-async def map_control_to_provision(
-    tenant_id: UUID, mapping: ControlMapping
-) -> ControlMapping:
+async def map_control_to_provision(tenant_id: UUID, mapping: ControlMapping) -> ControlMapping:
     """Convenience function to map a control to a provision.
 
     Args:

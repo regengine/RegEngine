@@ -42,6 +42,7 @@ def _get_audit_db_engine():
             return None
         try:
             from sqlalchemy import create_engine
+
             url = (
                 db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
                 if db_url.startswith("postgresql://")
@@ -67,6 +68,7 @@ def _persist_audit_entry(entry) -> None:
         return
 
     import time as _time
+
     from sqlalchemy import text
 
     _insert_sql = text("""
@@ -83,8 +85,8 @@ def _persist_audit_entry(entry) -> None:
     _params = {
         "event_id": entry.event_id,
         "actor": entry.actor,
-        "actor_type": entry.actor_type.value if hasattr(entry.actor_type, 'value') else str(entry.actor_type),
-        "action": entry.action.value if hasattr(entry.action, 'value') else str(entry.action),
+        "actor_type": entry.actor_type.value if hasattr(entry.actor_type, "value") else str(entry.actor_type),
+        "action": entry.action.value if hasattr(entry.action, "value") else str(entry.action),
         "target_type": entry.target_type,
         "target_id": entry.target_id,
         "tenant_id": entry.tenant_id,
@@ -107,12 +109,14 @@ def _persist_audit_entry(entry) -> None:
         except Exception as e:
             last_exc = e
             if attempt < _PERSIST_MAX_RETRIES - 1:
-                _time.sleep(min(2 ** attempt, 4))
+                _time.sleep(min(2**attempt, 4))
 
     # All retries exhausted — log at ERROR and raise so caller knows
     logging.getLogger("fsma_audit").error(
         "CRITICAL: Audit entry lost after %d retries: event_id=%s error=%s",
-        _PERSIST_MAX_RETRIES, entry.event_id, last_exc,
+        _PERSIST_MAX_RETRIES,
+        entry.event_id,
+        last_exc,
     )
 
 
@@ -306,9 +310,7 @@ class FSMAAuditEntry:
     evidence_link: Optional[str] = None  # S3 URI to source document
 
     # Additional context fields
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     target_type: str = ""  # Lot, TraceEvent, Facility, Document
     target_id: str = ""  # TLC, event_id, GLN, document_id
     tenant_id: Optional[str] = None
@@ -329,9 +331,7 @@ class FSMAAuditEntry:
         data = {
             "event_id": self.event_id,
             "actor": self.actor,
-            "action": (
-                self.action.value if isinstance(self.action, Enum) else self.action
-            ),
+            "action": (self.action.value if isinstance(self.action, Enum) else self.action),
             "timestamp": self.timestamp,
             "target_type": self.target_type,
             "target_id": self.target_id,
@@ -346,14 +346,8 @@ class FSMAAuditEntry:
         return {
             "event_id": self.event_id,
             "actor": self.actor,
-            "actor_type": (
-                self.actor_type.value
-                if isinstance(self.actor_type, Enum)
-                else self.actor_type
-            ),
-            "action": (
-                self.action.value if isinstance(self.action, Enum) else self.action
-            ),
+            "actor_type": (self.actor_type.value if isinstance(self.actor_type, Enum) else self.actor_type),
+            "action": (self.action.value if isinstance(self.action, Enum) else self.action),
             "diff": [d.to_dict() for d in self.diff],
             "evidence_link": self.evidence_link,
             "timestamp": self.timestamp,
@@ -403,6 +397,7 @@ class FSMAAuditLog:
             return None
         try:
             from sqlalchemy import text
+
             with engine.connect() as conn:
                 row = conn.execute(
                     text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY created_at DESC LIMIT 1")
@@ -587,9 +582,7 @@ class FSMAAuditLog:
         with self._lock:
             result = []
             for entry in self._entries:
-                entry_time = datetime.fromisoformat(
-                    entry.timestamp.replace("Z", "+00:00")
-                )
+                entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
                 if start <= entry_time <= end:
                     result.append(entry)
             return result
@@ -622,6 +615,7 @@ class FSMAAuditLog:
         if engine is not None:
             try:
                 from sqlalchemy import text
+
                 with engine.connect() as conn:
                     rows = conn.execute(
                         text("""
@@ -922,11 +916,7 @@ def log_recall(
     correlation_id: Optional[str] = None,
 ) -> FSMAAuditEntry:
     """Log a recall event."""
-    action = (
-        FSMAAuditAction.RECALL_INITIATED
-        if is_initiated
-        else FSMAAuditAction.RECALL_COMPLETED
-    )
+    action = FSMAAuditAction.RECALL_INITIATED if is_initiated else FSMAAuditAction.RECALL_COMPLETED
 
     return get_audit_log().log(
         action=action,
@@ -971,9 +961,7 @@ def audit_graph_write(
 
             # Extract target_id from kwargs or positional args
             target_id = kwargs.get(target_id_param)
-            evidence_link = (
-                kwargs.get(evidence_link_param) if evidence_link_param else None
-            )
+            evidence_link = kwargs.get(evidence_link_param) if evidence_link_param else None
             tenant_id = kwargs.get("tenant_id")
             correlation_id = kwargs.get("correlation_id")
 

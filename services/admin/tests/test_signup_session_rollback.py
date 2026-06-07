@@ -76,7 +76,7 @@ def _make_db_no_existing_user() -> MagicMock:
 
 
 def _call_signup(db, session_store, *, email: str = "new@example.com"):
-    from services.admin.app.auth_routes import signup, RegisterRequest
+    from services.admin.app.auth_routes import RegisterRequest, signup
 
     payload = RegisterRequest(
         email=email,
@@ -123,12 +123,8 @@ async def test_signup_happy_path_commits_after_session_persist(monkeypatch):
     # Redis MUST be persisted before the first DB commit — any ordering
     # where the commit fires first would re-introduce the #1403 orphan.
     assert call_order, "expected at least one step to fire"
-    assert call_order[0] == "redis.create_session", (
-        f"Redis must persist before DB commit; saw {call_order}"
-    )
-    assert "db.commit" in call_order, (
-        f"expected a db.commit after Redis persist; saw {call_order}"
-    )
+    assert call_order[0] == "redis.create_session", f"Redis must persist before DB commit; saw {call_order}"
+    assert "db.commit" in call_order, f"expected a db.commit after Redis persist; saw {call_order}"
     assert result.status_code == 202
     assert b"Check your inbox" in result.body
     assert db.rollback.call_count == 0
@@ -141,9 +137,9 @@ async def test_signup_happy_path_commits_after_session_persist(monkeypatch):
 @pytest.mark.asyncio
 async def test_signup_rolls_back_db_when_redis_persist_fails(monkeypatch):
     """If Redis ``create_session`` always raises, the signup MUST:
-      * roll back the DB (so no tenant/user/membership row is committed),
-      * raise 503 to the client,
-      * NOT call ``db.commit()``.
+    * roll back the DB (so no tenant/user/membership row is committed),
+    * raise 503 to the client,
+    * NOT call ``db.commit()``.
     """
     from services.admin.app import auth_routes
     from services.admin.app.auth import signup_router as _sr
@@ -156,9 +152,7 @@ async def test_signup_rolls_back_db_when_redis_persist_fails(monkeypatch):
 
     db = _make_db_no_existing_user()
     session_store = MagicMock()
-    session_store.create_session = AsyncMock(
-        side_effect=ConnectionError("redis down")
-    )
+    session_store.create_session = AsyncMock(side_effect=ConnectionError("redis down"))
 
     with pytest.raises(HTTPException) as exc_info:
         await _call_signup(db, session_store)
@@ -193,9 +187,7 @@ async def test_retry_after_redis_failure_is_not_blocked_by_409(monkeypatch):
 
     # First signup: Redis fails.
     session_store_fail = MagicMock()
-    session_store_fail.create_session = AsyncMock(
-        side_effect=ConnectionError("redis down")
-    )
+    session_store_fail.create_session = AsyncMock(side_effect=ConnectionError("redis down"))
     with pytest.raises(HTTPException) as exc_info:
         await _call_signup(db, session_store_fail, email="retry@example.com")
     assert exc_info.value.status_code == 503
@@ -250,9 +242,7 @@ async def test_db_commit_failure_deletes_persisted_redis_session(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_correlated_redis_failure_does_not_mask_original_db_error(
-    monkeypatch, caplog
-):
+async def test_correlated_redis_failure_does_not_mask_original_db_error(monkeypatch, caplog):
     """Correlated-failure path from #1692.
 
     Most likely Redis failure mode is that Redis is down for BOTH
@@ -340,22 +330,15 @@ async def test_correlated_redis_failure_logs_residual_orphan(monkeypatch):
 
     session_store = MagicMock()
     session_store.create_session = AsyncMock(side_effect=lambda sd: sd)
-    session_store.delete_session = AsyncMock(
-        side_effect=ConnectionError("redis down during cleanup")
-    )
+    session_store.delete_session = AsyncMock(side_effect=ConnectionError("redis down during cleanup"))
 
     with pytest.raises(RuntimeError):
         await _call_signup(db, session_store)
 
     # Find the cleanup-failure log record.
-    cleanup_logs = [
-        (event, kwargs)
-        for event, kwargs in captured
-        if event == "signup_session_cleanup_failed"
-    ]
+    cleanup_logs = [(event, kwargs) for event, kwargs in captured if event == "signup_session_cleanup_failed"]
     assert cleanup_logs, (
-        f"expected a ``signup_session_cleanup_failed`` warning log; "
-        f"saw events {[e for e, _ in captured]}"
+        f"expected a ``signup_session_cleanup_failed`` warning log; saw events {[e for e, _ in captured]}"
     )
 
     # Residual-orphan marker must be present so ops-side alerts can
@@ -410,27 +393,21 @@ async def test_signup_session_has_bounded_ttl(monkeypatch):
 
     # Sanity: expires_at must be in the future and bounded (not year 9999).
     now = datetime.now(timezone.utc)
-    assert sd.expires_at > now, (
-        f"signup session expires_at must be in the future; "
-        f"got {sd.expires_at} vs now {now}"
-    )
+    assert sd.expires_at > now, f"signup session expires_at must be in the future; got {sd.expires_at} vs now {now}"
     # REFRESH_TOKEN_EXPIRE_DAYS is the upper bound the handler applies.
     max_allowed = now + timedelta(days=auth_routes.REFRESH_TOKEN_EXPIRE_DAYS + 1)
     assert sd.expires_at < max_allowed, (
-        f"signup session TTL exceeds REFRESH_TOKEN_EXPIRE_DAYS upper bound; "
-        f"got {sd.expires_at}"
+        f"signup session TTL exceeds REFRESH_TOKEN_EXPIRE_DAYS upper bound; got {sd.expires_at}"
     )
 
     # And the store's TTL calculation converts that to a bounded positive
     # number of seconds — i.e. the key will carry a real EXPIRE, not -1.
     store = RedisSessionStore("redis://unused")
     ttl_seconds = store._calculate_ttl(sd.expires_at)
-    assert ttl_seconds > 0, (
-        f"computed TTL must be > 0 so Redis applies EXPIRE; got {ttl_seconds}"
+    assert ttl_seconds > 0, f"computed TTL must be > 0 so Redis applies EXPIRE; got {ttl_seconds}"
+    assert ttl_seconds <= (auth_routes.REFRESH_TOKEN_EXPIRE_DAYS * 86400 + 60), (
+        f"computed TTL exceeds expected upper bound; got {ttl_seconds}s"
     )
-    assert ttl_seconds <= (
-        auth_routes.REFRESH_TOKEN_EXPIRE_DAYS * 86400 + 60
-    ), f"computed TTL exceeds expected upper bound; got {ttl_seconds}s"
 
 
 # ── Supabase orphan cleanup on DB commit failure (#1090) ─────────────
@@ -481,8 +458,7 @@ async def test_supabase_orphan_deleted_when_db_commit_fails(monkeypatch):
 
     assert db.rollback.call_count >= 1
     assert deleted_ids == [fake_sb_user_id], (
-        f"expected Supabase delete_user({fake_sb_user_id!r}); "
-        f"got delete calls: {deleted_ids}"
+        f"expected Supabase delete_user({fake_sb_user_id!r}); got delete calls: {deleted_ids}"
     )
 
 
@@ -569,10 +545,7 @@ async def test_supabase_orphan_cleanup_failure_is_logged_and_original_error_prop
 
     # Cleanup failure must have been logged.
     cleanup_logs = [e for e, _ in captured if e == "signup_supabase_orphan_cleanup_failed"]
-    assert cleanup_logs, (
-        f"expected signup_supabase_orphan_cleanup_failed warning; "
-        f"saw {[e for e, _ in captured]}"
-    )
+    assert cleanup_logs, f"expected signup_supabase_orphan_cleanup_failed warning; saw {[e for e, _ in captured]}"
     _, kw = [item for item in captured if item[0] == "signup_supabase_orphan_cleanup_failed"][0]
     assert kw.get("residual_orphan") == "supabase_user_dangling"
     assert "supabase_user_id" in kw
@@ -628,26 +601,19 @@ async def test_redis_create_session_applies_expire_to_every_key(monkeypatch):
     #   user_sessions:{uid} → pipe.expire(..., ttl)
     #   token_hash:{hash}   → pipe.setex(..., ttl, ...)
     assert pipe.expire.await_count == 2, (
-        f"expected 2 EXPIRE calls (session + user_sessions); "
-        f"saw {pipe.expire.await_count}"
+        f"expected 2 EXPIRE calls (session + user_sessions); saw {pipe.expire.await_count}"
     )
-    assert pipe.setex.await_count == 1, (
-        f"expected 1 SETEX call (token_hash); saw {pipe.setex.await_count}"
-    )
+    assert pipe.setex.await_count == 1, f"expected 1 SETEX call (token_hash); saw {pipe.setex.await_count}"
 
     # TTL passed to EXPIRE must be positive (not -1 / 0).
     for call in pipe.expire.await_args_list:
         ttl_arg = call.args[1] if len(call.args) > 1 else call.kwargs.get("time")
-        assert ttl_arg is not None and ttl_arg > 0, (
-            f"EXPIRE must be called with a positive TTL; got {ttl_arg}"
-        )
+        assert ttl_arg is not None and ttl_arg > 0, f"EXPIRE must be called with a positive TTL; got {ttl_arg}"
 
     # TTL passed to SETEX (positional arg 1) must be positive.
     setex_call = pipe.setex.await_args_list[0]
     setex_ttl = setex_call.args[1] if len(setex_call.args) > 1 else None
-    assert setex_ttl is not None and setex_ttl > 0, (
-        f"SETEX must be called with a positive TTL; got {setex_ttl}"
-    )
+    assert setex_ttl is not None and setex_ttl > 0, f"SETEX must be called with a positive TTL; got {setex_ttl}"
 
 
 # ── Duplicate-email masking (#1400) ───────────────────────────────────
@@ -663,6 +629,7 @@ async def test_duplicate_email_returns_202_not_409(monkeypatch):
     receive, and must NOT raise HTTPException.
     """
     from fastapi.responses import JSONResponse
+
     from services.admin.app import auth_routes
     from services.admin.app.auth import signup_router as _sr
     from services.admin.app.auth_routes import RegisterRequest, signup
@@ -688,12 +655,8 @@ async def test_duplicate_email_returns_202_not_409(monkeypatch):
     )
 
     # Must be a JSONResponse (not a TokenResponse) with status 202.
-    assert isinstance(result, JSONResponse), (
-        f"Expected JSONResponse for duplicate email, got {type(result)}"
-    )
-    assert result.status_code == 202, (
-        f"Expected 202 for duplicate email to mask enumeration, got {result.status_code}"
-    )
+    assert isinstance(result, JSONResponse), f"Expected JSONResponse for duplicate email, got {type(result)}"
+    assert result.status_code == 202, f"Expected 202 for duplicate email to mask enumeration, got {result.status_code}"
     # DB must not have been modified.
     db.add.assert_not_called()
     db.commit.assert_not_called()

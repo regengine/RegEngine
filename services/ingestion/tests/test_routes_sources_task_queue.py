@@ -14,11 +14,10 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock
 
+import app.routes_sources as routes_sources
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from shared.auth import APIKey, require_api_key
-import app.routes_sources as routes_sources
 
 router = routes_sources.router
 
@@ -85,9 +84,7 @@ class TestIngestFederalRegister:
         assert kw["payload"]["job_id"] == fixed
         assert kw["payload"]["vertical"] == "food_safety"
         assert kw["payload"]["tenant_id"] == "tenant-abc"
-        assert kw["idempotency_key"] == (
-            f"federal_register_ingest:tenant-abc:{fixed}"
-        )
+        assert kw["idempotency_key"] == (f"federal_register_ingest:tenant-abc:{fixed}")
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)
@@ -149,9 +146,7 @@ class TestIngestECFR:
         resp = client.post(self.ENDPOINT, json=self.VALID_ECFR)
         assert resp.status_code == 202
         assert _enqueue_kwargs(mock_enqueue)["task_type"] == "ecfr_ingest"
-        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (
-            f"ecfr_ingest:tenant-abc:{fixed}"
-        )
+        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (f"ecfr_ingest:tenant-abc:{fixed}")
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)
@@ -196,9 +191,7 @@ class TestIngestFDA:
         resp = client.post(self.ENDPOINT, json={"vertical": "food_safety"})
         assert resp.status_code == 202
         assert _enqueue_kwargs(mock_enqueue)["task_type"] == "fda_ingest"
-        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (
-            f"fda_ingest:tenant-abc:{fixed}"
-        )
+        assert _enqueue_kwargs(mock_enqueue)["idempotency_key"] == (f"fda_ingest:tenant-abc:{fixed}")
 
     def test_non_us_returns_403(self, monkeypatch):
         _patch_enqueue(monkeypatch)
@@ -232,8 +225,8 @@ class TestIngestFDA:
 
 class TestRegisterSourceHandlers:
     def test_registers_all_three_task_types(self):
-        from shared.task_queue import TASK_HANDLERS
         from app.task_handlers_sources import register_source_handlers
+        from shared.task_queue import TASK_HANDLERS
 
         for key in ("federal_register_ingest", "ecfr_ingest", "fda_ingest"):
             TASK_HANDLERS.pop(key, None)
@@ -245,8 +238,8 @@ class TestRegisterSourceHandlers:
         assert "fda_ingest" in TASK_HANDLERS
 
     def test_handlers_are_distinct_callables(self):
-        from shared.task_queue import TASK_HANDLERS
         from app.task_handlers_sources import register_source_handlers
+        from shared.task_queue import TASK_HANDLERS
 
         register_source_handlers()
 

@@ -18,7 +18,6 @@ SSRF guarantees (preserved from PR #2197):
 from typing import Any, Dict
 
 import structlog
-
 from shared.safe_http import (
     STANDARD_BROWSER_HEADERS,
     safe_fetch_content,
@@ -39,9 +38,7 @@ __all__ = [
 ]
 
 
-def fetch_content(
-    url: str, timeout: int = 30, use_browser_fallback: bool = True
-) -> Dict[str, Any]:
+def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True) -> Dict[str, Any]:
     """Fetch a URL with SSRF protection and optional Playwright fallback.
 
     Thin wrapper over :func:`shared.safe_http.safe_fetch_content`. On
@@ -50,9 +47,7 @@ def fetch_content(
     SSRF errors are fatal and never reach the browser path.
     """
     try:
-        return safe_fetch_content(
-            url, timeout=timeout, headers=STANDARD_HEADERS
-        )
+        return safe_fetch_content(url, timeout=timeout, headers=STANDARD_HEADERS)
     except ValueError as e:
         # ``safe_fetch_content`` wraps SSRF as ValueError("URL validation
         # failed: ..."). That wrapper is fatal; do not fall back.
@@ -61,9 +56,7 @@ def fetch_content(
             raise
         # Other ValueError: not SSRF; treat as a transient fetch failure.
         if use_browser_fallback:
-            logger.warning(
-                "fetch_failed_falling_back_to_browser", url=url, error=str(e)
-            )
+            logger.warning("fetch_failed_falling_back_to_browser", url=url, error=str(e))
             return _fetch_with_browser_sync(url)
         raise
     except SSRFError as e:
@@ -73,15 +66,11 @@ def fetch_content(
         raise ValueError(f"URL validation failed: {str(e)}") from e
     except Exception as e:
         if use_browser_fallback:
-            logger.warning(
-                "fetch_failed_falling_back_to_browser", url=url, error=str(e)
-            )
+            logger.warning("fetch_failed_falling_back_to_browser", url=url, error=str(e))
             try:
                 return _fetch_with_browser_sync(url)
             except Exception as browser_e:
-                logger.error(
-                    "all_fetch_methods_failed", url=url, error=str(browser_e)
-                )
+                logger.error("all_fetch_methods_failed", url=url, error=str(browser_e))
                 raise browser_e
         raise
 
@@ -97,9 +86,7 @@ def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
     try:
         url = validate_url(url)
     except SSRFError as e:
-        logger.warning(
-            "ssrf_validation_failed_browser_fetch", url=url, error=str(e)
-        )
+        logger.warning("ssrf_validation_failed_browser_fetch", url=url, error=str(e))
         raise ValueError(f"URL validation failed: {str(e)}") from e
 
     try:
@@ -108,6 +95,4 @@ def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
         return run_browser_fetch(url)
     except ImportError:
         logger.error("browser_utils_not_found_cannot_fallback")
-        raise RuntimeError(
-            "Browser fallback requested but browser_utils not available"
-        )
+        raise RuntimeError("Browser fallback requested but browser_utils not available")

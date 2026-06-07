@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "health_check.py"
 _SUMMON_AGENT = Path(__file__).resolve().parents[2] / "scripts" / "summon_agent.py"
 

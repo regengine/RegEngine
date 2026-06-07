@@ -26,8 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from .base import (
     AuthType,
-    ConnectorConfig,
     ConnectionStatus,
+    ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
 )
@@ -127,9 +127,7 @@ class CSVSFTPConnector(IntegrationConnector):
             **config.extra.get("column_map", {}),
         }
         # Default CTE type when not specified in CSV
-        self._default_cte_type: str = config.extra.get(
-            "default_cte_type", "receiving"
-        )
+        self._default_cte_type: str = config.extra.get("default_cte_type", "receiving")
         # SFTP config
         self._sftp_host: str = config.extra.get("sftp_host", "")
         self._sftp_port: int = config.extra.get("sftp_port", 22)
@@ -155,6 +153,7 @@ class CSVSFTPConnector(IntegrationConnector):
         """Test SFTP connection (requires asyncssh)."""
         try:
             import asyncssh
+
             async with asyncssh.connect(
                 self._sftp_host,
                 port=self._sftp_port,
@@ -191,6 +190,7 @@ class CSVSFTPConnector(IntegrationConnector):
 
         try:
             import asyncssh
+
             events: List[NormalizedCTEEvent] = []
 
             async with asyncssh.connect(
@@ -264,18 +264,20 @@ class CSVSFTPConnector(IntegrationConnector):
             except Exception as exc:
                 logger.warning(
                     "csv_row_failed source=%s row=%d error=%s",
-                    source_file, row_num, str(exc),
+                    source_file,
+                    row_num,
+                    str(exc),
                 )
 
         logger.info(
             "csv_parsed source=%s rows=%d events=%d",
-            source_file, row_num if reader.line_num else 0, len(events),
+            source_file,
+            row_num if reader.line_num else 0,
+            len(events),
         )
         return events
 
-    def _resolve_column_mapping(
-        self, fieldnames: List[str]
-    ) -> Dict[str, str]:
+    def _resolve_column_mapping(self, fieldnames: List[str]) -> Dict[str, str]:
         """Map CSV headers to RegEngine fields using fuzzy matching."""
         mapping: Dict[str, str] = {}
         for col in fieldnames:
@@ -375,8 +377,13 @@ class CSVSFTPConnector(IntegrationConnector):
                 "and any system that exports CSV."
             ),
             "supported_cte_types": [
-                "receiving", "shipping", "cooling", "harvesting",
-                "initial_packing", "transformation", "first_land_based_receiving",
+                "receiving",
+                "shipping",
+                "cooling",
+                "harvesting",
+                "initial_packing",
+                "transformation",
+                "first_land_based_receiving",
             ],
             "auth_type": AuthType.API_KEY.value,
             "features": [

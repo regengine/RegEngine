@@ -175,8 +175,7 @@ class CircuitBreaker:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not self.can_execute():
                 raise CircuitOpenError(
-                    f"Circuit breaker '{self.name}' is open. "
-                    f"Retry after {self.recovery_timeout} seconds."
+                    f"Circuit breaker '{self.name}' is open. Retry after {self.recovery_timeout} seconds."
                 )
 
             try:
@@ -196,8 +195,7 @@ class CircuitBreaker:
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not self.can_execute():
                 raise CircuitOpenError(
-                    f"Circuit breaker '{self.name}' is open. "
-                    f"Retry after {self.recovery_timeout} seconds."
+                    f"Circuit breaker '{self.name}' is open. Retry after {self.recovery_timeout} seconds."
                 )
 
             try:

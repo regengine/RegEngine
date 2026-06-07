@@ -34,12 +34,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Override the autouse service-health fixture from the directory conftest.
 # These tests are fully offline; they must not be skipped because services
 # happen to be down.
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def check_services_health():  # noqa: F811
@@ -50,6 +50,7 @@ def check_services_health():  # noqa: F811
 # ---------------------------------------------------------------------------
 # Helpers — locate modules regardless of PYTHONPATH layout
 # ---------------------------------------------------------------------------
+
 
 def _import(dotted: str):
     """Import a dotted path, trying ``services.`` prefix if bare fails."""
@@ -63,6 +64,7 @@ def _import(dotted: str):
 # Rule factory (mirrors test_rules_engine_unit.py's _make_rule)
 # ---------------------------------------------------------------------------
 
+
 def _make_rule(
     rule_id: str = "rule-001",
     rule_version: int = 1,
@@ -74,9 +76,7 @@ def _make_rule(
     eval_type: str = "field_presence",
     field: str = "traceability_lot_code",
     params: Dict[str, Any] | None = None,
-    failure_reason_template: str = (
-        "Missing {field_name} at {field_path} per {citation} for {event_type} event"
-    ),
+    failure_reason_template: str = ("Missing {field_name} at {field_path} per {citation} for {event_type} event"),
     citation_reference: str = "21 CFR §1.1345",
 ):
     """Build a RuleDefinition with sensible defaults."""
@@ -160,6 +160,7 @@ Compliance Date: July 20, 2028 enforcement
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def rules_engine_cls():
     """Return the RulesEngine class."""
@@ -194,6 +195,7 @@ def _build_engine_with_rules(rules_engine_cls, session, rules: list):
     engine._rules_cache = rules
     # Override load_active_rules so it returns our list and marks cache loaded.
     import time as _time
+
     engine._rules_cache_loaded_at = _time.monotonic()
     # We set TTL=0 so _is_cache_fresh() always returns False, meaning
     # evaluate_event will call load_active_rules(). Patch it to return ours.
@@ -204,6 +206,7 @@ def _build_engine_with_rules(rules_engine_cls, session, rules: list):
 # ---------------------------------------------------------------------------
 # Test 1: valid document → NLP extracts OBLIGATION entity → compliance passes
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_valid_document_nlp_extraction_produces_entities(extract_entities):
@@ -241,7 +244,7 @@ def test_compliance_rules_pass_for_complete_event(rules_engine_cls, mock_session
             rule_id="r-tlc",
             title="TLC Required",
             field="traceability_lot_code",
-            cte_types=[],   # applies to any CTE type
+            cte_types=[],  # applies to any CTE type
         ),
         _make_rule(
             rule_id="r-type",
@@ -277,23 +280,19 @@ def test_compliance_rules_pass_for_complete_event(rules_engine_cls, mock_session
     summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-test")
 
     assert summary.total_rules == 3, f"Expected 3 rules, got {summary.total_rules}"
-    assert summary.failed == 0, (
-        f"Expected 0 failures for complete event, got {summary.failed}: "
-        + str([r.why_failed for r in summary.results if r.result == "fail"])
+    assert summary.failed == 0, f"Expected 0 failures for complete event, got {summary.failed}: " + str(
+        [r.why_failed for r in summary.results if r.result == "fail"]
     )
-    assert summary.compliant is True, (
-        f"EvaluationSummary.compliant should be True, got {summary.compliant}"
-    )
+    assert summary.compliant is True, f"EvaluationSummary.compliant should be True, got {summary.compliant}"
 
 
 # ---------------------------------------------------------------------------
 # Test 2: document missing TLC → compliance result is 'fail' with correct rule cited
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
-def test_missing_tlc_document_fails_compliance_with_rule_cited(
-    extract_entities, rules_engine_cls, mock_session
-):
+def test_missing_tlc_document_fails_compliance_with_rule_cited(extract_entities, rules_engine_cls, mock_session):
     """
     End-to-end: document with no lot code → NLP finds no TLC → compliance FAILS.
 
@@ -330,20 +329,15 @@ def test_missing_tlc_document_fails_compliance_with_rule_cited(
         severity="critical",
         citation_reference="21 CFR §1.1345(b)(1)",
         failure_reason_template=(
-            "Missing {field_name}: traceability lot code is required for all "
-            "FSMA 204 covered food events ({citation})"
+            "Missing {field_name}: traceability lot code is required for all FSMA 204 covered food events ({citation})"
         ),
     )
     engine = _build_engine_with_rules(rules_engine_cls, mock_session, [tlc_rule])
 
     summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-test")
 
-    assert summary.failed >= 1, (
-        f"Expected at least 1 failure for missing TLC, got {summary.failed}"
-    )
-    assert summary.compliant is False, (
-        f"EvaluationSummary.compliant should be False, got {summary.compliant}"
-    )
+    assert summary.failed >= 1, f"Expected at least 1 failure for missing TLC, got {summary.failed}"
+    assert summary.compliant is False, f"EvaluationSummary.compliant should be False, got {summary.compliant}"
 
     # The failure must cite the correct rule
     failing_results = [r for r in summary.results if r.result == "fail"]
@@ -351,19 +345,16 @@ def test_missing_tlc_document_fails_compliance_with_rule_cited(
         "Expected rule 'r-tlc-required' to appear in failures. "
         f"Actual failing rule_ids: {[r.rule_id for r in failing_results]}"
     )
-    assert any(r.severity == "critical" for r in failing_results), (
-        "Missing TLC failure should be severity=critical"
-    )
+    assert any(r.severity == "critical" for r in failing_results), "Missing TLC failure should be severity=critical"
 
 
 # ---------------------------------------------------------------------------
 # Test 3: cooling temperature exceedance → numeric_range rule fires as 'fail'
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
-def test_cooling_excursion_fails_numeric_range_rule(
-    extract_entities, rules_engine_cls, mock_session
-):
+def test_cooling_excursion_fails_numeric_range_rule(extract_entities, rules_engine_cls, mock_session):
     """
     NLP-extracted temperature that exceeds the cold-chain limit must produce
     a 'fail' result on the numeric_range evaluator.
@@ -403,18 +394,13 @@ def test_cooling_excursion_fails_numeric_range_rule(
         field="kdes.temperature_celsius",
         params={"field": "kdes.temperature_celsius", "min": None, "max": 5.0, "unit": "C"},
         citation_reference="21 CFR §1.1330(b)",
-        failure_reason_template=(
-            "Cooling temperature {value} {unit} exceeds maximum {max} {unit} "
-            "({citation})"
-        ),
+        failure_reason_template=("Cooling temperature {value} {unit} exceeds maximum {max} {unit} ({citation})"),
     )
     engine = _build_engine_with_rules(rules_engine_cls, mock_session, [cold_chain_rule])
 
     summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-test")
 
-    assert summary.failed >= 1, (
-        f"Expected at least 1 failure for temperature excursion, got {summary.failed}"
-    )
+    assert summary.failed >= 1, f"Expected at least 1 failure for temperature excursion, got {summary.failed}"
     assert summary.compliant is False
 
     fail_result = next(r for r in summary.results if r.result == "fail")
@@ -428,6 +414,7 @@ def test_cooling_excursion_fails_numeric_range_rule(
 # ---------------------------------------------------------------------------
 # Test 4: none input to extractor raises TypeError (not silent corruption)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_extract_entities_rejects_none(extract_entities):
@@ -444,6 +431,7 @@ def test_extract_entities_rejects_none(extract_entities):
 # ---------------------------------------------------------------------------
 # Test 5: empty rule set produces no-verdict (not compliant=True) — #1347
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_empty_ruleset_yields_no_verdict(rules_engine_cls, mock_session):
@@ -467,14 +455,13 @@ def test_empty_ruleset_yields_no_verdict(rules_engine_cls, mock_session):
     summary = engine.evaluate_event(event, persist=False, tenant_id="tenant-test")
 
     assert summary.total_rules == 0
-    assert summary.compliant is None, (
-        "Empty ruleset must yield compliant=None, not True (#1347)"
-    )
+    assert summary.compliant is None, "Empty ruleset must yield compliant=None, not True (#1347)"
 
 
 # ---------------------------------------------------------------------------
 # Test 6: FSMAExtractor regex pass (no LLM) extracts lot code from a BOL
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 def test_fsma_extractor_extracts_lot_code_from_bol(FSMAExtractor):
@@ -515,21 +502,15 @@ def test_fsma_extractor_extracts_lot_code_from_bol(FSMAExtractor):
 
     if result is not None:
         ctes = getattr(result, "ctes", [])
-        found_tlc = any(
-            getattr(cte, "lot_code", None) or getattr(cte, "traceability_lot_code", None)
-            for cte in ctes
-        )
+        found_tlc = any(getattr(cte, "lot_code", None) or getattr(cte, "traceability_lot_code", None) for cte in ctes)
         # If the extractor parsed CTEs, at least one should have a lot code.
         if ctes:
-            assert found_tlc, (
-                f"FSMAExtractor should extract lot code from BOL. CTEs: {ctes}"
-            )
+            assert found_tlc, f"FSMAExtractor should extract lot code from BOL. CTEs: {ctes}"
     else:
         # Fallback: verify the regex pattern itself works on the text
         import re
+
         pattern = r"(?:Lot|L/C|Batch|TLC|Traceability\s*Lot\s*Code)\s*[:#]?\s*(\d{14}[A-Za-z0-9\-\.]+|[A-Z0-9\-\.]{5,})"
         match = re.search(pattern, bol_text, re.IGNORECASE)
-        assert match is not None, (
-            "TLC regex pattern should match the test BOL text"
-        )
+        assert match is not None, "TLC regex pattern should match the test BOL text"
         assert "LOT" in match.group(0).upper() or "LOT" in match.group(1).upper()

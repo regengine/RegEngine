@@ -13,17 +13,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, call
 from typing import Any
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # Helpers / stubs
 # ---------------------------------------------------------------------------
+
 
 def _make_user(is_sysadmin: bool = False) -> MagicMock:
     u = MagicMock()
@@ -39,8 +39,8 @@ def _make_db_session():
 
 def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
     """Mount system_routes on a minimal FastAPI app with stubbed dependencies."""
-    from services.admin.app.system_routes import router
     from services.admin.app.dependencies import get_current_user, get_session
+    from services.admin.app.system_routes import router
 
     app = FastAPI()
     app.include_router(router, prefix="/v1")
@@ -53,6 +53,7 @@ def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestDLQReplayAuth:
     """RBAC gate: only sysadmins may call the endpoint."""

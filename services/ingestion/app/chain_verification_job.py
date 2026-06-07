@@ -20,9 +20,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("chain-verification")
 
@@ -79,8 +79,8 @@ class VerificationResultResponse(BaseModel):
 def _run_verification(job_id: str, tenant_id: str) -> None:
     """Execute chain verification in a background thread."""
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db = SessionLocal()
         try:
@@ -94,26 +94,38 @@ def _run_verification(job_id: str, tenant_id: str) -> None:
 
             # Try to persist to fsma.chain_verification_log
             _persist_verification_result(
-                db, job_id, tenant_id, chain_valid, chain_length, errors, completed_at,
+                db,
+                job_id,
+                tenant_id,
+                chain_valid,
+                chain_length,
+                errors,
+                completed_at,
             )
 
             with _verification_lock:
-                _verification_jobs[job_id].update({
-                    "status": "completed",
-                    "completed_at": completed_at,
-                    "chain_valid": chain_valid,
-                    "chain_length": chain_length,
-                    "errors": errors,
-                    "message": (
-                        "Chain integrity verified — no tampering detected"
-                        if chain_valid
-                        else f"Chain integrity FAILED — {len(errors)} error(s) detected"
-                    ),
-                })
+                _verification_jobs[job_id].update(
+                    {
+                        "status": "completed",
+                        "completed_at": completed_at,
+                        "chain_valid": chain_valid,
+                        "chain_length": chain_length,
+                        "errors": errors,
+                        "message": (
+                            "Chain integrity verified — no tampering detected"
+                            if chain_valid
+                            else f"Chain integrity FAILED — {len(errors)} error(s) detected"
+                        ),
+                    }
+                )
 
             logger.info(
                 "chain_verification_complete job_id=%s tenant_id=%s valid=%s length=%d errors=%d",
-                job_id, tenant_id, chain_valid, chain_length, len(errors),
+                job_id,
+                tenant_id,
+                chain_valid,
+                chain_length,
+                len(errors),
             )
 
             # Log to audit system (best-effort, async)
@@ -125,17 +137,21 @@ def _run_verification(job_id: str, tenant_id: str) -> None:
     except Exception as exc:
         logger.error(
             "chain_verification_failed job_id=%s tenant_id=%s error=%s",
-            job_id, tenant_id, str(exc),
+            job_id,
+            tenant_id,
+            str(exc),
         )
         with _verification_lock:
-            _verification_jobs[job_id].update({
-                "status": "failed",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-                "chain_valid": None,
-                "chain_length": 0,
-                "errors": [str(exc)],
-                "message": f"Verification failed: {exc}",
-            })
+            _verification_jobs[job_id].update(
+                {
+                    "status": "failed",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "chain_valid": None,
+                    "chain_length": 0,
+                    "errors": [str(exc)],
+                    "message": f"Verification failed: {exc}",
+                }
+            )
 
 
 def _persist_verification_result(
@@ -149,8 +165,9 @@ def _persist_verification_result(
 ) -> None:
     """Try to write result to fsma.chain_verification_log; fall back silently."""
     try:
-        from sqlalchemy import text
         import json
+
+        from sqlalchemy import text
 
         db.execute(
             text("""
@@ -190,7 +207,8 @@ def _log_verification_audit(
     """Best-effort audit log entry for the verification run."""
     try:
         import asyncio
-        from shared.audit_logging import AuditLogger, AuditEventType, AuditEventCategory, AuditSeverity, AuditActor
+
+        from shared.audit_logging import AuditActor, AuditEventCategory, AuditEventType, AuditLogger, AuditSeverity
 
         audit = AuditLogger.get_instance()
         actor = AuditActor(
@@ -282,7 +300,8 @@ async def start_chain_verification(
 
     logger.info(
         "chain_verification_started job_id=%s tenant_id=%s",
-        job_id, tenant_id,
+        job_id,
+        tenant_id,
     )
 
     return VerificationJobResponse(

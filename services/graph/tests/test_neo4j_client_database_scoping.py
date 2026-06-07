@@ -21,9 +21,7 @@ def _mk_client_with_fake_driver(enterprise: bool, database):
     ``settings.neo4j_enterprise`` patched to ``enterprise``. Returns the
     client instance.
     """
-    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch(
-        "app.neo4j_utils.settings"
-    ) as mock_settings:
+    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("app.neo4j_utils.settings") as mock_settings:
         mock_settings.neo4j_uri = "bolt://localhost:7687"
         mock_settings.neo4j_user = "neo4j"
         mock_settings.neo4j_password = "x"
@@ -51,9 +49,7 @@ def test_client_pins_to_global_db_on_community():
     """
     from app.neo4j_utils import Neo4jClient
 
-    client = _mk_client_with_fake_driver(
-        enterprise=False, database="reg_tenant_" + "a" * 32
-    )
+    client = _mk_client_with_fake_driver(enterprise=False, database="reg_tenant_" + "a" * 32)
     assert client.database == Neo4jClient.DB_GLOBAL
 
 
@@ -83,10 +79,7 @@ def test_get_tenant_database_name_format_is_stable():
     from app.neo4j_utils import Neo4jClient
 
     tid = UUID("12345678-1234-5678-1234-567812345678")
-    assert (
-        Neo4jClient.get_tenant_database_name(tid)
-        == f"reg_tenant_{tid}"
-    )
+    assert Neo4jClient.get_tenant_database_name(tid) == f"reg_tenant_{tid}"
 
 
 def test_session_uses_configured_database_on_enterprise():
@@ -96,9 +89,7 @@ def test_session_uses_configured_database_on_enterprise():
     lie.
     """
     tenant_db = "reg_tenant_" + "b" * 32
-    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch(
-        "app.neo4j_utils.settings"
-    ) as mock_settings:
+    with patch("app.neo4j_utils.AsyncGraphDatabase") as mock_gdb, patch("app.neo4j_utils.settings") as mock_settings:
         mock_settings.neo4j_uri = "bolt://localhost:7687"
         mock_settings.neo4j_user = "neo4j"
         mock_settings.neo4j_password = "x"

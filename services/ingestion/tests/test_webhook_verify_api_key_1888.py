@@ -10,17 +10,18 @@ The gate now only requires (a) a header to be present and (b) at
 least one credential env var to be configured in prod. It no longer
 attempts to validate the key itself — that's the principal path's job.
 """
+
 import os
 
+import app.webhook_router_v2 as wr
 import pytest
 from fastapi import HTTPException
-
-import app.webhook_router_v2 as wr
 
 
 def _reset_settings_cache(monkeypatch):
     """Drop the lru_cache so `get_settings()` picks up the new env."""
     from app import config
+
     config.get_settings.cache_clear()
 
 

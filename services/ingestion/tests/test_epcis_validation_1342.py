@@ -64,8 +64,7 @@ _GOOD_TLC = "00012345678901-L2025-1105-A"
 class TestDefaultProductDescription:
     def test_with_product_id_returns_formatted_string(self):
         assert (
-            _default_product_description({"product_id": "urn:epc:id:gtin:123"})
-            == "EPCIS Product urn:epc:id:gtin:123"
+            _default_product_description({"product_id": "urn:epc:id:gtin:123"}) == "EPCIS Product urn:epc:id:gtin:123"
         )
 
     def test_without_product_id_returns_generic_fallback(self):
@@ -73,18 +72,12 @@ class TestDefaultProductDescription:
 
     def test_with_none_product_id_returns_generic_fallback(self):
         # ``if product_id`` — None is falsy, fall to generic.
-        assert (
-            _default_product_description({"product_id": None})
-            == "EPCIS Traceability Event"
-        )
+        assert _default_product_description({"product_id": None}) == "EPCIS Traceability Event"
 
     def test_with_empty_product_id_returns_generic_fallback(self):
         # Defensive: EPCIS producers sometimes emit empty strings for
         # "field known but blank" — must not produce "EPCIS Product ".
-        assert (
-            _default_product_description({"product_id": ""})
-            == "EPCIS Traceability Event"
-        )
+        assert _default_product_description({"product_id": ""}) == "EPCIS Traceability Event"
 
 
 # ---------------------------------------------------------------------------
@@ -396,9 +389,7 @@ class _FakeAuditLogger:
         return _dummy()
 
 
-def _install_fake_audit(
-    monkeypatch: pytest.MonkeyPatch, raise_on_get_instance: bool = False
-) -> _FakeAuditLogger:
+def _install_fake_audit(monkeypatch: pytest.MonkeyPatch, raise_on_get_instance: bool = False) -> _FakeAuditLogger:
     """Install a stub ``shared.audit_logging`` that records ``.log()`` calls.
 
     The real module reaches into a writer singleton that can talk to a

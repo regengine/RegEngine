@@ -36,9 +36,7 @@ class TestGracefulProducerShutdown:
 
         _graceful_producer_shutdown(producer)
 
-        assert call_order == ["flush", "close"], (
-            f"Expected flush before close; got {call_order}"
-        )
+        assert call_order == ["flush", "close"], f"Expected flush before close; got {call_order}"
         producer.flush.assert_called_once()
         # flush timeout must be a positive number so drain has time to
         # finish; 5s matches the graph consumer pattern (#1220).
@@ -79,9 +77,11 @@ class TestRunConsumerShutdownFlush:
         consumer_module._shutdown_event.clear()
         consumer_module._shutdown_event.set()
 
-        with patch.object(consumer_module, "_ensure_topic"), \
-             patch.object(consumer_module, "KafkaConsumer", return_value=mock_consumer), \
-             patch.object(consumer_module, "KafkaProducer", return_value=mock_producer):
+        with (
+            patch.object(consumer_module, "_ensure_topic"),
+            patch.object(consumer_module, "KafkaConsumer", return_value=mock_consumer),
+            patch.object(consumer_module, "KafkaProducer", return_value=mock_producer),
+        ):
             try:
                 consumer_module.run_consumer()
             finally:
@@ -102,9 +102,11 @@ class TestRunConsumerShutdownFlush:
 
         consumer_module._shutdown_event.clear()
 
-        with patch.object(consumer_module, "_ensure_topic"), \
-             patch.object(consumer_module, "KafkaConsumer", return_value=mock_consumer), \
-             patch.object(consumer_module, "KafkaProducer", return_value=mock_producer):
+        with (
+            patch.object(consumer_module, "_ensure_topic"),
+            patch.object(consumer_module, "KafkaConsumer", return_value=mock_consumer),
+            patch.object(consumer_module, "KafkaProducer", return_value=mock_producer),
+        ):
             try:
                 with pytest.raises(RuntimeError, match="kafka down"):
                     consumer_module.run_consumer()

@@ -27,23 +27,22 @@ Targets the uncovered branches in the bulk-upload Pydantic validators:
   project_regulatory_logic_audit_2026_04_17.md re: FTL scoping gap); any
   category_id outside the valid set must emit a warning and be dropped.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from app.bulk_upload.validators import (
     _AUTOFILL_WARNINGS,
-    _autofill_str,
     BulkCTEEventRow,
     BulkFacilityRow,
     BulkFTLScopeRow,
     BulkTLCRow,
+    _autofill_str,
     compute_payload_sha256,
     next_merkle_hash,
     normalize_cte_type,
     validate_and_normalize_payload,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────
 # _autofill_str — the warning-substitution branch (lines 22-29)
@@ -292,10 +291,7 @@ def test_validate_facilities_section_not_a_list_emits_error():
         valid_ftl_category_ids={"1", "2"},
     )
     assert normalized["facilities"] == []
-    assert any(
-        e["section"] == "facility" and e["message"] == "Section must be an array"
-        for e in errors
-    )
+    assert any(e["section"] == "facility" and e["message"] == "Section must be an array" for e in errors)
 
 
 def test_validate_multiple_sections_not_lists_all_report():
@@ -310,11 +306,7 @@ def test_validate_multiple_sections_not_lists_all_report():
         supported_cte_types=set(),
         valid_ftl_category_ids=set(),
     )
-    section_errors = {
-        e["section"]
-        for e in errors
-        if e.get("message") == "Section must be an array"
-    }
+    section_errors = {e["section"] for e in errors if e.get("message") == "Section must be an array"}
     assert section_errors == {"facility", "ftl_scope", "tlc", "event"}
     assert normalized == {"facilities": [], "ftl_scopes": [], "tlcs": [], "events": []}
 
@@ -351,10 +343,7 @@ def test_validate_invalid_row_demoted_to_warning_and_skipped():
         valid_ftl_category_ids={"1"},
     )
     assert normalized["facilities"] == []  # skipped
-    warning_errors = [
-        e for e in errors
-        if e.get("section") == "facility" and e.get("severity") == "warning"
-    ]
+    warning_errors = [e for e in errors if e.get("section") == "facility" and e.get("severity") == "warning"]
     assert len(warning_errors) == 1
     assert warning_errors[0]["row"] == 1
     assert "message" in warning_errors[0]
@@ -380,10 +369,7 @@ def test_validate_invalid_event_time_demoted_to_warning():
         valid_ftl_category_ids={"1"},
     )
     assert normalized["events"] == []
-    warning_errors = [
-        e for e in errors
-        if e.get("section") == "event" and e.get("severity") == "warning"
-    ]
+    warning_errors = [e for e in errors if e.get("section") == "event" and e.get("severity") == "warning"]
     assert len(warning_errors) == 1
     assert "ISO-8601" in warning_errors[0]["message"]
 
@@ -409,9 +395,7 @@ def test_validate_ftl_scope_unknown_category_emits_warning_and_drops():
     )
     assert normalized["ftl_scopes"] == []
     unknown_errors = [
-        e for e in errors
-        if e.get("section") == "ftl_scope"
-        and "Unknown FTL category_id" in e.get("message", "")
+        e for e in errors if e.get("section") == "ftl_scope" and "Unknown FTL category_id" in e.get("message", "")
     ]
     assert len(unknown_errors) == 1
     assert unknown_errors[0]["severity"] == "warning"
@@ -435,9 +419,7 @@ def test_validate_ftl_scope_valid_category_passes_through():
     assert len(normalized["ftl_scopes"]) == 1
     assert normalized["ftl_scopes"][0]["category_id"] == "2"
     # No "Unknown FTL category_id" errors
-    assert not any(
-        "Unknown FTL category_id" in e.get("message", "") for e in errors
-    )
+    assert not any("Unknown FTL category_id" in e.get("message", "") for e in errors)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -451,9 +433,7 @@ def test_autofill_warning_with_hint_included_in_errors():
     # in the final errors list.
     normalized, errors = validate_and_normalize_payload(
         {
-            "facilities": [
-                {"name": "", "street": "1 Main", "city": "SF", "state": "CA", "postal_code": "94103"}
-            ],
+            "facilities": [{"name": "", "street": "1 Main", "city": "SF", "state": "CA", "postal_code": "94103"}],
             "ftl_scopes": [],
             "tlcs": [],
             "events": [],
@@ -489,10 +469,7 @@ def test_autofill_warning_for_unsupported_cte_type_propagates_hint():
         valid_ftl_category_ids={"1"},
     )
     assert normalized["events"][0]["cte_type"] == "receiving"
-    hint_warnings = [
-        e for e in errors
-        if e.get("section") == "autofill" and "event row 1" in e.get("message", "")
-    ]
+    hint_warnings = [e for e in errors if e.get("section") == "autofill" and "event row 1" in e.get("message", "")]
     assert len(hint_warnings) >= 1
 
 

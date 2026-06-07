@@ -1,25 +1,27 @@
+import os
 from datetime import datetime, timezone
+from typing import Iterator, Optional
+from uuid import UUID
+
+import structlog
 from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from sqlalchemy import select, text
-from uuid import UUID
-from typing import Iterator, Optional
-import structlog
 from jwt.exceptions import PyJWTError as JWTError
-import os
+from shared.env import is_production
+from shared.permissions import has_permission
 
-from .database import get_session, get_tenant_session
-from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
-from .models import TenantContext
-from .auth_utils import check_revoked_async, decode_access_token
 # Supabase Integration
 from shared.supabase_client import get_supabase
-from shared.permissions import has_permission
-from shared.env import is_production
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
+
+from .auth_utils import check_revoked_async, decode_access_token
+from .database import get_session, get_tenant_session
+from .models import TenantContext
 
 # Redis Session Store
 from .session_store import InMemorySessionStore, RedisSessionStore, redact_connection_url
+from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -61,9 +63,7 @@ def _is_supabase_token_rejection(exc: Exception) -> bool:
     cls = exc.__class__
     module = getattr(cls, "__module__", "")
     name = getattr(cls, "__name__", "")
-    return name in {"AuthApiError", "AuthInvalidCredentialsError"} and module.startswith(
-        ("supabase_auth.", "gotrue.")
-    )
+    return name in {"AuthApiError", "AuthInvalidCredentialsError"} and module.startswith(("supabase_auth.", "gotrue."))
 
 
 def _is_supabase_transient_exception(exc: Exception) -> bool:
@@ -144,7 +144,7 @@ async def _enforce_session_bound_token(
 
 def get_session_store() -> RedisSessionStore:
     """Dependency injection for Redis session store.
-    
+
     Returns singleton instance of RedisSessionStore.
     Lazily initialized on first call.
     """
@@ -165,12 +165,12 @@ def get_session_store() -> RedisSessionStore:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme), 
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_session),
     session_store: Optional[RedisSessionStore] = Depends(get_session_store),
 ) -> UserModel:
     credentials_exception = _credentials_exception()
-    
+
     user_id = None
     tenant_id = None
     token_version_claim: Optional[int] = None
@@ -302,10 +302,7 @@ async def get_current_user(
 
     # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
     if db.bind and db.bind.dialect.name != "sqlite":
-        db.execute(
-            text("SELECT set_config('regengine.user_id', :uid, false)"),
-            {"uid": str(user_id)}
-        )
+        db.execute(text("SELECT set_config('regengine.user_id', :uid, false)"), {"uid": str(user_id)})
 
     user = db.get(UserModel, UUID(user_id))
     if user is None:
@@ -351,12 +348,16 @@ async def get_current_user(
     # who belong to multiple tenants must have tenant_id written into
     # app_metadata (or the local JWT) by the server; we refuse to guess.
     if not tenant_id:
-        active_memberships = db.execute(
-            select(MembershipModel).where(
-                MembershipModel.user_id == UUID(user_id),
-                MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+        active_memberships = (
+            db.execute(
+                select(MembershipModel).where(
+                    MembershipModel.user_id == UUID(user_id),
+                    MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if len(active_memberships) == 1:
             tenant_id = str(active_memberships[0].tenant_id)
             logger.info(
@@ -401,18 +402,17 @@ async def get_current_user(
             # Verify membership exists for this tenant
             membership = db.execute(
                 select(MembershipModel).where(
-                    MembershipModel.user_id == UUID(user_id),
-                    MembershipModel.tenant_id == UUID(tenant_id)
+                    MembershipModel.user_id == UUID(user_id), MembershipModel.tenant_id == UUID(tenant_id)
                 )
             ).scalar_one_or_none()
 
             if not membership:
-                 logger.warning("invalid_tenant_context", user_id=user_id, tenant_id=tenant_id)
-                 raise credentials_exception
+                logger.warning("invalid_tenant_context", user_id=user_id, tenant_id=tenant_id)
+                raise credentials_exception
 
             if not membership.is_active:
-                 logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
-                 raise credentials_exception
+                logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
+                raise credentials_exception
 
         except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
             logger.error("tenant_context_error", error=str(e))
@@ -420,19 +420,20 @@ async def get_current_user(
 
     return user
 
+
 class PermissionChecker:
     def __init__(self, required_permission: str):
         self.required_permission = required_permission
 
     def __call__(self, user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)):
-        # Inspect current tenant context from session? 
+        # Inspect current tenant context from session?
         # Since set_tenant_context was called in get_current_user, RLS is active.
         # But we need to check the Roles/Permissions for the current tenant.
-        
+
         # We need to retrieve the tenant_id embedded in the current RLS context
         # OR we parse it from the token again (but get_current_user already did).
         # We can also get it from `db` if we trust `get_tenant_context`.
-        
+
         current_tenant_id = TenantContext.get_tenant_context(db)
         if not current_tenant_id:
             # SECURITY (#1065): fail closed for everyone — including sysadmins.
@@ -447,21 +448,25 @@ class PermissionChecker:
                 status_code=403,
                 detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID",
             )
-            
+
         # Get Membership and Role
-        stmt = select(RoleModel).join(MembershipModel).where(
-            MembershipModel.user_id == user.id,
-            MembershipModel.tenant_id == current_tenant_id,
+        stmt = (
+            select(RoleModel)
+            .join(MembershipModel)
+            .where(
+                MembershipModel.user_id == user.id,
+                MembershipModel.tenant_id == current_tenant_id,
+            )
         )
         role = db.execute(stmt).scalar_one_or_none()
-        
+
         if not role:
-             raise HTTPException(status_code=403, detail="Role not found")
-             
+            raise HTTPException(status_code=403, detail="Role not found")
+
         # Check permissions with wildcard and namespace support.
         if has_permission(role.permissions or [], self.required_permission):
             return True
-            
+
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
@@ -538,8 +543,8 @@ def get_tenant_scoped_session(
 # with the local ``models.TenantContext`` (a session-context helper)
 # that's already imported above — same name, different class.
 from shared.tenant_context import (  # noqa: E402
-    resolve_tenant_context,
     TenantContext as AuthTenantContext,
+    resolve_tenant_context,
 )
 
 
@@ -595,10 +600,8 @@ from shared.api_key_store import get_db_key_store
 
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
 
-async def get_current_tenant(
-    key: str = Depends(api_key_header),
-    db: Session = Depends(get_session)
-) -> UUID:
+
+async def get_current_tenant(key: str = Depends(api_key_header), db: Session = Depends(get_session)) -> UUID:
     """
     Validates API Key and returns the associated Tenant ID.
     Enforces Strict Security Boundary (Constitution 4.1).
@@ -609,15 +612,15 @@ async def get_current_tenant(
 
     store = await get_db_key_store()
     api_key_data = await store.validate_key(key)
-    
+
     if not api_key_data:
         raise HTTPException(status_code=403, detail="Invalid API Key")
-        
+
     if not api_key_data.tenant_id:
-         raise HTTPException(status_code=403, detail="API Key not associated with a Tenant")
-         
+        raise HTTPException(status_code=403, detail="API Key not associated with a Tenant")
+
     tenant_id = UUID(api_key_data.tenant_id)
     # SEC-RLS: Ensure the database session is restricted to this tenant
     TenantContext.set_tenant_context(db, tenant_id)
-    
+
     return tenant_id

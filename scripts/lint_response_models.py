@@ -92,13 +92,15 @@ def check_file(filepath: Path) -> list[dict]:
                     continue
 
                 if not has_response_model:
-                    violations.append({
-                        "file": str(filepath.relative_to(Path(__file__).resolve().parent.parent)),
-                        "line": node.lineno,
-                        "function": node.name,
-                        "method": method,
-                        "route": route_path or "unknown",
-                    })
+                    violations.append(
+                        {
+                            "file": str(filepath.relative_to(Path(__file__).resolve().parent.parent)),
+                            "line": node.lineno,
+                            "function": node.name,
+                            "method": method,
+                            "route": route_path or "unknown",
+                        }
+                    )
 
     return violations
 

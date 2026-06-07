@@ -30,12 +30,6 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -44,6 +38,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -73,12 +72,12 @@ def db_session() -> Session:
     for t in tables:
         t.create(bind=engine)
 
-    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False,
-                      expire_on_commit=False, future=True)
+    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=TEST_USER_ID, email="u@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
+    session.add(
+        UserModel(id=TEST_USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False)
+    )
     session.commit()
 
     try:
@@ -113,14 +112,10 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
 
-    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context",
-                        lambda _db: TEST_TENANT_ID)
-    monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_facility_ftl_scoping",
-                        lambda **_kw: None)
-    monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_cte_event",
-                        lambda **_kw: None)
-    monkeypatch.setattr(fac_routes.supplier_graph_sync, "get_required_ctes_for_facility",
-                        lambda *_a, **_kw: None)
+    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
+    monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kw: None)
+    monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
+    monkeypatch.setattr(fac_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda *_a, **_kw: None)
 
     with TestClient(app) as c:
         yield c
@@ -145,8 +140,7 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
 
-    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context",
-                        lambda _db: None)
+    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: None)
 
     with TestClient(app) as c:
         yield c
@@ -239,18 +233,32 @@ class TestListSupplierFacilities:
 class TestCreateSupplierFacility:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 108: missing tenant → 400."""
-        resp = client_no_tenant.post("/v1/supplier/facilities", json={
-            "name": "Warehouse X", "street": "1 Main St", "city": "Salinas",
-            "state": "CA", "postal_code": "93901", "roles": []
-        })
+        resp = client_no_tenant.post(
+            "/v1/supplier/facilities",
+            json={
+                "name": "Warehouse X",
+                "street": "1 Main St",
+                "city": "Salinas",
+                "state": "CA",
+                "postal_code": "93901",
+                "roles": [],
+            },
+        )
         assert resp.status_code == 400
 
     def test_create_facility_happy_path(self, client: TestClient):
         """Lines 110-125: valid request creates facility and returns response."""
-        resp = client.post("/v1/supplier/facilities", json={
-            "name": "New Packhouse", "street": "100 Depot Rd", "city": "Salinas",
-            "state": "CA", "postal_code": "93901", "roles": ["Packer"],
-        })
+        resp = client.post(
+            "/v1/supplier/facilities",
+            json={
+                "name": "New Packhouse",
+                "street": "100 Depot Rd",
+                "city": "Salinas",
+                "state": "CA",
+                "postal_code": "93901",
+                "roles": ["Packer"],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["name"] == "New Packhouse"
@@ -267,6 +275,7 @@ class TestSetFtlCategories:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 146: missing tenant → 400."""
         import uuid
+
         fid = str(uuid.uuid4())
         resp = client_no_tenant.put(
             f"/v1/supplier/facilities/{fid}/ftl-categories",
@@ -315,6 +324,7 @@ class TestGetRequiredCtes:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 219: missing tenant → 400."""
         import uuid
+
         resp = client_no_tenant.get(f"/v1/supplier/facilities/{uuid.uuid4()}/required-ctes")
         assert resp.status_code == 400
 
@@ -348,9 +358,7 @@ class TestGetRequiredCtes:
         assert body["source"] == "neo4j"
         assert body["required_ctes"] == ["harvesting"]
 
-    def test_falls_back_to_postgres_when_graph_returns_none(
-        self, client: TestClient, db_session: Session
-    ):
+    def test_falls_back_to_postgres_when_graph_returns_none(self, client: TestClient, db_session: Session):
         """Lines 244-264: graph returns None → read from postgres."""
         f = _make_facility(db_session)
         # No FTL categories, so postgres returns empty
@@ -370,10 +378,15 @@ class TestSubmitCteEvent:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 277: missing tenant → 400."""
         import uuid
+
         resp = client_no_tenant.post(
             f"/v1/supplier/facilities/{uuid.uuid4()}/cte-events",
-            json={"cte_type": "harvesting", "tlc_code": "TLC-001",
-                  "event_time": "2026-03-01T00:00:00Z", "kde_data": {}},
+            json={
+                "cte_type": "harvesting",
+                "tlc_code": "TLC-001",
+                "event_time": "2026-03-01T00:00:00Z",
+                "kde_data": {},
+            },
         )
         assert resp.status_code == 400
 
@@ -381,8 +394,12 @@ class TestSubmitCteEvent:
         """Lines 281-282: bad UUID → 400."""
         resp = client.post(
             "/v1/supplier/facilities/not-a-uuid/cte-events",
-            json={"cte_type": "harvesting", "tlc_code": "TLC-001",
-                  "event_time": "2026-03-01T00:00:00Z", "kde_data": {}},
+            json={
+                "cte_type": "harvesting",
+                "tlc_code": "TLC-001",
+                "event_time": "2026-03-01T00:00:00Z",
+                "kde_data": {},
+            },
         )
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
@@ -426,20 +443,27 @@ class TestCreateTlc:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 343: missing tenant → 400."""
         import uuid
-        resp = client_no_tenant.post("/v1/supplier/tlcs", json={
-            "facility_id": str(uuid.uuid4()),
-            "tlc_code": "TLC-X",
-            "product_description": "Spinach",
-        })
+
+        resp = client_no_tenant.post(
+            "/v1/supplier/tlcs",
+            json={
+                "facility_id": str(uuid.uuid4()),
+                "tlc_code": "TLC-X",
+                "product_description": "Spinach",
+            },
+        )
         assert resp.status_code == 400
 
     def test_invalid_facility_uuid_returns_400(self, client: TestClient):
         """Lines 347-348: bad facility UUID → 400."""
-        resp = client.post("/v1/supplier/tlcs", json={
-            "facility_id": "not-a-uuid",
-            "tlc_code": "TLC-X",
-            "product_description": "Spinach",
-        })
+        resp = client.post(
+            "/v1/supplier/tlcs",
+            json={
+                "facility_id": "not-a-uuid",
+                "tlc_code": "TLC-X",
+                "product_description": "Spinach",
+            },
+        )
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 

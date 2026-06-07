@@ -3,7 +3,6 @@ import logging
 import os
 
 from shared.kafka_compat import KafkaProducerCompat as KafkaProducer
-
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
 # In prod, import from shared.schemas
@@ -24,8 +23,11 @@ class GraphEventPublisher:
                 max_block_ms=5000,
             )
         except Exception as e:
-            logger.warning("Kafka producer unavailable (%s): audit events will be skipped. "
-                           "This is expected when running from host.", e)
+            logger.warning(
+                "Kafka producer unavailable (%s): audit events will be skipped. "
+                "This is expected when running from host.",
+                e,
+            )
             self.producer = None
 
     def publish_control_event(self, tenant_id: str, control_data: dict):

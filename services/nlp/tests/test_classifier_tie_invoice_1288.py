@@ -94,9 +94,7 @@ class TestClassifierTieHandling:
     def test_tie_returns_unknown(self, extractor):
         """When two document types score equally, _classify_document returns UNKNOWN."""
         doc_type = extractor._classify_document(TIE_TEXT)
-        assert doc_type == DocumentType.UNKNOWN, (
-            f"Expected UNKNOWN on tie, got {doc_type}"
-        )
+        assert doc_type == DocumentType.UNKNOWN, f"Expected UNKNOWN on tie, got {doc_type}"
 
     def test_tie_extraction_sets_review_required(self, extractor):
         """An extraction from a tie document must always require review."""
@@ -117,9 +115,7 @@ class TestClassifierTieHandling:
         result = extractor.extract(UNAMBIGUOUS_BOL_TEXT, "bol-doc-001", tenant_id=TENANT)
         assert result.document_type == DocumentType.BILL_OF_LADING
         cte_types = {cte.type for cte in result.ctes}
-        assert CTEType.SHIPPING in cte_types, (
-            f"Expected SHIPPING CTE from BOL, got: {cte_types}"
-        )
+        assert CTEType.SHIPPING in cte_types, f"Expected SHIPPING CTE from BOL, got: {cte_types}"
 
 
 class TestInvoiceClassification:
@@ -135,9 +131,7 @@ class TestInvoiceClassification:
         result = extractor.extract(INVOICE_TEXT, "inv-doc-001", tenant_id=TENANT)
         # If CTEs were emitted they MUST NOT be typed SHIPPING.
         for cte in result.ctes:
-            assert cte.type != CTEType.SHIPPING, (
-                f"Invoice produced a SHIPPING CTE — was not expected (#1288)"
-            )
+            assert cte.type != CTEType.SHIPPING, f"Invoice produced a SHIPPING CTE — was not expected (#1288)"
 
     def test_invoice_review_required(self, extractor):
         """Invoice extractions must unconditionally set review_required=True."""

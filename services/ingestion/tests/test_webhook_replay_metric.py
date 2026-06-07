@@ -28,7 +28,6 @@ pytest.importorskip("prometheus_client")
 
 import app.webhook_router_v2 as wr  # noqa: E402
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -39,10 +38,7 @@ def _counter_value(counter, reason: str, age_bucket: str) -> float:
         return 0.0
     for metric in counter.collect():
         for sample in metric.samples:
-            if (
-                sample.labels.get("reason") == reason
-                and sample.labels.get("age_bucket") == age_bucket
-            ):
+            if sample.labels.get("reason") == reason and sample.labels.get("age_bucket") == age_bucket:
                 return sample.value
     return 0.0
 
@@ -126,17 +122,10 @@ def test_record_replay_rejection_increments_stale():
     now = datetime.now(timezone.utc)
     stale_ts = (now - timedelta(days=300)).isoformat()
 
-    before = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "stale", "lt_1y"
-    )
+    before = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "stale", "lt_1y")
     wr._record_replay_rejection(stale_ts)
-    after = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "stale", "lt_1y"
-    )
-    assert after == before + 1, (
-        f"#1245: recorder must increment stale/lt_1y bucket; "
-        f"before={before} after={after}"
-    )
+    after = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "stale", "lt_1y")
+    assert after == before + 1, f"#1245: recorder must increment stale/lt_1y bucket; before={before} after={after}"
 
 
 def test_record_replay_rejection_increments_future():
@@ -147,13 +136,9 @@ def test_record_replay_rejection_increments_future():
     now = datetime.now(timezone.utc)
     future_ts = (now + timedelta(hours=30)).isoformat()
 
-    before = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "future", "lt_48h"
-    )
+    before = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "future", "lt_48h")
     wr._record_replay_rejection(future_ts)
-    after = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "future", "lt_48h"
-    )
+    after = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "future", "lt_48h")
     assert after == before + 1
 
 
@@ -163,13 +148,9 @@ def test_record_replay_rejection_increments_unparseable():
     if not wr._WEBHOOK_METRICS_ENABLED:
         pytest.skip("prometheus_client not available")
 
-    before = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "unparseable", "na"
-    )
+    before = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "unparseable", "na")
     wr._record_replay_rejection("not-a-real-date")
-    after = _counter_value(
-        wr.WEBHOOK_REPLAY_REJECTED, "unparseable", "na"
-    )
+    after = _counter_value(wr.WEBHOOK_REPLAY_REJECTED, "unparseable", "na")
     assert after == before + 1
 
 
@@ -204,8 +185,12 @@ def test_classify_never_raises_on_hostile_input():
         assert reason in {"stale", "future", "unparseable"}
         # age_bucket must be from a closed set to bound label cardinality
         assert bucket in {
-            "lt_48h", "lt_30d", "gte_30d",
-            "lt_180d", "lt_1y", "gte_1y",
+            "lt_48h",
+            "lt_30d",
+            "gte_30d",
+            "lt_180d",
+            "lt_1y",
+            "gte_1y",
             "na",
         }
 
@@ -236,7 +221,9 @@ def test_label_cardinality_is_bounded():
         (now - timedelta(days=366)).isoformat(),
         (now - timedelta(days=10_000)).isoformat(),
         # unparseable
-        "", "garbage", "2026-99-99",
+        "",
+        "garbage",
+        "2026-99-99",
     ]
 
     for ts in sample_inputs:
@@ -247,11 +234,17 @@ def test_label_cardinality_is_bounded():
     # All reasons must be in the closed set
     assert seen_reasons.issubset({"stale", "future", "unparseable"})
     # All buckets must be in the closed set
-    assert seen_buckets.issubset({
-        "lt_48h", "lt_30d", "gte_30d",
-        "lt_180d", "lt_1y", "gte_1y",
-        "na",
-    })
+    assert seen_buckets.issubset(
+        {
+            "lt_48h",
+            "lt_30d",
+            "gte_30d",
+            "lt_180d",
+            "lt_1y",
+            "gte_1y",
+            "na",
+        }
+    )
 
 
 if __name__ == "__main__":

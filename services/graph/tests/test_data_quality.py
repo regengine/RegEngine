@@ -34,6 +34,7 @@ from services.graph.app.fsma_utils import (
 
 class AsyncIteratorMock:
     """Helper to create a proper async iterator from a list of items."""
+
     def __init__(self, items):
         self._items = iter(items)
 
@@ -45,6 +46,7 @@ class AsyncIteratorMock:
             return next(self._items)
         except StopIteration:
             raise StopAsyncIteration
+
 
 # ============================================================================
 # ORPHAN LOT DATACLASS TESTS
@@ -334,10 +336,7 @@ class TestOrphanDetectionLogic:
         # Verify query was called with tenant_id parameter
         mock_session.run.assert_called()
         call_kwargs = mock_session.run.call_args
-        assert (
-            "tenant_id" in str(call_kwargs)
-            or call_kwargs[1].get("tenant_id") == "tenant-123"
-        )
+        assert "tenant_id" in str(call_kwargs) or call_kwargs[1].get("tenant_id") == "tenant-123"
 
 
 # ============================================================================
@@ -381,9 +380,7 @@ class TestOrphanDetectionTenantScoping:
 
         import asyncio
 
-        asyncio.run(
-            find_orphaned_lots(mock_client, tenant_id="tenant-a", days_stagnant=30)
-        )
+        asyncio.run(find_orphaned_lots(mock_client, tenant_id="tenant-a", days_stagnant=30))
 
         call = mock_session.run.call_args
         # find_orphaned_lots passes the query as the first positional arg.
@@ -439,8 +436,7 @@ class TestOrphanDetectionTenantScoping:
         inbound_group = tail[: close_idx + 1]
         assert "EXISTS {" in inbound_group
         assert "OR EXISTS {" in inbound_group, (
-            "#1270: inbound-OR group lost its `OR EXISTS` alternative; "
-            f"group was: {inbound_group!r}"
+            f"#1270: inbound-OR group lost its `OR EXISTS` alternative; group was: {inbound_group!r}"
         )
 
     def test_tenant_filter_precedes_inbound_group(self):
@@ -779,10 +775,7 @@ class TestDataQualityMonitoringFlow:
         )
 
         # Alert decision logic
-        should_alert = (
-            report.overall_completeness_rate < 0.85
-            or report.trend_direction == "degrading"
-        )
+        should_alert = report.overall_completeness_rate < 0.85 or report.trend_direction == "degrading"
 
         assert should_alert is True
         assert report.trend_direction == "degrading"

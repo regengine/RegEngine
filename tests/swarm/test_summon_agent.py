@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "summon_agent.py"
 _SPEC = importlib.util.spec_from_file_location("summon_agent", _SCRIPT_PATH)
 assert _SPEC and _SPEC.loader

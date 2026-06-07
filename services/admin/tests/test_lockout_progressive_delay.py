@@ -21,13 +21,13 @@ TTL elapses — serial or parallel. These tests pin:
        so a legitimate user who eventually types their password
        right doesn't keep seeing 429 through the remaining window.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException, status
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Progressive-delay table
@@ -63,8 +63,8 @@ def test_progressive_delay_cap_is_five_minutes():
     dropping the effective brute-force rate by an order of magnitude
     before the 10-attempt hard lockout fires."""
     from services.admin.app.auth_routes import (
-        _progressive_delay_seconds,
         _PROGRESSIVE_DELAY_CAP_SECONDS,
+        _progressive_delay_seconds,
     )
 
     assert _PROGRESSIVE_DELAY_CAP_SECONDS == 300
@@ -119,9 +119,7 @@ async def test_record_lockout_attempt_does_not_sleep(monkeypatch):
     count = await auth_routes._record_lockout_attempt(session_store, "a@b.c")
     assert count == 5
     # Delay at count=5 is 2^(5-3) = 4 seconds → SETEX fires with TTL=4.
-    client.setex.assert_awaited_once_with(
-        auth_routes._lockout_delay_key("a@b.c"), 4, "1"
-    )
+    client.setex.assert_awaited_once_with(auth_routes._lockout_delay_key("a@b.c"), 4, "1")
     assert sleep_calls == []  # the assertion-raising sleep never fired
 
 

@@ -36,12 +36,14 @@ module skips cleanly.
 Run via:
     pytest tests/migrations/test_v065_audit_logs_uuid_scrub.py -v
 """
+
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 
 import pytest
+
 from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
@@ -50,21 +52,13 @@ pytest.importorskip("testcontainers.postgres")
 from sqlalchemy import create_engine, text  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260423_c7d8e9f0a1b2_v065_audit_logs_fix_uuid_columns.py"
-)
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260423_c7d8e9f0a1b2_v065_audit_logs_fix_uuid_columns.py"
 
 
 def _load_v065_module():
     """Import the v065 migration module without going through Alembic."""
-    spec = importlib.util.spec_from_file_location(
-        "v065_audit_logs_fix_uuid_columns", MIGRATION_PATH
-    )
+    spec = importlib.util.spec_from_file_location("v065_audit_logs_fix_uuid_columns", MIGRATION_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -254,10 +248,7 @@ def test_v065_deletes_rows_with_non_castable_tenant_id(pg_engine, seed_audit_row
     v065 = _load_v065_module()
     with pg_engine.begin() as conn:
         _apply_v065(conn, v065)
-        labels = {
-            r[0]
-            for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()
-        }
+        labels = {r[0] for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()}
 
     assert "bad-tenant-delete" not in labels
     assert "empty-tenant-delete" not in labels
@@ -269,18 +260,12 @@ def test_v065_is_idempotent(pg_engine, seed_audit_rows):
     v065 = _load_v065_module()
     with pg_engine.begin() as conn:
         _apply_v065(conn, v065)
-        before = {
-            r[0]
-            for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()
-        }
+        before = {r[0] for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()}
 
     # Second apply (different transaction so pg_temp helper is recreated).
     with pg_engine.begin() as conn:
         _apply_v065(conn, v065)
-        after = {
-            r[0]
-            for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()
-        }
+        after = {r[0] for r in conn.execute(text("SELECT integrity_hash FROM audit_logs")).all()}
         types = _column_data_types(conn)
 
     assert before == after
@@ -311,7 +296,5 @@ def test_v065_does_not_resurrect_rls_uuid_cast(pg_engine, seed_audit_rows):
             )
         ).scalar_one()
 
-    assert "::uuid" not in policy_def, (
-        f"v065 should drop the ::uuid workaround cast, got: {policy_def}"
-    )
+    assert "::uuid" not in policy_def, f"v065 should drop the ::uuid workaround cast, got: {policy_def}"
     assert "get_tenant_context()" in policy_def

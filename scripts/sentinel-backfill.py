@@ -26,6 +26,7 @@ Usage:
 Re-run policy: idempotent. Safe to re-run any time. Anchors recovered on
 prior runs are re-verified each time.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,10 +91,14 @@ def detect_repo() -> tuple[str, str]:
 def load_universe() -> tuple[dict[int, int], list[int]]:
     """Return (already-anchored map, unanchored list)."""
     raw = gh(
-        "issue", "list",
-        "--state", "closed",
-        "--limit", "2000",
-        "--json", "number,closedByPullRequestsReferences",
+        "issue",
+        "list",
+        "--state",
+        "closed",
+        "--limit",
+        "2000",
+        "--json",
+        "number,closedByPullRequestsReferences",
     )
     issues = json.loads(raw)
     anchored: dict[int, int] = {}
@@ -109,11 +114,16 @@ def load_universe() -> tuple[dict[int, int], list[int]]:
 
 def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
     raw = gh(
-        "api", "graphql",
-        "-f", f"query={GRAPHQL_TIMELINE}",
-        "-f", f"owner={owner}",
-        "-f", f"repo={repo}",
-        "-F", f"num={num}",
+        "api",
+        "graphql",
+        "-f",
+        f"query={GRAPHQL_TIMELINE}",
+        "-f",
+        f"owner={owner}",
+        "-f",
+        f"repo={repo}",
+        "-F",
+        f"num={num}",
         check=False,
     )
     if not raw.strip():
@@ -123,11 +133,7 @@ def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
     except json.JSONDecodeError:
         return None
     nodes = (
-        data.get("data", {})
-        .get("repository", {})
-        .get("issue", {})
-        .get("timelineItems", {})
-        .get("nodes", [])
+        data.get("data", {}).get("repository", {}).get("issue", {}).get("timelineItems", {}).get("nodes", [])
     ) or []
     for n in nodes:
         closer = n.get("closer")
@@ -147,7 +153,8 @@ def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
 
 def is_pull_request(owner: str, repo: str, n: int) -> bool:
     raw = gh(
-        "api", f"repos/{owner}/{repo}/pulls/{n}",
+        "api",
+        f"repos/{owner}/{repo}/pulls/{n}",
         "--silent" if False else "-i",
         check=False,
     )
@@ -182,10 +189,10 @@ def resolve_via_comments(owner: str, repo: str, num: int) -> int | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=0,
-                    help="Process at most N unanchored issues (0 = all). For smoke testing.")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Resolve and print stats; do not write the anchors file.")
+    ap.add_argument(
+        "--limit", type=int, default=0, help="Process at most N unanchored issues (0 = all). For smoke testing."
+    )
+    ap.add_argument("--dry-run", action="store_true", help="Resolve and print stats; do not write the anchors file.")
     args = ap.parse_args()
 
     owner, repo = detect_repo()
@@ -205,8 +212,10 @@ def main() -> int:
             elapsed = time.time() - started
             rate = i / elapsed if elapsed else 0
             eta = (len(targets) - i) / rate if rate else 0
-            print(f"[backfill] {i}/{len(targets)}  recovered={len(recovered)}  "
-                  f"rate={rate:.1f}/s  eta={eta:.0f}s", flush=True)
+            print(
+                f"[backfill] {i}/{len(targets)}  recovered={len(recovered)}  rate={rate:.1f}/s  eta={eta:.0f}s",
+                flush=True,
+            )
         pr = resolve_via_close_event(owner, repo, num)
         if pr is None:
             pr = resolve_via_comments(owner, repo, num)

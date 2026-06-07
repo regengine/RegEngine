@@ -141,6 +141,7 @@ class MetricsCollector:
 
         # Hash URL for label (avoid high cardinality)
         import hashlib
+
         url_hash = hashlib.sha256(url.encode()).hexdigest()[:8]
 
         status = "success" if success else "failure"
@@ -155,9 +156,7 @@ class MetricsCollector:
         status = "success" if success else "failure"
         KAFKA_EVENTS.labels(topic=topic, status=status).inc()
 
-    def record_kafka_emit_failure(
-        self, source_type: str, failure_mode: str, count: int = 1
-    ) -> None:
+    def record_kafka_emit_failure(self, source_type: str, failure_mode: str, count: int = 1) -> None:
         """Record a Kafka emit failure for alerting (#1147).
 
         failure_mode values:
@@ -170,9 +169,7 @@ class MetricsCollector:
             return
         if count <= 0:
             return
-        KAFKA_EMIT_FAILURES.labels(
-            source_type=source_type, failure_mode=failure_mode
-        ).inc(count)
+        KAFKA_EMIT_FAILURES.labels(source_type=source_type, failure_mode=failure_mode).inc(count)
 
     def record_circuit_state(self, name: str, state: str) -> None:
         """Record circuit breaker state.
@@ -211,10 +208,12 @@ class MetricsCollector:
         if not self.enabled:
             return
 
-        SCHEDULER_INFO.info({
-            "version": version,
-            "environment": environment,
-        })
+        SCHEDULER_INFO.info(
+            {
+                "version": version,
+                "environment": environment,
+            }
+        )
 
     def get_metrics(self) -> bytes:
         """Generate metrics in Prometheus format."""

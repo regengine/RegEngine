@@ -15,6 +15,7 @@ from uuid import uuid4
 @dataclass
 class RuleDefinition:
     """A versioned compliance rule."""
+
     rule_id: str
     rule_version: int
     title: str
@@ -46,6 +47,7 @@ class RuleEvaluationResult:
                           compliance purposes (#1354) — "skip" would be
                           fail-open, which is unsafe for a regulatory stamp.
     """
+
     evaluation_id: str = field(default_factory=lambda: str(uuid4()))
     rule_id: str = ""
     rule_version: int = 1
@@ -78,6 +80,7 @@ class EvaluationSummary:
         fail-open bug: tenants with empty rule tables received a green
         compliance stamp. See #1347.
     """
+
     event_id: str = ""
     total_rules: int = 0
     passed: int = 0

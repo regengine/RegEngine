@@ -12,9 +12,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app import exception_router
-
+from app.authz import IngestionPrincipal, get_ingestion_principal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,6 +86,7 @@ def client(mock_svc):
 # List exceptions
 # ---------------------------------------------------------------------------
 
+
 def test_list_exceptions_returns_cases(client, mock_svc):
     mock_svc.list_exceptions.return_value = [
         {"case_id": "exc-1", "severity": "critical", "status": "open"},
@@ -126,6 +126,7 @@ def test_list_exceptions_passes_filters(client, mock_svc):
 # Get single exception
 # ---------------------------------------------------------------------------
 
+
 def test_get_exception_found(client, mock_svc):
     mock_svc.get_exception.return_value = {"case_id": "exc-1", "severity": "critical"}
     resp = client.get("/api/v1/exceptions/exc-1")
@@ -144,6 +145,7 @@ def test_get_exception_not_found(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Create exception
 # ---------------------------------------------------------------------------
+
 
 def test_create_exception(client, mock_svc):
     mock_svc.create_exception.return_value = "exc-new-1"
@@ -169,6 +171,7 @@ def test_create_exception(client, mock_svc):
 # Assign owner
 # ---------------------------------------------------------------------------
 
+
 def test_assign_owner(client, mock_svc):
     resp = client.patch(
         "/api/v1/exceptions/exc-1/assign",
@@ -186,6 +189,7 @@ def test_assign_owner(client, mock_svc):
 # Resolve exception
 # ---------------------------------------------------------------------------
 
+
 def test_resolve_exception(client, mock_svc):
     resp = client.patch(
         "/api/v1/exceptions/exc-1/resolve",
@@ -197,13 +201,17 @@ def test_resolve_exception(client, mock_svc):
     assert resp.status_code == 200
     assert resp.json()["status"] == "resolved"
     mock_svc.resolve_exception.assert_called_once_with(
-        TENANT, "exc-1", "Data corrected", "user-42",
+        TENANT,
+        "exc-1",
+        "Data corrected",
+        "user-42",
     )
 
 
 # ---------------------------------------------------------------------------
 # Waive exception
 # ---------------------------------------------------------------------------
+
 
 def test_waive_exception(client, mock_svc):
     resp = client.patch(
@@ -216,13 +224,17 @@ def test_waive_exception(client, mock_svc):
     assert resp.status_code == 200
     assert resp.json()["status"] == "waived"
     mock_svc.waive_exception.assert_called_once_with(
-        TENANT, "exc-1", "Low-risk supplier", "admin-1",
+        TENANT,
+        "exc-1",
+        "Low-risk supplier",
+        "admin-1",
     )
 
 
 # ---------------------------------------------------------------------------
 # Blocking count
 # ---------------------------------------------------------------------------
+
 
 def test_blocking_count(client, mock_svc):
     mock_svc.get_unresolved_blocking_count.return_value = 3
@@ -236,6 +248,7 @@ def test_blocking_count(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Comments
 # ---------------------------------------------------------------------------
+
 
 def test_list_comments(client, mock_svc):
     mock_svc.list_comments.return_value = [
@@ -265,6 +278,7 @@ def test_add_comment(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Auth & tenant isolation
 # ---------------------------------------------------------------------------
+
 
 def test_read_only_scope_blocks_write(monkeypatch):
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))

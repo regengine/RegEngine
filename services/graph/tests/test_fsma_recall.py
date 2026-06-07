@@ -389,9 +389,7 @@ class TestMockRecallEngine:
         )
         # Don't execute drill2, leave as pending
 
-        completed = self.engine.get_drill_history(
-            "tenant_1", status_filter=RecallStatus.COMPLETED
-        )
+        completed = self.engine.get_drill_history("tenant_1", status_filter=RecallStatus.COMPLETED)
 
         assert len(completed) == 1
         assert completed[0].status == RecallStatus.COMPLETED

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import structlog
@@ -59,6 +59,7 @@ router = APIRouter(prefix="/api/v1/sandbox", tags=["Sandbox"])
 # Endpoint
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/evaluate",
     response_model=SandboxResponse,
@@ -95,7 +96,9 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"CSV parsing error: {str(e)}")
         if not raw_events:
-            raise HTTPException(status_code=400, detail="No valid events found in CSV. Ensure 'cte_type' column exists.")
+            raise HTTPException(
+                status_code=400, detail="No valid events found in CSV. Ensure 'cte_type' column exists."
+            )
 
         # Extract header-level normalizations tracked during parsing
         all_normalizations = raw_events[0].pop("__normalizations__", [])
@@ -144,13 +147,12 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         kde_errors = _validate_kdes(raw_event)
         total_kde_errors += len(kde_errors)
         for error in kde_errors:
-            all_blocking_reasons.append(
-                f"Event {i+1} ({raw_event.get('cte_type', '?')}): {error}"
-            )
+            all_blocking_reasons.append(f"Event {i + 1} ({raw_event.get('cte_type', '?')}): {error}")
 
         # Step 2: Stateless per-event rules evaluation
         summary = _evaluate_event_stateless(
-            canonical, include_custom=payload.include_custom_rules,
+            canonical,
+            include_custom=payload.include_custom_rules,
         )
 
         # Step 3: Merge relational results for this event
@@ -177,17 +179,19 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         for r in summary.results:
             if r.result == "fail" and r.severity == "critical":
                 reason = r.why_failed or r.rule_title
-                blocking.append(RuleResultResponse(
-                    rule_title=r.rule_title,
-                    severity=r.severity,
-                    result=r.result,
-                    why_failed=r.why_failed,
-                    citation=r.citation_reference,
-                    remediation=r.remediation_suggestion,
-                    category=r.category,
-                    evidence=r.evidence_fields_inspected or None,
-                ))
-                all_blocking_reasons.append(f"Event {i+1} ({raw_event.get('cte_type', '?')}): {reason}")
+                blocking.append(
+                    RuleResultResponse(
+                        rule_title=r.rule_title,
+                        severity=r.severity,
+                        result=r.result,
+                        why_failed=r.why_failed,
+                        citation=r.citation_reference,
+                        remediation=r.remediation_suggestion,
+                        category=r.category,
+                        evidence=r.evidence_fields_inspected or None,
+                    )
+                )
+                all_blocking_reasons.append(f"Event {i + 1} ({raw_event.get('cte_type', '?')}): {reason}")
 
         # Inject duplicate lot warnings into kde_errors
         if i in dup_warnings_by_index:
@@ -198,32 +202,34 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         if is_compliant:
             compliant_count += 1
 
-        event_results.append(EventEvaluationResponse(
-            event_index=i,
-            cte_type=raw_event.get("cte_type", "unknown"),
-            traceability_lot_code=raw_event.get("traceability_lot_code", ""),
-            product_description=raw_event.get("product_description", ""),
-            kde_errors=kde_errors,
-            rules_evaluated=summary.total_rules,
-            rules_passed=summary.passed,
-            rules_failed=summary.failed,
-            rules_warned=summary.warned,
-            compliant=is_compliant,
-            blocking_defects=blocking,
-            all_results=[
-                RuleResultResponse(
-                    rule_title=r.rule_title,
-                    severity=r.severity,
-                    result=r.result,
-                    why_failed=r.why_failed,
-                    citation=r.citation_reference,
-                    remediation=r.remediation_suggestion,
-                    category=r.category,
-                    evidence=r.evidence_fields_inspected or None,
-                )
-                for r in summary.results
-            ],
-        ))
+        event_results.append(
+            EventEvaluationResponse(
+                event_index=i,
+                cte_type=raw_event.get("cte_type", "unknown"),
+                traceability_lot_code=raw_event.get("traceability_lot_code", ""),
+                product_description=raw_event.get("product_description", ""),
+                kde_errors=kde_errors,
+                rules_evaluated=summary.total_rules,
+                rules_passed=summary.passed,
+                rules_failed=summary.failed,
+                rules_warned=summary.warned,
+                compliant=is_compliant,
+                blocking_defects=blocking,
+                all_results=[
+                    RuleResultResponse(
+                        rule_title=r.rule_title,
+                        severity=r.severity,
+                        result=r.result,
+                        why_failed=r.why_failed,
+                        citation=r.citation_reference,
+                        remediation=r.remediation_suggestion,
+                        category=r.category,
+                        evidence=r.evidence_fields_inspected or None,
+                    )
+                    for r in summary.results
+                ],
+            )
+        )
 
     # Deduplicate blocking reasons
     unique_blocking = list(dict.fromkeys(all_blocking_reasons))
@@ -241,9 +247,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         blocking_reasons=unique_blocking,
         duplicate_warnings=all_duplicate_warnings,
         entity_warnings=entity_warnings,
-        normalizations=[
-            NormalizationAction(**n) for n in all_normalizations
-        ],
+        normalizations=[NormalizationAction(**n) for n in all_normalizations],
         events=event_results,
     )
 
@@ -296,6 +300,7 @@ async def sandbox_share(payload: SandboxShareRequest, request: Request) -> Sandb
 
     try:
         from shared.database import get_db
+
         with get_db() as db:
             db.execute(
                 text(
@@ -334,6 +339,7 @@ async def sandbox_share_get(share_id: str) -> SandboxResponse:
 
     try:
         from shared.database import get_db
+
         with get_db() as db:
             row = db.execute(
                 text(
@@ -352,5 +358,6 @@ async def sandbox_share_get(share_id: str) -> SandboxResponse:
         raise HTTPException(status_code=404, detail="Shared result not found or expired.")
 
     import json
+
     result_data = row[0] if isinstance(row[0], dict) else json.loads(row[0])
     return SandboxResponse(**result_data)

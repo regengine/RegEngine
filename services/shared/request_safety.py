@@ -32,6 +32,7 @@ _EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
 # API-01: Request body size limiter
 # ---------------------------------------------------------------------------
 
+
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     """Reject requests whose Content-Length exceeds *max_bytes*.
 
@@ -55,7 +56,10 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 return JSONResponse(
                     status_code=400,
-                    content={"error": "invalid_content_length", "detail": "Content-Length header is not a valid integer."},
+                    content={
+                        "error": "invalid_content_length",
+                        "detail": "Content-Length header is not a valid integer.",
+                    },
                 )
             if length > self.max_bytes:
                 mb = self.max_bytes / (1024 * 1024)
@@ -78,6 +82,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # API-02: Global request timeout
 # ---------------------------------------------------------------------------
+
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
     """Cancel request processing after *timeout_seconds*.

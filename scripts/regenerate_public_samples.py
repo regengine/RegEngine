@@ -89,8 +89,8 @@ def _try_import_production_helpers():
         # Import order matters: fda_export_service pulls in
         # ``shared.fda_export`` and ``app.shared.csv_safety`` which both
         # need to be on sys.path before this line.
-        from app.fda_export_service import _generate_csv  # type: ignore
         from app.epcis_export import _CTE_TO_BIZSTEP  # type: ignore
+        from app.fda_export_service import _generate_csv  # type: ignore
         from shared.merkle_tree import compute_merkle_root  # type: ignore
     except Exception as exc:  # noqa: BLE001 — best-effort import
         logger.warning(
@@ -240,9 +240,7 @@ def _write_fda_csv(events: list[dict], generate_csv) -> Path:
 def _write_epcis(events: list[dict], cte_to_bizstep: dict) -> Path:
     event_list = []
     for event in events:
-        bizstep = cte_to_bizstep.get(
-            event["event_type"], "urn:epcglobal:cbv:bizstep:observing"
-        )
+        bizstep = cte_to_bizstep.get(event["event_type"], "urn:epcglobal:cbv:bizstep:observing")
         tlc = event.get("traceability_lot_code") or "UNKNOWN"
         gln = event.get("location_gln") or "0000000000000"
         event_list.append(
@@ -284,8 +282,7 @@ def _write_epcis(events: list[dict], cte_to_bizstep: dict) -> Path:
             "eventsCount": len(event_list),
             "dataSource": "synthetic_sample",
             "syntheticDisclaimer": (
-                "This document is generated from synthetic CTE data in "
-                "sample_data/. See demo_exports/SYNTHETIC.md."
+                "This document is generated from synthetic CTE data in sample_data/. See demo_exports/SYNTHETIC.md."
             ),
         },
     }
@@ -319,8 +316,7 @@ def _write_audit_bundle(events: list[dict], compute_merkle_root) -> Path:
             for idx, e in enumerate(events)
         ],
         "syntheticDisclaimer": (
-            "Audit bundle generated from synthetic CTE data in sample_data/. "
-            "See demo_exports/SYNTHETIC.md."
+            "Audit bundle generated from synthetic CTE data in sample_data/. See demo_exports/SYNTHETIC.md."
         ),
     }
 
@@ -343,8 +339,7 @@ def main() -> int:
         # checked-in artifacts untouched. CI's diff check will still
         # pass because we didn't write anything.
         logger.warning(
-            "regenerate_public_samples: production helpers not importable; "
-            "exiting 0 without rewriting demo_exports/."
+            "regenerate_public_samples: production helpers not importable; exiting 0 without rewriting demo_exports/."
         )
         return 0
 

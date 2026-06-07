@@ -23,6 +23,7 @@ field on top of it. See ``services/graph/scripts/fsma_sync_worker.py``
 for the first consumer that actually enforces the ``KNOWN_VERSIONS``
 guard end-to-end.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -53,7 +54,6 @@ from shared.canonical_event import (  # noqa: E402
     parse_traceability_event,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -83,6 +83,7 @@ def _minimal_event_kwargs() -> dict:
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaVersionDefault:
     """Construction-time behaviour of the ``schema_version`` field."""
@@ -120,6 +121,7 @@ class TestSchemaVersionDefault:
 # Legacy / backward compat
 # ---------------------------------------------------------------------------
 
+
 class TestLegacyStringCoercion:
     """Pre-#1197 rows stored ``schema_version`` as a semver string
     (``"1.0.0"``). Round-tripping through the updated Pydantic model
@@ -152,6 +154,7 @@ class TestLegacyStringCoercion:
 # ---------------------------------------------------------------------------
 # parse_traceability_event dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestParseTraceabilityEvent:
     """Wire-format dispatch helper — the entry point consumers should
@@ -245,6 +248,7 @@ class TestParseTraceabilityEvent:
 # ---------------------------------------------------------------------------
 # Serialization round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaVersionSerialization:
     """The field must survive ``model_dump`` / ``model_dump_json``

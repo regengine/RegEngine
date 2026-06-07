@@ -23,15 +23,17 @@ def _build_scheduler_service_without_init():
     """Construct SchedulerService with heavy dependencies stubbed."""
     import main as scheduler_main
 
-    with patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()), \
-         patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()), \
-         patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()), \
-         patch.object(scheduler_main, "StateManager", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()):
+    with (
+        patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
+        patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
+        patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
+        patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+    ):
         svc = scheduler_main.SchedulerService()
     return svc
 
@@ -44,10 +46,7 @@ class TestNightlyFsmaSyncRegistered:
         svc.scheduler = MagicMock()
         svc.schedule_jobs()
 
-        scheduled_ids = [
-            call.kwargs.get("id")
-            for call in svc.scheduler.add_job.call_args_list
-        ]
+        scheduled_ids = [call.kwargs.get("id") for call in svc.scheduler.add_job.call_args_list]
         assert "fsma_nightly_sync" in scheduled_ids, (
             "FSMA nightly sync must be registered on the running "
             "BlockingScheduler — see #1135. Scheduled: %s" % scheduled_ids
@@ -59,6 +58,7 @@ class TestNightlyFsmaSyncRegistered:
         svc.schedule_jobs()
 
         from apscheduler.triggers.cron import CronTrigger
+
         for call in svc.scheduler.add_job.call_args_list:
             if call.kwargs.get("id") == "fsma_nightly_sync":
                 trigger = call.kwargs.get("trigger")

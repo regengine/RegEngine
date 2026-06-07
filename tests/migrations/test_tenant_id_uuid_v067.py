@@ -22,6 +22,7 @@ Skips cleanly if Docker / testcontainers are unavailable.
 Run via:
     pytest tests/migrations/test_tenant_id_uuid_v067.py -v
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -36,19 +37,13 @@ from docker.errors import DockerException  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_FILE = (
-    REPO_ROOT / "alembic" / "versions"
-    / "20260424_e9f0a1b2c3d4_v067_tenant_id_uuid_standardization.py"
-)
+MIGRATION_FILE = REPO_ROOT / "alembic" / "versions" / "20260424_e9f0a1b2c3d4_v067_tenant_id_uuid_standardization.py"
 
 
 def _load_v067_module():
     """Import the v067 migration module without running Alembic."""
-    spec = importlib.util.spec_from_file_location(
-        "v067_tenant_id_uuid_standardization", MIGRATION_FILE
-    )
+    spec = importlib.util.spec_from_file_location("v067_tenant_id_uuid_standardization", MIGRATION_FILE)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -84,7 +79,8 @@ def _create_pre_v067_tables(engine):
     with engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS fsma"))
         # fsma_audit_trail (v049)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DROP TABLE IF EXISTS fsma.fsma_audit_trail CASCADE;
             CREATE TABLE fsma.fsma_audit_trail (
                 id BIGSERIAL PRIMARY KEY,
@@ -92,9 +88,11 @@ def _create_pre_v067_tables(engine):
                 event_id TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
-        """))
+        """)
+        )
         # task_queue (v050 / v063)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DROP TABLE IF EXISTS fsma.task_queue CASCADE;
             CREATE TABLE fsma.task_queue (
                 id BIGSERIAL PRIMARY KEY,
@@ -102,9 +100,11 @@ def _create_pre_v067_tables(engine):
                 task_type TEXT,
                 status TEXT
             );
-        """))
+        """)
+        )
         # transformation_links (v057)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DROP TABLE IF EXISTS fsma.transformation_links CASCADE;
             CREATE TABLE fsma.transformation_links (
                 id BIGSERIAL PRIMARY KEY,
@@ -112,16 +112,19 @@ def _create_pre_v067_tables(engine):
                 input_tlc TEXT,
                 output_tlc TEXT
             );
-        """))
+        """)
+        )
         # dlq_replay (v060) — VARCHAR(36)
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DROP TABLE IF EXISTS fsma.dlq_replay CASCADE;
             CREATE TABLE fsma.dlq_replay (
                 id BIGSERIAL PRIMARY KEY,
                 tenant_id VARCHAR(36),
                 source VARCHAR(50)
             );
-        """))
+        """)
+        )
 
 
 def _apply_migration(engine):
@@ -134,42 +137,42 @@ def _apply_migration(engine):
 
 def _column_type(engine, schema: str, table: str, column: str) -> str:
     with engine.begin() as conn:
-        return conn.execute(text("""
+        return conn.execute(
+            text("""
             SELECT data_type FROM information_schema.columns
             WHERE table_schema = :schema AND table_name = :table
               AND column_name = :column
-        """), {"schema": schema, "table": table, "column": column}).scalar_one()
+        """),
+            {"schema": schema, "table": table, "column": column},
+        ).scalar_one()
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestUpgrade:
 
+class TestUpgrade:
     def test_all_four_columns_become_uuid(self, pg_engine):
         _create_pre_v067_tables(pg_engine)
         # Pre-state: text or character varying.
         for schema, table, column in _TARGET_COLUMNS:
             t = _column_type(pg_engine, schema, table, column)
             assert t in ("text", "character varying"), (
-                f"setup invariant: {schema}.{table}.{column} should start as "
-                f"text/varchar but is {t}"
+                f"setup invariant: {schema}.{table}.{column} should start as text/varchar but is {t}"
             )
         _apply_migration(pg_engine)
         # Post-state: uuid for all four.
         for schema, table, column in _TARGET_COLUMNS:
             t = _column_type(pg_engine, schema, table, column)
-            assert t == "uuid", (
-                f"v067 should have converted {schema}.{table}.{column} to uuid; "
-                f"got {t}"
-            )
+            assert t == "uuid", f"v067 should have converted {schema}.{table}.{column} to uuid; got {t}"
 
     def test_existing_uuid_data_survives_cast(self, pg_engine):
         _create_pre_v067_tables(pg_engine)
         # Insert a valid-UUID-shaped string into each table.
         with pg_engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO fsma.fsma_audit_trail (tenant_id, event_id)
                 VALUES ('11111111-1111-1111-1111-111111111111', 'evt-1');
                 INSERT INTO fsma.task_queue (tenant_id, task_type, status)
@@ -178,11 +181,14 @@ class TestUpgrade:
                 VALUES ('33333333-3333-3333-3333-333333333333', 'in', 'out');
                 INSERT INTO fsma.dlq_replay (tenant_id, source)
                 VALUES ('44444444-4444-4444-4444-444444444444', 'webhook');
-            """))
+            """)
+            )
         _apply_migration(pg_engine)
         # All rows survived; tenant_id is now UUID-typed.
         with pg_engine.begin() as conn:
-            tids = conn.execute(text("""
+            tids = (
+                conn.execute(
+                    text("""
                 SELECT tenant_id::text FROM fsma.fsma_audit_trail
                 UNION ALL
                 SELECT tenant_id::text FROM fsma.task_queue
@@ -191,7 +197,11 @@ class TestUpgrade:
                 UNION ALL
                 SELECT tenant_id::text FROM fsma.dlq_replay
                 ORDER BY 1
-            """)).scalars().all()
+            """)
+                )
+                .scalars()
+                .all()
+            )
             assert tids == [
                 "11111111-1111-1111-1111-111111111111",
                 "22222222-2222-2222-2222-222222222222",
@@ -201,7 +211,6 @@ class TestUpgrade:
 
 
 class TestIdempotent:
-
     def test_re_apply_is_noop(self, pg_engine):
         """Running the migration twice on a DB where the tables already
         have ``uuid`` columns must succeed (the ``information_schema``
@@ -216,7 +225,6 @@ class TestIdempotent:
 
 
 class TestTableMissingGuard:
-
     def test_missing_table_does_not_error(self, pg_engine):
         """If a target table doesn't exist (fresh DB where the creation
         migration hasn't run yet), the guard short-circuits and the
@@ -227,19 +235,19 @@ class TestTableMissingGuard:
             conn.execute(text("CREATE SCHEMA fsma"))
             # Create only ONE of the four — confirm v067 still runs and
             # converts the present table while skipping the absent ones.
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE fsma.fsma_audit_trail (
                     id BIGSERIAL PRIMARY KEY,
                     tenant_id TEXT
                 );
-            """))
+            """)
+            )
         _apply_migration(pg_engine)
         # The one that exists got converted.
         assert _column_type(pg_engine, "fsma", "fsma_audit_trail", "tenant_id") == "uuid"
         # The other three remain absent (no error raised).
         with pg_engine.begin() as conn:
             for schema, table, _ in _TARGET_COLUMNS[1:]:
-                rc = conn.execute(text(
-                    "SELECT to_regclass(:fq)"
-                ), {"fq": f"{schema}.{table}"}).scalar()
+                rc = conn.execute(text("SELECT to_regclass(:fq)"), {"fq": f"{schema}.{table}"}).scalar()
                 assert rc is None, f"{schema}.{table} should not exist"

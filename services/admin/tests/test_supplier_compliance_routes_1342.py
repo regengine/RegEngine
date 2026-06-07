@@ -12,12 +12,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -26,6 +20,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -49,12 +48,12 @@ def db_session() -> Session:
     ]
     for t in tables:
         t.create(bind=engine)
-    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False,
-                      expire_on_commit=False, future=True)
+    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=TEST_USER_ID, email="u@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
+    session.add(
+        UserModel(id=TEST_USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False)
+    )
     session.commit()
     try:
         yield session
@@ -75,8 +74,7 @@ def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
 
     app.dependency_overrides[comp_routes.get_session] = lambda: (yield db_session)
     app.dependency_overrides[comp_routes.get_current_user] = lambda: current_user
-    monkeypatch.setattr(comp_routes.TenantContext, "get_tenant_context",
-                        lambda _db: tenant)
+    monkeypatch.setattr(comp_routes.TenantContext, "get_tenant_context", lambda _db: tenant)
     return TestClient(app)
 
 
@@ -96,8 +94,8 @@ def client_no_tenant(db_session, monkeypatch):
 # GET /compliance-score — lines 46, 52-53
 # ---------------------------------------------------------------------------
 
-class TestComplianceScore:
 
+class TestComplianceScore:
     def test_no_tenant_returns_400(self, client_no_tenant):
         """Line 46: no tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/compliance-score")
@@ -114,8 +112,8 @@ class TestComplianceScore:
 # GET /gaps — lines 80, 86-87
 # ---------------------------------------------------------------------------
 
-class TestComplianceGaps:
 
+class TestComplianceGaps:
     def test_no_tenant_returns_400(self, client_no_tenant):
         """Line 80: no tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/gaps")
@@ -132,8 +130,8 @@ class TestComplianceGaps:
 # GET /export/fda-records/preview — lines 130, 136-137
 # ---------------------------------------------------------------------------
 
-class TestFDAExportPreview:
 
+class TestFDAExportPreview:
     def test_no_tenant_returns_400(self, client_no_tenant):
         """Line 130: no tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/export/fda-records/preview")
@@ -150,8 +148,8 @@ class TestFDAExportPreview:
 # GET /export/fda-records — lines 171, 177-178
 # ---------------------------------------------------------------------------
 
-class TestFDAExportCSV:
 
+class TestFDAExportCSV:
     def test_no_tenant_returns_400(self, client_no_tenant):
         """Line 171: no tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/export/fda-records")

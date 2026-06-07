@@ -25,6 +25,7 @@ Revision ID: d8e9f0a1b2c3
 Revises: c7d8e9f0a1b2
 Create Date: 2026-04-24
 """
+
 from pathlib import Path
 from typing import Sequence, Union
 

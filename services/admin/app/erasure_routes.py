@@ -20,13 +20,13 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from shared.database import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
 from .dependencies import get_current_user
 from .graph_outbox import enqueue_graph_write
 from .models import TenantContext
 from .sqlalchemy_models import UserModel
-from shared.database import get_db
 
 logger = structlog.get_logger("erasure")
 
@@ -86,9 +86,7 @@ async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
 
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "")
-        async with AsyncGraphDatabase.driver(
-            neo4j_uri, auth=(neo4j_user, neo4j_password)
-        ) as neo4j_driver:
+        async with AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as neo4j_driver:
             async with neo4j_driver.session() as session:
                 await session.run(
                     _CYPHER_DELETE_USER_GRAPH_DATA,
@@ -114,6 +112,7 @@ router = APIRouter(prefix="/v1/account", tags=["Account"])
 
 class ErasureRequest(BaseModel):
     """Request body for GDPR right-to-erasure."""
+
     reason: Optional[str] = Field(
         default=None,
         description="Optional reason for the deletion request",
@@ -126,6 +125,7 @@ class ErasureRequest(BaseModel):
 
 class ErasureResponse(BaseModel):
     """Response from erasure request."""
+
     status: str
     message: str
     soft_deleted: bool = False
@@ -168,12 +168,12 @@ async def request_erasure(
         raise HTTPException(status_code=401, detail="Could not identify user")
 
     try:
+        from shared.audit_logging import AuditActor
         from shared.data_retention import (
             DataRetentionManager,
             DeletionRequest,
             RetentionPolicy,
         )
-        from shared.audit_logging import AuditActor
         from shared.pii import mask_email
 
         with get_db() as db:
@@ -242,13 +242,11 @@ async def request_erasure(
             anonymized_count = 0
             if user_uuid is not None and tenant_uuid is not None:
                 try:
-                    anonymized_count, _anonymize_errors = (
-                        await manager.anonymize_audit_logs_for_user(
-                            db=db,
-                            user_id=user_uuid,
-                            tenant_id=tenant_uuid,
-                            actor=actor,
-                        )
+                    anonymized_count, _anonymize_errors = await manager.anonymize_audit_logs_for_user(
+                        db=db,
+                        user_id=user_uuid,
+                        tenant_id=tenant_uuid,
+                        actor=actor,
                     )
                 except Exception as anon_err:  # noqa: BLE001
                     # Do not fail the whole erasure if anonymization

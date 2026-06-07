@@ -7,10 +7,10 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-
 # ---------------------------------------------------------------------------
 # Canonical normalization for hashing
 # ---------------------------------------------------------------------------
+
 
 def _normalize_for_hashing(obj: Any) -> Any:
     """
@@ -61,6 +61,7 @@ def _normalize_for_hashing(obj: Any) -> Any:
 # Hashing Utilities
 # ---------------------------------------------------------------------------
 
+
 def compute_event_hash(
     event_id: str,
     event_type: str,
@@ -92,21 +93,20 @@ def compute_event_hash(
     # KDE values that may contain free-text descriptions are excluded from the
     # canonical string to keep the hash stable across reformatting (#1323).
     # Only keys and non-description scalar values participate.
-    stable_kdes = {
-        k: v for k, v in kdes.items()
-        if k not in ("product_description", "description", "item_description")
-    }
-    canonical = "|".join([
-        event_id,
-        event_type,
-        tlc,
-        # product_description excluded — see #1323
-        str(quantity),
-        unit_of_measure,
-        location_gln or "",
-        timestamp,
-        json.dumps(_normalize_for_hashing(stable_kdes), sort_keys=True),
-    ])
+    stable_kdes = {k: v for k, v in kdes.items() if k not in ("product_description", "description", "item_description")}
+    canonical = "|".join(
+        [
+            event_id,
+            event_type,
+            tlc,
+            # product_description excluded — see #1323
+            str(quantity),
+            unit_of_measure,
+            location_gln or "",
+            timestamp,
+            json.dumps(_normalize_for_hashing(stable_kdes), sort_keys=True),
+        ]
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -153,15 +153,17 @@ def compute_idempotency_key(
     this is an explicit type-dispatch rather than ``json.dumps(default=str)``.
     """
     canonical = json.dumps(
-        _normalize_for_hashing({
-            "event_type": event_type,
-            "tlc": tlc,
-            "timestamp": timestamp,
-            "source": source,
-            "location_gln": location_gln or "",
-            "location_name": location_name or "",
-            "kdes": kdes,
-        }),
+        _normalize_for_hashing(
+            {
+                "event_type": event_type,
+                "tlc": tlc,
+                "timestamp": timestamp,
+                "source": source,
+                "location_gln": location_gln or "",
+                "location_name": location_name or "",
+                "kdes": kdes,
+            }
+        ),
         sort_keys=True,
         separators=(",", ":"),
     )

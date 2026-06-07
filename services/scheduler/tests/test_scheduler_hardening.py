@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.models import (
     EnforcementItem,
     EnforcementSeverity,
@@ -46,15 +45,17 @@ def _build_scheduler_service_without_init():
     """
     import main as scheduler_main
 
-    with patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()), \
-         patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()), \
-         patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()), \
-         patch.object(scheduler_main, "StateManager", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()):
+    with (
+        patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
+        patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
+        patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
+        patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+    ):
         svc = scheduler_main.SchedulerService()
     return svc
 

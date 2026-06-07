@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
+
 import pytest
 import requests
 
@@ -44,6 +45,7 @@ POLL_TIMEOUT = 30  # seconds
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def wait_for_service(url: str, timeout: int = 10) -> bool:
     """Poll a service health endpoint until it responds."""
     deadline = time.time() + timeout
@@ -60,6 +62,7 @@ def wait_for_service(url: str, timeout: int = 10) -> bool:
 
 # ── Fixtures ─────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module", autouse=True)
 def check_services():
     """Ensure critical services are reachable before running tests."""
@@ -73,37 +76,38 @@ def check_services():
             unreachable.append(name)
 
     if unreachable:
-        pytest.skip(
-            f"Services not reachable (is Docker stack running?): {', '.join(unreachable)}"
-        )
+        pytest.skip(f"Services not reachable (is Docker stack running?): {', '.join(unreachable)}")
 
 
 # ── Test 1: Service Health ───────────────────────────────────────
 
+
 class TestServiceHealth:
     """Verify all services respond to /health."""
 
-    @pytest.mark.parametrize("service_name,url", [
-        ("ingestion", INGESTION_URL),
-        ("admin", ADMIN_URL),
-        ("nlp", NLP_URL),
-        ("graph", GRAPH_URL),
-        ("compliance", COMPLIANCE_URL),
-    ])
+    @pytest.mark.parametrize(
+        "service_name,url",
+        [
+            ("ingestion", INGESTION_URL),
+            ("admin", ADMIN_URL),
+            ("nlp", NLP_URL),
+            ("graph", GRAPH_URL),
+            ("compliance", COMPLIANCE_URL),
+        ],
+    )
     def test_health_endpoint(self, service_name: str, url: str):
         """Each service should return healthy status."""
         try:
             r = requests.get(f"{url}/health", timeout=5)
             assert r.status_code == 200, f"{service_name} returned {r.status_code}"
             data = r.json()
-            assert data.get("status") in ("healthy", "ok", "ready"), (
-                f"{service_name} unhealthy: {data}"
-            )
+            assert data.get("status") in ("healthy", "ok", "ready"), f"{service_name} unhealthy: {data}"
         except requests.ConnectionError:
             pytest.skip(f"{service_name} not reachable at {url}")
 
 
 # ── Test 2: Document Ingestion ───────────────────────────────────
+
 
 class TestIngestionFlow:
     """Test document ingestion via the API."""
@@ -130,14 +134,13 @@ class TestIngestionFlow:
                 timeout=10,
             )
             # Accept 200, 201, or 202 (queued)
-            assert r.status_code in (200, 201, 202), (
-                f"Ingestion failed: {r.status_code} — {r.text}"
-            )
+            assert r.status_code in (200, 201, 202), f"Ingestion failed: {r.status_code} — {r.text}"
         except requests.ConnectionError:
             pytest.skip("Ingestion service not reachable")
 
 
 # ── Test 3: Compliance Checklist ─────────────────────────────────
+
 
 class TestComplianceChecklist:
     """Test compliance checklist validation."""

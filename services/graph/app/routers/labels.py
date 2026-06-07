@@ -6,23 +6,22 @@ Merged v1.3 Security Fixes with v1.0 Operational Features.
 from __future__ import annotations
 
 import os
+import sys
 import urllib.parse
+import uuid
 from datetime import date, datetime
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Literal, Optional
 from urllib.parse import quote
-import uuid
-import sys
-from pathlib import Path
 
 # Add shared utilities (portable path resolution)
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from shared.middleware import get_current_tenant_id
-from shared.auth import require_api_key
-
 import structlog
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, validator
+from shared.auth import require_api_key
+from shared.middleware import get_current_tenant_id
 
 from ..exporters import zpl_safe
 from ..models.fsma_nodes import CTEType
@@ -38,10 +37,10 @@ def _reject_zpl_unsafe(value: str | None, *, field: str) -> str | None:
         return None
     if any(ch in value for ch in ("^", "~")) or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
         raise ValueError(
-            f"{field} contains characters that are not permitted in label "
-            "input (ZPL command prefix or control byte)"
+            f"{field} contains characters that are not permitted in label input (ZPL command prefix or control byte)"
         )
     return value
+
 
 # ✅ KEEP: Versioning & Logging
 router = APIRouter(tags=["Traceability Labels"])
@@ -134,16 +133,15 @@ def generate_sscc(gln: str, serial: int) -> str:
 
     return base + check_digit
 
+
 def generate_qr_payload(gtin: str, lot: str, serial: str, domain: Optional[str] = None) -> str:
     """Security Fix: Use GS1 Digital Link Path Syntax (No Query Params)."""
     base_domain = domain or TRACEABILITY_DOMAIN
-    safe_lot = urllib.parse.quote(lot, safe='')
+    safe_lot = urllib.parse.quote(lot, safe="")
     return f"{base_domain}/01/{gtin}/10/{safe_lot}/21/{serial}"
 
 
-def generate_zpl_code(
-    desc: str, plu: Optional[str], qr: str, serial: str, gtin: str
-) -> str:
+def generate_zpl_code(desc: str, plu: Optional[str], qr: str, serial: str, gtin: str) -> str:
     """Build a ZPL command stream for one label.
 
     RE-SEC-004: `desc` and `plu` are tenant-controlled strings. ``zpl_safe``
@@ -181,19 +179,18 @@ def health_check():
 async def initialize_label_batch(
     request: LabelBatchInitRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
-    api_key: str = Depends(require_api_key)
+    api_key: str = Depends(require_api_key),
 ):
     # Get tenant specific database
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     neo4j = Neo4jClient(database=db_name)
-    
+
     tlc = f"{request.product.gtin}-{request.traceability.lot_number}"
-    
+
     # Store tenant_id as string for Cypher
     tenant_id_str = str(tenant_id)
 
     logger.info("batch_init_start", tenant_id=tenant_id_str, tlc=tlc)
-
 
     # ✅ ATOMICITY FIX: Single Transaction for Create + Reserve
     cypher = """
@@ -268,9 +265,7 @@ async def initialize_label_batch(
     labels = []
     for sn in range(start_serial, end_serial + 1):
         sscc = generate_sscc(request.packer_gln, sn)
-        qr = generate_qr_payload(
-            request.product.gtin, request.traceability.lot_number, sscc
-        )
+        qr = generate_qr_payload(request.product.gtin, request.traceability.lot_number, sscc)
         zpl = generate_zpl_code(
             request.product.description,
             request.product.plu,

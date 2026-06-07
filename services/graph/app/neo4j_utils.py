@@ -123,7 +123,8 @@ class Neo4jClient:
         # Neo4j DDL does not support parameterized database names, so
         # regex validation is the primary defense against injection.
         import re
-        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{0,62}$', db_name):
+
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]{0,62}$", db_name):
             raise ValueError(f"Invalid database name: {db_name}")
         # Connect to system database to create new database
         async with self._driver.session(database="system") as session:

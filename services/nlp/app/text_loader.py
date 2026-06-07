@@ -67,9 +67,7 @@ def load_artifact(url_or_s3: str) -> str:
 
         declared = int(resp.headers.get("Content-Length") or 0)
         if declared > MAX_DOC_BYTES:
-            raise ValueError(
-                "E_DOC_TOO_LARGE: Content-Length exceeds cap"
-            )
+            raise ValueError("E_DOC_TOO_LARGE: Content-Length exceeds cap")
 
         ctype_full = resp.headers.get("Content-Type", "application/octet-stream")
         ctype = ctype_full.split(";")[0].strip().lower()
@@ -81,9 +79,7 @@ def load_artifact(url_or_s3: str) -> str:
         for chunk in resp.iter_bytes():
             total += len(chunk)
             if total > MAX_DOC_BYTES:
-                raise ValueError(
-                    "E_DOC_TOO_LARGE: streamed bytes exceed cap"
-                )
+                raise ValueError("E_DOC_TOO_LARGE: streamed bytes exceed cap")
             chunks.append(chunk)
         data = b"".join(chunks)
 

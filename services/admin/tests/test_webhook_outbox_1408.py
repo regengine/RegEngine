@@ -32,13 +32,9 @@ from typing import Tuple
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.metrics import (
-    HallucinationTracker,
     SIGNATURE_HEADER,
+    HallucinationTracker,
     WebhookTargetError,
     _validate_webhook_url,
 )
@@ -48,7 +44,9 @@ from app.webhook_outbox import (
     reconcile_webhook_outbox,
     sign_payload,
 )
-
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # ---------------------------------------------------------------------------
 # Fixtures — SQLite in-memory webhook_outbox mirroring the migration
@@ -63,7 +61,8 @@ def session() -> Session:
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE webhook_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NOT NULL,
@@ -80,7 +79,8 @@ def session() -> Session:
                 delivered_at    TEXT NULL,
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """))
+        """)
+        )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     s = SessionLocal()
     yield s
@@ -188,6 +188,7 @@ def test_sign_payload_requires_secret():
 def _secret_lookup_for(mapping):
     def lookup(tenant_id: str) -> Tuple[str, str]:
         return mapping.get(tenant_id, (None, None))
+
     return lookup
 
 
@@ -228,9 +229,7 @@ def test_drainer_delivers_and_signs_payload(session):
     poster = _Poster(responses=[200])
     drainer = WebhookOutboxDrainer(
         session,
-        secret_lookup=_secret_lookup_for(
-            {tenant: ("https://tenant-a.example.test/hook", secret)}
-        ),
+        secret_lookup=_secret_lookup_for({tenant: ("https://tenant-a.example.test/hook", secret)}),
         http_poster=poster,
     )
 
@@ -284,10 +283,12 @@ def test_drainer_routes_per_tenant_url(session):
     poster = _Poster(responses=[200, 200])
     drainer = WebhookOutboxDrainer(
         session,
-        secret_lookup=_secret_lookup_for({
-            tenant_a: ("https://a.example.test/hook", "secret_a"),
-            tenant_b: ("https://b.example.test/hook", "secret_b"),
-        }),
+        secret_lookup=_secret_lookup_for(
+            {
+                tenant_a: ("https://a.example.test/hook", "secret_a"),
+                tenant_b: ("https://b.example.test/hook", "secret_b"),
+            }
+        ),
         http_poster=poster,
     )
     drainer.drain_once(batch_size=10)
@@ -441,9 +442,12 @@ def test_drainer_marks_failed_after_max_attempts(session):
     drainer.drain_once(batch_size=10)
 
     # Reset next_attempt_at so we claim it again without sleeping.
-    session.execute(text("UPDATE webhook_outbox SET next_attempt_at = :now"), {
-        "now": datetime.now(timezone.utc).isoformat(),
-    })
+    session.execute(
+        text("UPDATE webhook_outbox SET next_attempt_at = :now"),
+        {
+            "now": datetime.now(timezone.utc).isoformat(),
+        },
+    )
     session.commit()
 
     # Second attempt fails transiently -> attempts=2 which hits max -> failed.
@@ -515,9 +519,12 @@ def test_drainer_retries_and_succeeds_on_second_attempt(session):
     assert s1["rescheduled"] == 1
 
     # Skip the backoff by resetting next_attempt_at.
-    session.execute(text("UPDATE webhook_outbox SET next_attempt_at = :now"), {
-        "now": datetime.now(timezone.utc).isoformat(),
-    })
+    session.execute(
+        text("UPDATE webhook_outbox SET next_attempt_at = :now"),
+        {
+            "now": datetime.now(timezone.utc).isoformat(),
+        },
+    )
     session.commit()
 
     # Attempt 2: 200 → delivered.
@@ -544,14 +551,14 @@ def test_drainer_retries_and_succeeds_on_second_attempt(session):
 @pytest.mark.parametrize(
     "url",
     [
-        "http://example.test/",                  # non-https
-        "https://10.0.0.1/",                     # RFC1918
-        "https://127.0.0.1/",                    # loopback
-        "https://localhost/",                    # loopback name
-        "https://169.254.169.254/metadata",      # AWS IMDS literal
-        "https://metadata.google.internal/",     # GCP IMDS name
-        "https://192.168.1.1/",                  # RFC1918
-        "https://[::1]/",                        # IPv6 loopback
+        "http://example.test/",  # non-https
+        "https://10.0.0.1/",  # RFC1918
+        "https://127.0.0.1/",  # loopback
+        "https://localhost/",  # loopback name
+        "https://169.254.169.254/metadata",  # AWS IMDS literal
+        "https://metadata.google.internal/",  # GCP IMDS name
+        "https://192.168.1.1/",  # RFC1918
+        "https://[::1]/",  # IPv6 loopback
     ],
 )
 def test_ssrf_guard_rejects_unsafe(url):
@@ -657,7 +664,11 @@ def _bypass_dns_resolution(monkeypatch):
         # the ipaddress short-circuit in _validate_webhook_url has
         # already run; this stub is only reached for DNS names. We
         # hand back a public IP so non-blocklisted hosts resolve.
-        if host in {"example.com", "www.example.com"} or host.endswith(".example.com") or host.endswith(".example.test"):
+        if (
+            host in {"example.com", "www.example.com"}
+            or host.endswith(".example.com")
+            or host.endswith(".example.test")
+        ):
             return [(2, 1, 6, "", ("93.184.216.34", 0))]
         return real(host, *args, **kwargs)
 
@@ -698,10 +709,12 @@ def test_notify_webhook_refuses_without_secret(monkeypatch):
 
     tenant_uuid = uuid4()
     tenants = {
-        str(tenant_uuid): _FakeTenant({
-            "review_webhook_url": "https://ok.example.com/hook",
-            # No review_webhook_secret.
-        })
+        str(tenant_uuid): _FakeTenant(
+            {
+                "review_webhook_url": "https://ok.example.com/hook",
+                # No review_webhook_secret.
+            }
+        )
     }
 
     dispatched = []
@@ -722,10 +735,12 @@ def test_notify_webhook_rejects_private_ip(monkeypatch):
 
     tenant_uuid = uuid4()
     tenants = {
-        str(tenant_uuid): _FakeTenant({
-            "review_webhook_url": "https://10.0.0.5/hook",
-            "review_webhook_secret": "s",
-        })
+        str(tenant_uuid): _FakeTenant(
+            {
+                "review_webhook_url": "https://10.0.0.5/hook",
+                "review_webhook_secret": "s",
+            }
+        )
     }
 
     dispatched = []
@@ -746,10 +761,12 @@ def test_notify_webhook_signs_with_tenant_secret(monkeypatch):
 
     tenant_uuid = uuid4()
     tenants = {
-        str(tenant_uuid): _FakeTenant({
-            "review_webhook_url": "https://buyer-a.example.com/hook",
-            "review_webhook_secret": "whsec_buyer_a",
-        })
+        str(tenant_uuid): _FakeTenant(
+            {
+                "review_webhook_url": "https://buyer-a.example.com/hook",
+                "review_webhook_secret": "whsec_buyer_a",
+            }
+        )
     }
 
     captured = []
@@ -794,14 +811,18 @@ def test_notify_webhook_distinct_per_tenant(monkeypatch):
     tenant_a = uuid4()
     tenant_b = uuid4()
     tenants = {
-        str(tenant_a): _FakeTenant({
-            "review_webhook_url": "https://a.example.com/hook",
-            "review_webhook_secret": "s_a",
-        }),
-        str(tenant_b): _FakeTenant({
-            "review_webhook_url": "https://b.example.com/hook",
-            "review_webhook_secret": "s_b",
-        }),
+        str(tenant_a): _FakeTenant(
+            {
+                "review_webhook_url": "https://a.example.com/hook",
+                "review_webhook_secret": "s_a",
+            }
+        ),
+        str(tenant_b): _FakeTenant(
+            {
+                "review_webhook_url": "https://b.example.com/hook",
+                "review_webhook_secret": "s_b",
+            }
+        ),
     }
 
     captured = []
@@ -837,7 +858,8 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE webhook_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NOT NULL,
@@ -854,7 +876,8 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
                 delivered_at    TEXT NULL,
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
-        """))
+        """)
+        )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
     tenant_uuid = uuid4()
@@ -866,10 +889,12 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
     tenant_model = metrics_mod.TenantModel
 
     tenants = {
-        str(tenant_uuid): _FakeTenant({
-            "review_webhook_url": "https://flaky.example.com/hook",
-            "review_webhook_secret": "s",
-        })
+        str(tenant_uuid): _FakeTenant(
+            {
+                "review_webhook_url": "https://flaky.example.com/hook",
+                "review_webhook_secret": "s",
+            }
+        )
     }
 
     class _HybridSession:
@@ -878,8 +903,7 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
 
         def get(self, model, key):
             if model is tenant_model or (
-                getattr(model, "__name__", None) == "TenantModel"
-                and getattr(model, "__tablename__", None) == "tenants"
+                getattr(model, "__name__", None) == "TenantModel" and getattr(model, "__tablename__", None) == "tenants"
             ):
                 return tenants.get(str(key))
             return self._real.get(model, key)
@@ -951,12 +975,18 @@ def test_notify_webhook_on_failure_enqueues_to_outbox(monkeypatch):
 def test_reconcile_reports_counts_and_age(session):
     tenant = str(uuid4())
     enqueue_webhook(
-        session, tenant_id=tenant, event_type="e",
-        target_url="https://ok.example.test/", payload={},
+        session,
+        tenant_id=tenant,
+        event_type="e",
+        target_url="https://ok.example.test/",
+        payload={},
     )
     enqueue_webhook(
-        session, tenant_id=tenant, event_type="e",
-        target_url="https://ok.example.test/", payload={},
+        session,
+        tenant_id=tenant,
+        event_type="e",
+        target_url="https://ok.example.test/",
+        payload={},
         dedupe_key="dk2",
     )
     session.commit()

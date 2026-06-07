@@ -22,12 +22,12 @@ opened, then mock ``_session()``. The ``api_keys`` table is not created
 because SQLite cannot render the postgres-specific ``ARRAY`` columns
 used by the production model — see #1879 for that history.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from shared.api_key_store import (
     APIKeyCreateResponse,
     APIKeyResponse,
@@ -41,9 +41,7 @@ def _make_store(monkeypatch) -> DatabaseAPIKeyStore:
     Mirrors the helper in test_api_key_store_rate_limit_minute_rollover.
     """
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:6543/d")
-    with patch("shared.api_key_store.create_async_engine") as _e, patch(
-        "shared.api_key_store.sessionmaker"
-    ) as _s:
+    with patch("shared.api_key_store.create_async_engine") as _e, patch("shared.api_key_store.sessionmaker") as _s:
         _e.return_value = object()
         _s.return_value = lambda: None
         return DatabaseAPIKeyStore()
@@ -186,9 +184,7 @@ async def test_change_scopes_broadening_requires_reason(monkeypatch):
 async def test_change_scopes_narrowing_in_place_updates_without_rotate(monkeypatch):
     """Narrowing-only change with rotate=False: no new raw_key, just shrink."""
     store = _make_store(monkeypatch)
-    mock_session = _patch_session_returning(
-        store, _existing_row(["clients.read", "clients.write", "branding.write"])
-    )
+    mock_session = _patch_session_returning(store, _existing_row(["clients.read", "clients.write", "branding.write"]))
     # get_key is awaited at the end of the narrowing path to return the
     # post-update row — stub it.
     store.get_key = AsyncMock(  # type: ignore[method-assign]
@@ -197,9 +193,7 @@ async def test_change_scopes_narrowing_in_place_updates_without_rotate(monkeypat
             key_prefix="rge_existing",
             name="Existing Key",
             scopes=["clients.read"],
-            created_at=__import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            ),
+            created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
         )
     )
     store.create_key = AsyncMock()  # type: ignore[method-assign]
@@ -298,9 +292,7 @@ async def test_change_scopes_emits_audit_event_with_diff(monkeypatch):
     import shared.api_key_store as api_key_store
 
     store = _make_store(monkeypatch)
-    _patch_session_returning(
-        store, _existing_row(["clients.read", "branding.read"])
-    )
+    _patch_session_returning(store, _existing_row(["clients.read", "branding.read"]))
     _patch_key_generation(store)
 
     logs: list[dict] = []
@@ -318,9 +310,7 @@ async def test_change_scopes_emits_audit_event_with_diff(monkeypatch):
         reason="onboarding new partner",
     )
 
-    changing = next(
-        (e for e in logs if e.get("event") == "api_key_scopes_changing"), None
-    )
+    changing = next((e for e in logs if e.get("event") == "api_key_scopes_changing"), None)
     assert changing is not None, f"missing audit event in: {logs}"
     assert changing["key_id"] == "rge_existing"
     assert changing["changed_by"] == "user_1"
@@ -333,11 +323,7 @@ async def test_change_scopes_emits_audit_event_with_diff(monkeypatch):
     # The follow-up "rotated" event is what the SOC2 evidence chain
     # actually links the new key_id to the old one.
     rotated = next(
-        (
-            e
-            for e in logs
-            if e.get("event") == "api_key_scopes_changed_via_rotation"
-        ),
+        (e for e in logs if e.get("event") == "api_key_scopes_changed_via_rotation"),
         None,
     )
     assert rotated is not None

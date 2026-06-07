@@ -12,6 +12,7 @@ These tests:
   2. Exercise the post-query invariant check — if a mocked Neo4j session
      yields a cross-tenant node the tracer raises rather than returning.
 """
+
 from __future__ import annotations
 
 import sys
@@ -25,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.fsma.tracer import trace_backward, trace_forward
 from services.graph.app.routers import lineage_traversal
-
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
 TENANT_B = "22222222-2222-2222-2222-222222222222"

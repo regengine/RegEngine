@@ -95,13 +95,10 @@ def _validate_jurisdiction_code(code: str) -> None:
     - Empty segments from a malformed code-generation path.
     """
     if not isinstance(code, str):
-        raise InvalidJurisdictionCodeError(
-            f"jurisdiction code must be a string, got {type(code).__name__}"
-        )
+        raise InvalidJurisdictionCodeError(f"jurisdiction code must be a string, got {type(code).__name__}")
     if len(code) > _MAX_JURISDICTION_CODE_LENGTH:
         raise InvalidJurisdictionCodeError(
-            f"jurisdiction code too long: {len(code)} > "
-            f"{_MAX_JURISDICTION_CODE_LENGTH} (#1304)"
+            f"jurisdiction code too long: {len(code)} > {_MAX_JURISDICTION_CODE_LENGTH} (#1304)"
         )
     if not _JURISDICTION_CODE_RE.fullmatch(code):
         raise InvalidJurisdictionCodeError(

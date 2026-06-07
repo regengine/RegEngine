@@ -54,7 +54,6 @@ from app.scrapers.state_generic import (  # noqa: E402
     StateRegistryScraper,
 )
 
-
 # ---------------------------------------------------------------------------
 # Spies
 # ---------------------------------------------------------------------------
@@ -65,9 +64,7 @@ class _S3Spy:
         self.uploads: list[dict[str, Any]] = []
 
     def upload_bytes(self, bucket, key, data, content_type):
-        self.uploads.append(
-            {"bucket": bucket, "key": key, "data": data, "content_type": content_type}
-        )
+        self.uploads.append({"bucket": bucket, "key": key, "data": data, "content_type": content_type})
         return f"s3://{bucket}/{key}"
 
 
@@ -253,9 +250,7 @@ class TestFetchDocumentHappyPath:
         monkeypatch.setattr(mod, "validate_url", lambda u, **_: u)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="my-bucket", s3_client=s3, kafka=kafka
-        )
+        scraper = StateRegistryScraper(s3_bucket="my-bucket", s3_client=s3, kafka=kafka)
 
         out = asyncio.run(
             scraper.fetch_document(
@@ -305,14 +300,8 @@ class TestFetchDocumentHappyPath:
         monkeypatch.setattr(mod, "validate_url", lambda u, **_: u)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
-        out = asyncio.run(
-            scraper.fetch_document(
-                url="https://x.gov/x", jurisdiction_code="US", tenant_id=None
-            )
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
+        out = asyncio.run(scraper.fetch_document(url="https://x.gov/x", jurisdiction_code="US", tenant_id=None))
         assert s3.uploads[0]["content_type"] == "application/octet-stream"
         assert out["content_type"] == "application/octet-stream"
 
@@ -327,14 +316,8 @@ class TestFetchDocumentHappyPath:
         monkeypatch.setattr(mod, "validate_url", lambda u, **_: u)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
-        out = asyncio.run(
-            scraper.fetch_document(
-                url="https://x.gov/x", jurisdiction_code="US"
-            )
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
+        out = asyncio.run(scraper.fetch_document(url="https://x.gov/x", jurisdiction_code="US"))
         assert out["tenant_id"] is None
 
     def test_validate_url_result_used_as_fetch_url(self, monkeypatch):
@@ -344,19 +327,11 @@ class TestFetchDocumentHappyPath:
         # the raw URL to httpx.
         resp = _FakeResponse()
         calls = _install_httpx_stub(monkeypatch, resp)
-        monkeypatch.setattr(
-            mod, "validate_url", lambda u, **_: "https://normalized.example/"
-        )
+        monkeypatch.setattr(mod, "validate_url", lambda u, **_: "https://normalized.example/")
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
-        out = asyncio.run(
-            scraper.fetch_document(
-                url="https://RAW.EXAMPLE/?a=b", jurisdiction_code="US"
-            )
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
+        out = asyncio.run(scraper.fetch_document(url="https://RAW.EXAMPLE/?a=b", jurisdiction_code="US"))
         assert calls[0]["url"] == "https://normalized.example/"
         # Event source_url is the normalized URL too.
         assert out["source_url"] == "https://normalized.example/"
@@ -370,15 +345,9 @@ class TestFetchDocumentHappyPath:
         monkeypatch.setattr(mod, "validate_url", lambda u, **_: u)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
-        o1 = asyncio.run(
-            scraper.fetch_document(url="https://a.gov/", jurisdiction_code="US")
-        )
-        o2 = asyncio.run(
-            scraper.fetch_document(url="https://a.gov/", jurisdiction_code="US")
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
+        o1 = asyncio.run(scraper.fetch_document(url="https://a.gov/", jurisdiction_code="US"))
+        o2 = asyncio.run(scraper.fetch_document(url="https://a.gov/", jurisdiction_code="US"))
         assert o1["doc_id"] != o2["doc_id"]
         assert s3.uploads[0]["key"] != s3.uploads[1]["key"]
 
@@ -416,15 +385,9 @@ class TestFetchDocumentErrors:
         monkeypatch.setattr(mod, "safe_httpx_get_sync", lambda url, *, timeout=None, headers=None: resp)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
         with pytest.raises(_HttpxStub.HTTPStatusError):
-            asyncio.run(
-                scraper.fetch_document(
-                    url="https://x.gov/missing", jurisdiction_code="US"
-                )
-            )
+            asyncio.run(scraper.fetch_document(url="https://x.gov/missing", jurisdiction_code="US"))
         # No upload, no emit when the HTTP call failed.
         assert s3.uploads == []
         assert kafka.emits == []
@@ -449,14 +412,8 @@ class TestFetchDocumentErrors:
         _install_httpx_stub(monkeypatch, resp)
 
         s3, kafka = _S3Spy(), _KafkaSpy()
-        scraper = StateRegistryScraper(
-            s3_bucket="b", s3_client=s3, kafka=kafka
-        )
-        asyncio.run(
-            scraper.fetch_document(
-                url="https://x.gov/", jurisdiction_code="US"
-            )
-        )
+        scraper = StateRegistryScraper(s3_bucket="b", s3_client=s3, kafka=kafka)
+        asyncio.run(scraper.fetch_document(url="https://x.gov/", jurisdiction_code="US"))
         # After RE-SEC-INGEST-003 migration the explicit second validate_url()
         # call is gone — safe_httpx_get_sync now performs per-hop validation
         # (and, crucially, IP-pinning) internally. The scraper itself only

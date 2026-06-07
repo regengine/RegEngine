@@ -46,7 +46,6 @@ from app.audit_middleware import (  # noqa: E402
     _trusted_proxy_cidrs,
 )
 
-
 # ---------------------------------------------------------------------------
 # #1342 — tolerant parsing of AUDIT_TRUSTED_PROXY_CIDRS
 # ---------------------------------------------------------------------------
@@ -68,7 +67,8 @@ def test_trusted_proxy_cidrs_skips_trailing_empty_token(monkeypatch):
 def test_trusted_proxy_cidrs_skips_whitespace_only_token(monkeypatch):
     """A ``,  ,`` run is whitespace after strip — must still ``continue``."""
     monkeypatch.setenv(
-        "AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8,   ,172.16.0.0/12",
+        "AUDIT_TRUSTED_PROXY_CIDRS",
+        "10.0.0.0/8,   ,172.16.0.0/12",
     )
     cidrs = _trusted_proxy_cidrs()
     # Both real CIDRs parse; the empty middle token is silently skipped.

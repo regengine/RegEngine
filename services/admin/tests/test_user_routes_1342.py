@@ -38,8 +38,10 @@ ROLE_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
 def _load_routes(monkeypatch):
     """Load user_routes and patch TenantContext to return TENANT_ID."""
     from services.admin.app import user_routes as ur
+
     monkeypatch.setattr(
-        ur.TenantContext, "get_tenant_context",
+        ur.TenantContext,
+        "get_tenant_context",
         staticmethod(lambda _db: TENANT_ID),
     )
     return ur
@@ -48,9 +50,13 @@ def _load_routes(monkeypatch):
 def _fake_user(**kwargs):
     """Construct a minimal UserModel-like SimpleNamespace."""
     from datetime import datetime, timezone
+
     defaults = dict(
-        id=ACTOR_ID, email="actor@example.com", status="active",
-        is_sysadmin=False, created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        id=ACTOR_ID,
+        email="actor@example.com",
+        status="active",
+        is_sysadmin=False,
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -58,8 +64,10 @@ def _fake_user(**kwargs):
 
 def _fake_membership(**kwargs):
     defaults = dict(
-        user_id=ACTOR_ID, tenant_id=TENANT_ID,
-        role_id=ROLE_ID, is_active=True,
+        user_id=ACTOR_ID,
+        tenant_id=TENANT_ID,
+        role_id=ROLE_ID,
+        is_active=True,
     )
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -77,7 +85,6 @@ def _fake_role(**kwargs):
 
 
 class TestListUsersHappyPath:
-
     def test_returns_user_list_with_active_status(self, monkeypatch):
         """Lines 56-88: list_users with one active user → PaginatedResponse
         with correct UserResponse.status='active'."""
@@ -186,7 +193,6 @@ class TestListUsersHappyPath:
 
 
 class TestListRolesHappyPath:
-
     def test_returns_role_list(self, monkeypatch):
         """Lines 299-313: list_roles with one custom role → PaginatedResponse
         with RoleResponse.is_system=False for tenant-scoped role."""

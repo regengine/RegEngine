@@ -64,10 +64,9 @@ from typing import Any, Callable, Optional, Sequence, Tuple
 from uuid import UUID
 
 import structlog
+from shared.safe_http import safe_httpx_post_sync
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-from shared.safe_http import safe_httpx_post_sync
 
 logger = structlog.get_logger("webhook_outbox")
 
@@ -364,8 +363,9 @@ class WebhookOutboxDrainer:
 
     def _claim_pending(self, batch_size: int) -> Sequence[OutboxRow]:
         now = datetime.now(timezone.utc).isoformat()
-        rows = self._session.execute(
-            text("""
+        rows = (
+            self._session.execute(
+                text("""
                 SELECT id, tenant_id, event_type, target_url, payload,
                        attempts, max_attempts, dedupe_key
                 FROM webhook_outbox
@@ -374,8 +374,11 @@ class WebhookOutboxDrainer:
                 ORDER BY next_attempt_at ASC, id ASC
                 LIMIT :limit
             """),
-            {"now": now, "limit": batch_size},
-        ).mappings().all()
+                {"now": now, "limit": batch_size},
+            )
+            .mappings()
+            .all()
+        )
         return [
             OutboxRow(
                 id=r["id"],
@@ -398,9 +401,7 @@ class WebhookOutboxDrainer:
             # time but has since removed one. Fail fast — we will not
             # dispatch an unsigned payload, and we will not dispatch to
             # a URL we can't validate.
-            self._mark_failed(
-                row, reason="tenant webhook url/secret no longer configured"
-            )
+            self._mark_failed(row, reason="tenant webhook url/secret no longer configured")
             return "failed"
 
         payload_bytes = json.dumps(row.payload, default=_json_default, sort_keys=True).encode("utf-8")
@@ -578,15 +579,19 @@ def reconcile_webhook_outbox(session: Session) -> OutboxHealth:
     a ``/metrics`` endpoint can emit ``webhook_delivery_lag_seconds``
     and ``webhook_delivery_failed_total``.
     """
-    row = session.execute(
-        text("""
+    row = (
+        session.execute(
+            text("""
             SELECT
                 COUNT(*) FILTER (WHERE status = 'pending')   AS pending_count,
                 COUNT(*) FILTER (WHERE status = 'failed')    AS failed_count,
                 MIN(enqueued_at) FILTER (WHERE status = 'pending') AS oldest_pending
             FROM webhook_outbox
         """)
-    ).mappings().first()
+        )
+        .mappings()
+        .first()
+    )
 
     oldest = row["oldest_pending"] if row else None
     age_seconds: Optional[float] = None

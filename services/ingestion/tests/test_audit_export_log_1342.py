@@ -23,9 +23,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import audit_export_log as ael
 from app.audit_export_log import (
     ActivityEntry,
@@ -42,7 +39,8 @@ from app.audit_export_log import (
     _query_verifications,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -64,7 +62,9 @@ def _app():
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     bypass = lambda: None
     app.dependency_overrides[_verify_api_key] = bypass
     install_tenant_context_override(app)
@@ -99,9 +99,14 @@ class TestPydanticModels:
 
     def test_export_record_all_fields(self):
         r = ExportRecord(
-            id="e-1", tenant_id="t", export_type="fda",
-            record_count=5, sha256_hash="abc", created_at="2026-01-01",
-            traceability_lot_code="TLC", format="json",
+            id="e-1",
+            tenant_id="t",
+            export_type="fda",
+            record_count=5,
+            sha256_hash="abc",
+            created_at="2026-01-01",
+            traceability_lot_code="TLC",
+            format="json",
         )
         assert r.export_type == "fda"
         assert r.record_count == 5
@@ -135,8 +140,11 @@ class TestPydanticModels:
 
     def test_activity_entry_required_fields(self):
         e = ActivityEntry(
-            id="x", tenant_id="t", activity_type="export",
-            summary="s", timestamp="2026-01-01",
+            id="x",
+            tenant_id="t",
+            activity_type="export",
+            summary="s",
+            timestamp="2026-01-01",
         )
         assert e.details is None
 
@@ -165,6 +173,7 @@ class TestQueryExports:
         row = ("e1", "t", "fda", 5, "hash", dt, "TLC-1", "json")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_exports("t", None, None, 50)
         assert result[0]["id"] == "e1"
@@ -176,6 +185,7 @@ class TestQueryExports:
         row = ("e1", "t", "fda", None, "h", None, "TLC", "json")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_exports("t", None, None, 50)
         assert result[0]["record_count"] == 0
@@ -185,19 +195,24 @@ class TestQueryExports:
         row = ("e1", "t", "fda", 1, "h", "2026-01-15T00:00:00", "TLC", "json")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_exports("t", None, None, 50)
         assert result[0]["created_at"] == "2026-01-15T00:00:00"
 
     def test_date_filters_included_in_params(self, monkeypatch):
         captured = {}
+
         class _Sess:
             def execute(self, stmt, params):
                 captured.update(params)
                 return SimpleNamespace(fetchall=lambda: [])
+
             def close(self):
                 pass
+
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: _Sess())
         _query_exports("t", "2026-01-01", "2026-01-31", 25)
         assert captured["start"] == "2026-01-01"
@@ -206,16 +221,20 @@ class TestQueryExports:
 
     def test_db_exception_returns_none(self, monkeypatch):
         import shared.database as shared_db
+
         monkeypatch.setattr(
-            shared_db, "SessionLocal",
+            shared_db,
+            "SessionLocal",
             lambda: _FakeSession(raises=True),
         )
         assert _query_exports("t", None, None, 50) is None
 
     def test_sessionlocal_factory_raises(self, monkeypatch):
         import shared.database as shared_db
+
         def _boom():
             raise RuntimeError("no db")
+
         monkeypatch.setattr(shared_db, "SessionLocal", _boom)
         assert _query_exports("t", None, None, 50) is None
 
@@ -231,6 +250,7 @@ class TestQueryVerifications:
         row = ("v1", "t", True, 100, ["err1", "err2"], dt)
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_verifications("t", 10)
         assert result[0]["chain_valid"] is True
@@ -240,6 +260,7 @@ class TestQueryVerifications:
         row = ("v1", "t", False, 5, '["e1", "e2"]', None)
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_verifications("t", 10)
         assert result[0]["errors"] == ["e1", "e2"]
@@ -249,14 +270,17 @@ class TestQueryVerifications:
         row = ("v1", "t", True, 0, None, None)
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_verifications("t", 10)
         assert result[0]["errors"] == []
 
     def test_db_exception_returns_none(self, monkeypatch):
         import shared.database as shared_db
+
         monkeypatch.setattr(
-            shared_db, "SessionLocal",
+            shared_db,
+            "SessionLocal",
             lambda: _FakeSession(raises=True),
         )
         assert _query_verifications("t", 10) is None
@@ -265,6 +289,7 @@ class TestQueryVerifications:
         row = ("v1", "t", True, 0, [], "2026-01-15")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_verifications("t", 10)
         assert result[0]["completed_at"] == "2026-01-15"
@@ -278,8 +303,11 @@ class TestQueryVerifications:
 class TestVerificationFallback:
     def test_local_store_only(self):
         ael._verification_store["v1"] = {
-            "id": "v1", "tenant_id": "t", "chain_valid": True,
-            "chain_length": 10, "errors": [],
+            "id": "v1",
+            "tenant_id": "t",
+            "chain_valid": True,
+            "chain_length": 10,
+            "errors": [],
             "completed_at": "2026-01-01",
         }
         result = _get_verification_fallback("t", 10)
@@ -288,28 +316,35 @@ class TestVerificationFallback:
 
     def test_wrong_tenant_excluded(self):
         ael._verification_store["v1"] = {
-            "id": "v1", "tenant_id": "other",
+            "id": "v1",
+            "tenant_id": "other",
             "completed_at": "2026-01-01",
         }
         result = _get_verification_fallback("t", 10)
         assert result == []
 
     def test_chain_verification_job_merge(self, monkeypatch):
-        import threading
         import sys
+        import threading
+
         fake_job_module = SimpleNamespace(
             _verification_jobs={
                 "j1": {
-                    "tenant_id": "t", "status": "completed",
-                    "chain_valid": False, "chain_length": 5,
-                    "errors": ["x"], "completed_at": "2026-01-02",
+                    "tenant_id": "t",
+                    "status": "completed",
+                    "chain_valid": False,
+                    "chain_length": 5,
+                    "errors": ["x"],
+                    "completed_at": "2026-01-02",
                 },
                 "j2": {
-                    "tenant_id": "t", "status": "running",  # excluded
+                    "tenant_id": "t",
+                    "status": "running",  # excluded
                     "completed_at": "2026-01-03",
                 },
                 "j3": {
-                    "tenant_id": "other", "status": "completed",  # excluded
+                    "tenant_id": "other",
+                    "status": "completed",  # excluded
                     "completed_at": "2026-01-04",
                 },
             },
@@ -323,6 +358,7 @@ class TestVerificationFallback:
 
     def test_chain_verification_job_import_error_handled(self, monkeypatch):
         import sys
+
         # Cause ImportError by setting module to None (Python sees as unavailable)
         monkeypatch.setitem(sys.modules, "app.chain_verification_job", None)
         ael._verification_store["v1"] = {"id": "v1", "tenant_id": "t", "completed_at": "2026-01-01"}
@@ -339,7 +375,9 @@ class TestVerificationFallback:
     def test_limit_applied(self):
         for i in range(5):
             ael._verification_store[f"v{i}"] = {
-                "id": f"v{i}", "tenant_id": "t", "completed_at": f"2026-01-0{i+1}",
+                "id": f"v{i}",
+                "tenant_id": "t",
+                "completed_at": f"2026-01-0{i + 1}",
             }
         result = _get_verification_fallback("t", 3)
         assert len(result) == 3
@@ -356,6 +394,7 @@ class TestQueryIngestions:
         row = ("i1", "t", "shipping", "TLC-42", dt)
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_ingestions("t", 10)
         assert result[0]["id"] == "i1"
@@ -368,6 +407,7 @@ class TestQueryIngestions:
         row = ("i1", "t", "shipping", "TLC", "2026-01-01")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_ingestions("t", 10)
         assert result[0]["timestamp"] == "2026-01-01"
@@ -376,14 +416,17 @@ class TestQueryIngestions:
         row = ("i1", "t", "shipping", "TLC", None)
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_ingestions("t", 10)
         assert result[0]["timestamp"] == ""
 
     def test_exception_returns_empty(self, monkeypatch):
         import shared.database as shared_db
+
         monkeypatch.setattr(
-            shared_db, "SessionLocal",
+            shared_db,
+            "SessionLocal",
             lambda: _FakeSession(raises=True),
         )
         assert _query_ingestions("t", 10) == []
@@ -408,11 +451,19 @@ class TestExportsEndpoint:
 
     def test_happy_path_returns_records(self, monkeypatch):
         monkeypatch.setattr(
-            ael, "_query_exports",
+            ael,
+            "_query_exports",
             lambda *a, **k: [
-                {"id": "e1", "tenant_id": "t1", "export_type": "fda",
-                 "record_count": 3, "sha256_hash": None, "created_at": None,
-                 "traceability_lot_code": None, "format": None},
+                {
+                    "id": "e1",
+                    "tenant_id": "t1",
+                    "export_type": "fda",
+                    "record_count": 3,
+                    "sha256_hash": None,
+                    "created_at": None,
+                    "traceability_lot_code": None,
+                    "format": None,
+                },
             ],
         )
         app = _app()
@@ -428,11 +479,13 @@ class TestExportsEndpoint:
 
     def test_no_body_uses_defaults(self, monkeypatch):
         captured = {}
+
         def _q(tid, s, e, lim):
             captured["s"] = s
             captured["e"] = e
             captured["lim"] = lim
             return []
+
         monkeypatch.setattr(ael, "_query_exports", _q)
         app = _app()
         client = TestClient(app)
@@ -451,10 +504,17 @@ class TestExportsEndpoint:
 class TestVerificationsEndpoint:
     def test_db_happy_path(self, monkeypatch):
         monkeypatch.setattr(
-            ael, "_query_verifications",
+            ael,
+            "_query_verifications",
             lambda tid, lim: [
-                {"id": "v1", "tenant_id": tid, "chain_valid": True,
-                 "chain_length": 10, "errors": [], "completed_at": None},
+                {
+                    "id": "v1",
+                    "tenant_id": tid,
+                    "chain_valid": True,
+                    "chain_length": 10,
+                    "errors": [],
+                    "completed_at": None,
+                },
             ],
         )
         app = _app()
@@ -466,8 +526,12 @@ class TestVerificationsEndpoint:
     def test_db_none_falls_back_to_memory(self, monkeypatch):
         monkeypatch.setattr(ael, "_query_verifications", lambda tid, lim: None)
         ael._verification_store["v1"] = {
-            "id": "v1", "tenant_id": "t1", "chain_valid": True,
-            "chain_length": 5, "errors": [], "completed_at": "2026-01-01",
+            "id": "v1",
+            "tenant_id": "t1",
+            "chain_valid": True,
+            "chain_length": 5,
+            "errors": [],
+            "completed_at": "2026-01-01",
         }
         app = _app()
         client = TestClient(app)
@@ -479,9 +543,11 @@ class TestVerificationsEndpoint:
 
     def test_no_body_defaults(self, monkeypatch):
         captured = {}
+
         def _q(tid, lim):
             captured["lim"] = lim
             return []
+
         monkeypatch.setattr(ael, "_query_verifications", _q)
         app = _app()
         client = TestClient(app)
@@ -498,28 +564,47 @@ class TestVerificationsEndpoint:
 class TestActivityFeedEndpoint:
     def test_combined_feed_sorts_desc(self, monkeypatch):
         monkeypatch.setattr(
-            ael, "_query_exports",
+            ael,
+            "_query_exports",
             lambda *a, **k: [
-                {"id": "e1", "tenant_id": "t1", "export_type": "fda",
-                 "record_count": 3, "sha256_hash": "h",
-                 "created_at": "2026-01-10", "traceability_lot_code": "T",
-                 "format": "json"},
+                {
+                    "id": "e1",
+                    "tenant_id": "t1",
+                    "export_type": "fda",
+                    "record_count": 3,
+                    "sha256_hash": "h",
+                    "created_at": "2026-01-10",
+                    "traceability_lot_code": "T",
+                    "format": "json",
+                },
             ],
         )
         monkeypatch.setattr(
-            ael, "_query_verifications",
+            ael,
+            "_query_verifications",
             lambda *a, **k: [
-                {"id": "v1", "tenant_id": "t1", "chain_valid": True,
-                 "chain_length": 5, "errors": [],
-                 "completed_at": "2026-01-20"},
+                {
+                    "id": "v1",
+                    "tenant_id": "t1",
+                    "chain_valid": True,
+                    "chain_length": 5,
+                    "errors": [],
+                    "completed_at": "2026-01-20",
+                },
             ],
         )
         monkeypatch.setattr(
-            ael, "_query_ingestions",
+            ael,
+            "_query_ingestions",
             lambda *a, **k: [
-                {"id": "i1", "tenant_id": "t1", "activity_type": "ingestion",
-                 "summary": "CTE", "timestamp": "2026-01-15",
-                 "details": {"event_type": "shipping"}},
+                {
+                    "id": "i1",
+                    "tenant_id": "t1",
+                    "activity_type": "ingestion",
+                    "summary": "CTE",
+                    "timestamp": "2026-01-15",
+                    "details": {"event_type": "shipping"},
+                },
             ],
         )
         app = _app()
@@ -535,12 +620,19 @@ class TestActivityFeedEndpoint:
     def test_pagination(self, monkeypatch):
         def _exp(*a, **k):
             return [
-                {"id": f"e{i}", "tenant_id": "t1", "export_type": "x",
-                 "record_count": 1, "sha256_hash": None,
-                 "created_at": f"2026-01-{i:02d}", "traceability_lot_code": None,
-                 "format": None}
+                {
+                    "id": f"e{i}",
+                    "tenant_id": "t1",
+                    "export_type": "x",
+                    "record_count": 1,
+                    "sha256_hash": None,
+                    "created_at": f"2026-01-{i:02d}",
+                    "traceability_lot_code": None,
+                    "format": None,
+                }
                 for i in range(1, 11)
             ]
+
         monkeypatch.setattr(ael, "_query_exports", _exp)
         monkeypatch.setattr(ael, "_query_verifications", lambda *a, **k: [])
         monkeypatch.setattr(ael, "_query_ingestions", lambda *a, **k: [])
@@ -557,11 +649,17 @@ class TestActivityFeedEndpoint:
     def test_chain_invalid_marks_failed(self, monkeypatch):
         monkeypatch.setattr(ael, "_query_exports", lambda *a, **k: [])
         monkeypatch.setattr(
-            ael, "_query_verifications",
+            ael,
+            "_query_verifications",
             lambda *a, **k: [
-                {"id": "v1", "tenant_id": "t1", "chain_valid": False,
-                 "chain_length": 3, "errors": ["e1"],
-                 "completed_at": "2026-01-01"},
+                {
+                    "id": "v1",
+                    "tenant_id": "t1",
+                    "chain_valid": False,
+                    "chain_length": 3,
+                    "errors": ["e1"],
+                    "completed_at": "2026-01-01",
+                },
             ],
         )
         monkeypatch.setattr(ael, "_query_ingestions", lambda *a, **k: [])
@@ -578,8 +676,12 @@ class TestActivityFeedEndpoint:
         monkeypatch.setattr(ael, "_query_verifications", lambda *a, **k: None)
         monkeypatch.setattr(ael, "_query_ingestions", lambda *a, **k: [])
         ael._verification_store["v1"] = {
-            "id": "v1", "tenant_id": "t", "chain_valid": True,
-            "chain_length": 0, "errors": [], "completed_at": "2026-01-01",
+            "id": "v1",
+            "tenant_id": "t",
+            "chain_valid": True,
+            "chain_length": 0,
+            "errors": [],
+            "completed_at": "2026-01-01",
         }
         app = _app()
         client = TestClient(app)

@@ -50,7 +50,7 @@ async def read_upload_with_limit(
         if total > max_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f"{label} too large (max {max_bytes // (1024*1024)} MB)",
+                detail=f"{label} too large (max {max_bytes // (1024 * 1024)} MB)",
             )
         chunks.append(chunk)
     return b"".join(chunks)
@@ -86,7 +86,7 @@ async def stream_upload_to_file_with_limit(
             if total > max_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"{label} too large (max {max_bytes // (1024*1024)} MB)",
+                    detail=f"{label} too large (max {max_bytes // (1024 * 1024)} MB)",
                 )
             if len(prefix) < prefix_bytes:
                 prefix.extend(chunk[: prefix_bytes - len(prefix)])

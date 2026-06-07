@@ -1,22 +1,23 @@
-
-from fastapi import APIRouter, Depends, HTTPException, status, Body
-from sqlalchemy.orm import Session
-from sqlalchemy import select, and_, func
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
-import structlog
-from pydantic import BaseModel
 
-from .database import get_session
-from .sqlalchemy_models import UserModel, MembershipModel, RoleModel
-from .dependencies import get_current_user, PermissionChecker
+import structlog
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import BaseModel
+from shared.pagination import PaginatedResponse, PaginationParams
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session
+
 from .audit import AuditLogger
+from .database import get_session
+from .dependencies import PermissionChecker, get_current_user
 from .models import TenantContext
-from shared.pagination import PaginationParams, PaginatedResponse
+from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
 
 router = APIRouter()
 logger = structlog.get_logger("user_routes")
+
 
 # DTOs
 class UserResponse(BaseModel):
@@ -28,22 +29,31 @@ class UserResponse(BaseModel):
     role_name: str
     created_at: datetime
 
+
 class RoleUpdate(BaseModel):
     role_id: UUID
+
 
 class RoleResponse(BaseModel):
     id: UUID
     name: str
     is_system: bool
 
+
 class UserActionResponse(BaseModel):
     """Response for user action operations."""
+
     status: str
 
 
 # --- Endpoints ---
 
-@router.get("/admin/users", response_model=PaginatedResponse[UserResponse], dependencies=[Depends(PermissionChecker("users.read"))])
+
+@router.get(
+    "/admin/users",
+    response_model=PaginatedResponse[UserResponse],
+    dependencies=[Depends(PermissionChecker("users.read"))],
+)
 async def list_users(
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_session),
@@ -75,24 +85,31 @@ async def list_users(
 
     results = []
     for user, membership, role in rows:
-        results.append(UserResponse(
-            id=user.id,
-            email=user.email,
-            status="inactive" if not membership.is_active else user.status,
-            is_sysadmin=user.is_sysadmin,
-            role_id=role.id,
-            role_name=role.name,
-            created_at=user.created_at
-        ))
+        results.append(
+            UserResponse(
+                id=user.id,
+                email=user.email,
+                status="inactive" if not membership.is_active else user.status,
+                is_sysadmin=user.is_sysadmin,
+                role_id=role.id,
+                role_name=role.name,
+                created_at=user.created_at,
+            )
+        )
 
     return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)
 
-@router.patch("/admin/users/{user_id}/role", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.manage_roles"))])
+
+@router.patch(
+    "/admin/users/{user_id}/role",
+    response_model=UserActionResponse,
+    dependencies=[Depends(PermissionChecker("users.manage_roles"))],
+)
 async def update_user_role(
     user_id: UUID,
     update: RoleUpdate,
     current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    db: Session = Depends(get_session),
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
@@ -139,7 +156,7 @@ async def update_user_role(
     # Update
     old_role_id = membership.role_id
     membership.role_id = target_role.id
-    
+
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
@@ -149,25 +166,25 @@ async def update_user_role(
         action="membership.role_change",
         resource_type="membership",
         resource_id=str(user_id),
-        metadata={
-            "old_role": str(old_role_id), 
-            "new_role": str(target_role.id)
-        }
+        metadata={"old_role": str(old_role_id), "new_role": str(target_role.id)},
     )
-    
+
     db.commit()
     return {"status": "updated"}
 
-@router.post("/admin/users/{user_id}/deactivate", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.disable"))])
+
+@router.post(
+    "/admin/users/{user_id}/deactivate",
+    response_model=UserActionResponse,
+    dependencies=[Depends(PermissionChecker("users.disable"))],
+)
 async def deactivate_user(
-    user_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    user_id: UUID, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
+
     # #1083: lock target membership + Owner rows. Same race as
     # update_user_role — concurrent deactivations of two Owners could
     # zero out the tenant before the invariant check fires.
@@ -200,7 +217,7 @@ async def deactivate_user(
 
     # Soft delete (tenant-scoped deactivation, not global user disable).
     membership.is_active = False
-    
+
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
@@ -210,17 +227,20 @@ async def deactivate_user(
         action="membership.deactivate",
         resource_type="membership",
         resource_id=str(user_id),
-        metadata={"is_active": False}
+        metadata={"is_active": False},
     )
-    
+
     db.commit()
     return {"status": "deactivated"}
 
-@router.post("/admin/users/{user_id}/reactivate", response_model=UserActionResponse, dependencies=[Depends(PermissionChecker("users.manage_roles"))])
+
+@router.post(
+    "/admin/users/{user_id}/reactivate",
+    response_model=UserActionResponse,
+    dependencies=[Depends(PermissionChecker("users.manage_roles"))],
+)
 async def reactivate_user(
-    user_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    user_id: UUID, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
@@ -280,13 +300,18 @@ async def reactivate_user(
         action="membership.reactivate",
         resource_type="membership",
         resource_id=str(user_id),
-        metadata={"is_active": True}
+        metadata={"is_active": True},
     )
 
     db.commit()
     return {"status": "reactivated"}
 
-@router.get("/admin/roles", response_model=PaginatedResponse[RoleResponse], dependencies=[Depends(PermissionChecker("users.read"))])
+
+@router.get(
+    "/admin/roles",
+    response_model=PaginatedResponse[RoleResponse],
+    dependencies=[Depends(PermissionChecker("users.read"))],
+)
 async def list_roles(
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_session),
@@ -296,15 +321,20 @@ async def list_roles(
         raise HTTPException(status_code=400, detail="Tenant context required")
 
     # Count total
-    count_stmt = select(func.count()).select_from(RoleModel).where(
-        (RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None))
+    count_stmt = (
+        select(func.count())
+        .select_from(RoleModel)
+        .where((RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None)))
     )
     total = db.execute(count_stmt).scalar()
 
     # Return System roles (tenant_id is NULL) AND Custom roles (tenant_id matches)
-    stmt = select(RoleModel).where(
-        (RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None))
-    ).offset(pagination.skip).limit(pagination.limit)
+    stmt = (
+        select(RoleModel)
+        .where((RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None)))
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+    )
     roles = db.execute(stmt).scalars().all()
 
     results = []

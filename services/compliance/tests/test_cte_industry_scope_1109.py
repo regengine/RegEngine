@@ -19,6 +19,7 @@ Paired with the flat ``allowed_cte_types`` contract in
 ``test_fsma_rules_contract_1223.py`` — the flat list is the **union**
 of every per-industry list; the per-industry map is the **scope**.
 """
+
 from __future__ import annotations
 
 import json
@@ -131,10 +132,7 @@ class TestCommonCTEsCoverEveryIndustry:
         FTL food category. A missing entry would silently disable
         chain-of-custody validation for that industry."""
         for industry in industry_ids:
-            assert cte in by_industry[industry], (
-                f"{cte} must appear in every industry scope; missing "
-                f"from {industry}"
-            )
+            assert cte in by_industry[industry], f"{cte} must appear in every industry scope; missing from {industry}"
 
 
 class TestFlatListIsUnionOfPerIndustry:
@@ -177,6 +175,5 @@ class TestMutualExclusionPairsValid:
         pair_sets = [frozenset(p) for p in pairs]
         expected = frozenset({"INITIAL_PACKING", "FIRST_LAND_BASED_RECEIVING"})
         assert expected in pair_sets, (
-            "INITIAL_PACKING / FIRST_LAND_BASED_RECEIVING mutual "
-            "exclusion missing — this is the core #1109 invariant."
+            "INITIAL_PACKING / FIRST_LAND_BASED_RECEIVING mutual exclusion missing — this is the core #1109 invariant."
         )

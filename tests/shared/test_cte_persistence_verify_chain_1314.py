@@ -21,16 +21,15 @@ reporting the missing IDs. The ``ChainVerification`` DTO gains
 
 Tests drive the writer with a mocked session — no Postgres.
 """
+
 from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Tuple
 
 import pytest
-
 from shared.cte_persistence.core import CTEPersistence
 from shared.cte_persistence.hashing import compute_chain_hash
-
 
 # ---------------------------------------------------------------------------
 # Minimal scripted session that serves verify_chain's two queries
@@ -82,8 +81,7 @@ class _ChainSession:
         return _ScriptedResult([])
 
 
-def _chain_row(seq: int, event_hash: str, prev: str | None, chain: str,
-               cte_id: str, matched: str | None) -> Tuple:
+def _chain_row(seq: int, event_hash: str, prev: str | None, chain: str, cte_id: str, matched: str | None) -> Tuple:
     return (seq, event_hash, prev, chain, cte_id, matched)
 
 

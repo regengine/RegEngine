@@ -42,9 +42,7 @@ _kafka_health_result: dict[str, Any] = {"status": "available", "error": None}
 
 
 def _fake_kafka_health_check(*, bootstrap_servers: str, timeout: float) -> dict[str, Any]:
-    _kafka_health_calls.append(
-        {"bootstrap_servers": bootstrap_servers, "timeout": timeout}
-    )
+    _kafka_health_calls.append({"bootstrap_servers": bootstrap_servers, "timeout": timeout})
     return dict(_kafka_health_result)
 
 
@@ -82,6 +80,7 @@ _REAL_APP_CONFIG = sys.modules.get("app.config")
 sys.modules["app.config"] = _config_stub
 
 import app as _app_pkg  # noqa: E402
+
 _REAL_APP_CONFIG_ATTR = getattr(_app_pkg, "config", None)
 _app_pkg.config = _config_stub
 
@@ -133,8 +132,7 @@ def _reset_state(monkeypatch):
     sys.modules["app.config"] = _config_stub
 
     # Re-pin into the route module in case a reload swapped it.
-    monkeypatch.setattr(rhm, "kafka_health_check", _fake_kafka_health_check,
-                        raising=False)
+    monkeypatch.setattr(rhm, "kafka_health_check", _fake_kafka_health_check, raising=False)
     monkeypatch.setattr(rhm, "get_settings", _fake_get_settings, raising=False)
 
     _kafka_health_calls.clear()
@@ -252,22 +250,14 @@ class TestHealthKafkaUnavailable:
 
     def test_logs_warning_with_kafka_error(self, monkeypatch, caplog):
         monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka.prod:9092")
-        _kafka_health_result.update(
-            {"status": "unavailable", "error": "broker connection refused"}
-        )
+        _kafka_health_result.update({"status": "unavailable", "error": "broker connection refused"})
 
         with caplog.at_level(logging.WARNING, logger=rhm.logger.name):
             health()
 
         # Find our specific warning line.
-        matching = [
-            rec for rec in caplog.records
-            if "ingestion_health_kafka_unavailable" in rec.getMessage()
-        ]
-        assert matching, (
-            f"Expected kafka warning, got records: "
-            f"{[r.getMessage() for r in caplog.records]}"
-        )
+        matching = [rec for rec in caplog.records if "ingestion_health_kafka_unavailable" in rec.getMessage()]
+        assert matching, f"Expected kafka warning, got records: {[r.getMessage() for r in caplog.records]}"
         assert "broker connection refused" in matching[0].getMessage()
 
     def test_unavailable_missing_error_logs_unknown(self, monkeypatch, caplog):
@@ -284,10 +274,7 @@ class TestHealthKafkaUnavailable:
             result = health()
 
         assert result["status"] == "degraded"
-        matching = [
-            rec for rec in caplog.records
-            if "ingestion_health_kafka_unavailable" in rec.getMessage()
-        ]
+        matching = [rec for rec in caplog.records if "ingestion_health_kafka_unavailable" in rec.getMessage()]
         assert matching
         assert "unknown" in matching[0].getMessage()
 

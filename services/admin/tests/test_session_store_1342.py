@@ -53,7 +53,6 @@ from app.session_store import (  # noqa: E402
     redact_connection_url,
 )
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures — mirrors test_session_store.py patterns
 # ---------------------------------------------------------------------------
@@ -102,7 +101,6 @@ def _sample_session(**overrides) -> SessionData:
 
 
 class TestRedactConnectionUrl:
-
     def test_redacts_username_password_when_present(self):
         """Line 42: when the URL has a username, the function builds
         ``user:***@`` so neither username (ideally) nor password leaks.
@@ -138,7 +136,6 @@ class TestRedactConnectionUrl:
 
 
 class TestGetClientLazyInit:
-
     @pytest.mark.asyncio
     async def test_first_call_constructs_client_via_from_url(self):
         """Line 134: first call to ``_get_client`` with ``_client is
@@ -168,7 +165,6 @@ class TestGetClientLazyInit:
 
 
 class TestClose:
-
     @pytest.mark.asyncio
     async def test_close_releases_and_nulls_client(self, store, mock_redis):
         """Lines 144-146: ``close()`` must both await ``_client.close()``
@@ -196,7 +192,6 @@ class TestClose:
 
 
 class TestClaimSessionByToken:
-
     @pytest.mark.asyncio
     async def test_claim_returns_session_when_first_to_getdel(self, store, mock_redis):
         """Lines 275, 278, 284-285: first caller GETDELs the token_hash
@@ -213,9 +208,7 @@ class TestClaimSessionByToken:
 
         assert result is not None
         assert result.id == session.id
-        mock_redis.getdel.assert_awaited_once_with(
-            store._token_hash_key(session.refresh_token_hash)
-        )
+        mock_redis.getdel.assert_awaited_once_with(store._token_hash_key(session.refresh_token_hash))
 
     @pytest.mark.asyncio
     async def test_claim_returns_none_when_already_claimed(self, store, mock_redis):
@@ -237,7 +230,6 @@ class TestClaimSessionByToken:
 
 
 class TestUpdateSession:
-
     @pytest.mark.asyncio
     async def test_returns_false_when_session_missing(self, store, mock_redis):
         """Lines 311-312: if ``EXISTS`` returns 0, we log and return
@@ -309,7 +301,6 @@ class TestUpdateSession:
 
 
 class TestListUserSessions:
-
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_no_sessions(self, store, mock_redis):
         """Line 419: user has no session set → return []. Pinned so a
@@ -369,7 +360,6 @@ class TestListUserSessions:
 
 
 class TestRevokeAll:
-
     @pytest.mark.asyncio
     async def test_returns_zero_when_no_active_sessions(self, store, mock_redis):
         """Line 471: empty-list short-circuit in
@@ -402,7 +392,6 @@ class TestRevokeAll:
 
 
 class TestCleanupExpiredSessions:
-
     @pytest.mark.asyncio
     async def test_removes_stale_references_and_returns_count(self, store, mock_redis):
         """Lines 512-525, 527-534: iterates the user_sessions set,

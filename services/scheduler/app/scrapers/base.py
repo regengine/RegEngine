@@ -9,7 +9,6 @@ from typing import Any, Callable, List, Mapping, Optional
 
 import httpx
 import structlog
-
 from shared.url_validation import SSRFError, validate_url
 
 from ..models import EnforcementItem, ScrapeResult, SourceType
@@ -147,7 +146,9 @@ def fetch_with_retry(
                 )
                 raise
             delay = _compute_backoff(
-                attempt, base=base_delay_seconds, max_delay=max_delay_seconds,
+                attempt,
+                base=base_delay_seconds,
+                max_delay=max_delay_seconds,
             )
             logger.warning(
                 f"{log_scope}_transport_error_retry",
@@ -184,7 +185,9 @@ def fetch_with_retry(
 
         retry_after = _parse_retry_after(response.headers.get("Retry-After"))
         computed_delay = _compute_backoff(
-            attempt, base=base_delay_seconds, max_delay=max_delay_seconds,
+            attempt,
+            base=base_delay_seconds,
+            max_delay=max_delay_seconds,
         )
         delay = max(retry_after or 0.0, computed_delay)
         logger.warning(

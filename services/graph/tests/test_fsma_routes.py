@@ -13,21 +13,17 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 
-_AUTH_HEADERS = {
-    "X-RegEngine-API-Key": os.getenv(
-        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
-    )
-}
-
-
+_AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
 @pytest.fixture
 def mock_neo4j_client():
     """Mock Neo4j client at all route module locations."""
-    with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_trace, \
-         patch("services.graph.app.routers.fsma.compliance.Neo4jClient") as mock_comp, \
-         patch("services.graph.app.routers.fsma.science.Neo4jClient", create=True) as mock_sci:
+    with (
+        patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_trace,
+        patch("services.graph.app.routers.fsma.compliance.Neo4jClient") as mock_comp,
+        patch("services.graph.app.routers.fsma.science.Neo4jClient", create=True) as mock_sci,
+    ):
         mock_instance = MagicMock()
         mock_instance.close = AsyncMock()
         for m in [mock_trace, mock_comp, mock_sci]:
@@ -40,8 +36,10 @@ def mock_neo4j_client():
 @pytest.fixture
 def mock_trace_forward():
     """Mock trace_forward function."""
-    with patch("services.graph.app.routers.fsma.traceability.trace_forward", new_callable=AsyncMock) as mock_t, \
-         patch("services.graph.app.routers.fsma.compliance.trace_forward", new_callable=AsyncMock) as mock_c:
+    with (
+        patch("services.graph.app.routers.fsma.traceability.trace_forward", new_callable=AsyncMock) as mock_t,
+        patch("services.graph.app.routers.fsma.compliance.trace_forward", new_callable=AsyncMock) as mock_c,
+    ):
         from services.graph.app.fsma_utils import TraceResult
 
         result = TraceResult(
@@ -86,8 +84,10 @@ def mock_trace_forward():
 @pytest.fixture
 def mock_trace_backward():
     """Mock trace_backward function."""
-    with patch("services.graph.app.routers.fsma.traceability.trace_backward", new_callable=AsyncMock) as mock_t, \
-         patch("services.graph.app.routers.fsma.compliance.trace_backward", new_callable=AsyncMock) as mock_c:
+    with (
+        patch("services.graph.app.routers.fsma.traceability.trace_backward", new_callable=AsyncMock) as mock_t,
+        patch("services.graph.app.routers.fsma.compliance.trace_backward", new_callable=AsyncMock) as mock_c,
+    ):
         from services.graph.app.fsma_utils import TraceResult
 
         result = TraceResult(
@@ -181,9 +181,7 @@ def mock_get_lot_timeline():
 class TestTraceForwardEndpoint:
     """Tests for /v1/fsma/trace/forward/{tlc}"""
 
-    def test_trace_forward_success(
-        self, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_trace_forward_success(self, mock_neo4j_client, mock_trace_forward):
         """Test successful forward trace."""
         from fastapi import FastAPI
 
@@ -192,9 +190,11 @@ class TestTraceForwardEndpoint:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -216,9 +216,7 @@ class TestTraceForwardEndpoint:
         assert data["facilities"][0]["gln"] == "1234567890123"
         assert data["hop_count"] == 2
 
-    def test_trace_forward_with_max_depth(
-        self, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_trace_forward_with_max_depth(self, mock_neo4j_client, mock_trace_forward):
         """Test forward trace with custom max_depth."""
         from fastapi import FastAPI
 
@@ -227,9 +225,11 @@ class TestTraceForwardEndpoint:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -250,9 +250,7 @@ class TestTraceForwardEndpoint:
 class TestTraceBackwardEndpoint:
     """Tests for /v1/fsma/trace/backward/{tlc}"""
 
-    def test_trace_backward_success(
-        self, mock_neo4j_client, mock_trace_backward
-    ):
+    def test_trace_backward_success(self, mock_neo4j_client, mock_trace_backward):
         """Test successful backward trace."""
         from fastapi import FastAPI
 
@@ -261,9 +259,11 @@ class TestTraceBackwardEndpoint:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -287,9 +287,7 @@ class TestTraceBackwardEndpoint:
 class TestTimelineEndpoint:
     """Tests for /v1/fsma/timeline/{tlc}"""
 
-    def test_timeline_success(
-        self, mock_neo4j_client, mock_get_lot_timeline
-    ):
+    def test_timeline_success(self, mock_neo4j_client, mock_get_lot_timeline):
         """Test lot timeline retrieval."""
         from fastapi import FastAPI
 
@@ -298,9 +296,11 @@ class TestTimelineEndpoint:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -335,9 +335,11 @@ class TestExportEndpoints:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -353,9 +355,7 @@ class TestExportEndpoints:
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/csv; charset=utf-8"
-        assert (
-            "fsma_trace_forward_LOT-2024-001" in response.headers["content-disposition"]
-        )
+        assert "fsma_trace_forward_LOT-2024-001" in response.headers["content-disposition"]
 
         # Verify CSV content
         content = response.content.decode("utf-8")
@@ -363,9 +363,7 @@ class TestExportEndpoints:
         assert len(lines) >= 1  # At least header
         assert "Traceability Lot Code" in lines[0]
 
-    def test_export_recall_contacts(
-        self, mock_neo4j_client, mock_trace_forward
-    ):
+    def test_export_recall_contacts(self, mock_neo4j_client, mock_trace_forward):
         """Test recall contacts CSV export."""
         from fastapi import FastAPI
 
@@ -374,9 +372,11 @@ class TestExportEndpoints:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -411,9 +411,11 @@ class TestGapAnalysisEndpoints:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -441,9 +443,11 @@ class TestGapAnalysisEndpoints:
         app = FastAPI()
         app.include_router(fsma_router)
 
+        import uuid
+
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
-        import uuid
+
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",

@@ -225,11 +225,7 @@ class StateManager:
         session = self._get_session()
 
         try:
-            results = (
-                session.query(SeenItem.source_id)
-                .filter_by(source_type=source_type)
-                .all()
-            )
+            results = session.query(SeenItem.source_id).filter_by(source_type=source_type).all()
             return {r.source_id for r in results}
 
         finally:
@@ -238,19 +234,13 @@ class StateManager:
     def cleanup_old_items(self, days: int = 90) -> int:
         """Remove items not seen in the specified number of days."""
         session = self._get_session()
-        cutoff = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         try:
             from datetime import timedelta
 
             cutoff = cutoff - timedelta(days=days)
-            result = (
-                session.query(SeenItem)
-                .filter(SeenItem.last_seen_at < cutoff)
-                .delete()
-            )
+            result = session.query(SeenItem).filter(SeenItem.last_seen_at < cutoff).delete()
             session.commit()
             logger.info("old_items_cleaned", count=result, days=days)
             return result
@@ -323,18 +313,15 @@ class StateManager:
 
         try:
             total = session.query(SeenItem).count()
-            by_type = (
-                session.execute(
-                    text(
-                        """
+            by_type = session.execute(
+                text(
+                    """
                     SELECT source_type, COUNT(*) as count 
                     FROM scheduler_seen_items 
                     GROUP BY source_type
                 """
-                    )
                 )
-                .fetchall()
-            )
+            ).fetchall()
 
             return {
                 "total_items": total,

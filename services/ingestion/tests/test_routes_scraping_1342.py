@@ -30,9 +30,9 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from shared.auth import APIKey, require_api_key
-from app.scrapers.state_adaptors.base import FetchedItem, Source
 import app.routes_scraping as routes_scraping
+from app.scrapers.state_adaptors.base import FetchedItem, Source
+from shared.auth import APIKey, require_api_key
 
 scraping_router = routes_scraping.router
 
@@ -80,9 +80,7 @@ class TestScrapeRegistry:
         assert response.status_code == 404
         assert response.json()["detail"] == "Unknown adaptor"
 
-    def test_skips_sources_outside_allowed_jurisdictions(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_skips_sources_outside_allowed_jurisdictions(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Scraper returns one source outside allowed jurisdictions; it
         # should be skipped before fetch is attempted.
         scraper = MagicMock()
@@ -98,9 +96,7 @@ class TestScrapeRegistry:
         # Fetch was never called because filtering kicked in first.
         scraper.fetch.assert_not_called()
 
-    def test_includes_source_with_no_jurisdiction_code(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_includes_source_with_no_jurisdiction_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Sources with ``jurisdiction_code=None`` bypass the allow-list
         # check. ``process_content`` returns a real event, which the
         # endpoint reflects in the response.
@@ -121,9 +117,7 @@ class TestScrapeRegistry:
         assert body["count"] == 1
         assert body["sources"][0]["event"] == "ok"
 
-    def test_empty_content_warning_is_skipped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_content_warning_is_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         scraper = MagicMock()
         scraper.list_sources.return_value = [_source("https://empty.test")]
         scraper.fetch.return_value = _fetched(b"")
@@ -138,16 +132,12 @@ class TestScrapeRegistry:
         assert response.json()["count"] == 0
         process.assert_not_called()
 
-    def test_pipeline_returns_no_event_is_not_appended(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_pipeline_returns_no_event_is_not_appended(self, monkeypatch: pytest.MonkeyPatch) -> None:
         scraper = MagicMock()
         scraper.list_sources.return_value = [_source("https://ok.test")]
         scraper.fetch.return_value = _fetched(b"<html>x</html>")
         monkeypatch.setitem(routes_scraping.ADAPTORS, "cppa", scraper)
-        monkeypatch.setattr(
-            routes_scraping._PIPELINE, "process_content", lambda **_k: None
-        )
+        monkeypatch.setattr(routes_scraping._PIPELINE, "process_content", lambda **_k: None)
 
         client = _client(_make_api_key(jurisdictions=["US-CA"]))
         response = client.post("/scrape/cppa")
@@ -155,9 +145,7 @@ class TestScrapeRegistry:
         body = response.json()
         assert body["count"] == 0
 
-    def test_pipeline_exception_is_swallowed_and_logged(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_pipeline_exception_is_swallowed_and_logged(self, monkeypatch: pytest.MonkeyPatch) -> None:
         scraper = MagicMock()
         sources = [
             _source("https://a.test"),
@@ -183,9 +171,7 @@ class TestScrapeRegistry:
         assert body["count"] == 1
         assert body["sources"] == [{"event": "b"}]
 
-    def test_empty_allowed_jurisdictions_filters_everything(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_allowed_jurisdictions_filters_everything(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``allowed_jurisdictions=None`` → ``set(None or [])`` = empty set;
         # every non-None jurisdiction source gets skipped.
         scraper = MagicMock()
@@ -256,9 +242,7 @@ class TestIngestAllRegulationsSummary:
         assert response.status_code == 200
         assert response.json()["unchanged"] == 1
 
-    def test_unknown_status_counted_as_failed(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unknown_status_counted_as_failed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_sources(monkeypatch, [self._fake_source()])
         # No ``status`` key -> falls through to ``.get("status", "failed")``
         # default, lands in ``failed`` bucket.

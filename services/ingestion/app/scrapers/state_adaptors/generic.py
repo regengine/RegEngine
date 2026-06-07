@@ -6,16 +6,18 @@ for different jurisdictions without custom code.
 
 from __future__ import annotations
 
-import httpx
-import feedparser
 from typing import Iterable, Optional
 
+import feedparser
+import httpx
+import structlog
 from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import SSRFError, validate_url
+
 from .base import FetchedItem, Source, StateRegistryScraper
 
-import structlog
 logger = structlog.get_logger("ingestion.scraper.generic")
+
 
 class GenericRSSScraper(StateRegistryScraper):
     """Generic RSS feed scraper for state regulatory feeds.
@@ -109,8 +111,9 @@ class GenericListScraper(StateRegistryScraper):
     def list_sources(self) -> Iterable[Source]:
         """Parse HTML page and yield sources for each document link."""
         try:
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
             resp = safe_httpx_get_sync(

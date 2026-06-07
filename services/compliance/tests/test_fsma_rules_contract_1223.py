@@ -32,10 +32,7 @@ from pathlib import Path
 
 import pytest
 
-
-_RULES_PATH = (
-    Path(__file__).parent.parent / "app" / "fsma_rules.json"
-)
+_RULES_PATH = Path(__file__).parent.parent / "app" / "fsma_rules.json"
 
 
 @pytest.fixture(scope="module")
@@ -112,9 +109,7 @@ class TestRequiredFieldsProducibleByIngestion_Issue1223:
         'no validation at all') and must have no duplicates."""
         required = rules["validation"]["required_fsma_fields"]
         assert len(required) > 0, "required_fsma_fields is empty"
-        assert len(required) == len(set(required)), (
-            f"required_fsma_fields contains duplicates: {required}"
-        )
+        assert len(required) == len(set(required)), f"required_fsma_fields contains duplicates: {required}"
 
 
 # ===========================================================================
@@ -141,8 +136,7 @@ class TestResponsiblePartyEnforcementDocumented_Issue1223:
         rpe = rules["validation"]["responsible_party_enforcement"]
         refs = rpe.get("reference_fields", [])
         assert "location_gln" in refs, (
-            f"responsible_party_enforcement.reference_fields must "
-            f"include location_gln; got {refs}"
+            f"responsible_party_enforcement.reference_fields must include location_gln; got {refs}"
         )
         assert "location_name" in refs, (
             f"responsible_party_enforcement.reference_fields must "
@@ -181,6 +175,4 @@ class TestAllowedCTETypesUnchanged_Issue1223:
             "RECEIVING",
             "TRANSFORMATION",
         }
-        assert expected <= allowed, (
-            f"allowed_cte_types missing FTL CTEs: {expected - allowed}"
-        )
+        assert expected <= allowed, f"allowed_cte_types missing FTL CTEs: {expected - allowed}"

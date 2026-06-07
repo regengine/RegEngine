@@ -22,6 +22,7 @@ Revision ID: 85cebda8e7f7
 Revises: 8374fa2eb35b
 Create Date: 2026-04-22
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -144,8 +145,6 @@ def downgrade() -> None:
     # should do so in a dedicated migration.
     op.execute("DROP POLICY IF EXISTS tenant_isolation_tasks ON fsma.task_queue")
     op.execute("DROP INDEX IF EXISTS fsma.idx_task_queue_idempotency")
-    op.execute(
-        "ALTER TABLE fsma.task_queue DROP COLUMN IF EXISTS visibility_timeout_seconds"
-    )
+    op.execute("ALTER TABLE fsma.task_queue DROP COLUMN IF EXISTS visibility_timeout_seconds")
     op.execute("ALTER TABLE fsma.task_queue DROP COLUMN IF EXISTS scheduled_at")
     op.execute("ALTER TABLE fsma.task_queue DROP COLUMN IF EXISTS idempotency_key")

@@ -13,22 +13,21 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
 from shared.auth import APIKey, require_api_key
+from shared.circuit_breaker import CircuitOpenError
 from shared.fda_export import (
-    ExportWindowError,
     MAX_EXPORT_WINDOW_DAYS,
+    ExportWindowError,
     safe_filename,
     safe_filename_token,
     validate_export_window,
 )
 from shared.resilient_http import resilient_client
-from shared.circuit_breaker import CircuitOpenError
 from shared.rules.ftl import FTL_CATEGORIES
+
 from .config import settings
 from .csv_safety import sanitize_cell
 from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
-
 
 # ---------------------------------------------------------------------------
 # FDA spreadsheet hardening helpers
@@ -75,13 +74,14 @@ def _is_ftl_commodity(value: str) -> bool:
 # Data models
 # ---------------------------------------------------------------------------
 
+
 class ComplianceRequirement(BaseModel):
     id: str
     title: str
     description: str
     category: str | None = None
     priority: str | None = None  # LOW | MEDIUM | HIGH | CRITICAL
-    status: str | None = None    # NOT_STARTED | IN_PROGRESS | COMPLIANT | NON_COMPLIANT
+    status: str | None = None  # NOT_STARTED | IN_PROGRESS | COMPLIANT | NON_COMPLIANT
 
 
 class ComplianceChecklist(BaseModel):
@@ -170,6 +170,7 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # false-positive compliance stamp. The deeper rule-engine logic (per-CTE
 # required-field enforcement, etc.) remains in ``services/shared/rules``
 # and is pending the #1203 option-2 rewire.
+
 
 @router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
 async def list_industries() -> IndustriesResponse:
@@ -480,10 +481,7 @@ async def fsma_audit_spreadsheet(
             status_code=403,
             detail="API key is not associated with a tenant",
         )
-    client_tenant_header = (
-        request.headers.get("X-Tenant-ID")
-        or request.headers.get("X-RegEngine-Tenant-ID")
-    )
+    client_tenant_header = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
     if client_tenant_header and client_tenant_header != str(authenticated_tenant_id):
         _logger.warning(
             "fda_export_tenant_mismatch",
@@ -646,10 +644,7 @@ async def fsma_audit_spreadsheet(
         )
         raise HTTPException(
             status_code=404,
-            detail=(
-                f"No FSMA 204 events found for {start.isoformat()} to "
-                f"{end.isoformat()} — verify query parameters"
-            ),
+            detail=(f"No FSMA 204 events found for {start.isoformat()} to {end.isoformat()} — verify query parameters"),
         )
 
     try:

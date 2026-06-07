@@ -24,6 +24,7 @@ logger = structlog.get_logger("fsma-plan-builder")
 
 class FirmType(str, Enum):
     """Types of firms under FSMA 204."""
+
     GROWER = "grower"
     MANUFACTURER = "manufacturer"
     PROCESSOR = "processor"
@@ -36,6 +37,7 @@ class FirmType(str, Enum):
 
 class RecordRetentionPeriod(str, Enum):
     """Record retention requirements."""
+
     TWO_YEARS = "2_years"
     STANDARD = "standard"  # As required by existing FDA regulations
 
@@ -43,6 +45,7 @@ class RecordRetentionPeriod(str, Enum):
 @dataclass
 class FirmInfo:
     """Information about the food business."""
+
     name: str
     address: str
     firm_type: FirmType
@@ -51,7 +54,7 @@ class FirmInfo:
     contact_name: str = ""
     contact_email: str = ""
     contact_phone: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
@@ -68,11 +71,12 @@ class FirmInfo:
 @dataclass
 class FTLCommodity:
     """Food Traceability List commodity handled by the firm."""
+
     name: str
     category: str  # e.g., "Leafy Greens", "Fresh-cut Fruits"
     cte_types: List[str] = field(default_factory=list)  # CTEs performed
     tlc_assignment_method: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
@@ -85,6 +89,7 @@ class FTLCommodity:
 @dataclass
 class RecordLocation:
     """Where traceability records are stored."""
+
     location_type: str  # "electronic", "paper", "hybrid"
     system_name: Optional[str] = None
     physical_address: Optional[str] = None
@@ -95,6 +100,7 @@ class RecordLocation:
 @dataclass
 class TraceabilityPlan:
     """Complete FSMA 204 Traceability Plan."""
+
     plan_id: str
     firm: FirmInfo
     version: str
@@ -584,22 +590,37 @@ Applies to all holding and storage operations for foods on the FTL at {address}.
 
 FIRM_TYPE_PROCEDURES: Dict[FirmType, List[str]] = {
     FirmType.GROWER: [
-        "harvesting", "cooling", "initial_packing", "shipping",
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "shipping",
     ],
     FirmType.PROCESSOR: [
-        "receiving", "cooling", "initial_packing", "transformation", "shipping",
+        "receiving",
+        "cooling",
+        "initial_packing",
+        "transformation",
+        "shipping",
     ],
     FirmType.MANUFACTURER: [
-        "receiving", "transformation", "shipping",
+        "receiving",
+        "transformation",
+        "shipping",
     ],
     FirmType.PACKER: [
-        "receiving", "initial_packing", "shipping",
+        "receiving",
+        "initial_packing",
+        "shipping",
     ],
     FirmType.HOLDER: [
-        "receiving", "holding", "shipping",
+        "receiving",
+        "holding",
+        "shipping",
     ],
     FirmType.DISTRIBUTOR: [
-        "receiving", "holding", "shipping",
+        "receiving",
+        "holding",
+        "shipping",
     ],
     FirmType.RETAILER: [
         "receiving",
@@ -614,33 +635,34 @@ FIRM_TYPE_PROCEDURES: Dict[FirmType, List[str]] = {
 # PLAN BUILDER
 # =============================================================================
 
+
 class TraceabilityPlanBuilder:
     """Builder for generating FSMA 204 Traceability Plans."""
-    
+
     def __init__(self, firm: FirmInfo):
         self.firm = firm
         self.commodities: List[FTLCommodity] = []
         self.record_locations: List[RecordLocation] = []
         self.tlc_format = ""
         self.record_system = "electronic record system"
-        
+
     def add_commodity(self, commodity: FTLCommodity) -> "TraceabilityPlanBuilder":
         """Add an FTL commodity to the plan."""
         self.commodities.append(commodity)
         return self
-    
+
     def add_record_location(self, location: RecordLocation) -> "TraceabilityPlanBuilder":
         """Add a record storage location."""
         self.record_locations.append(location)
         if location.system_name:
             self.record_system = location.system_name
         return self
-    
+
     def set_tlc_format(self, format_string: str) -> "TraceabilityPlanBuilder":
         """Set the TLC format template."""
         self.tlc_format = format_string
         return self
-    
+
     def _generate_receiving_procedure(self) -> str:
         """Generate receiving procedure from template."""
         return RECEIVING_PROCEDURE_TEMPLATE.format(
@@ -649,7 +671,7 @@ class TraceabilityPlanBuilder:
             tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
             record_system=self.record_system,
         )
-    
+
     def _generate_shipping_procedure(self) -> str:
         """Generate shipping procedure from template."""
         return SHIPPING_PROCEDURE_TEMPLATE.format(
@@ -657,7 +679,7 @@ class TraceabilityPlanBuilder:
             address=self.firm.address,
             record_system=self.record_system,
         )
-    
+
     def _generate_transformation_procedure(self) -> str:
         """Generate transformation procedure from template."""
         return TRANSFORMATION_PROCEDURE_TEMPLATE.format(
@@ -715,7 +737,7 @@ class TraceabilityPlanBuilder:
         example_tlc = self.tlc_format or "ABC-20240115-001"
         if "{" in example_tlc:
             example_tlc = "ABC-20240115-001"
-            
+
         return TLC_ASSIGNMENT_TEMPLATE.format(
             firm_name=self.firm.name,
             tlc_format=self.tlc_format or "[PLANT]-[YYYYMMDD]-[SEQ]",
@@ -723,7 +745,7 @@ class TraceabilityPlanBuilder:
             location_code=self.firm.gln[:3] if self.firm.gln else "ABC",
             record_system=self.record_system,
         )
-    
+
     def _generate_recall_procedure(self) -> str:
         """Generate recall response procedure from template."""
         return RECALL_PROCEDURE_TEMPLATE.format(
@@ -734,13 +756,13 @@ class TraceabilityPlanBuilder:
             contact_email=self.firm.contact_email,
             next_mock_recall="[Schedule quarterly]",
         )
-    
+
     def _generate_training_procedure(self) -> str:
         """Generate training procedure from template."""
         return TRAINING_PROCEDURE_TEMPLATE.format(
             firm_name=self.firm.name,
         )
-    
+
     def build(self) -> TraceabilityPlan:
         """Build the complete traceability plan.
 
@@ -748,10 +770,12 @@ class TraceabilityPlanBuilder:
         Universal procedures (TLC assignment, training, recall) are always included.
         """
         now = datetime.now(timezone.utc).isoformat()
-        applicable = set(FIRM_TYPE_PROCEDURES.get(
-            self.firm.firm_type,
-            ["receiving", "shipping", "transformation"],  # safe fallback
-        ))
+        applicable = set(
+            FIRM_TYPE_PROCEDURES.get(
+                self.firm.firm_type,
+                ["receiving", "shipping", "transformation"],  # safe fallback
+            )
+        )
 
         procedure_generators = {
             "receiving": self._generate_receiving_procedure,
@@ -791,14 +815,14 @@ class TraceabilityPlanBuilder:
             recall_procedure=self._generate_recall_procedure(),
             recall_contact=f"{self.firm.contact_name} - {self.firm.contact_email}",
         )
-        
+
         logger.info(
             "traceability_plan_generated",
             plan_id=plan.plan_id,
             firm_name=self.firm.name,
             commodities=len(self.commodities),
         )
-        
+
         return plan
 
 
@@ -806,14 +830,15 @@ class TraceabilityPlanBuilder:
 # PLAN EXPORT
 # =============================================================================
 
+
 def export_plan_markdown(plan: TraceabilityPlan) -> str:
     """Export plan as Markdown document."""
     md = f"""# FSMA 204 Traceability Plan
 
 **Company:** {plan.firm.name}  
 **Address:** {plan.firm.address}  
-**FDA Registration:** {plan.firm.fda_registration or 'N/A'}  
-**GLN:** {plan.firm.gln or 'N/A'}  
+**FDA Registration:** {plan.firm.fda_registration or "N/A"}  
+**GLN:** {plan.firm.gln or "N/A"}  
 
 **Plan Version:** {plan.version}  
 **Created:** {plan.created_date}  
@@ -832,29 +857,29 @@ def export_plan_markdown(plan: TraceabilityPlan) -> str:
 ## Food Traceability List (FTL) Commodities
 
 """
-    
+
     for i, comm in enumerate(plan.commodities, 1):
         md += f"""### {i}. {comm.name}
 - **Category:** {comm.category}
-- **CTEs Performed:** {', '.join(comm.cte_types) if comm.cte_types else 'N/A'}
-- **TLC Method:** {comm.tlc_assignment_method or 'Standard'}
+- **CTEs Performed:** {", ".join(comm.cte_types) if comm.cte_types else "N/A"}
+- **TLC Method:** {comm.tlc_assignment_method or "Standard"}
 
 """
-    
+
     md += f"""---
 
 ## Record Storage
 
 """
-    
+
     for loc in plan.record_locations:
         md += f"""- **Type:** {loc.location_type}
-  - System: {loc.system_name or 'N/A'}
-  - Location: {loc.physical_address or 'N/A'}
+  - System: {loc.system_name or "N/A"}
+  - Location: {loc.physical_address or "N/A"}
   - Retention: {loc.retention_period.value}
 
 """
-    
+
     md += f"""---
 
 ## TLC Format
@@ -907,7 +932,7 @@ I certify that this Traceability Plan meets the requirements of FSMA Section 204
 
 **Title:** _________________________
 """
-    
+
     return md
 
 

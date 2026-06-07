@@ -13,11 +13,11 @@ Tests follow the patterns from test_tenant_isolation.py and use httpx for servic
 """
 
 import os
-import pytest
-import httpx
-from uuid import uuid4
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
+import httpx
+import pytest
 
 # Service URLs
 ADMIN_URL = "http://localhost:8400"
@@ -65,7 +65,7 @@ class TestSQLInjectionPrevention:
                 json={
                     "event_col": "event_type'; DROP TABLE events; --",
                     "data": [{"event_type": "test"}],
-                }
+                },
             )
 
             # Should reject malicious column name
@@ -90,7 +90,7 @@ class TestSQLInjectionPrevention:
                 json={
                     "tenant_col": "t_id' UNION SELECT * FROM admin_users; --",
                     "data": [{"t_id": tenant_id}],
-                }
+                },
             )
 
             # Should reject malicious column name
@@ -114,7 +114,7 @@ class TestSQLInjectionPrevention:
                 json={
                     "message_expr": "CAST(msg AS TEXT) || '; DELETE FROM events WHERE 1=1; --'",
                     "data": [{"msg": "test"}],
-                }
+                },
             )
 
             # Should reject or sanitize the expression
@@ -139,7 +139,7 @@ class TestSQLInjectionPrevention:
                     "cte_name": "safe_cte",
                     "condition": "created_at > '2024-01-01' OR 1=1; DROP TABLE cte_logs; --",
                     "data": {"test": "value"},
-                }
+                },
             )
 
             # Should reject malicious condition
@@ -148,12 +148,15 @@ class TestSQLInjectionPrevention:
         except httpx.ConnectError:
             pytest.skip("Ingestion service not running")
 
-    @pytest.mark.parametrize("malicious_col", [
-        "col_name'; DROP TABLE t; --",
-        "col_name' UNION SELECT * FROM secret_data; --",
-        "col_name` OR `1`=`1",
-        "col_name\\'; DROP TABLE t; --",
-    ])
+    @pytest.mark.parametrize(
+        "malicious_col",
+        [
+            "col_name'; DROP TABLE t; --",
+            "col_name' UNION SELECT * FROM secret_data; --",
+            "col_name` OR `1`=`1",
+            "col_name\\'; DROP TABLE t; --",
+        ],
+    )
     def test_dynamic_column_allowlist_enforced(self, ingestion_client, malicious_col):
         """Test that dynamic column names are strictly allowlisted."""
         try:
@@ -168,7 +171,7 @@ class TestSQLInjectionPrevention:
                 json={
                     "alert_column": malicious_col,
                     "threshold": 10,
-                }
+                },
             )
 
             # Should reject any non-whitelisted column name
@@ -185,11 +188,14 @@ class TestAuthGuardEnforcement:
     auth headers are missing or invalid.
     """
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/ingest/status/job-123", "GET"),
-        ("/v1/ingest/documents/doc-456/analysis", "GET"),
-        ("/v1/ingest/discovery/queue", "GET"),
-    ])
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/ingest/status/job-123", "GET"),
+            ("/v1/ingest/documents/doc-456/analysis", "GET"),
+            ("/v1/ingest/discovery/queue", "GET"),
+        ],
+    )
     def test_ingestion_endpoints_require_auth(self, ingestion_client, endpoint, method):
         """Test that ingestion endpoints require authentication."""
         try:
@@ -204,20 +210,19 @@ class TestAuthGuardEnforcement:
         except httpx.ConnectError:
             pytest.skip("Ingestion service not running")
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/evidence/verify", "POST"),
-        ("/v1/evidence/chain/env-123", "GET"),
-        ("/v1/evidence/envelopes", "GET"),
-    ])
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/evidence/verify", "POST"),
+            ("/v1/evidence/chain/env-123", "GET"),
+            ("/v1/evidence/envelopes", "GET"),
+        ],
+    )
     def test_evidence_endpoints_require_auth(self, ingestion_client, endpoint, method):
         """Test that evidence endpoints require authentication."""
         try:
             # Request WITHOUT auth headers
-            response = ingestion_client.request(
-                method,
-                endpoint,
-                json={} if method == "POST" else None
-            )
+            response = ingestion_client.request(method, endpoint, json={} if method == "POST" else None)
 
             # Should be rejected as 401
             assert response.status_code in [401, 403]
@@ -228,10 +233,7 @@ class TestAuthGuardEnforcement:
     def test_vision_analyze_label_requires_auth(self, graph_client):
         """Test that vision analysis endpoint requires auth."""
         try:
-            response = graph_client.post(
-                "/api/v1/vision/analyze-label",
-                json={"image": "base64-data"}
-            )
+            response = graph_client.post("/api/v1/vision/analyze-label", json={"image": "base64-data"})
 
             # Should require auth
             assert response.status_code in [401, 403]
@@ -239,18 +241,17 @@ class TestAuthGuardEnforcement:
         except httpx.ConnectError:
             pytest.skip("Graph service not running")
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/obligation/evaluate", "POST"),
-        ("/v1/obligation/coverage-report", "GET"),
-    ])
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/obligation/evaluate", "POST"),
+            ("/v1/obligation/coverage-report", "GET"),
+        ],
+    )
     def test_obligation_endpoints_require_auth(self, graph_client, endpoint, method):
         """Test that obligation endpoints require authentication."""
         try:
-            response = graph_client.request(
-                method,
-                endpoint,
-                json={} if method == "POST" else None
-            )
+            response = graph_client.request(method, endpoint, json={} if method == "POST" else None)
 
             # Should require auth
             assert response.status_code in [401, 403]
@@ -262,8 +263,7 @@ class TestAuthGuardEnforcement:
         """Test that invalid API keys are rejected."""
         try:
             response = ingestion_client.get(
-                "/v1/ingest/status/job-123",
-                headers={"X-RegEngine-API-Key": "invalid-key-12345"}
+                "/v1/ingest/status/job-123", headers={"X-RegEngine-API-Key": "invalid-key-12345"}
             )
 
             assert response.status_code in [401, 403]
@@ -276,8 +276,7 @@ class TestAuthGuardEnforcement:
         try:
             # SQL injection attempt in API key
             response = ingestion_client.get(
-                "/v1/ingest/status/job-123",
-                headers={"X-RegEngine-API-Key": "'; DROP TABLE api_keys; --"}
+                "/v1/ingest/status/job-123", headers={"X-RegEngine-API-Key": "'; DROP TABLE api_keys; --"}
             )
 
             assert response.status_code in [401, 403]
@@ -296,7 +295,7 @@ class TestAuthGuardEnforcement:
                 headers={
                     "X-RegEngine-API-Key": "expired-key-token",
                     "X-Tenant-ID": tenant_id,
-                }
+                },
             )
 
             # Should be rejected (either 401 or because key doesn't exist)
@@ -328,16 +327,14 @@ class TestK8sAuthBypassGuard:
                 headers={
                     "X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token"),
                     "X-Tenant-ID": tenant_id,
-                }
+                },
             )
 
             # If REGENGINE_ENV=production, should fail
             current_env = os.getenv("REGENGINE_ENV", "test").lower()
             if current_env == "production":
                 # Bypass token should not work in production
-                assert response.status_code in [401, 403], (
-                    "Bypass token should not work in production environment"
-                )
+                assert response.status_code in [401, 403], "Bypass token should not work in production environment"
             else:
                 # In test/dev, bypass might work (or might not, depending on app logic)
                 pytest.skip(f"Not in production env, bypassing test (env={current_env})")
@@ -356,7 +353,7 @@ class TestK8sAuthBypassGuard:
                 headers={
                     "X-RegEngine-API-Key": "some-bypass-token",
                     "X-Tenant-ID": tenant_id,
-                }
+                },
             )
 
             # Without explicit env setup, should fail
@@ -388,7 +385,7 @@ class TestRLSSysadminDefense:
                 json={
                     "user_id": str(uuid4()),
                     "sysadmin": True,
-                }
+                },
             )
 
             # Should be rejected (403 Forbidden or 401)
@@ -410,7 +407,7 @@ class TestRLSSysadminDefense:
                 headers={
                     "X-RegEngine-API-Key": "user-key-with-false-sysadmin-claim",
                     "X-Tenant-ID": tenant_id,
-                }
+                },
             )
 
             # RLS should filter results to only tenant's users, not all users
@@ -430,7 +427,7 @@ class TestRLSSysadminDefense:
                 headers={
                     "X-RegEngine-API-Key": "regular-api-key",
                     "X-Tenant-ID": str(uuid4()),
-                }
+                },
             )
 
             # Should be rejected without X-Admin-Key
@@ -464,7 +461,7 @@ class TestRaceConditionGuards:
                         "X-Admin-Key": "admin-master-key-dev",
                         "X-Tenant-ID": tenant_id,
                     },
-                    json={"name": supplier_name}
+                    json={"name": supplier_name},
                 )
                 responses.append(response)
 
@@ -496,14 +493,12 @@ class TestRaceConditionGuards:
                         "X-Admin-Key": "admin-master-key-dev",
                         "X-Tenant-ID": tenant_id,
                     },
-                    json={"step_id": step_id}
+                    json={"step_id": step_id},
                 )
                 responses.append(response)
 
             # At least one should succeed
-            assert any(r.status_code in [200, 201] for r in responses), (
-                "No successful completion responses"
-            )
+            assert any(r.status_code in [200, 201] for r in responses), "No successful completion responses"
 
             # Should not have duplicate completion records
             successful = [r for r in responses if r.status_code in [200, 201]]
@@ -533,7 +528,7 @@ class TestJWTKeyRotation:
                 headers={
                     "Authorization": f"Bearer {expired_jwt}",
                     "X-Tenant-ID": str(uuid4()),
-                }
+                },
             )
 
             # Should reject expired token
@@ -549,14 +544,16 @@ class TestJWTKeyRotation:
         """Test that JWTs signed with the wrong key are rejected."""
         try:
             # Create a JWT with a signature from a different key
-            wrong_key_jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZXhwIjo5OTk5OTk5OTk5fQ.wrongsignature"
+            wrong_key_jwt = (
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiZXhwIjo5OTk5OTk5OTk5fQ.wrongsignature"
+            )
 
             response = graph_client.get(
                 "/v1/labels/health",
                 headers={
                     "Authorization": f"Bearer {wrong_key_jwt}",
                     "X-Tenant-ID": str(uuid4()),
-                }
+                },
             )
 
             # Should reject invalid signature
@@ -574,7 +571,7 @@ class TestJWTKeyRotation:
                 headers={
                     "Authorization": "Bearer not-a-valid-jwt",
                     "X-Tenant-ID": str(uuid4()),
-                }
+                },
             )
 
             # Should reject malformed token
@@ -592,12 +589,15 @@ class TestCSRFDoubleSubmit:
     CSRF tokens and reject requests without them.
     """
 
-    @pytest.mark.parametrize("method,endpoint", [
-        ("POST", "/v1/admin/suppliers"),
-        ("POST", "/v1/admin/onboarding/create"),
-        ("PUT", "/v1/admin/users/user-123"),
-        ("DELETE", "/v1/admin/keys/key-123"),
-    ])
+    @pytest.mark.parametrize(
+        "method,endpoint",
+        [
+            ("POST", "/v1/admin/suppliers"),
+            ("POST", "/v1/admin/onboarding/create"),
+            ("PUT", "/v1/admin/users/user-123"),
+            ("DELETE", "/v1/admin/keys/key-123"),
+        ],
+    )
     def test_state_changing_endpoints_require_csrf(self, admin_client, method, endpoint):
         """Test that state-changing endpoints require CSRF tokens."""
         try:
@@ -608,7 +608,7 @@ class TestCSRFDoubleSubmit:
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
                 },
-                json={} if method != "DELETE" else None
+                json={} if method != "DELETE" else None,
             )
 
             # If CSRF is enforced, should be rejected with 403
@@ -632,7 +632,7 @@ class TestCSRFDoubleSubmit:
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
                 },
-                json={"name": "Test Supplier"}
+                json={"name": "Test Supplier"},
             )
 
             # Should be rejected or require CSRF
@@ -654,7 +654,7 @@ class TestCSRFDoubleSubmit:
                 headers={
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
-                }
+                },
             )
 
             # Should not require CSRF
@@ -673,7 +673,7 @@ class TestCSRFDoubleSubmit:
                     "X-Tenant-ID": str(uuid4()),
                     "X-CSRF-Token": "wrong-csrf-token-12345",
                 },
-                json={"name": "Test Supplier"}
+                json={"name": "Test Supplier"},
             )
 
             # Should be rejected if CSRF is enforced
@@ -689,10 +689,13 @@ class TestCSRFDoubleSubmit:
 class TestSecurityHeadersPresence:
     """Test that security headers are present in responses."""
 
-    @pytest.mark.parametrize("endpoint", [
-        "/health",
-        "/v1/labels/health",
-    ])
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "/health",
+            "/v1/labels/health",
+        ],
+    )
     def test_security_headers_present(self, admin_client, endpoint):
         """Test that responses include security headers."""
         try:
@@ -733,13 +736,16 @@ class TestSecurityHeadersPresence:
 class TestInputValidationAndSanitization:
     """Test input validation and sanitization across security boundaries."""
 
-    @pytest.mark.parametrize("malicious_input", [
-        "<script>alert('xss')</script>",
-        "'; DROP TABLE users; --",
-        "x' UNION SELECT * FROM passwords; --",
-        "../../etc/passwd",
-        "%00%0a%0d",
-    ])
+    @pytest.mark.parametrize(
+        "malicious_input",
+        [
+            "<script>alert('xss')</script>",
+            "'; DROP TABLE users; --",
+            "x' UNION SELECT * FROM passwords; --",
+            "../../etc/passwd",
+            "%00%0a%0d",
+        ],
+    )
     def test_malicious_input_sanitized(self, admin_client, malicious_input):
         """Test that malicious input is sanitized or rejected."""
         try:
@@ -749,7 +755,7 @@ class TestInputValidationAndSanitization:
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
                 },
-                json={"name": malicious_input}
+                json={"name": malicious_input},
             )
 
             # Should either reject or sanitize
@@ -779,7 +785,7 @@ class TestInputValidationAndSanitization:
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
                 },
-                json=large_data
+                json=large_data,
             )
 
             # Should reject large requests
@@ -800,16 +806,14 @@ class TestErrorHandlingAndInfoLeakage:
     def test_404_does_not_leak_paths(self, admin_client):
         """Test that 404 errors don't reveal internal paths."""
         try:
-            response = admin_client.get(
-                "/v1/admin/secret-internal-path-xyz"
-            )
+            response = admin_client.get("/v1/admin/secret-internal-path-xyz")
 
             if response.status_code == 404:
                 body = response.text.lower()
                 # Should not leak internal paths or stack traces
                 assert "/users/" not in body
                 assert "traceback" not in body
-                assert "file \"" not in body
+                assert 'file "' not in body
 
         except httpx.ConnectError:
             pytest.skip("Admin service not running")
@@ -823,14 +827,14 @@ class TestErrorHandlingAndInfoLeakage:
                     "X-Admin-Key": "admin-master-key-dev",
                     "X-Tenant-ID": str(uuid4()),
                 },
-                json={"invalid": "data"}  # Missing required fields
+                json={"invalid": "data"},  # Missing required fields
             )
 
             if response.status_code == 500:
                 body = response.text.lower()
                 # Should not leak stack traces
                 assert "traceback" not in body
-                assert "file \"" not in body
+                assert 'file "' not in body
                 assert "line " not in body
 
         except httpx.ConnectError:
@@ -840,10 +844,7 @@ class TestErrorHandlingAndInfoLeakage:
         """Test that error messages are generic, not revealing."""
         try:
             response = admin_client.get(
-                "/v1/admin/keys",
-                headers={
-                    "X-RegEngine-API-Key": "definitely-invalid-key-that-does-not-exist"
-                }
+                "/v1/admin/keys", headers={"X-RegEngine-API-Key": "definitely-invalid-key-that-does-not-exist"}
             )
 
             # Should be rejected

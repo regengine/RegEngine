@@ -7,6 +7,7 @@ Covers:
   4. fail_closed policy raises HTTPException(503).
   5. Double-failure (primary + buffer) raises HTTPException(503).
 """
+
 from __future__ import annotations
 
 import os

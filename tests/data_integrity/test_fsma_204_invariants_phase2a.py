@@ -1,20 +1,18 @@
-
 import os
-import pytest
+
 import psycopg
+import pytest
 from psycopg.rows import dict_row
 
 # Get DB URL from env or use default
-DB_URL = os.environ.get(
-    "ADMIN_DATABASE_URL", 
-    "postgresql://regengine:regengine@localhost:5433/regengine_admin"
-)
+DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
 
 
 def _psycopg_conninfo(url: str) -> str:
     if url.startswith("postgresql+psycopg://"):
         return url.replace("postgresql+psycopg://", "postgresql://", 1)
     return url
+
 
 @pytest.fixture(scope="module")
 def db_connection():
@@ -26,21 +24,22 @@ def db_connection():
     except (psycopg.OperationalError, psycopg.ProgrammingError) as e:
         pytest.skip(f"Database unavailable: {e}")
 
+
 class TestFSMA204Invariants:
     """
     Phase 2a: Schema Invariant Verification for FSMA 204 Data.
-    
-    Verifies that existing data in the system adheres to critical regulatory 
+
+    Verifies that existing data in the system adheres to critical regulatory
     and architectural invariants, ensuring the 'Golden Corpus' is valid.
     """
-    
+
     def test_authority_documents_have_required_metadata(self, db_connection):
         """
         Invariant: All Authority Documents must have an Issuer and Effective Date.
         Critical for audit trails (who said so, and when).
         """
         cur = db_connection.cursor(row_factory=dict_row)
-        
+
         # We query for any violation
         cur.execute("""
             SELECT id, document_code, issuer_name, effective_date 
@@ -49,19 +48,19 @@ class TestFSMA204Invariants:
                OR effective_date IS NULL
         """)
         violations = cur.fetchall()
-        
+
         if violations:
             pytest.fail(f"Found {len(violations)} Authority Documents missing critical metadata: {violations}")
-            
+
         # Verify specific known seeds exist (Smoke Test)
         cur.execute("SELECT COUNT(*) as count FROM pcos_authority_documents WHERE document_code = 'SAG_CBA_2023'")
         result = cur.fetchone()
-        if result['count'] == 0:
+        if result["count"] == 0:
             print("\nWARNING: Seed data for SAG_CBA_2023 missing. DB appears to be empty of default authorities.")
-        
+
         # Check total count
         cur.execute("SELECT COUNT(*) as count FROM pcos_authority_documents")
-        total = cur.fetchone()['count']
+        total = cur.fetchone()["count"]
         if total == 0:
             print("\nNOTICE: pcos_authority_documents is empty. Invariant checks passed trivially.")
 
@@ -71,7 +70,7 @@ class TestFSMA204Invariants:
         e.g., if type='decimal', fact_value_decimal must not be NULL.
         """
         cur = db_connection.cursor(row_factory=dict_row)
-        
+
         # Check Decimal
         cur.execute("""
             SELECT id, fact_key, fact_value_type 
@@ -116,12 +115,14 @@ class TestFSMA204Invariants:
             WHERE a.status = 'superseded' AND f.is_current = TRUE
         """)
         # Facts linked to superseded docs shouldn't necessarily be marked 'current' without review
-        # This might be a soft failure/warning depending on business logic, 
+        # This might be a soft failure/warning depending on business logic,
         # but for STRICT integrity, current facts should generally come from active docs.
         # We'll treat it as a warning for now (print) or soft fail.
-        
+
         warnings = cur.fetchall()
         if warnings:
-            print(f"WARNING: {len(warnings)} Current Facts are linked to Superseded Authority Documents. Review required.")
+            print(
+                f"WARNING: {len(warnings)} Current Facts are linked to Superseded Authority Documents. Review required."
+            )
             # Un-comment to enforce strictly:
             # pytest.fail(f"Current Facts linked to Superseded Docs: {warnings}")

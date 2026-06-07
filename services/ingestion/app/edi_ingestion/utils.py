@@ -9,7 +9,6 @@ from typing import Optional
 from fastapi import HTTPException
 
 from ..webhook_models import VALID_UNITS_OF_MEASURE
-
 from .constants import _X12_UOM_MAP
 
 logger = logging.getLogger("edi-ingestion")
@@ -45,12 +44,12 @@ def _parse_edi_date_digits(digits: str) -> datetime:
         day = int(digits[4:6])
         logger.info(
             "edi_date_century_inferred yy=%02d pivot=%d -> %d",
-            yy, pivot, year,
+            yy,
+            pivot,
+            year,
         )
     else:
-        raise ValueError(
-            f"EDI date must be 8-digit CCYYMMDD or 6-digit YYMMDD, got {len(digits)} digits"
-        )
+        raise ValueError(f"EDI date must be 8-digit CCYYMMDD or 6-digit YYMMDD, got {len(digits)} digits")
     return datetime(year=year, month=month, day=day, tzinfo=timezone.utc)
 
 
@@ -85,10 +84,7 @@ def _valid_gln_or_none(value: Optional[str]) -> Optional[str]:
     if len(clean) != 13:
         return None
 
-    total = sum(
-        int(digit) * (3 if index % 2 else 1)
-        for index, digit in enumerate(reversed(clean[:-1]))
-    )
+    total = sum(int(digit) * (3 if index % 2 else 1) for index, digit in enumerate(reversed(clean[:-1])))
     expected = (10 - (total % 10)) % 10
     return clean if int(clean[-1]) == expected else None
 

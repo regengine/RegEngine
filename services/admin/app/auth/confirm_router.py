@@ -7,6 +7,7 @@ Exposes:
   unlock_account   — handler (re-exported from auth_routes for compat)
   ConfirmPasswordRequest — schema (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -17,12 +18,14 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from shared.pii import mask_email
+from shared.rate_limit import limiter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth_utils import create_access_token, decode_access_token, verify_password
 from ..database import get_session
-from ..dependencies import get_current_user, get_session_store, PermissionChecker
+from ..dependencies import PermissionChecker, get_current_user, get_session_store
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import MembershipModel, TenantModel, UserModel
 from .elevation_helpers import _ELEVATION_JTI_KEY_PREFIX, _ELEVATION_TOKEN_TTL_SECONDS
@@ -34,8 +37,6 @@ from .lockout import (
     _record_failed_login_attempt,
     _record_lockout_attempt,
 )
-from shared.pii import mask_email
-from shared.rate_limit import limiter
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -90,19 +91,24 @@ async def confirm_password(
     acting_tenant_id: Optional[UUID] = None
     try:
         from ..models import TenantContext as _TC
+
         acting_tenant_id = _TC.get_tenant_context(db)
     except Exception:
         acting_tenant_id = None
     if acting_tenant_id is None:
-        mem = db.execute(
-            select(MembershipModel)
-            .join(TenantModel, MembershipModel.tenant_id == TenantModel.id)
-            .where(
-                MembershipModel.user_id == current_user.id,
-                MembershipModel.is_active == True,  # noqa: E712
-                TenantModel.status == "active",
+        mem = (
+            db.execute(
+                select(MembershipModel)
+                .join(TenantModel, MembershipModel.tenant_id == TenantModel.id)
+                .where(
+                    MembershipModel.user_id == current_user.id,
+                    MembershipModel.is_active == True,  # noqa: E712
+                    TenantModel.status == "active",
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if mem is not None:
             acting_tenant_id = mem.tenant_id
 

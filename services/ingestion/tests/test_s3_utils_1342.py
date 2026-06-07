@@ -29,11 +29,9 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
+from app import s3_utils
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import HTTPException
-
-from app import s3_utils
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -145,11 +143,17 @@ def fake_client(monkeypatch):
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     """Ensure logger calls don't propagate to the console during tests."""
+
     # s3_utils uses structlog directly — just stub the bound logger
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
 
     monkeypatch.setattr(s3_utils, "logger", _Silent())
 
@@ -160,16 +164,20 @@ def _silence_logger(monkeypatch):
 
 
 class TestClientFactory:
-
     def test_raises_503_when_credentials_missing(self, monkeypatch):
         # #2348: legible 503 instead of NotImplementedError → 500.
         from fastapi import HTTPException
-        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
-            object_storage_access_key_id=None,
-            object_storage_secret_access_key=None,
-            object_storage_region="us-east-1",
-            object_storage_endpoint_url=None,
-        ))
+
+        monkeypatch.setattr(
+            s3_utils,
+            "get_settings",
+            lambda: SimpleNamespace(
+                object_storage_access_key_id=None,
+                object_storage_secret_access_key=None,
+                object_storage_region="us-east-1",
+                object_storage_endpoint_url=None,
+            ),
+        )
         with pytest.raises(HTTPException) as excinfo:
             s3_utils._client()
         assert excinfo.value.status_code == 503
@@ -177,30 +185,43 @@ class TestClientFactory:
 
     def test_raises_503_when_only_access_key_present(self, monkeypatch):
         from fastapi import HTTPException
-        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
-            object_storage_access_key_id="akid",
-            object_storage_secret_access_key=None,
-            object_storage_region="us-east-1",
-            object_storage_endpoint_url=None,
-        ))
+
+        monkeypatch.setattr(
+            s3_utils,
+            "get_settings",
+            lambda: SimpleNamespace(
+                object_storage_access_key_id="akid",
+                object_storage_secret_access_key=None,
+                object_storage_region="us-east-1",
+                object_storage_endpoint_url=None,
+            ),
+        )
         with pytest.raises(HTTPException) as excinfo:
             s3_utils._client()
         assert excinfo.value.status_code == 503
 
     def test_is_object_storage_configured(self, monkeypatch):
-        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
-            object_storage_access_key_id=None,
-            object_storage_secret_access_key=None,
-            object_storage_region="us-east-1",
-            object_storage_endpoint_url=None,
-        ))
+        monkeypatch.setattr(
+            s3_utils,
+            "get_settings",
+            lambda: SimpleNamespace(
+                object_storage_access_key_id=None,
+                object_storage_secret_access_key=None,
+                object_storage_region="us-east-1",
+                object_storage_endpoint_url=None,
+            ),
+        )
         assert s3_utils.is_object_storage_configured() is False
-        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
-            object_storage_access_key_id="akid",
-            object_storage_secret_access_key="skid",
-            object_storage_region="us-east-1",
-            object_storage_endpoint_url=None,
-        ))
+        monkeypatch.setattr(
+            s3_utils,
+            "get_settings",
+            lambda: SimpleNamespace(
+                object_storage_access_key_id="akid",
+                object_storage_secret_access_key="skid",
+                object_storage_region="us-east-1",
+                object_storage_endpoint_url=None,
+            ),
+        )
         assert s3_utils.is_object_storage_configured() is True
 
     def test_returns_boto_client_when_configured(self, monkeypatch):
@@ -213,12 +234,16 @@ class TestClientFactory:
                 return "boto-client"
 
         monkeypatch.setattr(s3_utils.boto3.session, "Session", lambda: _FakeBotoSession())
-        monkeypatch.setattr(s3_utils, "get_settings", lambda: SimpleNamespace(
-            object_storage_access_key_id="akid",
-            object_storage_secret_access_key="skid",
-            object_storage_region="us-west-2",
-            object_storage_endpoint_url="http://minio",
-        ))
+        monkeypatch.setattr(
+            s3_utils,
+            "get_settings",
+            lambda: SimpleNamespace(
+                object_storage_access_key_id="akid",
+                object_storage_secret_access_key="skid",
+                object_storage_region="us-west-2",
+                object_storage_endpoint_url="http://minio",
+            ),
+        )
         out = s3_utils._client()
         assert out == "boto-client"
         assert called["service"] == "s3"
@@ -234,11 +259,11 @@ class TestClientFactory:
 
 
 class TestEnsureBucketSecurity:
-
     def test_happy_path_calls_both(self, fake_client):
         s3_utils._ensure_bucket_security(fake_client, "b")
         assert fake_client.ensure_security_calls == [
-            "public_access_block", "bucket_encryption",
+            "public_access_block",
+            "bucket_encryption",
         ]
 
     def test_public_access_block_failure_is_non_fatal(self, fake_client):
@@ -259,7 +284,6 @@ class TestEnsureBucketSecurity:
 
 
 class TestPutJson:
-
     def test_happy_path_returns_uri(self, fake_client):
         uri = s3_utils.put_json("bkt", "k1", {"hello": "world"})
         assert uri == "s3://bkt/k1"
@@ -311,7 +335,6 @@ class TestPutJson:
 
 
 class TestPutBytes:
-
     def test_happy_path(self, fake_client):
         uri = s3_utils.put_bytes("b", "k", b"\x00\x01", content_type="image/png")
         assert uri == "s3://b/k"
@@ -349,7 +372,6 @@ class TestPutBytes:
 
 
 class TestJsonSerializer:
-
     def test_datetime_becomes_iso(self):
         ts = datetime(2026, 1, 1, tzinfo=timezone.utc)
         assert s3_utils._json_serializer(ts) == "2026-01-01T00:00:00+00:00"
@@ -368,7 +390,6 @@ class TestJsonSerializer:
 
 
 class TestEnsureBucket:
-
     def test_existing_bucket_is_noop(self, fake_client):
         s3_utils._ensure_bucket(fake_client, "b")
         assert fake_client.head_calls == [{"Bucket": "b"}]
@@ -410,7 +431,6 @@ class TestEnsureBucket:
 
 
 class TestUploadRawDocument:
-
     def test_happy_path_builds_tenant_date_key(self, fake_client, monkeypatch):
         # Freeze time for predictable date prefix
         fixed_now = datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc)
@@ -444,17 +464,22 @@ class TestUploadRawDocument:
 
     def test_no_filename_means_no_suffix(self, fake_client):
         out = s3_utils.upload_raw_document(
-            content=b"x", tenant_id="t", document_type="unknown",
+            content=b"x",
+            tenant_id="t",
+            document_type="unknown",
         )
         assert not out["key"].endswith("-")
         # Key ends with a UUID (no suffix)
         import re
+
         uuid_tail = out["key"].split("/")[-1]
         assert re.match(r"^[0-9a-f-]{36}$", uuid_tail)
 
     def test_sanitizes_slashes_in_filename(self, fake_client):
         out = s3_utils.upload_raw_document(
-            content=b"x", tenant_id="t", filename="../etc/passwd",
+            content=b"x",
+            tenant_id="t",
+            filename="../etc/passwd",
         )
         assert out["key"].endswith("-passwd")
         assert ".." not in out["key"]
@@ -463,14 +488,18 @@ class TestUploadRawDocument:
 
     def test_whitespace_only_filename_produces_no_suffix(self, fake_client):
         out = s3_utils.upload_raw_document(
-            content=b"x", tenant_id="t", filename="   ",
+            content=b"x",
+            tenant_id="t",
+            filename="   ",
         )
         # After strip, safe_name is empty → no "-" suffix
         assert not out["key"].endswith("-")
 
     def test_uppercase_and_space_in_document_type_normalized(self, fake_client):
         out = s3_utils.upload_raw_document(
-            content=b"x", tenant_id="t", document_type="Food Safety PDF",
+            content=b"x",
+            tenant_id="t",
+            document_type="Food Safety PDF",
         )
         assert "/food_safety_pdf/" in out["key"]
 
@@ -512,7 +541,6 @@ class TestUploadRawDocument:
 
 
 class TestSafeS3KeyComponent:
-
     def test_basename_allowlist_and_length_cap(self):
         value = "../Customer Secret \x00 Report.final.pdf"
         assert s3_utils.safe_s3_key_component(value) == "Customer_Secret_Report.final.pdf"
@@ -532,7 +560,6 @@ class TestSafeS3KeyComponent:
 
 
 class TestGetRawDocument:
-
     def test_happy_path(self, fake_client):
         out = s3_utils.get_raw_document("k1")
         assert out["content"] == b"doc-bytes"
@@ -582,22 +609,23 @@ class TestGetRawDocument:
 
 
 class TestListRawDocuments:
-
     def test_returns_documents_with_iso_timestamps(self, fake_client):
-        fake_client.paginator_pages = [{
-            "Contents": [
-                {
-                    "Key": "t/2026/04/19/pdf/abc",
-                    "Size": 512,
-                    "LastModified": datetime(2026, 4, 19, 10, tzinfo=timezone.utc),
-                },
-                {
-                    "Key": "t/2026/04/19/pdf/def",
-                    "Size": 1024,
-                    "LastModified": "2026-04-19T11:00:00Z",  # Already a string
-                },
-            ],
-        }]
+        fake_client.paginator_pages = [
+            {
+                "Contents": [
+                    {
+                        "Key": "t/2026/04/19/pdf/abc",
+                        "Size": 512,
+                        "LastModified": datetime(2026, 4, 19, 10, tzinfo=timezone.utc),
+                    },
+                    {
+                        "Key": "t/2026/04/19/pdf/def",
+                        "Size": 1024,
+                        "LastModified": "2026-04-19T11:00:00Z",  # Already a string
+                    },
+                ],
+            }
+        ]
         docs = s3_utils.list_raw_documents("t")
         assert len(docs) == 2
         assert docs[0]["key"] == "t/2026/04/19/pdf/abc"
@@ -638,10 +666,16 @@ class TestListRawDocuments:
         assert exc_info.value.status_code == 500
 
     def test_custom_bucket(self, fake_client):
-        fake_client.paginator_pages = [{"Contents": [{
-            "Key": "t/file",
-            "Size": 1,
-            "LastModified": datetime.now(timezone.utc),
-        }]}]
+        fake_client.paginator_pages = [
+            {
+                "Contents": [
+                    {
+                        "Key": "t/file",
+                        "Size": 1,
+                        "LastModified": datetime.now(timezone.utc),
+                    }
+                ]
+            }
+        ]
         docs = s3_utils.list_raw_documents("t", bucket="custom")
         assert docs[0]["s3_uri"].startswith("s3://custom/")

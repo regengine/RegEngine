@@ -14,9 +14,10 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.qr_decoder as qr_decoder
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.qr_decoder import router as qr_router
+
 
 def _tiny_png_bytes() -> bytes:
     from PIL import Image

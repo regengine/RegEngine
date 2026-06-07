@@ -27,9 +27,9 @@ from sqlalchemy.orm import Session
 from .compliance_models import AlertSeverity, AlertSourceType
 from .compliance_service_sync import ComplianceServiceSync
 from .dependencies import (
+    PermissionChecker,
     get_current_user,
     get_tenant_scoped_session,
-    PermissionChecker,
     verify_path_tenant_matches,
 )
 from .sqlalchemy_models import UserModel
@@ -248,7 +248,9 @@ def acknowledge_alert(
         service = ComplianceServiceSync(session)
         # #1405: tenant-scoped lookup. Cross-tenant ids → 404.
         alert = service.acknowledge_alert(
-            UUID(alert_id), UUID(tenant_id), str(current_user.id),
+            UUID(alert_id),
+            UUID(tenant_id),
+            str(current_user.id),
         )
         if not alert:
             raise HTTPException(status_code=404, detail="Alert not found")

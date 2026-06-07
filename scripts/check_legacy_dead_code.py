@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 
 TEXT_SUFFIXES = {
@@ -238,18 +237,14 @@ BANNED_PATTERNS = (
     ),
     LegacyPattern(
         "legacy-ingestion-file-reference",
-        re.compile(
-            r"(^|[\s`'\"])(app/(?:epcis_ingestion|fda_export_router|sandbox_router)\.py)\b"
-        ),
+        re.compile(r"(^|[\s`'\"])(app/(?:epcis_ingestion|fda_export_router|sandbox_router)\.py)\b"),
         "Active docs/code should not point to deleted ingestion shim files.",
     ),
 )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Check for high-confidence legacy/dead-code drift."
-    )
+    parser = argparse.ArgumentParser(description="Check for high-confidence legacy/dead-code drift.")
     parser.add_argument(
         "--root",
         type=Path,
@@ -314,10 +309,7 @@ def check_banned_files(files: Iterable[Path], root: Path) -> list[Finding]:
                     code="legacy-file-reintroduced",
                     path=legacy_file.path,
                     line=1,
-                    message=(
-                        f"Known legacy file was reintroduced. "
-                        f"{legacy_file.replacement}"
-                    ),
+                    message=(f"Known legacy file was reintroduced. {legacy_file.replacement}"),
                 )
             )
     return findings
@@ -454,8 +446,7 @@ def check_knip_json(report_path: Path, root: Path) -> list[Finding]:
                     path=file_path,
                     line=1,
                     message=(
-                        "Knip reports this frontend file as unused. "
-                        "Delete it or wire it into an active route/module."
+                        "Knip reports this frontend file as unused. Delete it or wire it into an active route/module."
                     ),
                 )
             )
@@ -465,10 +456,7 @@ def check_knip_json(report_path: Path, root: Path) -> list[Finding]:
 def emit_findings(findings: list[Finding]) -> None:
     for finding in findings:
         message = finding.message.replace("\n", " ")
-        print(
-            f"::error file={finding.path},line={finding.line},"
-            f"title={finding.code}::{message}"
-        )
+        print(f"::error file={finding.path},line={finding.line},title={finding.code}::{message}")
         print(f"{finding.path}:{finding.line}: {finding.code}: {message}")
 
 

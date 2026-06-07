@@ -31,7 +31,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-001"
 
 
@@ -57,8 +56,7 @@ def _make_review_row(entity_a_id: str, entity_b_id: str):
     return m
 
 
-def _make_entities_row(a_id, a_status, a_conf, a_created,
-                       b_id, b_status, b_conf, b_created):
+def _make_entities_row(a_id, a_status, a_conf, a_created, b_id, b_status, b_conf, b_created):
     """Response for the _pick_merge_target SELECT returning both rows."""
     m = MagicMock()
     m.fetchall.return_value = [
@@ -104,26 +102,36 @@ class TestMergeDirectionByVerification_Issue1193:
         eid_z = "eid-z"  # lex-higher, verified
         now = datetime.now(timezone.utc)
 
-        responses = iter([
-            _make_review_row(eid_a, eid_z),   # initial fetch
-            MagicMock(),                        # UPDATE review status
-            _make_entities_row(
-                eid_a, "unverified", 0.5, now,
-                eid_z, "verified", 1.0, now,
-            ),  # _pick_merge_target SELECT
-            # merge_entities _verify_tenant_access (no-op here)
-            _require_entity_row(eid_z),         # _require_entity(target)
-            _require_entity_row(eid_a),         # _require_entity(source)
-            MagicMock(),                        # UPDATE aliases
-            MagicMock(),                        # UPDATE source deactivation
-            MagicMock(),                        # UPDATE merge_history
-            MagicMock(),                        # INSERT merge_history
-            MagicMock(),                        # UPDATE any pending reviews
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_z),  # initial fetch
+                MagicMock(),  # UPDATE review status
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    0.5,
+                    now,
+                    eid_z,
+                    "verified",
+                    1.0,
+                    now,
+                ),  # _pick_merge_target SELECT
+                # merge_entities _verify_tenant_access (no-op here)
+                _require_entity_row(eid_z),  # _require_entity(target)
+                _require_entity_row(eid_a),  # _require_entity(source)
+                MagicMock(),  # UPDATE aliases
+                MagicMock(),  # UPDATE source deactivation
+                MagicMock(),  # UPDATE merge_history
+                MagicMock(),  # INSERT merge_history
+                MagicMock(),  # UPDATE any pending reviews
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(
-            TENANT, "r1", "confirmed_match",
+            TENANT,
+            "r1",
+            "confirmed_match",
             resolved_by="alice",
         )
 
@@ -131,26 +139,36 @@ class TestMergeDirectionByVerification_Issue1193:
         rat = result["merge_target_rationale"]
         assert rat["tiebreaker"] == "verification_status"
         assert rat["target_entity_id"] == eid_z, (
-            "verified entity must be the merge target, even though it "
-            "sorts lex-higher than the unverified entity"
+            "verified entity must be the merge target, even though it sorts lex-higher than the unverified entity"
         )
         assert rat["source_entity_id"] == eid_a
 
     def test_pending_review_beats_unverified(self, svc, mock_session):
         eid_a, eid_b = "aaa", "bbb"
         now = datetime.now(timezone.utc)
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            _make_entities_row(
-                eid_a, "unverified", 1.0, now,
-                eid_b, "pending_review", 1.0, now,
-            ),
-            _require_entity_row(eid_b),
-            _require_entity_row(eid_a),
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    1.0,
+                    now,
+                    eid_b,
+                    "pending_review",
+                    1.0,
+                    now,
+                ),
+                _require_entity_row(eid_b),
+                _require_entity_row(eid_a),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
@@ -168,18 +186,29 @@ class TestMergeDirectionByConfidence_Issue1193:
     def test_higher_confidence_wins_when_verification_tied(self, svc, mock_session):
         eid_a, eid_b = "aaa", "bbb"
         now = datetime.now(timezone.utc)
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            _make_entities_row(
-                eid_a, "unverified", 0.60, now,
-                eid_b, "unverified", 0.95, now,
-            ),
-            _require_entity_row(eid_b),
-            _require_entity_row(eid_a),
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    0.60,
+                    now,
+                    eid_b,
+                    "unverified",
+                    0.95,
+                    now,
+                ),
+                _require_entity_row(eid_b),
+                _require_entity_row(eid_a),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
@@ -202,27 +231,35 @@ class TestMergeDirectionByCreatedAt_Issue1193:
         older = datetime.now(timezone.utc) - timedelta(days=30)
         newer = datetime.now(timezone.utc)
         # eid_a is newer, eid_b is older — earlier-wins => eid_b
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            _make_entities_row(
-                eid_a, "unverified", 1.0, newer,
-                eid_b, "unverified", 1.0, older,
-            ),
-            _require_entity_row(eid_b),
-            _require_entity_row(eid_a),
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    1.0,
+                    newer,
+                    eid_b,
+                    "unverified",
+                    1.0,
+                    older,
+                ),
+                _require_entity_row(eid_b),
+                _require_entity_row(eid_a),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
         rat = result["merge_target_rationale"]
         assert rat["tiebreaker"] == "created_at"
-        assert rat["target_entity_id"] == eid_b, (
-            "older entity must survive when newer record is a suspected "
-            "duplicate"
-        )
+        assert rat["target_entity_id"] == eid_b, "older entity must survive when newer record is a suspected duplicate"
 
 
 # ---------------------------------------------------------------------------
@@ -237,19 +274,26 @@ class TestExplicitTargetOverride_Issue1193:
         chosen entity_b."""
         eid_a, eid_b = "aaa", "bbb"
         now = datetime.now(timezone.utc)
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            # NO _pick_merge_target call — explicit override skips it.
-            _require_entity_row(eid_a),  # merge_entities._require_entity(target)
-            _require_entity_row(eid_b),  # merge_entities._require_entity(source)
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                # NO _pick_merge_target call — explicit override skips it.
+                _require_entity_row(eid_a),  # merge_entities._require_entity(target)
+                _require_entity_row(eid_b),  # merge_entities._require_entity(source)
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(
-            TENANT, "r1", "confirmed_match",
+            TENANT,
+            "r1",
+            "confirmed_match",
             resolved_by="alice",
             target_entity_id=eid_a,
         )
@@ -260,11 +304,16 @@ class TestExplicitTargetOverride_Issue1193:
 
     def test_explicit_target_must_be_in_review_pair(self, svc, mock_session):
         mock_session.execute.return_value.fetchone.return_value = (
-            "r1", "eid-a", "eid-b", "pending",
+            "r1",
+            "eid-a",
+            "eid-b",
+            "pending",
         )
         with pytest.raises(ValueError, match="not part of review"):
             svc.resolve_review(
-                TENANT, "r1", "confirmed_match",
+                TENANT,
+                "r1",
+                "confirmed_match",
                 resolved_by="alice",
                 target_entity_id="some-other-uuid",
             )
@@ -277,7 +326,9 @@ class TestExplicitTargetOverride_Issue1193:
 
 class TestLexOrderNoLongerDecides_Issue1193:
     def test_verified_lex_higher_wins_over_unverified_lex_lower(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """The EXACT shape of the bug: queue_for_review stored
         entity_a_id < entity_b_id. Without the fix, entity_a_id is
@@ -288,18 +339,29 @@ class TestLexOrderNoLongerDecides_Issue1193:
         assert eid_a < eid_b, "test premise: lex ordering"
         now = datetime.now(timezone.utc)
 
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            _make_entities_row(
-                eid_a, "unverified", 0.7, now,
-                eid_b, "verified", 1.0, now,
-            ),
-            _require_entity_row(eid_b),
-            _require_entity_row(eid_a),
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    0.7,
+                    now,
+                    eid_b,
+                    "verified",
+                    1.0,
+                    now,
+                ),
+                _require_entity_row(eid_b),
+                _require_entity_row(eid_a),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
@@ -322,18 +384,29 @@ class TestFullyTiedFallsBackToLex_Issue1193:
         arbitrary at runtime."""
         eid_a, eid_b = "aaa", "bbb"
         now = datetime.now(timezone.utc)
-        responses = iter([
-            _make_review_row(eid_a, eid_b),
-            MagicMock(),
-            _make_entities_row(
-                eid_a, "unverified", 1.0, now,
-                eid_b, "unverified", 1.0, now,
-            ),
-            _require_entity_row(eid_a),
-            _require_entity_row(eid_b),
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row(eid_a, eid_b),
+                MagicMock(),
+                _make_entities_row(
+                    eid_a,
+                    "unverified",
+                    1.0,
+                    now,
+                    eid_b,
+                    "unverified",
+                    1.0,
+                    now,
+                ),
+                _require_entity_row(eid_a),
+                _require_entity_row(eid_b),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = _execute_merge_path(responses)
 
         result = svc.resolve_review(TENANT, "r1", "confirmed_match", resolved_by="alice")
@@ -350,14 +423,19 @@ class TestFullyTiedFallsBackToLex_Issue1193:
 
 class TestNonMergeResolutions_Issue1193:
     def test_confirmed_distinct_does_not_select_target(self, svc, mock_session):
-        responses = iter([
-            _make_review_row("eid-a", "eid-b"),
-            MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row("eid-a", "eid-b"),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = lambda *a, **kw: next(responses)
 
         result = svc.resolve_review(
-            TENANT, "r1", "confirmed_distinct", resolved_by="alice",
+            TENANT,
+            "r1",
+            "confirmed_distinct",
+            resolved_by="alice",
         )
         assert "merge" not in result
         assert "merge_target_rationale" not in result
@@ -365,16 +443,22 @@ class TestNonMergeResolutions_Issue1193:
         # If it had, StopIteration would fire on the next execute.
 
     def test_confirmed_match_with_auto_merge_false_does_not_select_target(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
-        responses = iter([
-            _make_review_row("eid-a", "eid-b"),
-            MagicMock(),
-        ])
+        responses = iter(
+            [
+                _make_review_row("eid-a", "eid-b"),
+                MagicMock(),
+            ]
+        )
         mock_session.execute.side_effect = lambda *a, **kw: next(responses)
 
         result = svc.resolve_review(
-            TENANT, "r1", "confirmed_match",
+            TENANT,
+            "r1",
+            "confirmed_match",
             resolved_by="alice",
             auto_merge=False,
         )

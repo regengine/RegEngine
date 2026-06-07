@@ -12,17 +12,17 @@ Usage:
     python3 scripts/summon_agent.py --list
 """
 
-from regengine.swarm.base import (
-    AgentMessage,
-    AgentMemory,
-    BaseAgent,
-    MessageType,
-)
 from regengine.swarm.agents import (
-    PlannerAgent,
     CoderAgent,
+    PlannerAgent,
     ReviewerAgent,
     TesterAgent,
+)
+from regengine.swarm.base import (
+    AgentMemory,
+    AgentMessage,
+    BaseAgent,
+    MessageType,
 )
 from regengine.swarm.coordinator import AgentSwarm
 

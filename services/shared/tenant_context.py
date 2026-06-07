@@ -400,16 +400,11 @@ def set_tenant_guc(session: Any, tenant_id: str) -> None:
         is mixed).
     """
     if not isinstance(tenant_id, str) or not tenant_id:
-        raise ValueError(
-            "tenant_id must be a non-empty UUID string; "
-            f"got {type(tenant_id).__name__!s}={tenant_id!r}"
-        )
+        raise ValueError(f"tenant_id must be a non-empty UUID string; got {type(tenant_id).__name__!s}={tenant_id!r}")
     try:
         _uuid.UUID(tenant_id)
     except (ValueError, AttributeError) as exc:
-        raise ValueError(
-            f"tenant_id is not a valid UUID: {tenant_id!r}"
-        ) from exc
+        raise ValueError(f"tenant_id is not a valid UUID: {tenant_id!r}") from exc
 
     # Return whatever ``session.execute(...)`` returns. Sync sessions
     # return a ``Result`` object (caller can ignore); async sessions

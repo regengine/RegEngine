@@ -186,13 +186,9 @@ class TestFSMAAuditLog:
         """
         log = FSMAAuditLog()
 
-        log.log(
-            action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-001"
-        )
+        log.log(action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-001")
         log.log(action=FSMAAuditAction.MODIFIED, target_type="Lot", target_id="LOT-001")
-        log.log(
-            action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-002"
-        )
+        log.log(action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-002")
 
         lot1_entries = log.get_by_target("LOT-001")
 
@@ -240,13 +236,9 @@ class TestFSMAAuditLog:
         """Test filtering by action type."""
         log = FSMAAuditLog()
 
-        log.log(
-            action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-001"
-        )
+        log.log(action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-001")
         log.log(action=FSMAAuditAction.APPROVED, target_type="Lot", target_id="LOT-001")
-        log.log(
-            action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-002"
-        )
+        log.log(action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="LOT-002")
 
         extracted = log.get_by_action(FSMAAuditAction.EXTRACTED)
 
@@ -452,14 +444,10 @@ class TestFDACompliance:
         """Test that log is append-only."""
         log = FSMAAuditLog()
 
-        entry1 = log.log(
-            action=FSMAAuditAction.CREATED, target_type="Doc", target_id="d1"
-        )
+        entry1 = log.log(action=FSMAAuditAction.CREATED, target_type="Doc", target_id="d1")
         initial_count = log.count()
 
-        entry2 = log.log(
-            action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="l1"
-        )
+        entry2 = log.log(action=FSMAAuditAction.EXTRACTED, target_type="Lot", target_id="l1")
 
         # Count should only increase
         assert log.count() == initial_count + 1
@@ -624,9 +612,7 @@ class TestReadAccessAudit:
         log = FSMAAuditLog()
 
         # Patch _query_audit_trail to raise to simulate DB failure
-        with mock.patch(
-            "app.fsma_audit._query_audit_trail", side_effect=RuntimeError("DB down")
-        ):
+        with mock.patch("app.fsma_audit._query_audit_trail", side_effect=RuntimeError("DB down")):
             with pytest.raises(RuntimeError, match="DB down"):
                 # The READ entry is logged synchronously before _query_audit_trail
                 # is called, so we can't test this at the FSMAAuditLog level

@@ -30,14 +30,12 @@ import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-
 from shared.idempotency import (
     IDEMPOTENCY_KEY_PREFIX,
     IDEMPOTENCY_TTL_SECONDS,
     IdempotencyDependency,
     IdempotencyMiddleware,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -99,9 +97,7 @@ def _patched_middleware(
         self._redis_available = True
         return fake
 
-    monkeypatch.setattr(
-        idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client
-    )
+    monkeypatch.setattr(idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client)
     return fake  # type: ignore[return-value]
 
 
@@ -174,9 +170,7 @@ class TestShouldCache:
         middleware should normalize before comparing."""
         assert middleware._should_cache(method) is True
 
-    @pytest.mark.parametrize(
-        "method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-    )
+    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
     def test_non_post_methods_not_cached(self, middleware, method):
         """PUT and DELETE are idempotent by RFC but that's a different
         kind of idempotency — we only cache replay-safe POSTs."""
@@ -325,9 +319,7 @@ class TestResolveTenantId:
 class TestIdempotencyDependency:
     """Per-route validation of the Idempotency-Key header."""
 
-    def _request(
-        self, method: str, headers: Optional[Dict[str, str]] = None
-    ) -> Request:
+    def _request(self, method: str, headers: Optional[Dict[str, str]] = None) -> Request:
         request = MagicMock(spec=Request)
         request.method = method
         request.headers = headers or {}
@@ -344,9 +336,7 @@ class TestIdempotencyDependency:
     @pytest.mark.asyncio
     async def test_strict_returns_key_when_present(self):
         dep = IdempotencyDependency(strict=True)
-        result = await dep(
-            self._request("POST", {"Idempotency-Key": "abc-123"})
-        )
+        result = await dep(self._request("POST", {"Idempotency-Key": "abc-123"}))
         assert result == "abc-123"
 
     @pytest.mark.asyncio
@@ -360,15 +350,11 @@ class TestIdempotencyDependency:
     @pytest.mark.asyncio
     async def test_non_strict_returns_key_when_present(self):
         dep = IdempotencyDependency(strict=False)
-        result = await dep(
-            self._request("POST", {"Idempotency-Key": "abc"})
-        )
+        result = await dep(self._request("POST", {"Idempotency-Key": "abc"}))
         assert result == "abc"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-    )
+    @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
     async def test_non_post_returns_none_even_in_strict_mode(self, method):
         """Strict mode only enforces on POST; other methods bypass the
         check entirely."""
@@ -423,9 +409,7 @@ class TestDispatchPostOnly:
 
         app = _build_app()
         client = TestClient(app)
-        resp = client.get(
-            "/ping", headers={"Idempotency-Key": "should-be-ignored"}
-        )
+        resp = client.get("/ping", headers={"Idempotency-Key": "should-be-ignored"})
         assert resp.status_code == 200
         assert fake.get_calls == []
         assert fake.setex_calls == []
@@ -443,9 +427,7 @@ class TestDispatchPostOnly:
         assert fake.get_calls == []
         assert fake.setex_calls == []
 
-    def test_post_with_overlong_idempotency_key_passes_through(
-        self, monkeypatch
-    ):
+    def test_post_with_overlong_idempotency_key_passes_through(self, monkeypatch):
         """Over-255-char keys cause the middleware to silently bypass —
         the strict dependency enforces, the middleware tolerates."""
         fake = _FakeAsyncRedis()
@@ -590,9 +572,7 @@ class TestDispatch2xxOnlyCaching:
             content=b"x",
         )
         assert resp.status_code == status
-        assert len(fake.setex_calls) == 1, (
-            f"Expected 2xx ({status}) to be cached"
-        )
+        assert len(fake.setex_calls) == 1, f"Expected 2xx ({status}) to be cached"
 
     @pytest.mark.parametrize("status", [300, 400, 401, 403, 404, 409, 500, 503])
     def test_non_2xx_status_codes_are_not_cached(self, monkeypatch, status):
@@ -614,9 +594,7 @@ class TestDispatch2xxOnlyCaching:
             content=b"x",
         )
         assert resp.status_code == status
-        assert fake.setex_calls == [], (
-            f"Expected {status} response to NOT be cached"
-        )
+        assert fake.setex_calls == [], f"Expected {status} response to NOT be cached"
 
 
 class TestDispatchCrossTenantIsolation:

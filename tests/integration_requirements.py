@@ -34,10 +34,8 @@ def psycopg_connect_or_skip(database_url: str | None, *, reason: str, **kwargs: 
 
     import psycopg
 
-    normalized = (
-        database_url
-        .replace("postgresql+psycopg://", "postgresql://", 1)
-        .replace("postgresql+psycopg2://", "postgresql://", 1)
+    normalized = database_url.replace("postgresql+psycopg://", "postgresql://", 1).replace(
+        "postgresql+psycopg2://", "postgresql://", 1
     )
     try:
         return psycopg.connect(normalized, **kwargs)

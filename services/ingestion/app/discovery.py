@@ -25,11 +25,7 @@ class EthicalScraper:
     """
 
     def __init__(self, redis_url: str = "redis://redis:6379/0"):
-        self.session = httpx.Client(
-            headers={
-                "User-Agent": "RegEngine-Research-Bot/1.0 (+https://regengine.co/bot)"
-            }
-        )
+        self.session = httpx.Client(headers={"User-Agent": "RegEngine-Research-Bot/1.0 (+https://regengine.co/bot)"})
         self.redis = Redis.from_url(redis_url)
 
     def can_fetch(self, url: str) -> bool:

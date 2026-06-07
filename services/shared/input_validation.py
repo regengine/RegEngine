@@ -118,9 +118,7 @@ class InputSanitizer:
     @staticmethod
     def to_alphanumeric(value: str, *, allowed: str = "") -> str:
         allowed_chars = set(allowed)
-        return "".join(
-            char for char in value if char.isalnum() or char in allowed_chars
-        )
+        return "".join(char for char in value if char.isalnum() or char in allowed_chars)
 
 
 class LengthRule:
@@ -216,9 +214,7 @@ class AllowlistRule:
         self.case_sensitive = case_sensitive
         self.allowed_values = set(allowed_values)
         self._normalized_allowed = (
-            self.allowed_values
-            if case_sensitive
-            else {value.lower() for value in self.allowed_values}
+            self.allowed_values if case_sensitive else {value.lower() for value in self.allowed_values}
         )
 
     def validate(self, value: str, field: str) -> str:

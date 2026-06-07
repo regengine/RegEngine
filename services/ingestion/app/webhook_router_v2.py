@@ -20,36 +20,34 @@ import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
 import structlog
-from typing import Optional
-
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-
-from .authz import require_permission, IngestionPrincipal, get_ingestion_principal
-from shared.permissions import has_permission as _has_permission
-from .subscription_gate import require_active_subscription
+from shared.api_key_store import api_key_hash_candidates
+from shared.canonical_event import normalize_webhook_event
 from shared.database import get_db_session
-from .config import get_settings
-from .tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.idempotency import IdempotencyDependency
-from shared.api_key_store import api_key_hash_candidates
-from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+from shared.permissions import has_permission as _has_permission
 from shared.tenant_context import resolve_tenant_context
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+from sqlalchemy.exc import SQLAlchemyError
+
+from .authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from .config import get_settings
+from .subscription_gate import require_active_subscription
+from .tenant_validation import validate_tenant_id
 from .webhook_models import (
+    REQUIRED_KDES_BY_CTE,
     ChainVerifyResponse,
     EventResult,
     IngestEvent,
     IngestResponse,
     RecentEventsResponse,
-    REQUIRED_KDES_BY_CTE,
     WebhookPayload,
 )
-from shared.canonical_event import normalize_webhook_event
 
 # Backwards-compat alias: tests override this private name via
 # ``app.dependency_overrides[_get_db_session]``. Point it at the canonical
@@ -71,6 +69,7 @@ def _get_persistence(db_session=None):
         return None
     try:
         from shared.cte_persistence import CTEPersistence
+
         return CTEPersistence(db_session)
     except ImportError:
         logger.warning("cte_persistence module not available")
@@ -90,9 +89,11 @@ def _get_persistence(db_session=None):
 # Auth
 # ---------------------------------------------------------------------------
 
+
 def _is_production() -> bool:
     """Detect production using centralized environment detection."""
     from shared.env import is_production
+
     return is_production()
 
 
@@ -124,9 +125,7 @@ def _verify_api_key_present(
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     settings = get_settings()
     configured_api_key = (
-        getattr(settings, "api_key", None)
-        or os.environ.get("API_KEY")
-        or os.environ.get("REGENGINE_API_KEY")
+        getattr(settings, "api_key", None) or os.environ.get("API_KEY") or os.environ.get("REGENGINE_API_KEY")
     )
     if not configured_api_key and _is_production():
         # Neither API_KEY nor REGENGINE_API_KEY set in prod — reject so a
@@ -243,9 +242,7 @@ async def _verify_webhook_signature(
         )
 
     raw_body = await request.body()
-    expected = hmac.new(
-        secret.encode("utf-8"), raw_body, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(expected, provided):
         logger.warning(
@@ -321,9 +318,7 @@ def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
         )
     if dt > now + timedelta(hours=future_cap_hours):
         return (
-            f"event.timestamp {timestamp} is more than "
-            f"WEBHOOK_MAX_EVENT_FUTURE_HOURS={future_cap_hours} in the "
-            f"future"
+            f"event.timestamp {timestamp} is more than WEBHOOK_MAX_EVENT_FUTURE_HOURS={future_cap_hours} in the future"
         )
     return None
 
@@ -354,9 +349,7 @@ try:  # pragma: no cover - metrics are best-effort; never break ingest on regist
             # Already registered (common during pytest re-imports or
             # multi-path imports).
             for collector in list(REGISTRY._collector_to_names):
-                if _matches_registered_name(
-                    getattr(collector, "_name", None), name
-                ):
+                if _matches_registered_name(getattr(collector, "_name", None), name):
                     return collector
             raise
 
@@ -451,9 +444,7 @@ def _record_replay_rejection(timestamp: str) -> None:
         return
     try:
         reason, age_bucket = _classify_replay_rejection(timestamp)
-        WEBHOOK_REPLAY_REJECTED.labels(
-            reason=reason, age_bucket=age_bucket
-        ).inc()
+        WEBHOOK_REPLAY_REJECTED.labels(reason=reason, age_bucket=age_bucket).inc()
     except Exception:  # pragma: no cover
         pass
 
@@ -587,6 +578,7 @@ def _check_rate_limit(tenant_id: str, request: Request | None = None) -> None:
 # KDE Validation
 # ---------------------------------------------------------------------------
 
+
 def _validate_event_kdes(event: IngestEvent) -> list[str]:
     """Validate that an event has all required KDEs for its CTE type."""
     errors: list[str] = []
@@ -614,19 +606,24 @@ def _validate_event_kdes(event: IngestEvent) -> list[str]:
 # Compliance Alerts
 # ---------------------------------------------------------------------------
 
+
 def _generate_alerts(event: IngestEvent) -> list[dict]:
     """Generate compliance alerts for an event."""
     alerts: list[dict] = []
 
     if event.cte_type.value in ("shipping", "receiving"):
         has_source = event.kdes.get("ship_from_location") or event.kdes.get("ship_from_gln")
-        has_dest = event.kdes.get("ship_to_location") or event.kdes.get("ship_to_gln") or event.kdes.get("receiving_location")
+        has_dest = (
+            event.kdes.get("ship_to_location") or event.kdes.get("ship_to_gln") or event.kdes.get("receiving_location")
+        )
         if not has_source or not has_dest:
-            alerts.append({
-                "severity": "warning",
-                "alert_type": "incomplete_route",
-                "message": "Shipping/receiving event missing source or destination identifiers",
-            })
+            alerts.append(
+                {
+                    "severity": "warning",
+                    "alert_type": "incomplete_route",
+                    "message": "Shipping/receiving event missing source or destination identifiers",
+                }
+            )
 
     return alerts
 
@@ -634,6 +631,7 @@ def _generate_alerts(event: IngestEvent) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Post-Ingest Obligation Check
 # ---------------------------------------------------------------------------
+
 
 def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id: str) -> list[dict]:
     """
@@ -722,10 +720,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                         or available.get("immediate_previous_source")
                     )
                 elif event.cte_type.value == "shipping":
-                    passed = bool(
-                        available.get("ship_to_location")
-                        or available.get("ship_to_gln")
-                    )
+                    passed = bool(available.get("ship_to_location") or available.get("ship_to_gln"))
                 else:
                     passed = True
             elif validation_rule == "record_exists":
@@ -770,12 +765,14 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             "sev": severity,
                             "atype": "chain_break",
                             "msg": f"Missing KDE '{kde_key}' required by obligation",
-                            "details": json.dumps({
-                                "obligation_id": str(obl_id),
-                                "obligation_text": obl_text[:200],
-                                "risk_category": risk,
-                                "missing_kde": kde_key,
-                            }),
+                            "details": json.dumps(
+                                {
+                                    "obligation_id": str(obl_id),
+                                    "obligation_text": obl_text[:200],
+                                    "risk_category": risk,
+                                    "missing_kde": kde_key,
+                                }
+                            ),
                         },
                     )
                 except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
@@ -801,6 +798,7 @@ def _get_redis_client():
     """Get Redis client for counter persistence. Returns None if unavailable."""
     try:
         import redis
+
         redis_url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
         return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
     except Exception:
@@ -919,11 +917,12 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     to unpack``. Restored consistent 3-tuple here. See spawned task.
     """
     from shared.rules.enforcement import (  # noqa: PLC0415
-        current_mode,
-        should_reject,
         EnforcementMode,
+        current_mode,
         handle_preeval_exception,
+        should_reject,
     )
+
     if current_mode() == EnforcementMode.OFF:
         return False, None, None
 
@@ -931,6 +930,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
     try:
         canonical = normalize_webhook_event(event, tenant_id)
         from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
         engine = RulesEngine(db_session)
         event_data = {
             "event_id": str(canonical.event_id),
@@ -946,8 +946,7 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
             "kdes": canonical.kdes,
         }
         summary = engine.evaluate_event(event_data, persist=False, tenant_id=tenant_id)
-    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError,
-            AttributeError, KeyError) as err:
+    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, AttributeError, KeyError) as err:
         # Finding A — fail loud under cte_only/all; HTTPException(500)
         # bubbles up to ingest_events and the route returns 5xx instead
         # of silently accepting because a rule crashed.
@@ -962,9 +961,10 @@ def _rules_preeval_reject(event: IngestEvent, db_session, tenant_id: str):
         # event rejected. Independent session = survives outer rollback.
         try:
             from shared.rules.rejection_audit import (  # noqa: PLC0415
-                record_rejection,
                 reasons_from_summary,
+                record_rejection,
             )
+
             _first_crit = (summary.critical_failures or [None])[0]
             record_rejection(
                 tenant_id=tenant_id,
@@ -1069,9 +1069,8 @@ def _persist_canonical_and_eval(
 
     if not summary.compliant:
         from shared.exception_queue import ExceptionQueueService  # noqa: PLC0415
-        ExceptionQueueService(db_session).create_exceptions_from_evaluation(
-            tenant_id, summary
-        )
+
+        ExceptionQueueService(db_session).create_exceptions_from_evaluation(tenant_id, summary)
 
 
 def _persist_required_canonical_and_eval(
@@ -1125,6 +1124,7 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 
     try:
         import redis as redis_lib
+
         client = redis_lib.from_url(redis_url)
         message = {
             "event": "cte.created",
@@ -1177,15 +1177,14 @@ def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
     """Best-effort legacy tenant lookup for callers without principal tenant context."""
     try:
         from shared.database import SessionLocal
-        from sqlalchemy import bindparam as _bindparam
-        from sqlalchemy import text as _text
+        from sqlalchemy import bindparam as _bindparam, text as _text
 
         key_hashes = api_key_hash_candidates(raw_api_key)
         _db = SessionLocal()
         try:
-            stmt = _text(
-                "SELECT tenant_id FROM api_keys WHERE key_hash IN :key_hashes LIMIT 1"
-            ).bindparams(_bindparam("key_hashes", expanding=True))
+            stmt = _text("SELECT tenant_id FROM api_keys WHERE key_hash IN :key_hashes LIMIT 1").bindparams(
+                _bindparam("key_hashes", expanding=True)
+            )
             _row = _db.execute(
                 stmt,
                 {"key_hashes": key_hashes},
@@ -1290,6 +1289,7 @@ async def ingest_events(
         )
     try:
         from shared.cte_persistence import CTEPersistence
+
         persistence = CTEPersistence(db_session)
     except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
         logger.error("db_init_failed — rejecting ingest: %s", str(e))
@@ -1305,12 +1305,14 @@ async def ingest_events(
             # Batch deduplication — skip identical events in same request
             dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
             if dedup_key in seen_in_batch:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
+                    )
+                )
                 rejected += 1
                 continue
             seen_in_batch.add(dedup_key)
@@ -1323,15 +1325,19 @@ async def ingest_events(
             if replay_error:
                 logger.warning(
                     "webhook_replay_window_rejected tenant=%s tlc=%s ts=%s",
-                    tenant_id, event.traceability_lot_code, event.timestamp,
+                    tenant_id,
+                    event.traceability_lot_code,
+                    event.timestamp,
                 )
                 _record_replay_rejection(event.timestamp)
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=[replay_error],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=[replay_error],
+                    )
+                )
                 rejected += 1
                 continue
 
@@ -1339,12 +1345,14 @@ async def ingest_events(
             errors = _validate_event_kdes(event)
 
             if errors:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=errors,
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=errors,
+                    )
+                )
                 rejected += 1
                 continue
 
@@ -1372,12 +1380,14 @@ async def ingest_events(
             for _event, _alerts in valid_events:
                 _reject, _reason, _summary = _rules_preeval_reject(_event, db_session, tenant_id)
                 if _reject:
-                    results.append(EventResult(
-                        traceability_lot_code=_event.traceability_lot_code,
-                        cte_type=_event.cte_type.value,
-                        status="rejected",
-                        errors=[f"rule_violation: {_reason}"],
-                    ))
+                    results.append(
+                        EventResult(
+                            traceability_lot_code=_event.traceability_lot_code,
+                            cte_type=_event.cte_type.value,
+                            status="rejected",
+                            errors=[f"rule_violation: {_reason}"],
+                        )
+                    )
                     rejected += 1
                     continue
                 _filtered.append((_event, _alerts))
@@ -1389,17 +1399,19 @@ async def ingest_events(
             batch_dicts = []
             event_objs = []
             for event, alerts in valid_events:
-                batch_dicts.append({
-                    "event_type": event.cte_type.value,
-                    "traceability_lot_code": event.traceability_lot_code,
-                    "product_description": event.product_description,
-                    "quantity": event.quantity,
-                    "unit_of_measure": event.unit_of_measure,
-                    "event_timestamp": event.timestamp,
-                    "location_gln": event.location_gln,
-                    "location_name": event.location_name,
-                    "kdes": event.kdes,
-                })
+                batch_dicts.append(
+                    {
+                        "event_type": event.cte_type.value,
+                        "traceability_lot_code": event.traceability_lot_code,
+                        "product_description": event.product_description,
+                        "quantity": event.quantity,
+                        "unit_of_measure": event.unit_of_measure,
+                        "event_timestamp": event.timestamp,
+                        "location_gln": event.location_gln,
+                        "location_name": event.location_name,
+                        "kdes": event.kdes,
+                    }
+                )
                 event_objs.append(event)
 
             try:
@@ -1409,17 +1421,17 @@ async def ingest_events(
                     source=payload.source,
                 )
 
-                for store_result, event, precomputed_summary in zip(
-                    store_results, event_objs, pre_eval_summaries
-                ):
-                    results.append(EventResult(
-                        traceability_lot_code=event.traceability_lot_code,
-                        cte_type=event.cte_type.value,
-                        status="accepted",
-                        event_id=store_result.event_id,
-                        sha256_hash=store_result.sha256_hash,
-                        chain_hash=store_result.chain_hash,
-                    ))
+                for store_result, event, precomputed_summary in zip(store_results, event_objs, pre_eval_summaries):
+                    results.append(
+                        EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="accepted",
+                            event_id=store_result.event_id,
+                            sha256_hash=store_result.sha256_hash,
+                            chain_hash=store_result.chain_hash,
+                        )
+                    )
                     accepted += 1
 
                     # Canonical normalization + rule evaluation + exception creation.
@@ -1441,6 +1453,7 @@ async def ingest_events(
                     # Auto-learn product catalog from confirmed scans
                     try:
                         from .product_catalog import learn_from_event
+
                         learn_from_event(
                             tenant_id=tenant_id,
                             event={
@@ -1469,12 +1482,14 @@ async def ingest_events(
                     # still honors the enforcement policy.
                     _fb_reject, _fb_reason, _fb_summary = _rules_preeval_reject(event, db_session, tenant_id)
                     if _fb_reject:
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="rejected",
-                            errors=[f"rule_violation: {_fb_reason}"],
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="rejected",
+                                errors=[f"rule_violation: {_fb_reason}"],
+                            )
+                        )
                         rejected += 1
                         continue
                     try:
@@ -1492,14 +1507,16 @@ async def ingest_events(
                             kdes=event.kdes,
                             alerts=alerts,
                         )
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="accepted",
-                            event_id=store_result.event_id,
-                            sha256_hash=store_result.sha256_hash,
-                            chain_hash=store_result.chain_hash,
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="accepted",
+                                event_id=store_result.event_id,
+                                sha256_hash=store_result.sha256_hash,
+                                chain_hash=store_result.chain_hash,
+                            )
+                        )
                         accepted += 1
 
                         # Canonical normalization + rule evaluation. Required in
@@ -1516,6 +1533,7 @@ async def ingest_events(
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
                             from .product_catalog import learn_from_event
+
                             learn_from_event(
                                 tenant_id=tenant_id,
                                 event={
@@ -1539,12 +1557,14 @@ async def ingest_events(
                             error=str(inner_e),
                             error_type=type(inner_e).__name__,
                         )
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="rejected",
-                            errors=[f"Internal storage error (correlation: {correlation_id})"],
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="rejected",
+                                errors=[f"Internal storage error (correlation: {correlation_id})"],
+                            )
+                        )
                         rejected += 1
 
         if accepted > 0:
@@ -1583,6 +1603,7 @@ async def ingest_events(
 # Chain Verification Endpoint
 # ---------------------------------------------------------------------------
 
+
 async def get_recent_events(
     tenant_id: str,
     limit: int = 10,
@@ -1596,6 +1617,7 @@ async def get_recent_events(
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text as _text
+
         db_session = SessionLocal()
         rows = db_session.execute(
             _text("""
@@ -1719,8 +1741,7 @@ async def recent_events_endpoint(
     response_model=ChainVerifyResponse,
     summary="Verify hash chain integrity",
     description=(
-        "Walk the tenant's entire hash chain from genesis to head, "
-        "recomputing each link and checking for tampering."
+        "Walk the tenant's entire hash chain from genesis to head, recomputing each link and checking for tampering."
     ),
 )
 async def verify_chain(
@@ -1740,8 +1761,8 @@ async def verify_chain(
     _check_read_rate_limit(tenant_id, scope="chain_verify", request=request)
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)

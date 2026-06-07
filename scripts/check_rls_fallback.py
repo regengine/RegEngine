@@ -22,6 +22,7 @@ non-grandfathered file (or an unexpected file).
 Usage:
     python scripts/check_rls_fallback.py
 """
+
 from __future__ import annotations
 
 import re
@@ -47,8 +48,7 @@ FALLBACK_UUID = "00000000-0000-0000-0000-000000000001"
 #   - COALESCE(current_setting(...), tenant_id) — self-tenant fallback
 #     which lets a context-less connection see every row
 _PAT_FALLBACK_UUID = re.compile(
-    r"COALESCE\s*\([^)]*current_setting\s*\(\s*'app\.tenant_id'[^)]*\)[^)]*"
-    + re.escape(FALLBACK_UUID),
+    r"COALESCE\s*\([^)]*current_setting\s*\(\s*'app\.tenant_id'[^)]*\)[^)]*" + re.escape(FALLBACK_UUID),
     re.IGNORECASE | re.DOTALL,
 )
 _PAT_SELF_TENANT = re.compile(

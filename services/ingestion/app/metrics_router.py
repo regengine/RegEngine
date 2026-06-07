@@ -30,17 +30,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.database import get_db_session
 from sqlalchemy import text
 
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
-from shared.database import get_db_session
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 logger = logging.getLogger("compliance-metrics")
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["Compliance Metrics"])
-
-
 
 
 @router.get(
@@ -154,41 +152,56 @@ async def compliance_metrics(
     entity_resolution_rate = (entity_stats[1] / entity_stats[0] * 100) if entity_stats and entity_stats[0] > 0 else 0
 
     # 8. Ambiguous identity match backlog
-    ambiguous_backlog = db_session.execute(
-        text("""
+    ambiguous_backlog = (
+        db_session.execute(
+            text("""
             SELECT COUNT(*) FROM fsma.identity_review_queue
             WHERE tenant_id = :tid AND status = 'pending'
         """),
-        {"tid": tid},
-    ).scalar() or 0
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # --- Reliability Metrics ---
 
     # Package generation success rate
-    package_stats = db_session.execute(
-        text("""
+    package_stats = (
+        db_session.execute(
+            text("""
             SELECT COUNT(*) FROM fsma.response_packages WHERE tenant_id = :tid
         """),
-        {"tid": tid},
-    ).scalar() or 0
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Rule evaluation count
-    eval_count = db_session.execute(
-        text("SELECT COUNT(*) FROM fsma.rule_evaluations WHERE tenant_id = :tid"),
-        {"tid": tid},
-    ).scalar() or 0
+    eval_count = (
+        db_session.execute(
+            text("SELECT COUNT(*) FROM fsma.rule_evaluations WHERE tenant_id = :tid"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Chain integrity
-    chain_length = db_session.execute(
-        text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"),
-        {"tid": tid},
-    ).scalar() or 0
+    chain_length = (
+        db_session.execute(
+            text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Export count
-    export_count = db_session.execute(
-        text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"),
-        {"tid": tid},
-    ).scalar() or 0
+    export_count = (
+        db_session.execute(
+            text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     return {
         "tenant_id": tid,
@@ -198,20 +211,15 @@ async def compliance_metrics(
             "total_events": total_events,
             "normalized_events": normalization[1] if normalization else 0,
             "rejected_events": normalization[2] if normalization else 0,
-
             "provenance_chain_rate_percent": round(provenance_rate, 1),
-
             "remediation_text_rate_percent": round(remediation_rate, 1),
             "total_failures": remediation[0] if remediation else 0,
             "failures_with_remediation": remediation[1] if remediation else 0,
-
             "median_exception_resolve_hours": round(float(median_resolve), 1) if median_resolve else None,
             "median_package_assembly_hours": round(float(median_package), 1) if median_package else None,
-
             "request_completion_rate_percent": round(completion_rate, 1),
             "total_requests": requests_stats[0] if requests_stats else 0,
             "completed_requests": requests_stats[1] if requests_stats else 0,
-
             "entity_resolution_rate_percent": round(entity_resolution_rate, 1),
             "ambiguous_match_backlog": ambiguous_backlog,
         },

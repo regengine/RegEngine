@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-
 from app import normalization as norm
 from app.models import PositionMapEntry, TextExtractionMetadata
 from app.normalization import (
@@ -35,7 +34,6 @@ from app.normalization import (
     _serialize_datetime,
     normalize_document,
 )
-
 
 # ---------------------------------------------------------------------------
 # _serialize_datetime
@@ -237,11 +235,13 @@ class TestExtractText:
 
     def test_html_by_content_type(self, monkeypatch):
         called = {}
+
         def _html(b):
             called["html"] = b
             return ("HTML", _stub_meta(), _stub_position())
 
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_html", _html)
         text, meta, pmap = _extract_text(None, b"<html/>", "text/html")
         assert text == "HTML"
@@ -249,6 +249,7 @@ class TestExtractText:
 
     def test_xml_by_content_type(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_xml", lambda b: ("XML", _stub_meta(), _stub_position()))
         # HTML token absent → xml branch
         text, _, _ = _extract_text(None, b"<x/>", "application/xml")
@@ -257,18 +258,21 @@ class TestExtractText:
     def test_xml_not_html(self, monkeypatch):
         """xml-in-html path falls to html (xml branch requires NOT html)."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_html", lambda b: ("HTML", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"<x/>", "application/xhtml+xml")
         assert text == "HTML"
 
     def test_csv_by_content_type(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_csv", lambda b: ("CSV", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"a,b,c", "text/csv")
         assert text == "CSV"
 
     def test_csv_by_comma_separated(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_csv", lambda b: ("CSV", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"a,b", "text/comma-separated-values")
         assert text == "CSV"
@@ -276,6 +280,7 @@ class TestExtractText:
     def test_excel_by_detected_format(self, monkeypatch):
         """detect_format returns 'excel' → excel branch."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "excel")
         monkeypatch.setattr(fe, "extract_from_excel", lambda b: ("XLSX", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"PK...", None)
@@ -284,6 +289,7 @@ class TestExtractText:
     def test_excel_by_ct_substring(self, monkeypatch):
         """content_type contains 'excel' → excel branch (unique, no xml conflict)."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "extract_from_excel", lambda b: ("XLSX", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"PK", "application/excel-legacy")
@@ -291,6 +297,7 @@ class TestExtractText:
 
     def test_docx_by_detected_format(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "docx")
         monkeypatch.setattr(fe, "extract_from_docx", lambda b: ("DOCX", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"PK...", None)
@@ -299,6 +306,7 @@ class TestExtractText:
     def test_docx_by_msword_ct(self, monkeypatch):
         """application/msword → docx branch."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "extract_from_docx", lambda b: ("DOCX", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"...", "application/msword")
@@ -306,6 +314,7 @@ class TestExtractText:
 
     def test_edi_by_content_type(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "extract_from_edi", lambda b: ("EDI", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"ISA*00...", "application/edi-x12")
         assert text == "EDI"
@@ -313,6 +322,7 @@ class TestExtractText:
     def test_edi_by_is_edi_detection(self, monkeypatch):
         """No matching content-type but is_edi_content() returns True."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: True)
         monkeypatch.setattr(fe, "extract_from_edi", lambda b: ("EDI", _stub_meta(), _stub_position()))
@@ -332,6 +342,7 @@ class TestExtractText:
     def test_fallback_bytes_utf8(self, monkeypatch):
         """Unknown format with non-empty bytes → utf-8 decode fallback."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)
         text, meta, pmap = _extract_text(None, b"hello bytes", "application/octet-stream")
@@ -341,6 +352,7 @@ class TestExtractText:
 
     def test_fallback_empty_bytes(self, monkeypatch):
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)
         text, meta, pmap = _extract_text(None, b"", None)
@@ -353,6 +365,7 @@ class TestExtractText:
     def test_detected_format_html(self, monkeypatch):
         """detect_format returns 'html' even when content_type doesn't say html."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "html")
         monkeypatch.setattr(fe, "extract_from_html", lambda b: ("H!", _stub_meta(), _stub_position()))
         text, _, _ = _extract_text(None, b"<x/>", "application/octet-stream")
@@ -361,6 +374,7 @@ class TestExtractText:
     def test_empty_payload_dict_falls_through_to_format(self, monkeypatch):
         """raw_payload = {} is falsy for the first branch."""
         import app.format_extractors as fe
+
         monkeypatch.setattr(fe, "detect_format", lambda ct, b: "unknown")
         monkeypatch.setattr(fe, "is_edi_content", lambda b: False)
         text, meta, _ = _extract_text({}, b"bytes-go-here", None)
@@ -378,6 +392,7 @@ class TestExtractFromPdf:
         """pdfminer.high_level.extract_text returns non-empty → pdfminer meta."""
         fake_module = SimpleNamespace(extract_text=lambda stream: "extracted text")
         import sys
+
         monkeypatch.setitem(sys.modules, "pdfminer.high_level", fake_module)
         text, meta, pmap = _extract_from_pdf(b"%PDF-1.4\nxxx")
         assert text == "extracted text"
@@ -388,6 +403,7 @@ class TestExtractFromPdf:
     def test_pdfminer_empty_tesseract_success(self, monkeypatch):
         """pdfminer returns empty → tesseract happy path with realistic stub."""
         import sys
+
         fake_pdfminer = SimpleNamespace(extract_text=lambda stream: "")
         monkeypatch.setitem(sys.modules, "pdfminer.high_level", fake_pdfminer)
 
@@ -401,9 +417,7 @@ class TestExtractFromPdf:
         )
         monkeypatch.setitem(sys.modules, "pytesseract", fake_tess)
 
-        fake_pdf2image = SimpleNamespace(
-            convert_from_bytes=lambda raw: ["image1-stub"]
-        )
+        fake_pdf2image = SimpleNamespace(convert_from_bytes=lambda raw: ["image1-stub"])
         monkeypatch.setitem(sys.modules, "pdf2image", fake_pdf2image)
 
         text, meta, pmap = _extract_from_pdf(b"%PDF-1.4")
@@ -416,6 +430,7 @@ class TestExtractFromPdf:
     def test_tesseract_multi_page_with_non_numeric_conf(self, monkeypatch):
         """Multiple pages, one word has non-numeric conf → conf=0 fallback."""
         import sys
+
         fake_pdfminer = SimpleNamespace(extract_text=lambda stream: "")
         monkeypatch.setitem(sys.modules, "pdfminer.high_level", fake_pdfminer)
 
@@ -425,6 +440,7 @@ class TestExtractFromPdf:
             {"text": ["page2", "word"], "conf": ["abc", "80"]},  # abc → 0.0
         ]
         call_idx = {"i": 0}
+
         def _image_to_data(image, output_type):
             i = call_idx["i"]
             call_idx["i"] += 1
@@ -452,6 +468,7 @@ class TestExtractFromPdf:
     def test_tesseract_empty_word_list(self, monkeypatch):
         """Empty text list + no confidences → mean 0.5, variance 0.25 defaults."""
         import sys
+
         fake_pdfminer = SimpleNamespace(extract_text=lambda stream: "")
         monkeypatch.setitem(sys.modules, "pdfminer.high_level", fake_pdfminer)
 
@@ -562,7 +579,5 @@ class TestNormalizeDocument:
         assert len(sha) == 64
 
     def test_content_type_propagated(self):
-        normalized, _, _ = normalize_document(
-            {"body": "t"}, b"", "http://x", "text/plain"
-        )
+        normalized, _, _ = normalize_document({"body": "t"}, b"", "http://x", "text/plain")
         assert normalized["content_type"] == "text/plain"

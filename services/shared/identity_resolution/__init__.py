@@ -7,11 +7,10 @@ Package layout:
 """
 
 from shared.identity_resolution.constants import (  # noqa: F401
-    VALID_ENTITY_TYPES,
-    VALID_ALIAS_TYPES,
-    VALID_REVIEW_STATUSES,
-    AMBIGUOUS_THRESHOLD_LOW,
     AMBIGUOUS_THRESHOLD_HIGH,
+    AMBIGUOUS_THRESHOLD_LOW,
+    VALID_ALIAS_TYPES,
+    VALID_ENTITY_TYPES,
+    VALID_REVIEW_STATUSES,
 )
-
 from shared.identity_resolution.service import IdentityResolutionService  # noqa: F401

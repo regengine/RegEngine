@@ -16,7 +16,7 @@ sys.path.insert(0, str(service_dir))
 
 import app.webhook_router_v2 as webhook_router_v2  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
-from app.webhook_router_v2 import _verify_api_key, _get_db_session  # noqa: E402
+from app.webhook_router_v2 import _get_db_session, _verify_api_key  # noqa: E402
 
 
 class _FakeDBSession:
@@ -116,6 +116,7 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
         auth_mode="test",
     )
     app.dependency_overrides[_verify_api_key] = lambda: None
+
     def _fake_get_db_session():
         yield _FakeDBSession()
 

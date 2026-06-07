@@ -26,6 +26,7 @@ Behavioral guarantees this module enforces (tracked by #972, #1070, #1082, #1404
 ``from services.admin.app.auth_routes import _progressive_delay_seconds``
 imports used by existing tests continue to work unchanged.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,9 +34,9 @@ import inspect
 
 import structlog
 from fastapi import HTTPException, status
+from shared.pii import mask_email
 
 from ..session_store import RedisSessionStore
-from shared.pii import mask_email
 
 logger = structlog.get_logger("auth.lockout")
 

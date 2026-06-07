@@ -27,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.routers.fsma import compliance as compliance_router
 
-
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
@@ -184,8 +183,7 @@ async def test_cypher_anchor_still_scoped_to_tenant():
     has_inline_filter = "Obligation {tenant_id: $tenant_id}" in cypher
     has_where_filter = "o.tenant_id = $tenant_id" in cypher
     assert has_inline_filter or has_where_filter, (
-        "Obligation anchor must be tenant-scoped (inline map or WHERE). "
-        f"Cypher was:\n{cypher}"
+        f"Obligation anchor must be tenant-scoped (inline map or WHERE). Cypher was:\n{cypher}"
     )
 
 
@@ -213,6 +211,5 @@ async def test_endpoint_passes_caller_tenant_id_as_param():
 
     kwargs = mock_session.run.call_args.kwargs
     assert kwargs.get("tenant_id") == str(TENANT_A), (
-        "endpoint must bind $tenant_id to the caller's tenant; "
-        f"actual kwargs: {kwargs!r}"
+        f"endpoint must bind $tenant_id to the caller's tenant; actual kwargs: {kwargs!r}"
     )

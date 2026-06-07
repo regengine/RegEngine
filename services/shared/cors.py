@@ -3,6 +3,7 @@
 This module provides centralized CORS configuration to prevent security issues
 like wildcard origins with credentials enabled.
 """
+
 import os
 from typing import List
 from urllib.parse import urlsplit
@@ -51,11 +52,7 @@ def _unique(values: List[str]) -> List[str]:
 
 
 def _current_environment() -> str:
-    return (
-        os.getenv("REGENGINE_ENV", "").strip().lower()
-        or os.getenv("ENV", "").strip().lower()
-        or "development"
-    )
+    return os.getenv("REGENGINE_ENV", "").strip().lower() or os.getenv("ENV", "").strip().lower() or "development"
 
 
 def _is_restricted_cors_environment() -> bool:
@@ -79,17 +76,15 @@ def _validate_exact_preview_origins(origins: List[str]) -> None:
             or parsed.fragment
             or parsed.path not in {"", "/"}
         ):
-            raise ValueError(
-                "CORS_ALLOWED_PREVIEW_ORIGINS must contain exact http(s) origins"
-            )
+            raise ValueError("CORS_ALLOWED_PREVIEW_ORIGINS must contain exact http(s) origins")
 
 
 def get_allowed_origins() -> List[str]:
     """Get CORS allowed origins from environment or sensible defaults.
-    
+
     Returns:
         List of allowed origin URLs. Never includes wildcards in production/cloud.
-    
+
     Example:
         # In .env:
         # CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.regengine.co
@@ -113,9 +108,7 @@ def get_allowed_origins() -> List[str]:
 
     # Never allow wildcard in production or cloud-like environments.
     if _is_restricted_cors_environment() and "*" in origins:
-        raise ValueError(
-            "CORS wildcard (*) not allowed in production or cloud environments"
-        )
+        raise ValueError("CORS wildcard (*) not allowed in production or cloud environments")
 
     return origins
 
@@ -130,29 +123,27 @@ def get_allowed_headers() -> List[str]:
     headers = _split_csv(headers_str)
 
     if _is_restricted_cors_environment() and "*" in headers:
-        raise ValueError(
-            "CORS wildcard (*) headers not allowed in production or cloud environments"
-        )
+        raise ValueError("CORS wildcard (*) headers not allowed in production or cloud environments")
 
     return headers
 
 
 def should_allow_credentials() -> bool:
     """Check if credentials should be allowed.
-    
+
     Only allows credentials if:
     1. Not using wildcard origins (CSRF protection)
     2. Explicitly enabled via CORS_ALLOW_CREDENTIALS env var
-    
+
     Returns:
         True if safe to allow credentials, False otherwise.
     """
     origins = get_allowed_origins()
-    
+
     # Never allow credentials with wildcard origins (CSRF risk)
     if "*" in origins:
         return False
-    
+
     # Require explicit opt-in for credentials
     # Default to false - only enable if you need session cookies/auth headers
     return os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true"

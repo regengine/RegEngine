@@ -34,6 +34,7 @@ def _strict_fsma_validation() -> bool:
         return True
     return explicit.strip().lower() in {"1", "true", "yes", "on", "strict"}
 
+
 # ---------------------------------------------------------------------------
 # EPCIS 2.0 XML Namespace constants
 # ---------------------------------------------------------------------------
@@ -232,8 +233,7 @@ def _xml_event_to_dict(ev_element) -> dict:
     event: dict[str, Any] = {"type": event_type}
 
     # Core scalar fields
-    for field_name in ("eventTime", "eventTimeZoneOffset", "action", "bizStep",
-                       "disposition", "eventID", "recordTime"):
+    for field_name in ("eventTime", "eventTimeZoneOffset", "action", "bizStep", "disposition", "eventID", "recordTime"):
         val = _xml_child_text(ev_element, field_name)
         if val:
             event[field_name] = val

@@ -2,47 +2,48 @@
 RegEngine API Client
 """
 
-import httpx
-import time
 import logging
-from typing import Optional, List, Any, Dict
+import time
 from datetime import date
+from typing import Any, Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger("regengine.client")
 
-from .models import (
-    Record,
-    TraceResult,
-    TimelineEvent,
-    FTLResult,
-    RecallDrill,
-    ReadinessScore,
-    CTEType,
-)
 from .exceptions import (
-    RegEngineError,
     AuthenticationError,
-    RateLimitError,
     NotFoundError,
+    RateLimitError,
+    RegEngineError,
     ValidationError,
+)
+from .models import (
+    CTEType,
+    FTLResult,
+    ReadinessScore,
+    RecallDrill,
+    Record,
+    TimelineEvent,
+    TraceResult,
 )
 
 
 class RegEngineClient:
     """
     Official Python client for RegEngine FSMA 204 Compliance API.
-    
+
     Args:
         api_key: Your RegEngine API key (format: rge_xxx)
         base_url: API base URL (default: https://api.regengine.co)
         tenant_id: Optional tenant ID for multi-tenant isolation
         timeout: Request timeout in seconds (default: 30)
-    
+
     Example:
         >>> client = RegEngineClient(api_key="rge_your_key")
         >>> record = client.get_record("LOT-2026-001")
     """
-    
+
     DEFAULT_BASE_URL = "https://api.regengine.co"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
 
@@ -82,7 +83,7 @@ class RegEngineClient:
         self.max_retries = max_retries
         self.retry_backoff_factor = retry_backoff_factor
         self._session = httpx.Client()
-    
+
     def _headers(self) -> Dict[str, str]:
         """Build request headers."""
         headers = {
@@ -93,7 +94,7 @@ class RegEngineClient:
         if self.tenant_id:
             headers["X-Tenant-ID"] = self.tenant_id
         return headers
-    
+
     def _request(
         self,
         method: str,
@@ -122,9 +123,15 @@ class RegEngineClient:
             except httpx.HTTPError as e:
                 last_exc = e
                 if attempt < self.max_retries:
-                    delay = self.retry_backoff_factor * (2 ** attempt)
-                    logger.warning("Request to %s failed (attempt %d/%d), retrying in %.1fs: %s",
-                                   path, attempt + 1, self.max_retries + 1, delay, e)
+                    delay = self.retry_backoff_factor * (2**attempt)
+                    logger.warning(
+                        "Request to %s failed (attempt %d/%d), retrying in %.1fs: %s",
+                        path,
+                        attempt + 1,
+                        self.max_retries + 1,
+                        delay,
+                        e,
+                    )
                     time.sleep(delay)
                     continue
                 raise RegEngineError(f"Request failed after {self.max_retries + 1} attempts: {e}")
@@ -136,11 +143,17 @@ class RegEngineClient:
                     try:
                         delay = float(retry_after)
                     except ValueError:
-                        delay = self.retry_backoff_factor * (2 ** attempt)
+                        delay = self.retry_backoff_factor * (2**attempt)
                 else:
-                    delay = self.retry_backoff_factor * (2 ** attempt)
-                logger.warning("Received %d from %s (attempt %d/%d), retrying in %.1fs",
-                               response.status_code, path, attempt + 1, self.max_retries + 1, delay)
+                    delay = self.retry_backoff_factor * (2**attempt)
+                logger.warning(
+                    "Received %d from %s (attempt %d/%d), retrying in %.1fs",
+                    response.status_code,
+                    path,
+                    attempt + 1,
+                    self.max_retries + 1,
+                    delay,
+                )
                 time.sleep(delay)
                 continue
 
@@ -165,11 +178,11 @@ class RegEngineClient:
 
         # Exhausted retries — raise last status error
         raise RegEngineError(f"Request to {path} failed after {self.max_retries + 1} attempts")
-    
+
     def _request_bytes(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> bytes:
         """Make an API request that returns raw bytes (for file downloads)."""
         url = f"{self.base_url}{path}"
-        
+
         try:
             response = self._session.request(
                 method=method,
@@ -182,11 +195,11 @@ class RegEngineClient:
             return response.content
         except httpx.HTTPError as e:
             raise RegEngineError(f"Request failed: {e}")
-    
+
     # =========================================================================
     # Record Management
     # =========================================================================
-    
+
     def create_record(
         self,
         cte_type: CTEType,
@@ -202,7 +215,7 @@ class RegEngineClient:
     ) -> Record:
         """
         Create a traceability record for a Critical Tracking Event.
-        
+
         Args:
             cte_type: Type of CTE (HARVESTING, COOLING, INITIAL_PACKING, FIRST_LAND_BASED_RECEIVING, SHIPPING, RECEIVING, TRANSFORMATION)
             tlc: Traceability Lot Code
@@ -214,7 +227,7 @@ class RegEngineClient:
             reference_document: Associated document reference
             input_tlcs: For TRANSFORMATION, list of input lot codes
             **extra_kdes: Additional Key Data Elements
-        
+
         Returns:
             Record object with created record details
         """
@@ -233,23 +246,23 @@ class RegEngineClient:
             payload["reference_document"] = reference_document
         if input_tlcs:
             payload["input_tlcs"] = input_tlcs
-        
+
         data = self._request("POST", "/api/graph/fsma/records", json=payload)
         return Record(**data)
-    
+
     def get_record(self, tlc: str) -> Record:
         """
         Retrieve a traceability record by Traceability Lot Code.
-        
+
         Args:
             tlc: The Traceability Lot Code to look up
-        
+
         Returns:
             Record object with record details
         """
         data = self._request("GET", f"/api/graph/fsma/records/{tlc}")
         return Record(**data)
-    
+
     def query_records(
         self,
         start_date: str,
@@ -259,13 +272,13 @@ class RegEngineClient:
     ) -> List[Record]:
         """
         Query traceability records by date range.
-        
+
         Args:
             start_date: Start date (ISO format)
             end_date: End date (ISO format)
             cte_type: Optional filter by CTE type
             limit: Maximum number of records to return
-        
+
         Returns:
             List of Record objects
         """
@@ -276,14 +289,14 @@ class RegEngineClient:
         }
         if cte_type:
             params["cte_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
-        
+
         data = self._request("GET", "/api/graph/fsma/records", params=params)
         return [Record(**r) for r in data.get("records", [])]
-    
+
     # =========================================================================
     # Supply Chain Tracing
     # =========================================================================
-    
+
     def trace_forward(
         self,
         tlc: str,
@@ -292,12 +305,12 @@ class RegEngineClient:
     ) -> TraceResult:
         """
         Trace a lot forward through the supply chain.
-        
+
         Args:
             tlc: Traceability Lot Code to trace from
             max_depth: Maximum hops to trace (default: 10)
             enforce_time_arrow: Ensure chronological ordering (default: True)
-        
+
         Returns:
             TraceResult with downstream facilities and events
         """
@@ -307,7 +320,7 @@ class RegEngineClient:
         }
         data = self._request("GET", f"/api/graph/fsma/trace/forward/{tlc}", params=params)
         return TraceResult(**data)
-    
+
     def trace_backward(
         self,
         tlc: str,
@@ -315,52 +328,52 @@ class RegEngineClient:
     ) -> TraceResult:
         """
         Trace a lot backward to source materials and suppliers.
-        
+
         Args:
             tlc: Traceability Lot Code to trace from
             max_depth: Maximum hops to trace (default: 10)
-        
+
         Returns:
             TraceResult with source lots and facilities
         """
         params = {"max_depth": max_depth}
         data = self._request("GET", f"/api/graph/fsma/trace/backward/{tlc}", params=params)
         return TraceResult(**data)
-    
+
     def get_timeline(self, tlc: str) -> List[TimelineEvent]:
         """
         Get chronological timeline of all events for a lot.
-        
+
         Args:
             tlc: Traceability Lot Code
-        
+
         Returns:
             List of TimelineEvent objects in chronological order
         """
         data = self._request("GET", f"/api/graph/fsma/timeline/{tlc}")
         return [TimelineEvent(**e) for e in data.get("events", [])]
-    
+
     # =========================================================================
     # FTL Checker
     # =========================================================================
-    
+
     def check_ftl(self, product_category: str) -> FTLResult:
         """
         Check if a product category is on FDA's Food Traceability List.
-        
+
         Args:
             product_category: Category ID (e.g., 'leafy-greens', 'finfish')
-        
+
         Returns:
             FTLResult with coverage status, CTEs, and KDEs required
         """
         data = self._request("GET", f"/api/compliance/ftl/{product_category}")
         return FTLResult(**data)
-    
+
     # =========================================================================
     # Recall Management
     # =========================================================================
-    
+
     def start_recall_drill(
         self,
         target_tlc: str,
@@ -369,12 +382,12 @@ class RegEngineClient:
     ) -> RecallDrill:
         """
         Initiate a mock recall drill for FDA compliance testing.
-        
+
         Args:
             target_tlc: Lot code to trace during drill
             drill_type: Type of drill ('forward_trace' or 'backward_trace')
             severity: Recall severity class ('class_i', 'class_ii', 'class_iii')
-        
+
         Returns:
             RecallDrill object with drill status
         """
@@ -385,34 +398,34 @@ class RegEngineClient:
         }
         data = self._request("POST", "/api/graph/fsma/recall/drills", json=payload)
         return RecallDrill(**data)
-    
+
     def get_recall_drills(self, limit: int = 20) -> List[RecallDrill]:
         """
         Get history of mock recall drills.
-        
+
         Args:
             limit: Maximum number of drills to return
-        
+
         Returns:
             List of RecallDrill objects
         """
         data = self._request("GET", "/api/graph/fsma/recall/drills", params={"limit": limit})
         return [RecallDrill(**d) for d in data.get("drills", [])]
-    
+
     def get_readiness_score(self) -> ReadinessScore:
         """
         Get your FSMA 204 recall readiness score.
-        
+
         Returns:
             ReadinessScore with score and recommendations
         """
         data = self._request("GET", "/api/graph/fsma/recall/readiness")
         return ReadinessScore(**data)
-    
+
     # =========================================================================
     # FDA Export
     # =========================================================================
-    
+
     def export_fda(
         self,
         tlc: str,
@@ -421,15 +434,15 @@ class RegEngineClient:
     ) -> bytes:
         """
         Generate FDA-compliant sortable spreadsheet (CSV).
-        
+
         Per 21 CFR 1.1455(b)(3), produces a spreadsheet within 24 hours
         containing all traceability records for the specified lot.
-        
+
         Args:
             tlc: Traceability Lot Code
             start_date: Start date (ISO format)
             end_date: End date (ISO format)
-        
+
         Returns:
             CSV file content as bytes
         """

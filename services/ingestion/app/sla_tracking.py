@@ -22,10 +22,10 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from .webhook_compat import require_tenant_context
 from shared.pagination import PaginationParams
 from shared.tenant_context import TenantContext
+
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("sla-tracking")
 
@@ -45,6 +45,7 @@ ALERT_THRESHOLD_HOURS = 4  # alert when < 4 hours remain
 
 class FDARequestCreate(BaseModel):
     """Payload for creating a new FDA records request."""
+
     tenant_id: str
     request_type: RequestType = "records_request"
     notes: Optional[str] = None
@@ -52,6 +53,7 @@ class FDARequestCreate(BaseModel):
 
 class FDARequest(BaseModel):
     """A tracked FDA records request with SLA deadline."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     tenant_id: str
     request_type: RequestType = "records_request"
@@ -82,6 +84,7 @@ class FDARequest(BaseModel):
 
 class SLADashboard(BaseModel):
     """Aggregated SLA compliance metrics for a tenant."""
+
     tenant_id: str
     open_requests: int = 0
     overdue_requests: int = 0
@@ -92,6 +95,7 @@ class SLADashboard(BaseModel):
 
 class SLAAlert(BaseModel):
     """An SLA alert for a request approaching or past deadline."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     tenant_id: str
     request_id: str
@@ -137,8 +141,7 @@ def _generate_alerts_for_request(req: FDARequest) -> List[SLAAlert]:
             tenant_id=req.tenant_id,
             request_id=req.id,
             alert_type="overdue",
-            message=f"FDA {req.request_type} request {req.id} is OVERDUE. "
-                    f"Deadline was {req.deadline_at.isoformat()}.",
+            message=f"FDA {req.request_type} request {req.id} is OVERDUE. Deadline was {req.deadline_at.isoformat()}.",
         )
         alerts.append(alert)
     elif remaining <= timedelta(hours=ALERT_THRESHOLD_HOURS):
@@ -149,7 +152,7 @@ def _generate_alerts_for_request(req: FDARequest) -> List[SLAAlert]:
             request_id=req.id,
             alert_type="deadline_approaching",
             message=f"FDA {req.request_type} request {req.id} deadline in "
-                    f"{hours_left:.1f} hours ({req.deadline_at.isoformat()}).",
+            f"{hours_left:.1f} hours ({req.deadline_at.isoformat()}).",
         )
         alerts.append(alert)
 
@@ -289,7 +292,10 @@ async def create_request(
 
     logger.info(
         "SLA request created: %s (tenant=%s, type=%s, deadline=%s)",
-        req.id, req.tenant_id, req.request_type, req.deadline_at.isoformat(),
+        req.id,
+        req.tenant_id,
+        req.request_type,
+        req.deadline_at.isoformat(),
     )
 
     return {
@@ -361,13 +367,15 @@ async def complete_request(
         request_id=req.id,
         alert_type="completed",
         message=f"FDA {req.request_type} request {req.id} completed in "
-                f"{response_hours:.1f}h. SLA {'MET' if met_sla else 'MISSED'}.",
+        f"{response_hours:.1f}h. SLA {'MET' if met_sla else 'MISSED'}.",
     )
     _alerts_store[alert.id] = alert
 
     logger.info(
         "SLA request completed: %s (response_hours=%.1f, met_sla=%s)",
-        req.id, response_hours or 0, met_sla,
+        req.id,
+        response_hours or 0,
+        met_sla,
     )
 
     return {

@@ -2,14 +2,8 @@ import importlib.util
 import re
 from pathlib import Path
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_MIGRATION_PATH = (
-    _REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py"
-)
+_MIGRATION_PATH = _REPO_ROOT / "alembic" / "versions" / "20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py"
 _FSMA_TABLES = (
     "products",
     "locations",

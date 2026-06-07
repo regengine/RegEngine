@@ -31,9 +31,9 @@ if TYPE_CHECKING:
     from .metrics import HallucinationTracker
 
 import structlog
-from opentelemetry import trace, propagate
-from prometheus_client import Counter, Histogram
 from confluent_kafka.admin import NewTopic
+from opentelemetry import propagate, trace
+from prometheus_client import Counter, Histogram
 from shared.kafka_compat import (
     KafkaAdminClientCompat as KafkaAdminClient,
     KafkaConsumerCompat as KafkaConsumer,
@@ -42,12 +42,8 @@ from shared.kafka_compat import (
 from tenacity import retry, stop_after_attempt, stop_after_delay, wait_exponential
 
 try:
-    REVIEW_MESSAGES_COUNTER = Counter(
-        "review_messages_total", "Review queue messages processed", ["status"]
-    )
-    POISON_PILL_COUNTER = Counter(
-        "review_poison_pill_total", "Count of malformed review messages"
-    )
+    REVIEW_MESSAGES_COUNTER = Counter("review_messages_total", "Review queue messages processed", ["status"])
+    POISON_PILL_COUNTER = Counter("review_poison_pill_total", "Count of malformed review messages")
 except ValueError:
     from prometheus_client import REGISTRY
 
@@ -56,15 +52,16 @@ except ValueError:
 
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 
+from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 from shared.observability import setup_standalone_observability
 from shared.observability.dlq_producer import DLQProducer, get_dlq_producer
 from shared.observability.kafka_propagation import (
     bind_correlation_context,
     inject_correlation_headers_tuples,
 )
-from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
 tracer = setup_standalone_observability("admin-review-consumer")
 
@@ -72,6 +69,7 @@ from .config import get_settings
 from .metrics import get_hallucination_tracker
 
 logger = structlog.get_logger("review-consumer")
+
 
 def _get_or_create_review_histogram() -> Histogram:
     """Create the review-latency histogram once, even when this module
@@ -92,6 +90,7 @@ def _get_or_create_review_histogram() -> Histogram:
         # existing collector so both imports refer to the same
         # histogram.
         from prometheus_client import REGISTRY
+
         for collector in list(REGISTRY._collector_to_names.keys()):
             if getattr(collector, "_name", None) == "review_message_latency_seconds":
                 return collector  # type: ignore[return-value]
@@ -144,27 +143,30 @@ def _send_to_dlq(bootstrap: str, event: Any, error: str, headers: list | None = 
     producer = _dlq_producer or _init_dlq_producer(bootstrap)
     try:
         if isinstance(event, dict):
-            dlq_payload = json.dumps({
-                "original_event": event,
-                "error": error,
-                "failed_at": datetime.now(timezone.utc).isoformat(),
-            }).encode("utf-8")
+            dlq_payload = json.dumps(
+                {
+                    "original_event": event,
+                    "error": error,
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).encode("utf-8")
         else:
-            dlq_payload = json.dumps({
-                "raw_payload": str(event),
-                "error": error,
-                "failed_at": datetime.now(timezone.utc).isoformat(),
-                "is_poison_pill": True,
-            }).encode("utf-8")
+            dlq_payload = json.dumps(
+                {
+                    "raw_payload": str(event),
+                    "error": error,
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
+                    "is_poison_pill": True,
+                }
+            ).encode("utf-8")
         producer.send(dlq_payload, reason=error[:120], headers=headers or [])
         logger.info("message_sent_to_dlq", error=error)
     except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
         logger.error("dlq_send_failed", error=str(exc))
 
 
-from sqlalchemy.exc import OperationalError, InterfaceError
+from sqlalchemy.exc import InterfaceError, OperationalError
 from tenacity import retry_if_exception_type
-
 
 # Total retry budget, capped well below the Kafka consumer group
 # ``max.poll.interval.ms`` (default 300s) so a persistently-failing
@@ -172,16 +174,11 @@ from tenacity import retry_if_exception_type
 # rebalance (#1201). Without a wall-clock cap, an unbounded exponential
 # backoff + attempt count can exceed the broker's rebalance timeout and
 # cause a death spiral where each kick-out makes the next poll slower.
-REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS = float(
-    os.getenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", "60")
-)
+REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS = float(os.getenv("REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS", "60"))
 
 
 @retry(
-    stop=(
-        stop_after_attempt(3)
-        | stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)
-    ),
+    stop=(stop_after_attempt(3) | stop_after_delay(REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS)),
     wait=wait_exponential(multiplier=0.5, min=0.5, max=5),
     retry=retry_if_exception_type((OperationalError, InterfaceError, ConnectionError, TimeoutError)),
     reraise=True,
@@ -201,7 +198,7 @@ def _record_with_retry(tracker: "HallucinationTracker", **kwargs) -> Dict[str, A
 
 def stop_consumer() -> None:
     """Signal the consumer loop to shut down gracefully.
-    
+
     The consumer loop will finish processing current batch before exiting.
     DLQ producer cleanup happens in the consumer loop itself.
     """
@@ -238,14 +235,14 @@ def get_consumer_health() -> Dict[str, Any]:
     is_alive = not _shutdown_event.is_set()
     last_poll = _last_poll_time.isoformat() if _last_poll_time else None
     started_at = _consumer_started_at.isoformat() if _consumer_started_at else None
-    
+
     # Consider unhealthy if no poll in threshold period
     poll_stale = False
     seconds_since_poll = None
     if _last_poll_time and is_alive:
         seconds_since_poll = (now - _last_poll_time).total_seconds()
         poll_stale = seconds_since_poll > CONSUMER_STALE_THRESHOLD_SECONDS
-    
+
     return {
         "alive": is_alive,
         "started_at": started_at,
@@ -293,7 +290,7 @@ def run_consumer() -> None:
                     with bind_correlation_context(record.headers or []):
                         with tracer.start_as_current_span(
                             "admin_review.process_message",
-                            attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                            attributes={"kafka.topic": record.topic, "kafka.offset": record.offset},
                         ) as span:
                             # Propagate trace + correlation context to DLQ headers.
                             otel_headers: list = []
@@ -333,7 +330,7 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
             raw_headers = raw_headers()
         except Exception:
             raw_headers = None
-    
+
     # 1. Handle Deserialization (Poison Pill Detection)
     try:
         evt = json.loads(raw_value.decode("utf-8")) if raw_value else {}
@@ -454,15 +451,12 @@ def _extract_and_record(
     """
     payload = _verify_review_event(evt, headers, topic=topic)
 
-    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
+    tenant_id = payload.get(
+        "tenant_id"
+    )  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
     document_id = payload.get("document_id")
     extraction = payload.get("extraction") or {}
-    doc_hash = (
-        payload.get("doc_hash")
-        or extraction.get("attributes", {}).get("doc_hash")
-        or document_id
-        or "unknown"
-    )
+    doc_hash = payload.get("doc_hash") or extraction.get("attributes", {}).get("doc_hash") or document_id or "unknown"
     extractor = extraction.get("attributes", {}).get("extractor") or "unknown"
     confidence_score = extraction.get("confidence_score", 0.0)
     source_text_raw = extraction.get("source_text")

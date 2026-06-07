@@ -8,14 +8,13 @@ FSMA 204 traceability events into RegEngine.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
-
-import logging
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -30,10 +29,7 @@ def validate_gln(gln: str) -> tuple[bool, str | None]:
     clean = re.sub(r"\D", "", gln)
     if len(clean) != 13:
         return False, f"GLN must be exactly 13 digits, got {len(clean)}"
-    total = sum(
-        int(d) * (1 if i % 2 else 3)
-        for i, d in enumerate(reversed(clean[:-1]))
-    )
+    total = sum(int(d) * (1 if i % 2 else 3) for i, d in enumerate(reversed(clean[:-1])))
     expected = (10 - (total % 10)) % 10
     if int(clean[-1]) != expected:
         return False, f"GLN check digit invalid: expected {expected}, got {clean[-1]}"
@@ -48,6 +44,7 @@ class WebhookCTEType(str, Enum):
     receiving, transformation.  GROWING is accepted for ingest
     backwards-compatibility but normalizes to farm metadata, not a CTE.
     """
+
     GROWING = "growing"  # legacy/internal — not an FDA-defined CTE
     HARVESTING = "harvesting"
     COOLING = "cooling"
@@ -60,53 +57,100 @@ class WebhookCTEType(str, Enum):
 
 # Valid units of measure for FSMA 204 traceability records
 VALID_UNITS_OF_MEASURE = {
-    "lbs", "kg", "oz", "g", "tons", "mt",           # weight
-    "cases", "cartons", "boxes", "crates", "bins",   # containers
-    "pallets", "totes", "bags", "sacks",             # bulk
-    "each", "units", "pieces", "count",              # discrete
-    "gallons", "liters", "barrels", "bushels",       # volume
+    "lbs",
+    "kg",
+    "oz",
+    "g",
+    "tons",
+    "mt",  # weight
+    "cases",
+    "cartons",
+    "boxes",
+    "crates",
+    "bins",  # containers
+    "pallets",
+    "totes",
+    "bags",
+    "sacks",  # bulk
+    "each",
+    "units",
+    "pieces",
+    "count",  # discrete
+    "gallons",
+    "liters",
+    "barrels",
+    "bushels",  # volume
 }
 
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
 REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
     WebhookCTEType.HARVESTING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "harvest_date", "location_name",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "harvest_date",
+        "location_name",
         "reference_document",  # §1.1327(b)(5)
     ],
     WebhookCTEType.COOLING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "cooling_date", "location_name",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "cooling_date",
+        "location_name",
         "reference_document",  # §1.1325(b)(7)
     ],
     WebhookCTEType.INITIAL_PACKING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "packing_date", "location_name",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "packing_date",
+        "location_name",
         "reference_document",  # §1.1335(c)(7)
         "harvester_business_name",  # §1.1335(c)(8)
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "landing_date", "receiving_location",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "landing_date",
+        "receiving_location",
         "reference_document",  # §1.1325(c)(7)
     ],
     WebhookCTEType.SHIPPING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "ship_date", "ship_from_location", "ship_to_location",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "ship_date",
+        "ship_from_location",
+        "ship_to_location",
         "reference_document",  # §1.1340(c)(6)
         "tlc_source_reference",  # §1.1340(c)(7)
     ],
     WebhookCTEType.RECEIVING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "receive_date", "receiving_location",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "receive_date",
+        "receiving_location",
         "immediate_previous_source",  # §1.1345(c)(5)
         "reference_document",  # §1.1345(c)(6)
         "tlc_source_reference",  # §1.1345(c)(7)
     ],
     WebhookCTEType.TRANSFORMATION: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "transformation_date", "location_name",
+        "traceability_lot_code",
+        "product_description",
+        "quantity",
+        "unit_of_measure",
+        "transformation_date",
+        "location_name",
         "reference_document",  # §1.1350(c)(6)
     ],
 }
@@ -124,8 +168,7 @@ class IngestEvent(BaseModel):
     location_name: Optional[str] = Field(None, description="Human-readable location name")
     timestamp: str = Field(..., description="ISO 8601 timestamp of the event")
     kdes: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
+        default_factory=dict, description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
     )
     input_traceability_lot_codes: Optional[list[str]] = Field(
         None,
@@ -150,9 +193,7 @@ class IngestEvent(BaseModel):
         # Events older than 90 days are accepted but flagged via _historical_warning.
         # Reject events more than 24 hours in the future (clock skew)
         if dt > now + timedelta(hours=24):
-            raise ValueError(
-                f"Event timestamp {v} is more than 24 hours in the future."
-            )
+            raise ValueError(f"Event timestamp {v} is more than 24 hours in the future.")
         return v
 
     @field_validator("location_gln")
@@ -166,7 +207,9 @@ class IngestEvent(BaseModel):
         if v is None or v.strip() == "":
             return v
         clean = re.sub(r"\D", "", v)
-        is_valid, error_msg = validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
+        is_valid, error_msg = (
+            validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
+        )
         if not is_valid:
             strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
             if strict:
@@ -189,9 +232,11 @@ class IngestEvent(BaseModel):
         normalized = v.strip().lower()
         if normalized not in VALID_UNITS_OF_MEASURE:
             import logging as _logging
+
             _logging.getLogger("uom-validation").warning(
                 "unknown_unit value=%s accepted_as_is=true valid=%s",
-                v, ",".join(sorted(VALID_UNITS_OF_MEASURE)),
+                v,
+                ",".join(sorted(VALID_UNITS_OF_MEASURE)),
             )
             # Accept it — KDE completeness checks will flag it to the user
             return normalized
@@ -205,12 +250,14 @@ class IngestEvent(BaseModel):
         if not has_gln and not has_name:
             # Also check KDEs for location fields
             kde_locations = [
-                "ship_from_location", "ship_to_location", "receiving_location",
-                "ship_from_gln", "ship_to_gln",
+                "ship_from_location",
+                "ship_to_location",
+                "receiving_location",
+                "ship_from_gln",
+                "ship_to_gln",
             ]
             has_kde_location = any(
-                self.kdes.get(k) for k in kde_locations
-                if self.kdes.get(k) and str(self.kdes[k]).strip()
+                self.kdes.get(k) for k in kde_locations if self.kdes.get(k) and str(self.kdes[k]).strip()
             )
             if not has_kde_location:
                 raise ValueError(
@@ -235,10 +282,7 @@ class WebhookPayload(BaseModel):
         min_length=1,
         max_length=500,
     )
-    tenant_id: Optional[str] = Field(
-        None,
-        description="Tenant identifier (auto-detected from API key if not provided)"
-    )
+    tenant_id: Optional[str] = Field(None, description="Tenant identifier (auto-detected from API key if not provided)")
 
 
 class EventResult(BaseModel):
@@ -260,9 +304,7 @@ class IngestResponse(BaseModel):
     rejected: int = 0
     total: int = 0
     events: List[EventResult] = Field(default_factory=list)
-    ingestion_timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class RecentEventsResponse(BaseModel):

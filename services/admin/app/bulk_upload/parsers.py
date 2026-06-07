@@ -20,9 +20,7 @@ DEFAULT_MAX_PDF_PAGES = 200
 
 
 def _max_upload_bytes() -> int:
-    raw_value = os.getenv(
-        "SUPPLIER_BULK_UPLOAD_MAX_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)
-    ).strip()
+    raw_value = os.getenv("SUPPLIER_BULK_UPLOAD_MAX_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)).strip()
     try:
         parsed = int(raw_value)
     except ValueError:
@@ -41,9 +39,7 @@ def _max_pdf_pages() -> int:
     cap bounds wire size only — post-decompression page count must also
     be bounded before iteration begins.
     """
-    raw_value = os.getenv(
-        "BULK_UPLOAD_MAX_PDF_PAGES", str(DEFAULT_MAX_PDF_PAGES)
-    ).strip()
+    raw_value = os.getenv("BULK_UPLOAD_MAX_PDF_PAGES", str(DEFAULT_MAX_PDF_PAGES)).strip()
     try:
         parsed = int(raw_value)
     except ValueError:
@@ -181,9 +177,7 @@ def _infer_roles_from_text(text: str) -> list[str]:
         roles.append("Grower")
     if any(token in lowered for token in ["pack", "re-pack", "bagging"]):
         roles.append("Packer")
-    if any(
-        token in lowered for token in ["process", "blast freez", "cooling", "transform"]
-    ):
+    if any(token in lowered for token in ["process", "blast freez", "cooling", "transform"]):
         roles.append("Processor")
     if any(
         token in lowered
@@ -215,24 +209,18 @@ def _extract_matrix_facility(
     contact_blob = attributes.get("contact", "")
     additional_blob = attributes.get("additional_service", "")
     special_controls_blob = attributes.get("special_controls", "")
-    lookup_blob = "\n".join(
-        [name, contact_blob, additional_blob, special_controls_blob]
-    )
+    lookup_blob = "\n".join([name, contact_blob, additional_blob, special_controls_blob])
 
     street, city, state, postal_code = _extract_address_parts(contact_blob)
     if not (street and city and state and postal_code):
-        street_fallback, city_fallback, state_fallback, postal_fallback = (
-            _extract_address_parts(lookup_blob)
-        )
+        street_fallback, city_fallback, state_fallback, postal_fallback = _extract_address_parts(lookup_blob)
         street = street or street_fallback
         city = city or city_fallback
         state = state or state_fallback
         postal_code = postal_code or postal_fallback
 
     if not (street and city and state and postal_code):
-        warnings.append(
-            f"Skipped facility '{name}' because address fields were not detected"
-        )
+        warnings.append(f"Skipped facility '{name}' because address fields were not detected")
         return None
 
     return {
@@ -246,9 +234,7 @@ def _extract_matrix_facility(
     }
 
 
-def _parse_pdf_matrix_table(
-    table: list[list[Any]], parsed: dict[str, Any], warnings: list[str]
-) -> int:
+def _parse_pdf_matrix_table(table: list[list[Any]], parsed: dict[str, Any], warnings: list[str]) -> int:
     if not table or len(table) < 3:
         return 0
 
@@ -260,17 +246,12 @@ def _parse_pdf_matrix_table(
         if label:
             row_labels.append(label)
 
-    marker_hits = sum(
-        1 for label in row_labels if label in WIDE_TABLE_ATTRIBUTE_MARKERS
-    )
+    marker_hits = sum(1 for label in row_labels if label in WIDE_TABLE_ATTRIBUTE_MARKERS)
     if marker_hits < 4:
         return 0
 
     added = 0
-    seen_names: set[str] = {
-        str(item.get("name") or "").strip().lower()
-        for item in parsed.get("facilities") or []
-    }
+    seen_names: set[str] = {str(item.get("name") or "").strip().lower() for item in parsed.get("facilities") or []}
     for column_index, header in enumerate(table[0][1:], start=1):
         attributes: dict[str, str] = {}
         for row in table[1:]:
@@ -385,9 +366,7 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _classify_row(
-    parsed: dict[str, Any], row: dict[str, Any], *, warnings: list[str]
-) -> None:
+def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list[str]) -> None:
     record_type = str(row.get("record_type") or "").strip().lower()
     if record_type in {"facility", "facilities"}:
         parsed["facilities"].append(
@@ -396,13 +375,8 @@ def _classify_row(
                 "street": str(row.get("street") or "").strip(),
                 "city": str(row.get("city") or "").strip(),
                 "state": str(row.get("state") or "").strip(),
-                "postal_code": str(
-                    row.get("postal_code") or row.get("zip") or ""
-                ).strip(),
-                "fda_registration_number": str(
-                    row.get("fda_registration_number") or ""
-                ).strip()
-                or None,
+                "postal_code": str(row.get("postal_code") or row.get("zip") or "").strip(),
+                "fda_registration_number": str(row.get("fda_registration_number") or "").strip() or None,
                 "roles": _parse_list_field(row.get("roles")),
             }
         )
@@ -410,9 +384,7 @@ def _classify_row(
     if record_type in {"ftl", "ftl_scope", "scope"}:
         parsed["ftl_scopes"].append(
             {
-                "facility_name": str(
-                    row.get("facility_name") or row.get("name") or ""
-                ).strip(),
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
                 "category_id": str(row.get("category_id") or "").strip(),
             }
         )
@@ -421,11 +393,8 @@ def _classify_row(
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
-                "facility_name": str(
-                    row.get("facility_name") or row.get("name") or ""
-                ).strip(),
-                "product_description": str(row.get("product_description") or "").strip()
-                or None,
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "product_description": str(row.get("product_description") or "").strip() or None,
                 "status": str(row.get("status") or "active").strip().lower(),
             }
         )
@@ -443,9 +412,7 @@ def _classify_row(
     if row.get("category_id"):
         parsed["ftl_scopes"].append(
             {
-                "facility_name": str(
-                    row.get("facility_name") or row.get("name") or ""
-                ).strip(),
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
                 "category_id": str(row.get("category_id") or "").strip(),
             }
         )
@@ -454,11 +421,8 @@ def _classify_row(
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
-                "facility_name": str(
-                    row.get("facility_name") or row.get("name") or ""
-                ).strip(),
-                "product_description": str(row.get("product_description") or "").strip()
-                or None,
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "product_description": str(row.get("product_description") or "").strip() or None,
                 "status": str(row.get("status") or "active").strip().lower(),
             }
         )
@@ -470,13 +434,8 @@ def _classify_row(
                 "street": str(row.get("street") or "").strip(),
                 "city": str(row.get("city") or "").strip(),
                 "state": str(row.get("state") or "").strip(),
-                "postal_code": str(
-                    row.get("postal_code") or row.get("zip") or ""
-                ).strip(),
-                "fda_registration_number": str(
-                    row.get("fda_registration_number") or ""
-                ).strip()
-                or None,
+                "postal_code": str(row.get("postal_code") or row.get("zip") or "").strip(),
+                "fda_registration_number": str(row.get("fda_registration_number") or "").strip() or None,
                 "roles": _parse_list_field(row.get("roles")),
             }
         )
@@ -485,9 +444,7 @@ def _classify_row(
     warnings.append("Skipped unrecognized row in uploaded dataset")
 
 
-def _parse_csv_bytes(
-    content: bytes, parsed: dict[str, Any], warnings: list[str]
-) -> None:
+def _parse_csv_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -501,23 +458,15 @@ def _parse_csv_bytes(
         _classify_row(parsed, normalized_row, warnings=warnings)
 
 
-def _append_non_object_warning(
-    warnings: list[str], section_name: str, index: int
-) -> None:
-    warnings.append(
-        f"Skipped non-object row in {section_name} section at index {index}"
-    )
+def _append_non_object_warning(warnings: list[str], section_name: str, index: int) -> None:
+    warnings.append(f"Skipped non-object row in {section_name} section at index {index}")
 
 
-def _parse_json_bytes(
-    content: bytes, parsed: dict[str, Any], warnings: list[str]
-) -> None:
+def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
     try:
         payload = json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid JSON file: {exc}"
-        ) from exc
+        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}") from exc
 
     if isinstance(payload, dict):
         facilities = payload.get("facilities") or []
@@ -565,10 +514,7 @@ def _parse_json_bytes(
                     _normalize_row({**row, "record_type": "event"}),
                     warnings=warnings,
                 )
-        if not any(
-            isinstance(section, list) and section
-            for section in [facilities, ftl_scopes, tlcs, events]
-        ):
+        if not any(isinstance(section, list) and section for section in [facilities, ftl_scopes, tlcs, events]):
             _classify_row(parsed, _normalize_row(payload), warnings=warnings)
         return
 
@@ -583,15 +529,11 @@ def _parse_json_bytes(
     raise HTTPException(status_code=400, detail="JSON must be an object or array")
 
 
-def _parse_xlsx_bytes(
-    content: bytes, parsed: dict[str, Any], warnings: list[str]
-) -> None:
+def _parse_xlsx_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
     try:
         from openpyxl import load_workbook
     except Exception as exc:  # pragma: no cover - dependency/env specific
-        raise HTTPException(
-            status_code=503, detail="XLSX parsing unavailable (openpyxl missing)"
-        ) from exc
+        raise HTTPException(status_code=503, detail="XLSX parsing unavailable (openpyxl missing)") from exc
 
     workbook = load_workbook(io.BytesIO(content), data_only=True)
     for sheet in workbook.worksheets:
@@ -616,9 +558,7 @@ def _parse_xlsx_bytes(
         for values in rows[1:]:
             if values is None:
                 continue
-            row_data = {
-                header: value for header, value in zip(headers, values) if header
-            }
+            row_data = {header: value for header, value in zip(headers, values) if header}
             if not any(str(value or "").strip() for value in row_data.values()):
                 continue
             if inferred_record_type and "record_type" not in row_data:
@@ -626,15 +566,11 @@ def _parse_xlsx_bytes(
             _classify_row(parsed, row_data, warnings=warnings)
 
 
-def _parse_pdf_bytes(
-    content: bytes, parsed: dict[str, Any], warnings: list[str]
-) -> None:
+def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
     try:
         import pdfplumber
     except Exception as exc:  # pragma: no cover - dependency/env specific
-        raise HTTPException(
-            status_code=503, detail="PDF parsing unavailable (pdfplumber missing)"
-        ) from exc
+        raise HTTPException(status_code=503, detail="PDF parsing unavailable (pdfplumber missing)") from exc
 
     extracted_rows = 0
     max_pages = _max_pdf_pages()
@@ -643,9 +579,7 @@ def _parse_pdf_bytes(
         if page_count > max_pages:
             raise HTTPException(
                 status_code=413,
-                detail=(
-                    f"PDF has {page_count} pages; max allowed is {max_pages}"
-                ),
+                detail=(f"PDF has {page_count} pages; max allowed is {max_pages}"),
             )
         for page in pdf.pages:
             for table in page.extract_tables() or []:
@@ -659,11 +593,7 @@ def _parse_pdf_bytes(
 
                 headers = [_normalize_key(str(cell or "")) for cell in table[0]]
                 for row_values in table[1:]:
-                    row = {
-                        header: value
-                        for header, value in zip(headers, row_values)
-                        if header
-                    }
+                    row = {header: value for header, value in zip(headers, row_values) if header}
                     if not any(str(value or "").strip() for value in row.values()):
                         continue
                     _classify_row(parsed, _normalize_row(row), warnings=warnings)
@@ -683,9 +613,7 @@ def _parse_pdf_bytes(
                     warnings.append("PDF contained JSON-like text but parsing failed")
 
     if extracted_rows == 0:
-        warnings.append(
-            "PDF parsed but no structured rows detected; include tabular data or JSON block"
-        )
+        warnings.append("PDF parsed but no structured rows detected; include tabular data or JSON block")
 
 
 async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
@@ -739,9 +667,7 @@ async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
     return parsed
 
 
-def _auto_scaffold_facilities(
-    parsed: dict[str, Any], warnings: list[str]
-) -> None:
+def _auto_scaffold_facilities(parsed: dict[str, Any], warnings: list[str]) -> None:
     """Auto-create facility records from event/tlc/ftl_scope rows.
 
     When a CSV contains event rows referencing facilities that have no

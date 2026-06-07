@@ -37,11 +37,24 @@ from shared.rules.utils import get_nested_value
 FTL_CATEGORIES = frozenset(
     c.lower()
     for c in [
-        "Leafy Greens", "Herbs", "Fresh-Cut Fruits", "Fresh-Cut Vegetables",
-        "Finfish", "Crustaceans", "Molluscan Shellfish", "Smoked Finfish",
-        "Soft Cheeses", "Shell Eggs", "Nut Butters", "Ready-to-Eat Deli Salads",
-        "Fresh Tomatoes", "Fresh Peppers", "Fresh Cucumbers", "Fresh Sprouts",
-        "Tropical Tree Fruits", "Fresh Melons",
+        "Leafy Greens",
+        "Herbs",
+        "Fresh-Cut Fruits",
+        "Fresh-Cut Vegetables",
+        "Finfish",
+        "Crustaceans",
+        "Molluscan Shellfish",
+        "Smoked Finfish",
+        "Soft Cheeses",
+        "Shell Eggs",
+        "Nut Butters",
+        "Ready-to-Eat Deli Salads",
+        "Fresh Tomatoes",
+        "Fresh Peppers",
+        "Fresh Cucumbers",
+        "Fresh Sprouts",
+        "Tropical Tree Fruits",
+        "Fresh Melons",
     ]
 )
 

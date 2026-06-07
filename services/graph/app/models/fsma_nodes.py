@@ -266,12 +266,8 @@ class TraceEvent:
     def __post_init__(self) -> None:
         """Derive sha256_hash from identity fields if not provided."""
         if self.sha256_hash is None:
-            event_type = (
-                self.type.value if isinstance(self.type, CTEType) else str(self.type)
-            )
-            self.sha256_hash = compute_event_hash(
-                self.event_id, event_type, self.event_date
-            )
+            event_type = self.type.value if isinstance(self.type, CTEType) else str(self.type)
+            self.sha256_hash = compute_event_hash(self.event_id, event_type, self.event_date)
 
     def set_chain_hash(self, previous_chain_hash: Optional[str]) -> str:
         """
@@ -377,9 +373,7 @@ class Facility:
         if self.country:
             props["country"] = self.country
         props["facility_type"] = (
-            self.facility_type.value
-            if isinstance(self.facility_type, FacilityType)
-            else self.facility_type
+            self.facility_type.value if isinstance(self.facility_type, FacilityType) else self.facility_type
         )
         if self.tenant_id:
             props["tenant_id"] = self.tenant_id
@@ -470,9 +464,7 @@ class Document:
     def __post_init__(self) -> None:
         """Derive sha256_hash if not explicitly provided."""
         if self.sha256_hash is None:
-            self.sha256_hash = compute_document_hash(
-                self.document_id, self.document_type
-            )
+            self.sha256_hash = compute_document_hash(self.document_id, self.document_type)
 
     @property
     def node_properties(self) -> Dict[str, Any]:

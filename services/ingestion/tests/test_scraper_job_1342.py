@@ -44,9 +44,8 @@ sys.path.insert(0, str(service_dir))
 
 
 from app import scraper_job as mod  # noqa: E402
-from app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
 from app.scraper_job import run_generic_scrape_job, run_state_scrape_job  # noqa: E402
-
+from app.scrapers.state_adaptors.base import FetchedItem, Source  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Stubs / spies
@@ -74,9 +73,7 @@ class _GenericScraperSpy:
         self.raises: Exception | None = None
 
     async def fetch_document(self, url, jurisdiction_code, *, tenant_id=None):
-        self.calls.append(
-            {"url": url, "jurisdiction_code": jurisdiction_code, "tenant_id": tenant_id}
-        )
+        self.calls.append({"url": url, "jurisdiction_code": jurisdiction_code, "tenant_id": tenant_id})
         if self.raises:
             raise self.raises
 
@@ -157,7 +154,8 @@ def patch_redis(monkeypatch):
         mod_redis = _make_redis_module(client)
         sys.modules["redis"] = mod_redis
         monkeypatch.setattr(
-            mod, "get_settings",
+            mod,
+            "get_settings",
             lambda: SimpleNamespace(redis_url="redis://stub:6379"),
             raising=False,
         )
@@ -292,9 +290,7 @@ class TestRunStateScrapeJob:
         # Pipeline WAS called (content wasn't empty) but there's no event to log.
         assert len(pipeline.calls) == 1
 
-    def test_caught_exception_logs_failure_to_redis(
-        self, _patch_module_singletons, patch_redis
-    ):
+    def test_caught_exception_logs_failure_to_redis(self, _patch_module_singletons, patch_redis):
         client = patch_redis(_RedisSpy())
         adaptor = _AdaptorSpy(raises=ValueError("boom"))
 
@@ -321,12 +317,9 @@ class TestRunStateScrapeJob:
 
     @pytest.mark.parametrize(
         "exc",
-        [OSError("fs"), IOError("io"), AttributeError("attr"),
-         TypeError("type"), ValueError("val")],
+        [OSError("fs"), IOError("io"), AttributeError("attr"), TypeError("type"), ValueError("val")],
     )
-    def test_caught_exception_types(
-        self, _patch_module_singletons, patch_redis, exc
-    ):
+    def test_caught_exception_types(self, _patch_module_singletons, patch_redis, exc):
         client = patch_redis(_RedisSpy())
         adaptor = _AdaptorSpy(raises=exc)
         # Should not raise — all these exc types are caught.
@@ -341,9 +334,7 @@ class TestRunStateScrapeJob:
         )
         assert len(client.setex_calls) == 1
 
-    def test_redis_setex_failure_swallowed(
-        self, _patch_module_singletons, patch_redis
-    ):
+    def test_redis_setex_failure_swallowed(self, _patch_module_singletons, patch_redis):
         # Redis unreachable / auth fails — the outer error is already
         # logged; the status-store side-effect is best-effort.
         client = patch_redis(_RedisSpy(setex_raises=OSError("redis down")))
@@ -361,9 +352,7 @@ class TestRunStateScrapeJob:
             )
         )
 
-    def test_redis_from_url_failure_swallowed(
-        self, _patch_module_singletons, patch_redis
-    ):
+    def test_redis_from_url_failure_swallowed(self, _patch_module_singletons, patch_redis):
         # redis.from_url itself raising (bad URL, dns fail) must also
         # not crash the worker.
         patch_redis(OSError("dns"))
@@ -410,24 +399,21 @@ class TestRunGenericScrapeJob:
                 tenant_id="t-7",
             )
         )
-        assert generic.calls == [
-            {"url": "https://ex.gov/x", "jurisdiction_code": "OR", "tenant_id": "t-7"}
-        ]
+        assert generic.calls == [{"url": "https://ex.gov/x", "jurisdiction_code": "OR", "tenant_id": "t-7"}]
 
     @pytest.mark.parametrize(
         "exc",
-        [OSError("fs"), IOError("io"), AttributeError("attr"),
-         TypeError("type"), ValueError("val")],
+        [OSError("fs"), IOError("io"), AttributeError("attr"), TypeError("type"), ValueError("val")],
     )
-    def test_caught_exceptions_do_not_propagate(
-        self, _patch_module_singletons, exc
-    ):
+    def test_caught_exceptions_do_not_propagate(self, _patch_module_singletons, exc):
         _, generic = _patch_module_singletons
         generic.raises = exc
         # Must not raise.
         asyncio.run(
             run_generic_scrape_job(
-                url="u", jurisdiction_code="CA", tenant_id=None,
+                url="u",
+                jurisdiction_code="CA",
+                tenant_id=None,
             )
         )
 
@@ -437,6 +423,8 @@ class TestRunGenericScrapeJob:
         with pytest.raises(RuntimeError, match="surprise"):
             asyncio.run(
                 run_generic_scrape_job(
-                    url="u", jurisdiction_code="CA", tenant_id=None,
+                    url="u",
+                    jurisdiction_code="CA",
+                    tenant_id=None,
                 )
             )

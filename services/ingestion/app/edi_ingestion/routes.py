@@ -33,15 +33,14 @@ from pydantic import ValidationError
 from ..authz import IngestionPrincipal, require_permission
 from ..format_extractors import is_edi_content
 from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
-from ..shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
+from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
-    IngestEvent,
     VALID_UNITS_OF_MEASURE,
+    IngestEvent,
     WebhookCTEType,
     WebhookPayload,
 )
-
 from .constants import (
     _CTE_TYPE_BY_SET,
     _REQUIRED_856_SEGMENTS,
@@ -52,7 +51,7 @@ from .constants import (
 from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
-from .parser import _first_segment, _parse_x12_segments, _segment_id_set, _detect_transaction_set
+from .parser import _detect_transaction_set, _first_segment, _parse_x12_segments, _segment_id_set
 from .utils import (
     _normalize_unit,
     _safe_float,
@@ -121,7 +120,8 @@ def _decode_edi_bytes(raw_bytes: bytes) -> str:
             "partner is sending ISO-8859-1 (X12 Basic set); data is "
             "preserved verbatim but partner config should declare "
             "encoding explicitly",
-            len(raw_bytes), utf8_err.start,
+            len(raw_bytes),
+            utf8_err.start,
         )
         return text
 
@@ -201,10 +201,7 @@ def _legacy_856_placeholder_errors(
         unit_message = (
             "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'."
             if not (unit_candidate and str(unit_candidate).strip())
-            else (
-                "EDI 856 has an invalid unit of measure; refusing to "
-                "synthesize unit_of_measure='units'."
-            )
+            else ("EDI 856 has an invalid unit of measure; refusing to synthesize unit_of_measure='units'.")
         )
         _add(
             "unit_of_measure",
@@ -299,8 +296,7 @@ def _enforce_envelope_integrity(
     # smuggle a different trading-partner identity.
     if extracted.get("envelope_mismatch"):
         logger.warning(
-            "edi_envelope_mismatch tenant=%s isa_sender=%s gs_sender=%s "
-            "isa_receiver=%s gs_receiver=%s",
+            "edi_envelope_mismatch tenant=%s isa_sender=%s gs_sender=%s isa_receiver=%s gs_receiver=%s",
             sender_tenant_id,
             extracted.get("isa_sender_id"),
             extracted.get("gs_sender_id"),
@@ -328,16 +324,14 @@ def _enforce_envelope_integrity(
     ):
         logger.warning(
             "edi_trading_partner_denied tenant=%s gs_sender=%s",
-            sender_tenant_id, extracted.get("gs_sender_id"),
+            sender_tenant_id,
+            extracted.get("gs_sender_id"),
         )
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "trading_partner_not_allowed",
-                "message": (
-                    "GS sender id is not in the tenant's allowed trading "
-                    "partner list."
-                ),
+                "message": ("GS sender id is not in the tenant's allowed trading partner list."),
                 "gs_sender_id": extracted.get("gs_sender_id"),
             },
         )
@@ -413,7 +407,9 @@ async def ingest_edi_856(
     except UnicodeDecodeError as exc:
         logger.warning(
             "edi_decode_failed_856 tenant=%s bytes=%d pos=%d",
-            sender_tenant_id, len(raw_bytes), exc.start,
+            sender_tenant_id,
+            len(raw_bytes),
+            exc.start,
         )
         raise HTTPException(
             status_code=422,
@@ -480,22 +476,10 @@ async def ingest_edi_856(
     resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
     resolved_unit = _normalize_unit(unit_of_measure_override or extracted.get("unit_of_measure"))
 
-    ship_from_name = (
-        ship_from_location_override
-        or extracted.get("ship_from_name")
-        or "Unknown ship-from"
-    )
-    ship_to_name = (
-        ship_to_location_override
-        or extracted.get("ship_to_name")
-        or "Unknown ship-to"
-    )
+    ship_from_name = ship_from_location_override or extracted.get("ship_from_name") or "Unknown ship-from"
+    ship_to_name = ship_to_location_override or extracted.get("ship_to_name") or "Unknown ship-to"
 
-    product_name = (
-        product_description
-        or extracted.get("product_description")
-        or "EDI 856 Shipment"
-    )
+    product_name = product_description or extracted.get("product_description") or "EDI 856 Shipment"
 
     ship_from_gln_raw = extracted.get("ship_from_gln")
     ship_to_gln_raw = extracted.get("ship_to_gln")
@@ -582,11 +566,7 @@ def _build_ingest_event_for_set(
     resolved_unit = _normalize_unit(unit_override or extracted.get("unit_of_measure"))
 
     # Resolve product description
-    product_name = (
-        product_description_override
-        or extracted.get("product_description")
-        or f"EDI {transaction_set} Item"
-    )
+    product_name = product_description_override or extracted.get("product_description") or f"EDI {transaction_set} Item"
 
     # Resolve location (varies by document type)
     location_name = location_override
@@ -631,40 +611,48 @@ def _build_ingest_event_for_set(
     }
 
     if transaction_set == "856":
-        kdes.update({
-            "ship_from_location": extracted.get("ship_from_name"),
-            "ship_to_location": extracted.get("ship_to_name"),
-            "ship_from_gln": extracted.get("ship_from_gln"),
-            "ship_to_gln": extracted.get("ship_to_gln"),
-            "carrier": extracted.get("carrier"),
-            "asn_number": extracted.get("asn_number"),
-        })
+        kdes.update(
+            {
+                "ship_from_location": extracted.get("ship_from_name"),
+                "ship_to_location": extracted.get("ship_to_name"),
+                "ship_from_gln": extracted.get("ship_from_gln"),
+                "ship_to_gln": extracted.get("ship_to_gln"),
+                "carrier": extracted.get("carrier"),
+                "asn_number": extracted.get("asn_number"),
+            }
+        )
     elif transaction_set == "850":
-        kdes.update({
-            "po_number": extracted.get("po_number"),
-            "buyer_name": extracted.get("buyer_name"),
-            "seller_name": extracted.get("seller_name"),
-            "buyer_gln": extracted.get("buyer_gln"),
-            "seller_gln": extracted.get("seller_gln"),
-            "unit_price": extracted.get("unit_price"),
-        })
+        kdes.update(
+            {
+                "po_number": extracted.get("po_number"),
+                "buyer_name": extracted.get("buyer_name"),
+                "seller_name": extracted.get("seller_name"),
+                "buyer_gln": extracted.get("buyer_gln"),
+                "seller_gln": extracted.get("seller_gln"),
+                "unit_price": extracted.get("unit_price"),
+            }
+        )
     elif transaction_set == "810":
-        kdes.update({
-            "invoice_number": extracted.get("invoice_number"),
-            "po_number": extracted.get("po_number"),
-            "buyer_name": extracted.get("buyer_name"),
-            "seller_name": extracted.get("seller_name"),
-            "total_amount": extracted.get("total_amount"),
-        })
+        kdes.update(
+            {
+                "invoice_number": extracted.get("invoice_number"),
+                "po_number": extracted.get("po_number"),
+                "buyer_name": extracted.get("buyer_name"),
+                "seller_name": extracted.get("seller_name"),
+                "total_amount": extracted.get("total_amount"),
+            }
+        )
     elif transaction_set == "861":
-        kdes.update({
-            "receiving_advice_number": extracted.get("receiving_advice_number"),
-            "po_number": extracted.get("po_number"),
-            "ship_from_location": extracted.get("ship_from_name"),
-            "receiving_location": extracted.get("receiving_location_name"),
-            "receiving_location_gln": extracted.get("receiving_location_gln"),
-            "condition_code": extracted.get("condition_code"),
-        })
+        kdes.update(
+            {
+                "receiving_advice_number": extracted.get("receiving_advice_number"),
+                "po_number": extracted.get("po_number"),
+                "ship_from_location": extracted.get("ship_from_name"),
+                "receiving_location": extracted.get("receiving_location_name"),
+                "receiving_location_gln": extracted.get("receiving_location_gln"),
+                "condition_code": extracted.get("condition_code"),
+            }
+        )
 
     return IngestEvent(
         cte_type=cte_type,
@@ -737,7 +725,9 @@ async def ingest_edi_document(
     except UnicodeDecodeError as exc:
         logger.warning(
             "edi_decode_failed_document tenant=%s bytes=%d pos=%d",
-            sender_tenant_id, len(raw_bytes), exc.start,
+            sender_tenant_id,
+            len(raw_bytes),
+            exc.start,
         )
         raise HTTPException(
             status_code=422,
@@ -793,7 +783,10 @@ async def ingest_edi_document(
     rejection_record: dict[str, Any] | None = None
     try:
         _validate_edi_as_fsma_event(
-            extracted, transaction_set, traceability_lot_code, sender_tenant_id,
+            extracted,
+            transaction_set,
+            traceability_lot_code,
+            sender_tenant_id,
         )
         extracted["fsma_validation_status"] = "passed"
     except ValidationError as ve:
@@ -801,7 +794,9 @@ async def ingest_edi_document(
         if strict_effective:
             logger.warning(
                 "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
-                transaction_set, traceability_lot_code, len(ve.errors()),
+                transaction_set,
+                traceability_lot_code,
+                len(ve.errors()),
             )
             # Record on the strict path too — the canonical stream is
             # untouched either way, but auditors still need the trail.

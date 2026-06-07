@@ -19,6 +19,7 @@ Fetcher contract::
 
 Related issue: EPIC-L (#1655).
 """
+
 from __future__ import annotations
 
 from typing import AsyncIterator, Awaitable, Callable, Optional, TypeVar
@@ -68,8 +69,7 @@ async def paginate(
         total += len(batch)
         if max_events is not None and total > max_events:
             raise ValueError(
-                f"export exceeded the {max_events:,}-event hard cap — "
-                "narrow the query or request an async batched job"
+                f"export exceeded the {max_events:,}-event hard cap — narrow the query or request an async batched job"
             )
         yield batch
         if not next_cursor:

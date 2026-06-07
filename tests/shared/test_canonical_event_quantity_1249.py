@@ -31,6 +31,7 @@ file pins the new contract:
     * The canonical row preserves the true quantity end-to-end for
       both EPCIS shapes.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -38,7 +39,6 @@ from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
-
 from shared.canonical_event import (
     CTEType,
     IngestionSource,
@@ -47,7 +47,6 @@ from shared.canonical_event import (
     _require_epcis_quantity,
     normalize_epcis_event,
 )
-
 
 TENANT_ID = str(uuid4())
 
@@ -105,13 +104,7 @@ def test_extract_real_epcis_shape():
     ``extension``. This is what every production event looks like and
     is exactly the shape the old code silently missed (defaulting
     everyone to 1.0)."""
-    event = {
-        "extension": {
-            "quantityList": [
-                {"epcClass": "urn:epc:class:lgtin:test", "quantity": 10.0, "uom": "CS"}
-            ]
-        }
-    }
+    event = {"extension": {"quantityList": [{"epcClass": "urn:epc:class:lgtin:test", "quantity": 10.0, "uom": "CS"}]}}
     assert _extract_epcis_quantity(event) == (10.0, "CS")
 
 
@@ -119,9 +112,7 @@ def test_extract_top_level_quantity_list():
     """Some shims flatten the structure one level; still should parse.
     The point is we accept every reasonable carrier rather than
     falling through to a silent default."""
-    event = {
-        "quantityList": [{"quantity": 5.5, "uom": "kg"}]
-    }
+    event = {"quantityList": [{"quantity": 5.5, "uom": "kg"}]}
     assert _extract_epcis_quantity(event) == (5.5, "kg")
 
 
@@ -223,9 +214,7 @@ def test_normalize_preserves_real_epcis_quantity():
     in canonical because the extractor was looking at the wrong key.
     This is the single regression test that would have caught it."""
     event = dict(_REAL_EPCIS_SHIPPING_EVENT)
-    event["extension"] = {
-        "quantityList": [{"quantity": 42.0, "uom": "CS"}]
-    }
+    event["extension"] = {"quantityList": [{"quantity": 42.0, "uom": "CS"}]}
 
     canonical = normalize_epcis_event(event, TENANT_ID)
     assert canonical.quantity == 42.0, (

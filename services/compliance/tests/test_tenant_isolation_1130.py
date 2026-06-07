@@ -11,6 +11,7 @@ filters every query by tenant_id, proving that:
 The mock DB session approach mirrors Postgres RLS: every SELECT is filtered
 with `WHERE tenant_id = :active_tenant_id`.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -20,10 +21,10 @@ import pytest
 from sqlalchemy import Column, DateTime, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-
 # ---------------------------------------------------------------------------
 # Minimal in-memory schema
 # ---------------------------------------------------------------------------
+
 
 class Base(DeclarativeBase):
     pass
@@ -54,6 +55,7 @@ class NLPExtractionRecord(Base):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -89,18 +91,21 @@ TENANT_PAIRS = [
 # Compliance record isolation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("tenant_a,tenant_b", TENANT_PAIRS)
 def test_compliance_record_invisible_to_other_tenant(db: Session, tenant_a: str, tenant_b: str):
     """Save a compliance record under tenant_a; query as tenant_b → empty."""
     reg = f"FSMA-204-{uuid.uuid4().hex[:8]}"
 
-    db.add(ComplianceRecord(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_a,
-        regulation=reg,
-        outcome="compliant",
-        detail="All CTEs present",
-    ))
+    db.add(
+        ComplianceRecord(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_a,
+            regulation=reg,
+            outcome="compliant",
+            detail="All CTEs present",
+        )
+    )
     db.flush()
 
     # Query filtered by tenant_b — should return nothing
@@ -110,13 +115,12 @@ def test_compliance_record_invisible_to_other_tenant(db: Session, tenant_a: str,
                 ComplianceRecord.tenant_id == tenant_b,
                 ComplianceRecord.regulation == reg,
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
-    assert rows == [], (
-        f"tenant_b={tenant_b!r} must NOT see compliance records owned by "
-        f"tenant_a={tenant_a!r}"
-    )
+    assert rows == [], f"tenant_b={tenant_b!r} must NOT see compliance records owned by tenant_a={tenant_a!r}"
 
 
 @pytest.mark.parametrize("tenant_a,tenant_b", TENANT_PAIRS)
@@ -124,13 +128,15 @@ def test_compliance_record_visible_to_owner(db: Session, tenant_a: str, tenant_b
     """Positive check: tenant_a can read its own record."""
     reg = f"FSMA-204-{uuid.uuid4().hex[:8]}"
 
-    db.add(ComplianceRecord(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_a,
-        regulation=reg,
-        outcome="non_compliant",
-        detail="Missing CTE-4",
-    ))
+    db.add(
+        ComplianceRecord(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_a,
+            regulation=reg,
+            outcome="non_compliant",
+            detail="Missing CTE-4",
+        )
+    )
     db.flush()
 
     rows = (
@@ -139,7 +145,9 @@ def test_compliance_record_visible_to_owner(db: Session, tenant_a: str, tenant_b
                 ComplianceRecord.tenant_id == tenant_a,
                 ComplianceRecord.regulation == reg,
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     assert len(rows) == 1
@@ -151,29 +159,47 @@ def test_same_regulation_both_tenants_isolated(db: Session, tenant_a: str, tenan
     """Both tenants insert a record for the same regulation; each sees only its own."""
     reg = f"SHARED-REG-{uuid.uuid4().hex[:8]}"
 
-    db.add(ComplianceRecord(
-        id=str(uuid.uuid4()), tenant_id=tenant_a,
-        regulation=reg, outcome="compliant", detail="Tenant A",
-    ))
-    db.add(ComplianceRecord(
-        id=str(uuid.uuid4()), tenant_id=tenant_b,
-        regulation=reg, outcome="non_compliant", detail="Tenant B",
-    ))
+    db.add(
+        ComplianceRecord(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_a,
+            regulation=reg,
+            outcome="compliant",
+            detail="Tenant A",
+        )
+    )
+    db.add(
+        ComplianceRecord(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_b,
+            regulation=reg,
+            outcome="non_compliant",
+            detail="Tenant B",
+        )
+    )
     db.flush()
 
-    rows_a = db.execute(
-        select(ComplianceRecord).where(
-            ComplianceRecord.tenant_id == tenant_a,
-            ComplianceRecord.regulation == reg,
+    rows_a = (
+        db.execute(
+            select(ComplianceRecord).where(
+                ComplianceRecord.tenant_id == tenant_a,
+                ComplianceRecord.regulation == reg,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    rows_b = db.execute(
-        select(ComplianceRecord).where(
-            ComplianceRecord.tenant_id == tenant_b,
-            ComplianceRecord.regulation == reg,
+    rows_b = (
+        db.execute(
+            select(ComplianceRecord).where(
+                ComplianceRecord.tenant_id == tenant_b,
+                ComplianceRecord.regulation == reg,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(rows_a) == 1 and rows_a[0].outcome == "compliant"
     assert len(rows_b) == 1 and rows_b[0].outcome == "non_compliant"
@@ -197,23 +223,31 @@ def test_soft_deleted_record_hidden_from_tenant_query(db: Session):
     record.deleted_at = datetime.now(timezone.utc)
     db.flush()
 
-    live = db.execute(
-        select(ComplianceRecord).where(
-            ComplianceRecord.tenant_id == tenant,
-            ComplianceRecord.regulation == reg,
-            ComplianceRecord.deleted_at.is_(None),
+    live = (
+        db.execute(
+            select(ComplianceRecord).where(
+                ComplianceRecord.tenant_id == tenant,
+                ComplianceRecord.regulation == reg,
+                ComplianceRecord.deleted_at.is_(None),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert live == [], "Soft-deleted records must not appear in live queries"
 
     # But the row still physically exists
-    all_rows = db.execute(
-        select(ComplianceRecord).where(
-            ComplianceRecord.tenant_id == tenant,
-            ComplianceRecord.regulation == reg,
+    all_rows = (
+        db.execute(
+            select(ComplianceRecord).where(
+                ComplianceRecord.tenant_id == tenant,
+                ComplianceRecord.regulation == reg,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(all_rows) == 1 and all_rows[0].deleted_at is not None
 
 
@@ -221,27 +255,31 @@ def test_soft_deleted_record_hidden_from_tenant_query(db: Session):
 # NLP extraction record isolation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("tenant_a,tenant_b", TENANT_PAIRS)
 def test_nlp_extraction_invisible_to_other_tenant(db: Session, tenant_a: str, tenant_b: str):
     """NLP extraction results saved under tenant_a are invisible to tenant_b."""
     doc_id = f"doc-{uuid.uuid4().hex[:8]}"
 
-    db.add(NLPExtractionRecord(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_a,
-        document_id=doc_id,
-        outcome="extracted",
-    ))
+    db.add(
+        NLPExtractionRecord(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_a,
+            document_id=doc_id,
+            outcome="extracted",
+        )
+    )
     db.flush()
 
-    rows = db.execute(
-        select(NLPExtractionRecord).where(
-            NLPExtractionRecord.tenant_id == tenant_b,
-            NLPExtractionRecord.document_id == doc_id,
+    rows = (
+        db.execute(
+            select(NLPExtractionRecord).where(
+                NLPExtractionRecord.tenant_id == tenant_b,
+                NLPExtractionRecord.document_id == doc_id,
+            )
         )
-    ).scalars().all()
-
-    assert rows == [], (
-        f"tenant_b={tenant_b!r} must not see NLP extractions owned by "
-        f"tenant_a={tenant_a!r}"
+        .scalars()
+        .all()
     )
+
+    assert rows == [], f"tenant_b={tenant_b!r} must not see NLP extractions owned by tenant_a={tenant_a!r}"

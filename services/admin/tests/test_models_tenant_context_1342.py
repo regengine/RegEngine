@@ -43,7 +43,6 @@ pytest.importorskip("sqlalchemy")
 
 from app.models import TenantContext  # noqa: E402
 
-
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000042")
 
 
@@ -60,7 +59,6 @@ def _session_returning(scalar_value):
 
 
 class TestGetTenantContext:
-
     def test_returns_none_when_session_has_no_tenant(self):
         """Line 384: session returns NULL -> method returns None."""
         session = _session_returning(None)
@@ -110,7 +108,6 @@ class TestGetTenantContext:
 
 
 class TestSetAdminContext:
-
     def test_sysadmin_true_logs_warning_and_executes_sql(self):
         """Lines 412-417: enabling the sysadmin bypass must emit the
         'sysadmin_context_activated' WARNING log for audit trail.
@@ -162,7 +159,6 @@ class TestSetAdminContext:
 
 
 class TestSetTenantContext:
-
     def test_executes_set_tenant_context_sql_with_stringified_uuid(self):
         """Line 367: tenant UUID is stringified and passed as ``:tid``
         binding to ``SELECT set_tenant_context(:tid)``. This is the
@@ -186,7 +182,6 @@ class TestSetTenantContext:
 
 
 class TestClearTenantContext:
-
     def test_emits_set_config_with_empty_tenant_id(self):
         """Line 434: resets ``app.tenant_id`` to '' (not NULL) via
         ``set_config`` with is_local=FALSE. Pinned to protect the

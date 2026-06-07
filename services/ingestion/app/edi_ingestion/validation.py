@@ -45,11 +45,7 @@ def _validate_edi_as_fsma_event(
     )
 
     source_gln = extracted.get("ship_from_gln") or extracted.get("seller_gln")
-    dest_gln = (
-        extracted.get("ship_to_gln")
-        or extracted.get("buyer_gln")
-        or extracted.get("receiving_location_gln")
-    )
+    dest_gln = extracted.get("ship_to_gln") or extracted.get("buyer_gln") or extracted.get("receiving_location_gln")
 
     # #1167: prefer any parseable EDI date (CCYYMMDD or YYMMDD) before
     # falling back to ``now()``. Stale dates used to silently become

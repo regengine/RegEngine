@@ -7,7 +7,6 @@ Covers RE-SEC-001 (XML), RE-SEC-002 (CSV-as-Excel), RE-SEC-003
 from __future__ import annotations
 
 import csv
-import defusedxml.ElementTree as ET
 import io
 import sys
 from pathlib import Path
@@ -26,10 +25,10 @@ from services.graph.app.exporters.safe_text import (  # noqa: E402
     zpl_safe,
 )
 
-
 # ---------------------------------------------------------------------------
 # xml_escape
 # ---------------------------------------------------------------------------
+
 
 class TestXmlEscape:
     def test_clean_input_passes_through(self):
@@ -60,6 +59,7 @@ class TestXmlEscape:
 # csv_safe
 # ---------------------------------------------------------------------------
 
+
 class TestCsvSafe:
     def test_clean_input_passes_through(self):
         assert csv_safe("LOT-12345") == "LOT-12345"
@@ -70,7 +70,7 @@ class TestCsvSafe:
     @pytest.mark.parametrize(
         "attack",
         [
-            "=HYPERLINK(\"http://evil/\",\"click\")",
+            '=HYPERLINK("http://evil/","click")',
             "+1+1",
             "-2+3",
             "@SUM(A1:A2)",
@@ -97,6 +97,7 @@ class TestCsvSafe:
 # ---------------------------------------------------------------------------
 # header_filename / rfc5987_filename
 # ---------------------------------------------------------------------------
+
 
 class TestHeaderFilename:
     def test_clean_filename_passes_through(self):
@@ -135,6 +136,7 @@ class TestRfc5987:
 # ---------------------------------------------------------------------------
 # zpl_safe
 # ---------------------------------------------------------------------------
+
 
 class TestZplSafe:
     def test_clean_input_passes_through(self):

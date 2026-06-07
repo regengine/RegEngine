@@ -3,7 +3,7 @@ Unit tests for vertical services health check endpoints.
 
 Tests health and readiness endpoints for:
 - Aerospace service
-- Construction service  
+- Construction service
 - Gaming service
 - Manufacturing service
 """
@@ -16,10 +16,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Set dummy database URLs before any imports to avoid connection attempts during tests
-os.environ.setdefault('AEROSPACE_DATABASE_URL', 'sqlite:///./test_aerospace.db')
-os.environ.setdefault('CONSTRUCTION_DATABASE_URL', 'sqlite:///./test_construction.db')
-os.environ.setdefault('GAMING_DATABASE_URL', 'sqlite:///./test_gaming.db')
-os.environ.setdefault('MANUFACTURING_DATABASE_URL', 'sqlite:///./test_manufacturing.db')
+os.environ.setdefault("AEROSPACE_DATABASE_URL", "sqlite:///./test_aerospace.db")
+os.environ.setdefault("CONSTRUCTION_DATABASE_URL", "sqlite:///./test_construction.db")
+os.environ.setdefault("GAMING_DATABASE_URL", "sqlite:///./test_gaming.db")
+os.environ.setdefault("MANUFACTURING_DATABASE_URL", "sqlite:///./test_manufacturing.db")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,16 +48,16 @@ def _create_client(service_name: str) -> TestClient:
 
 class TestAerospaceHealthEndpoints:
     """Tests for aerospace service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for aerospace service."""
         return _create_client("aerospace")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
@@ -67,16 +67,16 @@ class TestAerospaceHealthEndpoints:
 
 class TestConstructionHealthEndpoints:
     """Tests for construction service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for construction service."""
         return _create_client("construction")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
@@ -86,16 +86,16 @@ class TestConstructionHealthEndpoints:
 
 class TestGamingHealthEndpoints:
     """Tests for gaming service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for gaming service."""
         return _create_client("gaming")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
@@ -105,16 +105,16 @@ class TestGamingHealthEndpoints:
 
 class TestManufacturingHealthEndpoints:
     """Tests for manufacturing service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for manufacturing service."""
         return _create_client("manufacturing")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
@@ -124,7 +124,7 @@ class TestManufacturingHealthEndpoints:
 
 class TestHealthEndpointsNoAuth:
     """Verify health endpoints don't require authentication."""
-    
+
     def test_aerospace_health_accessible_without_auth(self):
         """Aerospace health endpoint should be accessible without API keys."""
         client = _create_client("aerospace")

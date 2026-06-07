@@ -9,6 +9,7 @@ These tests use a stub ``SessionLocal`` so they pass under SQLite in CI.
 The full Postgres integration is exercised by the migration test suite
 that runs against a real ephemeral DB.
 """
+
 from __future__ import annotations
 
 import sys
@@ -95,6 +96,7 @@ def test_record_rejection_writes_row_and_commits(patched_session):
     assert params["source"] == "epcis_preeval"
     # reasons is JSON-encoded
     import json
+
     decoded = json.loads(params["reasons"])
     assert decoded[0]["rule_id"] == "R_CRIT"
 
@@ -134,11 +136,16 @@ def test_reasons_from_summary_renders_failure_list():
     from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
     crit = RuleEvaluationResult(
-        rule_id="R1", severity="critical", result="fail",
+        rule_id="R1",
+        severity="critical",
+        result="fail",
         why_failed="kde missing",
     )
     summary = EvaluationSummary(
-        total_rules=1, failed=1, results=[crit], critical_failures=[crit],
+        total_rules=1,
+        failed=1,
+        results=[crit],
+        critical_failures=[crit],
     )
     out = reasons_from_summary(summary)
     assert isinstance(out, list)
@@ -242,8 +249,11 @@ def test_record_rejection_survives_outer_rollback_simulation(patched_session):
     from services.shared.rules.rejection_audit import record_rejection
 
     record_rejection(
-        tenant_id="t-1", rule_id="R", rule_version=1,
-        reasons={"why": "fail"}, event_id="e-1",
+        tenant_id="t-1",
+        rule_id="R",
+        rule_version=1,
+        reasons={"why": "fail"},
+        event_id="e-1",
     )
     # Caller's outer txn rolls back AFTER. Audit row's session is closed.
     # Our helper's session never sees that rollback.

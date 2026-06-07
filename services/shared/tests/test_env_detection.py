@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import os
 
-
 _ENV_MARKERS = (
     "DATABASE_URL",
     "ENV",

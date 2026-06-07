@@ -7,12 +7,14 @@ Exposes:
   logout            — re-exported from auth_routes for compat
   revoke_all_sessions — re-exported from auth_routes for compat
 """
+
 from __future__ import annotations
 
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from shared.pagination import PaginationParams
 from sqlalchemy.orm import Session
 
 from ..auth_utils import decode_access_token, revoke_token
@@ -22,7 +24,6 @@ from ..models import RevokeAllSessionsResponse, SessionListResponse, SessionRevo
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
-from shared.pagination import PaginationParams
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -66,7 +67,9 @@ async def list_sessions(
     }
 
 
-@router.post("/sessions/{session_id}/revoke", response_model=SessionRevokeResponse, dependencies=[Depends(get_current_user)])
+@router.post(
+    "/sessions/{session_id}/revoke", response_model=SessionRevokeResponse, dependencies=[Depends(get_current_user)]
+)
 async def revoke_session(
     session_id: UUID,
     current_user: UserModel = Depends(get_current_user),
@@ -155,9 +158,7 @@ async def revoke_all_sessions(
         new_version = None
 
     # 3. Revoke any outstanding elevation tokens too.
-    elevation_revoked = await _revoke_all_elevation_tokens_for_user(
-        session_store, current_user.id
-    )
+    elevation_revoked = await _revoke_all_elevation_tokens_for_user(session_store, current_user.id)
 
     logger.info(
         "all_sessions_revoked",

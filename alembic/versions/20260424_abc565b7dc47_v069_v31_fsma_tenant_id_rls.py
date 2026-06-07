@@ -75,9 +75,9 @@ Create Date: 2026-04-24
 
 from typing import Sequence, Union
 
-from alembic import op
 from sqlalchemy import text
 
+from alembic import op
 
 revision: str = "abc565b7dc47"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "f0a1b2c3d4e5"
@@ -116,9 +116,7 @@ def _v31_present() -> bool:
     for missing schemas as well as missing tables.
     """
     bind = op.get_bind()
-    return bind.execute(
-        text("SELECT to_regclass(:t)"), {"t": _V31_CANARY}
-    ).scalar() is not None
+    return bind.execute(text("SELECT to_regclass(:t)"), {"t": _V31_CANARY}).scalar() is not None
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +172,7 @@ def upgrade() -> None:
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_products_tenant ON fsma.products(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_products_tenant ON fsma.products(tenant_id)")
     # Tenant-scoped unique index; required for ON CONFLICT (tenant_id, gtin) in
     # product_catalog.py.  The legacy UNIQUE(org_id, gtin) constraint remains
     # until Phase C #3.
@@ -201,9 +197,7 @@ def upgrade() -> None:
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_locations_tenant ON fsma.locations(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_locations_tenant ON fsma.locations(tenant_id)")
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_fsma_locations_tenant_gln"
         " ON fsma.locations(tenant_id, gln)"
@@ -225,54 +219,31 @@ def upgrade() -> None:
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_suppliers_tenant ON fsma.suppliers(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_suppliers_tenant ON fsma.suppliers(tenant_id)")
 
     # ------------------------------------------------------------------
     # fsma.critical_tracking_events
     # ------------------------------------------------------------------
-    op.execute(
-        "ALTER TABLE fsma.critical_tracking_events"
-        " ADD COLUMN IF NOT EXISTS tenant_id UUID"
-    )
-    op.execute(
-        "UPDATE fsma.critical_tracking_events"
-        " SET tenant_id = org_id WHERE tenant_id IS NULL"
-    )
-    op.execute(
-        "ALTER TABLE fsma.critical_tracking_events"
-        " ALTER COLUMN tenant_id SET NOT NULL"
-    )
+    op.execute("ALTER TABLE fsma.critical_tracking_events ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("UPDATE fsma.critical_tracking_events SET tenant_id = org_id WHERE tenant_id IS NULL")
+    op.execute("ALTER TABLE fsma.critical_tracking_events ALTER COLUMN tenant_id SET NOT NULL")
     op.execute("ALTER TABLE fsma.critical_tracking_events FORCE ROW LEVEL SECURITY")
-    op.execute(
-        "DROP POLICY IF EXISTS fsma_org_isolation_cte"
-        " ON fsma.critical_tracking_events"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_cte ON fsma.critical_tracking_events"
-    )
+    op.execute("DROP POLICY IF EXISTS fsma_org_isolation_cte ON fsma.critical_tracking_events")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_cte ON fsma.critical_tracking_events")
     op.execute(f"""
         CREATE POLICY tenant_isolation_cte ON fsma.critical_tracking_events
             FOR ALL TO regengine, regengine_sysadmin
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_cte_tenant"
-        " ON fsma.critical_tracking_events(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_cte_tenant ON fsma.critical_tracking_events(tenant_id)")
 
     # ------------------------------------------------------------------
     # fsma.key_data_elements  (no org_id — isolation via cte_id → CTEs)
     # ------------------------------------------------------------------
     op.execute("ALTER TABLE fsma.key_data_elements FORCE ROW LEVEL SECURITY")
-    op.execute(
-        "DROP POLICY IF EXISTS fsma_org_isolation_kdes ON fsma.key_data_elements"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.key_data_elements"
-    )
+    op.execute("DROP POLICY IF EXISTS fsma_org_isolation_kdes ON fsma.key_data_elements")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.key_data_elements")
     op.execute(f"""
         CREATE POLICY tenant_isolation_kdes ON fsma.key_data_elements
             FOR ALL TO regengine, regengine_sysadmin
@@ -295,61 +266,34 @@ def upgrade() -> None:
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_audit_log_tenant ON fsma.audit_log(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_audit_log_tenant ON fsma.audit_log(tenant_id)")
 
     # ------------------------------------------------------------------
     # fsma.recall_assessments
     # ------------------------------------------------------------------
-    op.execute(
-        "ALTER TABLE fsma.recall_assessments ADD COLUMN IF NOT EXISTS tenant_id UUID"
-    )
-    op.execute(
-        "UPDATE fsma.recall_assessments SET tenant_id = org_id WHERE tenant_id IS NULL"
-    )
-    op.execute(
-        "ALTER TABLE fsma.recall_assessments ALTER COLUMN tenant_id SET NOT NULL"
-    )
+    op.execute("ALTER TABLE fsma.recall_assessments ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("UPDATE fsma.recall_assessments SET tenant_id = org_id WHERE tenant_id IS NULL")
+    op.execute("ALTER TABLE fsma.recall_assessments ALTER COLUMN tenant_id SET NOT NULL")
     op.execute("ALTER TABLE fsma.recall_assessments FORCE ROW LEVEL SECURITY")
-    op.execute(
-        "DROP POLICY IF EXISTS fsma_org_isolation_recall ON fsma.recall_assessments"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_recall_assessments"
-        " ON fsma.recall_assessments"
-    )
+    op.execute("DROP POLICY IF EXISTS fsma_org_isolation_recall ON fsma.recall_assessments")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_recall_assessments ON fsma.recall_assessments")
     op.execute(f"""
         CREATE POLICY tenant_isolation_recall_assessments ON fsma.recall_assessments
             FOR ALL TO regengine, regengine_sysadmin
             USING ({_POLICY_USING})
             WITH CHECK ({_POLICY_USING})
     """)
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_recall_assessments_tenant"
-        " ON fsma.recall_assessments(tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_fsma_recall_assessments_tenant ON fsma.recall_assessments(tenant_id)")
 
     # ------------------------------------------------------------------
     # fsma.compliance_snapshots
     # ------------------------------------------------------------------
-    op.execute(
-        "ALTER TABLE fsma.compliance_snapshots ADD COLUMN IF NOT EXISTS tenant_id UUID"
-    )
-    op.execute(
-        "UPDATE fsma.compliance_snapshots SET tenant_id = org_id WHERE tenant_id IS NULL"
-    )
-    op.execute(
-        "ALTER TABLE fsma.compliance_snapshots ALTER COLUMN tenant_id SET NOT NULL"
-    )
+    op.execute("ALTER TABLE fsma.compliance_snapshots ADD COLUMN IF NOT EXISTS tenant_id UUID")
+    op.execute("UPDATE fsma.compliance_snapshots SET tenant_id = org_id WHERE tenant_id IS NULL")
+    op.execute("ALTER TABLE fsma.compliance_snapshots ALTER COLUMN tenant_id SET NOT NULL")
     op.execute("ALTER TABLE fsma.compliance_snapshots FORCE ROW LEVEL SECURITY")
-    op.execute(
-        "DROP POLICY IF EXISTS fsma_org_isolation_snapshots ON fsma.compliance_snapshots"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_compliance_snapshots"
-        " ON fsma.compliance_snapshots"
-    )
+    op.execute("DROP POLICY IF EXISTS fsma_org_isolation_snapshots ON fsma.compliance_snapshots")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_compliance_snapshots ON fsma.compliance_snapshots")
     op.execute(f"""
         CREATE POLICY tenant_isolation_compliance_snapshots ON fsma.compliance_snapshots
             FOR ALL TO regengine, regengine_sysadmin
@@ -357,8 +301,7 @@ def upgrade() -> None:
             WITH CHECK ({_POLICY_USING})
     """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_fsma_compliance_snapshots_tenant"
-        " ON fsma.compliance_snapshots(tenant_id)"
+        "CREATE INDEX IF NOT EXISTS idx_fsma_compliance_snapshots_tenant ON fsma.compliance_snapshots(tenant_id)"
     )
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_fsma_compliance_snapshots_tenant_date"
@@ -379,24 +322,14 @@ def downgrade() -> None:
         # Mirror the upgrade-side guard.  If V31 wasn't present we
         # never altered anything, so there's nothing to revert.
         op.execute(
-            "DO $$ BEGIN "
-            "RAISE NOTICE 'v069 downgrade: Flyway V31 tables not present "
-            "— nothing to revert'; "
-            "END $$;"
+            "DO $$ BEGIN RAISE NOTICE 'v069 downgrade: Flyway V31 tables not present — nothing to revert'; END $$;"
         )
         return
 
     # fsma.compliance_snapshots
-    op.execute(
-        "DROP INDEX IF EXISTS uq_fsma_compliance_snapshots_tenant_date"
-    )
-    op.execute(
-        "DROP INDEX IF EXISTS idx_fsma_compliance_snapshots_tenant"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_compliance_snapshots"
-        " ON fsma.compliance_snapshots"
-    )
+    op.execute("DROP INDEX IF EXISTS uq_fsma_compliance_snapshots_tenant_date")
+    op.execute("DROP INDEX IF EXISTS idx_fsma_compliance_snapshots_tenant")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_compliance_snapshots ON fsma.compliance_snapshots")
     op.execute("""
         CREATE POLICY fsma_org_isolation_snapshots ON fsma.compliance_snapshots
             USING (org_id = fsma.current_org_id())
@@ -407,10 +340,7 @@ def downgrade() -> None:
 
     # fsma.recall_assessments
     op.execute("DROP INDEX IF EXISTS idx_fsma_recall_assessments_tenant")
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_recall_assessments"
-        " ON fsma.recall_assessments"
-    )
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_recall_assessments ON fsma.recall_assessments")
     op.execute("""
         CREATE POLICY fsma_org_isolation_recall ON fsma.recall_assessments
             USING (org_id = fsma.current_org_id())
@@ -431,9 +361,7 @@ def downgrade() -> None:
     op.execute("ALTER TABLE fsma.audit_log DROP COLUMN IF EXISTS tenant_id")
 
     # fsma.key_data_elements
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.key_data_elements"
-    )
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.key_data_elements")
     op.execute("""
         CREATE POLICY fsma_org_isolation_kdes ON fsma.key_data_elements
             USING (
@@ -455,26 +383,18 @@ def downgrade() -> None:
 
     # fsma.critical_tracking_events
     op.execute("DROP INDEX IF EXISTS idx_fsma_cte_tenant")
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_cte ON fsma.critical_tracking_events"
-    )
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_cte ON fsma.critical_tracking_events")
     op.execute("""
         CREATE POLICY fsma_org_isolation_cte ON fsma.critical_tracking_events
             USING (org_id = fsma.current_org_id())
             WITH CHECK (org_id = fsma.current_org_id())
     """)
-    op.execute(
-        "ALTER TABLE fsma.critical_tracking_events NO FORCE ROW LEVEL SECURITY"
-    )
-    op.execute(
-        "ALTER TABLE fsma.critical_tracking_events DROP COLUMN IF EXISTS tenant_id"
-    )
+    op.execute("ALTER TABLE fsma.critical_tracking_events NO FORCE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE fsma.critical_tracking_events DROP COLUMN IF EXISTS tenant_id")
 
     # fsma.suppliers
     op.execute("DROP INDEX IF EXISTS idx_fsma_suppliers_tenant")
-    op.execute(
-        "DROP POLICY IF EXISTS tenant_isolation_suppliers ON fsma.suppliers"
-    )
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_suppliers ON fsma.suppliers")
     op.execute("""
         CREATE POLICY fsma_org_isolation_suppliers ON fsma.suppliers
             USING (org_id = fsma.current_org_id())
@@ -506,4 +426,3 @@ def downgrade() -> None:
     """)
     op.execute("ALTER TABLE fsma.products NO FORCE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE fsma.products DROP COLUMN IF EXISTS tenant_id")
-

@@ -1,3 +1,4 @@
+from .request_id import RequestIDMiddleware
 from .security import add_security, add_trusted_host
 from .tenant_context import (
     TenantContextMiddleware,
@@ -5,7 +6,6 @@ from .tenant_context import (
     get_optional_tenant_id,
     validate_tenant_access,
 )
-from .request_id import RequestIDMiddleware
 
 __all__ = [
     "add_security",

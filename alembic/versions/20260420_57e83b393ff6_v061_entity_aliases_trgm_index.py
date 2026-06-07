@@ -31,10 +31,10 @@ Prod state (verified 2026-04-20 via Supabase MCP):
   * pg_trgm extension   -> already enabled
   * trgm index          -> missing (this migration creates it)
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 # revision identifiers, used by Alembic.
 revision: str = "57e83b393ff6"

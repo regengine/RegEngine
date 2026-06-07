@@ -6,7 +6,6 @@ import socket
 from unittest.mock import patch
 
 import pytest
-
 from shared.url_validation import SSRFError, validate_url
 
 
@@ -42,9 +41,7 @@ def test_dual_stack_ipv6_loopback_blocked():
 
     Closes RE-SEC-006 — gethostbyname only saw the A record and let it pass.
     """
-    with patch(
-        "socket.getaddrinfo", return_value=_addrinfo(["8.8.8.8", "::1"])
-    ):
+    with patch("socket.getaddrinfo", return_value=_addrinfo(["8.8.8.8", "::1"])):
         with pytest.raises(SSRFError):
             validate_url("https://example.com/")
 

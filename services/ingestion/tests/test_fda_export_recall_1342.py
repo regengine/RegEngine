@@ -36,11 +36,9 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.fda_export import recall as r
 from app.fda_export.queries import AuditLogWriteError
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -172,8 +170,7 @@ def _install_stubs(
     # _build_completeness_summary
     def _completeness(evts):
         captured["completeness_arg"] = list(evts)
-        return {"required_kde_coverage_ratio": 0.95,
-                "events_with_missing_required_fields": 0}
+        return {"required_kde_coverage_ratio": 0.95, "events_with_missing_required_fields": 0}
 
     monkeypatch.setattr(r, "_build_completeness_summary", _completeness)
 
@@ -183,10 +180,18 @@ def _install_stubs(
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
-        def debug(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
+
+        def debug(self, *a, **k):
+            pass
+
     monkeypatch.setattr(r, "logger", _Silent())
 
 
@@ -212,7 +217,6 @@ def _call(**overrides):
 
 
 class TestIdentifierValidation:
-
     def test_no_identifier_raises_400(self, monkeypatch):
         _install_stubs(monkeypatch)
         with pytest.raises(HTTPException) as exc_info:
@@ -237,7 +241,6 @@ class TestIdentifierValidation:
 
 
 class TestDateValidation:
-
     def test_only_start_date_raises_400(self, monkeypatch):
         _install_stubs(monkeypatch)
         with pytest.raises(HTTPException) as exc_info:
@@ -270,14 +273,16 @@ class TestDateValidation:
 
 
 class TestEmptyQuery:
-
     def test_no_rows_returns_404_with_all_filters(self, monkeypatch):
         sess, _, cap = _install_stubs(monkeypatch, rows=[])
         with pytest.raises(HTTPException) as exc_info:
             _call(
-                product="apple", location="farm-1", tlc="TLC-A",
+                product="apple",
+                location="farm-1",
+                tlc="TLC-A",
                 event_type="harvesting",
-                start_date="2026-01-01", end_date="2026-01-31",
+                start_date="2026-01-01",
+                end_date="2026-01-31",
             )
         assert exc_info.value.status_code == 404
         detail = exc_info.value.detail
@@ -306,12 +311,13 @@ class TestEmptyQuery:
 
 
 class TestCSVExport:
-
     def test_csv_happy_path_full_wiring(self, monkeypatch):
         rows = [{"id": 1}, {"id": 2}]
         events = [{"id": "e1"}, {"id": "e2"}]
         sess, persist, cap = _install_stubs(
-            monkeypatch, rows=rows, events=events,
+            monkeypatch,
+            rows=rows,
+            events=events,
             verify_return=SimpleNamespace(valid=True),
         )
         resp = _call(
@@ -375,16 +381,16 @@ class TestCSVExport:
         assert sess.closed is True
 
     def test_include_pii_defaults_to_false(self, monkeypatch):
-        _, _, cap = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}]
-        )
+        _, _, cap = _install_stubs(monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}])
         _call()
         assert cap["csv_and_hash_args"]["include_pii"] is False
         assert cap["csv_response_kwargs"]["include_pii"] is False
 
     def test_chain_invalid_reported_in_response(self, monkeypatch):
         _, _, cap = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}],
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=[{"id": "e1"}],
             verify_return=SimpleNamespace(valid=False),
         )
         _call()
@@ -392,20 +398,19 @@ class TestCSVExport:
 
     def test_non_package_format_still_goes_csv_path(self, monkeypatch):
         """Any non-'package' format string routes through build_csv_response."""
-        _, _, cap = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}]
-        )
+        _, _, cap = _install_stubs(monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}])
         _call(format="csv")
         assert cap["csv_response_kwargs"] is not None
         assert cap["package_response_kwargs"] is None
 
 
 class TestPackageExport:
-
     def test_package_happy_path(self, monkeypatch):
         events = [{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]
         _, _, cap = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=events,
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=events,
         )
         resp = _call(format="package", include_pii=False)
         assert resp == "PKG-RESP"
@@ -427,10 +432,11 @@ class TestPackageExport:
 
 
 class TestErrorHandling:
-
     def test_audit_log_write_error_becomes_503(self, monkeypatch):
         sess, _, _ = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}],
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=[{"id": "e1"}],
             log_raises=AuditLogWriteError("audit-db down"),
         )
         with pytest.raises(HTTPException) as exc_info:
@@ -444,7 +450,9 @@ class TestErrorHandling:
     def test_http_exception_from_verify_chain_passes_through(self, monkeypatch):
         """HTTPException from verify_chain bubbles out without being wrapped."""
         sess, _, _ = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}],
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=[{"id": "e1"}],
             verify_raises=HTTPException(status_code=418, detail="teapot"),
         )
         with pytest.raises(HTTPException) as exc_info:
@@ -453,15 +461,20 @@ class TestErrorHandling:
         assert exc_info.value.detail == "teapot"
         assert sess.closed is True
 
-    @pytest.mark.parametrize("exc", [
-        ImportError("missing mod"),
-        ValueError("bad value"),
-        RuntimeError("boom"),
-        OSError("disk"),
-    ])
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            ImportError("missing mod"),
+            ValueError("bad value"),
+            RuntimeError("boom"),
+            OSError("disk"),
+        ],
+    )
     def test_caught_exceptions_become_500(self, monkeypatch, exc):
         sess, _, _ = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}],
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=[{"id": "e1"}],
             verify_raises=exc,
         )
         with pytest.raises(HTTPException) as exc_info:
@@ -473,7 +486,9 @@ class TestErrorHandling:
     def test_uncaught_exception_propagates(self, monkeypatch):
         """KeyError is NOT in the catch tuple → it bubbles out."""
         sess, _, _ = _install_stubs(
-            monkeypatch, rows=[{"id": 1}], events=[{"id": "e1"}],
+            monkeypatch,
+            rows=[{"id": 1}],
+            events=[{"id": "e1"}],
             verify_raises=KeyError("k"),
         )
         with pytest.raises(KeyError):

@@ -41,6 +41,7 @@ logger = structlog.get_logger("kafka-consumer-base")
 # Health check
 # ---------------------------------------------------------------------------
 
+
 def kafka_health_check(
     bootstrap_servers: Optional[str] = None,
     timeout: float = 5.0,
@@ -54,17 +55,17 @@ def kafka_health_check(
 
     Uses the repo-standard ``confluent-kafka`` client.
     """
-    servers = bootstrap_servers or os.environ.get(
-        "KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092"
-    )
+    servers = bootstrap_servers or os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092")
 
     try:
         from confluent_kafka.admin import AdminClient
 
-        admin = AdminClient({
-            "bootstrap.servers": servers,
-            "client.id": "health-check",
-        })
+        admin = AdminClient(
+            {
+                "bootstrap.servers": servers,
+                "client.id": "health-check",
+            }
+        )
         metadata = admin.list_topics(timeout=timeout)
         broker_count = len(metadata.brokers)
         logger.info("kafka_health_ok", brokers=broker_count)
@@ -80,6 +81,7 @@ def kafka_health_check(
 # ---------------------------------------------------------------------------
 # Topic management
 # ---------------------------------------------------------------------------
+
 
 def ensure_topic(
     topic: str,
@@ -112,7 +114,10 @@ def ensure_topic(
 
 
 def _ensure_topic_confluent(
-    topic: str, bootstrap: str, partitions: int, replication: int,
+    topic: str,
+    bootstrap: str,
+    partitions: int,
+    replication: int,
     min_isr: int | None = None,
 ) -> None:
     """confluent-kafka based topic creation."""
@@ -124,10 +129,16 @@ def _ensure_topic_confluent(
             topic_config["min.insync.replicas"] = str(min_isr)
 
         admin = AdminClient({"bootstrap.servers": bootstrap})
-        futures = admin.create_topics([NewTopic(
-            topic, num_partitions=partitions, replication_factor=replication,
-            config=topic_config if topic_config else None,
-        )])
+        futures = admin.create_topics(
+            [
+                NewTopic(
+                    topic,
+                    num_partitions=partitions,
+                    replication_factor=replication,
+                    config=topic_config if topic_config else None,
+                )
+            ]
+        )
         for t, f in futures.items():
             try:
                 f.result()
@@ -144,6 +155,7 @@ def _ensure_topic_confluent(
 # ---------------------------------------------------------------------------
 # Dead Letter Queue (DLQ) manager
 # ---------------------------------------------------------------------------
+
 
 class DLQManager:
     """Thread-safe DLQ producer with lazy initialization.
@@ -182,6 +194,7 @@ class DLQManager:
             with self._lock:
                 if self._producer is None:
                     from shared.kafka_compat import KafkaProducerCompat
+
                     self._producer = KafkaProducerCompat(
                         bootstrap_servers=self._bootstrap,
                         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -258,6 +271,7 @@ class DLQManager:
 # Consumer health monitor
 # ---------------------------------------------------------------------------
 
+
 class ConsumerHealthMonitor:
     """Tracks consumer liveness for health check endpoints.
 
@@ -318,6 +332,7 @@ class ConsumerHealthMonitor:
 # ---------------------------------------------------------------------------
 # Graceful shutdown helper
 # ---------------------------------------------------------------------------
+
 
 def graceful_shutdown(
     consumer: Any,

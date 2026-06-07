@@ -1,8 +1,9 @@
-import os
-import requests
-import time
 import json
+import os
 import sys
+import time
+
+import requests
 
 # Consolidate config
 INGEST_URL = "http://localhost:8002/v1/ingest"
@@ -45,20 +46,17 @@ HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
     "X-Admin-Key": ADMIN_MASTER_KEY,
     "X-Tenant-ID": TENANT_ID,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
 }
+
 
 def log(msg):
     print(f"[FreshnessDemo] {msg}")
 
+
 def ingest_content(content, version_label):
     log(f"Ingesting {version_label} Content...")
-    payload = {
-        "text": content,
-        "source_url": SOURCE_URL,
-        "source_system": "manual_demo",
-        "vertical": "food_safety"
-    }
+    payload = {"text": content, "source_url": SOURCE_URL, "source_system": "manual_demo", "vertical": "food_safety"}
     try:
         resp = requests.post(INGEST_URL, json=payload, headers=HEADERS)
         if resp.status_code == 200:
@@ -71,6 +69,7 @@ def ingest_content(content, version_label):
         log(f"❌ Ingest Connection Error: {e}")
         return False
 
+
 def wait_for_doc(expect_version, previous_id=None):
     log(f"Waiting for V{expect_version} Document...")
     start = time.time()
@@ -79,52 +78,54 @@ def wait_for_doc(expect_version, previous_id=None):
             resp = requests.get(f"{ADMIN_API_URL}/pcos/authorities", headers=HEADERS)
             if resp.status_code == 200:
                 docs = resp.json()
-                matches = [d for d in docs if d.get('original_file_path') == SOURCE_URL]
-                
+                matches = [d for d in docs if d.get("original_file_path") == SOURCE_URL]
+
                 for d in matches:
                     # Heuristic for versioning in this demo
                     # If V1: just need a doc.
                     # If V2: need a doc that supersedes previous_id
                     if expect_version == 1:
-                        if not d.get('supersedes_document_id'):
+                        if not d.get("supersedes_document_id"):
                             return d
                     elif expect_version == 2:
-                        if d.get('supersedes_document_id') == previous_id:
+                        if d.get("supersedes_document_id") == previous_id:
                             return d
         except Exception:
             pass
         time.sleep(1)
     return None
 
+
 def main():
     log("Starting Freshness Pipeline Demo...")
-    
+
     # 1. Ingest Old Content
     if not ingest_content(CONTENT_OLD, "V1 (Old)"):
         sys.exit(1)
-        
+
     doc_v1 = wait_for_doc(1)
     if not doc_v1:
         log("❌ Timed out waiting for V1 document")
         sys.exit(1)
-    
+
     log(f"✅ V1 Document Created: {doc_v1['id']}")
-    
+
     # 2. Ingest New Content (Trigger Update)
-    time.sleep(2) # Ensure timestamp difference
+    time.sleep(2)  # Ensure timestamp difference
     if not ingest_content(CONTENT_NEW, "V2 (New)"):
         sys.exit(1)
-        
-    doc_v2 = wait_for_doc(2, previous_id=doc_v1['id'])
+
+    doc_v2 = wait_for_doc(2, previous_id=doc_v1["id"])
     if not doc_v2:
         log("❌ Timed out waiting for V2 document (Supersession Chain)")
         sys.exit(1)
-        
+
     log(f"✅ V2 Document Created: {doc_v2['id']}")
     log(f"   Supersedes: {doc_v2['supersedes_document_id']}")
-    
+
     # Verify Content Difference detection via Facts (Optional deeply, but doc chaining proves it)
     log("🎉 Demo Successful: detected content change and maintained lineage.")
+
 
 if __name__ == "__main__":
     main()

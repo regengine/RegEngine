@@ -3,12 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -17,7 +11,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -93,8 +91,10 @@ def db_session() -> Session:
     # execute_bulk_commit have the table they need. Schema mirrors
     # tests/test_bulk_upload_graph_sync_wiring.py.
     from sqlalchemy import text as _ddl_text
+
     with engine.begin() as _conn:
-        _conn.execute(_ddl_text("""
+        _conn.execute(
+            _ddl_text("""
             CREATE TABLE IF NOT EXISTS graph_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NULL,
@@ -110,7 +110,8 @@ def db_session() -> Session:
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 dedupe_key      TEXT NULL
             )
-        """))
+        """)
+        )
 
     session_local = sessionmaker(
         bind=engine,
@@ -271,8 +272,7 @@ ftl_scope,,,,,,,Ghost Warehouse,2,,,,,,
     # Validation succeeds — unknown facility refs are non-blocking
     preview = validate_payload["preview"]
     assert preview["can_commit"] is True or any(
-        "facility" in error.get("message", "").lower()
-        for error in preview.get("errors", [])
+        "facility" in error.get("message", "").lower() for error in preview.get("errors", [])
     )
 
 

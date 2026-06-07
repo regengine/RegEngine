@@ -24,7 +24,6 @@ from app.edi_ingestion.rejection_log import (
     reset_edi_rejections,
 )
 
-
 TENANT = "00000000-0000-0000-0000-0000000000aa"
 OTHER_TENANT = "00000000-0000-0000-0000-0000000000bb"
 
@@ -79,6 +78,7 @@ def test_extracted_is_scrubbed_to_json_safe_values() -> None:
     rejection write — we degrade to ``str()`` so the audit record
     survives. Regression guard for forensic-snapshot reliability.
     """
+
     class _Weird:
         def __str__(self) -> str:
             return "weird-value"
@@ -96,6 +96,7 @@ def test_extracted_is_scrubbed_to_json_safe_values() -> None:
 
 def test_structured_warning_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     import logging as _logging
+
     with caplog.at_level(_logging.WARNING, logger="edi-ingestion"):
         record_edi_rejection(
             tenant_id=TENANT,
@@ -103,6 +104,6 @@ def test_structured_warning_is_logged(caplog: pytest.LogCaptureFixture) -> None:
             traceability_lot_code="tlc-y",
             errors=[{"msg": "e"}],
         )
-    assert any(
-        "edi_fsma_rejection_recorded" in rec.message for rec in caplog.records
-    ), "rejection must always emit a structured warning for ops"
+    assert any("edi_fsma_rejection_recorded" in rec.message for rec in caplog.records), (
+        "rejection must always emit a structured warning for ops"
+    )

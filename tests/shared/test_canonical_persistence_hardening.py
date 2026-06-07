@@ -21,9 +21,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from shared.canonical_persistence.writer import CanonicalEventStore
-
 
 # ---------------------------------------------------------------------------
 # Minimal fake session that records every executed SQL text + params
@@ -203,8 +201,7 @@ class TestSupersedeNoPreCheck_Issue1262:
         # The new code must not issue a `SELECT status FROM fsma.traceability_events`
         # — that check-then-update pattern is the race this fixes.
         preselects = [
-            c for c in session.calls
-            if "SELECT status FROM fsma.traceability_events" in c[0].replace("\n", " ")
+            c for c in session.calls if "SELECT status FROM fsma.traceability_events" in c[0].replace("\n", " ")
         ]
         assert not preselects, (
             "race-prone pre-check SELECT must be removed — the UPDATE RETURNING is the source of truth"
@@ -282,8 +279,10 @@ class TestParameterizedSQL_Issue1254:
         sql_none, _ = session.calls[-1]
 
         store.query_events_by_tlc(
-            tenant_id="t", tlc="T",
-            start_date="2026-01-01", end_date="2026-04-01",
+            tenant_id="t",
+            tlc="T",
+            start_date="2026-01-01",
+            end_date="2026-04-01",
         )
         sql_both, _ = session.calls[-1]
 
@@ -309,10 +308,7 @@ class TestParameterizedSQL_Issue1254:
         evt_b = _make_event(tenant_id=shared_tid, idemp_key="b")
         store.persist_events_batch([evt_a, evt_b])
 
-        idemp_calls = [
-            c for c in session.calls
-            if "SELECT idempotency_key" in c[0]
-        ]
+        idemp_calls = [c for c in session.calls if "SELECT idempotency_key" in c[0]]
         assert idemp_calls, "batch idempotency SELECT should have been issued"
         sql, params = idemp_calls[0]
         # No per-index placeholders like ":k0"
@@ -346,7 +342,9 @@ class TestIdempotentReturn_Issue1252:
 
         assert result.idempotent is True
         # No INSERT statements were issued for the event
-        inserts = [c for c in session.calls if c[0].lstrip().upper().startswith("INSERT") or "INSERT INTO" in c[0].upper()]
+        inserts = [
+            c for c in session.calls if c[0].lstrip().upper().startswith("INSERT") or "INSERT INTO" in c[0].upper()
+        ]
         assert not any("INTO fsma.traceability_events" in c[0] for c in inserts)
 
 
@@ -442,8 +440,7 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
 
         rls_calls = [c for c in session.calls if "app.tenant_id" in c[0]]
         assert rls_calls, (
-            "complete_ingestion_run must also set RLS context as a "
-            "defence-in-depth guard against future refactors"
+            "complete_ingestion_run must also set RLS context as a defence-in-depth guard against future refactors"
         )
         # The RLS bind must be the same tenant as the UPDATE bind.
         assert any(p.get("tid") == TENANT for _, p in rls_calls)
@@ -477,9 +474,7 @@ class TestCompleteIngestionRunTenantScope_Issue1263:
 
         sig = inspect.signature(CanonicalEventStore.complete_ingestion_run)
         params = sig.parameters
-        assert "tenant_id" in params, (
-            "#1263: complete_ingestion_run must accept a `tenant_id` parameter"
-        )
+        assert "tenant_id" in params, "#1263: complete_ingestion_run must accept a `tenant_id` parameter"
         # Required: no default value.
         assert params["tenant_id"].default is inspect.Parameter.empty, (
             "#1263: tenant_id must be required (no default) so callers cannot "

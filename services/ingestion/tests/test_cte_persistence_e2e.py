@@ -36,12 +36,14 @@ if str(_SERVICES_DIR) not in sys.path:
 
 try:
     from testcontainers.postgres import PostgresContainer
+
     _HAS_TESTCONTAINERS = True
 except ImportError:
     _HAS_TESTCONTAINERS = False
 
 try:
     import psycopg  # noqa: F401
+
     _HAS_PSYCOPG = True
 except ImportError:
     _HAS_PSYCOPG = False
@@ -109,10 +111,7 @@ def _split_sql_statements(sql_text: str) -> list[str]:
     migration file (no dollar-quoting or embedded semicolons in DDL).
     Skips bare BEGIN/COMMIT since we manage the transaction ourselves.
     """
-    lines = [
-        line for line in sql_text.splitlines()
-        if not line.strip().startswith("--")
-    ]
+    lines = [line for line in sql_text.splitlines() if not line.strip().startswith("--")]
     stmts = []
     for stmt in "\n".join(lines).split(";"):
         stmt = stmt.strip()
@@ -128,12 +127,25 @@ def _split_sql_statements(sql_text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _FDA_COLUMNS = [
-    "Traceability Lot Code (TLC)", "Product Description", "Quantity",
-    "Unit of Measure", "Event Type (CTE)", "Event Date", "Event Time",
-    "Location GLN", "Location Name", "Ship From GLN", "Ship From Name",
-    "Ship To GLN", "Ship To Name", "Immediate Previous Source",
-    "TLC Source GLN", "TLC Source FDA Registration", "Source Document",
-    "Record Hash (SHA-256)", "Chain Hash",
+    "Traceability Lot Code (TLC)",
+    "Product Description",
+    "Quantity",
+    "Unit of Measure",
+    "Event Type (CTE)",
+    "Event Date",
+    "Event Time",
+    "Location GLN",
+    "Location Name",
+    "Ship From GLN",
+    "Ship From Name",
+    "Ship To GLN",
+    "Ship To Name",
+    "Immediate Previous Source",
+    "TLC Source GLN",
+    "TLC Source FDA Registration",
+    "Source Document",
+    "Record Hash (SHA-256)",
+    "Chain Hash",
 ]
 
 
@@ -184,6 +196,7 @@ def _generate_csv(events: list) -> str:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def postgres_engine():
     """
@@ -197,8 +210,7 @@ def postgres_engine():
     from sqlalchemy.exc import OperationalError
 
     assert _MIGRATION_V002.exists(), (
-        f"Migration file not found: {_MIGRATION_V002}\n"
-        "Ensure the repo root is correct and V002 has been created."
+        f"Migration file not found: {_MIGRATION_V002}\nEnsure the repo root is correct and V002 has been created."
     )
 
     with PostgresContainer("postgres:15-alpine") as pg:
@@ -229,15 +241,14 @@ def postgres_engine():
             # V052: replace single-column unique with composite (tenant_id, idempotency_key).
             # Execute directly (not via _split_sql_statements) because the migration
             # uses a dollar-quoted DO block which the semicolon-splitter would truncate.
-            conn.execute(text(
-                "ALTER TABLE fsma.cte_events "
-                "DROP CONSTRAINT IF EXISTS cte_events_idempotency_key_key"
-            ))
-            conn.execute(text(
-                "ALTER TABLE fsma.cte_events "
-                "ADD CONSTRAINT cte_events_tenant_idempotency_key "
-                "UNIQUE (tenant_id, idempotency_key)"
-            ))
+            conn.execute(text("ALTER TABLE fsma.cte_events DROP CONSTRAINT IF EXISTS cte_events_idempotency_key_key"))
+            conn.execute(
+                text(
+                    "ALTER TABLE fsma.cte_events "
+                    "ADD CONSTRAINT cte_events_tenant_idempotency_key "
+                    "UNIQUE (tenant_id, idempotency_key)"
+                )
+            )
 
         yield engine
 
@@ -251,6 +262,7 @@ def db_session(postgres_engine):
     no rollback needed between tests.
     """
     from sqlalchemy.orm import Session
+
     with Session(postgres_engine) as sess:
         yield sess
 
@@ -263,6 +275,7 @@ def _fresh_tenant() -> str:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCTEPersistenceE2E:
     """
@@ -282,7 +295,7 @@ class TestCTEPersistenceE2E:
         Storing a single event must return a 64-char SHA-256 hash and a
         chain_hash that matches the genesis formula (no previous event).
         """
-        from shared.cte_persistence import CTEPersistence, compute_event_hash, compute_chain_hash
+        from shared.cte_persistence import CTEPersistence, compute_chain_hash, compute_event_hash
 
         tenant_id = _fresh_tenant()
         p = CTEPersistence(db_session)
@@ -309,9 +322,15 @@ class TestCTEPersistenceE2E:
 
         # Recompute hashes manually from the returned event_id and verify
         expected_sha256 = compute_event_hash(
-            result.event_id, "harvesting", "TOM-E2E-001",
-            "Roma Tomatoes", 500.0, "cases",
-            None, "Valley Fresh Farms", "2026-03-01T00:00:00+00:00",
+            result.event_id,
+            "harvesting",
+            "TOM-E2E-001",
+            "Roma Tomatoes",
+            500.0,
+            "cases",
+            None,
+            "Valley Fresh Farms",
+            "2026-03-01T00:00:00+00:00",
             {"harvest_date": "2026-03-01", "field_id": "FIELD-A7"},
         )
         # Genesis: no previous chain → previous_chain_hash = None → seed = "GENESIS"
@@ -335,24 +354,36 @@ class TestCTEPersistenceE2E:
         p = CTEPersistence(db_session)
 
         r1 = p.store_event(
-            tenant_id=tenant_id, event_type="harvesting",
-            traceability_lot_code="CHAIN-001", product_description="Leaf Lettuce",
-            quantity=200.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T08:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code="CHAIN-001",
+            product_description="Leaf Lettuce",
+            quantity=200.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T08:00:00+00:00",
+            source="e2e_test",
             kdes={"harvest_date": "2026-03-01"},
         )
         r2 = p.store_event(
-            tenant_id=tenant_id, event_type="cooling",
-            traceability_lot_code="CHAIN-001", product_description="Leaf Lettuce",
-            quantity=200.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T12:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="cooling",
+            traceability_lot_code="CHAIN-001",
+            product_description="Leaf Lettuce",
+            quantity=200.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T12:00:00+00:00",
+            source="e2e_test",
             kdes={"cooling_date": "2026-03-01", "temperature_celsius": "2.5"},
         )
         r3 = p.store_event(
-            tenant_id=tenant_id, event_type="shipping",
-            traceability_lot_code="CHAIN-001", product_description="Leaf Lettuce",
-            quantity=200.0, unit_of_measure="cases",
-            event_timestamp="2026-03-02T06:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="shipping",
+            traceability_lot_code="CHAIN-001",
+            product_description="Leaf Lettuce",
+            quantity=200.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-02T06:00:00+00:00",
+            source="e2e_test",
             kdes={"ship_date": "2026-03-02", "ship_from_location": "Farm", "ship_to_location": "DC"},
         )
         db_session.commit()
@@ -377,11 +408,15 @@ class TestCTEPersistenceE2E:
 
         for i in range(4):
             p.store_event(
-                tenant_id=tenant_id, event_type="harvesting",
+                tenant_id=tenant_id,
+                event_type="harvesting",
                 traceability_lot_code=f"VERIFY-{i:03d}",
-                product_description="Spinach", quantity=100.0 + i, unit_of_measure="lbs",
-                event_timestamp=f"2026-03-0{i+1}T00:00:00+00:00", source="e2e_test",
-                kdes={"harvest_date": f"2026-03-0{i+1}"},
+                product_description="Spinach",
+                quantity=100.0 + i,
+                unit_of_measure="lbs",
+                event_timestamp=f"2026-03-0{i + 1}T00:00:00+00:00",
+                source="e2e_test",
+                kdes={"harvest_date": f"2026-03-0{i + 1}"},
             )
         db_session.commit()
 
@@ -402,20 +437,24 @@ class TestCTEPersistenceE2E:
         This proves the chain walk actually recomputes and compares values
         rather than just reading them.
         """
+        from shared.cte_persistence import CTEPersistence
         from sqlalchemy import text
         from sqlalchemy.orm import Session
-        from shared.cte_persistence import CTEPersistence
 
         tenant_id = _fresh_tenant()
         p = CTEPersistence(db_session)
 
         for i in range(3):
             p.store_event(
-                tenant_id=tenant_id, event_type="receiving",
-                traceability_lot_code="TAMPER-001", product_description="Strawberries",
-                quantity=50.0, unit_of_measure="flats",
-                event_timestamp=f"2026-03-{i+1:02d}T00:00:00+00:00", source="e2e_test",
-                kdes={"receive_date": f"2026-03-{i+1:02d}", "receiving_location": "Warehouse"},
+                tenant_id=tenant_id,
+                event_type="receiving",
+                traceability_lot_code="TAMPER-001",
+                product_description="Strawberries",
+                quantity=50.0,
+                unit_of_measure="flats",
+                event_timestamp=f"2026-03-{i + 1:02d}T00:00:00+00:00",
+                source="e2e_test",
+                kdes={"receive_date": f"2026-03-{i + 1:02d}", "receiving_location": "Warehouse"},
             )
         db_session.commit()
 
@@ -471,10 +510,14 @@ class TestCTEPersistenceE2E:
         tenant_id = _fresh_tenant()
         p = CTEPersistence(db_session)
         kwargs = dict(
-            tenant_id=tenant_id, event_type="harvesting",
-            traceability_lot_code="IDEM-001", product_description="Kale",
-            quantity=300.0, unit_of_measure="cases",
-            event_timestamp="2026-03-05T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code="IDEM-001",
+            product_description="Kale",
+            quantity=300.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-05T00:00:00+00:00",
+            source="e2e_test",
             kdes={"harvest_date": "2026-03-05"},
         )
 
@@ -509,10 +552,14 @@ class TestCTEPersistenceE2E:
         shared_tlc = "CROSS-TENANT-001"
 
         p.store_event(
-            tenant_id=tenant_a, event_type="harvesting",
-            traceability_lot_code=shared_tlc, product_description="Cilantro",
-            quantity=100.0, unit_of_measure="bunches",
-            event_timestamp="2026-03-01T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_a,
+            event_type="harvesting",
+            traceability_lot_code=shared_tlc,
+            product_description="Cilantro",
+            quantity=100.0,
+            unit_of_measure="bunches",
+            event_timestamp="2026-03-01T00:00:00+00:00",
+            source="e2e_test",
             kdes={"harvest_date": "2026-03-01"},
         )
         db_session.commit()
@@ -542,21 +589,36 @@ class TestCTEPersistenceE2E:
 
         # Insert in reverse order to confirm ORDER BY is doing the work
         p.store_event(
-            tenant_id=tenant_id, event_type="receiving", traceability_lot_code=tlc,
-            product_description="Tomatoes", quantity=100.0, unit_of_measure="cases",
-            event_timestamp="2026-03-03T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="receiving",
+            traceability_lot_code=tlc,
+            product_description="Tomatoes",
+            quantity=100.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-03T00:00:00+00:00",
+            source="e2e_test",
             kdes={"receive_date": "2026-03-03", "receiving_location": "DC"},
         )
         p.store_event(
-            tenant_id=tenant_id, event_type="shipping", traceability_lot_code=tlc,
-            product_description="Tomatoes", quantity=100.0, unit_of_measure="cases",
-            event_timestamp="2026-03-02T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="shipping",
+            traceability_lot_code=tlc,
+            product_description="Tomatoes",
+            quantity=100.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-02T00:00:00+00:00",
+            source="e2e_test",
             kdes={"ship_date": "2026-03-02", "ship_from_location": "Farm", "ship_to_location": "DC"},
         )
         p.store_event(
-            tenant_id=tenant_id, event_type="harvesting", traceability_lot_code=tlc,
-            product_description="Tomatoes", quantity=100.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code=tlc,
+            product_description="Tomatoes",
+            quantity=100.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T00:00:00+00:00",
+            source="e2e_test",
             kdes={"harvest_date": "2026-03-01"},
         )
         db_session.commit()
@@ -585,10 +647,16 @@ class TestCTEPersistenceE2E:
         tlc = "FDA-COL-001"
 
         p.store_event(
-            tenant_id=tenant_id, event_type="harvesting", traceability_lot_code=tlc,
-            product_description="Basil", quantity=50.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T00:00:00+00:00", source="e2e_test",
-            location_name="Herb Farm", location_gln="0614141000009",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code=tlc,
+            product_description="Basil",
+            quantity=50.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T00:00:00+00:00",
+            source="e2e_test",
+            location_name="Herb Farm",
+            location_gln="0614141000009",
             kdes={"harvest_date": "2026-03-01", "tlc_source_gln": "0614141000009"},
         )
         db_session.commit()
@@ -632,9 +700,14 @@ class TestCTEPersistenceE2E:
         tlc = "EXPORT-REPRO-001"
 
         p.store_event(
-            tenant_id=tenant_id, event_type="harvesting", traceability_lot_code=tlc,
-            product_description="Arugula", quantity=75.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T00:00:00+00:00", source="e2e_test",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code=tlc,
+            product_description="Arugula",
+            quantity=75.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T00:00:00+00:00",
+            source="e2e_test",
             kdes={"harvest_date": "2026-03-01"},
         )
         db_session.commit()
@@ -661,8 +734,7 @@ class TestCTEPersistenceE2E:
         hash_v2 = hashlib.sha256(csv_v2.encode("utf-8")).hexdigest()
 
         assert hash_v1 == hash_v2, (
-            "FDA export hash changed between generation and re-generation.\n"
-            f"First:  {hash_v1}\nSecond: {hash_v2}"
+            f"FDA export hash changed between generation and re-generation.\nFirst:  {hash_v1}\nSecond: {hash_v2}"
         )
 
     # -----------------------------------------------------------------------
@@ -696,11 +768,16 @@ class TestCTEPersistenceE2E:
         # -------- Step 1: Ingest the supply chain --------
 
         r_harvest = p.store_event(
-            tenant_id=tenant_id, event_type="harvesting",
-            traceability_lot_code=tlc, product_description="Roma Tomatoes",
-            quantity=800.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T06:00:00+00:00", source="e2e_test",
-            location_name="Valley Fresh Farms, Salinas CA", location_gln="0614141000001",
+            tenant_id=tenant_id,
+            event_type="harvesting",
+            traceability_lot_code=tlc,
+            product_description="Roma Tomatoes",
+            quantity=800.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T06:00:00+00:00",
+            source="e2e_test",
+            location_name="Valley Fresh Farms, Salinas CA",
+            location_gln="0614141000001",
             kdes={
                 "harvest_date": "2026-03-01",
                 "field_id": "FIELD-B4",
@@ -709,19 +786,29 @@ class TestCTEPersistenceE2E:
             },
         )
         r_cool = p.store_event(
-            tenant_id=tenant_id, event_type="cooling",
-            traceability_lot_code=tlc, product_description="Roma Tomatoes",
-            quantity=800.0, unit_of_measure="cases",
-            event_timestamp="2026-03-01T14:00:00+00:00", source="e2e_test",
-            location_name="Valley Fresh Cooler #2", location_gln="0614141000002",
+            tenant_id=tenant_id,
+            event_type="cooling",
+            traceability_lot_code=tlc,
+            product_description="Roma Tomatoes",
+            quantity=800.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-01T14:00:00+00:00",
+            source="e2e_test",
+            location_name="Valley Fresh Cooler #2",
+            location_gln="0614141000002",
             kdes={"cooling_date": "2026-03-01", "temperature_celsius": "2.1"},
         )
         r_ship = p.store_event(
-            tenant_id=tenant_id, event_type="shipping",
-            traceability_lot_code=tlc, product_description="Roma Tomatoes",
-            quantity=800.0, unit_of_measure="cases",
-            event_timestamp="2026-03-02T07:00:00+00:00", source="e2e_test",
-            location_name="Valley Fresh Farms, Salinas CA", location_gln="0614141000001",
+            tenant_id=tenant_id,
+            event_type="shipping",
+            traceability_lot_code=tlc,
+            product_description="Roma Tomatoes",
+            quantity=800.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-02T07:00:00+00:00",
+            source="e2e_test",
+            location_name="Valley Fresh Farms, Salinas CA",
+            location_gln="0614141000001",
             kdes={
                 "ship_date": "2026-03-02",
                 "ship_from_location": "Valley Fresh Farms, Salinas CA",
@@ -733,11 +820,16 @@ class TestCTEPersistenceE2E:
             },
         )
         r_recv = p.store_event(
-            tenant_id=tenant_id, event_type="receiving",
-            traceability_lot_code=tlc, product_description="Roma Tomatoes",
-            quantity=800.0, unit_of_measure="cases",
-            event_timestamp="2026-03-02T18:00:00+00:00", source="e2e_test",
-            location_name="Metro Distribution Center, LA", location_gln="0614141000003",
+            tenant_id=tenant_id,
+            event_type="receiving",
+            traceability_lot_code=tlc,
+            product_description="Roma Tomatoes",
+            quantity=800.0,
+            unit_of_measure="cases",
+            event_timestamp="2026-03-02T18:00:00+00:00",
+            source="e2e_test",
+            location_name="Metro Distribution Center, LA",
+            location_gln="0614141000003",
             kdes={
                 "receive_date": "2026-03-02",
                 "receiving_location": "Metro Distribution Center, LA",
@@ -786,11 +878,11 @@ class TestCTEPersistenceE2E:
         # -------- Step 5: Generate FDA CSV --------
 
         csv_v1 = _generate_csv(events)
-        assert "Traceability Lot Code (TLC)" in csv_v1   # header present
-        assert tlc in csv_v1                              # TLC appears in data
+        assert "Traceability Lot Code (TLC)" in csv_v1  # header present
+        assert tlc in csv_v1  # TLC appears in data
         assert "harvesting" in csv_v1
         assert "receiving" in csv_v1
-        assert "Valley Fresh Farms" in csv_v1              # ship_from in shipping KDEs
+        assert "Valley Fresh Farms" in csv_v1  # ship_from in shipping KDEs
 
         # Verify 4 data rows (+ 1 header)
         rows = list(csv.DictReader(io.StringIO(csv_v1)))
@@ -834,6 +926,4 @@ class TestCTEPersistenceE2E:
             assert len(row["Record Hash (SHA-256)"]) == 64, (
                 f"Row missing Record Hash: {row['Traceability Lot Code (TLC)']}"
             )
-            assert len(row["Chain Hash"]) == 64, (
-                f"Row missing Chain Hash: {row['Traceability Lot Code (TLC)']}"
-            )
+            assert len(row["Chain Hash"]) == 64, f"Row missing Chain Hash: {row['Traceability Lot Code (TLC)']}"

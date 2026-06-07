@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from shared.auth import APIKey, require_api_key
 
 from services.nlp.app.routes import router
-from shared.auth import APIKey, require_api_key
 
 
 def _api_key(scopes: list[str]) -> APIKey:

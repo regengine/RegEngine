@@ -32,9 +32,7 @@ class TestCleanupDlqProducer:
         with patch.object(review_consumer, "_dlq_producer", producer):
             review_consumer._cleanup_dlq_producer()
 
-        assert call_order == ["flush", "close"], (
-            f"Expected flush before close; got {call_order}"
-        )
+        assert call_order == ["flush", "close"], f"Expected flush before close; got {call_order}"
         # Flush timeout must be a positive drain window -- matches the
         # graph consumer pattern (#1220).
         flush_kwargs = producer.flush.call_args.kwargs
@@ -81,11 +79,13 @@ class TestRunConsumerShutdownFlush:
         review_consumer._shutdown_event.clear()
         review_consumer._shutdown_event.set()
 
-        with patch.object(review_consumer, "_ensure_topic"), \
-             patch.object(review_consumer, "KafkaConsumer", return_value=mock_consumer), \
-             patch.object(review_consumer, "get_settings", return_value=mock_settings), \
-             patch.object(review_consumer, "get_hallucination_tracker"), \
-             patch.object(review_consumer, "_cleanup_dlq_producer") as mock_cleanup:
+        with (
+            patch.object(review_consumer, "_ensure_topic"),
+            patch.object(review_consumer, "KafkaConsumer", return_value=mock_consumer),
+            patch.object(review_consumer, "get_settings", return_value=mock_settings),
+            patch.object(review_consumer, "get_hallucination_tracker"),
+            patch.object(review_consumer, "_cleanup_dlq_producer") as mock_cleanup,
+        ):
             try:
                 review_consumer.run_consumer()
             finally:
@@ -106,11 +106,13 @@ class TestRunConsumerShutdownFlush:
 
         review_consumer._shutdown_event.clear()
 
-        with patch.object(review_consumer, "_ensure_topic"), \
-             patch.object(review_consumer, "KafkaConsumer", return_value=mock_consumer), \
-             patch.object(review_consumer, "get_settings", return_value=mock_settings), \
-             patch.object(review_consumer, "get_hallucination_tracker"), \
-             patch.object(review_consumer, "_cleanup_dlq_producer") as mock_cleanup:
+        with (
+            patch.object(review_consumer, "_ensure_topic"),
+            patch.object(review_consumer, "KafkaConsumer", return_value=mock_consumer),
+            patch.object(review_consumer, "get_settings", return_value=mock_settings),
+            patch.object(review_consumer, "get_hallucination_tracker"),
+            patch.object(review_consumer, "_cleanup_dlq_producer") as mock_cleanup,
+        ):
             try:
                 with pytest.raises(RuntimeError, match="kafka down"):
                     review_consumer.run_consumer()

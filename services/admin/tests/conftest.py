@@ -1,6 +1,7 @@
 """
 Admin Service Test Configuration and Fixtures
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Generator
@@ -11,10 +12,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-
 # =============================================================================
 # Database Fixtures
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def engine():
@@ -34,21 +35,27 @@ def tables(engine):
 
     # Create tenant and user tables first (mock)
     with engine.connect() as connection:
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS tenants (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL
             )
-        """))
-        connection.execute(text("""
+        """)
+        )
+        connection.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL
             )
-        """))
-        connection.execute(text("""
+        """)
+        )
+        connection.execute(
+            text("""
             INSERT OR IGNORE INTO tenants (id, name) VALUES ('test-tenant-id', 'Test Tenant')
-        """))
+        """)
+        )
         connection.commit()
 
     try:
@@ -67,7 +74,8 @@ def tables(engine):
     # tests/test_graph_outbox.py.
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS graph_outbox (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
                     tenant_id       TEXT NULL,
@@ -83,7 +91,8 @@ def tables(engine):
                     next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     dedupe_key      TEXT NULL
                 )
-            """))
+            """)
+            )
     except Exception:
         pass
 
@@ -115,6 +124,7 @@ def db_session(engine, tables) -> Generator[Session, None, None]:
 # Tenant Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def tenant_id() -> uuid.UUID:
     """Provide a consistent test tenant ID."""
@@ -131,10 +141,12 @@ def user_id() -> uuid.UUID:
 # API Client Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def client():
     """Provide a FastAPI TestClient for API testing."""
     from fastapi.testclient import TestClient
+
     from services.admin.main import app
 
     with TestClient(app) as test_client:

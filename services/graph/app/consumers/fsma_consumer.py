@@ -10,18 +10,18 @@ Migrated to Confluent Kafka with Avro Schema Validation (Task 5.6).
 from __future__ import annotations
 
 import asyncio
+import socket
 import sys
 import threading
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import socket
 import structlog
 from confluent_kafka import Consumer, KafkaException
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
-from confluent_kafka.serialization import SerializationContext, MessageField
+from confluent_kafka.serialization import MessageField, SerializationContext
 from prometheus_client import Counter, Histogram
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
@@ -30,6 +30,7 @@ DLQ_COUNTER = Counter("fsma_consumer_dlq_messages", "Messages sent to DLQ", ["re
 
 # Global DLQ Producer (initialized in run_fsma_consumer) -- #1228: shared singleton
 _dlq_producer: Optional[object] = None  # shared.observability.dlq_producer.DLQProducer
+
 
 def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -> None:
     """Send failed message to Dead Letter Queue via shared DLQProducer. #1228"""
@@ -49,8 +50,10 @@ def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -
     except Exception as e:
         logger.critical("dlq_emission_failed", error=str(e))
 
+
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 from shared.kafka_auth import KafkaAuthError, get_allowed_producers, verify_event
 
@@ -73,12 +76,8 @@ logger = structlog.get_logger("fsma-graph-consumer")
 TLC_SOURCE_REQUIRED_EVENTS = {"TRANSFORMATION", "INITIAL_PACKING", "CREATION"}
 
 # Metrics
-FSMA_MESSAGES_COUNTER = Counter(
-    "fsma_graph_messages_total", "FSMA graph consumer messages", ["status"]
-)
-FSMA_INGEST_DURATION = Histogram(
-    "fsma_graph_ingest_duration_seconds", "FSMA event ingestion duration"
-)
+FSMA_MESSAGES_COUNTER = Counter("fsma_graph_messages_total", "FSMA graph consumer messages", ["status"])
+FSMA_INGEST_DURATION = Histogram("fsma_graph_ingest_duration_seconds", "FSMA event ingestion duration")
 
 # Topic configuration
 FSMA_TOPIC = "fsma.events.extracted"
@@ -111,6 +110,7 @@ def _extract_tenant_source_identifiers(
 
 class TLCSourceValidationError(Exception):
     """Raised when TLC source fields are missing for events that require them."""
+
     pass
 
 
@@ -136,6 +136,7 @@ def stop_consumer() -> None:
 def _load_schema_str() -> str:
     """Load Avro schema from file using standardized discovery."""
     from shared.paths import project_root
+
     try:
         schema_path = project_root() / "schemas" / "fsma_trace_event.avsc"
         return schema_path.read_text()
@@ -182,11 +183,13 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
     # Same logic as original ingest_fsma_event
     # Simplified here for brevity but assuming full logic is preserved or imported
     # COPYING LOGIC FROM ORIGINAL TO ENSURE FUNCTIONALITY (Truncated for brevity in thought, but writing full in file)
-    
+
     document_type = event.get("document_type", "UNKNOWN")
     ctes = event.get("ctes", [])
     timestamp = event.get("timestamp")
-    tenant_id = event.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- event reached ingest only after _verify_fsma_event_auth verified the signed Kafka envelope
+    tenant_id = event.get(
+        "tenant_id"
+    )  # nosemgrep: tenant-id-from-request-body -- event reached ingest only after _verify_fsma_event_auth verified the signed Kafka envelope
     tenant_source_gln, tenant_source_fda_reg = _extract_tenant_source_identifiers(event)
 
     bind_contextvars(document_id=document_id)
@@ -205,10 +208,10 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                 document_id=document_id,
                 properties=doc.node_properties,
             )
-            
+
             # Evidence link
             evidence_link = event.get("source_url") or f"s3://documents/{document_id}"
-            
+
             # 2. Process each CTE
             for idx, cte_data in enumerate(ctes):
                 event_id = f"{document_id}-cte-{idx}"
@@ -228,11 +231,11 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                     if not tlc_source_gln and not tlc_source_fda_reg:
                         tlc_source_gln = tenant_source_gln
                         tlc_source_fda_reg = tenant_source_fda_reg
-                    
+
                     if not tlc_source_gln and not tlc_source_fda_reg:
-                         logger.error("tlc_source_validation_failed", event_id=event_id, action="dlq_eviction")
-                         # raise exception to trigger outer DLQ catch
-                         raise TLCSourceValidationError(f"Missing TLC Source for {cte_type}") 
+                        logger.error("tlc_source_validation_failed", event_id=event_id, action="dlq_eviction")
+                        # raise exception to trigger outer DLQ catch
+                        raise TLCSourceValidationError(f"Missing TLC Source for {cte_type}")
 
                 # Create TraceEvent
                 trace_event = TraceEvent(
@@ -275,7 +278,7 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                         event_id=event_id,
                         tenant_id=tenant_id,
                     )
-                    
+
                     assigned_by = lot.assigned_by_cypher()
                     if assigned_by:
                         cypher, params = assigned_by
@@ -284,9 +287,10 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                 # 4. Facility
                 location_id = kdes.get("location_identifier")
                 if location_id:
-                    gln = None 
-                    if location_id.startswith("urn:gln:"): gln = location_id.replace("urn:gln:", "")
-                    
+                    gln = None
+                    if location_id.startswith("urn:gln:"):
+                        gln = location_id.replace("urn:gln:", "")
+
                     if gln:
                         facility = Facility(gln=gln, name=f"Facility-{gln}", tenant_id=tenant_id)
                         await session.run(Facility.merge_cypher(), gln=gln, properties=facility.node_properties)
@@ -304,14 +308,14 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
 
 async def run_fsma_consumer(database: Optional[str] = None) -> None:
     """Run the FSMA Kafka consumer with Avro support."""
-    
+
     client = Neo4jClient(database=database)
     await _ensure_constraints(client)
 
     # Schema Registry Configuration
-    schema_registry_conf = {'url': settings.schema_registry_url}
+    schema_registry_conf = {"url": settings.schema_registry_url}
     schema_registry_client = SchemaRegistryClient(schema_registry_conf)
-    
+
     # Avro Deserializer
     avro_deserializer = AvroDeserializer(
         schema_registry_client,
@@ -320,6 +324,7 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
 
     # Initialize DLQ Producer -- #1228: use shared singleton
     from shared.dlq import DLQProducer
+
     global _dlq_producer
     _dlq_producer = DLQProducer(
         bootstrap_servers=settings.kafka_bootstrap,
@@ -329,10 +334,10 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
 
     # Consumer Config
     consumer_conf = {
-        'bootstrap.servers': settings.kafka_bootstrap,
-        'group.id': settings.consumer_group_id,
-        'auto.offset.reset': 'earliest',
-        'enable.auto.commit': False
+        "bootstrap.servers": settings.kafka_bootstrap,
+        "group.id": settings.consumer_group_id,
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": False,
     }
 
     consumer = Consumer(consumer_conf)
@@ -410,6 +415,7 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
         await asyncio.to_thread(consumer.close)
         await client.close()
         logger.info("fsma_consumer_stopped")
+
 
 if __name__ == "__main__":
     try:

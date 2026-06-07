@@ -88,6 +88,7 @@ _REAL_APP_ROUTES = sys.modules.get("app.routes")
 sys.modules["app.routes"] = _routes_stub
 
 import app as _app_pkg  # noqa: E402
+
 _REAL_APP_ROUTES_ATTR = getattr(_app_pkg, "routes", None)
 _app_pkg.routes = _routes_stub
 
@@ -126,7 +127,6 @@ from app.task_handlers_sources import (  # noqa: E402
     register_source_handlers,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -142,8 +142,7 @@ def _reset_state(monkeypatch):
     # Make sure the names imported into ``ths`` at module-load time
     # still point at our spies (root conftest may have purged the
     # module and reloaded against fresh source).
-    monkeypatch.setattr(ths, "FederalRegisterAdapter",
-                        _FederalRegisterAdapter, raising=False)
+    monkeypatch.setattr(ths, "FederalRegisterAdapter", _FederalRegisterAdapter, raising=False)
     monkeypatch.setattr(ths, "ECFRAdapter", _ECFRAdapter, raising=False)
     monkeypatch.setattr(ths, "FDAAdapter", _FDAAdapter, raising=False)
 
@@ -265,8 +264,7 @@ class TestHandleECFR:
         assert call["cfr_part"] is None
 
     def test_unknown_kwargs_absorbed(self, captured_ingest):
-        _handle_ecfr(vertical="v", tenant_id="t", job_id="j",
-                     future_thing="ok")
+        _handle_ecfr(vertical="v", tenant_id="t", job_id="j", future_thing="ok")
         assert "future_thing" not in captured_ingest[0]
 
 
@@ -292,8 +290,7 @@ class TestHandleFDA:
         assert captured_ingest[0]["source_system"] == "openfda_api"
 
     def test_max_documents_pass_through(self, captured_ingest):
-        _handle_fda(vertical="v", tenant_id="t", job_id="j",
-                    max_documents=200)
+        _handle_fda(vertical="v", tenant_id="t", job_id="j", max_documents=200)
         assert captured_ingest[0]["max_documents"] == 200
 
     def test_max_documents_defaults_to_none(self, captured_ingest):
@@ -301,8 +298,7 @@ class TestHandleFDA:
         assert captured_ingest[0]["max_documents"] is None
 
     def test_unknown_kwargs_absorbed(self, captured_ingest):
-        _handle_fda(vertical="v", tenant_id="t", job_id="j",
-                    future_field="x")
+        _handle_fda(vertical="v", tenant_id="t", job_id="j", future_field="x")
         assert "future_field" not in captured_ingest[0]
 
 
@@ -332,9 +328,6 @@ class TestRegisterSourceHandlers:
         # Stable order matters for any task-queue introspection that
         # relies on registration sequence (admin dashboards etc.).
         order: list[str] = []
-        monkeypatch.setattr(
-            ths, "register_task_handler",
-            lambda t, h: order.append(t)
-        )
+        monkeypatch.setattr(ths, "register_task_handler", lambda t, h: order.append(t))
         register_source_handlers()
         assert order == ["federal_register_ingest", "ecfr_ingest", "fda_ingest"]

@@ -13,11 +13,12 @@ test module, we detect which service owns it and (a) invalidate the cached
 This keeps feature code untouched while letting the full test suite collect
 in a single ``pytest`` run.
 """
+
 from __future__ import annotations
 
-import re
 import asyncio
 import os
+import re
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -48,9 +49,7 @@ _TEST_TO_SERVICE_OVERRIDES = {
     "tests/test_rules_engine_unit.py": "ingestion",
     "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
 }
-_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {
-    service: {} for service in _APP_BEARING_SERVICES
-}
+_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {service: {} for service in _APP_BEARING_SERVICES}
 _KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
 
 
@@ -175,11 +174,7 @@ def _switch_to_service(service: str) -> None:
     # ``from main import app`` at module scope, so only evicting ``app.*`` is
     # not enough during full-suite collection.
     stale = sorted(
-        [
-            name
-            for name in sys.modules
-            if name == "main" or name == "app" or name.startswith("app.")
-        ],
+        [name for name in sys.modules if name == "main" or name == "app" or name.startswith("app.")],
         key=lambda value: value.count("."),
         reverse=True,
     )
@@ -248,10 +243,7 @@ def _switch_to_service(service: str) -> None:
     # Remove other service dirs from sys.path so only the current one wins
     # when ``app`` is (re-)imported.
     sys.path[:] = [
-        p for p in sys.path
-        if not any(
-            p == str(_SERVICES_DIR / s) for s in _APP_BEARING_SERVICES if s != service
-        )
+        p for p in sys.path if not any(p == str(_SERVICES_DIR / s) for s in _APP_BEARING_SERVICES if s != service)
     ]
 
     # Place this service's dir at position 0.

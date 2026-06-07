@@ -31,8 +31,8 @@ if str(_repo_root) not in sys.path:
 
 from shared.kafka_auth import (
     HEADER_PRODUCER_SERVICE,
-    HEADER_SIGNATURE,
     HEADER_SIG_VERSION,
+    HEADER_SIGNATURE,
     KafkaAuthError,
     verify_event,
 )
@@ -60,8 +60,8 @@ class TestRouteExtractionSigns:
     def test_high_confidence_emit_is_signed(self, producer: MagicMock) -> None:
         from services.nlp.app.consumer import (
             NLP_PRODUCER_SERVICE,
-            _route_extraction,
             ExtractionPayload,
+            _route_extraction,
         )
 
         extraction = ExtractionPayload(
@@ -108,8 +108,8 @@ class TestRouteExtractionSigns:
     def test_low_confidence_emit_is_signed(self, producer: MagicMock) -> None:
         from services.nlp.app.consumer import (
             NLP_PRODUCER_SERVICE,
-            _route_extraction,
             ExtractionPayload,
+            _route_extraction,
         )
 
         extraction = ExtractionPayload(
@@ -142,11 +142,9 @@ class TestRouteExtractionSigns:
         assert producer_service == NLP_PRODUCER_SERVICE
         assert evt["tenant_id"] == tenant_id
 
-    def test_review_priority_header_survives_signing(
-        self, producer: MagicMock
-    ) -> None:
+    def test_review_priority_header_survives_signing(self, producer: MagicMock) -> None:
         """X-Review-Priority is a correlation header — must not get stripped."""
-        from services.nlp.app.consumer import _route_extraction, ExtractionPayload
+        from services.nlp.app.consumer import ExtractionPayload, _route_extraction
 
         extraction = ExtractionPayload(
             subject="x",
@@ -173,7 +171,7 @@ class TestRouteExtractionSigns:
     def test_signature_covers_tenant_id_field(self, producer: MagicMock) -> None:
         """Swap tenant_id post-sign → verify must fail. The cross-tenant
         injection primitive from the issue description."""
-        from services.nlp.app.consumer import _route_extraction, ExtractionPayload
+        from services.nlp.app.consumer import ExtractionPayload, _route_extraction
 
         extraction = ExtractionPayload(
             subject="x",

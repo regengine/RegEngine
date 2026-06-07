@@ -23,7 +23,6 @@ import sys
 import zipfile
 from typing import Any
 
-
 LEAF_PREFIX = "leaf|"
 NODE_SEPARATOR = "|"
 
@@ -99,14 +98,10 @@ def verify_bundle(zip_path: str) -> int:
                 return _fail(f"{path} declared in manifest but missing from bundle")
             data = bundle.read(path)
             if declared_size is not None and len(data) != declared_size:
-                return _fail(
-                    f"{path}: size {len(data)} != declared {declared_size}"
-                )
+                return _fail(f"{path}: size {len(data)} != declared {declared_size}")
             actual = _sha256_bytes(data)
             if actual != declared:
-                return _fail(
-                    f"{path}: sha256 mismatch (got {actual}, declared {declared})"
-                )
+                return _fail(f"{path}: sha256 mismatch (got {actual}, declared {declared})")
             recomputed.append(actual)
 
         total = len(files)
@@ -121,18 +116,14 @@ def verify_bundle(zip_path: str) -> int:
 
         root = _merkle_root(recomputed)
         if root != merkle["root"]:
-            return _fail(
-                f"merkle root mismatch (recomputed {root}, declared {merkle['root']})"
-            )
+            return _fail(f"merkle root mismatch (recomputed {root}, declared {merkle['root']})")
         print("merkle: root recomputed and matched")
         print("result: bundle intact")
         return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Verify a RegEngine audit bundle (zip with manifest.json)."
-    )
+    parser = argparse.ArgumentParser(description="Verify a RegEngine audit bundle (zip with manifest.json).")
     parser.add_argument("bundle", help="Path to audit-bundle.zip")
     args = parser.parse_args()
     return verify_bundle(args.bundle)

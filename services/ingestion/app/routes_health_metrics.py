@@ -16,7 +16,6 @@ import logging
 import os as _os
 
 from fastapi import APIRouter
-
 from shared.kafka_consumer_base import kafka_health_check
 
 from .config import get_settings
@@ -40,7 +39,8 @@ def health() -> dict[str, object]:
     if kafka_servers and kafka_servers not in ("redpanda:9092", "localhost:9092"):
         settings = get_settings()
         kafka_result = kafka_health_check(
-            bootstrap_servers=settings.kafka_bootstrap_servers, timeout=3.0,
+            bootstrap_servers=settings.kafka_bootstrap_servers,
+            timeout=3.0,
         )
         kafka_status = kafka_result["status"]
         if kafka_status != "available":
@@ -57,6 +57,7 @@ def health() -> dict[str, object]:
     # drifts to fail-open (WEBHOOK_HMAC_SECRET unset).
     try:
         from .webhook_router_v2 import webhook_hmac_configured
+
         hmac_configured = webhook_hmac_configured()
     except Exception:  # pragma: no cover - never break /health on import error
         hmac_configured = False

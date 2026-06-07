@@ -22,6 +22,7 @@ so it's safe to use in non-request code paths (cron exports, etc.).
 Related issue: EPIC-L (#1655) — "end_date-only exports permitting
 full-tenant dumps".
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -83,9 +84,7 @@ def _coerce(name: str, value: object) -> date:
             try:
                 parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             except ValueError as exc:
-                raise ExportWindowError(
-                    f"{name} must be ISO-8601 YYYY-MM-DD"
-                ) from exc
+                raise ExportWindowError(f"{name} must be ISO-8601 YYYY-MM-DD") from exc
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             return parsed.astimezone(timezone.utc).date()

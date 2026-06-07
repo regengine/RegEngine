@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -41,6 +42,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -68,6 +70,7 @@ def tenant_id():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -148,6 +151,7 @@ def _set_deadline(db_session, tenant_id: str, case_id: str, due_at: datetime):
 # The Test: Deadline Monitoring & Overdue Escalation
 # ---------------------------------------------------------------------------
 
+
 class TestDeadlineBreachE2E:
     """Prove deadline monitoring detects urgency levels and overdue cases
     remain functional."""
@@ -157,6 +161,7 @@ class TestDeadlineBreachE2E:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
@@ -187,9 +192,7 @@ class TestDeadlineBreachE2E:
                 to_facility_reference=event_data.get("to_facility_reference"),
                 kdes=event_data.get("kdes", {}),
                 confidence_score=event_data.get("confidence_score"),
-                source_system=IngestionSource(
-                    event_data.get("source_system", "csv_upload")
-                ),
+                source_system=IngestionSource(event_data.get("source_system", "csv_upload")),
                 status="active",
             )
             store.persist_event(te)
@@ -251,9 +254,7 @@ class TestDeadlineBreachE2E:
         assert our_case["urgency"] == "overdue", (
             f"Expected 'overdue' for breached deadline, got '{our_case['urgency']}'"
         )
-        assert our_case["hours_remaining"] < 0, (
-            f"Expected negative hours_remaining, got {our_case['hours_remaining']}"
-        )
+        assert our_case["hours_remaining"] < 0, f"Expected negative hours_remaining, got {our_case['hours_remaining']}"
 
     # ---- Step 5: Verify case still functions after breach ----
 
@@ -262,7 +263,8 @@ class TestDeadlineBreachE2E:
         case_id = self.__class__._case_id
 
         workflow.update_scope(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             scope_description="Updated scope after deadline breach — still operational",
         )
 
@@ -271,9 +273,7 @@ class TestDeadlineBreachE2E:
         case_id = self.__class__._case_id
 
         result = workflow.collect_records(tenant_id, case_id)
-        assert result["total_records"] >= 1, (
-            f"Expected >=1 records collected, got {result['total_records']}"
-        )
+        assert result["total_records"] >= 1, f"Expected >=1 records collected, got {result['total_records']}"
 
     def test_07_overdue_case_still_functional_package(self, tenant_id, workflow):
         """An overdue case can still assemble a response package."""
@@ -281,14 +281,16 @@ class TestDeadlineBreachE2E:
 
         # Add required signoff before assembly
         workflow.add_signoff(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             signoff_type="scope_approval",
             signed_by="qa_lead@company.com",
             notes="Scope approved despite overdue status.",
         )
 
         package = workflow.assemble_response_package(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             generated_by="compliance_officer@company.com",
         )
 
@@ -331,8 +333,7 @@ class TestDeadlineBreachE2E:
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "urgent", (
-            f"Expected 'urgent' at >2h, got '{our_case['urgency']}' "
-            f"(hours_remaining={our_case['hours_remaining']})"
+            f"Expected 'urgent' at >2h, got '{our_case['urgency']}' (hours_remaining={our_case['hours_remaining']})"
         )
 
     def test_10_boundary_6h_is_normal(self, db_session, tenant_id, workflow):
@@ -347,8 +348,7 @@ class TestDeadlineBreachE2E:
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "normal", (
-            f"Expected 'normal' at >=6h, got '{our_case['urgency']}' "
-            f"(hours_remaining={our_case['hours_remaining']})"
+            f"Expected 'normal' at >=6h, got '{our_case['urgency']}' (hours_remaining={our_case['hours_remaining']})"
         )
 
     def test_11_boundary_just_under_6h_is_urgent(self, db_session, tenant_id, workflow):
@@ -362,14 +362,14 @@ class TestDeadlineBreachE2E:
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "urgent", (
-            f"Expected 'urgent' at 5h59m, got '{our_case['urgency']}' "
-            f"(hours_remaining={our_case['hours_remaining']})"
+            f"Expected 'urgent' at 5h59m, got '{our_case['urgency']}' (hours_remaining={our_case['hours_remaining']})"
         )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _find_case(cases: List[Dict], case_id: str) -> Dict | None:
     """Find a specific case in the deadline status results."""

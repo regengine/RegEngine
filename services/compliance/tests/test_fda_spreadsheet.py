@@ -23,16 +23,14 @@ import io
 import json
 
 import pytest
-
 from app.fsma_spreadsheet import (
     FDA_COLUMNS,
     FDA_HEADERS,
     FSMATimestampError,
-    generate_fda_csv,
-    _parse_timestamp,
     _normalise_event,
+    _parse_timestamp,
+    generate_fda_csv,
 )
-
 
 # ─── _parse_timestamp ────────────────────────────────────────────────────
 
@@ -215,9 +213,7 @@ class TestGenerateFDACSV:
         assert dates == sorted(dates)
 
     def test_metadata_includes_date_range(self):
-        result = generate_fda_csv(
-            [], start_date="2026-01-01", end_date="2026-06-30"
-        )
+        result = generate_fda_csv([], start_date="2026-01-01", end_date="2026-06-30")
         assert "2026-01-01 to 2026-06-30" in result
 
     def test_metadata_includes_requesting_entity(self):

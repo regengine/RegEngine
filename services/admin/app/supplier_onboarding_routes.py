@@ -3,9 +3,9 @@ from __future__ import annotations
 import csv
 import io
 import uuid as uuid_module
+import zipfile
 from datetime import datetime, timedelta, timezone
 from typing import Any
-import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -24,11 +24,10 @@ from .sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
-from .supplier_graph_sync import supplier_graph_sync
 from .supplier_cte_service import (
     _persist_supplier_cte_event,
 )
-
+from .supplier_graph_sync import supplier_graph_sync
 
 router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
 
@@ -44,7 +43,11 @@ FTL_CATEGORY_CATALOG = [
     {"id": "4", "name": "Nut butter", "ctes": ["receiving", "transforming", "shipping"]},
     {"id": "5", "name": "Fresh herbs", "ctes": ["harvesting", "cooling", "initial_packing", "receiving", "shipping"]},
     {"id": "6", "name": "Finfish (fresh/frozen)", "ctes": ["first_receiver", "receiving", "transforming", "shipping"]},
-    {"id": "7", "name": "Crustaceans (fresh/frozen)", "ctes": ["first_receiver", "receiving", "transforming", "shipping"]},
+    {
+        "id": "7",
+        "name": "Crustaceans (fresh/frozen)",
+        "ctes": ["first_receiver", "receiving", "transforming", "shipping"],
+    },
     {"id": "8", "name": "Molluscan shellfish", "ctes": ["harvesting", "first_receiver", "receiving", "shipping"]},
     {"id": "9", "name": "Ready-to-eat deli salads", "ctes": ["receiving", "transforming", "shipping"]},
     {"id": "10", "name": "Soft & semi-soft cheeses", "ctes": ["receiving", "transforming", "shipping"]},
@@ -268,11 +271,7 @@ def _get_supplier_facility_or_404(
     facility_id: uuid_module.UUID,
 ) -> SupplierFacilityModel:
     facility = db.get(SupplierFacilityModel, facility_id)
-    if (
-        facility is None
-        or facility.tenant_id != tenant_id
-        or facility.supplier_user_id != supplier_user_id
-    ):
+    if facility is None or facility.tenant_id != tenant_id or facility.supplier_user_id != supplier_user_id:
         raise HTTPException(status_code=404, detail="Facility not found")
     return facility
 
@@ -362,31 +361,43 @@ def _compute_supplier_compliance(
 
     facility_ids = [facility.id for facility in facilities]
 
-    category_rows = db.execute(
-        select(SupplierFacilityFTLCategoryModel).where(
-            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
-            SupplierFacilityFTLCategoryModel.facility_id.in_(facility_ids),
+    category_rows = (
+        db.execute(
+            select(SupplierFacilityFTLCategoryModel).where(
+                SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+                SupplierFacilityFTLCategoryModel.facility_id.in_(facility_ids),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    scoped_events = db.execute(
-        select(SupplierCTEEventModel)
-        .where(
-            SupplierCTEEventModel.tenant_id == tenant_id,
-            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
-            SupplierCTEEventModel.facility_id.in_(facility_ids),
+    scoped_events = (
+        db.execute(
+            select(SupplierCTEEventModel)
+            .where(
+                SupplierCTEEventModel.tenant_id == tenant_id,
+                SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+                SupplierCTEEventModel.facility_id.in_(facility_ids),
+            )
+            .order_by(SupplierCTEEventModel.sequence_number.asc())
         )
-        .order_by(SupplierCTEEventModel.sequence_number.asc())
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
-    all_supplier_events = db.execute(
-        select(SupplierCTEEventModel)
-        .where(
-            SupplierCTEEventModel.tenant_id == tenant_id,
-            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+    all_supplier_events = (
+        db.execute(
+            select(SupplierCTEEventModel)
+            .where(
+                SupplierCTEEventModel.tenant_id == tenant_id,
+                SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+            )
+            .order_by(SupplierCTEEventModel.sequence_number.asc())
         )
-        .order_by(SupplierCTEEventModel.sequence_number.asc())
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     required_by_facility: dict[uuid_module.UUID, list[str]] = {facility.id: [] for facility in facilities}
     required_seen_by_facility: dict[uuid_module.UUID, set[str]] = {facility.id: set() for facility in facilities}
@@ -401,7 +412,9 @@ def _compute_supplier_compliance(
             required_seen_by_facility[row.facility_id].add(normalized_cte)
             required_by_facility[row.facility_id].append(normalized_cte)
 
-    events_by_facility: dict[uuid_module.UUID, list[SupplierCTEEventModel]] = {facility.id: [] for facility in facilities}
+    events_by_facility: dict[uuid_module.UUID, list[SupplierCTEEventModel]] = {
+        facility.id: [] for facility in facilities
+    }
     for event in scoped_events:
         events_by_facility[event.facility_id].append(event)
 
@@ -740,10 +753,7 @@ def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
 
     for row in rows:
         writer.writerow(
-            {
-                FDA_EXPORT_HEADERS[column]: _string_value(row.get(column, ""))
-                for column in FDA_EXPORT_COLUMN_ORDER
-            }
+            {FDA_EXPORT_HEADERS[column]: _string_value(row.get(column, "")) for column in FDA_EXPORT_COLUMN_ORDER}
         )
 
     return output.getvalue().encode("utf-8")
@@ -777,68 +787,64 @@ def _render_fda_export_xlsx_fallback(rows: list[dict[str, Any]]) -> bytes:
     header_cells = []
     for col_idx, header in enumerate(header_values, start=1):
         cell_ref = f"{_xlsx_column_name(col_idx)}1"
-        header_cells.append(
-            f"<c r=\"{cell_ref}\" t=\"inlineStr\"><is><t>{_xml_escape(header)}</t></is></c>"
-        )
-    sheet_rows.append(f"<row r=\"1\">{''.join(header_cells)}</row>")
+        header_cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{_xml_escape(header)}</t></is></c>')
+    sheet_rows.append(f'<row r="1">{"".join(header_cells)}</row>')
 
     for row_idx, row in enumerate(rows, start=2):
         data_cells: list[str] = []
         for col_idx, column in enumerate(FDA_EXPORT_COLUMN_ORDER, start=1):
             cell_ref = f"{_xlsx_column_name(col_idx)}{row_idx}"
             value = _xml_escape(_string_value(row.get(column, "")))
-            data_cells.append(
-                f"<c r=\"{cell_ref}\" t=\"inlineStr\"><is><t>{value}</t></is></c>"
-            )
-        sheet_rows.append(f"<row r=\"{row_idx}\">{''.join(data_cells)}</row>")
+            data_cells.append(f'<c r="{cell_ref}" t="inlineStr"><is><t>{value}</t></is></c>')
+        sheet_rows.append(f'<row r="{row_idx}">{"".join(data_cells)}</row>')
 
     cols_xml_parts: list[str] = []
     for idx, column in enumerate(FDA_EXPORT_COLUMN_ORDER, start=1):
         display_name = FDA_EXPORT_HEADERS[column]
         width = min(max(len(display_name) + 2, 14), 42)
-        cols_xml_parts.append(f"<col min=\"{idx}\" max=\"{idx}\" width=\"{width}\" customWidth=\"1\"/>")
+        cols_xml_parts.append(f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>')
 
     worksheet_xml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
-        "<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/>"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
         "</sheetView></sheetViews>"
-        "<sheetFormatPr defaultRowHeight=\"15\"/>"
+        '<sheetFormatPr defaultRowHeight="15"/>'
         f"<cols>{''.join(cols_xml_parts)}</cols>"
         f"<sheetData>{''.join(sheet_rows)}</sheetData>"
-        f"<autoFilter ref=\"A1:{last_column}1\"/>"
+        f'<autoFilter ref="A1:{last_column}1"/>'
         "</worksheet>"
     )
 
     workbook_xml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-        "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
-        "<sheets><sheet name=\"FDA Traceability\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="FDA Traceability" sheetId="1" r:id="rId1"/></sheets>'
         "</workbook>"
     )
 
     root_rels_xml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
-        "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
         "</Relationships>"
     )
 
     workbook_rels_xml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
-        "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
         "</Relationships>"
     )
 
     content_types_xml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-        "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
-        "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
-        "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
-        "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
-        "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
         "</Types>"
     )
 

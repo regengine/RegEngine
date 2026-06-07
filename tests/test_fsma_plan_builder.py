@@ -15,10 +15,10 @@ from shared.fsma_plan_builder import (
     export_plan_markdown,
 )
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def sample_firm():
@@ -69,13 +69,14 @@ def sample_record_location():
 # FIRM INFO TESTS
 # =============================================================================
 
+
 class TestFirmInfo:
     """Tests for FirmInfo dataclass."""
 
     def test_firm_to_dict(self, sample_firm):
         """Test firm serialization to dict."""
         result = sample_firm.to_dict()
-        
+
         assert result["name"] == "Fresh Foods Processing Co"
         assert result["firm_type"] == "processor"
         assert result["gln"] == "1234567890123"
@@ -88,7 +89,7 @@ class TestFirmInfo:
             address="456 Farm Road",
             firm_type=FirmType.GROWER,
         )
-        
+
         assert firm.gln is None
         assert firm.contact_name == ""
 
@@ -99,10 +100,16 @@ class TestFirmType:
     def test_all_firm_types(self):
         """Test all firm types are defined."""
         expected_types = [
-            "grower", "manufacturer", "processor", "packer",
-            "holder", "distributor", "retailer", "restaurant"
+            "grower",
+            "manufacturer",
+            "processor",
+            "packer",
+            "holder",
+            "distributor",
+            "retailer",
+            "restaurant",
         ]
-        
+
         for ft in expected_types:
             assert FirmType(ft)
 
@@ -111,13 +118,14 @@ class TestFirmType:
 # COMMODITY TESTS
 # =============================================================================
 
+
 class TestFTLCommodity:
     """Tests for FTLCommodity dataclass."""
 
     def test_commodity_to_dict(self, sample_commodities):
         """Test commodity serialization."""
         result = sample_commodities[0].to_dict()
-        
+
         assert result["name"] == "Romaine Lettuce"
         assert result["category"] == "Leafy Greens"
         assert "RECEIVING" in result["cte_types"]
@@ -128,7 +136,7 @@ class TestFTLCommodity:
             name="Test Product",
             category="Test Category",
         )
-        
+
         assert commodity.cte_types == []
         assert commodity.tlc_assignment_method == ""
 
@@ -137,6 +145,7 @@ class TestFTLCommodity:
 # PLAN BUILDER TESTS
 # =============================================================================
 
+
 class TestTraceabilityPlanBuilder:
     """Tests for TraceabilityPlanBuilder."""
 
@@ -144,7 +153,7 @@ class TestTraceabilityPlanBuilder:
         """Test building a plan with minimal configuration."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         assert plan.plan_id is not None
         assert plan.firm.name == "Fresh Foods Processing Co"
         assert plan.version == "1.0"
@@ -153,15 +162,15 @@ class TestTraceabilityPlanBuilder:
     def test_build_full_plan(self, sample_firm, sample_commodities, sample_record_location):
         """Test building a complete plan."""
         builder = TraceabilityPlanBuilder(sample_firm)
-        
+
         for commodity in sample_commodities:
             builder.add_commodity(commodity)
-        
+
         builder.add_record_location(sample_record_location)
         builder.set_tlc_format("FFC-{YYYYMMDD}-{SEQ}")
-        
+
         plan = builder.build()
-        
+
         assert len(plan.commodities) == 2
         assert len(plan.record_locations) == 1
         assert plan.tlc_format == "FFC-{YYYYMMDD}-{SEQ}"
@@ -170,7 +179,7 @@ class TestTraceabilityPlanBuilder:
         """Test that generated procedures reference the firm."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         assert "Fresh Foods Processing Co" in plan.receiving_procedure
         assert "Fresh Foods Processing Co" in plan.shipping_procedure
         assert "Fresh Foods Processing Co" in plan.recall_procedure
@@ -179,45 +188,44 @@ class TestTraceabilityPlanBuilder:
         """Test that generated procedures reference the address."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         assert "Salinas" in plan.receiving_procedure
 
     def test_recall_procedure_has_contact_info(self, sample_firm):
         """Test that recall procedure includes contact information."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         assert "John Smith" in plan.recall_procedure
         assert "john.smith@freshfoods.com" in plan.recall_procedure
 
     def test_builder_chaining(self, sample_firm):
         """Test that builder methods return self for chaining."""
         builder = TraceabilityPlanBuilder(sample_firm)
-        
-        result = (
-            builder
-            .add_commodity(FTLCommodity(name="Test", category="Test"))
-            .set_tlc_format("TEST-{SEQ}")
-        )
-        
+
+        result = builder.add_commodity(FTLCommodity(name="Test", category="Test")).set_tlc_format("TEST-{SEQ}")
+
         assert result is builder
 
     def test_record_system_updates_procedures(self, sample_firm):
         """Test that record system name appears in procedures."""
         builder = TraceabilityPlanBuilder(sample_firm)
-        builder.add_record_location(RecordLocation(
-            location_type="electronic",
-            system_name="CustomERP System",
-        ))
-        
+        builder.add_record_location(
+            RecordLocation(
+                location_type="electronic",
+                system_name="CustomERP System",
+            )
+        )
+
         plan = builder.build()
-        
+
         assert "CustomERP System" in plan.receiving_procedure
 
 
 # =============================================================================
 # PLAN EXPORT TESTS
 # =============================================================================
+
 
 class TestPlanExport:
     """Tests for plan export functions."""
@@ -226,9 +234,9 @@ class TestPlanExport:
         """Test JSON export contains required fields."""
         builder = TraceabilityPlanBuilder(sample_firm)
         plan = builder.build()
-        
+
         result = export_plan_json(plan)
-        
+
         assert "plan_id" in result
         assert "firm" in result
         assert "version" in result
@@ -238,14 +246,16 @@ class TestPlanExport:
     def test_export_markdown(self, sample_firm):
         """Test Markdown export is formatted correctly."""
         builder = TraceabilityPlanBuilder(sample_firm)
-        builder.add_commodity(FTLCommodity(
-            name="Lettuce",
-            category="Leafy Greens",
-        ))
+        builder.add_commodity(
+            FTLCommodity(
+                name="Lettuce",
+                category="Leafy Greens",
+            )
+        )
         plan = builder.build()
-        
+
         md = export_plan_markdown(plan)
-        
+
         # Check structure
         assert "# FSMA 204 Traceability Plan" in md
         assert "**Company:** Fresh Foods Processing Co" in md
@@ -289,6 +299,7 @@ class TestPlanExport:
 # INTEGRATION TESTS
 # =============================================================================
 
+
 class TestPlanBuilderIntegration:
     """Integration tests for complete plan generation flow."""
 
@@ -304,45 +315,51 @@ class TestPlanBuilderIntegration:
             contact_email="mgarcia@valleyfresh.com",
             contact_phone="559-555-9876",
         )
-        
+
         builder = TraceabilityPlanBuilder(firm)
-        
+
         # Add FTL commodities
-        builder.add_commodity(FTLCommodity(
-            name="Bagged Salad Mix",
-            category="Leafy Greens",
-            cte_types=["RECEIVING", "TRANSFORMATION", "PACKING", "SHIPPING"],
-            tlc_assignment_method="Date + Production Line",
-        ))
-        
-        builder.add_commodity(FTLCommodity(
-            name="Fresh-cut Melons",
-            category="Fresh-cut Fruits",
-            cte_types=["RECEIVING", "TRANSFORMATION", "PACKING", "SHIPPING"],
-        ))
-        
+        builder.add_commodity(
+            FTLCommodity(
+                name="Bagged Salad Mix",
+                category="Leafy Greens",
+                cte_types=["RECEIVING", "TRANSFORMATION", "PACKING", "SHIPPING"],
+                tlc_assignment_method="Date + Production Line",
+            )
+        )
+
+        builder.add_commodity(
+            FTLCommodity(
+                name="Fresh-cut Melons",
+                category="Fresh-cut Fruits",
+                cte_types=["RECEIVING", "TRANSFORMATION", "PACKING", "SHIPPING"],
+            )
+        )
+
         # Add record system
-        builder.add_record_location(RecordLocation(
-            location_type="electronic",
-            system_name="RegEngine Traceability",
-            backup_procedure="Continuous cloud sync with daily backup",
-            retention_period=RecordRetentionPeriod.TWO_YEARS,
-        ))
-        
+        builder.add_record_location(
+            RecordLocation(
+                location_type="electronic",
+                system_name="RegEngine Traceability",
+                backup_procedure="Continuous cloud sync with daily backup",
+                retention_period=RecordRetentionPeriod.TWO_YEARS,
+            )
+        )
+
         builder.set_tlc_format("VFP-{YYYYMMDD}-{LINE}-{SEQ}")
-        
+
         plan = builder.build()
-        
+
         # Verify plan completeness
         assert plan.firm.name == "Valley Fresh Produce"
         assert len(plan.commodities) == 2
         assert "VFP-{YYYYMMDD}-{LINE}-{SEQ}" in plan.tlc_assignment_procedure
         assert "Maria Garcia" in plan.recall_procedure
-        
+
         # Verify JSON export
         json_export = export_plan_json(plan)
         assert json_export["firm"]["gln"] == "9876543210123"
-        
+
         # Verify Markdown export
         md_export = export_plan_markdown(plan)
         assert "Valley Fresh Produce" in md_export

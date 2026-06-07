@@ -11,7 +11,6 @@ from __future__ import annotations
 import warnings
 
 import pytest
-
 from app import config as cfg
 from app.config import Settings, get_settings
 
@@ -29,10 +28,22 @@ def _clear_env(monkeypatch):
     """Strip config-relevant env vars so the default values take effect."""
     monkeypatch.setitem(cfg.Settings.model_config, "env_file", None)
     for var in (
-        "RAW_DATA_BUCKET", "PROCESSED_DATA_BUCKET", "KAFKA_BOOTSTRAP_SERVERS",
-        "KAFKA_TOPIC_NORMALIZED", "API_KEY", "REGENGINE_API_KEY", "AUTH_TEST_BYPASS_TOKEN",
-        "ENV", "ALLOWED_ORIGINS", "NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD",
-        "GROQ_API_KEY", "REDIS_URL", "GOOGLE_API_KEY", "GOOGLE_CX",
+        "RAW_DATA_BUCKET",
+        "PROCESSED_DATA_BUCKET",
+        "KAFKA_BOOTSTRAP_SERVERS",
+        "KAFKA_TOPIC_NORMALIZED",
+        "API_KEY",
+        "REGENGINE_API_KEY",
+        "AUTH_TEST_BYPASS_TOKEN",
+        "ENV",
+        "ALLOWED_ORIGINS",
+        "NEO4J_URI",
+        "NEO4J_USER",
+        "NEO4J_PASSWORD",
+        "GROQ_API_KEY",
+        "REDIS_URL",
+        "GOOGLE_API_KEY",
+        "GOOGLE_CX",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -145,12 +156,14 @@ class TestSettingsEnvOverrides:
 class TestGetSettingsCaching:
     def test_returns_settings_instance(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: False)
         result = get_settings()
         assert isinstance(result, Settings)
 
     def test_caches_same_instance(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: False)
         first = get_settings()
         second = get_settings()
@@ -158,6 +171,7 @@ class TestGetSettingsCaching:
 
     def test_cache_survives_until_clear(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: False)
         first = get_settings()
         get_settings.cache_clear()
@@ -169,6 +183,7 @@ class TestGetSettingsCaching:
 class TestGetSettingsProductionGuardrails:
     def test_missing_api_key_in_production_warns(self, _clear_env, monkeypatch, caplog):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         with warnings.catch_warnings(record=True) as recorded:
             warnings.simplefilter("always")
@@ -179,6 +194,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_missing_api_key_in_production_logs_warning(self, _clear_env, monkeypatch, caplog):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         with caplog.at_level("WARNING"):
             get_settings()
@@ -186,6 +202,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         monkeypatch.setenv("API_KEY", "valid-key")
         with warnings.catch_warnings(record=True) as recorded:
@@ -197,6 +214,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_regengine_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         monkeypatch.setenv("REGENGINE_API_KEY", "valid-key")
         with warnings.catch_warnings(record=True) as recorded:
@@ -208,6 +226,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_missing_api_key_in_dev_no_warning(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: False)
         with warnings.catch_warnings(record=True) as recorded:
             warnings.simplefilter("always")
@@ -218,6 +237,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_auth_bypass_token_forced_none_in_production(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         monkeypatch.setenv("API_KEY", "x")  # suppress the API_KEY warning
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "should-be-killed")
@@ -226,6 +246,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_auth_bypass_token_forced_none_logs_warning(self, _clear_env, monkeypatch, caplog):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         monkeypatch.setenv("API_KEY", "x")
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "should-be-killed")
@@ -235,6 +256,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_auth_bypass_preserved_in_dev(self, _clear_env, monkeypatch):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: False)
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "dev-bypass")
         s = get_settings()
@@ -242,6 +264,7 @@ class TestGetSettingsProductionGuardrails:
 
     def test_auth_bypass_none_in_production_does_not_warn(self, _clear_env, monkeypatch, caplog):
         import shared.env as shared_env
+
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
         monkeypatch.setenv("API_KEY", "x")
         # AUTH_TEST_BYPASS_TOKEN not set -> None
@@ -263,5 +286,6 @@ class TestModuleSurface:
 
     def test_settings_inherits_mixins(self):
         from shared.base_config import BaseServiceSettings, ObjectStorageMixin
+
         assert issubclass(Settings, BaseServiceSettings)
         assert issubclass(Settings, ObjectStorageMixin)

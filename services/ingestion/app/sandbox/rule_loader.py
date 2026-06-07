@@ -15,7 +15,6 @@ from shared.rules_engine import (
     RuleDefinition,
 )
 
-
 # ---------------------------------------------------------------------------
 # Demo custom business rules — showcase the paid product's rule builder
 # ---------------------------------------------------------------------------
@@ -83,21 +82,23 @@ def _build_rules_from_seeds(
 
     rules = []
     for i, seed in enumerate(seeds):
-        rules.append(RuleDefinition(
-            rule_id=f"sandbox-rule-{i:03d}",
-            rule_version=1,
-            title=seed["title"],
-            description=seed.get("description"),
-            severity=seed["severity"],
-            category=seed["category"],
-            applicability_conditions=seed.get("applicability_conditions", {}),
-            citation_reference=seed.get("citation_reference"),
-            effective_date=datetime.now(timezone.utc).date(),
-            retired_date=None,
-            evaluation_logic=seed["evaluation_logic"],
-            failure_reason_template=seed["failure_reason_template"],
-            remediation_suggestion=seed.get("remediation_suggestion"),
-        ))
+        rules.append(
+            RuleDefinition(
+                rule_id=f"sandbox-rule-{i:03d}",
+                rule_version=1,
+                title=seed["title"],
+                description=seed.get("description"),
+                severity=seed["severity"],
+                category=seed["category"],
+                applicability_conditions=seed.get("applicability_conditions", {}),
+                citation_reference=seed.get("citation_reference"),
+                effective_date=datetime.now(timezone.utc).date(),
+                retired_date=None,
+                evaluation_logic=seed["evaluation_logic"],
+                failure_reason_template=seed["failure_reason_template"],
+                remediation_suggestion=seed.get("remediation_suggestion"),
+            )
+        )
     return rules
 
 

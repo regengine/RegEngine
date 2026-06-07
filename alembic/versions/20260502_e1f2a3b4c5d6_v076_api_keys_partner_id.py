@@ -18,11 +18,12 @@ direct customer keys) and a full index would be mostly empty.
 
 Reversible.
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision: str = "e1f2a3b4c5d6"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "d0e1f2a3b4c5"
@@ -33,9 +34,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def _api_keys_exists() -> bool:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        return bool(
-            bind.execute(sa.text("SELECT to_regclass('api_keys') IS NOT NULL")).scalar()
-        )
+        return bool(bind.execute(sa.text("SELECT to_regclass('api_keys') IS NOT NULL")).scalar())
 
     return sa.inspect(bind).has_table("api_keys")
 

@@ -22,17 +22,18 @@ Usage:
   python scripts/regctl/tenant.py reset <tenant-id>
 """
 
-import click
+import os
 import re
 import sys
-import os
-from pathlib import Path
-from uuid import uuid4, UUID
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+from uuid import UUID, uuid4
+
+import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -42,7 +43,7 @@ from services.graph.app.neo4j_utils import Neo4jClient
 
 # Allowlist: only alphanumeric + underscore allowed in schema/database names.
 # Prevents SQL/Cypher injection when names are interpolated into DDL statements.
-_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z0-9_]+$')
+_SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 
 
 def _validate_identifier(name: str, label: str = "identifier") -> str:
@@ -59,12 +60,7 @@ class TenantManager:
         """Initialize tenant manager."""
         self.tenants_db_file = str(REPO_ROOT / ".tenants.db")
 
-    def create_tenant(
-        self,
-        name: str,
-        demo_mode: bool = False,
-        framework: str = "nist"
-    ) -> dict:
+    def create_tenant(self, name: str, demo_mode: bool = False, framework: str = "nist") -> dict:
         """
         Create a new tenant with complete infrastructure.
 
@@ -110,14 +106,14 @@ class TenantManager:
         click.echo("         ✓ Tenant record saved")
 
         click.echo(f"\n✅ Tenant created successfully!")
-        click.echo(f"\n{'='*60}")
+        click.echo(f"\n{'=' * 60}")
         click.echo(f"Tenant Details")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
         click.echo(f"Name:       {name}")
         click.echo(f"Tenant ID:  {tenant_id}")
         click.echo(f"API Key:    {api_key}")
         click.echo(f"Framework:  {framework.upper() if demo_mode else 'N/A'}")
-        click.echo(f"{'='*60}")
+        click.echo(f"{'=' * 60}")
 
         if demo_mode:
             click.echo(f"\n🎯 Next Steps:")
@@ -136,13 +132,14 @@ class TenantManager:
     def list_tenants(self):
         """List all tenants."""
         console = Console()
-        
+
         if not os.path.exists(self.tenants_db_file):
             console.print("[yellow]No tenants found.[/yellow]")
             return []
 
-        with open(self.tenants_db_file, 'r') as f:
+        with open(self.tenants_db_file, "r") as f:
             import json
+
             tenants = [json.loads(line) for line in f if line.strip()]
 
         if not tenants:
@@ -158,17 +155,12 @@ class TenantManager:
         for tenant in tenants:
             # Format date nicely
             try:
-                created_dt = datetime.fromisoformat(tenant['created_at'])
+                created_dt = datetime.fromisoformat(tenant["created_at"])
                 created_str = created_dt.strftime("%Y-%m-%d %H:%M")
             except (ValueError, KeyError):
-                created_str = tenant.get('created_at', 'N/A')
+                created_str = tenant.get("created_at", "N/A")
 
-            table.add_row(
-                tenant['name'],
-                tenant['tenant_id'],
-                tenant['api_key'],
-                created_str
-            )
+            table.add_row(tenant["name"], tenant["tenant_id"], tenant["api_key"], created_str)
 
         console.print(table)
         console.print(f"[dim]Total: {len(tenants)} tenant(s)[/dim]")
@@ -214,7 +206,7 @@ class TenantManager:
             click.echo(f"❌ Tenant not found: {tenant_id}")
             return
 
-        name = tenant_info['name']
+        name = tenant_info["name"]
 
         click.echo(f"\n🔄 Resetting tenant: {name}")
 
@@ -229,16 +221,15 @@ class TenantManager:
 
     def _create_postgres_schema(self, tenant_id: UUID):
         """Create PostgreSQL schema for tenant."""
-        from sqlalchemy import create_engine, text
         import os
+
+        from sqlalchemy import create_engine, text
 
         database_url = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
         try:
             engine = create_engine(database_url, pool_pre_ping=True)
-            schema_name = _validate_identifier(
-                f"tenant_{str(tenant_id).replace('-', '_')}", "schema name"
-            )
+            schema_name = _validate_identifier(f"tenant_{str(tenant_id).replace('-', '_')}", "schema name")
 
             with engine.connect() as conn:
                 # Create schema
@@ -257,9 +248,7 @@ class TenantManager:
     def _create_neo4j_database(self, tenant_id: UUID):
         """Create Neo4j database for tenant."""
         try:
-            db_name = _validate_identifier(
-                f"reg_tenant_{tenant_id}".replace('-', '_'), "Neo4j database name"
-            )
+            db_name = _validate_identifier(f"reg_tenant_{tenant_id}".replace("-", "_"), "Neo4j database name")
 
             # Note: This requires Neo4j Enterprise and admin access
             # In demo mode, this may fail - that's okay
@@ -296,8 +285,10 @@ class TenantManager:
                 [
                     sys.executable,
                     str(REPO_ROOT / "scripts/demo/load_demo_data.py"),
-                    "--tenant-id", str(tenant_id),
-                    "--framework", framework,
+                    "--tenant-id",
+                    str(tenant_id),
+                    "--framework",
+                    framework,
                 ],
                 check=True,
                 capture_output=True,
@@ -320,15 +311,13 @@ class TenantManager:
         }
 
         # Append to tenants database file
-        with open(self.tenants_db_file, 'a') as f:
-            f.write(json.dumps(record) + '\n')
+        with open(self.tenants_db_file, "a") as f:
+            f.write(json.dumps(record) + "\n")
 
     def _delete_neo4j_database(self, tenant_id: UUID):
         """Delete Neo4j database for tenant."""
         try:
-            db_name = _validate_identifier(
-                f"reg_tenant_{tenant_id}".replace('-', '_'), "Neo4j database name"
-            )
+            db_name = _validate_identifier(f"reg_tenant_{tenant_id}".replace("-", "_"), "Neo4j database name")
 
             # Note: This requires Neo4j Enterprise
             try:
@@ -341,16 +330,15 @@ class TenantManager:
 
     def _delete_postgres_schema(self, tenant_id: UUID):
         """Delete PostgreSQL schema for tenant."""
-        from sqlalchemy import create_engine, text
         import os
+
+        from sqlalchemy import create_engine, text
 
         database_url = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
         try:
             engine = create_engine(database_url, pool_pre_ping=True)
-            schema_name = _validate_identifier(
-                f"tenant_{str(tenant_id).replace('-', '_')}", "schema name"
-            )
+            schema_name = _validate_identifier(f"tenant_{str(tenant_id).replace('-', '_')}", "schema name")
 
             with engine.connect() as conn:
                 # Drop schema and all objects in it
@@ -370,16 +358,16 @@ class TenantManager:
             return
 
         # Read all tenants
-        with open(self.tenants_db_file, 'r') as f:
+        with open(self.tenants_db_file, "r") as f:
             tenants = [json.loads(line) for line in f if line.strip()]
 
         # Filter out the deleted tenant
-        tenants = [t for t in tenants if t['tenant_id'] != str(tenant_id)]
+        tenants = [t for t in tenants if t["tenant_id"] != str(tenant_id)]
 
         # Rewrite file
-        with open(self.tenants_db_file, 'w') as f:
+        with open(self.tenants_db_file, "w") as f:
             for tenant in tenants:
-                f.write(json.dumps(tenant) + '\n')
+                f.write(json.dumps(tenant) + "\n")
 
     def _get_tenant_info(self, tenant_id: UUID) -> Optional[dict]:
         """Get tenant information."""
@@ -388,17 +376,18 @@ class TenantManager:
         if not os.path.exists(self.tenants_db_file):
             return None
 
-        with open(self.tenants_db_file, 'r') as f:
+        with open(self.tenants_db_file, "r") as f:
             tenants = [json.loads(line) for line in f if line.strip()]
 
         for tenant in tenants:
-            if tenant['tenant_id'] == str(tenant_id):
+            if tenant["tenant_id"] == str(tenant_id):
                 return tenant
 
         return None
 
 
 # CLI Commands
+
 
 @click.group()
 def tenant():
@@ -407,13 +396,13 @@ def tenant():
 
 
 @tenant.command()
-@click.argument('name')
-@click.option('--demo-mode', is_flag=True, help='Load demo data')
+@click.argument("name")
+@click.option("--demo-mode", is_flag=True, help="Load demo data")
 @click.option(
-    '--framework',
-    type=click.Choice(['nist', 'soc2', 'iso27001']),
-    default='nist',
-    help='Control framework for demo data'
+    "--framework",
+    type=click.Choice(["nist", "soc2", "iso27001"]),
+    default="nist",
+    help="Control framework for demo data",
 )
 def create(name: str, demo_mode: bool, framework: str):
     """Create a new tenant."""
@@ -429,8 +418,8 @@ def list():
 
 
 @tenant.command()
-@click.argument('tenant_id')
-@click.confirmation_option(prompt='Are you sure you want to delete this tenant?')
+@click.argument("tenant_id")
+@click.confirmation_option(prompt="Are you sure you want to delete this tenant?")
 def delete(tenant_id: str):
     """Delete a tenant."""
     try:
@@ -444,12 +433,12 @@ def delete(tenant_id: str):
 
 
 @tenant.command()
-@click.argument('tenant_id')
+@click.argument("tenant_id")
 @click.option(
-    '--framework',
-    type=click.Choice(['nist', 'soc2', 'iso27001']),
-    default='nist',
-    help='Control framework for new demo data'
+    "--framework",
+    type=click.Choice(["nist", "soc2", "iso27001"]),
+    default="nist",
+    help="Control framework for new demo data",
 )
 def reset(tenant_id: str, framework: str):
     """Reset a tenant (delete and recreate with demo data)."""
@@ -463,5 +452,5 @@ def reset(tenant_id: str, framework: str):
     manager.reset_tenant(tid, framework)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     tenant()

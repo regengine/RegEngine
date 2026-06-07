@@ -6,8 +6,8 @@ protect decorator, and the circuit breaker registry.
 """
 
 import time
-import pytest
 
+import pytest
 from app.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerRegistry,
@@ -86,9 +86,7 @@ class TestCircuitBreakerTransitions:
         assert cb.state == CircuitState.HALF_OPEN
 
     def test_half_open_closes_after_enough_successes(self):
-        cb = CircuitBreaker(
-            name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=2
-        )
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=2)
         cb.record_failure()
         time.sleep(0.01)
         cb.can_execute()  # transitions to half-open
@@ -107,9 +105,7 @@ class TestCircuitBreakerTransitions:
         assert cb.state == CircuitState.OPEN
 
     def test_success_resets_failure_count_after_close(self):
-        cb = CircuitBreaker(
-            name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=1
-        )
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=1)
         cb.record_failure()
         time.sleep(0.01)
         cb.can_execute()

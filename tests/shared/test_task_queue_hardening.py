@@ -28,7 +28,6 @@ if str(_ROOT) not in sys.path:
 
 from server.workers import task_processor  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # #1164 — enqueue_task idempotency key
 # ---------------------------------------------------------------------------
@@ -224,12 +223,12 @@ class TestClaimTaskRespectsBackoff:
         db = MagicMock()
         # Simulate a real claim — 6 columns incl. timeout.
         db.execute.return_value.fetchone.return_value = (
-            42,                   # id
-            "nlp_extraction",     # task_type
-            {"doc": "x"},         # payload (dict)
-            1,                    # attempts
-            3,                    # max_attempts
-            180,                  # visibility_timeout_seconds
+            42,  # id
+            "nlp_extraction",  # task_type
+            {"doc": "x"},  # payload (dict)
+            1,  # attempts
+            3,  # max_attempts
+            180,  # visibility_timeout_seconds
         )
         claimed = task_processor._claim_task(db)
         assert claimed is not None
@@ -259,8 +258,7 @@ class TestVisibilityTimeouts:
         # timeout, otherwise a new task type silently inherits DEFAULT.
         for task_type in task_processor.TASK_HANDLERS:
             assert task_type in task_processor.TASK_TIMEOUTS_SECONDS, (
-                f"#1210: task type {task_type!r} must have an explicit "
-                "visibility timeout in TASK_TIMEOUTS_SECONDS"
+                f"#1210: task type {task_type!r} must have an explicit visibility timeout in TASK_TIMEOUTS_SECONDS"
             )
 
     def test_default_timeout_is_conservative(self):
@@ -281,9 +279,9 @@ class TestHeartbeatExtension:
         task_processor._heartbeat_extend(db, task_id=123, timeout_seconds=300)
 
         sql = [str(call.args[0]).lower() for call in db.execute.call_args_list if call.args]
-        assert any(
-            "update" in s and "locked_until" in s and "locked_by" in s for s in sql
-        ), "_heartbeat_extend must UPDATE locked_until for the task id"
+        assert any("update" in s and "locked_until" in s and "locked_by" in s for s in sql), (
+            "_heartbeat_extend must UPDATE locked_until for the task id"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +299,5 @@ class TestPollInterval:
         DB in idle windows.
         """
         assert task_processor.POLL_INTERVAL <= 1.0, (
-            f"#1185: POLL_INTERVAL default must be sub-second; "
-            f"got {task_processor.POLL_INTERVAL}"
+            f"#1185: POLL_INTERVAL default must be sub-second; got {task_processor.POLL_INTERVAL}"
         )

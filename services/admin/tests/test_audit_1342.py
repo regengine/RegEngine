@@ -34,7 +34,6 @@ pytest.importorskip("sqlalchemy")
 
 from app.audit import AuditLogger  # noqa: E402
 
-
 TENANT = UUID("00000000-0000-0000-0000-000000000099")
 ACTOR = UUID("00000000-0000-0000-0000-000000000001")
 
@@ -73,7 +72,6 @@ def _mk_session(*, prev_hash: str | None = None, add_side_effect=None):
 
 
 class TestUserAgentTruncation:
-
     def test_long_user_agent_truncated_to_512(self):
         """A user-agent > 512 chars must be truncated before DB insert
         to prevent storage bloat (line 155-156)."""
@@ -168,7 +166,6 @@ class TestUserAgentTruncation:
 
 
 class TestLogEventExceptionFallthrough:
-
     @pytest.mark.parametrize(
         "exc",
         [
@@ -201,6 +198,7 @@ class TestLogEventExceptionFallthrough:
     def test_unhandled_exception_propagates(self):
         """Exceptions NOT in the catch list must propagate — pins that
         we didn't accidentally widen the catch to a bare ``except``."""
+
         class _BespokeError(Exception):
             pass
 
@@ -222,7 +220,6 @@ class TestLogEventExceptionFallthrough:
 
 
 class TestLogEventHappyPath:
-
     def test_returns_new_entry_id(self):
         session = _mk_session(prev_hash=None)
         new_id = AuditLogger.log_event(

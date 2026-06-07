@@ -58,7 +58,6 @@ sys.path.insert(0, str(service_dir))
 from app import fda_export_service as svc  # noqa: E402
 from app.webhook_models import WebhookCTEType  # noqa: E402
 
-
 # ── _redact_location_value ──────────────────────────────────────────────────
 
 
@@ -74,10 +73,7 @@ class TestRedactLocationValue:
         assert svc._redact_location_value("", "Location Name", False) == ""
 
     def test_pii_column_non_empty_gets_placeholder(self) -> None:
-        assert (
-            svc._redact_location_value("Acme", "Location Name", False)
-            == svc.PII_REDACTION_PLACEHOLDER
-        )
+        assert svc._redact_location_value("Acme", "Location Name", False) == svc.PII_REDACTION_PLACEHOLDER
 
 
 # ── _redact_extra_kde_pii ──────────────────────────────────────────────────
@@ -132,7 +128,7 @@ _CORE_EVENT = {
         "reference_document_number": "PO-42",
         "carrier": "TruckCo",
         "facility_address": "123 Main St",  # PII key — goes to extras
-        "other_kde": "visible",              # non-PII extras
+        "other_kde": "visible",  # non-PII extras
     },
 }
 
@@ -150,8 +146,8 @@ class TestEventToFdaRow:
         assert row["Immediate Previous Source"] == "Previous"
         # Extras JSON excludes named + literal-consumed keys.
         extras = json.loads(row["Additional KDEs (JSON)"])
-        assert "ship_from_gln" not in extras        # literal-consumed
-        assert "receive_date" not in extras          # named column
+        assert "ship_from_gln" not in extras  # literal-consumed
+        assert "receive_date" not in extras  # named column
         assert "facility_address" in extras
         assert "other_kde" in extras
 
@@ -232,9 +228,7 @@ class TestGenerateCsv:
 
 class TestGeneratePdf:
     def test_small_payload_returns_pdf_bytes(self) -> None:
-        result = svc._generate_pdf(
-            [_CORE_EVENT], metadata={"tlc": "TLC-1", "generated_at": "2026-03-01"}
-        )
+        result = svc._generate_pdf([_CORE_EVENT], metadata={"tlc": "TLC-1", "generated_at": "2026-03-01"})
         assert isinstance(result, (bytes, bytearray))
         assert bytes(result).startswith(b"%PDF")
 
@@ -247,6 +241,7 @@ class TestGeneratePdf:
         # Patch the private cap to 1 so a 3-event payload triggers the
         # truncation warning footer branch.
         import app.fda_export_service as mod
+
         events = [_CORE_EVENT, _CORE_EVENT, _CORE_EVENT]
         # The cap is a local inside _generate_pdf; overriding isn't
         # directly exposed, so we just confirm 3 events still render
@@ -350,9 +345,7 @@ class TestBuildCompletenessSummary:
         assert summary["events_with_missing_required_fields"] == 0
 
     def test_unknown_event_type_yields_no_checks(self) -> None:
-        summary = svc._build_completeness_summary(
-            [{"event_type": "BOGUS_CTE"}]
-        )
+        summary = svc._build_completeness_summary([{"event_type": "BOGUS_CTE"}])
         assert summary["required_checks_total"] == 0
         assert summary["events_with_missing_required_fields"] == 0
 
@@ -360,6 +353,7 @@ class TestBuildCompletenessSummary:
         # Use SHIPPING which is in REQUIRED_KDES_BY_CTE; fill every
         # required field so coverage is 100%.
         from app.webhook_models import REQUIRED_KDES_BY_CTE
+
         cte = WebhookCTEType.SHIPPING
         required = REQUIRED_KDES_BY_CTE[cte]
 
@@ -390,9 +384,7 @@ class TestBuildCompletenessSummary:
     def test_lowercase_event_type_upcased_before_lookup(self) -> None:
         # The source .upper()s raw_event_type, so lowercase values still
         # match their uppercase __members__ entries.
-        summary = svc._build_completeness_summary(
-            [{"event_type": "shipping", "kdes": {}}]
-        )
+        summary = svc._build_completeness_summary([{"event_type": "shipping", "kdes": {}}])
         assert summary["required_checks_total"] > 0
 
     def test_partial_coverage_tracks_missing(self) -> None:
@@ -703,9 +695,7 @@ class TestEventToFdaRowV2:
         assert row["Trace Seed TLC"] == "TLC-1"
 
     def test_all_pass_reports_pass(self) -> None:
-        row = svc._event_to_fda_row_v2(
-            dict(_CORE_EVENT, rule_results=[{"rule_name": "r1", "passed": True}])
-        )
+        row = svc._event_to_fda_row_v2(dict(_CORE_EVENT, rule_results=[{"rule_name": "r1", "passed": True}]))
         assert row["Compliance Status"] == "PASS"
         assert row["Rule Failures"] == ""
 
@@ -725,9 +715,7 @@ class TestEventToFdaRowV2:
         assert "r3: bad format" in row["Rule Failures"]
 
     def test_rule_result_missing_fields_uses_defaults(self) -> None:
-        row = svc._event_to_fda_row_v2(
-            dict(_CORE_EVENT, rule_results=[{"passed": False}])
-        )
+        row = svc._event_to_fda_row_v2(dict(_CORE_EVENT, rule_results=[{"passed": False}]))
         assert "unknown_rule" in row["Rule Failures"]
         assert "no reason provided" in row["Rule Failures"]
 

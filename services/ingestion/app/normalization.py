@@ -7,7 +7,7 @@ import io
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dateutil import parser
 
@@ -38,13 +38,9 @@ def normalize_document(
 
     title = raw_payload.get("title") or raw_payload.get("headline")
     jurisdiction = raw_payload.get("jurisdiction") or raw_payload.get("agency")
-    retrieved_at = _parse_datetime(raw_payload.get("publication_date")) or datetime.now(
-        timezone.utc
-    )
+    retrieved_at = _parse_datetime(raw_payload.get("publication_date")) or datetime.now(timezone.utc)
 
-    document_id = raw_payload.get("document_id") or _derive_document_id(
-        source_url, extracted_text
-    )
+    document_id = raw_payload.get("document_id") or _derive_document_id(source_url, extracted_text)
 
     normalized = {
         "document_id": document_id,
@@ -72,13 +68,9 @@ def _derive_document_id(source_url: str, text: str) -> str:
 
 def _content_hash(normalized_payload: Dict[str, Any]) -> str:
     serializable = {
-        key: _serialize_datetime(value)
-        for key, value in normalized_payload.items()
-        if key != "content_sha256"
+        key: _serialize_datetime(value) for key, value in normalized_payload.items() if key != "content_sha256"
     }
-    payload_bytes = json.dumps(serializable, sort_keys=True, default=str).encode(
-        "utf-8"
-    )
+    payload_bytes = json.dumps(serializable, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(payload_bytes).hexdigest()
 
 
@@ -98,19 +90,19 @@ def _extract_text(
     content_type: Optional[str],
 ) -> Tuple[str, TextExtractionMetadata | None, List[PositionMapEntry] | None]:
     """Extract text from document using format-specific extractors."""
-    
+
     # Import format extractors
     from .format_extractors import (
-        extract_from_html,
-        extract_from_xml,
+        detect_format,
         extract_from_csv,
-        extract_from_excel,
         extract_from_docx,
         extract_from_edi,
-        detect_format,
+        extract_from_excel,
+        extract_from_html,
+        extract_from_xml,
         is_edi_content,
     )
-    
+
     # First try to extract from JSON payload if available
     if raw_payload:
         candidate_text = _extract_text_from_payload(raw_payload)
@@ -126,40 +118,38 @@ def _extract_text(
             ]
             return (
                 candidate_text,
-                TextExtractionMetadata(
-                    engine="payload", confidence_mean=1.0, confidence_std=0.0
-                ),
+                TextExtractionMetadata(engine="payload", confidence_mean=1.0, confidence_std=0.0),
                 position_map,
             )
 
     # Detect format and use appropriate extractor
     detected_format = detect_format(content_type, raw_bytes)
     ct_lower = (content_type or "").lower()
-    
+
     # HTML extraction
     if detected_format == "html" or "html" in ct_lower:
         return extract_from_html(raw_bytes)
-    
+
     # XML extraction (but not HTML)
     if detected_format == "xml" or ("xml" in ct_lower and "html" not in ct_lower):
         return extract_from_xml(raw_bytes)
-    
+
     # CSV extraction
     if detected_format == "csv" or "csv" in ct_lower or "comma-separated" in ct_lower:
         return extract_from_csv(raw_bytes)
-    
+
     # Excel extraction
     if detected_format == "excel" or any(x in ct_lower for x in ["spreadsheet", "excel", "xlsx", "xls"]):
         return extract_from_excel(raw_bytes)
-    
+
     # Word DOCX extraction
     if detected_format == "docx" or any(x in ct_lower for x in ["wordprocessing", "msword", "docx"]):
         return extract_from_docx(raw_bytes)
-    
+
     # EDI extraction
     if detected_format == "edi" or "edi" in ct_lower or is_edi_content(raw_bytes):
         return extract_from_edi(raw_bytes)
-    
+
     # PDF extraction (existing logic)
     if detected_format == "pdf" or "pdf" in ct_lower:
         text, meta, position_map = _extract_from_pdf(raw_bytes)
@@ -179,21 +169,15 @@ def _extract_text(
         ]
         return (
             text,
-            TextExtractionMetadata(
-                engine="bytes", confidence_mean=0.5, confidence_std=0.3
-            ),
+            TextExtractionMetadata(engine="bytes", confidence_mean=0.5, confidence_std=0.3),
             position_map,
         )
 
     return (
         "",
-        TextExtractionMetadata(
-            engine="unknown", confidence_mean=0.0, confidence_std=1.0
-        ),
+        TextExtractionMetadata(engine="unknown", confidence_mean=0.0, confidence_std=1.0),
         [],
     )
-
-
 
 
 def _extract_text_from_payload(payload: dict[str, Any]) -> str:
@@ -235,9 +219,7 @@ def _extract_from_pdf(
         ]
         return (
             text,
-            TextExtractionMetadata(
-                engine="pdfminer", confidence_mean=0.9, confidence_std=0.05
-            ),
+            TextExtractionMetadata(engine="pdfminer", confidence_mean=0.9, confidence_std=0.05),
             position_map,
         )
 
@@ -249,9 +231,7 @@ def _extract_from_pdf(
         logger.warning("tesseract_missing")
         return (
             "",
-            TextExtractionMetadata(
-                engine="unavailable", confidence_mean=0.0, confidence_std=1.0
-            ),
+            TextExtractionMetadata(engine="unavailable", confidence_mean=0.0, confidence_std=1.0),
             [],
         )
 
@@ -262,9 +242,7 @@ def _extract_from_pdf(
         logger.warning("pdf_rasterization_failed", exc_info=exc)
         return (
             "",
-            TextExtractionMetadata(
-                engine="tesseract", confidence_mean=0.0, confidence_std=1.0
-            ),
+            TextExtractionMetadata(engine="tesseract", confidence_mean=0.0, confidence_std=1.0),
             [],
         )
 

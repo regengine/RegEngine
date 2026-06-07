@@ -4,7 +4,6 @@ import uuid
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-
 from shared.auth import require_api_key
 from shared.middleware import get_current_tenant_id
 

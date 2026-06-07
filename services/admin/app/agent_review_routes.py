@@ -7,8 +7,6 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy.orm import Session
-
 from shared.agent_operator_view import (
     AgentArtifactTimelineResponse,
     AgentReviewDecisionRequest,
@@ -21,11 +19,11 @@ from shared.agent_operator_view import (
     upsert_agent_artifact_review,
 )
 from shared.tenant_context import set_tenant_guc
+from sqlalchemy.orm import Session
 
 from .dependencies import get_current_user, get_session
 from .models import TenantContext
 from .sqlalchemy_models import UserModel
-
 
 router = APIRouter(prefix="/agent-reviews", tags=["agent-reviews"])
 

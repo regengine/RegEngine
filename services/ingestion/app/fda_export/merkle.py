@@ -20,8 +20,8 @@ async def get_merkle_root_handler(tenant_id: str) -> dict:
     """
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
@@ -61,8 +61,8 @@ async def get_merkle_proof_handler(tenant_id: str, event_id: str) -> dict:
     """
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)

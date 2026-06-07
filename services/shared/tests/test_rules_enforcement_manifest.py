@@ -20,9 +20,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from shared.rules.enforcement import ENFORCEMENT_AWARE_CALL_SITES
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -56,8 +54,7 @@ def _files_importing_should_reject() -> set[str]:
             except OSError:
                 continue
             if (
-                "from shared.rules.enforcement import" in text
-                or "from .enforcement import" in text
+                "from shared.rules.enforcement import" in text or "from .enforcement import" in text
             ) and "should_reject" in text:
                 paths.append(str(path))
 

@@ -12,6 +12,7 @@ This suite pins the fail-closed contract:
   * non-UUID X-Tenant-ID  → 401  E_TENANT_HEADER_INVALID
   * valid-UUID tenant     → APIKey with that tenant_id (regression guard)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +23,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
-
 
 # ---- Load services.shared.auth without needing package __init__ ----
 _shared_dir = Path(__file__).resolve().parent.parent
@@ -83,6 +83,7 @@ def _call(request, api_key: str | None):
 
 
 # ---- Tests ----
+
 
 class TestPresharedMasterKeyTenantRequired:
     """Preshared master-key auth must fail closed without a valid X-Tenant-ID."""

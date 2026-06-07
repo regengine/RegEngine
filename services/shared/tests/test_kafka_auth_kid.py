@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import Iterator
 
 import pytest
-
 from shared.kafka_auth import (
     BODY_FIELD_PRODUCER_SERVICE,
     ENV_SIGNING_KEY,
@@ -31,7 +30,6 @@ from shared.kafka_auth import (
     sign_event,
     verify_event,
 )
-
 
 # Per-service env vars under test. Mirrors the maps in kafka_auth.py.
 ENV_NLP = "KAFKA_SIGNING_KEY_NLP"

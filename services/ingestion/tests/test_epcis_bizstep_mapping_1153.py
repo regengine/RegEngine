@@ -31,24 +31,25 @@ from services.ingestion.app.epcis.normalization import (
     _normalize_epcis_to_cte,
 )
 
-
 # The seven FSMA 204 Critical Tracking Events (CTEs) every compliant
 # traceability graph must be able to represent. A fix for #1153 that
 # omits any of these from the map would silently drop that CTE class
 # from recall lookback — a direct FDA 24-hour response failure.
-_FSMA_204_CTES = frozenset({
-    "growing",
-    "harvesting",
-    "cooling",
-    "initial_packing",
-    "first_land_based_receiving",
-    "shipping",
-    "receiving",
-    # transformation is the eighth tracked event type — not one of the
-    # seven CTEs under the regulation but required by the canonical
-    # event schema and FSMA reconciliation paths.
-    "transformation",
-})
+_FSMA_204_CTES = frozenset(
+    {
+        "growing",
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        # transformation is the eighth tracked event type — not one of the
+        # seven CTEs under the regulation but required by the canonical
+        # event schema and FSMA reconciliation paths.
+        "transformation",
+    }
+)
 
 
 def _event_with_bizstep(biz_step: str) -> dict:
@@ -90,8 +91,7 @@ class TestEveryFsmaCteIsMapped_Issue1153:
         'growing' CTE. This keeps that one pinned even if someone
         regresses the broader set."""
         assert "growing" in set(_EVENT_TYPE_MAP.values()), (
-            "#1153: the 'growing' CTE must be reachable from at least "
-            "one bizStep URI."
+            "#1153: the 'growing' CTE must be reachable from at least one bizStep URI."
         )
 
 
@@ -111,8 +111,7 @@ class TestEveryMappedBizStepRoundTrips_Issue1153:
         event = _event_with_bizstep(biz_step)
         normalized = _normalize_epcis_to_cte(event)
         assert normalized["event_type"] == expected_cte, (
-            f"#1153: bizStep {biz_step!r} should map to {expected_cte!r}, "
-            f"got {normalized['event_type']!r}"
+            f"#1153: bizStep {biz_step!r} should map to {expected_cte!r}, got {normalized['event_type']!r}"
         )
 
     def test_mapped_bizsteps_carry_epcis_biz_step_field(self):

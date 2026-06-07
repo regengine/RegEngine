@@ -14,15 +14,14 @@ import time
 from functools import wraps
 from typing import Optional
 
-from prometheus_client import Counter, Gauge, Histogram, Info
-from prometheus_client import REGISTRY
-
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram, Info
 
 # ============================================================================
 # SAFE METRIC CREATION HELPERS
 # ============================================================================
 # These prevent ValueError: Duplicated timeseries when modules are
 # re-imported during test collection.
+
 
 def _get_or_create_histogram(name, documentation, labelnames=(), **kwargs):
     if name in REGISTRY._names_to_collectors:
@@ -77,9 +76,7 @@ TRACE_QUERIES_TOTAL = _get_or_create_counter(
     ["direction", "status"],
 )
 
-TRACE_MAX_DEPTH = _get_or_create_gauge(
-    "fsma_trace_max_depth", "Maximum depth reached in trace queries", ["direction"]
-)
+TRACE_MAX_DEPTH = _get_or_create_gauge("fsma_trace_max_depth", "Maximum depth reached in trace queries", ["direction"])
 
 TRACE_FACILITIES_FOUND = _get_or_create_counter(
     "fsma_trace_facilities_total",
@@ -119,9 +116,7 @@ GAPS_TOTAL = _get_or_create_gauge(
     ["gap_type"],
 )
 
-GAP_RATE = _get_or_create_gauge(
-    "fsma_gap_rate", "Percentage of events with missing KDEs", ["event_type"]
-)
+GAP_RATE = _get_or_create_gauge("fsma_gap_rate", "Percentage of events with missing KDEs", ["event_type"])
 
 ORPHANS_TOTAL = _get_or_create_gauge(
     "fsma_orphans_total",
@@ -175,13 +170,9 @@ LOTS_TOTAL = _get_or_create_gauge(
     "Total lots in the traceability graph",
 )
 
-EVENTS_TOTAL = _get_or_create_gauge(
-    "fsma_events_total", "Total trace events in the graph", ["event_type"]
-)
+EVENTS_TOTAL = _get_or_create_gauge("fsma_events_total", "Total trace events in the graph", ["event_type"])
 
-FACILITIES_TOTAL = _get_or_create_gauge(
-    "fsma_facilities_total", "Total facilities in the graph", ["facility_type"]
-)
+FACILITIES_TOTAL = _get_or_create_gauge("fsma_facilities_total", "Total facilities in the graph", ["facility_type"])
 
 BROKEN_CHAINS_TOTAL = _get_or_create_gauge(
     "fsma_broken_chains_total",
@@ -248,9 +239,7 @@ def record_trace_query(
     facility_count: int,
 ):
     """Record metrics for a trace query execution."""
-    TRACE_QUERY_LATENCY.labels(direction=direction, status=status).observe(
-        duration_seconds
-    )
+    TRACE_QUERY_LATENCY.labels(direction=direction, status=status).observe(duration_seconds)
     TRACE_QUERIES_TOTAL.labels(direction=direction, status=status).inc()
     TRACE_MAX_DEPTH.labels(direction=direction).set(hop_count)
     TRACE_FACILITIES_FOUND.labels(direction=direction).inc(facility_count)
@@ -262,9 +251,7 @@ def record_recall_export(export_type: str, duration_seconds: float, status: str)
     RECALL_EXPORTS_TOTAL.labels(export_type=export_type, status=status).inc()
 
 
-def update_gap_metrics(
-    missing_date: int, missing_lot: int, total_events: int, gap_rates: dict
-):
+def update_gap_metrics(missing_date: int, missing_lot: int, total_events: int, gap_rates: dict):
     """Update gap-related gauges."""
     GAPS_TOTAL.labels(gap_type="missing_date").set(missing_date)
     GAPS_TOTAL.labels(gap_type="missing_lot").set(missing_lot)
@@ -287,9 +274,7 @@ def update_orphan_metrics(
         ORPHAN_QUANTITY_AT_RISK.labels(unit_of_measure=unit or "unknown").set(qty)
 
 
-def update_completeness_metrics(
-    overall_rate: float, by_type: dict, confidence_by_type: dict
-):
+def update_completeness_metrics(overall_rate: float, by_type: dict, confidence_by_type: dict):
     """Update KDE completeness gauges."""
     KDE_COMPLETENESS_RATE.set(overall_rate)
 
@@ -300,9 +285,7 @@ def update_completeness_metrics(
         EXTRACTION_CONFIDENCE_AVG.labels(event_type=event_type).set(confidence)
 
 
-def update_graph_stats(
-    lots_count: int, events_by_type: dict, facilities_by_type: dict, broken_chains: int
-):
+def update_graph_stats(lots_count: int, events_by_type: dict, facilities_by_type: dict, broken_chains: int):
     """Update graph statistics gauges."""
     LOTS_TOTAL.set(lots_count)
     BROKEN_CHAINS_TOTAL.set(broken_chains)
@@ -327,9 +310,7 @@ def record_validation(identifier_type: str, is_valid: bool):
     if identifier_type == "TLC":
         TLC_VALIDATIONS_TOTAL.labels(result=result).inc()
     else:
-        GS1_VALIDATIONS_TOTAL.labels(
-            identifier_type=identifier_type, result=result
-        ).inc()
+        GS1_VALIDATIONS_TOTAL.labels(identifier_type=identifier_type, result=result).inc()
 
 
 # Aliases for simpler import patterns
@@ -428,9 +409,7 @@ def track_trace_query(direction: str):
                 hop_count = getattr(result, "hop_count", 0)
                 facility_count = len(getattr(result, "facilities", []))
 
-                record_trace_query(
-                    direction, duration, status, hop_count, facility_count
-                )
+                record_trace_query(direction, duration, status, hop_count, facility_count)
                 return result
             except Exception as e:
                 status = "error"

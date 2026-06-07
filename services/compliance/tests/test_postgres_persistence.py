@@ -12,6 +12,7 @@ verify the four critical invariants without requiring a live Postgres instance:
 The schema mirrors the compliance_records table defined in the DB migrations
 (services/shared/db_migrations or equivalent).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -32,10 +33,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-
 # ---------------------------------------------------------------------------
 # Minimal ORM model mirroring the compliance_records table
 # ---------------------------------------------------------------------------
+
 
 class Base(DeclarativeBase):
     pass
@@ -52,14 +53,13 @@ class ComplianceRecord(Base):
     record_date = Column(Date, nullable=False, default=date.today)
     deleted_at = Column(DateTime(timezone=True), nullable=True, default=None)
 
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "regulation", name="uq_tenant_regulation"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "regulation", name="uq_tenant_regulation"),)
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -101,6 +101,7 @@ def _make_record(tenant_id: str, regulation: str = "FSMA-204", **kwargs) -> Comp
 # Test 1: Insert → read back → fields match
 # ---------------------------------------------------------------------------
 
+
 def test_insert_and_read_back(db_session: Session):
     record = _make_record(TENANT_A)
     record_id = record.id
@@ -122,6 +123,7 @@ def test_insert_and_read_back(db_session: Session):
 # ---------------------------------------------------------------------------
 # Test 2: Duplicate insert → idempotent (unique constraint prevents duplicate)
 # ---------------------------------------------------------------------------
+
 
 def test_duplicate_insert_is_idempotent(db_session: Session):
     """Second insert with the same (tenant_id, regulation) should not create
@@ -151,12 +153,16 @@ def test_duplicate_insert_is_idempotent(db_session: Session):
     )
     db_session.flush()
 
-    rows = db_session.execute(
-        select(ComplianceRecord).where(
-            ComplianceRecord.tenant_id == TENANT_A,
-            ComplianceRecord.regulation == regulation,
+    rows = (
+        db_session.execute(
+            select(ComplianceRecord).where(
+                ComplianceRecord.tenant_id == TENANT_A,
+                ComplianceRecord.regulation == regulation,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(rows) == 1, "Duplicate insert must not create a second compliance record"
     assert rows[0].status == "compliant"  # Original row untouched
@@ -165,6 +171,7 @@ def test_duplicate_insert_is_idempotent(db_session: Session):
 # ---------------------------------------------------------------------------
 # Test 3: RLS simulation — tenant A inserts; tenant B query → empty
 # ---------------------------------------------------------------------------
+
 
 def test_tenant_isolation_rls_simulation(db_session: Session):
     """Rows inserted under tenant_a must not appear when querying with tenant_b.
@@ -192,8 +199,7 @@ def test_tenant_isolation_rls_simulation(db_session: Session):
     )
 
     assert rows_for_b == [], (
-        "Tenant B must see no rows belonging to Tenant A — "
-        "in production this is enforced by Postgres RLS"
+        "Tenant B must see no rows belonging to Tenant A — in production this is enforced by Postgres RLS"
     )
 
     # Tenant A can see its own row
@@ -213,6 +219,7 @@ def test_tenant_isolation_rls_simulation(db_session: Session):
 # ---------------------------------------------------------------------------
 # Test 4: Soft-delete → record hidden from normal queries
 # ---------------------------------------------------------------------------
+
 
 def test_soft_delete_hides_record(db_session: Session):
     """Setting deleted_at makes the record invisible to normal (live) queries."""

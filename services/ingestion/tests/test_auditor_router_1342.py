@@ -42,16 +42,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # Make services/ingestion importable as the ingestion service expects.
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import auditor_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # FakeSession — regex-keyed SQLAlchemy stand-in (fetchone / fetchall / scalar)
@@ -146,9 +144,7 @@ def _build_client(
 
 @pytest.fixture(autouse=True)
 def _disable_rate_limit(monkeypatch):
-    monkeypatch.setattr(
-        authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99)
-    )
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
 
 # =========================================================================
@@ -193,9 +189,7 @@ class TestAuthGate:
         """A tenant-bound principal with ``*`` wildcard MUST still be denied
         cross-tenant access. Wildcard grants action breadth, not tenant
         breadth. Regression for the 2026-05 audit fix (authz.py:385)."""
-        principal = _make_principal(
-            tenant_id="admin", scopes=["audit.read", "*"]
-        )
+        principal = _make_principal(tenant_id="admin", scopes=["audit.read", "*"])
         client = _build_client(principal, FakeSession())
         resp = client.get(f"/api/v1/audit/summary?tenant_id={OTHER_TENANT}")
         assert resp.status_code == 403
@@ -230,9 +224,7 @@ class TestTenantResolution:
         """With no ``tenant_id`` param the principal's bound tenant
         is used as the scoping key for every downstream SQL."""
         principal = _make_principal(tenant_id=TENANT)
-        session = FakeSession(
-            {r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events": lambda _: (0,)}
-        )
+        session = FakeSession({r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events": lambda _: (0,)})
         client = _build_client(principal, session)
         resp = client.get("/api/v1/audit/summary")
         assert resp.status_code == 200
@@ -253,9 +245,7 @@ class TestTenantResolution:
         Uses ``tenant_id=None`` so the format-validation path runs without
         being short-circuited by the cross-tenant check (which the 2026-05
         wildcard-bypass fix tightened)."""
-        principal = _make_principal(
-            tenant_id=None, scopes=["audit.read", "*"]
-        )
+        principal = _make_principal(tenant_id=None, scopes=["audit.read", "*"])
         session = FakeSession()
         client = _build_client(principal, session)
         resp = client.get("/api/v1/audit/summary?tenant_id=bad;tenant")
@@ -273,14 +263,16 @@ class TestSummary:
     def test_empty_db_returns_zero_rates_no_div_by_zero(self):
         """Empty DB must produce a 200 with zero totals and 0% pass
         rate — never a 500 from division-by-zero."""
-        session = FakeSession({
-            r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (0,),
-            r"COUNT\(\*\).*rule_evaluations": lambda _: (0, 0, 0, 0),
-            r"COUNT\(\*\).*exception_cases": lambda _: (0, 0, 0),
-            r"COUNT\(\*\).*request_cases": lambda _: (0, 0, 0),
-            r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (0,),
-            r"source_system, COUNT": lambda _: [],
-        })
+        session = FakeSession(
+            {
+                r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (0,),
+                r"COUNT\(\*\).*rule_evaluations": lambda _: (0, 0, 0, 0),
+                r"COUNT\(\*\).*exception_cases": lambda _: (0, 0, 0),
+                r"COUNT\(\*\).*request_cases": lambda _: (0, 0, 0),
+                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (0,),
+                r"source_system, COUNT": lambda _: [],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/summary")
         assert resp.status_code == 200
@@ -292,14 +284,16 @@ class TestSummary:
         assert body["records"]["ingestion_sources"] == {}
 
     def test_populated_db_computes_pass_rate_and_sources(self):
-        session = FakeSession({
-            r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (150,),
-            r"COUNT\(\*\).*rule_evaluations": lambda _: (100, 70, 20, 10),
-            r"COUNT\(\*\).*exception_cases": lambda _: (12, 5, 2),
-            r"COUNT\(\*\).*request_cases": lambda _: (8, 3, 2),
-            r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (150,),
-            r"source_system, COUNT": lambda _: [("SAP", 120), ("CSV", 30)],
-        })
+        session = FakeSession(
+            {
+                r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: (150,),
+                r"COUNT\(\*\).*rule_evaluations": lambda _: (100, 70, 20, 10),
+                r"COUNT\(\*\).*exception_cases": lambda _: (12, 5, 2),
+                r"COUNT\(\*\).*request_cases": lambda _: (8, 3, 2),
+                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: (150,),
+                r"source_system, COUNT": lambda _: [("SAP", 120), ("CSV", 30)],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/summary")
         assert resp.status_code == 200
@@ -312,10 +306,14 @@ class TestSummary:
         assert body["compliance"]["warned"] == 10
         assert body["compliance"]["pass_rate_percent"] == 70.0
         assert body["exceptions"] == {
-            "total": 12, "open": 5, "critical_open": 2,
+            "total": 12,
+            "open": 5,
+            "critical_open": 2,
         }
         assert body["requests"] == {
-            "total": 8, "submitted": 3, "active": 2,
+            "total": 8,
+            "submitted": 3,
+            "active": 2,
         }
         assert body["chain_integrity"]["chain_length"] == 150
         assert body["chain_integrity"]["status"] == "VERIFIED"
@@ -325,14 +323,16 @@ class TestSummary:
     def test_none_scalars_treated_as_zero(self):
         """``scalar()`` may return None on an empty aggregate — the
         router uses ``or 0`` to keep downstream math safe."""
-        session = FakeSession({
-            r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: None,
-            r"COUNT\(\*\).*rule_evaluations": lambda _: None,
-            r"COUNT\(\*\).*exception_cases": lambda _: None,
-            r"COUNT\(\*\).*request_cases": lambda _: None,
-            r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: None,
-            r"source_system, COUNT": lambda _: [],
-        })
+        session = FakeSession(
+            {
+                r"COUNT\(\*\)\s+FROM\s+fsma\.traceability_events.*status": lambda _: None,
+                r"COUNT\(\*\).*rule_evaluations": lambda _: None,
+                r"COUNT\(\*\).*exception_cases": lambda _: None,
+                r"COUNT\(\*\).*request_cases": lambda _: None,
+                r"COUNT\(\*\)\s+FROM\s+fsma\.hash_chain": lambda _: None,
+                r"source_system, COUNT": lambda _: [],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/summary")
         assert resp.status_code == 200
@@ -357,14 +357,14 @@ def _events_row(
     return (
         event_id,
         event_type,
-        "TLC-001",            # traceability_lot_code
-        "PROD-REF",           # product_reference
-        42.0,                 # quantity
-        "kg",                 # unit_of_measure
+        "TLC-001",  # traceability_lot_code
+        "PROD-REF",  # product_reference
+        42.0,  # quantity
+        "kg",  # unit_of_measure
         datetime(2026, 1, 2, tzinfo=timezone.utc),
-        "SAP",                # source_system
-        0.95,                 # confidence_score
-        "1.0",                # schema_version
+        "SAP",  # source_system
+        0.95,  # confidence_score
+        "1.0",  # schema_version
         datetime(2026, 1, 2, 12, tzinfo=timezone.utc),
         total_rules,
         passed,
@@ -374,9 +374,7 @@ def _events_row(
 
 class TestEvents:
     def test_returns_compliant_status_when_all_rules_pass(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: [_events_row()]
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: [_events_row()]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events")
         assert resp.status_code == 200
@@ -388,50 +386,36 @@ class TestEvents:
         assert e["compliance"]["failed"] == 0
 
     def test_returns_non_compliant_when_any_rule_failed(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: [
-                _events_row(total_rules=3, passed=2, failed=1)
-            ]
-        })
+        session = FakeSession(
+            {r"FROM fsma\.traceability_events": lambda _: [_events_row(total_rules=3, passed=2, failed=1)]}
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events")
         assert resp.json()["events"][0]["compliance"]["status"] == "non_compliant"
 
     def test_returns_unevaluated_when_no_rules(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: [
-                _events_row(total_rules=0, passed=0, failed=0)
-            ]
-        })
-        client = _build_client(_make_principal(), session)
-        assert (
-            client.get("/api/v1/audit/events").json()["events"][0]
-            ["compliance"]["status"]
-            == "unevaluated"
+        session = FakeSession(
+            {r"FROM fsma\.traceability_events": lambda _: [_events_row(total_rules=0, passed=0, failed=0)]}
         )
+        client = _build_client(_make_principal(), session)
+        assert client.get("/api/v1/audit/events").json()["events"][0]["compliance"]["status"] == "unevaluated"
 
     def test_tlc_filter_passes_through_to_sql_params(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events?tlc=TLC-XYZ")
         assert resp.status_code == 200
         assert any(c[1].get("tlc") == "TLC-XYZ" for c in session.calls)
 
     def test_event_type_filter_passes_through(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events?event_type=receiving")
         assert resp.status_code == 200
         assert any(c[1].get("event_type") == "receiving" for c in session.calls)
 
     def test_compliance_status_compliant_adds_sql_filter(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/events?compliance_status=compliant")
         last_sql = session.calls[-1][0]
@@ -439,18 +423,14 @@ class TestEvents:
         assert "total_rules" in last_sql.lower()
 
     def test_compliance_status_non_compliant_adds_sql_filter(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/events?compliance_status=non_compliant")
         last_sql = session.calls[-1][0]
         assert "> 0" in last_sql
 
     def test_compliance_status_unevaluated_adds_sql_filter(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/events?compliance_status=unevaluated")
         last_sql = session.calls[-1][0]
@@ -459,17 +439,13 @@ class TestEvents:
     def test_limit_capped_at_200(self):
         """FastAPI's ``Query(..., le=200)`` rejects limit > 200 at
         validation time."""
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events?limit=500")
         assert resp.status_code == 422
 
     def test_limit_and_offset_propagate_to_sql(self):
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events?limit=25&offset=50")
         assert resp.status_code == 200
@@ -482,13 +458,22 @@ class TestEvents:
         """Defensive: missing timestamps and quantities don't crash
         the response assembly."""
         row = (
-            "evt-null", "receiving", "TLC", "PROD", None, "kg",
-            None, "SAP", None, "1.0", None,
-            0, 0, 0,
+            "evt-null",
+            "receiving",
+            "TLC",
+            "PROD",
+            None,
+            "kg",
+            None,
+            "SAP",
+            None,
+            "1.0",
+            None,
+            0,
+            0,
+            0,
         )
-        session = FakeSession({
-            r"FROM fsma\.traceability_events": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events")
         assert resp.status_code == 200
@@ -509,10 +494,14 @@ class TestEventDetail:
         # The store is instantiated inside the handler — patch the
         # class so the instance has a ``get_event`` returning None.
         class _FakeStore:
-            def __init__(self, *a, **k): pass
-            def get_event(self, *a, **k): return None
+            def __init__(self, *a, **k):
+                pass
+
+            def get_event(self, *a, **k):
+                return None
 
         from shared import canonical_persistence
+
         monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _FakeStore)
 
         client = _build_client(_make_principal(), FakeSession())
@@ -534,6 +523,7 @@ class TestEventDetail:
             def __init__(self, db, dual_write=False):
                 self.db = db
                 self.dual_write = dual_write
+
             def get_event(self, tenant_id, event_id, include_raw_payload=False):
                 assert tenant_id == TENANT
                 assert event_id == "evt-1"
@@ -543,13 +533,22 @@ class TestEventDetail:
                 return dict(event_payload)
 
         from shared import canonical_persistence
+
         monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _FakeStore)
 
         eval_row = (
-            "eval-1", "pass", None, '["field.a","field.b"]', 0.99,
+            "eval-1",
+            "pass",
+            None,
+            '["field.a","field.b"]',
+            0.99,
             datetime(2026, 1, 2, tzinfo=timezone.utc),
-            "Rule title", "critical", "CTE", "21 CFR 1.1345",
-            "Remediation text", "v1",
+            "Rule title",
+            "critical",
+            "CTE",
+            "21 CFR 1.1345",
+            "Remediation text",
+            "v1",
         )
         chain_row = (
             42,
@@ -559,16 +558,22 @@ class TestEventDetail:
             datetime(2026, 1, 3, tzinfo=timezone.utc),
         )
         attach_row = (
-            "att-1", "invoice", "receipt.pdf", "sha256:deadbeef",
-            "application/pdf", "s3://bucket/key",
+            "att-1",
+            "invoice",
+            "receipt.pdf",
+            "sha256:deadbeef",
+            "application/pdf",
+            "s3://bucket/key",
             datetime(2026, 1, 4, tzinfo=timezone.utc),
         )
 
-        session = FakeSession({
-            r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
-            r"FROM fsma\.hash_chain h": lambda _: chain_row,
-            r"FROM fsma\.evidence_attachments": lambda _: [attach_row],
-        })
+        session = FakeSession(
+            {
+                r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
+                r"FROM fsma\.hash_chain h": lambda _: chain_row,
+                r"FROM fsma\.evidence_attachments": lambda _: [attach_row],
+            }
+        )
 
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events/evt-1")
@@ -599,21 +604,37 @@ class TestEventDetail:
         string. Both paths must work."""
 
         class _FakeStore:
-            def __init__(self, *a, **k): pass
-            def get_event(self, *a, **k): return {"event_id": "evt-1"}
+            def __init__(self, *a, **k):
+                pass
+
+            def get_event(self, *a, **k):
+                return {"event_id": "evt-1"}
 
         from shared import canonical_persistence
+
         monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _FakeStore)
 
         eval_row = (
-            "eval-1", "pass", None, ["a", "b"], 1.0, None,
-            "Title", "warning", "CTE", "ref", "rem", "v1",
+            "eval-1",
+            "pass",
+            None,
+            ["a", "b"],
+            1.0,
+            None,
+            "Title",
+            "warning",
+            "CTE",
+            "ref",
+            "rem",
+            "v1",
         )
-        session = FakeSession({
-            r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
-            r"FROM fsma\.hash_chain h": lambda _: None,
-            r"FROM fsma\.evidence_attachments": lambda _: [],
-        })
+        session = FakeSession(
+            {
+                r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
+                r"FROM fsma\.hash_chain h": lambda _: None,
+                r"FROM fsma\.evidence_attachments": lambda _: [],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events/evt-1")
         assert resp.status_code == 200
@@ -623,21 +644,37 @@ class TestEventDetail:
         """``None`` in the JSONB slot → empty list, not a crash."""
 
         class _FakeStore:
-            def __init__(self, *a, **k): pass
-            def get_event(self, *a, **k): return {"event_id": "evt-1"}
+            def __init__(self, *a, **k):
+                pass
+
+            def get_event(self, *a, **k):
+                return {"event_id": "evt-1"}
 
         from shared import canonical_persistence
+
         monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _FakeStore)
 
         eval_row = (
-            "eval-1", "pass", None, None, None, None,
-            "Title", "warning", "CTE", "ref", "rem", "v1",
+            "eval-1",
+            "pass",
+            None,
+            None,
+            None,
+            None,
+            "Title",
+            "warning",
+            "CTE",
+            "ref",
+            "rem",
+            "v1",
         )
-        session = FakeSession({
-            r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
-            r"FROM fsma\.hash_chain h": lambda _: None,
-            r"FROM fsma\.evidence_attachments": lambda _: [],
-        })
+        session = FakeSession(
+            {
+                r"FROM fsma\.rule_evaluations re": lambda _: [eval_row],
+                r"FROM fsma\.hash_chain h": lambda _: None,
+                r"FROM fsma\.evidence_attachments": lambda _: [],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events/evt-1")
         assert resp.status_code == 200
@@ -646,17 +683,23 @@ class TestEventDetail:
 
     def test_no_chain_position_when_hash_chain_row_absent(self, monkeypatch):
         class _FakeStore:
-            def __init__(self, *a, **k): pass
-            def get_event(self, *a, **k): return {"event_id": "evt-1"}
+            def __init__(self, *a, **k):
+                pass
+
+            def get_event(self, *a, **k):
+                return {"event_id": "evt-1"}
 
         from shared import canonical_persistence
+
         monkeypatch.setattr(canonical_persistence, "CanonicalEventStore", _FakeStore)
 
-        session = FakeSession({
-            r"FROM fsma\.rule_evaluations re": lambda _: [],
-            r"FROM fsma\.hash_chain h": lambda _: None,
-            r"FROM fsma\.evidence_attachments": lambda _: [],
-        })
+        session = FakeSession(
+            {
+                r"FROM fsma\.rule_evaluations re": lambda _: [],
+                r"FROM fsma\.hash_chain h": lambda _: None,
+                r"FROM fsma\.evidence_attachments": lambda _: [],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events/evt-1")
         assert resp.status_code == 200
@@ -671,14 +714,18 @@ class TestEventDetail:
 class TestRules:
     def test_returns_rule_catalog_with_pass_rate(self):
         rule_row = (
-            "rule-1", "Receiving lot must reference a PO",
-            "critical", "CTE_MISSING",
-            "21 CFR 1.1345", datetime(2026, 1, 1).date(),
-            100, 80, 15, 5,
+            "rule-1",
+            "Receiving lot must reference a PO",
+            "critical",
+            "CTE_MISSING",
+            "21 CFR 1.1345",
+            datetime(2026, 1, 1).date(),
+            100,
+            80,
+            15,
+            5,
         )
-        session = FakeSession({
-            r"FROM fsma\.rule_definitions": lambda _: [rule_row]
-        })
+        session = FakeSession({r"FROM fsma\.rule_definitions": lambda _: [rule_row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/rules")
         assert resp.status_code == 200
@@ -689,31 +736,36 @@ class TestRules:
         assert r["severity"] == "critical"
         assert r["citation_reference"] == "21 CFR 1.1345"
         assert r["evaluation_stats"] == {
-            "total": 100, "passed": 80, "failed": 15,
-            "warned": 5, "pass_rate_percent": 80.0,
+            "total": 100,
+            "passed": 80,
+            "failed": 15,
+            "warned": 5,
+            "pass_rate_percent": 80.0,
         }
 
     def test_zero_evaluations_yields_none_pass_rate_not_divide_by_zero(self):
         """A newly-added rule has no evaluations yet — the router
         reports ``pass_rate_percent: null`` instead of blowing up."""
         rule_row = (
-            "rule-new", "Brand new rule",
-            "warning", "CTE_MISSING",
-            "21 CFR 1.1345", None,
-            0, 0, 0, 0,
+            "rule-new",
+            "Brand new rule",
+            "warning",
+            "CTE_MISSING",
+            "21 CFR 1.1345",
+            None,
+            0,
+            0,
+            0,
+            0,
         )
-        session = FakeSession({
-            r"FROM fsma\.rule_definitions": lambda _: [rule_row]
-        })
+        session = FakeSession({r"FROM fsma\.rule_definitions": lambda _: [rule_row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/rules")
         assert resp.status_code == 200
         assert resp.json()["rules"][0]["evaluation_stats"]["pass_rate_percent"] is None
 
     def test_empty_catalog_returns_empty_list(self):
-        session = FakeSession({
-            r"FROM fsma\.rule_definitions": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.rule_definitions": lambda _: []})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/rules").json()
         assert body["rules"] == []
@@ -728,16 +780,21 @@ class TestRules:
 class TestExceptions:
     def test_returns_exception_history_rows(self):
         row = (
-            "exc-1", "critical", "open", "CTE_MISSING",
-            "ACME Farms", "Reingest", None, None, None,
+            "exc-1",
+            "critical",
+            "open",
+            "CTE_MISSING",
+            "ACME Farms",
+            "Reingest",
+            None,
+            None,
+            None,
             "user-42",
             datetime(2026, 1, 1, tzinfo=timezone.utc),
             None,
             2,
         )
-        session = FakeSession({
-            r"FROM fsma\.exception_cases": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.exception_cases": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/exceptions")
         assert resp.status_code == 200
@@ -757,24 +814,28 @@ class TestExceptions:
         assert resp.status_code == 422
 
     def test_limit_propagated_to_sql(self):
-        session = FakeSession({
-            r"FROM fsma\.exception_cases": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.exception_cases": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/exceptions?limit=75")
         assert any(c[1].get("lim") == 75 for c in session.calls)
 
     def test_resolved_at_serialized_when_present(self):
         row = (
-            "exc-2", "warning", "resolved", "CTE_MISSING",
-            "SUP", "rem", "done", None, None, "user-1",
+            "exc-2",
+            "warning",
+            "resolved",
+            "CTE_MISSING",
+            "SUP",
+            "rem",
+            "done",
+            None,
+            None,
+            "user-1",
             datetime(2026, 1, 1, tzinfo=timezone.utc),
             datetime(2026, 1, 2, tzinfo=timezone.utc),
             0,
         )
-        session = FakeSession({
-            r"FROM fsma\.exception_cases": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.exception_cases": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/exceptions").json()
         assert body["cases"][0]["resolved_at"] is not None
@@ -789,15 +850,21 @@ class TestExceptions:
 class TestRequests:
     def test_returns_request_cases(self):
         row = (
-            "req-1", "FDA", "email", "tlc", "submitted", 10, 0,
+            "req-1",
+            "FDA",
+            "email",
+            "tlc",
+            "submitted",
+            10,
+            0,
             datetime(2026, 1, 1, tzinfo=timezone.utc),
             datetime(2026, 1, 2, tzinfo=timezone.utc),
             datetime(2026, 1, 2, 12, tzinfo=timezone.utc),
-            1, 1, 2,
+            1,
+            1,
+            2,
         )
-        session = FakeSession({
-            r"FROM fsma\.request_cases": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.request_cases": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/requests")
         assert resp.status_code == 200
@@ -816,12 +883,21 @@ class TestRequests:
 
     def test_null_timestamps_serialized_as_null(self):
         row = (
-            "req-draft", "FDA", "email", "tlc", "draft", 0, 5,
-            None, None, None, 0, 0, 0,
+            "req-draft",
+            "FDA",
+            "email",
+            "tlc",
+            "draft",
+            0,
+            5,
+            None,
+            None,
+            None,
+            0,
+            0,
+            0,
         )
-        session = FakeSession({
-            r"FROM fsma\.request_cases": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.request_cases": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/requests").json()
         r = body["cases"][0]
@@ -830,9 +906,7 @@ class TestRequests:
         assert r["submission_timestamp"] is None
 
     def test_empty_returns_empty_cases(self):
-        session = FakeSession({
-            r"FROM fsma\.request_cases": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.request_cases": lambda _: []})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/requests").json()
         assert body["cases"] == []
@@ -862,11 +936,13 @@ class TestChain:
         class _FakePersistence:
             def __init__(self, db):
                 captured["db"] = db
+
             def verify_chain(self, tenant_id):
                 captured["tenant"] = tenant_id
                 return _FakeResult()
 
         from shared import cte_persistence
+
         monkeypatch.setattr(cte_persistence, "CTEPersistence", _FakePersistence)
 
         client = _build_client(_make_principal(), FakeSession())
@@ -888,10 +964,14 @@ class TestChain:
             checked_at = "2026-04-18T12:00:00+00:00"
 
         class _FakePersistence:
-            def __init__(self, db): pass
-            def verify_chain(self, tenant_id): return _FakeResult()
+            def __init__(self, db):
+                pass
+
+            def verify_chain(self, tenant_id):
+                return _FakeResult()
 
         from shared import cte_persistence
+
         monkeypatch.setattr(cte_persistence, "CTEPersistence", _FakePersistence)
 
         client = _build_client(_make_principal(), FakeSession())
@@ -908,15 +988,17 @@ class TestChain:
 class TestExportLog:
     def test_returns_export_history(self):
         row = (
-            "exp-1", "fda_csv", "TLC-001",
+            "exp-1",
+            "fda_csv",
+            "TLC-001",
             datetime(2026, 1, 1).date(),
             datetime(2026, 1, 31).date(),
-            250, "sha256:cafef00d", "admin-1",
+            250,
+            "sha256:cafef00d",
+            "admin-1",
             datetime(2026, 2, 1, tzinfo=timezone.utc),
         )
-        session = FakeSession({
-            r"FROM fsma\.fda_export_log": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.fda_export_log": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/export-log")
         assert resp.status_code == 200
@@ -935,12 +1017,17 @@ class TestExportLog:
 
     def test_null_dates_serialized_as_null(self):
         row = (
-            "exp-2", "epcis", None, None, None,
-            0, "sha256:abc", "system", None,
+            "exp-2",
+            "epcis",
+            None,
+            None,
+            None,
+            0,
+            "sha256:abc",
+            "system",
+            None,
         )
-        session = FakeSession({
-            r"FROM fsma\.fda_export_log": lambda _: [row]
-        })
+        session = FakeSession({r"FROM fsma\.fda_export_log": lambda _: [row]})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/export-log").json()
         e = body["exports"][0]
@@ -956,17 +1043,13 @@ class TestExportLog:
         assert resp.status_code == 422
 
     def test_limit_propagated_to_sql(self):
-        session = FakeSession({
-            r"FROM fsma\.fda_export_log": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.fda_export_log": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/export-log?limit=17")
         assert any(c[1].get("lim") == 17 for c in session.calls)
 
     def test_empty_returns_empty_exports(self):
-        session = FakeSession({
-            r"FROM fsma\.fda_export_log": lambda _: []
-        })
+        session = FakeSession({r"FROM fsma\.fda_export_log": lambda _: []})
         client = _build_client(_make_principal(), session)
         body = client.get("/api/v1/audit/export-log").json()
         assert body["exports"] == []

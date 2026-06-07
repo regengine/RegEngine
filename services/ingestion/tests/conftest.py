@@ -6,6 +6,7 @@ The root conftest.py provides a ``pytest_collectstart`` hook for this, but
 imported.  Placing an explicit sys.path insert here runs at conftest-import
 time, which is guaranteed to precede any test-module import in this directory.
 """
+
 from __future__ import annotations
 
 import sys

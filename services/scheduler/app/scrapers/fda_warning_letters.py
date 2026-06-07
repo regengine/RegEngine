@@ -6,14 +6,14 @@ Warning Letters are enforcement actions issued to companies for regulatory viola
 
 from __future__ import annotations
 
-import time
 import re
+import time
 from datetime import datetime, timezone
 from typing import List, Optional
-from defusedxml import ElementTree
 
 import httpx
 import structlog
+from defusedxml import ElementTree
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
 from .base import BaseScraper, fetch_with_retry
@@ -64,7 +64,7 @@ class FDAWarningLettersScraper(BaseScraper):
         try:
             # Try RSS feed first
             items = self._scrape_rss()
-            
+
             if items:
                 logger.info(
                     "fda_warning_letters_scraped",
@@ -120,7 +120,7 @@ class FDAWarningLettersScraper(BaseScraper):
                 logger.info(
                     "rss_feed_defunct_skipping",
                     url=FDA_WARNING_LETTERS_RSS,
-                    note="FDA has reorganized feeds; using API fallback"
+                    note="FDA has reorganized feeds; using API fallback",
                 )
                 return []
 
@@ -209,9 +209,7 @@ class FDAWarningLettersScraper(BaseScraper):
                 # Parse date
                 report_date = result.get("report_date", "")
                 if report_date:
-                    published_date = datetime.strptime(report_date, "%Y%m%d").replace(
-                        tzinfo=timezone.utc
-                    )
+                    published_date = datetime.strptime(report_date, "%Y%m%d").replace(tzinfo=timezone.utc)
                 else:
                     published_date = datetime.now(timezone.utc)
 

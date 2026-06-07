@@ -14,33 +14,34 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ── Allow-list: endpoints that are intentionally unauthenticated ──────
 
-UNAUTHENTICATED_ALLOWLIST = frozenset({
-    # Service root and liveness aliases — public for platform probes
-    "GET /",
-    # Health/readiness — must be public for load balancers and orchestrators
-    "GET /health",
-    "GET /api/health",
-    # Feature discovery — public endpoint for client capability negotiation
-    "GET /api/v1/features",
-    # Public/static compatibility and reference data — no tenant data returned
-    "GET /api/v1/billing/plans",
-    "GET /api/v1/fsma/export-jobs",
-    "GET /api/v1/fsma/mappings",
-    "GET /api/v1/onboarding/steps",
-    "GET /api/v1/products/categories/ftl",
-    "GET /api/v1/team/roles/definitions",
-    # Sandbox — intentionally public with rate limiting
-    "POST /api/v1/sandbox/evaluate",
-    # Webhook receivers — use signature verification instead of API keys
-    "POST /api/v1/integrations/webhook/{tenant_id}/{connector_id}",
-    # OpenAPI docs
-    "GET /docs",
-    "GET /redoc",
-    "GET /openapi.json",
-})
+UNAUTHENTICATED_ALLOWLIST = frozenset(
+    {
+        # Service root and liveness aliases — public for platform probes
+        "GET /",
+        # Health/readiness — must be public for load balancers and orchestrators
+        "GET /health",
+        "GET /api/health",
+        # Feature discovery — public endpoint for client capability negotiation
+        "GET /api/v1/features",
+        # Public/static compatibility and reference data — no tenant data returned
+        "GET /api/v1/billing/plans",
+        "GET /api/v1/fsma/export-jobs",
+        "GET /api/v1/fsma/mappings",
+        "GET /api/v1/onboarding/steps",
+        "GET /api/v1/products/categories/ftl",
+        "GET /api/v1/team/roles/definitions",
+        # Sandbox — intentionally public with rate limiting
+        "POST /api/v1/sandbox/evaluate",
+        # Webhook receivers — use signature verification instead of API keys
+        "POST /api/v1/integrations/webhook/{tenant_id}/{connector_id}",
+        # OpenAPI docs
+        "GET /docs",
+        "GET /redoc",
+        "GET /openapi.json",
+    }
+)
 
 
 def _build_test_app():
@@ -65,9 +66,11 @@ def _build_test_app():
             sys.modules.pop(name, None)
 
     from shared.paths import ensure_shared_importable
+
     ensure_shared_importable()
 
     from main import app
+
     return app
 
 
@@ -85,6 +88,7 @@ def _extract_endpoints(app) -> list[tuple[str, str]]:
 def _make_dummy_path(path: str) -> str:
     """Replace path parameters with dummy values for testing."""
     import re
+
     return re.sub(r"\{[^}]+\}", "test-000", path)
 
 
@@ -123,10 +127,7 @@ def test_all_endpoints_require_auth(app_and_client):
         if response.status_code in (200, 201, 204):
             unprotected.append(f"{method} {path} -> {response.status_code}")
 
-    assert not unprotected, (
-        f"Endpoints accessible without authentication:\n"
-        + "\n".join(f"  {e}" for e in unprotected)
-    )
+    assert not unprotected, f"Endpoints accessible without authentication:\n" + "\n".join(f"  {e}" for e in unprotected)
 
 
 def test_allowlist_entries_still_exist(app_and_client):
@@ -140,7 +141,6 @@ def test_allowlist_entries_still_exist(app_and_client):
     docs_paths = {"GET /docs", "GET /redoc", "GET /openapi.json"}
     stale -= docs_paths
 
-    assert not stale, (
-        f"Stale allowlist entries (endpoints no longer exist):\n"
-        + "\n".join(f"  {e}" for e in sorted(stale))
+    assert not stale, f"Stale allowlist entries (endpoints no longer exist):\n" + "\n".join(
+        f"  {e}" for e in sorted(stale)
     )

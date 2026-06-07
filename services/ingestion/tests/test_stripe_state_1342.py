@@ -34,7 +34,6 @@ sys.path.insert(0, str(service_dir))
 
 from app.stripe_billing import state as state_mod  # noqa: E402
 
-
 # ── Test double: in-memory Redis ────────────────────────────────────────────
 
 
@@ -140,9 +139,7 @@ class TestRedisClient:
       values as ``str`` rather than ``bytes``
     """
 
-    def test_calls_redis_from_url_with_decoded_responses(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_calls_redis_from_url_with_decoded_responses(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, Any] = {}
         fake_settings = MagicMock()
         fake_settings.redis_url = "redis://unit-test:6379/0"
@@ -182,9 +179,7 @@ class TestBufferPendingSubscriptionUpdate:
         base.update(overrides)
         return base
 
-    def test_missing_subscription_id_returns_false_without_write(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_missing_subscription_id_returns_false_without_write(self, fake_redis: _FakeRedis) -> None:
         result = state_mod._buffer_pending_subscription_update(
             "",
             self._payload(),
@@ -194,9 +189,7 @@ class TestBufferPendingSubscriptionUpdate:
         # BEFORE touching Redis.
         assert fake_redis.set_calls == []
 
-    def test_first_update_writes_payload_with_ttl(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_first_update_writes_payload_with_ttl(self, fake_redis: _FakeRedis) -> None:
         result = state_mod._buffer_pending_subscription_update(
             "sub_fresh",
             self._payload(),
@@ -211,9 +204,7 @@ class TestBufferPendingSubscriptionUpdate:
         # ~3 day retry window.
         assert fake_redis.ttls[key] == state_mod._PENDING_SUB_UPDATE_TTL_SECONDS
 
-    def test_newer_event_overwrites_buffered_older(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_newer_event_overwrites_buffered_older(self, fake_redis: _FakeRedis) -> None:
         state_mod._buffer_pending_subscription_update(
             "sub_1",
             self._payload(event_created=100, status="past_due"),
@@ -229,9 +220,7 @@ class TestBufferPendingSubscriptionUpdate:
         assert decoded["status"] == "active"
         assert decoded["event_created"] == 200
 
-    def test_older_event_is_ignored_when_newer_already_buffered(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_older_event_is_ignored_when_newer_already_buffered(self, fake_redis: _FakeRedis) -> None:
         state_mod._buffer_pending_subscription_update(
             "sub_1",
             self._payload(event_created=500, status="active"),
@@ -264,9 +253,7 @@ class TestBufferPendingSubscriptionUpdate:
         decoded = json.loads(fake_redis.values["billing:pending_sub_update:sub_tie"])
         assert decoded["status"] == "new"
 
-    def test_event_created_zero_is_treated_as_zero(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_event_created_zero_is_treated_as_zero(self, fake_redis: _FakeRedis) -> None:
         """Missing ``event_created`` coerces to 0 (defensive). A later
         non-zero timestamp must overwrite."""
         state_mod._buffer_pending_subscription_update(
@@ -282,9 +269,7 @@ class TestBufferPendingSubscriptionUpdate:
         decoded = json.loads(fake_redis.values["billing:pending_sub_update:sub_zero"])
         assert decoded["status"] == "active"
 
-    def test_corrupt_existing_buffer_is_treated_as_zero(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_corrupt_existing_buffer_is_treated_as_zero(self, fake_redis: _FakeRedis) -> None:
         """If the existing buffered value is not valid JSON (external
         mutation / bad deploy), we treat its event_created as 0 and
         overwrite. Prevents a permanent poison-pill buffer."""
@@ -298,15 +283,11 @@ class TestBufferPendingSubscriptionUpdate:
         decoded = json.loads(fake_redis.values[key])
         assert decoded["status"] == "active"
 
-    def test_non_integer_event_created_in_existing_buffer_falls_back(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_non_integer_event_created_in_existing_buffer_falls_back(self, fake_redis: _FakeRedis) -> None:
         """If the existing buffer has ``event_created`` as a non-integer
         string, ``int(...)`` raises ValueError — we treat as 0."""
         key = "billing:pending_sub_update:sub_nonint"
-        fake_redis.values[key] = json.dumps(
-            {"event_created": "not-an-int", "status": "old"}
-        )
+        fake_redis.values[key] = json.dumps({"event_created": "not-an-int", "status": "old"})
         result = state_mod._buffer_pending_subscription_update(
             "sub_nonint",
             self._payload(event_created=50, status="new"),
@@ -315,9 +296,7 @@ class TestBufferPendingSubscriptionUpdate:
         decoded = json.loads(fake_redis.values[key])
         assert decoded["status"] == "new"
 
-    def test_redis_error_on_get_returns_false(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_redis_error_on_get_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Boom:
             def get(self, *a: Any, **k: Any) -> Any:
                 raise redis.RedisError("nope")
@@ -326,16 +305,12 @@ class TestBufferPendingSubscriptionUpdate:
                 return True
 
         monkeypatch.setattr(state_mod, "_redis_client", lambda: _Boom())
-        result = state_mod._buffer_pending_subscription_update(
-            "sub_err", {"event_created": 1}
-        )
+        result = state_mod._buffer_pending_subscription_update("sub_err", {"event_created": 1})
         # Fail-open: return False so the caller knows the buffer was NOT
         # safely written — but don't raise.
         assert result is False
 
-    def test_redis_error_on_set_returns_false(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_redis_error_on_set_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _BoomOnSet:
             def get(self, *a: Any, **k: Any) -> Optional[str]:
                 return None
@@ -344,14 +319,10 @@ class TestBufferPendingSubscriptionUpdate:
                 raise redis.RedisError("write refused")
 
         monkeypatch.setattr(state_mod, "_redis_client", lambda: _BoomOnSet())
-        result = state_mod._buffer_pending_subscription_update(
-            "sub_write_err", {"event_created": 1}
-        )
+        result = state_mod._buffer_pending_subscription_update("sub_write_err", {"event_created": 1})
         assert result is False
 
-    def test_payload_serialization_is_compact(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_payload_serialization_is_compact(self, fake_redis: _FakeRedis) -> None:
         """JSON uses ``(",", ":")`` separators to save Redis memory. Verify
         the stored value has no extraneous whitespace."""
         state_mod._buffer_pending_subscription_update(
@@ -369,9 +340,7 @@ class TestBufferPendingSubscriptionUpdate:
 class TestPopPendingSubscriptionUpdate:
     """#1196 drain side: atomic fetch-and-delete of the buffered payload."""
 
-    def test_missing_subscription_id_returns_none(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_missing_subscription_id_returns_none(self, fake_redis: _FakeRedis) -> None:
         # Empty sub_id short-circuits before any Redis call.
         assert state_mod._pop_pending_subscription_update("") is None
         assert fake_redis.deleted == []
@@ -380,9 +349,7 @@ class TestPopPendingSubscriptionUpdate:
         assert state_mod._pop_pending_subscription_update("sub_never") is None
 
     def test_happy_path_returns_and_deletes(self, fake_redis: _FakeRedis) -> None:
-        state_mod._buffer_pending_subscription_update(
-            "sub_1", {"event_created": 1, "status": "active"}
-        )
+        state_mod._buffer_pending_subscription_update("sub_1", {"event_created": 1, "status": "active"})
         popped = state_mod._pop_pending_subscription_update("sub_1")
         assert popped is not None
         assert popped["status"] == "active"
@@ -394,9 +361,7 @@ class TestPopPendingSubscriptionUpdate:
     ) -> None:
         """Older redis-py versions don't expose ``getdel``. Cover the
         fallback path that builds a pipeline and executes GET+DELETE."""
-        state_mod._buffer_pending_subscription_update(
-            "sub_pipe", {"event_created": 1, "status": "active"}
-        )
+        state_mod._buffer_pending_subscription_update("sub_pipe", {"event_created": 1, "status": "active"})
 
         # Swap the getdel method with one that raises AttributeError —
         # this is exactly what happens on older redis-py.
@@ -417,9 +382,7 @@ class TestPopPendingSubscriptionUpdate:
         """Redis servers older than 6.2 answer GETDEL with ERR unknown
         command — redis-py surfaces that as ``redis.ResponseError``.
         Same recovery path as the AttributeError case above."""
-        state_mod._buffer_pending_subscription_update(
-            "sub_old_server", {"event_created": 1, "status": "past_due"}
-        )
+        state_mod._buffer_pending_subscription_update("sub_old_server", {"event_created": 1, "status": "past_due"})
 
         def _response_err(*a: Any, **k: Any) -> Any:
             raise redis.ResponseError("ERR unknown command 'GETDEL'")
@@ -431,9 +394,7 @@ class TestPopPendingSubscriptionUpdate:
         assert popped["status"] == "past_due"
         assert "billing:pending_sub_update:sub_old_server" not in fake_redis.values
 
-    def test_pipeline_fallback_with_empty_results_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_pipeline_fallback_with_empty_results_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If the pipeline returns an empty list (defensive — real redis-py
         always returns one element per queued op), we should not crash and
         should return None."""
@@ -458,9 +419,7 @@ class TestPopPendingSubscriptionUpdate:
         monkeypatch.setattr(state_mod, "_redis_client", lambda: _OddRedis())
         assert state_mod._pop_pending_subscription_update("sub_empty") is None
 
-    def test_redis_error_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_redis_error_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Boom:
             def getdel(self, *a: Any, **k: Any) -> Any:
                 raise redis.RedisError("conn dropped")
@@ -468,9 +427,7 @@ class TestPopPendingSubscriptionUpdate:
         monkeypatch.setattr(state_mod, "_redis_client", lambda: _Boom())
         assert state_mod._pop_pending_subscription_update("sub_boom") is None
 
-    def test_corrupt_json_returns_none(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_corrupt_json_returns_none(self, fake_redis: _FakeRedis) -> None:
         """If the buffered value is not decodeable JSON, we log and
         return None — do NOT crash and do NOT leak the raw string."""
         fake_redis.values["billing:pending_sub_update:sub_bad"] = "<<<not json>>>"
@@ -499,15 +456,11 @@ class TestPopPendingSubscriptionUpdate:
 
 
 class TestClearLookupNoops:
-    def test_clear_customer_lookup_empty_id_is_noop(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_clear_customer_lookup_empty_id_is_noop(self, fake_redis: _FakeRedis) -> None:
         state_mod._clear_customer_lookup("")
         assert fake_redis.deleted == []
 
-    def test_clear_subscription_lookup_empty_id_is_noop(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_clear_subscription_lookup_empty_id_is_noop(self, fake_redis: _FakeRedis) -> None:
         state_mod._clear_subscription_lookup("")
         assert fake_redis.deleted == []
 

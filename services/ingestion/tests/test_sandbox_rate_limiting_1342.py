@@ -25,8 +25,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
 from app.sandbox import rate_limiting
 from app.sandbox.rate_limiting import (
     _SANDBOX_RATE_LIMIT,
@@ -36,11 +34,12 @@ from app.sandbox.rate_limiting import (
     _check_sandbox_rate_limit,
     _get_redis,
 )
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_module_state():
@@ -61,6 +60,7 @@ def _reset_module_state():
 # ===========================================================================
 # _check_in_memory
 # ===========================================================================
+
 
 class TestCheckInMemory:
     """Sliding-window accounting entirely in-process."""
@@ -132,6 +132,7 @@ class TestCheckInMemory:
 # _get_redis
 # ===========================================================================
 
+
 class TestGetRedis:
     """Lazy Redis-client caching + failure latching."""
 
@@ -161,14 +162,10 @@ class TestGetRedis:
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://test-host:6379/0")
 
-        monkeypatch.setattr(
-            "app.config.get_settings", fake_get_settings, raising=False
-        )
+        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
         # ``import redis as redis_lib`` happens inside the function;
         # monkeypatch sys.modules so that import resolves to our fake.
-        monkeypatch.setitem(
-            __import__("sys").modules, "redis", FakeRedisModule
-        )
+        monkeypatch.setitem(__import__("sys").modules, "redis", FakeRedisModule)
 
         result = _get_redis()
         assert result is fake_client
@@ -195,12 +192,8 @@ class TestGetRedis:
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://broken:6379/0")
 
-        monkeypatch.setattr(
-            "app.config.get_settings", fake_get_settings, raising=False
-        )
-        monkeypatch.setitem(
-            __import__("sys").modules, "redis", FakeRedisModule
-        )
+        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
+        monkeypatch.setitem(__import__("sys").modules, "redis", FakeRedisModule)
 
         assert _get_redis() is None
         assert rate_limiting._redis_failed is True
@@ -211,12 +204,11 @@ class TestGetRedis:
 
     def test_import_failure_latches_failed_flag(self, monkeypatch):
         """If the redis module can't be imported, fail gracefully."""
+
         def fake_get_settings():
             return SimpleNamespace(redis_url="redis://x/0")
 
-        monkeypatch.setattr(
-            "app.config.get_settings", fake_get_settings, raising=False
-        )
+        monkeypatch.setattr("app.config.get_settings", fake_get_settings, raising=False)
         # Force import failure by dropping ``redis`` from sys.modules
         # and replacing with a module that raises on attribute access.
         import sys
@@ -233,6 +225,7 @@ class TestGetRedis:
 # ===========================================================================
 # _check_redis
 # ===========================================================================
+
 
 class _FakePipeline:
     """Stub pipeline recording calls for assertions."""
@@ -309,7 +302,10 @@ class TestCheckRedis:
         assert op_names == ["zremrangebyscore", "zcard", "execute"]
         # Verify the prune window boundary is now - WINDOW
         assert pipe.calls[0] == (
-            "zremrangebyscore", "sandbox:rate:3.3.3.3", 0, 1000.0 - _SANDBOX_WINDOW,
+            "zremrangebyscore",
+            "sandbox:rate:3.3.3.3",
+            0,
+            1000.0 - _SANDBOX_WINDOW,
         )
 
     def test_at_limit_with_oldest_returns_remaining_seconds(self, monkeypatch):
@@ -369,6 +365,7 @@ class TestCheckRedis:
 # _check_sandbox_rate_limit — public entry
 # ===========================================================================
 
+
 class TestCheckSandboxRateLimit:
     """Public API: under-limit is silent, at-limit raises 429."""
 
@@ -406,6 +403,7 @@ class TestCheckSandboxRateLimit:
                 return _RealDT(2000, 1, 1, 0, 0, 5, tzinfo=tz)
 
         from datetime import datetime as _RealDT, timezone as _RealTZ
+
         class _FrozenClock:
             @staticmethod
             def now(tz=None):
@@ -416,6 +414,7 @@ class TestCheckSandboxRateLimit:
         class _Frozen:
             def __init__(self, ts):
                 self._ts = ts
+
             def timestamp(self):
                 return self._ts
 

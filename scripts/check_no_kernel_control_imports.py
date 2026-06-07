@@ -42,8 +42,7 @@ def main() -> int:
 
     if offenders:
         print(
-            "ERROR: kernel.control was retired (epic-g-retire-kernel). "
-            "Found forbidden imports:",
+            "ERROR: kernel.control was retired (epic-g-retire-kernel). Found forbidden imports:",
             file=sys.stderr,
         )
         for line in offenders:

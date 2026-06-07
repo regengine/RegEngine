@@ -30,6 +30,7 @@ from the April 17 shared-kernel audit:
 All assertions use the same ``FakeSession`` harness as
 ``test_cte_persistence_hardening.py`` so no live Postgres is needed.
 """
+
 from __future__ import annotations
 
 import re
@@ -38,10 +39,8 @@ from typing import Any, Dict, List, Tuple
 from unittest.mock import MagicMock
 
 import pytest
-
-from sqlalchemy.exc import OperationalError, ProgrammingError
-
 from shared.cte_persistence.core import CTEPersistence
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
 TENANT_B = "22222222-2222-2222-2222-222222222222"
@@ -113,19 +112,11 @@ class TestTenantContext_Issue1321:
 
         # The set_tenant_context SQL must appear in the call log and
         # precede any fsma.cte_events SELECT.
-        set_calls = [
-            i for i, (sql, _) in enumerate(session.calls)
-            if "app.tenant_id" in sql
-        ]
-        select_calls = [
-            i for i, (sql, _) in enumerate(session.calls)
-            if "FROM fsma.cte_events" in sql
-        ]
+        set_calls = [i for i, (sql, _) in enumerate(session.calls) if "app.tenant_id" in sql]
+        select_calls = [i for i, (sql, _) in enumerate(session.calls) if "FROM fsma.cte_events" in sql]
         assert set_calls, "query_events_by_tlc must set app.tenant_id"
         assert select_calls, "query_events_by_tlc must SELECT from fsma.cte_events"
-        assert set_calls[0] < select_calls[0], (
-            "tenant context must be set BEFORE the cte_events SELECT"
-        )
+        assert set_calls[0] < select_calls[0], "tenant context must be set BEFORE the cte_events SELECT"
 
     def test_query_events_by_tlc_passes_tenant_to_session_setting(self):
         """The bound tenant_id parameter on the SET LOCAL must match
@@ -137,10 +128,7 @@ class TestTenantContext_Issue1321:
         p = CTEPersistence(session=session)
         p.query_events_by_tlc(tenant_id=TENANT_B, tlc="TLC-1")
 
-        set_calls = [
-            (sql, params) for sql, params in session.calls
-            if "app.tenant_id" in sql
-        ]
+        set_calls = [(sql, params) for sql, params in session.calls if "app.tenant_id" in sql]
         assert set_calls
         _, params = set_calls[0]
         assert params["tid"] == TENANT_B
@@ -156,9 +144,7 @@ class TestTenantContext_Issue1321:
         p = CTEPersistence(session=session)
         p.query_events_by_tlc(tenant_id=TENANT_A, tlc="TLC-1")
 
-        select_sql = next(
-            sql for sql, _ in session.calls if "FROM fsma.cte_events" in sql
-        )
+        select_sql = next(sql for sql, _ in session.calls if "FROM fsma.cte_events" in sql)
         assert "tenant_id = :tid" in select_sql
 
 
@@ -186,10 +172,7 @@ class TestTraversalDepth_Issue1322:
         p.query_events_by_tlc(tenant_id=TENANT_A, tlc="TLC-1", max_depth=12)
 
         # Find the recursive CTE call and assert the bound depth.
-        cte_calls = [
-            (sql, params) for sql, params in session.calls
-            if "RECURSIVE tlc_graph" in sql
-        ]
+        cte_calls = [(sql, params) for sql, params in session.calls if "RECURSIVE tlc_graph" in sql]
         assert cte_calls
         _, params = cte_calls[0]
         assert params["max_depth"] == 12
@@ -201,7 +184,9 @@ class TestTraversalDepth_Issue1322:
         p = CTEPersistence(session=session)
         with pytest.raises(ValueError, match="depth must be"):
             p._expand_tlcs_via_transformation_links(
-                tenant_id=TENANT_A, seed_tlc="TLC-1", depth=-1,
+                tenant_id=TENANT_A,
+                seed_tlc="TLC-1",
+                depth=-1,
             )
 
     def test_programming_error_degrades_to_seed_tlc_only(self):
@@ -217,7 +202,8 @@ class TestTraversalDepth_Issue1322:
 
         p = CTEPersistence(session=session)
         result = p._expand_tlcs_via_transformation_links(
-            tenant_id=TENANT_A, seed_tlc="TLC-X",
+            tenant_id=TENANT_A,
+            seed_tlc="TLC-X",
         )
         assert result == ["TLC-X"]
 
@@ -233,7 +219,8 @@ class TestTraversalDepth_Issue1322:
 
         p = CTEPersistence(session=session)
         result = p._expand_tlcs_via_transformation_links(
-            tenant_id=TENANT_A, seed_tlc="TLC-X",
+            tenant_id=TENANT_A,
+            seed_tlc="TLC-X",
         )
         assert result == ["TLC-X"]
 
@@ -253,7 +240,8 @@ class TestTraversalDepth_Issue1322:
         p = CTEPersistence(session=session)
         with pytest.raises(RuntimeError):
             p._expand_tlcs_via_transformation_links(
-                tenant_id=TENANT_A, seed_tlc="TLC-X",
+                tenant_id=TENANT_A,
+                seed_tlc="TLC-X",
             )
 
 
@@ -346,9 +334,7 @@ class TestFutureDate_Issue1336:
         p = CTEPersistence(session=session)
         future = (datetime.now(timezone.utc) + timedelta(days=365 * 5)).isoformat()
         with pytest.raises(ValueError, match="future"):
-            p.store_events_batch(
-                tenant_id=TENANT_A, events=[_base_batch_event(event_timestamp=future)]
-            )
+            p.store_events_batch(tenant_id=TENANT_A, events=[_base_batch_event(event_timestamp=future)])
 
 
 class TestBatchKdeJsonb_Issue1336:
@@ -388,6 +374,4 @@ class TestBatchKdeJsonb_Issue1336:
             # JSON text uses double-quotes for strings; python repr
             # uses single-quotes.  A bare ``["TLC-A","TLC-B"]`` is
             # valid JSON; ``['TLC-A', 'TLC-B']`` is not.
-            assert "'TLC-A'" not in v, (
-                f"KDE value should be JSON text, got python repr: {v!r}"
-            )
+            assert "'TLC-A'" not in v, f"KDE value should be JSON text, got python repr: {v!r}"

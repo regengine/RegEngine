@@ -14,11 +14,10 @@ import hashlib
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+import app.routes_scraping as routes_scraping
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from shared.auth import APIKey, require_api_key
-import app.routes_scraping as routes_scraping
 
 router = routes_scraping.router
 
@@ -128,7 +127,9 @@ class TestIngestAllRegulations:
     def test_endpoint_does_not_accept_background_tasks_param(self):
         """Signature must not list BackgroundTasks — confirms the dead param was removed."""
         import inspect
+
         from fastapi import BackgroundTasks
+
         sig = inspect.signature(routes_scraping.ingest_all_regulations)
         for param in sig.parameters.values():
             assert param.annotation is not BackgroundTasks, (
@@ -169,8 +170,8 @@ class TestIngestAllRegulations:
 
 class TestRegisterScrapingHandlers:
     def test_registers_both_task_types(self):
-        from shared.task_queue import TASK_HANDLERS
         from app.task_handlers_scraping import register_scraping_handlers
+        from shared.task_queue import TASK_HANDLERS
 
         for key in ("state_scrape", "generic_scrape"):
             TASK_HANDLERS.pop(key, None)
@@ -181,8 +182,8 @@ class TestRegisterScrapingHandlers:
         assert "generic_scrape" in TASK_HANDLERS
 
     def test_handlers_are_distinct(self):
-        from shared.task_queue import TASK_HANDLERS
         from app.task_handlers_scraping import register_scraping_handlers
+        from shared.task_queue import TASK_HANDLERS
 
         register_scraping_handlers()
 

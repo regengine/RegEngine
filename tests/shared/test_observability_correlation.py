@@ -19,7 +19,6 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # HTTP middleware
 # ---------------------------------------------------------------------------

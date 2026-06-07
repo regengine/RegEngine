@@ -5,6 +5,7 @@ Tests for CTE persistence cluster fixes:
   #1334 — append-only migration SQL present
   #1335 — module header no longer contains the word LEGACY
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -25,12 +26,14 @@ MIGRATION_DIR = REPO_ROOT / "alembic" / "sql"
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def _make_hash(
     product_description: str = "Organic Romaine Lettuce",
     kdes: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Call compute_event_hash with a fixed event, varying only product_description."""
     from services.shared.cte_persistence.hashing import compute_event_hash
+
     return compute_event_hash(
         event_id="evt-001",
         event_type="harvesting",
@@ -49,13 +52,14 @@ def _make_hash(
 # #1323 — product_description must NOT affect the event hash
 # ============================================================
 
+
 class TestHashStability:
     def test_same_hash_for_different_product_description(self):
         """The same event with a reformatted description must produce the same hash."""
         h1 = _make_hash("Organic Romaine Lettuce")
         h2 = _make_hash("organic romaine lettuce")  # lowercase reformat
         h3 = _make_hash("Lechuga Romana Orgánica")  # translated
-        h4 = _make_hash("")                          # empty
+        h4 = _make_hash("")  # empty
 
         assert h1 == h2, "case-reformatted description changed hash"
         assert h1 == h3, "translated description changed hash"
@@ -64,26 +68,60 @@ class TestHashStability:
     def test_different_event_type_gives_different_hash(self):
         """Stable fields still differentiate events."""
         from services.shared.cte_persistence.hashing import compute_event_hash
+
         h_harv = compute_event_hash(
-            "evt-001", "harvesting", "TLC-X", "", 10.0, "kg", None, None,
-            "2024-01-01T00:00:00+00:00", {},
+            "evt-001",
+            "harvesting",
+            "TLC-X",
+            "",
+            10.0,
+            "kg",
+            None,
+            None,
+            "2024-01-01T00:00:00+00:00",
+            {},
         )
         h_ship = compute_event_hash(
-            "evt-001", "shipping", "TLC-X", "", 10.0, "kg", None, None,
-            "2024-01-01T00:00:00+00:00", {},
+            "evt-001",
+            "shipping",
+            "TLC-X",
+            "",
+            10.0,
+            "kg",
+            None,
+            None,
+            "2024-01-01T00:00:00+00:00",
+            {},
         )
         assert h_harv != h_ship
 
     def test_different_tlc_gives_different_hash(self):
         """TLC change must still produce a different hash."""
         from services.shared.cte_persistence.hashing import compute_event_hash
+
         h1 = compute_event_hash(
-            "evt-001", "harvesting", "TLC-A", "desc", 10.0, "kg", None, None,
-            "2024-01-01T00:00:00+00:00", {},
+            "evt-001",
+            "harvesting",
+            "TLC-A",
+            "desc",
+            10.0,
+            "kg",
+            None,
+            None,
+            "2024-01-01T00:00:00+00:00",
+            {},
         )
         h2 = compute_event_hash(
-            "evt-001", "harvesting", "TLC-B", "desc", 10.0, "kg", None, None,
-            "2024-01-01T00:00:00+00:00", {},
+            "evt-001",
+            "harvesting",
+            "TLC-B",
+            "desc",
+            10.0,
+            "kg",
+            None,
+            None,
+            "2024-01-01T00:00:00+00:00",
+            {},
         )
         assert h1 != h2
 
@@ -104,9 +142,11 @@ class TestHashStability:
 # #1324 — critical alerts → validation_status='rejected'
 # ============================================================
 
+
 class TestValidationStatus:
     def _call_derive(self, alerts: List[Dict[str, Any]]) -> str:
         from services.shared.cte_persistence.core import _derive_validation_status
+
         return _derive_validation_status(alerts)
 
     def test_no_alerts_gives_valid(self):
@@ -178,6 +218,7 @@ class TestValidationStatus:
 # #1334 — migration file with append-only triggers exists
 # ============================================================
 
+
 class TestAppendOnlyMigration:
     def _find_migration(self) -> Optional[Path]:
         """Find V053 migration (or any migration referencing prevent_cte_mutation)."""
@@ -215,8 +256,7 @@ class TestAppendOnlyMigration:
         assert migration is not None
         sql = migration.read_text()
         assert "allow_mutation" in sql, (
-            "Migration must include the fsma.allow_mutation GUC escape hatch "
-            "so authorized corrections are possible"
+            "Migration must include the fsma.allow_mutation GUC escape hatch so authorized corrections are possible"
         )
 
     def test_trigger_function_raises_on_mutation(self):
@@ -230,6 +270,7 @@ class TestAppendOnlyMigration:
 # ============================================================
 # #1335 — module header must not say LEGACY
 # ============================================================
+
 
 class TestNoLegacyLabel:
     def test_core_module_header_not_legacy(self):
@@ -245,17 +286,15 @@ class TestNoLegacyLabel:
     def test_hashing_module_no_legacy_in_function_names(self):
         """No function in hashing.py should be named with 'legacy' in it."""
         from services.shared.cte_persistence import hashing
-        legacy_funcs = [
-            name for name in dir(hashing)
-            if "legacy" in name.lower() and callable(getattr(hashing, name))
-        ]
+
+        legacy_funcs = [name for name in dir(hashing) if "legacy" in name.lower() and callable(getattr(hashing, name))]
         assert not legacy_funcs, f"hashing.py has legacy-named functions: {legacy_funcs}"
 
     def test_dual_write_reconciliation_marker_present(self):
         """DUAL_WRITE_RECONCILIATION_NEEDED constant must exist in core.py."""
         from services.shared.cte_persistence import core
+
         assert hasattr(core, "DUAL_WRITE_RECONCILIATION_NEEDED"), (
-            "core.py must export DUAL_WRITE_RECONCILIATION_NEEDED = True "
-            "as a machine-findable marker per #1335"
+            "core.py must export DUAL_WRITE_RECONCILIATION_NEEDED = True as a machine-findable marker per #1335"
         )
         assert core.DUAL_WRITE_RECONCILIATION_NEEDED is True

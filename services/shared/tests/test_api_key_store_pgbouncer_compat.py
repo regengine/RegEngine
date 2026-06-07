@@ -10,6 +10,7 @@ The fix: pass ``statement_cache_size=0`` and
 ``prepared_statement_cache_size=0`` via ``connect_args`` when the URL
 uses the asyncpg driver. This test pins that behavior.
 """
+
 from unittest.mock import patch
 
 
@@ -29,8 +30,9 @@ def _make_store_with_url(url: str):
         captured["kwargs"] = kwargs
         return object()  # Engine stand-in; store only needs it for attribute assignment.
 
-    with patch.object(api_key_store, "create_async_engine", _fake_create_async_engine), patch.object(
-        api_key_store, "sessionmaker", lambda *a, **kw: None
+    with (
+        patch.object(api_key_store, "create_async_engine", _fake_create_async_engine),
+        patch.object(api_key_store, "sessionmaker", lambda *a, **kw: None),
     ):
         api_key_store.DatabaseAPIKeyStore(database_url=url)
     return captured

@@ -12,10 +12,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-
-from .webhook_compat import require_tenant_context
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
+
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("notification-prefs")
 
@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["Notification Preferenc
 
 class NotificationChannel(BaseModel):
     """A notification delivery channel."""
+
     channel: str  # email, slack, webhook, sms
     enabled: bool = True
     target: str = ""  # email address, webhook URL, Slack channel
@@ -32,6 +33,7 @@ class NotificationChannel(BaseModel):
 
 class AlertPreference(BaseModel):
     """Preference for a specific alert rule."""
+
     rule_id: str
     rule_name: str
     enabled: bool = True
@@ -41,15 +43,17 @@ class AlertPreference(BaseModel):
 
 class QuietHours(BaseModel):
     """Quiet hours configuration."""
+
     enabled: bool = False
     start_hour: int = 22  # 10 PM
-    end_hour: int = 7     # 7 AM
+    end_hour: int = 7  # 7 AM
     timezone: str = "America/Los_Angeles"
     override_critical: bool = True  # Critical alerts bypass quiet hours
 
 
 class EscalationRule(BaseModel):
     """Escalation rule for unacknowledged alerts."""
+
     enabled: bool = True
     escalate_after_minutes: int = 60
     escalate_to: str = ""  # email or Slack
@@ -57,6 +61,7 @@ class EscalationRule(BaseModel):
 
 class NotificationPreferences(BaseModel):
     """Complete notification preferences for a tenant."""
+
     tenant_id: str
     channels: list[NotificationChannel]
     alert_preferences: list[AlertPreference]
@@ -78,14 +83,62 @@ def _default_preferences(tenant_id: str) -> NotificationPreferences:
             NotificationChannel(channel="sms", enabled=False, target=""),
         ],
         alert_preferences=[
-            AlertPreference(rule_id="kde-missing", rule_name="Missing Key Data Elements", enabled=True, channels=["email"], min_severity="warning"),
-            AlertPreference(rule_id="cte-overdue", rule_name="Overdue CTE Entry", enabled=True, channels=["email"], min_severity="warning"),
-            AlertPreference(rule_id="temp-excursion", rule_name="Temperature Excursion", enabled=True, channels=["email", "slack"], min_severity="info"),
-            AlertPreference(rule_id="chain-integrity", rule_name="Hash Chain Break", enabled=True, channels=["email", "slack"], min_severity="info"),
-            AlertPreference(rule_id="portal-expiry", rule_name="Supplier Portal Link Expiring", enabled=True, channels=["email"], min_severity="info"),
-            AlertPreference(rule_id="fda-deadline", rule_name="FDA Records Request Deadline", enabled=True, channels=["email", "slack", "sms"], min_severity="info"),
-            AlertPreference(rule_id="compliance-drop", rule_name="Compliance Score Drop", enabled=True, channels=["email"], min_severity="warning"),
-            AlertPreference(rule_id="event-volume-spike", rule_name="Event Volume Anomaly", enabled=False, channels=["email"], min_severity="warning"),
+            AlertPreference(
+                rule_id="kde-missing",
+                rule_name="Missing Key Data Elements",
+                enabled=True,
+                channels=["email"],
+                min_severity="warning",
+            ),
+            AlertPreference(
+                rule_id="cte-overdue",
+                rule_name="Overdue CTE Entry",
+                enabled=True,
+                channels=["email"],
+                min_severity="warning",
+            ),
+            AlertPreference(
+                rule_id="temp-excursion",
+                rule_name="Temperature Excursion",
+                enabled=True,
+                channels=["email", "slack"],
+                min_severity="info",
+            ),
+            AlertPreference(
+                rule_id="chain-integrity",
+                rule_name="Hash Chain Break",
+                enabled=True,
+                channels=["email", "slack"],
+                min_severity="info",
+            ),
+            AlertPreference(
+                rule_id="portal-expiry",
+                rule_name="Supplier Portal Link Expiring",
+                enabled=True,
+                channels=["email"],
+                min_severity="info",
+            ),
+            AlertPreference(
+                rule_id="fda-deadline",
+                rule_name="FDA Records Request Deadline",
+                enabled=True,
+                channels=["email", "slack", "sms"],
+                min_severity="info",
+            ),
+            AlertPreference(
+                rule_id="compliance-drop",
+                rule_name="Compliance Score Drop",
+                enabled=True,
+                channels=["email"],
+                min_severity="warning",
+            ),
+            AlertPreference(
+                rule_id="event-volume-spike",
+                rule_name="Event Volume Anomaly",
+                enabled=False,
+                channels=["email"],
+                min_severity="warning",
+            ),
         ],
         quiet_hours=QuietHours(enabled=False),
         escalation=EscalationRule(enabled=True, escalate_after_minutes=60, escalate_to="manager@example.com"),
@@ -185,11 +238,11 @@ async def toggle_channel(
         if tenant_id not in _prefs_store:
             _prefs_store[tenant_id] = _default_preferences(tenant_id)
         prefs = _prefs_store[tenant_id]
-    
+
     for ch in prefs.channels:
         if ch.channel == channel:
             ch.enabled = enabled
-            
+
             # Try DB first, fall back to memory
             db_success = _db_save_preferences(tenant_id, prefs)
             if db_success:
@@ -221,11 +274,11 @@ async def toggle_alert_rule(
         if tenant_id not in _prefs_store:
             _prefs_store[tenant_id] = _default_preferences(tenant_id)
         prefs = _prefs_store[tenant_id]
-    
+
     for ap in prefs.alert_preferences:
         if ap.rule_id == rule_id:
             ap.enabled = enabled
-            
+
             # Try DB first, fall back to memory
             db_success = _db_save_preferences(tenant_id, prefs)
             if db_success:

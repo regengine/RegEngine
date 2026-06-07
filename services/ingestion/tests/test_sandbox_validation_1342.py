@@ -27,7 +27,6 @@ from __future__ import annotations
 import string
 
 import pytest
-
 from app.sandbox.validation import (
     _detect_duplicate_lots,
     _detect_entity_mismatches,
@@ -37,10 +36,10 @@ from app.sandbox.validation import (
 )
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _base_event(cte_type: str, **overrides) -> dict:
     """Build a raw-event dict with minimal, valid top-level fields.
@@ -99,6 +98,7 @@ def _full_required_event(cte_type: WebhookCTEType) -> dict:
 # ===========================================================================
 # _validate_kdes
 # ===========================================================================
+
 
 class TestValidateKdesCteTypeResolution:
     """Validate how ``_validate_kdes`` resolves the ``cte_type`` field."""
@@ -243,6 +243,7 @@ class TestValidateKdesRequiredFields:
 # _detect_duplicate_lots
 # ===========================================================================
 
+
 class TestDetectDuplicateLots:
     """Duplicate detection keyed on (TLC, CTE type, reference_document)."""
 
@@ -257,10 +258,8 @@ class TestDetectDuplicateLots:
     def test_duplicate_same_cte_same_tlc_same_ref_flagged(self):
         """Exact dup — TLC + CTE + ref_doc all match — gets a warning."""
         events = [
-            _base_event("harvesting", traceability_lot_code="TLC-001",
-                        kdes={"reference_document": "BOL-100"}),
-            _base_event("harvesting", traceability_lot_code="TLC-001",
-                        kdes={"reference_document": "BOL-100"}),
+            _base_event("harvesting", traceability_lot_code="TLC-001", kdes={"reference_document": "BOL-100"}),
+            _base_event("harvesting", traceability_lot_code="TLC-001", kdes={"reference_document": "BOL-100"}),
         ]
         warnings = _detect_duplicate_lots(events)
         assert 1 in warnings
@@ -274,10 +273,8 @@ class TestDetectDuplicateLots:
     def test_split_shipment_different_ref_docs_not_flagged(self):
         """Different BOLs with same TLC+CTE is a legitimate split shipment."""
         events = [
-            _base_event("shipping", traceability_lot_code="TLC-001",
-                        kdes={"reference_document": "BOL-100"}),
-            _base_event("shipping", traceability_lot_code="TLC-001",
-                        kdes={"reference_document": "BOL-101"}),
+            _base_event("shipping", traceability_lot_code="TLC-001", kdes={"reference_document": "BOL-100"}),
+            _base_event("shipping", traceability_lot_code="TLC-001", kdes={"reference_document": "BOL-101"}),
         ]
         assert _detect_duplicate_lots(events) == {}
 
@@ -339,10 +336,8 @@ class TestDetectDuplicateLots:
     def test_ref_doc_from_top_level_fallback(self):
         """``reference_document`` at top level should be used when ``kdes`` lacks it."""
         events = [
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        reference_document="BOL-A"),
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        reference_document="BOL-A"),
+            _base_event("harvesting", traceability_lot_code="TLC-1", reference_document="BOL-A"),
+            _base_event("harvesting", traceability_lot_code="TLC-1", reference_document="BOL-A"),
         ]
         warnings = _detect_duplicate_lots(events)
         assert 1 in warnings
@@ -350,12 +345,18 @@ class TestDetectDuplicateLots:
     def test_kdes_ref_doc_takes_precedence_over_top_level(self):
         """When both are set, ``kdes.reference_document`` wins (first arg to ``or``)."""
         events = [
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        reference_document="TOP-A",
-                        kdes={"reference_document": "KDE-X"}),
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        reference_document="TOP-B",
-                        kdes={"reference_document": "KDE-X"}),
+            _base_event(
+                "harvesting",
+                traceability_lot_code="TLC-1",
+                reference_document="TOP-A",
+                kdes={"reference_document": "KDE-X"},
+            ),
+            _base_event(
+                "harvesting",
+                traceability_lot_code="TLC-1",
+                reference_document="TOP-B",
+                kdes={"reference_document": "KDE-X"},
+            ),
         ]
         warnings = _detect_duplicate_lots(events)
         # Matched by the kdes value, not the top-level one
@@ -390,10 +391,8 @@ class TestDetectDuplicateLots:
     def test_ref_doc_none_coerced_via_or(self):
         """``kdes.reference_document`` is None → falls through to top-level (also None) → empty string."""
         events = [
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        kdes={"reference_document": None}),
-            _base_event("harvesting", traceability_lot_code="TLC-1",
-                        kdes={"reference_document": None}),
+            _base_event("harvesting", traceability_lot_code="TLC-1", kdes={"reference_document": None}),
+            _base_event("harvesting", traceability_lot_code="TLC-1", kdes={"reference_document": None}),
         ]
         warnings = _detect_duplicate_lots(events)
         assert 1 in warnings
@@ -403,46 +402,58 @@ class TestDetectDuplicateLots:
 # _is_entity_field
 # ===========================================================================
 
-class TestIsEntityField:
 
-    @pytest.mark.parametrize("field_name", [
-        "location_name",
-        "ship_from_location",
-        "ship_to_location",
-        "receiving_location",
-        "from_entity_reference",
-        "immediate_previous_source",
-    ])
+class TestIsEntityField:
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "location_name",
+            "ship_from_location",
+            "ship_to_location",
+            "receiving_location",
+            "from_entity_reference",
+            "immediate_previous_source",
+        ],
+    )
     def test_explicit_fields_recognized(self, field_name: str):
         assert _is_entity_field(field_name) is True
 
-    @pytest.mark.parametrize("field_name", [
-        "LOCATION_NAME",
-        "Ship_From_Location",
-        "Immediate_Previous_SOURCE",
-    ])
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "LOCATION_NAME",
+            "Ship_From_Location",
+            "Immediate_Previous_SOURCE",
+        ],
+    )
     def test_explicit_fields_case_insensitive(self, field_name: str):
         assert _is_entity_field(field_name) is True
 
-    @pytest.mark.parametrize("field_name", [
-        "some_location_field",
-        "entity_reference_xyz",
-        "any_source_thing",
-        "facility_id",
-        "my_facility",
-    ])
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "some_location_field",
+            "entity_reference_xyz",
+            "any_source_thing",
+            "facility_id",
+            "my_facility",
+        ],
+    )
     def test_marker_substring_matches(self, field_name: str):
         """Fields containing 'location'/'entity'/'source'/'facility' match."""
         assert _is_entity_field(field_name) is True
 
-    @pytest.mark.parametrize("field_name", [
-        "traceability_lot_code",
-        "product_description",
-        "quantity",
-        "unit_of_measure",
-        "harvest_date",
-        "cte_type",
-    ])
+    @pytest.mark.parametrize(
+        "field_name",
+        [
+            "traceability_lot_code",
+            "product_description",
+            "quantity",
+            "unit_of_measure",
+            "harvest_date",
+            "cte_type",
+        ],
+    )
     def test_non_entity_fields_rejected(self, field_name: str):
         assert _is_entity_field(field_name) is False
 
@@ -455,28 +466,31 @@ class TestIsEntityField:
 # _normalize_entity_name
 # ===========================================================================
 
-class TestNormalizeEntityName:
 
-    @pytest.mark.parametrize("original, expected", [
-        ("Acme Foods, Inc.", "acme foods"),
-        ("Acme Foods Inc", "acme foods"),
-        ("Acme Foods, LLC", "acme foods"),
-        ("Acme Foods LLC", "acme foods"),
-        ("Acme Foods Corp.", "acme foods"),
-        ("Acme Foods Corporation", "acme foods"),
-        ("Acme Foods Limited", "acme foods"),
-        ("Acme Foods Ltd.", "acme foods"),
-        ("Acme Foods Ltd", "acme foods"),
-        ("Acme Foods Company", "acme foods"),
-        ("Acme Foods Co.", "acme foods"),
-        ("Acme Foods Co", "acme foods"),
-        ("Acme Foods L.L.C.", "acme foods"),
-        ("Acme Foods L.L.P.", "acme foods"),
-        ("Acme Foods L.P.", "acme foods"),
-        ("Acme Foods LP", "acme foods"),
-        ("Acme Foods LLP", "acme foods"),
-        ("Acme Foods Incorporated", "acme foods"),
-    ])
+class TestNormalizeEntityName:
+    @pytest.mark.parametrize(
+        "original, expected",
+        [
+            ("Acme Foods, Inc.", "acme foods"),
+            ("Acme Foods Inc", "acme foods"),
+            ("Acme Foods, LLC", "acme foods"),
+            ("Acme Foods LLC", "acme foods"),
+            ("Acme Foods Corp.", "acme foods"),
+            ("Acme Foods Corporation", "acme foods"),
+            ("Acme Foods Limited", "acme foods"),
+            ("Acme Foods Ltd.", "acme foods"),
+            ("Acme Foods Ltd", "acme foods"),
+            ("Acme Foods Company", "acme foods"),
+            ("Acme Foods Co.", "acme foods"),
+            ("Acme Foods Co", "acme foods"),
+            ("Acme Foods L.L.C.", "acme foods"),
+            ("Acme Foods L.L.P.", "acme foods"),
+            ("Acme Foods L.P.", "acme foods"),
+            ("Acme Foods LP", "acme foods"),
+            ("Acme Foods LLP", "acme foods"),
+            ("Acme Foods Incorporated", "acme foods"),
+        ],
+    )
     def test_strips_business_suffixes(self, original: str, expected: str):
         assert _normalize_entity_name(original) == expected
 
@@ -523,10 +537,7 @@ class TestNormalizeEntityName:
         assert _normalize_entity_name("Acme.") == "acme"
 
     def test_multiple_words_preserved(self):
-        assert (
-            _normalize_entity_name("Big Farm Produce Company")
-            == "big farm produce"
-        )
+        assert _normalize_entity_name("Big Farm Produce Company") == "big farm produce"
 
     def test_punctuation_constant_fully_stripped(self):
         """Guardrail: every char in string.punctuation must be removed.
@@ -542,8 +553,8 @@ class TestNormalizeEntityName:
 # _detect_entity_mismatches
 # ===========================================================================
 
-class TestDetectEntityMismatches:
 
+class TestDetectEntityMismatches:
     def test_no_entities_no_warnings(self):
         events = [
             {"traceability_lot_code": "TLC-1", "quantity": 5, "kdes": {}},

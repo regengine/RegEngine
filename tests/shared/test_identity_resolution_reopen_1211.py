@@ -31,7 +31,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-1211"
 ENTITY_A = "11111111-1111-1111-1111-111111111111"
 ENTITY_B = "22222222-2222-2222-2222-222222222222"
@@ -80,9 +79,7 @@ class _ScriptedSession:
             # fails loudly — the whole point of #1211 is that we no
             # longer issue "any existing row" queries.
             self.calls.append(("unexpected", params or {}))
-            raise AssertionError(
-                f"unexpected SQL in queue_for_review:\n{sql[:300]}"
-            )
+            raise AssertionError(f"unexpected SQL in queue_for_review:\n{sql[:300]}")
         return result
 
 
@@ -123,9 +120,7 @@ class TestOpenRowIdempotent_Issue1211:
         assert result["match_confidence"] == 0.82
         # Exactly one query — the open check — and no insert.
         kinds = [c[0] for c in session.calls]
-        assert kinds == ["open_check"], (
-            f"expected short-circuit after open_check, got {kinds}"
-        )
+        assert kinds == ["open_check"], f"expected short-circuit after open_check, got {kinds}"
 
     def test_deferred_row_returns_idempotent_no_insert(self):
         """A deferred review counts as 'open' for idempotency."""
@@ -161,18 +156,14 @@ class TestClosedRowReopen_Issue1211:
         assert result["is_reopen"] is True
         # Full flow: open_check -> closed_lookup -> insert.
         kinds = [c[0] for c in session.calls]
-        assert kinds == ["open_check", "closed_lookup", "insert"], (
-            f"expected full reopen flow, got {kinds}"
-        )
+        assert kinds == ["open_check", "closed_lookup", "insert"], f"expected full reopen flow, got {kinds}"
         # Insert params thread the previous_review_id through.
         insert_params = dict(session.calls[2][1])
         assert insert_params["previous_review_id"] == "rev-closed-distinct"
         # New row is 'pending' (not inheriting the closed status).
         # Status is fixed in the INSERT SQL literal; confirm by checking
         # that a status param is NOT being set to the closed value.
-        assert "status" not in insert_params or insert_params.get(
-            "status"
-        ) != "confirmed_distinct"
+        assert "status" not in insert_params or insert_params.get("status") != "confirmed_distinct"
 
     def test_confirmed_match_also_does_not_block(self):
         """A prior confirmed_match also should not block a re-review —
@@ -232,12 +223,9 @@ class TestStatusAwareQueryShape_Issue1211:
         )
 
         # First SELECT must be scoped to open statuses.
-        assert any(
-            "IN ('pending', 'deferred')" in s for s in captured_sql
-        ), (
+        assert any("IN ('pending', 'deferred')" in s for s in captured_sql), (
             f"open-check SQL did not filter on pending/deferred — "
-            f"this is the #1211 regression.\ncaptured:\n"
-            + "\n---\n".join(captured_sql)
+            f"this is the #1211 regression.\ncaptured:\n" + "\n---\n".join(captured_sql)
         )
 
     def test_open_check_is_tenant_scoped(self):
@@ -307,7 +295,10 @@ class TestResponseShape_Issue1211:
         result = _call(session)
         # Must contain the core idempotent fields.
         assert set(result) >= {
-            "review_id", "status", "match_confidence", "idempotent",
+            "review_id",
+            "status",
+            "match_confidence",
+            "idempotent",
         }
 
     def test_insert_response_always_includes_reopen_fields(self):

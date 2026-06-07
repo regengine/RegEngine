@@ -22,21 +22,21 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 from shared.identity_resolution.constants import (
-    VALID_ENTITY_TYPES,
-    VALID_ALIAS_TYPES,
-    VALID_REVIEW_STATUSES,
-    AMBIGUOUS_THRESHOLD_LOW,
     AMBIGUOUS_THRESHOLD_HIGH,
+    AMBIGUOUS_THRESHOLD_LOW,
+    VALID_ALIAS_TYPES,
+    VALID_ENTITY_TYPES,
+    VALID_REVIEW_STATUSES,
 )
+
 # #1233: PII masking helpers for log emission. Raw alias_value /
 # canonical_name must never reach the log sinks — log retention is
 # typically longer than DB retention and sinks are accessible to a
 # wider personnel surface (SRE, observability vendors).
 from shared.pii import mask_alias_value, mask_name
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("identity-resolution")
 
@@ -51,9 +51,15 @@ logger = logging.getLogger("identity-resolution")
 #   - "tlc", "tlc_prefix" — Traceability Lot Codes are stored VERBATIM per
 #     FSMA 204; their internal structure (supplier-defined suffix) must never
 #     be altered (#1175).
-_STRUCTURED_IDENTIFIER_ALIAS_TYPES: frozenset = frozenset({
-    "gln", "gtin", "fda_registration", "internal_code", "duns",
-})
+_STRUCTURED_IDENTIFIER_ALIAS_TYPES: frozenset = frozenset(
+    {
+        "gln",
+        "gtin",
+        "fda_registration",
+        "internal_code",
+        "duns",
+    }
+)
 
 
 def _normalize_identifier(kind: str, value: str) -> str:
@@ -90,6 +96,7 @@ def _normalize_identifier(kind: str, value: str) -> str:
 # ---------------------------------------------------------------------------
 # Identity Resolution Service
 # ---------------------------------------------------------------------------
+
 
 class IdentityResolutionService:
     """
@@ -148,13 +155,12 @@ class IdentityResolutionService:
         if self._principal_tenant_id is None:
             return
         if not tenant_id:
-            raise PermissionError(
-                "identity_resolution: tenant_id is required"
-            )
+            raise PermissionError("identity_resolution: tenant_id is required")
         if tenant_id != self._principal_tenant_id:
             logger.warning(
                 "identity_tenant_mismatch principal=%s requested=%s",
-                self._principal_tenant_id, tenant_id,
+                self._principal_tenant_id,
+                tenant_id,
             )
             raise PermissionError(
                 "identity_resolution: tenant_id does not match the "
@@ -618,17 +624,19 @@ class IdentityResolutionService:
                 continue
 
             seen_entities.add(entity_id)
-            scored.append({
-                "entity_id": entity_id,
-                "entity_type": r[1],
-                "canonical_name": r[2],
-                "gln": r[3],
-                "gtin": r[4],
-                "verification_status": r[5],
-                "entity_confidence": float(r[6]) if r[6] is not None else None,
-                "confidence": round(ratio, 4),
-                "matched_alias": alias_value,
-            })
+            scored.append(
+                {
+                    "entity_id": entity_id,
+                    "entity_type": r[1],
+                    "canonical_name": r[2],
+                    "gln": r[3],
+                    "gtin": r[4],
+                    "verification_status": r[5],
+                    "entity_confidence": float(r[6]) if r[6] is not None else None,
+                    "confidence": round(ratio, 4),
+                    "matched_alias": alias_value,
+                }
+            )
 
         scored.sort(key=lambda x: x["confidence"], reverse=True)
         return scored[:limit]
@@ -746,12 +754,7 @@ class IdentityResolutionService:
             """),
             {"tenant_id": tenant_id, "source_entity_id": source_entity_id},
         ).fetchall()
-        alias_snapshot = {
-            source_entity_id: [
-                {"alias_type": r[0], "alias_value": r[1]}
-                for r in source_aliases_rows
-            ]
-        }
+        alias_snapshot = {source_entity_id: [{"alias_type": r[0], "alias_value": r[1]} for r in source_aliases_rows]}
 
         # Re-point aliases from source to target (skip duplicates)
         self.session.execute(
@@ -1111,9 +1114,7 @@ class IdentityResolutionService:
             return {
                 "review_id": str(open_existing[0]),
                 "status": open_existing[1],
-                "match_confidence": (
-                    float(open_existing[2]) if open_existing[2] is not None else None
-                ),
+                "match_confidence": (float(open_existing[2]) if open_existing[2] is not None else None),
                 "idempotent": True,
             }
 
@@ -1325,9 +1326,7 @@ class IdentityResolutionService:
         self._verify_tenant_access(tenant_id)
 
         if resolution not in VALID_REVIEW_STATUSES:
-            raise ValueError(
-                f"Invalid resolution '{resolution}'. Must be one of {sorted(VALID_REVIEW_STATUSES)}"
-            )
+            raise ValueError(f"Invalid resolution '{resolution}'. Must be one of {sorted(VALID_REVIEW_STATUSES)}")
 
         review = self.session.execute(
             text("""
@@ -1348,10 +1347,7 @@ class IdentityResolutionService:
 
         # Validate caller-supplied target up front — reject before any
         # side effect if it's not one of the two entities on this review.
-        if (
-            target_entity_id is not None
-            and target_entity_id not in (entity_a_id, entity_b_id)
-        ):
+        if target_entity_id is not None and target_entity_id not in (entity_a_id, entity_b_id):
             raise ValueError(
                 f"target_entity_id '{target_entity_id}' is not part of review "
                 f"'{review_id}' (expected one of '{entity_a_id}' or "
@@ -1402,7 +1398,9 @@ class IdentityResolutionService:
                 }
             else:
                 source, target, rationale = self._pick_merge_target(
-                    tenant_id, entity_a_id, entity_b_id,
+                    tenant_id,
+                    entity_a_id,
+                    entity_b_id,
                 )
             logger.info(
                 "review_merge_target_selected",
@@ -1416,10 +1414,7 @@ class IdentityResolutionService:
                 tenant_id=tenant_id,
                 source_entity_id=source,
                 target_entity_id=target,
-                reason=(
-                    f"Confirmed match via review {review_id} "
-                    f"(target selected by {rationale['tiebreaker']})"
-                ),
+                reason=(f"Confirmed match via review {review_id} (target selected by {rationale['tiebreaker']})"),
                 performed_by=resolved_by,
             )
             result["merge"] = merge_result
@@ -1749,13 +1744,12 @@ class IdentityResolutionService:
         authoritative dedup barrier.
         """
         import hashlib
+
         payload = f"{tenant_id}|{alias_type}|{alias_value}".encode("utf-8")
         # Fold to signed bigint range (Postgres bigint = int8, 63 bits
         # usable once we account for sign).
         digest = hashlib.blake2b(payload, digest_size=8).digest()
-        lock_key = int.from_bytes(digest, byteorder="big", signed=False) & (
-            (1 << 63) - 1
-        )
+        lock_key = int.from_bytes(digest, byteorder="big", signed=False) & ((1 << 63) - 1)
         try:
             self.session.execute(
                 text("SELECT pg_advisory_xact_lock(:key)"),
@@ -1785,9 +1779,7 @@ class IdentityResolutionService:
         ).fetchone()
 
         if not row:
-            raise ValueError(
-                f"Entity '{entity_id}' not found for tenant '{tenant_id}'"
-            )
+            raise ValueError(f"Entity '{entity_id}' not found for tenant '{tenant_id}'")
 
     def _resolve_or_register(
         self,
@@ -1851,7 +1843,9 @@ class IdentityResolutionService:
         _NAME_LIKE_ALIAS_TYPES = {"name", "trade_name", "abbreviation"}
         if alias_type in _NAME_LIKE_ALIAS_TYPES:
             fuzzy_matches = self.find_potential_matches(
-                tenant_id, reference, entity_type=entity_type,
+                tenant_id,
+                reference,
+                entity_type=entity_type,
                 threshold=AMBIGUOUS_THRESHOLD_LOW,
             )
         else:

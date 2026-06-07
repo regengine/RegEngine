@@ -29,16 +29,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--run-integration",
         action="store_true",
         default=False,
-        help=(
-            "Run @pytest.mark.integration tests in services/graph/tests "
-            "(default: skipped to keep local runs fast)."
-        ),
+        help=("Run @pytest.mark.integration tests in services/graph/tests (default: skipped to keep local runs fast)."),
     )
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if config.getoption("--run-integration"):
         return
     # If the user explicitly selected integration tests via -m, respect that.
@@ -47,8 +42,7 @@ def pytest_collection_modifyitems(
         return
     skip_marker = pytest.mark.skip(
         reason=(
-            "integration test (heavy testcontainers/docker dependency); "
-            "pass --run-integration or -m integration to run"
+            "integration test (heavy testcontainers/docker dependency); pass --run-integration or -m integration to run"
         )
     )
     for item in items:

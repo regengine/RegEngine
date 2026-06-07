@@ -30,10 +30,8 @@ from datetime import datetime, timezone
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.fda_export import verification as v
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Fakes / fixtures
@@ -145,7 +143,6 @@ def _sha256_hex(content: str) -> str:
 
 
 class TestRowLookup:
-
     def test_missing_row_raises_404(self, monkeypatch):
         sess, _ = _install_deps(monkeypatch, session=_FakeSession(row=None))
         with pytest.raises(HTTPException) as exc_info:
@@ -187,9 +184,9 @@ class TestRowLookup:
 
 
 class TestSingleTLCVerification:
-
-    def _make_row(self, *, tlc="TLC-A", start="2026-01-01", end="2026-01-31",
-                  count=3, original_hash="orig", generated_at=None):
+    def _make_row(
+        self, *, tlc="TLC-A", start="2026-01-01", end="2026-01-31", count=3, original_hash="orig", generated_at=None
+    ):
         return (
             "fda_csv",
             tlc,
@@ -220,8 +217,7 @@ class TestSingleTLCVerification:
         assert out["current_record_count"] == 3
         # Single TLC path: query_events_by_tlc invoked once with stored tlc
         assert persist.tlc_calls == [
-            {"tenant_id": "tenant-1", "tlc": "TLC-A",
-             "start_date": "2026-01-01", "end_date": "2026-01-31"}
+            {"tenant_id": "tenant-1", "tlc": "TLC-A", "start_date": "2026-01-01", "end_date": "2026-01-31"}
         ]
         assert persist.all_events_calls == []
         assert sess.closed is True
@@ -259,6 +255,7 @@ class TestSingleTLCVerification:
     def test_non_string_dates_coerced_to_str(self, monkeypatch):
         """date() objects stored in the audit row are stringified for the re-query."""
         from datetime import date
+
         row = self._make_row(start=date(2026, 2, 1), end=date(2026, 2, 28))
         sess = _FakeSession(row=row)
         persist = _FakePersistence(sess)
@@ -310,7 +307,6 @@ class TestSingleTLCVerification:
 
 
 class TestFullExportVerification:
-
     @pytest.mark.parametrize("export_type", ["fda_spreadsheet", "fda_package"])
     def test_full_export_expands_per_tlc_and_dedups(self, monkeypatch, export_type):
         row = (
@@ -332,6 +328,7 @@ class TestFullExportVerification:
             ],
             None,
         )
+
         # Per-TLC expansion returns overlapping events (e1 appears in both)
         def _by_tlc(tlc):
             if tlc == "TLC-X":
@@ -339,6 +336,7 @@ class TestFullExportVerification:
             if tlc == "TLC-Y":
                 return [{"id": "e1"}, {"id": "e4"}]  # e1 dup
             return []
+
         persist.tlc_side_effect = _by_tlc
         _install_deps(monkeypatch, session=sess, persistence=persist)
 
@@ -390,9 +388,7 @@ class TestFullExportVerification:
         persist.tlc_side_effect = lambda tlc: [{"id": None}, {"id": None}]
         _install_deps(monkeypatch, session=sess, persistence=persist)
         captured: list = []
-        monkeypatch.setattr(
-            v, "_generate_csv", lambda events: (captured.extend(events), "x")[1]
-        )
+        monkeypatch.setattr(v, "_generate_csv", lambda events: (captured.extend(events), "x")[1])
         out = asyncio.run(v.verify_export_handler("x", "t"))
         assert len(captured) == 1  # both None-ids collapse to one
         assert out["current_record_count"] == 1
@@ -404,7 +400,6 @@ class TestFullExportVerification:
 
 
 class TestErrorHandling:
-
     def test_http_exception_passes_through(self, monkeypatch):
         """409/404 raised inside the try-block is re-raised as-is."""
         row = ("fda_recall", None, None, None, 0, "h", None)
@@ -416,12 +411,15 @@ class TestErrorHandling:
         assert exc_info.value.status_code == 409
         assert sess.closed is True
 
-    @pytest.mark.parametrize("exc", [
-        ImportError("missing mod"),
-        ValueError("bad value"),
-        RuntimeError("boom"),
-        OSError("disk"),
-    ])
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            ImportError("missing mod"),
+            ValueError("bad value"),
+            RuntimeError("boom"),
+            OSError("disk"),
+        ],
+    )
     def test_generic_caught_exceptions_become_500(self, monkeypatch, exc):
         sess = _FakeSession(execute_raises=exc)
         _install_deps(monkeypatch, session=sess)

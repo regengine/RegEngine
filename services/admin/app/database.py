@@ -31,7 +31,7 @@ new code.
 from __future__ import annotations
 
 import os
-from typing import Iterator, AsyncIterator
+from typing import AsyncIterator, Iterator
 
 import structlog
 from sqlalchemy import create_engine, event, text
@@ -137,7 +137,6 @@ def _create_engine():
     )
 
 
-
 # Admin DB engine for core tables (users, tenants, memberships, roles)
 _engine = _create_engine()
 SessionLocal = sessionmaker(
@@ -177,9 +176,7 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
             cursor.execute("SELECT set_config('app.tenant_id', '', false)")
             # Defense-in-depth: also clear the sysadmin-context flag so
             # a stale sysadmin session does not linger in the pool.
-            cursor.execute(
-                "SELECT set_config('regengine.is_sysadmin', 'false', false)"
-            )
+            cursor.execute("SELECT set_config('regengine.is_sysadmin', 'false', false)")
         finally:
             cursor.close()
     except Exception as exc:  # noqa: BLE001 -- log and keep going
@@ -194,6 +191,7 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
 if _engine.dialect.name != "sqlite":
     event.listen(_engine, "checkout", _reset_tenant_guc_on_checkout)
 
+
 def init_db() -> None:
     """Create RLS helper functions on startup. Schema is managed by Alembic.
 
@@ -207,13 +205,29 @@ def init_db() -> None:
         # SQLite dev fallback: create only core auth tables (no Alembic, no RLS).
         # SQLite dev fallback doesn't support PostgreSQL ARRAY types.
         from .sqlalchemy_models import (
-            Base, TenantModel, UserModel, RoleModel, MembershipModel,
-            AuditLogModel, InviteModel, SessionModel, ReviewItemModel,
+            AuditLogModel,
+            Base,
+            InviteModel,
+            MembershipModel,
+            ReviewItemModel,
+            RoleModel,
+            SessionModel,
+            TenantModel,
+            UserModel,
         )
+
         _core_tables = [
             Base.metadata.tables[m.__tablename__]
-            for m in (TenantModel, UserModel, RoleModel, MembershipModel,
-                      AuditLogModel, InviteModel, SessionModel, ReviewItemModel)
+            for m in (
+                TenantModel,
+                UserModel,
+                RoleModel,
+                MembershipModel,
+                AuditLogModel,
+                InviteModel,
+                SessionModel,
+                ReviewItemModel,
+            )
             if m.__tablename__ in Base.metadata.tables
         ]
         Base.metadata.create_all(bind=_engine, tables=_core_tables)
@@ -227,14 +241,17 @@ def init_db() -> None:
             text("SELECT pg_advisory_xact_lock(:lock_id)"),
             {"lock_id": _ADMIN_DB_INIT_LOCK_ID},
         )
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION set_tenant_context(tenant_id text) RETURNS void AS $$
             BEGIN
               PERFORM set_config('app.tenant_id', tenant_id, false);
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS $$
             DECLARE
               tid TEXT;
@@ -246,12 +263,14 @@ def init_db() -> None:
               RETURN tid::UUID;
             END;
             $$ LANGUAGE plpgsql;
-        """))
+        """)
+        )
         # SECURITY: set_admin_context sets the regengine.is_sysadmin session
         # variable. This alone is NOT sufficient for RLS bypass — the RLS
         # policies also require current_user = 'regengine_sysadmin'.
         # See: migrations/V048__rls_sysadmin_defense_in_depth.sql
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION set_admin_context(p_is_sysadmin boolean) RETURNS void AS $$
             BEGIN
               IF p_is_sysadmin AND current_user != 'regengine_sysadmin' THEN
@@ -260,7 +279,8 @@ def init_db() -> None:
               PERFORM set_config('regengine.is_sysadmin', p_is_sysadmin::text, false);
             END;
             $$ LANGUAGE plpgsql;
-        """))
+        """)
+        )
     logger.info("database_tables_initialized", dialect="postgresql")
 
 
@@ -284,12 +304,12 @@ def get_session() -> Iterator[Session]:
 def get_tenant_session(
     tenant_id: str,
 ) -> Iterator[Session]:
-    """Provide a tenant-aware SQLAlchemy session (Admin DB).
-    """
+    """Provide a tenant-aware SQLAlchemy session (Admin DB)."""
     session = SessionLocal()
     try:
         if tenant_id and _engine.dialect.name != "sqlite":
             from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
             set_tenant_guc(session, tenant_id)
         yield session
     finally:

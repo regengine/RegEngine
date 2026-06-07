@@ -12,11 +12,9 @@ from datetime import datetime
 from typing import Any, Literal, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
-
 from shared.agent_risk_engine import ComplianceGap, RiskScoreBreakdown, evaluate_agent_risk
 from shared.run_ledger import IngestionRunTimeline, fetch_ingestion_run_timeline, verify_receipt_chain
-
+from sqlalchemy import text
 
 ReviewStatus = Literal["pending", "accepted", "rejected", "needs_more_evidence"]
 ReviewDecisionStatus = Literal["accepted", "rejected", "needs_more_evidence"]
@@ -228,10 +226,7 @@ def fetch_agent_review_items(
     )
 
     return AgentReviewListResponse(
-        items=[
-            _item_from_row(row, chain_valid_by_run=chain_valid_by_run)
-            for row in rows
-        ],
+        items=[_item_from_row(row, chain_valid_by_run=chain_valid_by_run) for row in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -352,23 +347,15 @@ def fetch_agent_artifact_timeline(
         raise LookupError(f"agent artifact {artifact_id} not found for tenant {tenant_id}")
 
     ingestion_run_id = _string_or_none(row.get("ingestion_run_id"))
-    timeline = (
-        fetch_ingestion_run_timeline(db_session, tenant_id, ingestion_run_id)
-        if ingestion_run_id
-        else None
-    )
+    timeline = fetch_ingestion_run_timeline(db_session, tenant_id, ingestion_run_id) if ingestion_run_id else None
     if ingestion_run_id and timeline is None:
-        raise LookupError(
-            f"ingestion run {ingestion_run_id} not found for artifact {artifact_id}"
-        )
+        raise LookupError(f"ingestion run {ingestion_run_id} not found for artifact {artifact_id}")
 
     chain_valid = timeline.verification.valid if timeline is not None else None
     item = _item_from_row(
         row,
         chain_valid_by_run=(
-            {ingestion_run_id: chain_valid}
-            if ingestion_run_id is not None and chain_valid is not None
-            else {}
+            {ingestion_run_id: chain_valid} if ingestion_run_id is not None and chain_valid is not None else {}
         ),
     )
     return AgentArtifactTimelineResponse(
@@ -566,11 +553,7 @@ def _fetch_chain_valid_by_run(
         run_id = str(row["ingestion_run_id"])
         grouped.setdefault(run_id, []).append(_receipt_for_verification(row))
 
-    return {
-        run_id: verify_receipt_chain(receipts).valid
-        for run_id, receipts in grouped.items()
-        if receipts
-    }
+    return {run_id: verify_receipt_chain(receipts).valid for run_id, receipts in grouped.items() if receipts}
 
 
 def _item_from_row(

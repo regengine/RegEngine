@@ -29,8 +29,7 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--once",
         action="store_true",
-        help="Drain a single batch and exit (default). If absent the "
-        "caller is expected to re-invoke via cron.",
+        help="Drain a single batch and exit (default). If absent the caller is expected to re-invoke via cron.",
     )
     args = parser.parse_args(argv)
 

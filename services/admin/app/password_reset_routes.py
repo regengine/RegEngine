@@ -28,10 +28,10 @@ from __future__ import annotations
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
-
-from shared.rate_limit import limiter
 from shared.pii import mask_email
+from shared.rate_limit import limiter
 from shared.supabase_client import get_supabase
+
 from .dependencies import get_session_store
 from .session_store import RedisSessionStore
 
@@ -49,18 +49,14 @@ logger = structlog.get_logger("auth")
 _FORGOT_PW_LIMIT = 3
 _FORGOT_PW_WINDOW = 3600  # 1 hour in seconds
 
-_FORGOT_PW_GENERIC_MSG = (
-    "If that email address is registered you will receive a password-reset link shortly."
-)
+_FORGOT_PW_GENERIC_MSG = "If that email address is registered you will receive a password-reset link shortly."
 
 
 def _forgot_pw_rate_key(email: str) -> str:
     return f"auth:forgot_password:{email}"
 
 
-async def _check_forgot_pw_rate_limit(
-    session_store: RedisSessionStore, email: str
-) -> None:
+async def _check_forgot_pw_rate_limit(session_store: RedisSessionStore, email: str) -> None:
     """Raise 429 if this email has exceeded the forgot-password request limit."""
     try:
         client = await session_store._get_client()
@@ -77,9 +73,7 @@ async def _check_forgot_pw_rate_limit(
         logger.warning("forgot_password_rate_limit_redis_error", error=str(exc))
 
 
-async def _record_forgot_pw_attempt(
-    session_store: RedisSessionStore, email: str
-) -> None:
+async def _record_forgot_pw_attempt(session_store: RedisSessionStore, email: str) -> None:
     """Increment the per-email forgot-password counter (with TTL)."""
     try:
         client = await session_store._get_client()

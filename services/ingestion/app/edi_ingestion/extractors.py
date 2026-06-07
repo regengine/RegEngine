@@ -158,9 +158,7 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
             if len(segment) > 2 and segment[2]:
                 qualifier = segment[1].upper() if len(segment) > 1 else ""
                 if qualifier in {"BM", "SI", "CN", "PO", "PK"}:
-                    data["reference_document_number"] = (
-                        data["reference_document_number"] or segment[2]
-                    )
+                    data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
         elif seg_id == "TD5":
             # Favor carrier name/code if present in routing details.
@@ -431,9 +429,7 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
                 if qualifier in {"PO", "BM", "SI"}:
                     if qualifier == "PO":
                         data["po_number"] = data["po_number"] or segment[2]
-                    data["reference_document_number"] = (
-                        data["reference_document_number"] or segment[2]
-                    )
+                    data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
     if total_quantity > 0:
         data["quantity"] = total_quantity

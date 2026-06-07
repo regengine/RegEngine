@@ -29,11 +29,10 @@ sys.path.insert(0, str(service_dir))
 
 
 from app.epcis.extraction import (  # noqa: E402
-    _extract_lot_data,
     _extract_location_id,
+    _extract_lot_data,
     _extract_party_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # _extract_lot_data
@@ -129,10 +128,7 @@ class TestExtractLotData:
 class TestExtractLocationId:
     def test_returns_id_from_nested_dict(self):
         payload = {"readPoint": {"id": "urn:epc:id:sgln:0123.456.789"}}
-        assert (
-            _extract_location_id(payload, "readPoint")
-            == "urn:epc:id:sgln:0123.456.789"
-        )
+        assert _extract_location_id(payload, "readPoint") == "urn:epc:id:sgln:0123.456.789"
 
     def test_missing_key_returns_empty(self):
         # ``.get(key, {})`` — missing top-level key returns empty dict,
@@ -184,10 +180,7 @@ class TestExtractPartyId:
                 {"source": "urn:epc:id:gln:B"},
             ]
         }
-        assert (
-            _extract_party_id(payload, "sourceList", "source")
-            == "urn:epc:id:gln:A"
-        )
+        assert _extract_party_id(payload, "sourceList", "source") == "urn:epc:id:gln:A"
 
     def test_missing_top_key_returns_empty(self):
         assert _extract_party_id({}, "sourceList", "source") == ""
@@ -206,50 +199,20 @@ class TestExtractPartyId:
         # ``first = items[0] if isinstance(items[0], dict) else {}`` —
         # non-dict first item falls through to empty-dict lookup,
         # returning "".
-        assert (
-            _extract_party_id(
-                {"sourceList": ["str-not-dict"]}, "sourceList", "source"
-            )
-            == ""
-        )
-        assert (
-            _extract_party_id(
-                {"sourceList": [123]}, "sourceList", "source"
-            )
-            == ""
-        )
+        assert _extract_party_id({"sourceList": ["str-not-dict"]}, "sourceList", "source") == ""
+        assert _extract_party_id({"sourceList": [123]}, "sourceList", "source") == ""
 
     def test_missing_nested_key_returns_empty(self):
-        assert (
-            _extract_party_id(
-                {"sourceList": [{"other": "x"}]}, "sourceList", "source"
-            )
-            == ""
-        )
+        assert _extract_party_id({"sourceList": [{"other": "x"}]}, "sourceList", "source") == ""
 
     def test_none_nested_value_returns_empty(self):
-        assert (
-            _extract_party_id(
-                {"sourceList": [{"source": None}]}, "sourceList", "source"
-            )
-            == ""
-        )
+        assert _extract_party_id({"sourceList": [{"source": None}]}, "sourceList", "source") == ""
 
     def test_empty_nested_value_returns_empty(self):
-        assert (
-            _extract_party_id(
-                {"sourceList": [{"source": ""}]}, "sourceList", "source"
-            )
-            == ""
-        )
+        assert _extract_party_id({"sourceList": [{"source": ""}]}, "sourceList", "source") == ""
 
     def test_integer_nested_value_coerced_to_string(self):
-        assert (
-            _extract_party_id(
-                {"sourceList": [{"source": 9}]}, "sourceList", "source"
-            )
-            == "9"
-        )
+        assert _extract_party_id({"sourceList": [{"source": 9}]}, "sourceList", "source") == "9"
 
     def test_second_item_ignored(self):
         # Pin first-item-only behavior — if later callers need "all
@@ -270,9 +233,7 @@ class TestExtractPartyId:
             ("destinationList", "destination", "urn:epc:id:sgln:DST"),
         ],
     )
-    def test_key_and_nested_key_parameters_select_fields(
-        self, key, nested, expected
-    ):
+    def test_key_and_nested_key_parameters_select_fields(self, key, nested, expected):
         # Function services sourceList/destinationList with
         # source/destination nested keys. Parameterize to pin both
         # paths exercise the same code.

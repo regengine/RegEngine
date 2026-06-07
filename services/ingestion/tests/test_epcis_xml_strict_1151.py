@@ -35,7 +35,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 
 
@@ -45,6 +44,7 @@ def client() -> TestClient:
     api-key dep so the tests focus on XML + validation behavior."""
     from app.epcis.router import router
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
     app = FastAPI()
@@ -151,7 +151,7 @@ def _xml_with_unmapped_bizstep() -> bytes:
 
 def _malformed_xml() -> bytes:
     """Broken XML -- lxml will raise. Pre-fix path returned [] silently."""
-    return b"<?xml version=\"1.0\"?><EPCISDocument><unclosed>"
+    return b'<?xml version="1.0"?><EPCISDocument><unclosed>'
 
 
 def _empty_xml_document() -> bytes:
@@ -356,6 +356,7 @@ class TestParseXmlUnit_Issue1151:
         """The parser's own contract: return [] rather than raise. The
         router is responsible for turning [] into a 422."""
         from app.epcis.xml_parser import _parse_epcis_xml
+
         events = _parse_epcis_xml(_malformed_xml())
         assert events == []
 
@@ -363,6 +364,7 @@ class TestParseXmlUnit_Issue1151:
         """Round-trip check: a valid ObjectEvent comes out with bizStep
         populated so ``_normalize_epcis_to_cte`` can map it to a CTE."""
         from app.epcis.xml_parser import _parse_epcis_xml
+
         events = _parse_epcis_xml(_valid_epcis_xml())
         assert len(events) == 1
         assert events[0]["type"] == "ObjectEvent"
@@ -371,5 +373,6 @@ class TestParseXmlUnit_Issue1151:
 
     def test_parse_empty_document_returns_empty_list(self):
         from app.epcis.xml_parser import _parse_epcis_xml
+
         events = _parse_epcis_xml(_empty_xml_document())
         assert events == []

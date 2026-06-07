@@ -4,9 +4,22 @@ from __future__ import annotations
 
 import uuid as uuid_module
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.types import TypeDecorator, CHAR, JSON
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.types import CHAR, JSON, TypeDecorator
 
 Base = declarative_base()
 
@@ -48,12 +61,14 @@ class JSONType(TypeDecorator):
     def load_dialect_impl(self, dialect):
         if dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import JSONB
+
             return dialect.type_descriptor(JSONB())
         return dialect.type_descriptor(JSON())
 
 
 class TenantModel(Base):
     """Root of trust for multi-tenancy."""
+
     __tablename__ = "tenants"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -64,13 +79,12 @@ class TenantModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    __table_args__ = (
-        Index("ix_tenants_slug", "slug"),
-    )
+    __table_args__ = (Index("ix_tenants_slug", "slug"),)
 
 
 class UserModel(Base):
     """Global user identity."""
+
     __tablename__ = "users"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -92,13 +106,12 @@ class UserModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (
-        Index("ix_users_email", "email"),
-    )
+    __table_args__ = (Index("ix_users_email", "email"),)
 
 
 class RoleModel(Base):
     """RBAC Roles (System or Custom)."""
+
     __tablename__ = "roles"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -107,13 +120,12 @@ class RoleModel(Base):
     permissions = Column(JSONType(), nullable=False, default=list)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    __table_args__ = (
-        Index("ix_roles_tenant", "tenant_id"),
-    )
+    __table_args__ = (Index("ix_roles_tenant", "tenant_id"),)
 
 
 class MembershipModel(Base):
     """Links users to tenants with specific roles."""
+
     __tablename__ = "memberships"
 
     user_id = Column(GUID(), ForeignKey("users.id"), primary_key=True)
@@ -131,6 +143,7 @@ class MembershipModel(Base):
 
 class MFARecoveryCodeModel(Base):
     """One-time-use recovery codes for MFA account recovery."""
+
     __tablename__ = "admin_mfa_recovery_codes"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -139,9 +152,7 @@ class MFARecoveryCodeModel(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    __table_args__ = (
-        Index("ix_mfa_recovery_codes_user", "user_id"),
-    )
+    __table_args__ = (Index("ix_mfa_recovery_codes_user", "user_id"),)
 
 
 class AuditLogModel(Base):
@@ -150,6 +161,7 @@ class AuditLogModel(Base):
     No UPDATE or DELETE permitted. Each entry includes a SHA-256 hash chain
     for integrity verification. ISO 27001 controls 12.4.1-12.4.3.
     """
+
     __tablename__ = "audit_logs"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
@@ -192,6 +204,7 @@ class AuditLogModel(Base):
 
 class InviteModel(Base):
     """Pending user invitations."""
+
     __tablename__ = "invites"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -207,8 +220,13 @@ class InviteModel(Base):
 
     __table_args__ = (
         # Ensure only one active invite per email per tenant
-        Index("ix_invites_tenant_email", "tenant_id", "email", unique=True,
-              postgresql_where=(revoked_at.is_(None) & accepted_at.is_(None))),
+        Index(
+            "ix_invites_tenant_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=(revoked_at.is_(None) & accepted_at.is_(None)),
+        ),
         Index("ix_invites_token_hash", "token_hash", unique=True),
         Index("ix_invites_tenant_created", "tenant_id", "created_at"),
     )
@@ -216,6 +234,7 @@ class InviteModel(Base):
 
 class PasswordResetTokenModel(Base):
     """Time-limited tokens for password reset flow."""
+
     __tablename__ = "password_reset_tokens"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
@@ -225,9 +244,7 @@ class PasswordResetTokenModel(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    __table_args__ = (
-        Index("ix_password_reset_tokens_user_id", "user_id"),
-    )
+    __table_args__ = (Index("ix_password_reset_tokens_user_id", "user_id"),)
 
 
 class SupplierFacilityModel(Base):
@@ -380,8 +397,7 @@ class ReviewItemModel(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug convenience
         return (
-            "ReviewItemModel(id={id!s}, tenant_id={tenant_id!s}, status={status!s}, "
-            "confidence_score={score!r})"
+            "ReviewItemModel(id={id!s}, tenant_id={tenant_id!s}, status={status!s}, confidence_score={score!r})"
         ).format(
             id=self.id,
             tenant_id=self.tenant_id,
@@ -389,8 +405,10 @@ class ReviewItemModel(Base):
             score=self.confidence_score,
         )
 
+
 class SessionModel(Base):
     """Stateful session tracking for refresh token rotation."""
+
     __tablename__ = "sessions"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)

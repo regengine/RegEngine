@@ -22,7 +22,6 @@ import os
 from typing import Optional
 
 from fastapi import HTTPException, Request
-
 from shared.circuit_breaker import CircuitOpenError, redis_circuit
 
 logger = logging.getLogger("subscription-gate")

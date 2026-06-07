@@ -5,8 +5,9 @@ Revises: e5f6a7b8c9d0
 Create Date: 2026-04-11 00:00:00.000000
 
 """
-from typing import Sequence, Union
+
 from pathlib import Path
+from typing import Sequence, Union
 
 from alembic import op
 

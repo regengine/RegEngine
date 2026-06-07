@@ -17,6 +17,7 @@ These tests exercise the two safeguards:
    mapping if the buffered ``event_created`` is strictly newer than the
    checkout event's.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -29,7 +30,6 @@ from services.ingestion.app.stripe_billing import (
     _handle_stripe_event,
     _update_subscription_status,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test fakes — in-memory substitutes for the Redis-backed state helpers.
@@ -57,9 +57,7 @@ class _FakeState:
 
     # --- _store_subscription_mapping ---------------------------------------
     def store(self, tenant_id: str, payload: Dict[str, Any]) -> None:
-        self.tenants.setdefault(tenant_id, {}).update(
-            {k: ("" if v is None else str(v)) for k, v in payload.items()}
-        )
+        self.tenants.setdefault(tenant_id, {}).update({k: ("" if v is None else str(v)) for k, v in payload.items()})
         sub_id = payload.get("subscription_id")
         if sub_id:
             self.sub_to_tenant[str(sub_id)] = tenant_id
@@ -365,7 +363,9 @@ class TestPendingDrainedOnCheckout_Issue1196:
 
     @pytest.mark.asyncio
     async def test_buffered_newer_update_applied_on_top_of_checkout(
-        self, fake_state, fake_redis,
+        self,
+        fake_state,
+        fake_redis,
     ):
         # Checkout handler's session-lookup must succeed or it tries to
         # provision a tenant via the admin service. Pre-bind.
@@ -410,7 +410,9 @@ class TestPendingDrainedOnCheckout_Issue1196:
 
     @pytest.mark.asyncio
     async def test_buffered_older_update_discarded_on_checkout(
-        self, fake_state, fake_redis,
+        self,
+        fake_state,
+        fake_redis,
     ):
         """If the buffered pending update is OLDER than the checkout event,
         the checkout's fresh fetch from Stripe is authoritative — we
@@ -448,7 +450,9 @@ class TestPendingDrainedOnCheckout_Issue1196:
 
     @pytest.mark.asyncio
     async def test_no_buffered_update_checkout_unchanged(
-        self, fake_state, fake_redis,
+        self,
+        fake_state,
+        fake_redis,
     ):
         """Baseline: when no buffered update exists, checkout behaves
         exactly like before."""
@@ -484,20 +488,24 @@ class TestEndToEndEventOrdering_Issue1196:
 
     @pytest.mark.asyncio
     async def test_updated_before_created_no_longer_silently_drops(
-        self, fake_state, fake_redis,
+        self,
+        fake_state,
+        fake_redis,
     ):
         """Regression: this exact sequence returned silently and left the
         subscription stuck on its checkout-time status."""
         fake_redis.bind_session("cs_race", "tenant-RACE")
 
         # #1 — subscription.updated arrives first, no mapping yet.
-        await _handle_stripe_event(_subscription_event(
-            event_type="customer.subscription.updated",
-            subscription_id="sub_RACE",
-            customer_id="cus_RACE",
-            status="active",
-            event_created=2000,
-        ))
+        await _handle_stripe_event(
+            _subscription_event(
+                event_type="customer.subscription.updated",
+                subscription_id="sub_RACE",
+                customer_id="cus_RACE",
+                status="active",
+                event_created=2000,
+            )
+        )
 
         # Pre-fix this would be gone. Now it's buffered.
         assert "sub_RACE" in fake_state.pending
@@ -507,23 +515,25 @@ class TestEndToEndEventOrdering_Issue1196:
         fake_sub = {"status": "incomplete", "current_period_end": 1_700_000_000}
         with patch("services.ingestion.app.stripe_billing.webhooks.stripe") as mock_stripe:
             mock_stripe.Subscription.retrieve.return_value = fake_sub
-            await _handle_stripe_event({
-                "type": "checkout.session.completed",
-                "created": 1500,
-                "data": {
-                    "object": {
-                        "id": "cs_race",
-                        "customer": "cus_RACE",
-                        "subscription": "sub_RACE",
-                        "metadata": {
-                            "plan_id": "growth",
-                            "billing_period": "monthly",
-                            "tenant_id": "tenant-RACE",
+            await _handle_stripe_event(
+                {
+                    "type": "checkout.session.completed",
+                    "created": 1500,
+                    "data": {
+                        "object": {
+                            "id": "cs_race",
+                            "customer": "cus_RACE",
+                            "subscription": "sub_RACE",
+                            "metadata": {
+                                "plan_id": "growth",
+                                "billing_period": "monthly",
+                                "tenant_id": "tenant-RACE",
+                            },
+                            "customer_email": "user@example.com",
                         },
-                        "customer_email": "user@example.com",
                     },
-                },
-            })
+                }
+            )
 
         # Subscription is "active" (from the reordered update), not
         # "incomplete" (from the checkout's stale live-fetch).
@@ -549,65 +559,75 @@ class TestEndToEndEventOrdering_Issue1196:
         )
 
         # Newer-in-Stripe-time event arrives FIRST.
-        await _handle_stripe_event(_subscription_event(
-            event_type="customer.subscription.updated",
-            subscription_id="sub_Q",
-            customer_id="cus_Q",
-            status="canceled",
-            event_created=2000,
-        ))
+        await _handle_stripe_event(
+            _subscription_event(
+                event_type="customer.subscription.updated",
+                subscription_id="sub_Q",
+                customer_id="cus_Q",
+                status="canceled",
+                event_created=2000,
+            )
+        )
         assert fake_state.get("tenant-Q")["status"] == "canceled"
 
         # Older-in-Stripe-time event arrives SECOND — must be rejected.
-        await _handle_stripe_event(_subscription_event(
-            event_type="customer.subscription.updated",
-            subscription_id="sub_Q",
-            customer_id="cus_Q",
-            status="active",
-            event_created=1500,
-        ))
+        await _handle_stripe_event(
+            _subscription_event(
+                event_type="customer.subscription.updated",
+                subscription_id="sub_Q",
+                customer_id="cus_Q",
+                status="active",
+                event_created=1500,
+            )
+        )
 
         assert fake_state.get("tenant-Q")["status"] == "canceled"
         assert fake_state.get("tenant-Q")["last_event_created"] == "2000"
 
     @pytest.mark.asyncio
     async def test_deleted_before_created_buffered_and_applied(
-        self, fake_state, fake_redis,
+        self,
+        fake_state,
+        fake_redis,
     ):
         """A canceled subscription whose ``deleted`` event beats
         ``checkout.session.completed`` must still end up canceled."""
         fake_redis.bind_session("cs_del", "tenant-DEL")
 
-        await _handle_stripe_event(_subscription_event(
-            event_type="customer.subscription.deleted",
-            subscription_id="sub_DEL",
-            customer_id="cus_DEL",
-            status="canceled",
-            event_created=3000,
-        ))
+        await _handle_stripe_event(
+            _subscription_event(
+                event_type="customer.subscription.deleted",
+                subscription_id="sub_DEL",
+                customer_id="cus_DEL",
+                status="canceled",
+                event_created=3000,
+            )
+        )
 
         assert fake_state.pending["sub_DEL"]["status"] == "canceled"
 
         fake_sub = {"status": "active", "current_period_end": 1_700_000_000}
         with patch("services.ingestion.app.stripe_billing.webhooks.stripe") as mock_stripe:
             mock_stripe.Subscription.retrieve.return_value = fake_sub
-            await _handle_stripe_event({
-                "type": "checkout.session.completed",
-                "created": 1000,
-                "data": {
-                    "object": {
-                        "id": "cs_del",
-                        "customer": "cus_DEL",
-                        "subscription": "sub_DEL",
-                        "metadata": {
-                            "plan_id": "growth",
-                            "billing_period": "monthly",
-                            "tenant_id": "tenant-DEL",
+            await _handle_stripe_event(
+                {
+                    "type": "checkout.session.completed",
+                    "created": 1000,
+                    "data": {
+                        "object": {
+                            "id": "cs_del",
+                            "customer": "cus_DEL",
+                            "subscription": "sub_DEL",
+                            "metadata": {
+                                "plan_id": "growth",
+                                "billing_period": "monthly",
+                                "tenant_id": "tenant-DEL",
+                            },
+                            "customer_email": "x@example.com",
                         },
-                        "customer_email": "x@example.com",
                     },
-                },
-            })
+                }
+            )
 
         # Final status reflects the cancellation even though the checkout
         # event's synchronous fetch reported "active".

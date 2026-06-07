@@ -45,7 +45,6 @@ from app.stripe_billing.models import (  # noqa: E402
     CheckoutRequest,
 )
 
-
 # ── Small fixtures ─────────────────────────────────────────────────────────
 
 
@@ -77,9 +76,7 @@ def _stub_emit_funnel_event(monkeypatch: pytest.MonkeyPatch) -> None:
     prod. Swap for a noop so tests stay hermetic."""
     import shared.funnel_events as funnel_events
 
-    monkeypatch.setattr(
-        funnel_events, "emit_funnel_event", lambda **_kwargs: True
-    )
+    monkeypatch.setattr(funnel_events, "emit_funnel_event", lambda **_kwargs: True)
 
 
 # ── list_plans ──────────────────────────────────────────────────────────────
@@ -140,21 +137,15 @@ class TestCreateCheckoutErrorBranches:
             raise redis.RedisError("conn dropped")
 
         monkeypatch.setattr(customers_mod, "_get_existing_customer_id", _boom)
-        monkeypatch.setattr(
-            customers_mod, "_record_checkout_session_hint", lambda **_: None
-        )
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
 
         class _Session:
             id = "cs_test_123"
             url = "https://checkout.stripe.com/c/pay/cs_test_123"
 
-        monkeypatch.setattr(
-            stripe.checkout.Session, "create", lambda **kwargs: _Session()
-        )
+        monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kwargs: _Session())
 
-        response = await routes_mod.create_checkout(
-            base_request, x_tenant_id=None, principal=_principal()
-        )
+        response = await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
         # Still returns a session — checkout is not blocked by Redis outage.
         assert response.session_id == "cs_test_123"
         assert response.plan == "growth"
@@ -168,12 +159,8 @@ class TestCreateCheckoutErrorBranches:
         same payment method is remembered."""
         captured: dict[str, Any] = {}
 
-        monkeypatch.setattr(
-            customers_mod, "_get_existing_customer_id", lambda _: "cus_existing"
-        )
-        monkeypatch.setattr(
-            customers_mod, "_record_checkout_session_hint", lambda **_: None
-        )
+        monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: "cus_existing")
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
 
         class _Session:
             id = "cs_456"
@@ -214,9 +201,7 @@ class TestCreateCheckoutErrorBranches:
         monkeypatch.setattr(stripe.checkout.Session, "create", _raise)
 
         with pytest.raises(Exception) as excinfo:
-            await routes_mod.create_checkout(
-                base_request, x_tenant_id=None, principal=_principal()
-            )
+            await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
         exc = excinfo.value
         assert getattr(exc, "status_code", None) == 502
         assert "Card declined" in getattr(exc, "detail", "")
@@ -230,9 +215,7 @@ class TestCreateCheckoutErrorBranches:
         catch it, set ``authenticated_tenant_id=None``, and proceed — the
         webhook provisions a fresh tenant after payment."""
         monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
-        monkeypatch.setattr(
-            customers_mod, "_record_checkout_session_hint", lambda **_: None
-        )
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
 
         captured: dict[str, Any] = {}
 
@@ -265,9 +248,7 @@ class TestCreateCheckoutErrorBranches:
         authenticated tenant always wins. The mismatch must be logged
         for audit as a structlog event."""
         monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
-        monkeypatch.setattr(
-            customers_mod, "_record_checkout_session_hint", lambda **_: None
-        )
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
 
         class _Session:
             id = "cs_mismatch"
@@ -297,11 +278,7 @@ class TestCreateCheckoutErrorBranches:
         assert captured["metadata"]["tenant_id"] == "tenant-good"
         # A warning was logged about the client-supplied mismatch — the
         # structured fields must travel with it for audit.
-        mismatch_entries = [
-            entry
-            for entry in log_entries
-            if entry.get("event") == "checkout_ignored_client_tenant_id"
-        ]
+        mismatch_entries = [entry for entry in log_entries if entry.get("event") == "checkout_ignored_client_tenant_id"]
         assert mismatch_entries, f"expected mismatch log; got {log_entries!r}"
         entry = mismatch_entries[0]
         assert entry["log_level"] == "warning"
@@ -320,21 +297,15 @@ class TestCreateCheckoutErrorBranches:
         def _boom(**_kwargs: Any) -> None:
             raise redis.RedisError("write dropped")
 
-        monkeypatch.setattr(
-            customers_mod, "_record_checkout_session_hint", _boom
-        )
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", _boom)
 
         class _Session:
             id = "cs_hint_failed"
             url = "https://checkout.stripe.com/c/pay/cs_hint_failed"
 
-        monkeypatch.setattr(
-            stripe.checkout.Session, "create", lambda **kwargs: _Session()
-        )
+        monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kwargs: _Session())
 
-        response = await routes_mod.create_checkout(
-            base_request, x_tenant_id=None, principal=_principal()
-        )
+        response = await routes_mod.create_checkout(base_request, x_tenant_id=None, principal=_principal())
         # Redis failure on the hint is logged and swallowed.
         assert response.session_id == "cs_hint_failed"
 
@@ -348,9 +319,7 @@ class TestGetSubscription:
     bypass it with ``_=None``."""
 
     @pytest.mark.asyncio
-    async def test_redis_error_raises_503(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_redis_error_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _boom(_tenant_id: str) -> None:
             raise redis.RedisError("conn dropped")
 
@@ -378,12 +347,8 @@ class TestGetSubscription:
         assert result.events_limit == 0
 
     @pytest.mark.asyncio
-    async def test_missing_mapping_returns_none_plan(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            state_mod, "_get_subscription_mapping", lambda _t: {}
-        )
+    async def test_missing_mapping_returns_none_plan(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(state_mod, "_get_subscription_mapping", lambda _t: {})
         result = await routes_mod.get_subscription("tenant-no-mapping", _=None)
         assert result.plan == "none"
         assert result.status == "none"
@@ -391,9 +356,7 @@ class TestGetSubscription:
         assert result.events_limit == 0
 
     @pytest.mark.asyncio
-    async def test_mapping_without_subscription_id_returns_stored_status(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_mapping_without_subscription_id_returns_stored_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -410,9 +373,7 @@ class TestGetSubscription:
         assert result.current_period_end == "2030-01-01T00:00:00+00:00"
 
     @pytest.mark.asyncio
-    async def test_mapping_with_subscription_id_refreshes_from_stripe(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_mapping_with_subscription_id_refreshes_from_stripe(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -490,9 +451,7 @@ class TestWebhookRouteWrappers:
     both so future refactors don't silently drop one endpoint."""
 
     @pytest.mark.asyncio
-    async def test_primary_webhook_delegates_to_processor(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_primary_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
         called: dict[str, Any] = {}
 
         async def _fake_process(request: Any, sig: Any) -> dict[str, Any]:
@@ -508,17 +467,13 @@ class TestWebhookRouteWrappers:
         )
 
         request = MagicMock()
-        result = await routes_mod.stripe_webhooks(
-            request, stripe_signature="t=1,v1=fake"
-        )
+        result = await routes_mod.stripe_webhooks(request, stripe_signature="t=1,v1=fake")
         assert result == {"received": True}
         assert called["request"] is request
         assert called["sig"] == "t=1,v1=fake"
 
     @pytest.mark.asyncio
-    async def test_legacy_webhook_delegates_to_processor(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_legacy_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The ``/webhook/stripe`` path is retained for backward compat;
         must call the same processor as the primary route."""
         called: dict[str, Any] = {}
@@ -536,9 +491,7 @@ class TestWebhookRouteWrappers:
         )
 
         request = MagicMock()
-        result = await routes_mod.stripe_webhook_legacy(
-            request, stripe_signature="t=2,v1=fake"
-        )
+        result = await routes_mod.stripe_webhook_legacy(request, stripe_signature="t=2,v1=fake")
         assert result == {"received": True, "legacy": True}
         assert called["sig"] == "t=2,v1=fake"
 
@@ -558,13 +511,9 @@ class TestCreatePortalSessionForTenant:
         )
 
     @pytest.mark.asyncio
-    async def test_with_client_return_url_uses_it(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_with_client_return_url_uses_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 337-340: client-supplied return_url is validated and used."""
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_p1"
-        )
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_p1")
         captured: dict[str, Any] = {}
 
         class _Portal:
@@ -587,19 +536,13 @@ class TestCreatePortalSessionForTenant:
         assert captured["return_url"] == "https://regengine.co/billing-done"
 
     @pytest.mark.asyncio
-    async def test_without_client_return_url_uses_env_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_without_client_return_url_uses_env_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 342-345: missing client return_url falls back to
         STRIPE_PORTAL_RETURN_URL env, which is ALSO validated — so a
         misconfigured env variable fails loudly rather than silently
         shipping an open redirect."""
-        monkeypatch.setenv(
-            "STRIPE_PORTAL_RETURN_URL", "https://app.regengine.co/settings"
-        )
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_env"
-        )
+        monkeypatch.setenv("STRIPE_PORTAL_RETURN_URL", "https://app.regengine.co/settings")
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_env")
         captured: dict[str, Any] = {}
 
         class _Portal:
@@ -619,27 +562,19 @@ class TestCreatePortalSessionForTenant:
         assert captured["return_url"] == "https://app.regengine.co/settings"
 
     @pytest.mark.asyncio
-    async def test_redis_error_on_ensure_customer_raises_503(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_redis_error_on_ensure_customer_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _boom(**_kwargs: Any) -> None:
             raise redis.RedisError("conn dropped")
 
         monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", _boom)
 
         with pytest.raises(Exception) as excinfo:
-            await routes_mod.create_portal_session_for_tenant(
-                self._req(), x_tenant_id=None, principal=_principal()
-            )
+            await routes_mod.create_portal_session_for_tenant(self._req(), x_tenant_id=None, principal=_principal())
         assert getattr(excinfo.value, "status_code", None) == 503
 
     @pytest.mark.asyncio
-    async def test_stripe_error_on_portal_create_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_err"
-        )
+    async def test_stripe_error_on_portal_create_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_err")
 
         class _Err(stripe.error.StripeError):
             @property
@@ -652,21 +587,15 @@ class TestCreatePortalSessionForTenant:
         monkeypatch.setattr(customers_mod, "_create_portal_session", _raise)
 
         with pytest.raises(Exception) as excinfo:
-            await routes_mod.create_portal_session_for_tenant(
-                self._req(), x_tenant_id=None, principal=_principal()
-            )
+            await routes_mod.create_portal_session_for_tenant(self._req(), x_tenant_id=None, principal=_principal())
         assert getattr(excinfo.value, "status_code", None) == 502
         assert "Portal unavailable" in getattr(excinfo.value, "detail", "")
 
     @pytest.mark.asyncio
-    async def test_missing_portal_url_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_missing_portal_url_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 368: Stripe returned a session object without a URL
         (observed in the wild when the portal configuration is missing)."""
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_missing"
-        )
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_missing")
 
         class _NoUrlPortal:
             url = ""
@@ -678,9 +607,7 @@ class TestCreatePortalSessionForTenant:
         )
 
         with pytest.raises(Exception) as excinfo:
-            await routes_mod.create_portal_session_for_tenant(
-                self._req(), x_tenant_id=None, principal=_principal()
-            )
+            await routes_mod.create_portal_session_for_tenant(self._req(), x_tenant_id=None, principal=_principal())
         assert getattr(excinfo.value, "status_code", None) == 502
         assert "missing portal URL" in getattr(excinfo.value, "detail", "")
 
@@ -692,9 +619,7 @@ class TestListInvoices:
     """Lines 398-446."""
 
     @pytest.mark.asyncio
-    async def test_redis_error_raises_503(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_redis_error_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _boom(_t: str) -> None:
             raise redis.RedisError("conn dropped")
 
@@ -711,12 +636,8 @@ class TestListInvoices:
         assert getattr(excinfo.value, "status_code", None) == 503
 
     @pytest.mark.asyncio
-    async def test_missing_customer_id_raises_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            state_mod, "_get_subscription_mapping", lambda _t: {"customer_id": "  "}
-        )
+    async def test_missing_customer_id_raises_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(state_mod, "_get_subscription_mapping", lambda _t: {"customer_id": "  "})
         with pytest.raises(Exception) as excinfo:
             await routes_mod.list_invoices(
                 tenant_id="tenant-no-cus",
@@ -728,9 +649,7 @@ class TestListInvoices:
         assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
-    async def test_stripe_list_error_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_stripe_list_error_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -759,9 +678,7 @@ class TestListInvoices:
         assert "rate limited" in getattr(excinfo.value, "detail", "")
 
     @pytest.mark.asyncio
-    async def test_happy_path_returns_paginated_summary(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_happy_path_returns_paginated_summary(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -822,17 +739,13 @@ class TestListInvoices:
         assert result.next_cursor == "in_2"
 
     @pytest.mark.asyncio
-    async def test_empty_invoice_list_has_none_cursor(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_empty_invoice_list_has_none_cursor(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
             lambda _t: {"customer_id": "cus_empty"},
         )
-        monkeypatch.setattr(
-            stripe.Invoice, "list", lambda **_: {"data": [], "has_more": False}
-        )
+        monkeypatch.setattr(stripe.Invoice, "list", lambda **_: {"data": [], "has_more": False})
 
         result = await routes_mod.list_invoices(
             tenant_id="tenant-empty",
@@ -853,9 +766,7 @@ class TestGetInvoicePdf:
     """Lines 474-503."""
 
     @pytest.mark.asyncio
-    async def test_redis_error_raises_503(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_redis_error_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _boom(_t: str) -> None:
             raise redis.RedisError("conn dropped")
 
@@ -871,12 +782,8 @@ class TestGetInvoicePdf:
         assert getattr(excinfo.value, "status_code", None) == 503
 
     @pytest.mark.asyncio
-    async def test_missing_customer_id_raises_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            state_mod, "_get_subscription_mapping", lambda _t: {}
-        )
+    async def test_missing_customer_id_raises_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(state_mod, "_get_subscription_mapping", lambda _t: {})
         with pytest.raises(Exception) as excinfo:
             await routes_mod.get_invoice_pdf(
                 invoice_id="in_1",
@@ -887,9 +794,7 @@ class TestGetInvoicePdf:
         assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
-    async def test_invalid_request_error_returns_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_invalid_request_error_returns_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 486-487: Stripe's InvalidRequestError on retrieve means
         the invoice doesn't exist — surface as 404 (not 502) so clients
         know to stop retrying."""
@@ -914,9 +819,7 @@ class TestGetInvoicePdf:
         assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
-    async def test_stripe_error_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_stripe_error_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -944,9 +847,7 @@ class TestGetInvoicePdf:
         assert "Stripe is down" in getattr(excinfo.value, "detail", "")
 
     @pytest.mark.asyncio
-    async def test_cross_tenant_invoice_returns_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_cross_tenant_invoice_returns_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Defense: if the invoice's customer doesn't match the tenant's
         customer, we MUST return 404 — never leak another tenant's
         billing metadata."""
@@ -978,9 +879,7 @@ class TestGetInvoicePdf:
         assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
-    async def test_missing_pdf_url_returns_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_missing_pdf_url_returns_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 499-501: Stripe returned the invoice but no PDF URL
         (draft invoice, etc). This is 404 not 502."""
         monkeypatch.setattr(
@@ -1012,9 +911,7 @@ class TestGetInvoicePdf:
         assert "does not have a PDF URL" in getattr(excinfo.value, "detail", "")
 
     @pytest.mark.asyncio
-    async def test_happy_path_returns_pdf_response(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_happy_path_returns_pdf_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             state_mod,
             "_get_subscription_mapping",
@@ -1051,9 +948,7 @@ class TestCreatePortalSessionLegacy:
     """Lines 523-554. Companion to the non-legacy portal endpoint."""
 
     @pytest.mark.asyncio
-    async def test_happy_path_returns_portal_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_happy_path_returns_portal_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             customers_mod,
             "_ensure_customer_mapping",
@@ -1063,9 +958,7 @@ class TestCreatePortalSessionLegacy:
         class _Portal:
             url = "https://billing.stripe.com/session/legacy"
 
-        monkeypatch.setattr(
-            customers_mod, "_create_portal_session", lambda **_: _Portal()
-        )
+        monkeypatch.setattr(customers_mod, "_create_portal_session", lambda **_: _Portal())
 
         result = await routes_mod.create_portal_session_legacy(
             "tenant-legacy",
@@ -1077,24 +970,19 @@ class TestCreatePortalSessionLegacy:
         assert result.tenant_id == "tenant-legacy"
 
     @pytest.mark.asyncio
-    async def test_url_tenant_mismatch_returns_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_url_tenant_mismatch_returns_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """RE-SEC-INGEST-001: legacy route must reject cross-tenant access.
 
         An authenticated principal scoped to ``tenant-A`` must not be able to
         mint a portal session for ``tenant-B`` by varying the URL path.
         """
+
         # If the guard fails, _ensure_customer_mapping would be called and
         # leak the cross-tenant customer id. Stub it to fail loudly.
         def _should_not_be_called(**_kwargs: Any) -> str:
-            raise AssertionError(
-                "tenant-mismatch must short-circuit before customer lookup"
-            )
+            raise AssertionError("tenant-mismatch must short-circuit before customer lookup")
 
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", _should_not_be_called
-        )
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", _should_not_be_called)
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_portal_session_legacy(
@@ -1105,9 +993,7 @@ class TestCreatePortalSessionLegacy:
         assert getattr(excinfo.value, "status_code", None) == 404
 
     @pytest.mark.asyncio
-    async def test_redis_error_raises_503(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_redis_error_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _boom(**_kwargs: Any) -> None:
             raise redis.RedisError("conn dropped")
 
@@ -1122,12 +1008,8 @@ class TestCreatePortalSessionLegacy:
         assert getattr(excinfo.value, "status_code", None) == 503
 
     @pytest.mark.asyncio
-    async def test_stripe_error_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_x"
-        )
+    async def test_stripe_error_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_x")
 
         class _Err(stripe.error.StripeError):
             @property
@@ -1149,19 +1031,13 @@ class TestCreatePortalSessionLegacy:
         assert "portal offline" in getattr(excinfo.value, "detail", "")
 
     @pytest.mark.asyncio
-    async def test_missing_portal_url_raises_502(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            customers_mod, "_ensure_customer_mapping", lambda **_: "cus_x"
-        )
+    async def test_missing_portal_url_raises_502(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(customers_mod, "_ensure_customer_mapping", lambda **_: "cus_x")
 
         class _NoUrl:
             url = ""
 
-        monkeypatch.setattr(
-            customers_mod, "_create_portal_session", lambda **_: _NoUrl()
-        )
+        monkeypatch.setattr(customers_mod, "_create_portal_session", lambda **_: _NoUrl())
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_portal_session_legacy(

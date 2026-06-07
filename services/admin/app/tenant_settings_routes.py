@@ -14,7 +14,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from .database import get_session
 from .dependencies import get_current_user
-from .sqlalchemy_models import TenantModel, MembershipModel, RoleModel, UserModel
+from .sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 
 router = APIRouter(prefix="/tenants", tags=["Tenant Settings"])
 logger = structlog.get_logger("tenant_settings")
@@ -24,9 +24,7 @@ logger = structlog.get_logger("tenant_settings")
 _ADMIN_ROLE_NAMES = frozenset({"Owner", "Admin", "owner", "admin"})
 
 
-def _get_tenant_for_user(
-    tenant_id: UUID, user: UserModel, db: Session
-) -> TenantModel:
+def _get_tenant_for_user(tenant_id: UUID, user: UserModel, db: Session) -> TenantModel:
     """Load tenant after verifying user has membership."""
     membership = db.execute(
         select(MembershipModel).where(
@@ -43,9 +41,7 @@ def _get_tenant_for_user(
     return tenant
 
 
-def _get_user_role_name(
-    tenant_id: UUID, user: UserModel, db: Session
-) -> Optional[str]:
+def _get_user_role_name(tenant_id: UUID, user: UserModel, db: Session) -> Optional[str]:
     """Resolve the role name for (user, tenant) from the memberships table.
 
     Returns the role name string or ``None`` if no active membership
@@ -71,9 +67,7 @@ def _get_user_role_name(
     return role.name
 
 
-def _require_tenant_admin(
-    tenant_id: UUID, user: UserModel, db: Session
-) -> TenantModel:
+def _require_tenant_admin(tenant_id: UUID, user: UserModel, db: Session) -> TenantModel:
     """Load tenant after verifying the user has Owner/Admin/Sysadmin role.
 
     Fixes #1386: the previous ``_get_tenant_for_user`` only verified a
@@ -83,9 +77,7 @@ def _require_tenant_admin(
     """
     role_name = _get_user_role_name(tenant_id, user, db)
     if role_name is None:
-        raise HTTPException(
-            status_code=403, detail="Not a member of this tenant"
-        )
+        raise HTTPException(status_code=403, detail="Not a member of this tenant")
 
     if role_name not in _ADMIN_ROLE_NAMES and role_name != "Sysadmin":
         logger.warning(
@@ -96,10 +88,7 @@ def _require_tenant_admin(
         )
         raise HTTPException(
             status_code=403,
-            detail=(
-                "Only tenant Owner or Admin roles may modify tenant "
-                f"settings. Current role: {role_name}"
-            ),
+            detail=(f"Only tenant Owner or Admin roles may modify tenant settings. Current role: {role_name}"),
         )
 
     tenant = db.get(TenantModel, tenant_id)
@@ -159,12 +148,14 @@ class OnboardingResponse(BaseModel):
 
 class SettingsUpdateResponse(BaseModel):
     """Response for updating tenant settings."""
+
     status: str
     settings: dict
 
 
 class PartnerStatusResponse(BaseModel):
     """Response for updating partner status."""
+
     status: str
     partner_tier: str | None = None
 
@@ -218,15 +209,11 @@ async def update_tenant_settings(
 
     stripped_keys: list[str] = []
     if isinstance(filtered_update.get("workspace_profile"), dict):
-        cleaned, removed = _strip_blocked_keys(
-            filtered_update["workspace_profile"], _SETTINGS_BLOCKED_WORKSPACE_KEYS
-        )
+        cleaned, removed = _strip_blocked_keys(filtered_update["workspace_profile"], _SETTINGS_BLOCKED_WORKSPACE_KEYS)
         filtered_update["workspace_profile"] = cleaned
         stripped_keys.extend(f"workspace_profile.{k}" for k in removed)
     if isinstance(filtered_update.get("onboarding"), dict):
-        cleaned, removed = _strip_blocked_keys(
-            filtered_update["onboarding"], _SETTINGS_BLOCKED_WORKSPACE_KEYS
-        )
+        cleaned, removed = _strip_blocked_keys(filtered_update["onboarding"], _SETTINGS_BLOCKED_WORKSPACE_KEYS)
         filtered_update["onboarding"] = cleaned
         stripped_keys.extend(f"onboarding.{k}" for k in removed)
 
@@ -274,8 +261,7 @@ async def get_onboarding_status(
 
     # Consider setup complete when the 3 workspace setup steps are done
     is_complete = all(
-        onboarding.get(k, False)
-        for k in ("workspace_setup_completed", "facility_created", "ftl_check_completed")
+        onboarding.get(k, False) for k in ("workspace_setup_completed", "facility_created", "ftl_check_completed")
     )
 
     return OnboardingResponse(

@@ -14,21 +14,21 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import structlog
 import os
 import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import structlog
+from app.database import get_session
+from app.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.database import get_session
-from app.dependencies import get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import UserModel
 
@@ -61,9 +61,7 @@ def _make_erasure_token(email: str) -> str:
     nonce = secrets.token_hex(16)
     ts = str(int(time.time()))
     message = f"{email}:{ts}:{nonce}"
-    sig = hmac.new(
-        _erasure_secret().encode(), message.encode(), hashlib.sha256
-    ).hexdigest()
+    sig = hmac.new(_erasure_secret().encode(), message.encode(), hashlib.sha256).hexdigest()
     # Encode the payload so we can verify later without a DB
     payload = f"{message}:{sig}"
     return payload
@@ -76,9 +74,7 @@ def _verify_erasure_token(email: str, token: str) -> bool:
         if len(parts) != 2:
             return False
         message, provided_sig = parts
-        expected_sig = hmac.new(
-            _erasure_secret().encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(_erasure_secret().encode(), message.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected_sig, provided_sig):
             return False
         # Parse timestamp from message: email:ts:nonce
@@ -99,6 +95,7 @@ def _verify_erasure_token(email: str, token: str) -> bool:
 # ---------------------------------------------------------------------------
 # Art. 15 / 20 — Data export
 # ---------------------------------------------------------------------------
+
 
 class ExportResponse(BaseModel):
     user: Dict[str, Any]
@@ -135,13 +132,14 @@ async def gdpr_export(
 
     # ── User profile ─────────────────────────────────────────────────────────
     try:
-        user_row = db.execute(
-            text(
-                "SELECT id, email, status, created_at, last_login_at "
-                "FROM users WHERE id = :uid LIMIT 1"
-            ),
-            {"uid": user_id},
-        ).mappings().first()
+        user_row = (
+            db.execute(
+                text("SELECT id, email, status, created_at, last_login_at FROM users WHERE id = :uid LIMIT 1"),
+                {"uid": user_id},
+            )
+            .mappings()
+            .first()
+        )
         user_data: Dict[str, Any] = dict(user_row) if user_row else {"id": user_id, "email": email}
     except Exception as exc:
         logger.warning("gdpr_export_user_query_failed", error=str(exc))
@@ -155,17 +153,21 @@ async def gdpr_export(
     # ── Audit events (paginated) ──────────────────────────────────────────────
     audit_events: List[Dict[str, Any]] = []
     try:
-        rows = db.execute(
-            text(
-                "SELECT id, timestamp, event_type, event_category, action, "
-                "       severity, resource_type, resource_id, endpoint "
-                "FROM audit_logs "
-                "WHERE tenant_id = :tid AND actor_id = :uid "
-                "ORDER BY timestamp DESC "
-                "LIMIT :lim OFFSET :off"
-            ),
-            {"tid": tenant_id, "uid": user_id, "lim": page_size, "off": offset},
-        ).mappings().all()
+        rows = (
+            db.execute(
+                text(
+                    "SELECT id, timestamp, event_type, event_category, action, "
+                    "       severity, resource_type, resource_id, endpoint "
+                    "FROM audit_logs "
+                    "WHERE tenant_id = :tid AND actor_id = :uid "
+                    "ORDER BY timestamp DESC "
+                    "LIMIT :lim OFFSET :off"
+                ),
+                {"tid": tenant_id, "uid": user_id, "lim": page_size, "off": offset},
+            )
+            .mappings()
+            .all()
+        )
         for row in rows:
             d = dict(row)
             for k, v in d.items():
@@ -178,16 +180,20 @@ async def gdpr_export(
     # ── Compliance records (paginated) ────────────────────────────────────────
     compliance_records: List[Dict[str, Any]] = []
     try:
-        rows = db.execute(
-            text(
-                "SELECT id, cte_type, status, created_at "
-                "FROM supplier_cte_events "
-                "WHERE tenant_id = :tid "
-                "ORDER BY created_at DESC "
-                "LIMIT :lim OFFSET :off"
-            ),
-            {"tid": tenant_id, "lim": page_size, "off": offset},
-        ).mappings().all()
+        rows = (
+            db.execute(
+                text(
+                    "SELECT id, cte_type, status, created_at "
+                    "FROM supplier_cte_events "
+                    "WHERE tenant_id = :tid "
+                    "ORDER BY created_at DESC "
+                    "LIMIT :lim OFFSET :off"
+                ),
+                {"tid": tenant_id, "lim": page_size, "off": offset},
+            )
+            .mappings()
+            .all()
+        )
         for row in rows:
             d = dict(row)
             for k, v in d.items():
@@ -222,6 +228,7 @@ async def gdpr_export(
 # ---------------------------------------------------------------------------
 # Art. 17 — Tool-lead erasure (unauthenticated)
 # ---------------------------------------------------------------------------
+
 
 class ErasureRequestBody(BaseModel):
     email: EmailStr
@@ -326,8 +333,5 @@ async def confirm_lead_erasure(
     return {
         "status": "erased",
         "rows_deleted": deleted,
-        "message": (
-            "Your data has been removed from our lead capture database "
-            "in accordance with GDPR Article 17."
-        ),
+        "message": ("Your data has been removed from our lead capture database in accordance with GDPR Article 17."),
     }

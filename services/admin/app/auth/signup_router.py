@@ -4,6 +4,7 @@ Exposes:
   router   — APIRouter with /signup registered; included by auth_routes.py
   signup   — the handler function (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -13,6 +14,10 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from shared.funnel_events import emit_funnel_event
+from shared.pii import mask_email
+from shared.rate_limit import limiter
+from shared.supabase_client import get_supabase
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -27,7 +32,7 @@ from ..auth_utils import (
 )
 from ..database import get_session
 from ..dependencies import get_session_store
-from ..password_policy import validate_password, PasswordPolicyError
+from ..password_policy import PasswordPolicyError, validate_password
 from ..session_store import RedisSessionStore, SessionData
 from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 from .schemas import (
@@ -38,10 +43,6 @@ from .schemas import (
 )
 from .session_helpers import _persist_session
 from .signup_helpers import _ensure_unique_tenant_slug
-from shared.funnel_events import emit_funnel_event
-from shared.pii import mask_email
-from shared.rate_limit import limiter
-from shared.supabase_client import get_supabase
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -88,9 +89,7 @@ async def signup(
     if not tenant_name:
         raise HTTPException(status_code=400, detail="Tenant name is required")
 
-    existing_user = db.execute(
-        select(UserModel).where(UserModel.email == normalized_email)
-    ).scalar_one_or_none()
+    existing_user = db.execute(select(UserModel).where(UserModel.email == normalized_email)).scalar_one_or_none()
     if existing_user:
         # Return the exact same accepted response as successful signup to
         # prevent email enumeration (#1861). We do NOT send a confirmation
@@ -140,7 +139,14 @@ async def signup(
             supabase_user = getattr(supabase_response, "user", None)
             if supabase_user and getattr(supabase_user, "id", None):
                 supabase_user_id = UUID(str(supabase_user.id))
-        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError, AttributeError) as exc:  # pragma: no cover - external dependency behavior
+        except (
+            OSError,
+            TimeoutError,
+            ConnectionError,
+            ValueError,
+            RuntimeError,
+            AttributeError,
+        ) as exc:  # pragma: no cover - external dependency behavior
             logger.warning("supabase_signup_provisioning_failed", email=mask_email(normalized_email), error=str(exc))
             # Non-fatal: we continue without Supabase linkage rather than
             # blocking signup entirely. Supabase orphan cleanup handled by
@@ -208,7 +214,8 @@ async def signup(
     # can simply retry. Supabase-user orphans are a separate layer (#1090).
     try:
         await _persist_session(
-            session_store, session_data,
+            session_store,
+            session_data,
             context="signup",
             user_id=new_user.id,
         )

@@ -54,9 +54,7 @@ def test_anonymize_audit_logs_for_user_exists_with_correct_signature():
     erasure route breaks silently, so lock it in."""
     from shared.data_retention import DataRetentionManager
 
-    sig = inspect.signature(
-        DataRetentionManager.anonymize_audit_logs_for_user
-    )
+    sig = inspect.signature(DataRetentionManager.anonymize_audit_logs_for_user)
     params = sig.parameters
     assert "db" in params
     assert "user_id" in params
@@ -78,17 +76,12 @@ def test_erasure_route_calls_per_user_anonymize_with_correct_kwargs():
     """
     import pathlib
 
-    source_path = (
-        pathlib.Path(__file__).resolve().parents[1]
-        / "app"
-        / "erasure_routes.py"
-    )
+    source_path = pathlib.Path(__file__).resolve().parents[1] / "app" / "erasure_routes.py"
     source = source_path.read_text()
 
     # The fix uses the per-user variant.
     assert "anonymize_audit_logs_for_user(" in source, (
-        "erasure_routes.py must call anonymize_audit_logs_for_user "
-        "(per-user GDPR variant) to match the #1092 fix"
+        "erasure_routes.py must call anonymize_audit_logs_for_user (per-user GDPR variant) to match the #1092 fix"
     )
 
     # The call site passes user_id= and tenant_id=
@@ -101,9 +94,5 @@ def test_erasure_route_calls_per_user_anonymize_with_correct_kwargs():
     # AuditActor must be constructed with `email=` (the real field),
     # not the invalid `actor_email=` (which raised TypeError and
     # silently broke every erasure request even after #1441).
-    assert "actor_email=" not in source, (
-        "AuditActor has no `actor_email` field -- use `email=`"
-    )
-    assert "email=mask_email(" in source, (
-        "erasure_routes.py must construct AuditActor(email=mask_email(...))"
-    )
+    assert "actor_email=" not in source, "AuditActor has no `actor_email` field -- use `email=`"
+    assert "email=mask_email(" in source, "erasure_routes.py must construct AuditActor(email=mask_email(...))"

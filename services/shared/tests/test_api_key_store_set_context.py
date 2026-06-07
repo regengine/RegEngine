@@ -10,10 +10,10 @@ regular function call that accepts bound parameters. This test pins
 the rendered SQL so a future refactor that reintroduces ``SET LOCAL``
 trips CI.
 """
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from shared.api_key_store import DatabaseAPIKeyStore
 
 
@@ -21,9 +21,7 @@ from shared.api_key_store import DatabaseAPIKeyStore
 async def test_set_context_uses_set_config_not_set_local(monkeypatch):
     """Rendered SQL must call set_config(…), not SET LOCAL …"""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:6543/d")
-    with patch("shared.api_key_store.create_async_engine") as _e, patch(
-        "shared.api_key_store.sessionmaker"
-    ) as _s:
+    with patch("shared.api_key_store.create_async_engine") as _e, patch("shared.api_key_store.sessionmaker") as _s:
         _e.return_value = object()
         _s.return_value = lambda: None
         store = DatabaseAPIKeyStore()
@@ -52,9 +50,7 @@ async def test_set_context_uses_set_config_not_set_local(monkeypatch):
 async def test_set_context_skipped_when_no_tenant(monkeypatch):
     """Empty or None tenant → no DB call (unchanged)."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:6543/d")
-    with patch("shared.api_key_store.create_async_engine") as _e, patch(
-        "shared.api_key_store.sessionmaker"
-    ) as _s:
+    with patch("shared.api_key_store.create_async_engine") as _e, patch("shared.api_key_store.sessionmaker") as _s:
         _e.return_value = object()
         _s.return_value = lambda: None
         store = DatabaseAPIKeyStore()
@@ -74,9 +70,7 @@ async def test_set_context_skipped_when_no_tenant(monkeypatch):
 async def test_set_context_rejects_non_uuid(monkeypatch):
     """UUID validation still runs — SQL injection surface stays closed."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:6543/d")
-    with patch("shared.api_key_store.create_async_engine") as _e, patch(
-        "shared.api_key_store.sessionmaker"
-    ) as _s:
+    with patch("shared.api_key_store.create_async_engine") as _e, patch("shared.api_key_store.sessionmaker") as _s:
         _e.return_value = object()
         _s.return_value = lambda: None
         store = DatabaseAPIKeyStore()

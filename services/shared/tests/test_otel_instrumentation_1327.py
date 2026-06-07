@@ -19,9 +19,9 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, call, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Minimal stubs for opentelemetry packages (may not be installed in CI)
@@ -76,9 +76,15 @@ def _ensure_stubs():
 
     sdk_t = sys.modules["opentelemetry.sdk.trace"]
     if not hasattr(sdk_t, "TracerProvider"):
-        sdk_t.TracerProvider = type("TracerProvider", (), {"__init__": lambda s, **kw: None,
-                                                           "add_span_processor": lambda s, p: None,
-                                                           "set_tracer_provider": lambda s: None})
+        sdk_t.TracerProvider = type(
+            "TracerProvider",
+            (),
+            {
+                "__init__": lambda s, **kw: None,
+                "add_span_processor": lambda s, p: None,
+                "set_tracer_provider": lambda s: None,
+            },
+        )
 
     sdk_e = sys.modules["opentelemetry.sdk.trace.export"]
     if not hasattr(sdk_e, "BatchSpanProcessor"):
@@ -104,8 +110,9 @@ def _ensure_stubs():
 
     sdk_l = sys.modules["opentelemetry.sdk._logs"]
     if not hasattr(sdk_l, "LoggerProvider"):
-        sdk_l.LoggerProvider = type("LoggerProvider", (), {"__init__": lambda s, **kw: None,
-                                                           "add_log_record_processor": lambda s, p: None})
+        sdk_l.LoggerProvider = type(
+            "LoggerProvider", (), {"__init__": lambda s, **kw: None, "add_log_record_processor": lambda s, p: None}
+        )
     if not hasattr(sdk_l, "LoggingHandler"):
         sdk_l.LoggingHandler = type("LoggingHandler", (), {})
 
@@ -169,6 +176,7 @@ def _enable_otel(monkeypatch):
 # Unit tests for _instrument_downstream_clients directly
 # ---------------------------------------------------------------------------
 
+
 class TestInstrumentDownstreamClients:
     def test_sqlalchemy_instrument_called(self):
         otel_mod = _load_fresh_otel_module()
@@ -210,6 +218,7 @@ class TestInstrumentDownstreamClients:
 # Integration: add_observability calls _instrument_downstream_clients
 # ---------------------------------------------------------------------------
 
+
 class TestAddObservabilityCallsInstrumentation:
     def test_downstream_instrumented_when_otel_enabled(self, monkeypatch):
         _enable_otel(monkeypatch)
@@ -219,6 +228,7 @@ class TestAddObservabilityCallsInstrumentation:
         otel_mod._instrument_downstream_clients = lambda: called.append(True)
 
         from fastapi import FastAPI
+
         otel_mod.add_observability(FastAPI(), "svc")
 
         assert called, "_instrument_downstream_clients was not called"
@@ -231,6 +241,7 @@ class TestAddObservabilityCallsInstrumentation:
         otel_mod._instrument_downstream_clients = lambda: called.append(True)
 
         from fastapi import FastAPI
+
         otel_mod.add_observability(FastAPI(), "svc")
 
         assert not called, "_instrument_downstream_clients must not be called when OTel is off"
@@ -247,6 +258,7 @@ class TestAddObservabilityCallsInstrumentation:
         )
 
         from fastapi import FastAPI
+
         otel_mod.add_observability(FastAPI(), "svc")
 
         set_tracer_provider.assert_not_called()
@@ -270,6 +282,7 @@ class TestAddObservabilityCallsInstrumentation:
         otel_mod._instrument_downstream_clients = lambda: None
 
         from fastapi import FastAPI
+
         otel_mod.add_observability(FastAPI(), "svc")
 
         set_tracer_provider.assert_not_called()
@@ -278,6 +291,7 @@ class TestAddObservabilityCallsInstrumentation:
 # ---------------------------------------------------------------------------
 # Integration: setup_standalone_observability calls _instrument_downstream_clients
 # ---------------------------------------------------------------------------
+
 
 class TestStandaloneObservabilityCallsInstrumentation:
     def test_downstream_instrumented_when_otel_enabled(self, monkeypatch):

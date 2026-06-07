@@ -24,7 +24,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Minimal fake session factory
 # ---------------------------------------------------------------------------
@@ -65,6 +64,7 @@ def _fake_session(event_rows=None, kde_rows=None, count_row=None):
 
 def _make_persistence(session):
     from services.shared.cte_persistence.core import CTEPersistence  # noqa: PLC0415
+
     p = object.__new__(CTEPersistence)
     p.session = session
     # DEFAULT_TRAVERSAL_DEPTH may be accessed
@@ -93,9 +93,21 @@ class TestQueryEventsByTlcAudit:
         event_rows = [
             # (id, event_type, tlc, product_description, qty, uom, gln, loc, ts, sha, chain, src, status, ingested, entry_ts)
             (
-                "evt-001", "receiving", "TLC-001", "Tomatoes", 100.0, "cases",
-                "0614141000005", "WH-A", None, "abc", "def", "epcis",
-                "valid", None, None,
+                "evt-001",
+                "receiving",
+                "TLC-001",
+                "Tomatoes",
+                100.0,
+                "cases",
+                "0614141000005",
+                "WH-A",
+                None,
+                "abc",
+                "def",
+                "epcis",
+                "valid",
+                None,
+                None,
             )
         ]
         session = _fake_session(event_rows=event_rows, kde_rows=[])
@@ -124,9 +136,21 @@ class TestQueryEventsByTlcAudit:
     def test_audit_record_contains_required_fields(self, caplog):
         event_rows = [
             (
-                "evt-001", "receiving", "TLC-001", "Tomatoes", 100.0, "cases",
-                "0614141000005", "WH-A", None, "abc", "def", "epcis",
-                "valid", None, None,
+                "evt-001",
+                "receiving",
+                "TLC-001",
+                "Tomatoes",
+                100.0,
+                "cases",
+                "0614141000005",
+                "WH-A",
+                None,
+                "abc",
+                "def",
+                "epcis",
+                "valid",
+                None,
+                None,
             )
         ]
         session = _fake_session(event_rows=event_rows, kde_rows=[])

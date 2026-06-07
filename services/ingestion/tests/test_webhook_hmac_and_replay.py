@@ -25,7 +25,6 @@ pytest.importorskip("fastapi")
 
 import app.webhook_router_v2 as wr  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Fake Request stub — the real starlette.Request needs an ASGI scope and we
 # only need ``await request.body()`` to return bytes.
@@ -103,7 +102,8 @@ async def test_signature_mismatch_rejected(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await wr._verify_webhook_signature(
-            req, x_webhook_signature="sha256=" + "0" * 64,
+            req,
+            x_webhook_signature="sha256=" + "0" * 64,
         )
     assert exc.value.status_code == 401
     assert exc.value.detail["error"] == "invalid_webhook_signature"
@@ -121,7 +121,8 @@ async def test_signature_unsupported_scheme_rejected(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await wr._verify_webhook_signature(
-            req, x_webhook_signature="md5=deadbeef",
+            req,
+            x_webhook_signature="md5=deadbeef",
         )
     assert exc.value.status_code == 401
     # In dev, "message" is present for partner debugging…
@@ -143,7 +144,8 @@ async def test_signature_body_tampering_rejected(monkeypatch):
 
     with pytest.raises(HTTPException) as exc:
         await wr._verify_webhook_signature(
-            req, x_webhook_signature=f"sha256={sig_for_original}",
+            req,
+            x_webhook_signature=f"sha256={sig_for_original}",
         )
     assert exc.value.status_code == 401
 

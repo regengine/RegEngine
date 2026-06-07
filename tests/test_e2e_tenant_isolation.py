@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -47,6 +48,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -80,6 +82,7 @@ def tenant_b():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -87,6 +90,7 @@ def workflow(db_session):
 def rules_engine(db_session):
     """Create a RulesEngine instance."""
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
 
 
@@ -94,6 +98,7 @@ def rules_engine(db_session):
 def canonical_store(db_session):
     """Create a CanonicalEventStore instance."""
     from shared.canonical_persistence import CanonicalEventStore
+
     return CanonicalEventStore(db_session)
 
 
@@ -110,7 +115,7 @@ SUPPLIERS_B = ["Nordic Aquaculture", "Ocean Fresh Packers", "ColdChain Logistics
 
 def _make_events_for_tenant(tenant_id: str, product: str, suppliers: List[str], lot_prefix: str) -> List[Dict]:
     """Generate 3 test events for a given tenant and product."""
-    from shared.canonical_event import TraceabilityEvent, IngestionSource
+    from shared.canonical_event import IngestionSource, TraceabilityEvent
 
     base_time = datetime.now(timezone.utc) - timedelta(days=10)
 
@@ -184,6 +189,7 @@ def _make_events_for_tenant(tenant_id: str, product: str, suppliers: List[str], 
 # The Test: Multi-Tenant Isolation
 # ---------------------------------------------------------------------------
 
+
 class TestTenantIsolationE2E:
     """Prove that tenant boundaries hold across every system layer."""
 
@@ -192,6 +198,7 @@ class TestTenantIsolationE2E:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
@@ -256,29 +263,30 @@ class TestTenantIsolationE2E:
 
         # Advance to scoping and collecting
         workflow.update_scope(
-            tenant_a, case_id,
+            tenant_a,
+            case_id,
             scope_description="All Romaine lots from Salinas region",
         )
         result = workflow.collect_records(tenant_a, case_id)
 
-        assert result["total_records"] >= 2, (
-            f"Expected >=2 records for tenant_a, got {result['total_records']}"
-        )
+        assert result["total_records"] >= 2, f"Expected >=2 records for tenant_a, got {result['total_records']}"
 
         # Verify every collected event belongs to tenant_a
-        collected_events = db_session.execute(
-            text("""
+        collected_events = (
+            db_session.execute(
+                text("""
                 SELECT event_id, tenant_id, product_reference
                 FROM fsma.traceability_events
                 WHERE tenant_id = :tid AND status = 'active'
             """),
-            {"tid": tenant_a},
-        ).mappings().fetchall()
+                {"tid": tenant_a},
+            )
+            .mappings()
+            .fetchall()
+        )
 
         for evt in collected_events:
-            assert str(evt["tenant_id"]) == tenant_a, (
-                f"Event {evt['event_id']} belongs to wrong tenant"
-            )
+            assert str(evt["tenant_id"]) == tenant_a, f"Event {evt['event_id']} belongs to wrong tenant"
             assert evt["product_reference"] == PRODUCT_A, (
                 f"Event {evt['event_id']} has wrong product: {evt['product_reference']}"
             )
@@ -313,9 +321,7 @@ class TestTenantIsolationE2E:
             {"tid": tenant_b, "product": PRODUCT_A},
         ).scalar()
 
-        assert result == 0, (
-            f"Tenant B found {result} events for Tenant A's product '{PRODUCT_A}' — isolation breach!"
-        )
+        assert result == 0, f"Tenant B found {result} events for Tenant A's product '{PRODUCT_A}' — isolation breach!"
 
         # Verify tenant_b only sees their own product
         b_products = db_session.execute(
@@ -340,21 +346,27 @@ class TestTenantIsolationE2E:
         from sqlalchemy import text
 
         # Evaluate rules for tenant_a's events
-        a_events = db_session.execute(
-            text("""
+        a_events = (
+            db_session.execute(
+                text("""
                 SELECT * FROM fsma.traceability_events
                 WHERE tenant_id = :tid AND status = 'active'
                 ORDER BY event_timestamp
             """),
-            {"tid": tenant_a},
-        ).mappings().fetchall()
+                {"tid": tenant_a},
+            )
+            .mappings()
+            .fetchall()
+        )
 
         for event in a_events:
             event_dict = dict(event)
             if event_dict.get("kdes") and isinstance(event_dict["kdes"], str):
                 event_dict["kdes"] = json.loads(event_dict["kdes"])
             rules_engine.evaluate_event(
-                event_dict, persist=True, tenant_id=tenant_a,
+                event_dict,
+                persist=True,
+                tenant_id=tenant_a,
             )
 
         # Now check: tenant_b must have ZERO rule evaluations for tenant_a's events
@@ -382,9 +394,7 @@ class TestTenantIsolationE2E:
             {"tid": tenant_b},
         ).scalar()
 
-        assert b_eval_count == 0, (
-            f"Tenant B has {b_eval_count} rule evaluations before any were run — unexpected data"
-        )
+        assert b_eval_count == 0, f"Tenant B has {b_eval_count} rule evaluations before any were run — unexpected data"
 
     # ------------------------------------------------------------------
     # Step 8: Create a request case for Tenant B — verify isolation
@@ -410,14 +420,13 @@ class TestTenantIsolationE2E:
 
         # Advance tenant_b's case through scope and collect
         workflow.update_scope(
-            tenant_b, case["request_case_id"],
+            tenant_b,
+            case["request_case_id"],
             scope_description="All salmon lots",
         )
         result = workflow.collect_records(tenant_b, case["request_case_id"])
 
-        assert result["total_records"] >= 2, (
-            f"Expected >=2 records for tenant_b, got {result['total_records']}"
-        )
+        assert result["total_records"] >= 2, f"Expected >=2 records for tenant_b, got {result['total_records']}"
 
         # Verify tenant_b's active cases don't include tenant_a's case
         b_cases = workflow.get_active_cases(tenant_b, include_submitted=True)
@@ -426,17 +435,13 @@ class TestTenantIsolationE2E:
         assert self.__class__._case_a_id not in b_case_ids, (
             "Tenant A's case appeared in Tenant B's active cases — isolation breach!"
         )
-        assert case["request_case_id"] in b_case_ids, (
-            "Tenant B's own case not found in their active cases"
-        )
+        assert case["request_case_id"] in b_case_ids, "Tenant B's own case not found in their active cases"
 
     # ------------------------------------------------------------------
     # Step 9: Submit package for Tenant A — verify Tenant B's data excluded
     # ------------------------------------------------------------------
 
-    def test_09_submit_package_tenant_a_excludes_tenant_b(
-        self, db_session, tenant_a, tenant_b, workflow
-    ):
+    def test_09_submit_package_tenant_a_excludes_tenant_b(self, db_session, tenant_a, tenant_b, workflow):
         """Assemble and submit Tenant A's package — must not contain Tenant B data."""
         case_a_id = self.__class__._case_a_id
 
@@ -445,7 +450,8 @@ class TestTenantIsolationE2E:
 
         # Assemble package
         package = workflow.assemble_response_package(
-            tenant_a, case_a_id,
+            tenant_a,
+            case_a_id,
             generated_by="qa_lead_a@company.com",
         )
 
@@ -477,20 +483,23 @@ class TestTenantIsolationE2E:
 
         # Add signoffs and submit
         workflow.add_signoff(
-            tenant_a, case_a_id,
+            tenant_a,
+            case_a_id,
             signoff_type="scope_approval",
             signed_by="qa_lead_a@company.com",
             notes="Scope confirmed for tenant A.",
         )
         workflow.add_signoff(
-            tenant_a, case_a_id,
+            tenant_a,
+            case_a_id,
             signoff_type="final_approval",
             signed_by="vp_quality_a@company.com",
             notes="Approved for submission.",
         )
 
         result = workflow.submit_package(
-            tenant_a, case_a_id,
+            tenant_a,
+            case_a_id,
             package_id=package["package_id"],
             submitted_by="vp_quality_a@company.com",
             submitted_to="FDA",
@@ -571,9 +580,7 @@ class TestTenantIsolationE2E:
             """),
             {"tid": tenant_b, "cid": exc_case_id},
         ).scalar()
-        assert b_exc_count == 0, (
-            f"Tenant B found Tenant A's exception case — isolation breach!"
-        )
+        assert b_exc_count == 0, f"Tenant B found Tenant A's exception case — isolation breach!"
 
         # Verify tenant_b has no exception cases linked to tenant_a's request
         b_leaked_exc = db_session.execute(
@@ -584,9 +591,7 @@ class TestTenantIsolationE2E:
             """),
             {"tid": tenant_b, "case_id": self.__class__._case_a_id},
         ).scalar()
-        assert b_leaked_exc == 0, (
-            "Tenant B has exception cases linked to Tenant A's request — isolation breach!"
-        )
+        assert b_leaked_exc == 0, "Tenant B has exception cases linked to Tenant A's request — isolation breach!"
 
     # ------------------------------------------------------------------
     # Final verification: cross-tenant counts
@@ -637,6 +642,5 @@ class TestTenantIsolationE2E:
             ).scalar()
 
             assert combined == a_count + b_count, (
-                f"Data integrity issue in {table}: "
-                f"combined({combined}) != a({a_count}) + b({b_count})"
+                f"Data integrity issue in {table}: combined({combined}) != a({a_count}) + b({b_count})"
             )

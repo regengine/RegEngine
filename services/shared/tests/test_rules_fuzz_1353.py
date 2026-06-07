@@ -24,13 +24,15 @@ import pytest
 
 pytest.importorskip("hypothesis")
 
-from hypothesis import given, settings  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
+from hypothesis import (  # noqa: E402
+    given,
+    settings,
+    strategies as st,  # noqa: E402
+)
 
 # ---------------------------------------------------------------------------
 # Module-level helpers / shims so imports work without a live DB
 # ---------------------------------------------------------------------------
-
 # Canonical event hashing
 from services.shared.cte_persistence.hashing import compute_event_hash
 
@@ -67,6 +69,7 @@ _kde_st = st.dictionaries(st.text(min_size=1, max_size=32), _kde_value_st, max_s
 # 1. Confidence always in [0.0, 1.0]
 # ---------------------------------------------------------------------------
 
+
 class TestConfidenceRange:
     """Property: any confidence score produced by the rules engine must be
     clamped to [0.0, 1.0].  We test this by directly inspecting
@@ -96,6 +99,7 @@ class TestConfidenceRange:
 # ---------------------------------------------------------------------------
 # 2. Empty KDE → EvaluationSummary with no compliant verdict (None / not True)
 # ---------------------------------------------------------------------------
+
 
 class TestEmptyKdeNoCompliantVerdict:
     """Property: when the rules engine is given a canonical event with an
@@ -147,6 +151,7 @@ class TestEmptyKdeNoCompliantVerdict:
 # Minimal TLC normalizer inline — mirrors the logic in rules engine / extractor
 # without importing a potentially DB-bound module.
 
+
 def _normalize_tlc(value: str) -> str:
     """Canonical TLC normalization: strip whitespace, uppercase."""
     if not isinstance(value, str):
@@ -162,14 +167,13 @@ class TestTlcNormalizeIdempotent:
     def test_normalize_is_idempotent(self, raw: str):
         once = _normalize_tlc(raw)
         twice = _normalize_tlc(once)
-        assert once == twice, (
-            f"TLC normalization not idempotent: {raw!r} → {once!r} → {twice!r}"
-        )
+        assert once == twice, f"TLC normalization not idempotent: {raw!r} → {once!r} → {twice!r}"
 
 
 # ---------------------------------------------------------------------------
 # 4. Event hash is deterministic
 # ---------------------------------------------------------------------------
+
 
 class TestEventHashDeterministic:
     """Property: compute_event_hash returns the same value for identical inputs,
@@ -222,14 +226,13 @@ class TestEventHashDeterministic:
             kdes=kdes,
         )
         assert h1 == h2, f"compute_event_hash not deterministic: {h1!r} != {h2!r}"
-        assert isinstance(h1, str) and len(h1) == 64, (
-            f"Expected 64-char sha256 hex, got {h1!r}"
-        )
+        assert isinstance(h1, str) and len(h1) == 64, f"Expected 64-char sha256 hex, got {h1!r}"
 
 
 # ---------------------------------------------------------------------------
 # 5. RulesEngine never raises unhandled exception on arbitrary string input
 # ---------------------------------------------------------------------------
+
 
 class TestRulesEngineNoUnhandledException:
     """Property: RulesEngine.evaluate_event must not raise any unhandled

@@ -34,10 +34,10 @@ from services.shared.rules_engine import (
     _get_nested_value,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_rule(**overrides) -> RuleDefinition:
     """Factory for a RuleDefinition with sensible defaults."""
@@ -53,9 +53,7 @@ def _make_rule(**overrides) -> RuleDefinition:
         effective_date=date(2026, 1, 1),
         retired_date=None,
         evaluation_logic={"type": "field_presence", "field": "kdes.tlc_source_reference"},
-        failure_reason_template=(
-            "Missing {field_name} at {field_path} per {citation} for {event_type} event"
-        ),
+        failure_reason_template=("Missing {field_name} at {field_path} per {citation} for {event_type} event"),
         remediation_suggestion="Request the data from your supplier",
     )
     defaults.update(overrides)
@@ -88,6 +86,7 @@ def mock_session():
 # 1. Dataclass Construction & Validation
 # ---------------------------------------------------------------------------
 
+
 class TestDataclasses:
     def test_rule_definition_creation(self):
         rule = _make_rule()
@@ -116,6 +115,7 @@ class TestDataclasses:
 # ---------------------------------------------------------------------------
 # 2. _get_nested_value
 # ---------------------------------------------------------------------------
+
 
 class TestGetNestedValue:
     def test_flat_key(self):
@@ -146,13 +146,12 @@ class TestGetNestedValue:
 # 3. _evaluate_field_presence
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluateFieldPresence:
     def test_present_field_passes(self):
         rule = _make_rule()
         event = _make_event()
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
         assert result.rule_id == "rule-001"
         assert result.why_failed is None
@@ -160,9 +159,7 @@ class TestEvaluateFieldPresence:
     def test_missing_field_fails(self):
         rule = _make_rule()
         event = _make_event(kdes={})  # no tlc_source_reference
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
         assert result.why_failed is not None
         assert "tlc source reference" in result.why_failed
@@ -170,33 +167,25 @@ class TestEvaluateFieldPresence:
     def test_empty_string_field_fails(self):
         rule = _make_rule()
         event = _make_event(kdes={"tlc_source_reference": "   "})
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
 
     def test_none_field_fails(self):
         rule = _make_rule()
         event = _make_event(kdes={"tlc_source_reference": None})
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
 
     def test_numeric_field_passes(self):
         rule = _make_rule(evaluation_logic={"type": "field_presence", "field": "kdes.quantity"})
         event = _make_event(kdes={"quantity": 0})  # 0 is non-None
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
 
     def test_evidence_fields_populated(self):
         rule = _make_rule()
         event = _make_event()
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert len(result.evidence_fields_inspected) == 1
         evidence = result.evidence_fields_inspected[0]
         assert evidence["field"] == "kdes.tlc_source_reference"
@@ -205,23 +194,20 @@ class TestEvaluateFieldPresence:
     def test_why_failed_includes_citation(self):
         rule = _make_rule()
         event = _make_event(kdes={})
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert "21 CFR" in result.why_failed
 
     def test_remediation_suggestion_set_on_failure(self):
         rule = _make_rule()
         event = _make_event(kdes={})
-        result = _evaluate_field_presence(
-            event, rule.evaluation_logic, rule
-        )
+        result = _evaluate_field_presence(event, rule.evaluation_logic, rule)
         assert result.remediation_suggestion == "Request the data from your supplier"
 
 
 # ---------------------------------------------------------------------------
 # 4. _evaluate_field_format
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateFieldFormat:
     def test_matching_format_passes(self):
@@ -291,6 +277,7 @@ class TestEvaluateFieldFormat:
 # 5. _evaluate_multi_field_presence
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluateMultiFieldPresence:
     def test_one_of_many_present_passes(self):
         rule = _make_rule(
@@ -351,6 +338,7 @@ class TestEvaluateMultiFieldPresence:
 # 6. RulesEngine.evaluate_event (integrated, mock DB)
 # ---------------------------------------------------------------------------
 
+
 class TestRulesEngineEvaluateEvent:
     def _engine_with_rules(self, rules, mock_session):
         engine = RulesEngine(mock_session)
@@ -405,11 +393,13 @@ class TestRulesEngineEvaluateEvent:
         assert "Unknown evaluation type" in summary.results[0].why_failed
 
     def test_evaluator_exception_skips(self, mock_session):
-        rules = [_make_rule(
-            evaluation_logic={"type": "field_presence", "field": "kdes.x"},
-            # Template that will fail because of bad format key
-            failure_reason_template="{nonexistent_key}",
-        )]
+        rules = [
+            _make_rule(
+                evaluation_logic={"type": "field_presence", "field": "kdes.x"},
+                # Template that will fail because of bad format key
+                failure_reason_template="{nonexistent_key}",
+            )
+        ]
         engine = self._engine_with_rules(rules, mock_session)
         event = _make_event(kdes={})
 
@@ -421,9 +411,13 @@ class TestRulesEngineEvaluateEvent:
     def test_multiple_rules_evaluated(self, mock_session):
         rules = [
             _make_rule(rule_id="r1"),
-            _make_rule(rule_id="r2", evaluation_logic={
-                "type": "field_presence", "field": "kdes.harvest_date",
-            }),
+            _make_rule(
+                rule_id="r2",
+                evaluation_logic={
+                    "type": "field_presence",
+                    "field": "kdes.harvest_date",
+                },
+            ),
         ]
         engine = self._engine_with_rules(rules, mock_session)
         event = _make_event()
@@ -436,6 +430,7 @@ class TestRulesEngineEvaluateEvent:
 # ---------------------------------------------------------------------------
 # 7. Applicability Filtering
 # ---------------------------------------------------------------------------
+
 
 class TestGetApplicableRules:
     def test_filter_by_cte_type(self, mock_session):
@@ -465,6 +460,7 @@ class TestGetApplicableRules:
 # 8. Batch Evaluation
 # ---------------------------------------------------------------------------
 
+
 class TestBatchEvaluation:
     def test_batch_evaluates_multiple_events(self, mock_session):
         rules = [_make_rule()]
@@ -489,6 +485,7 @@ class TestBatchEvaluation:
 # 9. Severity Ordering
 # ---------------------------------------------------------------------------
 
+
 class TestSeverityOrdering:
     def test_critical_before_warning(self):
         """Verify that severity can be used for sorting/prioritization."""
@@ -509,6 +506,7 @@ class TestSeverityOrdering:
 # ---------------------------------------------------------------------------
 # 10. why_failed Explanation Quality
 # ---------------------------------------------------------------------------
+
 
 class TestWhyFailedExplanation:
     def test_why_failed_contains_field_name(self):
@@ -540,6 +538,7 @@ class TestWhyFailedExplanation:
 # 11. _fetch_related_events
 # ---------------------------------------------------------------------------
 
+
 class TestFetchRelatedEvents:
     def test_returns_related_events(self, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
@@ -568,6 +567,7 @@ class TestFetchRelatedEvents:
 # ---------------------------------------------------------------------------
 # 12. _evaluate_temporal_order
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateTemporalOrder:
     def _temporal_rule(self):
@@ -657,6 +657,7 @@ class TestEvaluateTemporalOrder:
 # ---------------------------------------------------------------------------
 # 13. _evaluate_identity_consistency
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateIdentityConsistency:
     def _identity_rule(self):
@@ -748,6 +749,7 @@ class TestEvaluateIdentityConsistency:
 # ---------------------------------------------------------------------------
 # 14. _evaluate_mass_balance
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateMassBalance:
     def _mass_rule(self):
@@ -894,6 +896,7 @@ class TestEvaluateMassBalance:
 # ---------------------------------------------------------------------------
 # 15. Relational rules dispatch via RulesEngine
 # ---------------------------------------------------------------------------
+
 
 class TestRelationalRuleDispatch:
     def test_temporal_order_dispatched_through_engine(self, mock_session):

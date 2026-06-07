@@ -268,11 +268,11 @@ jobs:
         # ``main.py`` / ``api.py`` / ``conftest.py`` at service root are
         # also covered, plus this job now gates merges (see ci-status).
         run: |
-          pip install flake8
+          pip install ruff==0.15.5
           cd services/${{ matrix.service }}
-          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
-            --exclude=__pycache__,.venv,venv,build,dist \
-            --count --statistics
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
 
   # ── Lint shared/ ─────────────────────────────────────────
   # ``services/shared/`` isn't in the service matrix but is imported by
@@ -290,11 +290,35 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Run linting
         run: |
-          pip install flake8
+          pip install ruff==0.15.5
           cd services/shared
-          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
-            --exclude=__pycache__,.venv,venv,build,dist \
-            --count --statistics
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
+
+  # ── Lint repo roots (scripts/, cli/, server/, alembic/, …) ─
+  # The per-service matrix + lint-shared only cover services/. Python
+  # outside services/ was ungated — that gap let a NameError (missing
+  # ``import time``) sit in scripts/verify_compliance_lineage.py. This job
+  # runs the same bug-gate over everything EXCEPT services/, so the gap
+  # closes for current and future top-level Python without enumerating
+  # roots by hand.
+  lint-repo-roots:
+    name: Lint repo roots
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Run linting
+        run: |
+          pip install ruff==0.15.5
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist,services \
+            --statistics
 
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
@@ -609,7 +633,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -618,6 +642,7 @@ jobs:
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
+          echo "Lint repo roots:   ${{ needs.lint-repo-roots.result }}"
           echo "Ingestion suite:   ${{ needs.ingestion-full-suite.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
@@ -626,7 +651,7 @@ jobs:
           echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
           echo "tenant_id UUID:    ${{ needs.tenant-id-uuid-check.result }}"
           echo "Public samples:    ${{ needs.regenerate-public-samples.result }}"
-          # Lint is now blocking — flake8 F821 (undefined name) would
+          # Lint is now blocking — ruff F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
@@ -634,6 +659,7 @@ jobs:
              || "${{ needs.test.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \
+             || "${{ needs.lint-repo-roots.result }}" != "success" \
              || "${{ needs.ingestion-full-suite.result }}" != "success" \
              || "${{ needs.docker-build.result }}" != "success" \
              || "${{ needs.security.result }}" != "success" \

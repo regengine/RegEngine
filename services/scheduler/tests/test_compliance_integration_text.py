@@ -107,9 +107,8 @@ def test_find_matching_tenants_tier1_query_uses_text(sqlite_session, monkeypatch
     by patching ``session.execute`` to verify the first call passes a
     ``TextClause``, not a ``str``.
     """
-    from sqlalchemy.sql.elements import TextClause
-
     from app import compliance_integration as ci_module
+    from sqlalchemy.sql.elements import TextClause
 
     fake_settings = MagicMock()
     fake_settings.database_url = "sqlite:///:memory:"
@@ -125,10 +124,12 @@ def test_find_matching_tenants_tier1_query_uses_text(sqlite_session, monkeypatch
         captured.append(stmt)
         # Re-raise as if the table were missing so we still hit the Tier-2
         # path; that's fine because the Tier-2 query has its own assertion.
-        return real_execute(stmt, *args, **kwargs) if not isinstance(
-            stmt, str
-        ) else (_ for _ in ()).throw(  # pragma: no cover
-            AssertionError("raw string passed to session.execute")
+        return (
+            real_execute(stmt, *args, **kwargs)
+            if not isinstance(stmt, str)
+            else (_ for _ in ()).throw(  # pragma: no cover
+                AssertionError("raw string passed to session.execute")
+            )
         )
 
     with patch.object(sqlite_session, "execute", side_effect=_capturing_execute):
@@ -140,8 +141,6 @@ def test_find_matching_tenants_tier1_query_uses_text(sqlite_session, monkeypatch
     # Every captured statement must be a TextClause (or a SQLAlchemy
     # construct), never a raw ``str``.
     for stmt in captured:
-        assert not isinstance(stmt, str), (
-            f"raw-string statement passed to session.execute: {stmt!r}"
-        )
+        assert not isinstance(stmt, str), f"raw-string statement passed to session.execute: {stmt!r}"
         # All five fixed sites use text(); validate at least one did.
     assert any(isinstance(s, TextClause) for s in captured)

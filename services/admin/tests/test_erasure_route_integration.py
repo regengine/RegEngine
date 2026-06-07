@@ -40,9 +40,7 @@ def _make_user_model(**overrides):
     # Explicitly raise on dict-style access so any regression to
     # ``.get("user_id")`` re-introduces the bug loudly instead of
     # silently swallowing.
-    u.get.side_effect = AttributeError(
-        "UserModel has no .get(); use attribute access"
-    )
+    u.get.side_effect = AttributeError("UserModel has no .get(); use attribute access")
     for k, v in overrides.items():
         setattr(u, k, v)
     return u
@@ -85,16 +83,17 @@ async def test_erasure_reads_id_email_via_attribute_not_dict():
     fake_manager.process_deletion_request = _proc_del
     fake_manager.anonymize_audit_logs_for_user = _anon
 
-    with patch.object(m, "get_db", fake_get_db), \
-         patch.object(m.TenantContext, "get_tenant_context",
-                      return_value=_TENANT_ID), \
-         patch("shared.data_retention.DataRetentionManager",
-               return_value=fake_manager), \
-         patch.object(m, "enqueue_graph_write") as enqueue_mock, \
-         patch.object(m, "_delete_neo4j_user_graph_data") as neo4j_mock:
+    with (
+        patch.object(m, "get_db", fake_get_db),
+        patch.object(m.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
+        patch("shared.data_retention.DataRetentionManager", return_value=fake_manager),
+        patch.object(m, "enqueue_graph_write") as enqueue_mock,
+        patch.object(m, "_delete_neo4j_user_graph_data") as neo4j_mock,
+    ):
         # _delete_neo4j_user_graph_data is async — patch with AsyncMock-ish
         async def _async_noop(*a, **k):
             return None
+
         neo4j_mock.side_effect = _async_noop
 
         resp = await m.request_erasure(body=body, current_user=user)

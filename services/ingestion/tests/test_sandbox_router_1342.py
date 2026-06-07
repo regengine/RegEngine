@@ -91,12 +91,12 @@ sandbox_router_mod = sys.modules["app.sandbox.router"]
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_rate_limiters(monkeypatch):
     """Disable rate limiting so tests don't trip each other up."""
     # Silence the imported rate-limit guard used by evaluate/trace.
-    monkeypatch.setattr(sandbox_router_mod, "_check_sandbox_rate_limit",
-                        lambda ip: None)
+    monkeypatch.setattr(sandbox_router_mod, "_check_sandbox_rate_limit", lambda ip: None)
     # Reset share-buckets state for every test.
     sandbox_router_mod._share_buckets.clear()
     yield
@@ -113,6 +113,7 @@ def client() -> TestClient:
 # ---------------------------------------------------------------------------
 # Shared helpers for DB stubbing
 # ---------------------------------------------------------------------------
+
 
 class _FakeDb:
     """Minimal stand-in for a SQLAlchemy session used by share endpoints."""
@@ -151,8 +152,8 @@ def _install_get_db(monkeypatch, db: _FakeDb):
 # POST /evaluate — input validation
 # ===========================================================================
 
-class TestEvaluateInputValidation:
 
+class TestEvaluateInputValidation:
     def test_neither_csv_nor_events_returns_400(self, client):
         resp = client.post("/api/v1/sandbox/evaluate", json={})
         assert resp.status_code == 400
@@ -167,31 +168,26 @@ class TestEvaluateInputValidation:
     def test_unparseable_csv_returns_400(self, client, monkeypatch):
         def _raise(*_a, **_kw):
             raise ValueError("bad csv")
+
         monkeypatch.setattr(sandbox_router_mod, "_parse_csv_to_events", _raise)
-        resp = client.post("/api/v1/sandbox/evaluate",
-                           json={"csv": "anything"})
+        resp = client.post("/api/v1/sandbox/evaluate", json={"csv": "anything"})
         assert resp.status_code == 400
         assert "CSV parsing error" in resp.json()["detail"]
 
     def test_csv_with_no_events_returns_400(self, client):
         # Header only — no rows
-        resp = client.post("/api/v1/sandbox/evaluate",
-                           json={"csv": "cte_type,tlc\n"})
+        resp = client.post("/api/v1/sandbox/evaluate", json={"csv": "cte_type,tlc\n"})
         assert resp.status_code == 400
         assert "No valid events" in resp.json()["detail"]
 
     def test_csv_missing_cte_type_column_returns_400(self, client):
         """Rows without a cte_type are dropped by the parser; empty result → 400."""
-        resp = client.post("/api/v1/sandbox/evaluate",
-                           json={"csv": "tlc,product\nLOT-1,Apples\n"})
+        resp = client.post("/api/v1/sandbox/evaluate", json={"csv": "tlc,product\nLOT-1,Apples\n"})
         assert resp.status_code == 400
         assert "No valid events" in resp.json()["detail"]
 
     def test_too_many_events_returns_400(self, client):
-        events = [
-            {"cte_type": "harvesting", "traceability_lot_code": f"LOT-{i}"}
-            for i in range(501)
-        ]
+        events = [{"cte_type": "harvesting", "traceability_lot_code": f"LOT-{i}"} for i in range(501)]
         resp = client.post("/api/v1/sandbox/evaluate", json={"events": events})
         assert resp.status_code == 400
         assert "500" in resp.json()["detail"]
@@ -201,15 +197,20 @@ class TestEvaluateInputValidation:
 # POST /evaluate — happy paths
 # ===========================================================================
 
-class TestEvaluateHappyPaths:
 
+class TestEvaluateHappyPaths:
     def test_minimal_json_event_returns_200(self, client):
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{
-                "cte_type": "harvesting",
-                "traceability_lot_code": "LOT-1",
-            }],
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [
+                    {
+                        "cte_type": "harvesting",
+                        "traceability_lot_code": "LOT-1",
+                    }
+                ],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["total_events"] == 1
@@ -224,11 +225,7 @@ class TestEvaluateHappyPaths:
 
     def test_duplicate_warnings_surface_in_response(self, client):
         """Two identical TLCs in same CTE should produce a duplicate warning."""
-        csv = (
-            "cte_type,traceability_lot_code,product\n"
-            "harvesting,LOT-DUP,Apples\n"
-            "harvesting,LOT-DUP,Apples\n"
-        )
+        csv = "cte_type,traceability_lot_code,product\nharvesting,LOT-DUP,Apples\nharvesting,LOT-DUP,Apples\n"
         resp = client.post("/api/v1/sandbox/evaluate", json={"csv": csv})
         assert resp.status_code == 200
         body = resp.json()
@@ -243,8 +240,7 @@ class TestEvaluateHappyPaths:
         resp = client.post("/api/v1/sandbox/evaluate", json={"csv": csv})
         assert resp.status_code == 200
         body = resp.json()
-        cte_norms = [n for n in body["normalizations"]
-                     if n["action_type"] == "cte_type_normalize"]
+        cte_norms = [n for n in body["normalizations"] if n["action_type"] == "cte_type_normalize"]
         assert cte_norms
 
     def test_header_aliases_surface_in_normalizations(self, client):
@@ -253,8 +249,7 @@ class TestEvaluateHappyPaths:
         resp = client.post("/api/v1/sandbox/evaluate", json={"csv": csv})
         assert resp.status_code == 200
         body = resp.json()
-        header_aliases = [n for n in body["normalizations"]
-                          if n["action_type"] == "header_alias"]
+        header_aliases = [n for n in body["normalizations"] if n["action_type"] == "header_alias"]
         assert header_aliases
 
     def test_include_custom_rules_flag_flows_through(self, client, monkeypatch):
@@ -264,20 +259,21 @@ class TestEvaluateHappyPaths:
         def _fake_eval(event, include_custom=False):
             captured["include_custom"] = include_custom
             from shared.rules_engine import EvaluationSummary
-            return EvaluationSummary(event_id=event.get("event_id", "E"),
-                                     total_rules=0, results=[])
+
+            return EvaluationSummary(event_id=event.get("event_id", "E"), total_rules=0, results=[])
+
         # shared.rules_engine isn't really imported in tests without the full
         # project. We'll mock EvaluationSummary in-place via the router module.
-        monkeypatch.setattr(sandbox_router_mod, "_evaluate_event_stateless",
-                            _fake_eval)
-        monkeypatch.setattr(sandbox_router_mod, "_evaluate_relational_in_memory",
-                            lambda events: {})
+        monkeypatch.setattr(sandbox_router_mod, "_evaluate_event_stateless", _fake_eval)
+        monkeypatch.setattr(sandbox_router_mod, "_evaluate_relational_in_memory", lambda events: {})
 
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-            "include_custom_rules": True,
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+                "include_custom_rules": True,
+            },
+        )
         assert resp.status_code == 200
         assert captured["include_custom"] is True
 
@@ -286,32 +282,40 @@ class TestEvaluateHappyPaths:
 # POST /evaluate — relational result merge + blocking defects
 # ===========================================================================
 
-def _mk_rule_result(result: str, severity: str = "warning",
-                    *, rule_id: str = "R-X", title: str = "rule-title",
-                    why: str = "because") -> Any:
+
+def _mk_rule_result(
+    result: str, severity: str = "warning", *, rule_id: str = "R-X", title: str = "rule-title", why: str = "because"
+) -> Any:
     """Build a RuleEvaluationResult-shaped object for merging."""
     from shared.rules_engine import RuleEvaluationResult
+
     return RuleEvaluationResult(
-        rule_id=rule_id, rule_version=1, rule_title=title,
-        severity=severity, result=result, category="test",
-        why_failed=why, citation_reference="§1",
+        rule_id=rule_id,
+        rule_version=1,
+        rule_title=title,
+        severity=severity,
+        result=result,
+        category="test",
+        why_failed=why,
+        citation_reference="§1",
         remediation_suggestion="fix it",
         evidence_fields_inspected=[{"field": "foo"}],
     )
 
 
 class TestEvaluateRelationalMerge:
-
     def _install_stubs(self, monkeypatch, *, relational_results: Dict[str, List[Any]]):
         """Replace the evaluators with deterministic stubs."""
         from shared.rules_engine import EvaluationSummary
 
         def _stateless(ev, include_custom=False):
             return EvaluationSummary(
-                event_id=ev.get("event_id", "E"), total_rules=0, results=[],
+                event_id=ev.get("event_id", "E"),
+                total_rules=0,
+                results=[],
             )
-        monkeypatch.setattr(sandbox_router_mod, "_evaluate_event_stateless",
-                            _stateless)
+
+        monkeypatch.setattr(sandbox_router_mod, "_evaluate_event_stateless", _stateless)
         # Relational-results are keyed by event_id; we need to know the
         # event_id that _normalize_for_rules will assign. Easiest: patch
         # _normalize_for_rules to assign predictable ids.
@@ -322,8 +326,10 @@ class TestEvaluateRelationalMerge:
                 "event_id": f"EID-{idx}",
                 "event_type": ev.get("cte_type", ""),
                 "traceability_lot_code": ev.get("traceability_lot_code", ""),
-                "product_reference": "", "quantity": None,
-                "unit_of_measure": "", "event_timestamp": "",
+                "product_reference": "",
+                "quantity": None,
+                "unit_of_measure": "",
+                "event_timestamp": "",
                 "from_facility_reference": None,
                 "to_facility_reference": None,
                 "from_entity_reference": None,
@@ -331,107 +337,133 @@ class TestEvaluateRelationalMerge:
                 "transport_reference": None,
                 "kdes": {},
             }
+
         monkeypatch.setattr(sandbox_router_mod, "_normalize_for_rules", _norm)
-        monkeypatch.setattr(sandbox_router_mod, "_evaluate_relational_in_memory",
-                            lambda evs: relational_results)
+        monkeypatch.setattr(sandbox_router_mod, "_evaluate_relational_in_memory", lambda evs: relational_results)
         monkeypatch.setattr(sandbox_router_mod, "_validate_kdes", lambda ev: [])
 
     def test_pass_result_increments_passed(self, client, monkeypatch):
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("pass")],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("pass")],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["events"][0]["rules_passed"] == 1
 
     def test_fail_non_critical_does_not_block(self, client, monkeypatch):
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("fail", severity="warning")],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("fail", severity="warning")],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["events"][0]["rules_failed"] == 1
         assert body["submission_blocked"] is False
         assert body["events"][0]["blocking_defects"] == []
 
     def test_fail_critical_blocks_submission(self, client, monkeypatch):
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("fail", severity="critical",
-                                      title="Missing TLC", why="no lot code")],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("fail", severity="critical", title="Missing TLC", why="no lot code")],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["submission_blocked"] is True
         assert body["blocking_reasons"]
         assert "no lot code" in body["blocking_reasons"][0]
         assert body["events"][0]["blocking_defects"]
 
-    def test_critical_failure_uses_rule_title_when_no_why_failed(
-        self, client, monkeypatch
-    ):
-        r = _mk_rule_result("fail", severity="critical",
-                            title="Unique Rule Title", why=None)
+    def test_critical_failure_uses_rule_title_when_no_why_failed(self, client, monkeypatch):
+        r = _mk_rule_result("fail", severity="critical", title="Unique Rule Title", why=None)
         self._install_stubs(monkeypatch, relational_results={"EID-0": [r]})
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert "Unique Rule Title" in body["blocking_reasons"][0]
 
     def test_warn_result_increments_warned(self, client, monkeypatch):
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("warn")],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("warn")],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["events"][0]["rules_warned"] == 1
 
     def test_unknown_result_increments_skipped(self, client, monkeypatch):
         """Results with result not in (pass/fail/warn) fall to the skipped bucket."""
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("skip")],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("skip")],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         # Skipped isn't exposed in the response directly, but rules_evaluated
         # should be 1 (merged from relational).
         assert body["events"][0]["rules_evaluated"] == 1
 
-    def test_blocking_reasons_deduped_across_duplicate_events(
-        self, client, monkeypatch
-    ):
+    def test_blocking_reasons_deduped_across_duplicate_events(self, client, monkeypatch):
         r = _mk_rule_result("fail", severity="critical", why="identical reason")
         # Same relational failure on two different events, but both produce
         # an event-N-prefixed entry, so dedupe-by-reason works only when the
         # prefix matches. In practice, the per-event prefix keeps them
         # distinct; we assert at least both appear.
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [r], "EID-1": [r],
-        })
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [
-                {"_test_idx": 0, "cte_type": "harvesting",
-                 "traceability_lot_code": "LOT-1"},
-                {"_test_idx": 1, "cte_type": "harvesting",
-                 "traceability_lot_code": "LOT-2"},
-            ],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [r],
+                "EID-1": [r],
+            },
+        )
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [
+                    {"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"},
+                    {"_test_idx": 1, "cte_type": "harvesting", "traceability_lot_code": "LOT-2"},
+                ],
+            },
+        )
         body = resp.json()
         # Two events, same reason text → 2 entries prefixed with
         # "Event 1" and "Event 2" — both preserved after dedupe.
@@ -440,10 +472,12 @@ class TestEvaluateRelationalMerge:
     def test_no_relational_results_event_still_evaluates(self, client, monkeypatch):
         """Events not present in relational_results still produce a response."""
         self._install_stubs(monkeypatch, relational_results={})
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["total_events"] == 1
         assert body["events"][0]["rules_evaluated"] == 0
@@ -453,15 +487,20 @@ class TestEvaluateRelationalMerge:
         should bump ``compliant_events`` (exercises line 195 of router.py)."""
         # Seed at least one passing relational rule so summary.compliant is
         # tri-state True (total_rules > 0 and failed == 0 — see #1347).
-        self._install_stubs(monkeypatch, relational_results={
-            "EID-0": [_mk_rule_result("pass")],
-        })
+        self._install_stubs(
+            monkeypatch,
+            relational_results={
+                "EID-0": [_mk_rule_result("pass")],
+            },
+        )
         # Short-circuit KDE validation to zero errors.
         monkeypatch.setattr(sandbox_router_mod, "_validate_kdes", lambda ev: [])
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"_test_idx": 0, "cte_type": "harvesting",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"_test_idx": 0, "cte_type": "harvesting", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["compliant_events"] == 1
         assert body["non_compliant_events"] == 0
@@ -470,10 +509,12 @@ class TestEvaluateRelationalMerge:
     def test_kde_errors_make_event_non_compliant(self, client):
         """An event missing required KDEs for its CTE type is non-compliant."""
         # Shipping without ship_to_location / ship_date triggers KDE errors.
-        resp = client.post("/api/v1/sandbox/evaluate", json={
-            "events": [{"cte_type": "shipping",
-                        "traceability_lot_code": "LOT-1"}],
-        })
+        resp = client.post(
+            "/api/v1/sandbox/evaluate",
+            json={
+                "events": [{"cte_type": "shipping", "traceability_lot_code": "LOT-1"}],
+            },
+        )
         body = resp.json()
         assert body["events"][0]["kde_errors"]
         assert body["total_kde_errors"] > 0
@@ -487,23 +528,17 @@ class TestEvaluateRelationalMerge:
 # POST /evaluate — duplicate warning injection into kde_errors
 # ===========================================================================
 
-class TestEvaluateDuplicateLotKdeInjection:
 
+class TestEvaluateDuplicateLotKdeInjection:
     def test_duplicate_warning_appears_in_per_event_kde_errors(self, client):
-        csv = (
-            "cte_type,traceability_lot_code,product\n"
-            "harvesting,LOT-DUP,Apples\n"
-            "harvesting,LOT-DUP,Apples\n"
-        )
+        csv = "cte_type,traceability_lot_code,product\nharvesting,LOT-DUP,Apples\nharvesting,LOT-DUP,Apples\n"
         resp = client.post("/api/v1/sandbox/evaluate", json={"csv": csv})
         assert resp.status_code == 200
         body = resp.json()
         # One of the events should have the duplicate warning in its
         # kde_errors list (and total_kde_errors should reflect that).
         any_with_dup_warning = any(
-            any("duplicate" in err.lower() or "dup" in err.lower()
-                for err in e["kde_errors"])
-            for e in body["events"]
+            any("duplicate" in err.lower() or "dup" in err.lower() for err in e["kde_errors"]) for e in body["events"]
         )
         assert any_with_dup_warning or body["duplicate_warnings"]
 
@@ -512,25 +547,34 @@ class TestEvaluateDuplicateLotKdeInjection:
 # POST /trace — thin delegate
 # ===========================================================================
 
-class TestTraceDelegate:
 
+class TestTraceDelegate:
     def test_trace_delegates_to_tracer_impl(self, client, monkeypatch):
         from app.sandbox.models import TraceGraphResponse
+
         captured = {}
 
         async def _fake_impl(payload, request):
             captured["tlc"] = payload.tlc
             return TraceGraphResponse(
-                seed_tlc=payload.tlc, direction=payload.direction,
-                nodes=[], edges=[], lots_touched=[], facilities=[],
-                max_depth=0, total_quantity=0.0,
+                seed_tlc=payload.tlc,
+                direction=payload.direction,
+                nodes=[],
+                edges=[],
+                lots_touched=[],
+                facilities=[],
+                max_depth=0,
+                total_quantity=0.0,
             )
-        monkeypatch.setattr(sandbox_router_mod, "_sandbox_trace_impl",
-                            _fake_impl)
-        resp = client.post("/api/v1/sandbox/trace", json={
-            "csv": "cte_type,tlc\nharvesting,LOT-1\n",
-            "tlc": "LOT-1",
-        })
+
+        monkeypatch.setattr(sandbox_router_mod, "_sandbox_trace_impl", _fake_impl)
+        resp = client.post(
+            "/api/v1/sandbox/trace",
+            json={
+                "csv": "cte_type,tlc\nharvesting,LOT-1\n",
+                "tlc": "LOT-1",
+            },
+        )
         assert resp.status_code == 200
         assert captured["tlc"] == "LOT-1"
 
@@ -539,25 +583,28 @@ class TestTraceDelegate:
 # POST /share — happy path, rate limit, DB failures
 # ===========================================================================
 
+
 def _sample_share_payload() -> Dict[str, Any]:
     return {
         "csv": "cte_type,tlc\nharvesting,LOT-1\n",
         "result": {
-            "total_events": 1, "compliant_events": 1,
-            "non_compliant_events": 0, "total_kde_errors": 0,
-            "total_rule_failures": 0, "submission_blocked": False,
-            "blocking_reasons": [], "events": [],
+            "total_events": 1,
+            "compliant_events": 1,
+            "non_compliant_events": 0,
+            "total_kde_errors": 0,
+            "total_rule_failures": 0,
+            "submission_blocked": False,
+            "blocking_reasons": [],
+            "events": [],
         },
     }
 
 
 class TestSharePost:
-
     def test_share_persists_and_returns_url(self, client, monkeypatch):
         db = _FakeDb()
         _install_get_db(monkeypatch, db)
-        resp = client.post("/api/v1/sandbox/share",
-                           json=_sample_share_payload())
+        resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 200
         body = resp.json()
         assert body["share_id"]
@@ -572,8 +619,7 @@ class TestSharePost:
     def test_share_id_is_opaque_url_safe(self, client, monkeypatch):
         db = _FakeDb()
         _install_get_db(monkeypatch, db)
-        resp = client.post("/api/v1/sandbox/share",
-                           json=_sample_share_payload())
+        resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 200
         share_id = resp.json()["share_id"]
         # token_urlsafe(12) → 16 chars
@@ -585,10 +631,8 @@ class TestSharePost:
         _install_get_db(monkeypatch, db)
         # Router uses a structlog-style `logger.error(event, error=...)`
         # kwarg form that the stdlib logger rejects; swap in a silent stub.
-        monkeypatch.setattr(sandbox_router_mod, "logger",
-                            MagicMock())
-        resp = client.post("/api/v1/sandbox/share",
-                           json=_sample_share_payload())
+        monkeypatch.setattr(sandbox_router_mod, "logger", MagicMock())
+        resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 503
         assert "temporarily unavailable" in resp.json()["detail"]
 
@@ -597,12 +641,10 @@ class TestSharePost:
         _install_get_db(monkeypatch, db)
         # Fill up the bucket to the limit.
         for _ in range(sandbox_router_mod._SHARE_RATE_LIMIT):
-            resp = client.post("/api/v1/sandbox/share",
-                               json=_sample_share_payload())
+            resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
             assert resp.status_code == 200
         # Next call trips the 429.
-        resp = client.post("/api/v1/sandbox/share",
-                           json=_sample_share_payload())
+        resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 429
         assert "rate limit" in resp.json()["detail"].lower()
 
@@ -612,8 +654,7 @@ class TestSharePost:
         _install_get_db(monkeypatch, db)
         # Seed bucket with entries ancient enough to be pruned.
         sandbox_router_mod._share_buckets["testclient"] = [0.0]
-        resp = client.post("/api/v1/sandbox/share",
-                           json=_sample_share_payload())
+        resp = client.post("/api/v1/sandbox/share", json=_sample_share_payload())
         assert resp.status_code == 200
         # Bucket should now only contain the fresh entry (ancient one pruned).
         assert len(sandbox_router_mod._share_buckets["testclient"]) == 1
@@ -623,8 +664,8 @@ class TestSharePost:
 # GET /share/{id}
 # ===========================================================================
 
-class TestShareGet:
 
+class TestShareGet:
     def test_share_id_too_long_returns_400(self, client):
         long_id = "x" * 25
         resp = client.get(f"/api/v1/sandbox/share/{long_id}")
@@ -640,10 +681,14 @@ class TestShareGet:
 
     def test_share_found_as_dict_row(self, client, monkeypatch):
         row_data = {
-            "total_events": 1, "compliant_events": 1,
-            "non_compliant_events": 0, "total_kde_errors": 0,
-            "total_rule_failures": 0, "submission_blocked": False,
-            "blocking_reasons": [], "events": [],
+            "total_events": 1,
+            "compliant_events": 1,
+            "non_compliant_events": 0,
+            "total_kde_errors": 0,
+            "total_rule_failures": 0,
+            "submission_blocked": False,
+            "blocking_reasons": [],
+            "events": [],
         }
         # Row[0] is already a dict (Postgres JSON column behavior)
         db = _FakeDb(fetch_row=(row_data,))
@@ -655,10 +700,14 @@ class TestShareGet:
     def test_share_found_as_json_string_row(self, client, monkeypatch):
         """Row[0] may be a JSON string when the DB driver doesn't auto-parse."""
         row_data = {
-            "total_events": 2, "compliant_events": 2,
-            "non_compliant_events": 0, "total_kde_errors": 0,
-            "total_rule_failures": 0, "submission_blocked": False,
-            "blocking_reasons": [], "events": [],
+            "total_events": 2,
+            "compliant_events": 2,
+            "non_compliant_events": 0,
+            "total_kde_errors": 0,
+            "total_rule_failures": 0,
+            "submission_blocked": False,
+            "blocking_reasons": [],
+            "events": [],
         }
         db = _FakeDb(fetch_row=(json.dumps(row_data),))
         _install_get_db(monkeypatch, db)
@@ -687,8 +736,8 @@ class TestShareGet:
 # Module-level constants
 # ===========================================================================
 
-class TestModuleLevelDefaults:
 
+class TestModuleLevelDefaults:
     def test_router_has_expected_prefix_and_tag(self):
         assert sandbox_router.prefix == "/api/v1/sandbox"
         assert "Sandbox" in sandbox_router.tags

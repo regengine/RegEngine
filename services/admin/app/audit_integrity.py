@@ -60,12 +60,14 @@ def verify_chain(entries: List[dict]) -> dict:
             expected_prev_hash = actual_prev
         else:
             if actual_prev != expected_prev_hash:
-                errors.append({
-                    "id": entry.get("id"),
-                    "error": "prev_hash_mismatch",
-                    "expected": expected_prev_hash,
-                    "actual": actual_prev,
-                })
+                errors.append(
+                    {
+                        "id": entry.get("id"),
+                        "error": "prev_hash_mismatch",
+                        "expected": expected_prev_hash,
+                        "actual": actual_prev,
+                    }
+                )
 
         # #1415: recompute using v2 (actor fields folded in). Fall back
         # to v1 for entries written before the schema migration so older
@@ -86,9 +88,7 @@ def verify_chain(entries: List[dict]) -> dict:
             "severity": entry.get("severity"),
             "endpoint": entry.get("endpoint"),
         }
-        recomputed_v2 = hashlib.sha256(
-            json.dumps(v2_body, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
+        recomputed_v2 = hashlib.sha256(json.dumps(v2_body, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
         v1_body = {
             "prev_hash": actual_prev or "GENESIS",
@@ -99,9 +99,7 @@ def verify_chain(entries: List[dict]) -> dict:
             "resource_id": entry.get("resource", {}).get("id"),
             "metadata": entry.get("metadata", {}),
         }
-        recomputed_v1 = hashlib.sha256(
-            json.dumps(v1_body, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
+        recomputed_v1 = hashlib.sha256(json.dumps(v1_body, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
         if actual_hash == recomputed_v2:
             recomputed = recomputed_v2
@@ -113,12 +111,14 @@ def verify_chain(entries: List[dict]) -> dict:
             recomputed = recomputed_v2
 
         if recomputed != actual_hash:
-            errors.append({
-                "id": entry.get("id"),
-                "error": "integrity_hash_mismatch",
-                "expected": recomputed,
-                "actual": actual_hash,
-            })
+            errors.append(
+                {
+                    "id": entry.get("id"),
+                    "error": "integrity_hash_mismatch",
+                    "expected": recomputed,
+                    "actual": actual_hash,
+                }
+            )
 
         # Next entry should reference this hash
         expected_prev_hash = actual_hash

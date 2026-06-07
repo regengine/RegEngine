@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -7,7 +8,8 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(os.path.abspath("services/admin"))
 
 try:
-    from app.sqlalchemy_models import Base, TenantModel, UserModel, RoleModel, MembershipModel, AuditLogModel
+    from app.sqlalchemy_models import AuditLogModel, Base, MembershipModel, RoleModel, TenantModel, UserModel
+
     print("Successfully imported models.")
 except ImportError as e:
     print(f"Failed to import models: {e}")

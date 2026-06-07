@@ -43,9 +43,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
 import pytest
-
 from shared.auth import APIKey, APIKeyStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -112,9 +110,7 @@ class TestCreateKey:
         assert key.enabled is True
         assert key.last_used_at is None
 
-    def test_key_is_registered_in_store(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_key_is_registered_in_store(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         _, key = raw_and_key
         assert store.list_keys() == [key]
 
@@ -139,9 +135,7 @@ class TestValidateKey:
     def test_rejects_unknown_key_id(self, store: APIKeyStore):
         assert store.validate_key("rge_bogusid.bogussecret") is None
 
-    def test_rejects_hash_mismatch(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_rejects_hash_mismatch(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         """A correct key_id with a forged secret must be rejected — this is
         the branch ``hmac.compare_digest`` defends. Without it, an
         attacker who knows the key_id (leaked in logs) could walk the
@@ -151,9 +145,7 @@ class TestValidateKey:
         forged = f"{key_id}.forged-secret-xxxxxxxxxxxxxxxxxxxx"
         assert store.validate_key(forged) is None
 
-    def test_rejects_disabled(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_rejects_disabled(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         raw, key = raw_and_key
         assert store.revoke_key(key.key_id) is True
         assert store.validate_key(raw) is None
@@ -174,9 +166,7 @@ class TestValidateKey:
         assert got.last_used_at is not None
         assert got.last_used_at.tzinfo is not None, "must be timezone-aware UTC"
 
-    def test_does_not_bump_last_used_on_rejection(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_does_not_bump_last_used_on_rejection(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         raw, key = raw_and_key
         # Poison with a hash-mismatch call before the happy path.
         key_id = raw.split(".", 1)[0]
@@ -203,10 +193,7 @@ class TestRateLimit:
         off-by-one guard. The implementation uses ``>=`` so the caller
         who sees True has already been counted."""
         limit = 10
-        allowed = sum(
-            1 for _ in range(limit + 5)
-            if store.check_rate_limit("k1", limit_per_minute=limit)
-        )
+        allowed = sum(1 for _ in range(limit + 5) if store.check_rate_limit("k1", limit_per_minute=limit))
         assert allowed == limit, f"expected exactly {limit} allowed, got {allowed}"
 
     def test_evicts_stale_timestamps(self, store: APIKeyStore, monkeypatch):
@@ -214,6 +201,7 @@ class TestRateLimit:
         otherwise a quiet key would be permanently rate-limited after
         spiking once."""
         import shared.auth as auth_mod
+
         fake_now = [1_000_000.0]
         monkeypatch.setattr(auth_mod.time, "time", lambda: fake_now[0])
 
@@ -245,17 +233,13 @@ class TestRevokeKey:
     def test_returns_false_for_unknown(self, store: APIKeyStore):
         assert store.revoke_key("rge_never-existed") is False
 
-    def test_flips_enabled_false_on_known(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_flips_enabled_false_on_known(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         _, key = raw_and_key
         assert key.enabled is True
         assert store.revoke_key(key.key_id) is True
         assert key.enabled is False
 
-    def test_idempotent(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_idempotent(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         _, key = raw_and_key
         assert store.revoke_key(key.key_id) is True
         # Second revoke still returns True (key still exists in store)
@@ -278,17 +262,13 @@ class TestListKeys:
         listed = store.list_keys()
         assert {k.key_id for k in listed} == {a.key_id, b.key_id}
 
-    def test_returns_snapshot_not_live_view(
-        self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]
-    ):
+    def test_returns_snapshot_not_live_view(self, store: APIKeyStore, raw_and_key: Tuple[str, APIKey]):
         """Mutating the returned list must not corrupt internal state —
         callers are admin dashboards, we can't trust they'll be
         careful."""
         snapshot = store.list_keys()
         snapshot.clear()
-        assert len(store.list_keys()) == 1, (
-            "list_keys must return a fresh list each call"
-        )
+        assert len(store.list_keys()) == 1, "list_keys must return a fresh list each call"
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +344,5 @@ class TestThreadSafety:
             list(pool.map(lambda _: _worker(), range(n)))
 
         assert sum(1 for r in results if r) == limit, (
-            f"rate limiter oversubscribed — got {sum(results)} allowed, "
-            f"budget was {limit}"
+            f"rate limiter oversubscribed — got {sum(results)} allowed, budget was {limit}"
         )

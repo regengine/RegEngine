@@ -2,4 +2,4 @@
 
 from .tenant_validator import TenantValidator, TenantValidatorORM
 
-__all__ = ['TenantValidator', 'TenantValidatorORM']
+__all__ = ["TenantValidator", "TenantValidatorORM"]

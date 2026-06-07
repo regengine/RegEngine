@@ -18,7 +18,6 @@ from typing import Dict, List, Optional
 import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-
 from shared.auth import require_api_key
 
 from services.graph.app.fsma_engine import FSMAApplicabilityEngine

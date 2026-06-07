@@ -11,6 +11,7 @@ the tenant predicate:
   scoped resources.
 - Global resources (``user_account``) skip the predicate.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,16 +19,14 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
+from shared.audit_logging import AuditActor
 from shared.data_retention import (
+    _GLOBAL_RESOURCES,
     DataRetentionManager,
     DeletionRequest,
     RetentionPolicy,
     _is_tenant_scoped,
-    _GLOBAL_RESOURCES,
 )
-from shared.audit_logging import AuditActor
-
 
 TENANT = uuid.uuid4()
 

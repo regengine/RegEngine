@@ -52,7 +52,6 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-
 from shared.merkle_tree import MerkleTree
 from shared.rate_limit import limiter
 
@@ -134,16 +133,9 @@ def _extract_event_hashes(events: list[dict[str, Any]]) -> list[str]:
     """
     hashes: list[str] = []
     for event in events:
-        h = (
-            event.get("event_hash")
-            or event.get("sha256_hash")
-            or event.get("hash")
-        )
+        h = event.get("event_hash") or event.get("sha256_hash") or event.get("hash")
         if not isinstance(h, str) or len(h) != 64:
-            raise ValueError(
-                "events must each carry a 64-char hex 'event_hash' / "
-                "'sha256_hash'"
-            )
+            raise ValueError("events must each carry a 64-char hex 'event_hash' / 'sha256_hash'")
         hashes.append(h)
     return hashes
 
@@ -439,19 +431,13 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
     if total_uncompressed > MAX_DECOMPRESSED_BYTES:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"decompressed size {total_uncompressed} exceeds "
-                f"{MAX_DECOMPRESSED_BYTES}"
-            ),
+            detail=(f"decompressed size {total_uncompressed} exceeds {MAX_DECOMPRESSED_BYTES}"),
         )
     extra.append(
         VerifyCheck(
             name="zip_structure",
             passed=True,
-            detail=(
-                f"{len(names)} entries, {total_uncompressed} uncompressed "
-                "bytes; no path-traversal"
-            ),
+            detail=(f"{len(names)} entries, {total_uncompressed} uncompressed bytes; no path-traversal"),
         )
     )
 
@@ -463,9 +449,7 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
         manifest_bytes = zf.read("manifest.json")
         manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise HTTPException(
-            status_code=400, detail=f"manifest.json unreadable: {exc}"
-        )
+        raise HTTPException(status_code=400, detail=f"manifest.json unreadable: {exc}")
 
     manifest_file_result = _verify_manifest_file_bundle(
         zf=zf,
@@ -491,11 +475,7 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
             VerifyCheck(
                 name="file_hashes_match_manifest",
                 passed=not mismatched,
-                detail=(
-                    "all declared file hashes match"
-                    if not mismatched
-                    else f"mismatched: {sorted(mismatched)}"
-                ),
+                detail=("all declared file hashes match" if not mismatched else f"mismatched: {sorted(mismatched)}"),
             )
         )
 
@@ -513,18 +493,15 @@ def _verify_zip_bundle(raw: bytes) -> VerifyResponse:
                 detail=f"chain_verification JSON unreadable: {exc}",
             )
         events = chain_payload.get("events") or []
-        declared_root = (
-            chain_payload.get("merkle_root")
-            or (chain_payload.get("chain_verification") or {}).get("merkle_root")
+        declared_root = chain_payload.get("merkle_root") or (chain_payload.get("chain_verification") or {}).get(
+            "merkle_root"
         )
 
     # Manifest may also carry an embedded event list / root for simpler bundles.
     if not events:
         events = manifest.get("events") or []
     if not declared_root:
-        declared_root = manifest.get("merkle_root") or (
-            manifest.get("summary") or {}
-        ).get("merkle_root")
+        declared_root = manifest.get("merkle_root") or (manifest.get("summary") or {}).get("merkle_root")
 
     return _verify_payload(
         manifest=manifest,
@@ -607,9 +584,7 @@ async def verify_export(
 
     raw = await bundle.read(MAX_BUNDLE_BYTES + 1)
     if len(raw) > MAX_BUNDLE_BYTES:
-        raise HTTPException(
-            status_code=413, detail=f"bundle exceeds {MAX_BUNDLE_BYTES} bytes"
-        )
+        raise HTTPException(status_code=413, detail=f"bundle exceeds {MAX_BUNDLE_BYTES} bytes")
     if not raw:
         raise HTTPException(status_code=400, detail="empty bundle")
 

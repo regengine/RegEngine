@@ -7,15 +7,15 @@ These types are used by all audit subsystems (integrity, storage, writer).
 
 import json
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-
 # =============================================================================
 # Audit Event Types
 # =============================================================================
+
 
 class AuditEventCategory(str, Enum):
     """Categories of audit events."""
@@ -130,6 +130,7 @@ class AuditSeverity(str, Enum):
 # =============================================================================
 # Audit Event Data Classes
 # =============================================================================
+
 
 @dataclass
 class AuditActor:

@@ -15,16 +15,13 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 ROUTE_ENV = {
     "REGENGINE_ENV": "test",
     "ENVIRONMENT": "test",
     "DATABASE_URL": "postgresql://localhost:5432/regengine_test",
-    "ADMIN_DATABASE_URL": (
-        "postgresql+psycopg://localhost:5432/regengine_admin_test"
-    ),
+    "ADMIN_DATABASE_URL": ("postgresql+psycopg://localhost:5432/regengine_admin_test"),
     "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",  # pragma: allowlist secret
     "ENABLE_EXPERIMENTAL_ROUTERS": "true",
 }
@@ -64,11 +61,7 @@ def _route_keys(module_name: str) -> set[str]:
         check=False,
     )
 
-    assert result.returncode == 0, (
-        f"failed to import {module_name}\n"
-        f"stdout:\n{result.stdout}\n"
-        f"stderr:\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"failed to import {module_name}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
 
     output = result.stdout.splitlines() + result.stderr.splitlines()
     for line in reversed(output):
@@ -76,9 +69,7 @@ def _route_keys(module_name: str) -> set[str]:
             return set(json.loads(line.removeprefix("ROUTE_KEYS_JSON=")))
 
     pytest.fail(
-        f"route extraction for {module_name} produced no marker\n"
-        f"stdout:\n{result.stdout}\n"
-        f"stderr:\n{result.stderr}"
+        f"route extraction for {module_name} produced no marker\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
 
 
@@ -100,9 +91,8 @@ def test_monolith_mounts_standalone_service_routes(
     service_routes = _route_keys(module_name)
     missing = service_routes - monolith_routes
 
-    assert not missing, (
-        f"server.main is missing {service_name} routes mounted by {module_name}:\n"
-        + "\n".join(f"  {route}" for route in sorted(missing))
+    assert not missing, f"server.main is missing {service_name} routes mounted by {module_name}:\n" + "\n".join(
+        f"  {route}" for route in sorted(missing)
     )
 
 
@@ -113,9 +103,7 @@ def test_monolith_mounts_standalone_service_routes(
         "POST /api/v1/proof/recall-drill",
     ],
 )
-def test_public_proof_routes_are_mounted_on_ingestion_and_monolith(
-    monolith_routes: set[str], route: str
-) -> None:
+def test_public_proof_routes_are_mounted_on_ingestion_and_monolith(monolith_routes: set[str], route: str) -> None:
     ingestion_routes = _route_keys("services.ingestion.main")
 
     assert route in ingestion_routes

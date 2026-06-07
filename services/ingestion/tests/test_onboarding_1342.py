@@ -12,9 +12,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import onboarding as ob
 from app.onboarding import (
     ONBOARDING_STEPS,
@@ -30,8 +27,10 @@ from app.onboarding import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -90,8 +89,10 @@ def fake_jsonb(monkeypatch):
 def no_seed(monkeypatch):
     """Replace obligation seeding with a no-op so step completion doesn't hit DB."""
     calls = []
+
     def _noop(tid):
         calls.append(tid)
+
     monkeypatch.setattr(ob, "_seed_obligations_if_needed", _noop)
     return calls
 
@@ -104,8 +105,10 @@ def no_seed(monkeypatch):
 class TestPydanticModels:
     def test_onboarding_profile(self):
         p = OnboardingProfile(
-            company_name="Acme", company_type="grower",
-            contact_name="Alice", contact_email="a@x.com",
+            company_name="Acme",
+            company_type="grower",
+            contact_name="Alice",
+            contact_email="a@x.com",
         )
         assert p.company_type == "grower"
 
@@ -133,9 +136,12 @@ class TestPydanticModels:
 
     def test_onboarding_progress(self):
         p = OnboardingProgress(
-            tenant_id="t1", current_step=3,
+            tenant_id="t1",
+            current_step=3,
             completed_steps=["company_profile", "first_facility"],
-            total_steps=5, percent_complete=40, steps=ONBOARDING_STEPS,
+            total_steps=5,
+            percent_complete=40,
+            steps=ONBOARDING_STEPS,
             started_at="2026-04-18T00:00:00+00:00",
         )
         assert p.first_cte_at is None
@@ -154,8 +160,11 @@ class TestOnboardingStepsCatalog:
     def test_step_ids_in_order(self):
         ids = [s["id"] for s in ONBOARDING_STEPS]
         assert ids == [
-            "company_profile", "first_facility", "first_product",
-            "first_cte", "verify_chain",
+            "company_profile",
+            "first_facility",
+            "first_product",
+            "first_cte",
+            "verify_chain",
         ]
 
     def test_step_numbers_1_to_5(self):
@@ -181,6 +190,7 @@ class TestSeedObligations:
         session.close = MagicMock()
 
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: session)
 
         _seed_obligations_if_needed("tenant-abc")
@@ -197,6 +207,7 @@ class TestSeedObligations:
         session.close = MagicMock()
 
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: session)
 
         # Exception caught by outer try/except — function should not raise

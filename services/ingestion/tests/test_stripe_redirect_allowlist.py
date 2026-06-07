@@ -29,7 +29,6 @@ sys.path.insert(0, str(service_dir))
 
 from app.stripe_billing import helpers as sh  # noqa: E402
 
-
 # ── 1. Happy-path: first-party hosts accepted ──────────────────────────────
 
 
@@ -57,11 +56,11 @@ def test_allowlisted_urls_pass(url):
 @pytest.mark.parametrize(
     "url",
     [
-        "http://regengine.co/dashboard",            # http not allowed
-        "javascript:alert(1)",                      # js pseudo-scheme
-        "data:text/html,<script>alert(1)</script>", # data URI
-        "file:///etc/passwd",                       # file scheme
-        "ftp://regengine.co/x",                     # ftp
+        "http://regengine.co/dashboard",  # http not allowed
+        "javascript:alert(1)",  # js pseudo-scheme
+        "data:text/html,<script>alert(1)</script>",  # data URI
+        "file:///etc/passwd",  # file scheme
+        "ftp://regengine.co/x",  # ftp
     ],
 )
 def test_non_https_scheme_rejected(url):
@@ -79,13 +78,11 @@ def test_non_https_scheme_rejected(url):
     [
         (
             "https://regengine.co.attacker.com/dashboard",
-            "subdomain-suffix bypass — 'regengine.co' is NOT a suffix match "
-            "for this host; attacker-controlled apex",
+            "subdomain-suffix bypass — 'regengine.co' is NOT a suffix match for this host; attacker-controlled apex",
         ),
         (
             "https://attacker-regengine.co/dashboard",
-            "prefix-pollution: host isn't exactly regengine.co, nor a "
-            "subdomain (suffix .regengine.co would not match)",
+            "prefix-pollution: host isn't exactly regengine.co, nor a subdomain (suffix .regengine.co would not match)",
         ),
         (
             "https://evil.com/regengine.co/dashboard",
@@ -110,8 +107,7 @@ def test_non_https_scheme_rejected(url):
         ),
         (
             "https://vercel.app/dashboard",
-            "'vercel.app' bare is NOT a preview subdomain; the suffix "
-            "match requires a real subdomain",
+            "'vercel.app' bare is NOT a preview subdomain; the suffix match requires a real subdomain",
         ),
     ],
 )
@@ -162,32 +158,22 @@ def test_missing_host_rejected():
 def test_env_var_extends_exact_hosts(monkeypatch):
     """Operators can whitelist additional exact hostnames via env."""
     monkeypatch.setenv("STRIPE_REDIRECT_ALLOWED_HOSTS", "partner.example.com")
-    result = sh._validate_redirect_url(
-        "https://partner.example.com/oauth/return", field="return_url"
-    )
+    result = sh._validate_redirect_url("https://partner.example.com/oauth/return", field="return_url")
     assert result is not None
 
     # Random other hosts still rejected.
     with pytest.raises(HTTPException):
-        sh._validate_redirect_url(
-            "https://random.example.com/x", field="return_url"
-        )
+        sh._validate_redirect_url("https://random.example.com/x", field="return_url")
 
 
 def test_env_var_extends_suffix_hosts(monkeypatch):
     """Operators can whitelist suffix matches (must start with a dot)."""
-    monkeypatch.setenv(
-        "STRIPE_REDIRECT_ALLOWED_HOST_SUFFIXES", ".partner.example.com"
-    )
+    monkeypatch.setenv("STRIPE_REDIRECT_ALLOWED_HOST_SUFFIXES", ".partner.example.com")
     # A subdomain of the suffix passes.
-    assert sh._validate_redirect_url(
-        "https://tenant-42.partner.example.com/back", field="return_url"
-    )
+    assert sh._validate_redirect_url("https://tenant-42.partner.example.com/back", field="return_url")
     # Bare apex does NOT match (suffix requires a real subdomain).
     with pytest.raises(HTTPException):
-        sh._validate_redirect_url(
-            "https://partner.example.com/back", field="return_url"
-        )
+        sh._validate_redirect_url("https://partner.example.com/back", field="return_url")
 
 
 def test_dotless_suffix_rejected_on_read(monkeypatch):
@@ -195,14 +181,13 @@ def test_dotless_suffix_rejected_on_read(monkeypatch):
     dropped (otherwise ``regengine.co`` as a suffix would match
     ``evil-regengine.co``)."""
     monkeypatch.setenv(
-        "STRIPE_REDIRECT_ALLOWED_HOST_SUFFIXES", "regengine.co"  # no dot
+        "STRIPE_REDIRECT_ALLOWED_HOST_SUFFIXES",
+        "regengine.co",  # no dot
     )
     with pytest.raises(HTTPException):
         # Must still reject ``evil-regengine.co``: the dotless suffix
         # was dropped.
-        sh._validate_redirect_url(
-            "https://evil-regengine.co/phish", field="success_url"
-        )
+        sh._validate_redirect_url("https://evil-regengine.co/phish", field="success_url")
 
 
 # ── 6. Default values match allowlist ──────────────────────────────────────
@@ -212,13 +197,15 @@ def test_default_success_url_passes():
     """The default CheckoutRequest.success_url value must not be
     self-rejected — if it ever changes to an off-allowlist URL, every
     unauthenticated signup breaks."""
-    from app.stripe_billing.models import DEFAULT_SUCCESS_URL, DEFAULT_CANCEL_URL
+    from app.stripe_billing.models import DEFAULT_CANCEL_URL, DEFAULT_SUCCESS_URL
+
     assert sh._validate_redirect_url(DEFAULT_SUCCESS_URL, field="success_url")
     assert sh._validate_redirect_url(DEFAULT_CANCEL_URL, field="cancel_url")
 
 
 def test_default_portal_return_url_passes():
     from app.stripe_billing.plans import DEFAULT_PORTAL_RETURN_URL
+
     assert sh._validate_redirect_url(DEFAULT_PORTAL_RETURN_URL, field="return_url")
 
 
@@ -241,9 +228,7 @@ def test_query_and_fragment_preserved():
 def test_uppercase_host_normalized():
     """Hostnames are case-insensitive per RFC 3986. Our validator
     must not be fooled by case variations."""
-    cleaned = sh._validate_redirect_url(
-        "https://REGENGINE.CO/dashboard", field="success_url"
-    )
+    cleaned = sh._validate_redirect_url("https://REGENGINE.CO/dashboard", field="success_url")
     assert cleaned is not None
     assert "regengine.co" in cleaned.lower()
 

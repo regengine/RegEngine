@@ -4,21 +4,21 @@ Import this module at app startup to make all connectors
 available in the registry.
 """
 
-from .registry import register_connector
-from .safetyculture import SafetyCultureConnector
 from .csv_sftp import CSVSFTPConnector
-from .retailers import (
-    WalmartGDSNConnector,
-    KrogerConnector,
-    WholeFoodsConnector,
-    CostcoConnector,
-)
 from .food_safety import (
-    FoodReadyConnector,
     FoodDocsConnector,
+    FoodReadyConnector,
     TiveConnector,
 )
 from .inflow_lab import InflowLabConnector
+from .registry import register_connector
+from .retailers import (
+    CostcoConnector,
+    KrogerConnector,
+    WalmartGDSNConnector,
+    WholeFoodsConnector,
+)
+from .safetyculture import SafetyCultureConnector
 
 
 def register_all_connectors() -> None:

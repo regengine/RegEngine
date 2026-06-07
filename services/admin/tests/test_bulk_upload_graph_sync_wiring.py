@@ -41,10 +41,6 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -53,7 +49,9 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000010")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000011")
@@ -87,7 +85,8 @@ def db_session() -> Session:
     # This matches tests/test_graph_outbox.py so we exercise the same dev
     # fallback path ``enqueue_graph_write`` takes on non-Postgres sessions.
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE graph_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NULL,
@@ -103,7 +102,8 @@ def db_session() -> Session:
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 dedupe_key      TEXT NULL
             )
-        """))
+        """)
+        )
 
     SessionLocal = sessionmaker(
         bind=engine,
@@ -166,14 +166,16 @@ def _build_payload(event_count: int) -> dict[str, list[dict[str, Any]]]:
         # produces a deterministic ordering, and distinct timestamps land
         # distinct payload hashes (avoids duplicate-Merkle edge cases).
         t = base_time.replace(minute=i % 60, second=(i // 60) % 60)
-        events.append({
-            "facility_name": "Bulk Test Packhouse",
-            "tlc_code": "TLC-2026-BULK-1001",
-            "cte_type": "shipping",
-            "event_time": t.isoformat(),
-            "kde_data": {"quantity": i + 1, "unit_of_measure": "cases"},
-            "obligation_ids": [],
-        })
+        events.append(
+            {
+                "facility_name": "Bulk Test Packhouse",
+                "tlc_code": "TLC-2026-BULK-1001",
+                "cte_type": "shipping",
+                "event_time": t.isoformat(),
+                "kde_data": {"quantity": i + 1, "unit_of_measure": "cases"},
+                "obligation_ids": [],
+            }
+        )
     return {
         "facilities": [
             {
@@ -200,12 +202,14 @@ def _build_payload(event_count: int) -> dict[str, list[dict[str, Any]]]:
 
 def _outbox_rows(session: Session) -> list[dict[str, Any]]:
     return [
-        dict(r) for r in session.execute(
+        dict(r)
+        for r in session.execute(
             text(
-                "SELECT id, tenant_id, operation, cypher, params, status, "
-                "dedupe_key FROM graph_outbox ORDER BY id ASC"
+                "SELECT id, tenant_id, operation, cypher, params, status, dedupe_key FROM graph_outbox ORDER BY id ASC"
             )
-        ).mappings().all()
+        )
+        .mappings()
+        .all()
     ]
 
 
@@ -244,9 +248,7 @@ def test_small_import_all_sync_and_durable_outbox(
     def _record_event(**kwargs: Any) -> None:
         sync_calls.append(kwargs)
 
-    monkeypatch.setattr(
-        tx_manager.supplier_graph_sync, "record_cte_event", _record_event
-    )
+    monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", _record_event)
     monkeypatch.setattr(
         tx_manager.supplier_graph_sync,
         "record_facility_ftl_scoping",
@@ -271,9 +273,7 @@ def test_small_import_all_sync_and_durable_outbox(
     assert len(sync_calls) == 50
 
     # All 50 also durable in the outbox — the post-fix invariant.
-    cte_rows = [
-        r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"
-    ]
+    cte_rows = [r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"]
     assert len(cte_rows) == 50, (
         f"Expected 50 graph_outbox rows for the 50 events (durability "
         f"backup); got {len(cte_rows)}. The pre-fix asymmetry between "
@@ -317,9 +317,7 @@ def test_large_import_first_100_sync_remainder_enqueued(
     def _record_event(**kwargs: Any) -> None:
         sync_calls.append(kwargs)
 
-    monkeypatch.setattr(
-        tx_manager.supplier_graph_sync, "record_cte_event", _record_event
-    )
+    monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", _record_event)
     monkeypatch.setattr(
         tx_manager.supplier_graph_sync,
         "record_facility_ftl_scoping",
@@ -347,9 +345,7 @@ def test_large_import_first_100_sync_remainder_enqueued(
     # see the test docstring; the previous "400 rows" assertion encoded
     # the asymmetry that left the first 100 events without durability
     # backup).
-    cte_rows = [
-        r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"
-    ]
+    cte_rows = [r for r in _outbox_rows(db_session) if r["operation"] == "cte_event_recorded"]
     assert len(cte_rows) == 500, (
         f"expected 500 outbox rows for the full event set (durability "
         f"symmetry across MAX_SYNC_EVENTS boundary); got {len(cte_rows)}"
@@ -390,9 +386,7 @@ def test_large_import_first_100_sync_remainder_enqueued(
 
     # Every enqueued event is one of the Postgres-chained events (the
     # drainer will never replay a phantom event).
-    db_events = db_session.execute(
-        text("SELECT id FROM supplier_cte_events")
-    ).scalars().all()
+    db_events = db_session.execute(text("SELECT id FROM supplier_cte_events")).scalars().all()
     db_event_ids = {str(eid) for eid in db_events}
     for row in rows:
         params = json.loads(row["params"])
@@ -400,10 +394,7 @@ def test_large_import_first_100_sync_remainder_enqueued(
 
     # The warning now describes the real behavior — async replay via
     # graph_outbox, not the pre-fix phantom "background worker".
-    deferred_warnings = [
-        w for w in summary.get("sync_warnings", [])
-        if w.startswith("graph_sync_deferred:")
-    ]
+    deferred_warnings = [w for w in summary.get("sync_warnings", []) if w.startswith("graph_sync_deferred:")]
     assert len(deferred_warnings) == 1
     # ``graph_sync_deferred`` deliberately preserves its pre-fix semantics:
     # count reflects overflow events that are reachable ONLY via the
@@ -438,9 +429,7 @@ def test_outbox_enqueue_failure_rolls_back_bulk_import(
     """
     import app.bulk_upload.transaction_manager as tx_manager
 
-    monkeypatch.setattr(
-        tx_manager.supplier_graph_sync, "record_cte_event", lambda **_kw: None
-    )
+    monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
     monkeypatch.setattr(
         tx_manager.supplier_graph_sync,
         "record_facility_ftl_scoping",
@@ -470,9 +459,7 @@ def test_outbox_enqueue_failure_rolls_back_bulk_import(
     # before the (post-commit) outbox enqueue; that ordering produced the
     # drift the outbox was designed to close.
     db_session.rollback()
-    db_events = db_session.execute(
-        text("SELECT count(*) FROM supplier_cte_events")
-    ).scalar()
+    db_events = db_session.execute(text("SELECT count(*) FROM supplier_cte_events")).scalar()
     assert db_events == 0
 
     # And no outbox rows either — same transaction, same rollback.

@@ -40,8 +40,8 @@ import importlib  # noqa: E402
 
 router_mod = importlib.import_module("app.epcis.router")
 from app.webhook_compat import _verify_api_key  # noqa: E402
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 TEST_TENANT_ID = "11111111-2222-3333-4444-555555555555"
 
@@ -124,23 +124,18 @@ class TestBatchIngest:
         assert resp.status_code == 400
         assert "at least one event" in resp.json()["detail"]
 
-    def test_atomic_mode_success_shape(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_atomic_mode_success_shape(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 131-146: atomic happy path returns 201 with the full
         response shape (total, created, failed, results, errors, mode)."""
-        def _fake_atomic(
-            tenant_id: str, events: list[dict]
-        ) -> list[tuple[dict, int]]:
+
+        def _fake_atomic(tenant_id: str, events: list[dict]) -> list[tuple[dict, int]]:
             assert tenant_id == TEST_TENANT_ID
             return [
                 ({"cte_id": "evt1", "validation_status": "valid"}, 201),
                 ({"cte_id": "evt2", "validation_status": "valid"}, 201),
             ]
 
-        monkeypatch.setattr(
-            router_mod, "_ingest_batch_events_db_atomic", _fake_atomic
-        )
+        monkeypatch.setattr(router_mod, "_ingest_batch_events_db_atomic", _fake_atomic)
 
         resp = client.post(
             "/api/v1/epcis/events/batch?mode=atomic",
@@ -156,15 +151,11 @@ class TestBatchIngest:
         assert len(body["results"]) == 2
         assert body["results"][0]["status_code"] == 201
 
-    def test_partial_mode_mixed_returns_207(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_mode_mixed_returns_207(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 172: partial mode with BOTH successes and failures → 207."""
         call = {"i": 0}
 
-        def _fake_single(
-            tenant_id: str, event: dict
-        ) -> tuple[dict, int]:
+        def _fake_single(tenant_id: str, event: dict) -> tuple[dict, int]:
             call["i"] += 1
             if call["i"] == 1:
                 return ({"cte_id": "ok1", "validation_status": "valid"}, 201)
@@ -183,13 +174,10 @@ class TestBatchIngest:
         assert body["failed"] == 1
         assert body["errors"] == [{"index": 1, "detail": "bad event"}]
 
-    def test_partial_mode_all_failures_returns_400(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_mode_all_failures_returns_400(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 173-174: partial mode with ONLY failures → 400."""
-        def _always_fail(
-            tenant_id: str, event: dict
-        ) -> tuple[dict, int]:
+
+        def _always_fail(tenant_id: str, event: dict) -> tuple[dict, int]:
             raise HTTPException(status_code=422, detail="nope")
 
         monkeypatch.setattr(router_mod, "_ingest_single_event", _always_fail)
@@ -203,9 +191,7 @@ class TestBatchIngest:
         assert body["created"] == 0
         assert body["failed"] == 1
 
-    def test_partial_mode_all_success_returns_201(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_mode_all_success_returns_201(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 175: partial mode with ONLY successes → 201."""
         monkeypatch.setattr(
             router_mod,
@@ -228,17 +214,14 @@ class TestGetEpcisEvent:
     def _stub_tenant(self, stub_resolve_tenant: dict[str, Any]) -> None:
         stub_resolve_tenant["return"] = TEST_TENANT_ID
 
-    def test_db_error_without_fallback_returns_503(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_db_error_without_fallback_returns_503(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 193: DB error + fallback disabled → 503."""
+
         def _boom(tenant_id: str, event_id: str) -> Optional[dict]:
             raise RuntimeError("pg down")
 
         monkeypatch.setattr(router_mod, "_fetch_event_from_db", _boom)
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: False
-        )
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
 
         resp = client.get("/api/v1/epcis/events/some-id")
         assert resp.status_code == 503
@@ -248,15 +231,9 @@ class TestGetEpcisEvent:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Line 204: DB returned None AND fallback has nothing → 404."""
-        monkeypatch.setattr(
-            router_mod, "_fetch_event_from_db", lambda t, eid: None
-        )
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: True
-        )
-        monkeypatch.setattr(
-            router_mod, "_fallback_store_for", lambda t: {}
-        )
+        monkeypatch.setattr(router_mod, "_fetch_event_from_db", lambda t, eid: None)
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
+        monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: {})
 
         resp = client.get("/api/v1/epcis/events/missing")
         assert resp.status_code == 404
@@ -267,13 +244,12 @@ class TestGetEpcisEvent:
     ) -> None:
         """Lines 191-196: DB exception with fallback enabled logs the
         warning and proceeds to the fallback lookup."""
+
         def _boom(tenant_id: str, event_id: str) -> Optional[dict]:
             raise RuntimeError("pg flaked")
 
         monkeypatch.setattr(router_mod, "_fetch_event_from_db", _boom)
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: True
-        )
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
         monkeypatch.setattr(
             router_mod,
             "_fallback_store_for",
@@ -284,9 +260,7 @@ class TestGetEpcisEvent:
             resp = client.get("/api/v1/epcis/events/found-id")
         assert resp.status_code == 200
         assert resp.json()["cte_id"] == "found-id"
-        assert any(
-            "epcis_get_db_failed_using_fallback" in m for m in caplog.messages
-        )
+        assert any("epcis_get_db_failed_using_fallback" in m for m in caplog.messages)
 
 
 # ── Export: DB failure + filter branches ──────────────────────────────────
@@ -297,17 +271,14 @@ class TestExportEpcis:
     def _stub_tenant(self, stub_resolve_tenant: dict[str, Any]) -> None:
         stub_resolve_tenant["return"] = TEST_TENANT_ID
 
-    def test_db_error_without_fallback_returns_503(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_db_error_without_fallback_returns_503(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 225: DB error + fallback disabled → 503."""
+
         def _boom(*_: Any, **__: Any) -> list[dict]:
             raise RuntimeError("pg offline")
 
         monkeypatch.setattr(router_mod, "_list_events_from_db", _boom)
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: False
-        )
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
 
         resp = client.get("/api/v1/epcis/export")
         assert resp.status_code == 503
@@ -316,12 +287,8 @@ class TestExportEpcis:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Line 248: event_time < start_date → excluded from fallback export."""
-        monkeypatch.setattr(
-            router_mod, "_list_events_from_db", lambda *a, **kw: []
-        )
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: True
-        )
+        monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
         fake_store = {
             "early": {
@@ -339,13 +306,9 @@ class TestExportEpcis:
                 "epcis_document": {"type": "ObjectEvent", "id": "late"},
             },
         }
-        monkeypatch.setattr(
-            router_mod, "_fallback_store_for", lambda t: fake_store
-        )
+        monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: fake_store)
 
-        resp = client.get(
-            "/api/v1/epcis/export?start_date=2025-01-01T00:00:00Z"
-        )
+        resp = client.get("/api/v1/epcis/export?start_date=2025-01-01T00:00:00Z")
         assert resp.status_code == 200
         events = resp.json()["epcisBody"]["eventList"]
         assert len(events) == 1
@@ -355,12 +318,8 @@ class TestExportEpcis:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Line 250: event_time >= end_date → excluded from fallback export."""
-        monkeypatch.setattr(
-            router_mod, "_list_events_from_db", lambda *a, **kw: []
-        )
-        monkeypatch.setattr(
-            router_mod, "_allow_in_memory_fallback", lambda: True
-        )
+        monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
+        monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
         fake_store = {
             "early": {
@@ -378,13 +337,9 @@ class TestExportEpcis:
                 "epcis_document": {"type": "ObjectEvent", "id": "late"},
             },
         }
-        monkeypatch.setattr(
-            router_mod, "_fallback_store_for", lambda t: fake_store
-        )
+        monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: fake_store)
 
-        resp = client.get(
-            "/api/v1/epcis/export?end_date=2025-01-01T00:00:00Z"
-        )
+        resp = client.get("/api/v1/epcis/export?end_date=2025-01-01T00:00:00Z")
         assert resp.status_code == 200
         events = resp.json()["epcisBody"]["eventList"]
         assert len(events) == 1
@@ -432,9 +387,7 @@ class TestIngestEpcisXml:
         assert resp.status_code == 400
         assert "Invalid mode" in resp.json()["detail"]
 
-    def test_atomic_happy_path_response_shape(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_atomic_happy_path_response_shape(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 334-339: atomic XML ingest returns 201 with the
         EPCIS-XML response shape."""
         monkeypatch.setattr(
@@ -456,9 +409,7 @@ class TestIngestEpcisXml:
         assert body["format"] == "EPCIS_XML_2.0"
         assert body["mode"] == "atomic"
 
-    def test_partial_mixed_returns_207(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_mixed_returns_207(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 377: partial XML mode with both successes and failures → 207."""
         # Force parser to return two events so we can get mixed results.
         monkeypatch.setattr(
@@ -489,9 +440,7 @@ class TestIngestEpcisXml:
         assert body["created"] == 1
         assert body["failed"] == 1
 
-    def test_partial_all_success_returns_201(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_all_success_returns_201(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 359-361 + 380: partial XML mode with all-success → 201."""
         monkeypatch.setattr(
             router_mod,
@@ -511,9 +460,7 @@ class TestIngestEpcisXml:
         )
         assert resp.status_code == 201
 
-    def test_partial_all_fail_returns_400(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_all_fail_returns_400(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 379 (partial-xml all-failure branch): only HTTPException
         raises reach 'failed' — we still want the 400 arm, confirmed via
         the response status_code."""
@@ -553,9 +500,7 @@ class TestIngestEpcisXml:
         assert resp.status_code == 400
         assert "does not appear to be XML" in resp.json()["detail"]
 
-    def test_xml_with_no_events_returns_422(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_xml_with_no_events_returns_422(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(router_mod, "_parse_epcis_xml", lambda raw: [])
         resp = client.post(
             "/api/v1/epcis/events/xml",
@@ -587,9 +532,7 @@ class TestValidateEndpoint:
     """The /validate endpoint is simple enough that we just cover its
     happy path alongside error branches to keep the file self-sufficient."""
 
-    def test_invalid_payload_reports_errors_and_no_normalized(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_payload_reports_errors_and_no_normalized(self, client: TestClient) -> None:
         # Missing required EPCIS fields → errors list, normalized None.
         resp = client.post("/api/v1/epcis/validate", json={"type": "ObjectEvent"})
         assert resp.status_code == 200

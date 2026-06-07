@@ -49,6 +49,7 @@ class OpenAIClient(BaseLLMClient):
     def __init__(self, model: str, api_key: str, timeout: int = 60):
         super().__init__(model, timeout)
         from openai import OpenAI
+
         self.api_key = api_key
         self.client = OpenAI(api_key=api_key)
 
@@ -161,6 +162,7 @@ class VertexAIClient(BaseLLMClient):
         super().__init__(model, timeout)
         import vertexai
         from vertexai.generative_models import GenerativeModel
+
         vertexai.init(project=project_id, location=location)
         self.client = GenerativeModel(model)
 
@@ -212,35 +214,27 @@ class MockLLMClient(BaseLLMClient):
 
         # Behavior based on system prompt or prompt content
         if "Planner" in system_prompt or "Planner" in prompt:
-            return json.dumps({
-                "plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}],
-                "files_to_edit": ["main.py"]
-            })
+            return json.dumps(
+                {"plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}], "files_to_edit": ["main.py"]}
+            )
         if "Coder" in system_prompt or "Coder" in prompt:
-            return json.dumps({
-                "explanation": "Added compliance headers",
-                "files_written": ["main.py"]
-            })
+            return json.dumps({"explanation": "Added compliance headers", "files_written": ["main.py"]})
         if "Reviewer" in system_prompt or "Reviewer" in prompt:
-            return json.dumps({
-                "verdict": "approve",
-                "review": "Code looks good and implements the requested headers.",
-                "critical_issues": []
-            })
+            return json.dumps(
+                {
+                    "verdict": "approve",
+                    "review": "Code looks good and implements the requested headers.",
+                    "critical_issues": [],
+                }
+            )
         if "Tester" in system_prompt or "Tester" in prompt:
-            return json.dumps({
-                "verdict": "pass",
-                "tests_run": 5,
-                "passed": 5,
-                "failed": 0
-            })
+            return json.dumps({"verdict": "pass", "tests_run": 5, "passed": 5, "failed": 0})
 
         # Specific fallback for word 'plan' only if no other role matched
         if "plan" in prompt.lower() and "review" not in prompt.lower():
-            return json.dumps({
-                "plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}],
-                "files_to_edit": ["main.py"]
-            })
+            return json.dumps(
+                {"plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}], "files_to_edit": ["main.py"]}
+            )
 
         return json.dumps({"result": "mock response", "verdict": "pass", "status": "completed"})
 

@@ -32,9 +32,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
 from services.nlp.app.extractors.fsma_types import (
     CTE,
+    KDE,
     CTEType,
     DocumentType,
-    KDE,
     LineItem,
 )
 
@@ -65,9 +65,7 @@ class TestCTEEnumCoverage_Issue1103:
     )
     def test_every_fda_cte_type_present_in_enum(self, member: str):
         """The enum must carry all 7 FDA CTE types plus CREATION."""
-        assert member in CTEType.__members__, (
-            f"CTEType missing {member} — #1103 regression"
-        )
+        assert member in CTEType.__members__, f"CTEType missing {member} — #1103 regression"
 
     def test_new_document_types_map_to_correct_cte(self, extractor: FSMAExtractor):
         """Origin-side document types route to their FDA CTE rather
@@ -87,15 +85,16 @@ class TestCTEEnumCoverage_Issue1103:
 
 class TestTLCPreservation_Issue1104:
     def test_build_tlc_returns_lot_code_verbatim_ignoring_gtin(
-        self, extractor: FSMAExtractor,
+        self,
+        extractor: FSMAExtractor,
     ):
         """``_build_tlc`` must no longer synthesize ``{gtin}-{lot_code}``."""
         result = extractor._build_tlc(
-            gtin="00012345678905", lot_code="LOT-ABC-123",
+            gtin="00012345678905",
+            lot_code="LOT-ABC-123",
         )
         assert result == "LOT-ABC-123", (
-            "TLC must be preserved verbatim — synthesizing one is "
-            "non-compliant with 21 CFR §1.1320"
+            "TLC must be preserved verbatim — synthesizing one is non-compliant with 21 CFR §1.1320"
         )
 
     def test_build_tlc_without_lot_returns_none(self, extractor: FSMAExtractor):
@@ -112,8 +111,7 @@ class TestTLCPreservation_Issue1104:
         text = "TLC: LOT-ABC-123\nGTIN: 00012345678905\n"
         kde = extractor._extract_kdes(text)
         assert kde.traceability_lot_code == "LOT-ABC-123", (
-            f"TLC was mutated; got {kde.traceability_lot_code!r} "
-            "(#1104 regression)"
+            f"TLC was mutated; got {kde.traceability_lot_code!r} (#1104 regression)"
         )
         assert kde.gtin == "00012345678905"
 
@@ -137,25 +135,16 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
         # Both parties must be resolvable — the #1123 receiver guard
         # refuses to fabricate RECEIVING if ship_to is unknown.
         ctes = extractor._extract_ctes(
-            text=(
-                "Ship From: Farm A  GLN: 0000000000017\n"
-                "Ship To: Distributor B  GLN: 0000000000024\n"
-            ),
+            text=("Ship From: Farm A  GLN: 0000000000017\nShip To: Distributor B  GLN: 0000000000024\n"),
             doc_type=DocumentType.BILL_OF_LADING,
             line_items=[line_item],
         )
         types = [c.type for c in ctes]
         assert CTEType.SHIPPING in types
-        assert CTEType.RECEIVING in types, (
-            f"BOL must emit a RECEIVING partner; got only {types} (#1123)"
-        )
+        assert CTEType.RECEIVING in types, f"BOL must emit a RECEIVING partner; got only {types} (#1123)"
         # SHIPPING must come before its paired RECEIVING.
-        first_shipping = next(
-            i for i, c in enumerate(ctes) if c.type is CTEType.SHIPPING
-        )
-        first_receiving = next(
-            i for i, c in enumerate(ctes) if c.type is CTEType.RECEIVING
-        )
+        first_shipping = next(i for i, c in enumerate(ctes) if c.type is CTEType.SHIPPING)
+        first_receiving = next(i for i, c in enumerate(ctes) if c.type is CTEType.RECEIVING)
         assert first_shipping < first_receiving
 
     def test_receiving_links_back_to_shipping_tlc(self, extractor: FSMAExtractor):
@@ -166,10 +155,7 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
             unit_of_measure="cases",
         )
         ctes = extractor._extract_ctes(
-            text=(
-                "Ship From: Farm A  GLN: 0000000000017\n"
-                "Ship To: Distributor B  GLN: 0000000000024\n"
-            ),
+            text=("Ship From: Farm A  GLN: 0000000000017\nShip To: Distributor B  GLN: 0000000000024\n"),
             doc_type=DocumentType.BILL_OF_LADING,
             line_items=[line_item],
         )
@@ -178,7 +164,8 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
         assert receiving.kdes.prior_source_tlc == shipping.kdes.traceability_lot_code
 
     def test_non_bol_document_does_not_emit_receiving(
-        self, extractor: FSMAExtractor,
+        self,
+        extractor: FSMAExtractor,
     ):
         """Harvest logs (#1103) must NOT be paired into RECEIVING —
         only BOL triggers the shipping-receiving split."""
@@ -198,7 +185,8 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
         assert CTEType.RECEIVING not in types
 
     def test_bol_with_both_parties_returns_exactly_two_paired_ctes(
-        self, extractor: FSMAExtractor,
+        self,
+        extractor: FSMAExtractor,
     ):
         """Task-spec regression: a BOL that names both shipper and
         receiver must yield EXACTLY one SHIPPING + one RECEIVING,
@@ -219,9 +207,7 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
             doc_type=DocumentType.BILL_OF_LADING,
             line_items=[line_item],
         )
-        assert len(ctes) == 2, (
-            f"expected exactly 2 paired CTEs; got {[c.type for c in ctes]}"
-        )
+        assert len(ctes) == 2, f"expected exactly 2 paired CTEs; got {[c.type for c in ctes]}"
         shipping = next(c for c in ctes if c.type is CTEType.SHIPPING)
         receiving = next(c for c in ctes if c.type is CTEType.RECEIVING)
         # Same TLC and lot info — the pair documents a single handoff.
@@ -237,12 +223,12 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
         assert receiving.kdes.location_identifier == receiving.kdes.ship_to_gln
         # Distinct UUIDs so the pair can't collide on ingest.
         assert shipping.event_id and receiving.event_id
-        assert shipping.event_id != receiving.event_id, (
-            "paired SHIPPING/RECEIVING must have distinct event IDs (#1123)"
-        )
+        assert shipping.event_id != receiving.event_id, "paired SHIPPING/RECEIVING must have distinct event IDs (#1123)"
 
     def test_bol_without_receiver_skips_receiving_and_warns(
-        self, extractor: FSMAExtractor, caplog,
+        self,
+        extractor: FSMAExtractor,
+        caplog,
     ):
         """If the ship-to party is unknown we must NOT fabricate a
         RECEIVING CTE — log a warning and emit only SHIPPING.
@@ -263,15 +249,16 @@ class TestBolEmitsShippingAndReceiving_Issue1123:
             )
         types = [c.type for c in ctes]
         assert CTEType.SHIPPING in types
-        assert CTEType.RECEIVING not in types, (
-            "must not fabricate RECEIVING when receiver unknown (#1123)"
-        )
+        assert CTEType.RECEIVING not in types, "must not fabricate RECEIVING when receiver unknown (#1123)"
         # Warning should have been logged so HITL can see the gap.
-        assert any(
-            "bol_receiving_skipped_unknown_party" in rec.getMessage()
-            or getattr(rec, "event", None) == "bol_receiving_skipped_unknown_party"
-            for rec in caplog.records
-        ) or True  # structlog may route around stdlib; gate softly.
+        assert (
+            any(
+                "bol_receiving_skipped_unknown_party" in rec.getMessage()
+                or getattr(rec, "event", None) == "bol_receiving_skipped_unknown_party"
+                for rec in caplog.records
+            )
+            or True
+        )  # structlog may route around stdlib; gate softly.
 
 
 # ---------------------------------------------------------------------------
@@ -283,10 +270,7 @@ class TestQuantityRequiresUnit_Issue1129:
     def test_quantity_without_unit_not_stored(self, extractor: FSMAExtractor):
         """A bare quantity with no unit must NOT populate ``kde.quantity``."""
         kde = extractor._extract_kdes("Quantity: 50\nProduct: Romaine")
-        assert kde.quantity is None, (
-            "quantity without unit must remain unset; got "
-            f"{kde.quantity} (#1129 regression)"
-        )
+        assert kde.quantity is None, f"quantity without unit must remain unset; got {kde.quantity} (#1129 regression)"
 
     def test_quantity_with_unit_is_stored(self, extractor: FSMAExtractor):
         kde = extractor._extract_kdes("Quantity: 50 cases")
@@ -306,7 +290,11 @@ class TestQuantityRequiresUnit_Issue1129:
         ],
     )
     def test_extended_unit_list(
-        self, extractor: FSMAExtractor, text: str, expect_qty: float, expect_uom: str,
+        self,
+        extractor: FSMAExtractor,
+        text: str,
+        expect_qty: float,
+        expect_uom: str,
     ):
         """Units beyond the original 5 (oz, bushels, CS, CT, cartons…)
         must be recognized so real-world documents don't silently fall
@@ -323,7 +311,8 @@ class TestQuantityRequiresUnit_Issue1129:
 
 class TestFTLScoping_Issue1116:
     def test_classify_ftl_tri_state_on_missing_description(
-        self, extractor: FSMAExtractor,
+        self,
+        extractor: FSMAExtractor,
     ):
         """No description → tri-state None (classification gap, not
         a False verdict)."""
@@ -371,8 +360,7 @@ class TestFTLScoping_Issue1116:
             "ctes": [{"kdes": {"is_ftl_covered": True}}],
         }
         assert _is_fsma_event(non_fsma_url_ftl_product) is True, (
-            "FTL-covered product on a generic URL must route through "
-            "the FSMA path (#1116)"
+            "FTL-covered product on a generic URL must route through the FSMA path (#1116)"
         )
 
         fsma_url_non_ftl_product = {
@@ -381,8 +369,7 @@ class TestFTLScoping_Issue1116:
             "ctes": [{"kdes": {"is_ftl_covered": False}}],
         }
         assert _is_fsma_event(fsma_url_non_ftl_product) is False, (
-            "Verified non-FTL product must not be routed to FSMA "
-            "even if the URL mentions 'fsma' (#1116)"
+            "Verified non-FTL product must not be routed to FSMA even if the URL mentions 'fsma' (#1116)"
         )
 
     def test_is_fsma_event_falls_back_to_url_when_no_ftl_signal(self):
@@ -393,9 +380,19 @@ class TestFTLScoping_Issue1116:
         except SyntaxError as exc:
             pytest.skip(f"consumer.py has pre-existing SyntaxError: {exc}")
 
-        assert _is_fsma_event({
-            "source_url": "https://dashboard.example.com/fsma/204/report",
-        }) is True
-        assert _is_fsma_event({
-            "source_url": "https://example.com/random/doc.pdf",
-        }) is False
+        assert (
+            _is_fsma_event(
+                {
+                    "source_url": "https://dashboard.example.com/fsma/204/report",
+                }
+            )
+            is True
+        )
+        assert (
+            _is_fsma_event(
+                {
+                    "source_url": "https://example.com/random/doc.pdf",
+                }
+            )
+            is False
+        )

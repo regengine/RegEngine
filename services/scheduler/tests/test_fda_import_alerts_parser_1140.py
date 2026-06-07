@@ -29,13 +29,13 @@ These tests exercise the BeautifulSoup-based parser via the public
 9. Empty AND tiny page (e.g. outage) → NO mismatch warning.
 10. Garbled HTML (nested tags unclosed) → parser tolerates.
 """
+
 from __future__ import annotations
 
 from app.scrapers.fda_import_alerts import (
     FDA_IMPORT_ALERTS_URL,
     FDAImportAlertsScraper,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -186,9 +186,7 @@ class TestFDAImportAlertsParser_Issue1140:
         by_number = {i.raw_data["alert_number"]: i.url for i in items}
 
         # The 99-08 row had a fully-qualified URL already.
-        assert by_number["99-08"] == (
-            "https://www.accessdata.fda.gov/cms_ia/importalert_99-08.html"
-        )
+        assert by_number["99-08"] == ("https://www.accessdata.fda.gov/cms_ia/importalert_99-08.html")
 
     def test_severity_is_high(self):
         items, _ = self.scraper.parse_html(REALISTIC_LISTING_HTML)
@@ -318,6 +316,7 @@ class TestFDAImportAlertsParser_Issue1140:
     def test_scrape_no_warning_on_healthy_parse(self, monkeypatch):
         scraper = FDAImportAlertsScraper()
         try:
+
             class _MockResponse:
                 status_code = 200
                 text = REALISTIC_LISTING_HTML
@@ -325,9 +324,7 @@ class TestFDAImportAlertsParser_Issue1140:
                 def raise_for_status(self) -> None:
                     return None
 
-            monkeypatch.setattr(
-                scraper.session, "get", lambda url, timeout=None, **kwargs: _MockResponse()
-            )
+            monkeypatch.setattr(scraper.session, "get", lambda url, timeout=None, **kwargs: _MockResponse())
 
             result = scraper.scrape()
 

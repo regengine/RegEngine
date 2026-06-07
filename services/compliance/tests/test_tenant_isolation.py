@@ -9,6 +9,7 @@ The tests cover:
   - Multiple tenant pairs (parametrized)
   - Rule-engine result isolation (compliance check outputs keyed by tenant)
 """
+
 from __future__ import annotations
 
 import uuid
@@ -18,10 +19,10 @@ import pytest
 from sqlalchemy import Column, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-
 # ---------------------------------------------------------------------------
 # Minimal schema
 # ---------------------------------------------------------------------------
+
 
 class Base(DeclarativeBase):
     pass
@@ -42,6 +43,7 @@ class ComplianceCheckResult(Base):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def engine():
@@ -102,8 +104,7 @@ def test_compliance_result_not_visible_across_tenants(db: Session, tenant_a: str
     )
 
     assert result == [], (
-        f"tenant_b={tenant_b!r} must not see compliance results belonging to "
-        f"tenant_a={tenant_a!r}; got {result}"
+        f"tenant_b={tenant_b!r} must not see compliance results belonging to tenant_a={tenant_a!r}; got {result}"
     )
 
 
@@ -142,12 +143,18 @@ def test_multiple_tenants_same_regulation_are_separate(db: Session, tenant_a: st
     regulation = "FSMA-204-SHARED-REG"
 
     row_a = ComplianceCheckResult(
-        id=str(uuid.uuid4()), tenant_id=tenant_a, regulation=regulation,
-        outcome="compliant", detail="Tenant A result",
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_a,
+        regulation=regulation,
+        outcome="compliant",
+        detail="Tenant A result",
     )
     row_b = ComplianceCheckResult(
-        id=str(uuid.uuid4()), tenant_id=tenant_b, regulation=regulation,
-        outcome="non_compliant", detail="Tenant B result",
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_b,
+        regulation=regulation,
+        outcome="non_compliant",
+        detail="Tenant B result",
     )
     db.add_all([row_a, row_b])
     db.flush()

@@ -25,7 +25,6 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 
 from services.admin.app import password_reset_routes as prr  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -89,11 +88,12 @@ class TestForgotPwRateLimit:
 # Integration-style tests via TestClient (handles SlowAPI decorator)
 # ---------------------------------------------------------------------------
 
+
 def _build_app(session_store: MagicMock, supabase: object | None) -> FastAPI:
     """Build a minimal FastAPI app mounting the router under test."""
     from slowapi import Limiter, _rate_limit_exceeded_handler
-    from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
 
     app = FastAPI()
     limiter = Limiter(key_func=get_remote_address, enabled=False)
@@ -130,9 +130,7 @@ class TestForgotPasswordEndpoint:
         """Unknown email → same 200 + same generic message (no enumeration)."""
         store = _make_session_store(counter=0)
         sb = MagicMock()
-        sb.auth.reset_password_for_email = MagicMock(
-            side_effect=Exception("User not found")
-        )
+        sb.auth.reset_password_for_email = MagicMock(side_effect=Exception("User not found"))
 
         with patch.object(prr, "get_supabase", return_value=sb):
             result = await prr._forgot_password_handler(

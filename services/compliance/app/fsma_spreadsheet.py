@@ -90,18 +90,35 @@ FDA_HEADERS = [
 
 # Named KDE keys that get their own dedicated columns
 _NAMED_KDE_KEYS = {
-    "harvest_date", "cooling_date", "pack_date", "ship_date",
-    "receive_date", "transformation_date", "landing_date",
-    "temperature", "carrier", "immediate_previous_source",
+    "harvest_date",
+    "cooling_date",
+    "pack_date",
+    "ship_date",
+    "receive_date",
+    "transformation_date",
+    "landing_date",
+    "temperature",
+    "carrier",
+    "immediate_previous_source",
 }
 
 # Keys already mapped into top-level columns (skip when building extra KDE JSON)
 _SKIP_KDE_KEYS = _NAMED_KDE_KEYS | {
-    "traceability_lot_code", "product_description", "quantity",
-    "unit_of_measure", "event_date", "event_time", "cte_type",
-    "ship_from_gln", "ship_to_gln", "ship_from_location",
-    "ship_to_location", "tlc_source_gln", "tlc_source_fda_reg",
-    "reference_document_number", "reference_document_type",
+    "traceability_lot_code",
+    "product_description",
+    "quantity",
+    "unit_of_measure",
+    "event_date",
+    "event_time",
+    "cte_type",
+    "ship_from_gln",
+    "ship_to_gln",
+    "ship_from_location",
+    "ship_to_location",
+    "tlc_source_gln",
+    "tlc_source_fda_reg",
+    "reference_document_number",
+    "reference_document_type",
     "location_identifier",
 }
 
@@ -140,8 +157,7 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
     except (ValueError, AttributeError) as exc:
         if strict:
             raise FSMATimestampError(
-                f"event_date {raw!r} is not ISO-8601; refusing to "
-                "truncate into an FDA submission"
+                f"event_date {raw!r} is not ISO-8601; refusing to truncate into an FDA submission"
             ) from exc
         # Legacy, non-strict behavior: return raw[:10] for non-FDA
         # callers that only need a best-effort display value.
@@ -251,18 +267,32 @@ def generate_fda_csv(
     # ``start_date`` / ``end_date`` are also user-supplied; sanitize
     # each value before it lands in a spreadsheet cell.
     writer.writerow(sanitize_sequence(["FSMA Section 204 - Sortable Spreadsheet"]))
-    writer.writerow(sanitize_sequence([
-        "Generated",
-        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-    ]))
+    writer.writerow(
+        sanitize_sequence(
+            [
+                "Generated",
+                datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            ]
+        )
+    )
     if start_date or end_date:
-        writer.writerow(sanitize_sequence([
-            "Date Range", f"{start_date} to {end_date}",
-        ]))
+        writer.writerow(
+            sanitize_sequence(
+                [
+                    "Date Range",
+                    f"{start_date} to {end_date}",
+                ]
+            )
+        )
     if requesting_entity:
-        writer.writerow(sanitize_sequence([
-            "Requesting Entity", requesting_entity,
-        ]))
+        writer.writerow(
+            sanitize_sequence(
+                [
+                    "Requesting Entity",
+                    requesting_entity,
+                ]
+            )
+        )
     writer.writerow(sanitize_sequence(["Record Count", str(len(events))]))
     writer.writerow([])  # blank separator
 

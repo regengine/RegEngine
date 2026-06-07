@@ -17,7 +17,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import Depends, HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Schema-level regression
 # ---------------------------------------------------------------------------
@@ -40,10 +39,12 @@ def test_alert_action_request_rejects_client_supplied_user_id_silently():
     """Extra fields like ``user_id`` must not populate anything on the model."""
     from services.admin.app.compliance_routes import AlertActionRequest
 
-    req = AlertActionRequest.model_validate({
-        "user_id": "11111111-1111-1111-1111-111111111111",  # attacker payload
-        "notes": "looks legit",
-    })
+    req = AlertActionRequest.model_validate(
+        {
+            "user_id": "11111111-1111-1111-1111-111111111111",  # attacker payload
+            "notes": "looks legit",
+        }
+    )
     assert req.notes == "looks legit"
     # No user_id attribute should exist.
     assert not hasattr(req, "user_id") or getattr(req, "user_id", None) is None
@@ -61,15 +62,12 @@ def test_acknowledge_alert_handler_depends_on_get_current_user():
     sig = inspect.signature(acknowledge_alert)
     current_user_param = sig.parameters.get("current_user")
     assert current_user_param is not None, (
-        "acknowledge_alert must declare current_user: UserModel = "
-        "Depends(get_current_user)"
+        "acknowledge_alert must declare current_user: UserModel = Depends(get_current_user)"
     )
 
     # The default is a FastAPI Depends marker — peel it open.
     default = current_user_param.default
-    assert hasattr(default, "dependency"), (
-        "current_user must be wired via FastAPI Depends()"
-    )
+    assert hasattr(default, "dependency"), "current_user must be wired via FastAPI Depends()"
     assert default.dependency is get_current_user
 
 
@@ -243,8 +241,8 @@ def test_service_layer_still_stamps_acknowledged_by_from_caller_arg():
     """Defense in depth: even the service layer should honor the actor arg,
     not pull from anywhere else. This catches a regression where the route
     starts computing the actor but the service stops using it."""
-    from services.admin.app.compliance_service_sync import ComplianceServiceSync
     from services.admin.app.compliance_models import ComplianceAlertModel
+    from services.admin.app.compliance_service_sync import ComplianceServiceSync
 
     # Spy session that records mutations.
     captured = {}

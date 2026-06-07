@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from shared.funnel_events import emit_funnel_event
 
 from .authz import IngestionPrincipal, require_permission
 from .shared.upload_limits import (
@@ -18,7 +19,6 @@ from .shared.upload_limits import (
     read_upload_with_limit,
     validated_image_content_type,
 )
-from shared.funnel_events import emit_funnel_event
 
 logger = logging.getLogger("qr-decoder")
 
@@ -27,8 +27,8 @@ router = APIRouter(prefix="/api/v1/qr", tags=["QR & GS1"])
 _GROUP_SEPARATOR = chr(29)
 _AI_FIXED_LENGTH = {
     "01": 14,  # GTIN
-    "13": 6,   # packaging date
-    "17": 6,   # expiration date
+    "13": 6,  # packaging date
+    "17": 6,  # expiration date
 }
 _AI_VARIABLE = {"10", "21"}  # lot, serial
 _AI_SUPPORTED = set(_AI_FIXED_LENGTH.keys()) | _AI_VARIABLE
@@ -99,7 +99,7 @@ def _is_supported_ai(ai: str) -> bool:
 
 
 def _looks_like_ai_at(payload: str, index: int) -> bool:
-    ai = payload[index:index + 2]
+    ai = payload[index : index + 2]
     if not _is_supported_ai(ai):
         return False
     if ai in _AI_FIXED_LENGTH:
@@ -172,14 +172,14 @@ def _parse_gs1_ai(payload: str) -> QRDecodedFields:
             index += 1
             continue
 
-        ai = normalized[index:index + 2]
+        ai = normalized[index : index + 2]
         if not _is_supported_ai(ai):
             index += 1
             continue
 
         if ai in _AI_FIXED_LENGTH:
             length = _AI_FIXED_LENGTH[ai]
-            value = normalized[index + 2:index + 2 + length]
+            value = normalized[index + 2 : index + 2 + length]
             if len(value) == length:
                 if ai == "01" and not fields.gtin:
                     fields.gtin = value
@@ -251,8 +251,7 @@ def _decode_image_bytes(image_bytes: bytes) -> str:
     response_model=QRDecodeResponse,
     summary="Decode GS1 QR/barcode image",
     description=(
-        "Decodes an uploaded barcode/QR image and returns structured GS1 fields "
-        "(GTIN, lot, serial, expiry, pack date)."
+        "Decodes an uploaded barcode/QR image and returns structured GS1 fields (GTIN, lot, serial, expiry, pack date)."
     ),
 )
 async def decode_qr_image(
@@ -273,9 +272,7 @@ async def decode_qr_image(
 
     raw_value = _decode_image_bytes(image_bytes)
     fields = _parse_gs1_payload(raw_value)
-    fsma_compatible = bool(
-        fields.traceability_lot_code or (fields.gtin and fields.valid_gtin is not False)
-    )
+    fsma_compatible = bool(fields.traceability_lot_code or (fields.gtin and fields.valid_gtin is not False))
 
     emit_funnel_event(
         tenant_id=principal.tenant_id,

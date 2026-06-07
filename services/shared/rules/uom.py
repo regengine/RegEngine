@@ -11,7 +11,6 @@ regardless of the unit the operator recorded it in.
 
 from typing import Dict, Optional, Tuple
 
-
 _UOM_TO_LBS: Dict[str, float] = {
     # Weight (already in lbs)
     "lbs": 1.0,
@@ -162,6 +161,7 @@ def resolve_temperature_reading(
     Returns ``None`` if nothing parseable was found. The tuple's second
     element is the KDE key the reading came from so evidence can cite it.
     """
+
     def _get(name: str):
         # Try dot-notation-free direct lookups and common camelcase variants.
         for key in (name, name.lower(), name.upper()):

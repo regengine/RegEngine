@@ -31,7 +31,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -172,13 +171,11 @@ def test_clear_tenant_context_called_before_user_set_on_postgres(monkeypatch):
     assert "app.tenant_id" in rendered or "set_config" in rendered
     # And the CLEAR should happen before the user_id set.
     clear_idx = next(
-        (i for i, r in enumerate(db._executed)
-         if "app.tenant_id" in str(r[0]) and "''" in str(r[0])),
+        (i for i, r in enumerate(db._executed) if "app.tenant_id" in str(r[0]) and "''" in str(r[0])),
         None,
     )
     set_user_idx = next(
-        (i for i, r in enumerate(db._executed)
-         if "regengine.user_id" in str(r[0])),
+        (i for i, r in enumerate(db._executed) if "regengine.user_id" in str(r[0])),
         None,
     )
     assert clear_idx is not None, "expected clear_tenant_context to run first"

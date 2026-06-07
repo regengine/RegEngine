@@ -65,6 +65,7 @@ _REAL_APP_SCRAPER_JOB = sys.modules.get("app.scraper_job")
 sys.modules["app.scraper_job"] = _scraper_job_stub
 
 import app as _app_pkg  # noqa: E402
+
 _REAL_APP_SCRAPER_JOB_ATTR = getattr(_app_pkg, "scraper_job", None)
 _app_pkg.scraper_job = _scraper_job_stub
 
@@ -135,7 +136,6 @@ from app.task_handlers_scraping import (  # noqa: E402
     register_scraping_handlers,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -148,12 +148,8 @@ def _reset_state(monkeypatch):
     sys.modules["app.routes_scraping"] = _routes_scraping_stub
 
     # Re-pin into ths in case the module was reloaded against fresh source.
-    monkeypatch.setattr(
-        ths, "run_state_scrape_job", _stub_run_state_scrape_job, raising=False
-    )
-    monkeypatch.setattr(
-        ths, "run_generic_scrape_job", _stub_run_generic_scrape_job, raising=False
-    )
+    monkeypatch.setattr(ths, "run_state_scrape_job", _stub_run_state_scrape_job, raising=False)
+    monkeypatch.setattr(ths, "run_generic_scrape_job", _stub_run_generic_scrape_job, raising=False)
 
     _state_calls.clear()
     _generic_calls.clear()
@@ -326,7 +322,8 @@ class TestRegisterScrapingHandlers:
         # state should come first.
         order: list[str] = []
         monkeypatch.setattr(
-            ths, "register_task_handler",
+            ths,
+            "register_task_handler",
             lambda t, h: order.append(t),
         )
         register_scraping_handlers()

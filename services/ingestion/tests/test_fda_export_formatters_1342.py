@@ -32,13 +32,11 @@ import hashlib
 from types import SimpleNamespace
 
 import pytest
-
 from app.fda_export import formatters as fmt
 from app.fda_export_service import (
     _build_completeness_summary,
     _safe_filename_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # generate_csv_and_hash
@@ -46,10 +44,10 @@ from app.fda_export_service import (
 
 
 class TestGenerateCsvAndHash:
-
     def test_hash_matches_content(self, monkeypatch):
         monkeypatch.setattr(
-            fmt, "_generate_csv",
+            fmt,
+            "_generate_csv",
             lambda evs, include_pii=False: "a,b\n1,2\n",
         )
         content, h = fmt.generate_csv_and_hash([{"x": 1}])
@@ -59,7 +57,8 @@ class TestGenerateCsvAndHash:
     def test_hash_uses_utf8_encoding(self, monkeypatch):
         unicode_csv = "héllo,wörld\n"
         monkeypatch.setattr(
-            fmt, "_generate_csv",
+            fmt,
+            "_generate_csv",
             lambda evs, include_pii=False: unicode_csv,
         )
         _, h = fmt.generate_csv_and_hash([])
@@ -96,10 +95,10 @@ class TestGenerateCsvAndHash:
 
 
 class TestGenerateCsvV2AndHash:
-
     def test_hash_matches_v2_content(self, monkeypatch):
         monkeypatch.setattr(
-            fmt, "_generate_csv_v2",
+            fmt,
+            "_generate_csv_v2",
             lambda evs, include_pii=False: "csv-v2",
         )
         content, h = fmt.generate_csv_v2_and_hash([])
@@ -130,7 +129,6 @@ class TestGenerateCsvV2AndHash:
 
 
 class TestBuildComplianceHeaders:
-
     def test_base_headers_emitted(self):
         summary = {
             "required_kde_coverage_ratio": 0.95,
@@ -182,7 +180,6 @@ class TestBuildComplianceHeaders:
 
 
 class TestBuildCsvResponse:
-
     def test_headers_pii_redacted_default(self):
         """Default include_pii=False → X-PII-Redacted: true."""
         resp = fmt.build_csv_response(
@@ -201,22 +198,32 @@ class TestBuildCsvResponse:
 
     def test_include_pii_flips_redacted_header(self):
         resp = fmt.build_csv_response(
-            csv_content="x", filename="f.csv", export_hash="h",
-            record_count=0, chain_valid=True, include_pii=True,
+            csv_content="x",
+            filename="f.csv",
+            export_hash="h",
+            record_count=0,
+            chain_valid=True,
+            include_pii=True,
         )
         assert resp.headers["x-pii-redacted"] == "false"
 
     def test_unverified_when_chain_invalid(self):
         resp = fmt.build_csv_response(
-            csv_content="x", filename="f.csv", export_hash="h",
-            record_count=0, chain_valid=False,
+            csv_content="x",
+            filename="f.csv",
+            export_hash="h",
+            record_count=0,
+            chain_valid=False,
         )
         assert resp.headers["x-chain-integrity"] == "UNVERIFIED"
 
     def test_extra_headers_merged(self):
         resp = fmt.build_csv_response(
-            csv_content="x", filename="f.csv", export_hash="h",
-            record_count=0, chain_valid=True,
+            csv_content="x",
+            filename="f.csv",
+            export_hash="h",
+            record_count=0,
+            chain_valid=True,
             extra_headers={"X-Extra": "yes"},
         )
         assert resp.headers["x-extra"] == "yes"
@@ -228,7 +235,6 @@ class TestBuildCsvResponse:
 
 
 class TestBuildPdfResponse:
-
     def test_delegates_to_pdf_generator_with_all_kwargs(self, monkeypatch):
         captured = {}
 
@@ -265,8 +271,12 @@ class TestBuildPdfResponse:
 
         monkeypatch.setattr(fmt, "_generate_pdf", _fake)
         resp = fmt.build_pdf_response(
-            events=[], metadata={}, filename="f.pdf",
-            export_hash="h", record_count=0, chain_valid=True,
+            events=[],
+            metadata={},
+            filename="f.pdf",
+            export_hash="h",
+            record_count=0,
+            chain_valid=True,
             include_pii=True,
         )
         assert captured["include_pii"] is True
@@ -274,23 +284,33 @@ class TestBuildPdfResponse:
 
     def test_unverified_chain(self, monkeypatch):
         monkeypatch.setattr(
-            fmt, "_generate_pdf",
+            fmt,
+            "_generate_pdf",
             lambda events, metadata, include_pii=False: b"x",
         )
         resp = fmt.build_pdf_response(
-            events=[], metadata={}, filename="f.pdf",
-            export_hash="h", record_count=0, chain_valid=False,
+            events=[],
+            metadata={},
+            filename="f.pdf",
+            export_hash="h",
+            record_count=0,
+            chain_valid=False,
         )
         assert resp.headers["x-chain-integrity"] == "UNVERIFIED"
 
     def test_extra_headers_merged(self, monkeypatch):
         monkeypatch.setattr(
-            fmt, "_generate_pdf",
+            fmt,
+            "_generate_pdf",
             lambda events, metadata, include_pii=False: b"x",
         )
         resp = fmt.build_pdf_response(
-            events=[], metadata={}, filename="f.pdf",
-            export_hash="h", record_count=0, chain_valid=True,
+            events=[],
+            metadata={},
+            filename="f.pdf",
+            export_hash="h",
+            record_count=0,
+            chain_valid=True,
             extra_headers={"X-Extra": "yep"},
         )
         assert resp.headers["x-extra"] == "yep"
@@ -320,7 +340,6 @@ def _patch_package_deps(monkeypatch, *, package_hash="pkg-hash"):
 
 
 class TestBuildPackageResponse:
-
     def test_happy_path_headers_and_kwargs(self, monkeypatch):
         captured = _patch_package_deps(monkeypatch)
         chain_verification = SimpleNamespace(valid=True)
@@ -430,7 +449,6 @@ class TestBuildPackageResponse:
 
 
 class TestMakeTimestamp:
-
     def test_format_shape(self):
         ts = fmt.make_timestamp()
         # YYYYMMDD_HHMMSS — 15 chars, underscore at index 8
@@ -446,7 +464,6 @@ class TestMakeTimestamp:
 
 
 class TestReExports:
-
     def test_completeness_summary_alias(self):
         assert fmt.completeness_summary is _build_completeness_summary
 
