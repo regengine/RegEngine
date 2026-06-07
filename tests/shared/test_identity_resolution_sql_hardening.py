@@ -18,7 +18,6 @@ These tests lock in three invariants:
    *before* reaching SQLAlchemy, so even a mis-used call can't
    produce a second statement.
 """
-
 from __future__ import annotations
 
 import re
@@ -35,6 +34,7 @@ from services.shared.identity_resolution import (
     IdentityResolutionService,
 )
 
+
 TENANT = "tenant-1191"
 
 
@@ -45,15 +45,24 @@ def test_service_module_has_no_fstring_sql():
     """#1191: `text(f"…")` is the footgun. The module must never build
     a SQL string with Python f-string interpolation, even for values
     that happen to be whitelisted today. Static strings only — every
-    user value flows through SQLAlchemy bindparams."""
-    src = (
-        Path(__file__).resolve().parents[2] / "services" / "shared" / "identity_resolution" / "service.py"
-    ).read_text()
+    user value flows through SQLAlchemy bindparams.
+
+    The service was split into sibling modules (matching.py, merging.py,
+    ...) — scan every module in the package so the invariant follows
+    the code wherever it lives."""
+    pkg_dir = (
+        Path(__file__).resolve().parents[2]
+        / "services"
+        / "shared"
+        / "identity_resolution"
+    )
+    src = "\n".join(p.read_text() for p in sorted(pkg_dir.glob("*.py")))
 
     # Any occurrence of `text(f"` or `text(f'` is a regression.
     offending = re.findall(r"text\(\s*f['\"]", src)
     assert not offending, (
-        f"#1191 regression: service.py contains {len(offending)} `text(f...)` "
+        f"#1191 regression: identity_resolution package contains "
+        f"{len(offending)} `text(f...)` "
         "call(s); convert them to parameterized binds."
     )
 
@@ -74,7 +83,9 @@ def test_find_potential_matches_uses_parameter_not_literal():
     sql_text = str(sql_obj)
 
     # Must contain the bindparam placeholder
-    assert ":entity_type" in sql_text, f"#1191: entity_type must be a bindparam, got SQL:\n{sql_text}"
+    assert ":entity_type" in sql_text, (
+        f"#1191: entity_type must be a bindparam, got SQL:\n{sql_text}"
+    )
     # Must NOT contain the literal value inlined
     assert "'facility'" not in sql_text and '"facility"' not in sql_text, (
         f"#1191: entity_type literal was inlined into SQL:\n{sql_text}"
@@ -130,13 +141,18 @@ class TestEntityTypeWhitelistRejection:
         """Even though SQL is now parameterized, the whitelist check
         runs first and should raise on anything not in VALID_ENTITY_TYPES."""
         if hostile_value in VALID_ENTITY_TYPES:
-            pytest.skip(f"Test payload {hostile_value!r} accidentally matches the whitelist — adjust the test")
+            pytest.skip(
+                f"Test payload {hostile_value!r} accidentally matches the "
+                "whitelist — adjust the test"
+            )
 
         session = MagicMock()
         svc = IdentityResolutionService(session)
 
         with pytest.raises(ValueError, match="Invalid entity_type"):
-            svc.find_potential_matches(TENANT, "search", entity_type=hostile_value)
+            svc.find_potential_matches(
+                TENANT, "search", entity_type=hostile_value
+            )
 
         # Critical: execute() must NEVER have been called — the
         # whitelist raised before we hit the DB.
@@ -176,7 +192,9 @@ def test_params_dict_always_contains_entity_type_key():
         session.execute.reset_mock()
         svc.find_potential_matches(TENANT, "search", entity_type=entity_type)
         params = session.execute.call_args.args[1]
-        assert "entity_type" in params, f"entity_type kwarg missing from params dict for {entity_type!r}"
+        assert "entity_type" in params, (
+            f"entity_type kwarg missing from params dict for {entity_type!r}"
+        )
 
 
 if __name__ == "__main__":
