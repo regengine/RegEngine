@@ -66,10 +66,11 @@ Use the fast simulator for quick golden-contract checks; it is DB-free and does 
 Use the full verifier when you need real local Postgres-backed evidence:
 
 ```bash
-POSTGRES_PASSWORD=regengine docker compose -f docker-compose.dev.yml up -d postgres
-DATABASE_URL=postgresql://regengine:regengine@localhost:5432/regengine ./venv/bin/alembic upgrade head
-DATABASE_URL=postgresql://regengine:regengine@localhost:5432/regengine \
-  ./venv/bin/python scripts/verify_inflow_to_regengine_e2e.py \
+export POSTGRES_PASSWORD=regengine
+export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+docker compose -f docker-compose.dev.yml up -d postgres
+./venv/bin/alembic upgrade head
+./venv/bin/python scripts/verify_inflow_to_regengine_e2e.py \
   --output-dir /tmp/regengine-inflow-e2e
 ```
 

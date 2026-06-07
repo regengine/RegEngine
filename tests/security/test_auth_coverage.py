@@ -114,7 +114,7 @@ def app_and_client():
         if name == "main" or name == "app" or name.startswith("app.")
     }
     prev_sys_path = list(sys.path)
-    os.environ["API_KEY"] = "test-auth-coverage-master-key"
+    os.environ["API_KEY"] = "test-auth-coverage-master-key"  # pragma: allowlist secret
     os.environ["REGENGINE_ENV"] = "staging"
     os.environ["ENV"] = "staging"
     os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
