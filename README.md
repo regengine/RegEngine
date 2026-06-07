@@ -165,6 +165,20 @@ export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/
 alembic upgrade head
 ```
 
+Run the persisted Inflow-to-RegEngine proof when you need real local evidence instead of DB-free simulation:
+
+```bash
+DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine" \
+  ./venv/bin/python scripts/verify_inflow_to_regengine_e2e.py \
+  --output-dir /tmp/regengine-inflow-e2e
+```
+
+For the fast golden contract without Postgres persistence, use:
+
+```bash
+./venv/bin/python scripts/run_full_fsma_simulation.py --json
+```
+
 Run the consolidated backend:
 
 ```bash
