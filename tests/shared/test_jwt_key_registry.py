@@ -58,7 +58,7 @@ class TestGenerateSigningSecret:
 class TestSigningKey:
     def test_round_trip(self):
         key = SigningKey(
-            kid="re-test-0001", secret="s3cret", algorithm="HS256"
+            kid="re-test-0001", secret="s3cret", algorithm="HS256"  # pragma: allowlist secret
         )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         d = key.to_dict()
         restored = SigningKey.from_dict(d)
@@ -138,7 +138,7 @@ class TestRegistryInitialize:
         redis = FakeAsyncRedis()
 
         existing = SigningKey(
-            kid="re-existing-0001", secret="pre-existing"
+            kid="re-existing-0001", secret="pre-existing"  # pragma: allowlist secret
         )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         redis.store[REDIS_KEY] = json.dumps([existing.to_dict()])
 

@@ -70,9 +70,7 @@ def _parse_supabase_token_claims(token: str) -> dict:
     which would then need to be rotated in lockstep with Supabase.
     """
     try:
-        return _jwt.decode(
-            token, options={"verify_signature": False}
-        )  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        return _jwt.decode(token, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     except _jwt.PyJWTError:
         return {}
 

@@ -451,9 +451,7 @@ def _extract_and_record(
     """
     payload = _verify_review_event(evt, headers, topic=topic)
 
-    tenant_id = payload.get(
-        "tenant_id"
-    )  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
+    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
     document_id = payload.get("document_id")
     extraction = payload.get("extraction") or {}
     doc_hash = payload.get("doc_hash") or extraction.get("attributes", {}).get("doc_hash") or document_id or "unknown"

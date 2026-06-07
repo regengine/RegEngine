@@ -1160,9 +1160,7 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(
-            recovery_token_payload, "irrelevant", algorithm="HS256"
-        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -1221,9 +1219,7 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(
-            recovery_token_payload, "irrelevant", algorithm="HS256"
-        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -1302,9 +1298,7 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(
-            recovery_token_payload, "irrelevant", algorithm="HS256"
-        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(

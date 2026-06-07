@@ -35,7 +35,9 @@ def _files_importing_should_reject() -> set[str]:
                 "rg",
                 "--type=py",
                 "-l",
-                r"from shared\.rules\.enforcement import .*should_reject|from \.enforcement import .*should_reject",
+                "--multiline",
+                # Match single-line and parenthesized multi-line import forms.
+                r"from (shared\.rules\.enforcement|\.enforcement) import (\([^)]*should_reject|[^\n]*should_reject)",
                 str(REPO_ROOT / "services"),
             ],
             capture_output=True,

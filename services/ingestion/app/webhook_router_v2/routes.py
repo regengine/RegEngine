@@ -1,0 +1,579 @@
+"""FastAPI router and endpoint handlers for webhook ingestion.
+
+Code moved verbatim from the original ``webhook_router_v2.py``.
+
+Dependency callables (``_verify_api_key``, ``_verify_webhook_signature``,
+``get_db_session``, ...) are imported by object so
+``app.dependency_overrides[...]`` keyed on the package re-exports keeps
+matching — identical to the original module, where ``Depends(...)``
+captured the function object at import time. Helpers invoked inside the
+request handlers are resolved through the package namespace (``_pkg``)
+at call time so monkeypatching ``app.webhook_router_v2.<name>``
+(e.g. ``_check_rate_limit``, ``_publish_graph_sync``,
+``emit_funnel_event``) keeps working exactly as before.
+"""
+
+from __future__ import annotations
+
+import sys
+import uuid
+from typing import Optional
+
+from sqlalchemy.exc import SQLAlchemyError
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from ..authz import require_permission, IngestionPrincipal, get_ingestion_principal
+from ..subscription_gate import require_active_subscription
+from shared.database import get_db_session
+from shared.idempotency import IdempotencyDependency
+from ..webhook_models import (
+    ChainVerifyResponse,
+    EventResult,
+    IngestResponse,
+    RecentEventsResponse,
+    WebhookPayload,
+)
+
+from .security import (
+    _verify_api_key,
+    _verify_api_key_present,
+    _verify_webhook_signature,
+)
+
+_pkg = sys.modules[__package__]
+
+router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
+
+
+# ---------------------------------------------------------------------------
+# Ingest Endpoint
+# ---------------------------------------------------------------------------
+
+# #1232 — enforce ``Idempotency-Key`` on all webhook ingest calls. The
+# ``IdempotencyMiddleware`` mounted in ``main.py`` then caches the 2xx
+# response for 24h, scoped per tenant (#1237).
+_require_idempotency_key = IdempotencyDependency(strict=True)
+
+
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    summary="Ingest traceability events",
+    description=(
+        "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
+        "Each event is validated against FSMA 204 KDE requirements, SHA-256 hashed, "
+        "chain-linked, and persisted to the compliance database. "
+        "The ``Idempotency-Key`` header is REQUIRED — safe retries replay "
+        "the cached response for 24 hours. Cache keys are tenant-scoped."
+    ),
+)
+async def ingest_events(
+    payload: WebhookPayload,
+    request: Request,
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    _auth: None = Depends(_verify_api_key),
+    # #1243: HMAC signature check runs in parallel with the API-key check.
+    # A leaked key alone is no longer sufficient to forge events when
+    # ``WEBHOOK_HMAC_SECRET`` is configured.
+    _signature: None = Depends(_verify_webhook_signature),
+    _subscription: None = Depends(require_active_subscription),
+    _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
+    db_session=Depends(get_db_session),
+) -> IngestResponse:
+    """Process incoming webhook events with persistent storage."""
+    ctx = await _pkg.resolve_tenant_context(request)
+    tenant_id = ctx.tenant_id
+    _pkg.validate_tenant_id(tenant_id)
+
+    # Rate limiting (tenant-scoped)
+    _pkg._check_rate_limit(tenant_id, request=request)
+
+    results: list[EventResult] = []
+    accepted = 0
+    rejected = 0
+
+    # Batch deduplication — detect identical events within the same payload
+    seen_in_batch: set[str] = set()
+
+    # Get persistence layer from injected db_session (Depends(get_db_session))
+    persistence = None
+    if db_session is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable — cannot accept events. Retry after service recovery.",
+        )
+    try:
+        from shared.cte_persistence import CTEPersistence
+        persistence = CTEPersistence(db_session)
+    except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
+        _pkg.logger.error("db_init_failed — rejecting ingest: %s", str(e))
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable — cannot accept events. Retry after service recovery.",
+        )
+
+    try:
+        # --- Phase 1: Validate all events, collect valid ones for batch persist ---
+        valid_events: list = []  # (event, alerts) tuples
+        for event in payload.events:
+            # Batch deduplication — skip identical events in same request
+            dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
+            if dedup_key in seen_in_batch:
+                results.append(EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=["Duplicate event in batch — same CTE type, TLC, timestamp, and location"],
+                ))
+                rejected += 1
+                continue
+            seen_in_batch.add(dedup_key)
+
+            # #1245: event-timestamp replay window. Signature-freshness
+            # defends against immediate replay; this defends against a
+            # captured payload re-ingested months later with freshly
+            # computed signature.
+            replay_error = _pkg._validate_event_timestamp_window(event.timestamp)
+            if replay_error:
+                _pkg.logger.warning(
+                    "webhook_replay_window_rejected tenant=%s tlc=%s ts=%s",
+                    tenant_id, event.traceability_lot_code, event.timestamp,
+                )
+                _pkg._record_replay_rejection(event.timestamp)
+                results.append(EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=[replay_error],
+                ))
+                rejected += 1
+                continue
+
+            # Validate KDEs
+            errors = _pkg._validate_event_kdes(event)
+
+            if errors:
+                results.append(EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="rejected",
+                    errors=errors,
+                ))
+                rejected += 1
+                continue
+
+            # Generate alerts
+            alerts = _pkg._generate_alerts(event)
+            valid_events.append((event, alerts))
+
+        # --- Phase 2a: Rules enforcement partition ---
+        # Under RULES_ENGINE_ENFORCE=cte_only|all, exclude events whose
+        # rules verdict says reject BEFORE they hit the batch store.
+        # Runs a non-persisting eval per event; decision logic is in
+        # ``shared.rules.enforcement.should_reject``. When ENFORCE=off
+        # (default) every call returns (False, None) and the loop is a
+        # no-op. No-verdict summaries (no rules loaded, non-FTL, etc.)
+        # never reject — see EvaluationSummary.compliant docstring.
+        # ``pre_eval_summaries`` is a parallel list to ``valid_events`` after
+        # the filter — same length, same order, ``None`` entries for events
+        # whose pre-eval skipped (OFF mode, canonical/eval error). The
+        # threaded post-commit block uses the captured summary instead of
+        # re-evaluating, eliminating the double-eval regression
+        # (services/shared/rules/engine.py:persist_summary).
+        pre_eval_summaries: list = []
+        if valid_events:
+            _filtered: list = []
+            for _event, _alerts in valid_events:
+                _reject, _reason, _summary = _pkg._rules_preeval_reject(_event, db_session, tenant_id)
+                if _reject:
+                    results.append(EventResult(
+                        traceability_lot_code=_event.traceability_lot_code,
+                        cte_type=_event.cte_type.value,
+                        status="rejected",
+                        errors=[f"rule_violation: {_reason}"],
+                    ))
+                    rejected += 1
+                    continue
+                _filtered.append((_event, _alerts))
+                pre_eval_summaries.append(_summary)
+            valid_events = _filtered
+
+        # --- Phase 2: Batch persist all valid events ---
+        if valid_events:
+            batch_dicts = []
+            event_objs = []
+            for event, alerts in valid_events:
+                batch_dicts.append({
+                    "event_type": event.cte_type.value,
+                    "traceability_lot_code": event.traceability_lot_code,
+                    "product_description": event.product_description,
+                    "quantity": event.quantity,
+                    "unit_of_measure": event.unit_of_measure,
+                    "event_timestamp": event.timestamp,
+                    "location_gln": event.location_gln,
+                    "location_name": event.location_name,
+                    "kdes": event.kdes,
+                })
+                event_objs.append(event)
+
+            try:
+                store_results = persistence.store_events_batch(
+                    tenant_id=tenant_id,
+                    events=batch_dicts,
+                    source=payload.source,
+                )
+
+                for store_result, event, precomputed_summary in zip(
+                    store_results, event_objs, pre_eval_summaries
+                ):
+                    results.append(EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="accepted",
+                        event_id=store_result.event_id,
+                        sha256_hash=store_result.sha256_hash,
+                        chain_hash=store_result.chain_hash,
+                    ))
+                    accepted += 1
+
+                    # Canonical normalization + rule evaluation + exception creation.
+                    # This is required evidence now: it runs synchronously in the
+                    # request transaction so accepted legacy CTEs cannot diverge
+                    # from canonical rows or persisted rule-evaluation evidence.
+                    _pkg._persist_required_canonical_and_eval(
+                        db_session,
+                        event,
+                        tenant_id,
+                        precomputed_summary,
+                        source=payload.source,
+                        canonical_event_id=store_result.event_id,
+                    )
+
+                    # Post-ingest graph sync (non-blocking)
+                    _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
+
+                    # Auto-learn product catalog from confirmed scans
+                    try:
+                        from ..product_catalog import learn_from_event
+                        learn_from_event(
+                            tenant_id=tenant_id,
+                            event={
+                                "product_description": event.product_description,
+                                "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                "kdes": event.kdes,
+                                "location_name": event.location_name,
+                            },
+                        )
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as learn_err:
+                        _pkg.logger.warning("catalog_learn_skipped: %s", str(learn_err))
+
+            except (ValueError, TypeError, RuntimeError, AttributeError) as e:
+                _pkg.logger.error(
+                    "batch_persistence_failed",
+                    extra={"error": str(e), "batch_size": len(valid_events)},
+                )
+                # Fall back to per-event persistence
+                for event, alerts in valid_events:
+                    # Enforcement: same pre-eval gate as the happy path.
+                    # Events that were pre-eval rejected above never
+                    # reach this fallback (they were stripped from
+                    # valid_events), but running the check again here
+                    # is cheap insurance — if the batch path ever
+                    # mutates valid_events in flight, the fallback
+                    # still honors the enforcement policy.
+                    _fb_reject, _fb_reason, _fb_summary = _pkg._rules_preeval_reject(event, db_session, tenant_id)
+                    if _fb_reject:
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="rejected",
+                            errors=[f"rule_violation: {_fb_reason}"],
+                        ))
+                        rejected += 1
+                        continue
+                    try:
+                        store_result = persistence.store_event(
+                            tenant_id=tenant_id,
+                            event_type=event.cte_type.value,
+                            traceability_lot_code=event.traceability_lot_code,
+                            product_description=event.product_description,
+                            quantity=event.quantity,
+                            unit_of_measure=event.unit_of_measure,
+                            event_timestamp=event.timestamp,
+                            source=payload.source,
+                            location_gln=event.location_gln,
+                            location_name=event.location_name,
+                            kdes=event.kdes,
+                            alerts=alerts,
+                        )
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="accepted",
+                            event_id=store_result.event_id,
+                            sha256_hash=store_result.sha256_hash,
+                            chain_hash=store_result.chain_hash,
+                        ))
+                        accepted += 1
+
+                        # Canonical normalization + rule evaluation. Required in
+                        # the same transaction as the legacy fallback write.
+                        _pkg._persist_required_canonical_and_eval(
+                            db_session,
+                            event,
+                            tenant_id,
+                            _fb_summary,
+                            source=payload.source,
+                            canonical_event_id=store_result.event_id,
+                        )
+
+                        _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
+                        try:
+                            from ..product_catalog import learn_from_event
+                            learn_from_event(
+                                tenant_id=tenant_id,
+                                event={
+                                    "product_description": event.product_description,
+                                    "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                    "kdes": event.kdes,
+                                    "location_name": event.location_name,
+                                },
+                            )
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, KeyError) as learn_err:
+                            _pkg.logger.warning("catalog_learn_skipped: %s", str(learn_err))
+                    except (SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as inner_e:
+                        # F-3: don't leak SQL/bound-params from SQLAlchemyError.__str__
+                        # to the API caller. Full detail goes to server logs with a
+                        # correlation_id; the response carries only the correlation_id.
+                        correlation_id = str(uuid.uuid4())
+                        _pkg.logger.warning(
+                            "storage_error_per_event_fallback",
+                            correlation_id=correlation_id,
+                            tlc=event.traceability_lot_code,
+                            error=str(inner_e),
+                            error_type=type(inner_e).__name__,
+                        )
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="rejected",
+                            errors=[f"Internal storage error (correlation: {correlation_id})"],
+                        ))
+                        rejected += 1
+
+        if accepted > 0:
+            _pkg.emit_funnel_event(
+                tenant_id=tenant_id,
+                event_name="first_ingest",
+                metadata={
+                    "accepted_events": accepted,
+                    "source": payload.source,
+                },
+                db_session=db_session,
+            )
+
+        # Commit all events in a single transaction
+        if db_session:
+            db_session.commit()
+
+    except Exception as e:
+        if db_session:
+            db_session.rollback()
+        _pkg.logger.error("ingest_batch_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Ingestion failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+    return IngestResponse(
+        accepted=accepted,
+        rejected=rejected,
+        total=len(payload.events),
+        events=results,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chain Verification Endpoint
+# ---------------------------------------------------------------------------
+
+async def get_recent_events(
+    tenant_id: str,
+    limit: int = 10,
+):
+    """
+    Get most recent CTE events for a tenant — powers the scan history
+    dashboard widget.
+    """
+    _pkg.validate_tenant_id(tenant_id)
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text as _text
+        db_session = SessionLocal()
+        rows = db_session.execute(
+            _text("""
+                SELECT id, event_type, traceability_lot_code, product_description,
+                       quantity, unit_of_measure, location_name, source, ingested_at
+                FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                ORDER BY ingested_at DESC
+                LIMIT :lim
+            """),
+            {"tid": tenant_id, "lim": min(limit, 50)},
+        ).fetchall()
+        events = [
+            {
+                "event_id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": float(r[4]) if r[4] else 0,
+                "unit_of_measure": r[5],
+                "location_name": r[6],
+                "source": r[7],
+                "ingested_at": r[8].isoformat() if r[8] else None,
+            }
+            for r in rows
+        ]
+        return {"tenant_id": tenant_id, "events": events, "total": len(events)}
+    except (ImportError, ValueError, RuntimeError) as e:
+        _pkg.logger.warning("recent_events_query_failed: %s", str(e))
+        return {"tenant_id": tenant_id, "events": [], "total": 0}
+    finally:
+        if db_session:
+            db_session.close()
+
+
+def _enforce_webhooks_read_principal(
+    url_tenant_id: str,
+    principal: IngestionPrincipal,
+    scope: str,
+) -> None:
+    """Bind a webhook READ route's URL ``tenant_id`` to the authenticated principal.
+
+    Closes F-1 (re-audit): the previous gate (``_verify_api_key``) only
+    checked header presence, leaving these reads as cross-tenant IDORs.
+    Mirrors the #2249 stripe-portal fix:
+
+    1. Require the ``webhooks.read`` permission on the principal.
+    2. Compare URL ``tenant_id`` to the principal's tenant.
+    3. On mismatch, return **404 Not Found** (not 403) — avoids the
+       tenant-existence oracle a 403 would create.
+
+    Wildcard (``*``) and ``admin.*`` scopes grant permission BREADTH
+    (which actions a key may perform), NOT tenant BREADTH (which tenants
+    it may act on). A tenant-bound key carrying ``*`` MUST NOT pivot to
+    another tenant by passing ``?tenant_id=<other>``. The only callers
+    that legitimately need cross-tenant reads (legacy master / dev_open)
+    carry ``tenant_id=None`` and bypass the pin via the unbound branch
+    below — they never relied on the wildcard short-circuit. Closes the
+    third instance of the same antipattern fixed in PR #2328 (authz.py,
+    inflow_workbench.py).
+    """
+    # Permission check first — a key without webhooks.read should never
+    # learn whether a tenant exists.
+    if not _pkg._has_permission(principal.scopes, "webhooks.read"):
+        _pkg.logger.warning(
+            "webhooks_read_permission_denied key_id=%s scope=%s",
+            getattr(principal, "key_id", None),
+            scope,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions: requires 'webhooks.read'",
+        )
+
+    principal_tenant = principal.tenant_id
+    # Unbound principals (master/dev_open, tenant_id=None) keep
+    # cross-tenant access. Bound principals — including those holding
+    # ``*`` or ``admin.*`` — must match the URL tenant.
+    if principal_tenant is None:
+        return
+
+    if principal_tenant != url_tenant_id:
+        _pkg.logger.warning(
+            "webhooks_read_tenant_mismatch url_tenant=%s principal_tenant=%s key_id=%s scope=%s",
+            url_tenant_id,
+            principal_tenant,
+            getattr(principal, "key_id", None),
+            scope,
+        )
+        # 404 not 403 — same shape as #2249 to avoid existence oracle.
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+@router.get(
+    "/recent",
+    response_model=RecentEventsResponse,
+    summary="Get recent CTE events",
+    description="Returns the most recently ingested traceability events for the scan history widget.",
+)
+async def recent_events_endpoint(
+    request: Request,
+    tenant_id: str,
+    limit: int = 10,
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    _auth: None = Depends(_verify_api_key_present),
+):
+    """Return the tenant's recent CTE events.
+
+    F-1 (re-audit): bound to the authenticated principal's tenant; URL
+    ``tenant_id`` mismatches return 404 to avoid a tenant-existence oracle.
+    F-4 (re-audit): tighter rate limit applied (``webhooks.read.recent``).
+    """
+    _pkg.validate_tenant_id(tenant_id)
+    _pkg._enforce_webhooks_read_principal(tenant_id, principal, scope="recent")
+    _pkg._check_read_rate_limit(tenant_id, scope="recent", request=request)
+    return await _pkg.get_recent_events(tenant_id, limit)
+
+
+@router.get(
+    "/chain/verify",
+    response_model=ChainVerifyResponse,
+    summary="Verify hash chain integrity",
+    description=(
+        "Walk the tenant's entire hash chain from genesis to head, "
+        "recomputing each link and checking for tampering."
+    ),
+)
+async def verify_chain(
+    request: Request,
+    tenant_id: str,
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+    _auth: None = Depends(_verify_api_key_present),
+):
+    """Verify the integrity of the tenant's hash chain.
+
+    F-1 (re-audit): bound to the authenticated principal's tenant; URL
+    ``tenant_id`` mismatches return 404. F-4 (re-audit): tighter rate
+    limit applied (``webhooks.read.chain_verify``).
+    """
+    _pkg.validate_tenant_id(tenant_id)
+    _pkg._enforce_webhooks_read_principal(tenant_id, principal, scope="chain_verify")
+    _pkg._check_read_rate_limit(tenant_id, scope="chain_verify", request=request)
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+        result = persistence.verify_chain(tenant_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "chain_valid": result.valid,
+            "chain_length": result.chain_length,
+            "errors": result.errors,
+            "checked_at": result.checked_at,
+        }
+    except (ImportError, ValueError, RuntimeError) as e:
+        _pkg.logger.error("chain_verification_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail="Chain verification failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()

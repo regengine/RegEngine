@@ -187,9 +187,7 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
     document_type = event.get("document_type", "UNKNOWN")
     ctes = event.get("ctes", [])
     timestamp = event.get("timestamp")
-    tenant_id = event.get(
-        "tenant_id"
-    )  # nosemgrep: tenant-id-from-request-body -- event reached ingest only after _verify_fsma_event_auth verified the signed Kafka envelope
+    tenant_id = event.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- event reached ingest only after _verify_fsma_event_auth verified the signed Kafka envelope
     tenant_source_gln, tenant_source_fda_reg = _extract_tenant_source_identifiers(event)
 
     bind_contextvars(document_id=document_id)
