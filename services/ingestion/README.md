@@ -154,10 +154,7 @@ cd services/ingestion
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Dependencies are installed from the root lockfile (single source of truth)
+# Install dependencies from the root lockfile (single source of truth)
 pip install --require-hashes -r ../../requirements.lock
 
 # Install Tesseract (macOS)
