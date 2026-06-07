@@ -60,7 +60,6 @@ def _mk_dialect(name: str):
 
 
 class TestGuidLoadDialectImpl:
-
     def test_postgres_dialect_returns_pg_uuid(self):
         """Lines 22-24: on Postgres, GUID maps to the native UUID type
         (``PG_UUID(as_uuid=True)``) instead of CHAR(36). This is the
@@ -101,7 +100,6 @@ class TestGuidLoadDialectImpl:
 
 
 class TestGuidProcessBindParam:
-
     def test_none_returns_none_regardless_of_dialect(self):
         guid = GUID()
         assert guid.process_bind_param(None, _mk_dialect("postgresql")) is None
@@ -136,7 +134,6 @@ class TestGuidProcessBindParam:
 
 
 class TestGuidProcessResultValue:
-
     def test_none_returns_none(self):
         guid = GUID()
         assert guid.process_result_value(None, _mk_dialect("postgresql")) is None
@@ -171,7 +168,6 @@ class TestGuidProcessResultValue:
 
 
 class TestJsonTypeLoadDialectImpl:
-
     def test_postgres_dialect_returns_jsonb(self):
         """Lines 50-51: on Postgres we want JSONB for index support —
         the generic JSON type doesn't get GIN indexing."""

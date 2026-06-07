@@ -43,8 +43,6 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 pytest.importorskip("stripe")
 
-from fastapi import HTTPException  # noqa: E402
-
 from app.stripe_billing import helpers as mod  # noqa: E402
 from app.stripe_billing.helpers import (  # noqa: E402
     _allowed_redirect_hosts,
@@ -62,7 +60,7 @@ from app.stripe_billing.helpers import (  # noqa: E402
     _stripe_get,
     _validate_redirect_url,
 )
-
+from fastapi import HTTPException  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # _configure_stripe
@@ -451,9 +449,7 @@ class TestEnforceAdminOrOperator:
 class TestResolveTenantContext:
     def test_principal_tenant_wins(self):
         principal = _Principal(scopes=[], tenant_id="from-principal")
-        assert (
-            _resolve_tenant_context(None, None, principal) == "from-principal"
-        )
+        assert _resolve_tenant_context(None, None, principal) == "from-principal"
 
     def test_header_or_explicit_matching_principal_ok(self):
         principal = _Principal(scopes=[], tenant_id="from-principal")

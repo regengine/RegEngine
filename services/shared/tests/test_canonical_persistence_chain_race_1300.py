@@ -39,7 +39,6 @@ for _p in (_SHARED_DIR, _SERVICES_DIR):
 from shared.canonical_event import CTEType, IngestionSource, TraceabilityEvent  # noqa: E402
 from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -158,9 +157,7 @@ class TestChainRaceSequenceNumbers_Issue1300:
             store, _ = self._make_store_with_head(sequence_num=8)
             store.persist_events_batch(events_b)
 
-        assert chain_seqs_b == [9, 10], (
-            f"Expected [9, 10] after head=8, got {chain_seqs_b}"
-        )
+        assert chain_seqs_b == [9, 10], f"Expected [9, 10] after head=8, got {chain_seqs_b}"
 
     def test_no_duplicate_sequence_numbers_across_two_writers(self):
         """Union of both writers' sequences contains no duplicates."""
@@ -188,9 +185,7 @@ class TestChainRaceSequenceNumbers_Issue1300:
             store_b.persist_events_batch(events_b)
 
         all_seqs = seqs_a + seqs_b
-        assert len(all_seqs) == len(set(all_seqs)), (
-            f"Duplicate sequence numbers detected: {all_seqs}"
-        )
+        assert len(all_seqs) == len(set(all_seqs)), f"Duplicate sequence numbers detected: {all_seqs}"
 
     def test_genesis_batch_starts_at_sequence_one(self):
         """When there is no chain head (None), first sequence_num must be 1."""
@@ -365,7 +360,8 @@ class TestRLSTenantIsolation_Issue1300:
         calls = self._collect_sql_calls(TENANT_A, events)
 
         tenant_context_calls = [
-            params for stmt, params in calls
+            params
+            for stmt, params in calls
             # ``set_tenant_guc`` (via ``CanonicalEventStore.set_tenant_context``)
             # used to emit ``SET LOCAL app.tenant_id = :tid`` and now emits
             # ``SELECT set_config('app.tenant_id', :tid, true)`` for asyncpg
@@ -374,19 +370,14 @@ class TestRLSTenantIsolation_Issue1300:
         ]
         assert tenant_context_calls, "set_tenant_context was never called"
         for params in tenant_context_calls:
-            assert params.get("tid") == TENANT_A, (
-                f"set_tenant_context set wrong tenant: {params.get('tid')!r}"
-            )
+            assert params.get("tid") == TENANT_A, f"set_tenant_context set wrong tenant: {params.get('tid')!r}"
 
     def test_advisory_lock_uses_correct_tenant_hash_input(self):
         """pg_advisory_xact_lock must be called with tenant A's ID."""
         events = [_make_event(TENANT_A)]
         calls = self._collect_sql_calls(TENANT_A, events)
 
-        lock_calls = [
-            params for stmt, params in calls
-            if "pg_advisory_xact_lock" in stmt
-        ]
+        lock_calls = [params for stmt, params in calls if "pg_advisory_xact_lock" in stmt]
         assert lock_calls, "advisory lock was never acquired"
         for params in lock_calls:
             assert params.get("tid") == TENANT_A
@@ -396,15 +387,10 @@ class TestRLSTenantIsolation_Issue1300:
         events = [_make_event(TENANT_A)]
         calls = self._collect_sql_calls(TENANT_A, events)
 
-        chain_head_calls = [
-            params for stmt, params in calls
-            if "ORDER BY sequence_num DESC" in stmt
-        ]
+        chain_head_calls = [params for stmt, params in calls if "ORDER BY sequence_num DESC" in stmt]
         assert chain_head_calls, "chain head query not found"
         for params in chain_head_calls:
-            assert params.get("tid") == TENANT_A, (
-                f"chain head query scoped to wrong tenant: {params.get('tid')!r}"
-            )
+            assert params.get("tid") == TENANT_A, f"chain head query scoped to wrong tenant: {params.get('tid')!r}"
 
     def test_tenant_b_id_never_appears_in_tenant_a_writes(self):
         """No param value in any call should equal TENANT_B when writing for TENANT_A."""
@@ -413,9 +399,7 @@ class TestRLSTenantIsolation_Issue1300:
 
         for stmt, params in calls:
             for key, val in params.items():
-                assert val != TENANT_B, (
-                    f"Tenant B's ID leaked into a Tenant A write: key={key!r}, stmt={stmt[:80]!r}"
-                )
+                assert val != TENANT_B, f"Tenant B's ID leaked into a Tenant A write: key={key!r}, stmt={stmt[:80]!r}"
 
     def test_mixed_tenant_batch_raises_before_any_db_write(self):
         """Batches mixing tenants must be rejected before touching the DB."""

@@ -119,10 +119,7 @@ def _resolve_price_id(plan_id: str, billing_period: str) -> tuple[dict[str, Any]
     if not price_id:
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"Stripe price ID is not configured for plan '{normalized_plan}' "
-                f"({billing_period})."
-            ),
+            detail=(f"Stripe price ID is not configured for plan '{normalized_plan}' ({billing_period})."),
         )
 
     amount = plan[f"price_{billing_period}"]

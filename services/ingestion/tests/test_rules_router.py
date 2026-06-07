@@ -16,8 +16,9 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.rules_router as rules_router_mod
+from app.authz import IngestionPrincipal, get_ingestion_principal
+
 from services.ingestion.tests.authz_overrides import install_ingestion_principal_override
 
 rules_router = rules_router_mod.router
@@ -27,6 +28,7 @@ _get_db_session = rules_router_mod._get_db_session
 # ---------------------------------------------------------------------------
 # Fake domain objects
 # ---------------------------------------------------------------------------
+
 
 class _FakeRule:
     """Mimics a rule definition returned by RulesEngine.load_active_rules."""
@@ -130,6 +132,7 @@ SAMPLE_RULES = [
 
 _NO_DB = object()  # sentinel for "simulate DB unavailable"
 
+
 def _build_client(
     principal: IngestionPrincipal,
     db_session: Any = _NO_DB,
@@ -172,6 +175,7 @@ def _sample_event(**overrides) -> dict:
 # ---------------------------------------------------------------------------
 # Tests: list rules
 # ---------------------------------------------------------------------------
+
 
 class TestListRules:
     def test_list_rules_returns_all(self, monkeypatch: pytest.MonkeyPatch):
@@ -262,6 +266,7 @@ class TestListRules:
 # Tests: get rule detail
 # ---------------------------------------------------------------------------
 
+
 class TestGetRuleDetail:
     def test_get_existing_rule(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
@@ -296,6 +301,7 @@ class TestGetRuleDetail:
 # ---------------------------------------------------------------------------
 # Tests: evaluate single event
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateEvent:
     def test_evaluate_compliant_event(self, monkeypatch: pytest.MonkeyPatch):
@@ -425,15 +431,23 @@ class TestEvaluateEvent:
 # Tests: evaluate batch
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluateBatch:
     def test_evaluate_batch_multiple_events(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
 
         summaries = [
             _FakeEvalSummary(event_id="EVT-001", compliant=True, passed=2, failed=0, warned=0, critical_failures=[]),
-            _FakeEvalSummary(event_id="EVT-002", compliant=False, passed=1, failed=1, warned=0, critical_failures=[
-                _FakeEvalResult(rule_id="RULE-001", result="fail"),
-            ]),
+            _FakeEvalSummary(
+                event_id="EVT-002",
+                compliant=False,
+                passed=1,
+                failed=1,
+                warned=0,
+                critical_failures=[
+                    _FakeEvalResult(rule_id="RULE-001", result="fail"),
+                ],
+            ),
         ]
         fake_engine = MagicMock()
         fake_engine.evaluate_events_batch.return_value = summaries
@@ -485,28 +499,30 @@ class TestEvaluateBatch:
 # Tests: evaluation history
 # ---------------------------------------------------------------------------
 
+
 class TestGetEventEvaluations:
     def test_get_evaluations_returns_results(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
 
         from datetime import datetime, timezone
+
         evaluated_at = datetime(2026, 3, 26, 10, 0, 0, tzinfo=timezone.utc)
 
         fake_rows = [
             (
-                "eval-1",          # evaluation_id
-                "RULE-001",        # rule_id
-                1,                 # rule_version
-                "fail",            # result
-                "Missing TLC",     # why_failed
+                "eval-1",  # evaluation_id
+                "RULE-001",  # rule_id
+                1,  # rule_version
+                "fail",  # result
+                "Missing TLC",  # why_failed
                 '["traceability_lot_code"]',  # evidence (JSON string)
-                0.95,              # confidence
-                evaluated_at,      # evaluated_at
-                "TLC Required",    # title
-                "critical",        # severity
-                "traceability",    # category
-                "21 CFR 1.1315",   # citation_reference
-                "Add lot code",    # remediation_suggestion
+                0.95,  # confidence
+                evaluated_at,  # evaluated_at
+                "TLC Required",  # title
+                "critical",  # severity
+                "traceability",  # category
+                "21 CFR 1.1315",  # citation_reference
+                "Add lot code",  # remediation_suggestion
             ),
         ]
 
@@ -578,6 +594,7 @@ class TestGetEventEvaluations:
 # Tests: seed rules
 # ---------------------------------------------------------------------------
 
+
 class TestSeedRules:
     def test_seed_rules_success(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
@@ -588,6 +605,7 @@ class TestSeedRules:
         monkeypatch.setattr(rules_router_mod, "seed_rule_definitions", _fake_seed, raising=False)
         # Also patch the import inside the function
         import types
+
         fake_shared = types.ModuleType("shared.rules_engine")
         fake_shared.seed_rule_definitions = _fake_seed
         monkeypatch.setitem(sys.modules, "shared.rules_engine", fake_shared)
@@ -614,11 +632,13 @@ class TestSeedRules:
 # Tests: authentication / authorization
 # ---------------------------------------------------------------------------
 
+
 class TestAuth:
     def test_missing_api_key_returns_401(self, monkeypatch: pytest.MonkeyPatch):
         """When API_KEY is configured but no key header is sent, expect 401."""
         monkeypatch.setenv("API_KEY", "real-secret-key")
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
 
         app = FastAPI()
@@ -657,6 +677,7 @@ class TestAuth:
 # ---------------------------------------------------------------------------
 # Tests: DB unavailable
 # ---------------------------------------------------------------------------
+
 
 class TestDBUnavailable:
     def test_list_rules_db_unavailable_returns_503(self, monkeypatch: pytest.MonkeyPatch):

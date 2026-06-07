@@ -111,8 +111,8 @@ def install_metrics(
     os.environ.setdefault("REGENGINE_SERVICE_NAME", service_name)
 
     instrumentator = Instrumentator(
-        should_group_status_codes=True,    # 2xx/3xx/4xx/5xx — not per-status
-        should_ignore_untemplated=True,    # drop raw paths, keep templates
+        should_group_status_codes=True,  # 2xx/3xx/4xx/5xx — not per-status
+        should_ignore_untemplated=True,  # drop raw paths, keep templates
         should_group_untemplated=True,
         should_instrument_requests_inprogress=False,
         excluded_handlers=["/metrics", "/health", "/ready"],
@@ -173,7 +173,6 @@ def _expose_with_auth(
     """Attach the instrumentator output to an auth-guarded route."""
     from fastapi import Depends, Response
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
     from shared.observability.metrics_auth import require_metrics_key
 
     @app.get(

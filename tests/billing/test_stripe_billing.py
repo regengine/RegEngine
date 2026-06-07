@@ -4,6 +4,7 @@ Covers plan definitions, checkout session creation, webhook signature
 verification, subscription lifecycle events, and authentication
 requirements. All Stripe API calls are mocked -- no live keys needed.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,7 +25,6 @@ from services.ingestion.app.stripe_billing import (
     _resolve_price_id,
 )
 
-
 # ── Plan Definition Tests ────────────────────────────────────────
 
 
@@ -42,12 +42,8 @@ class TestPlanDefinitions:
     def test_plans_have_stripe_price_env_keys(self):
         """Every plan must declare Stripe price env var names for monthly and annual."""
         for plan_id, plan in PLANS.items():
-            assert "stripe_price_env_monthly" in plan, (
-                f"Plan '{plan_id}' missing stripe_price_env_monthly"
-            )
-            assert "stripe_price_env_annual" in plan, (
-                f"Plan '{plan_id}' missing stripe_price_env_annual"
-            )
+            assert "stripe_price_env_monthly" in plan, f"Plan '{plan_id}' missing stripe_price_env_monthly"
+            assert "stripe_price_env_annual" in plan, f"Plan '{plan_id}' missing stripe_price_env_annual"
 
     def test_features_are_non_empty_lists(self):
         """Each plan must list at least one feature."""
@@ -143,6 +139,7 @@ class TestConfigureStripe:
         """_configure_stripe should raise 500 if STRIPE_SECRET_KEY is not set."""
         # Clear the key if it exists in the environment
         import os
+
         os.environ.pop("STRIPE_SECRET_KEY", None)
         with pytest.raises(HTTPException) as exc_info:
             _configure_stripe()
@@ -209,10 +206,13 @@ class TestCheckoutCreation:
     @patch("services.ingestion.app.stripe_billing.emit_funnel_event")
     @patch("services.ingestion.app.stripe_billing._get_existing_customer_id", return_value=None)
     @patch("services.ingestion.app.stripe_billing.stripe")
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m",
+        },
+    )
     def test_checkout_creates_session(self, mock_stripe, mock_get_cust, mock_emit, mock_hint):
         """create_checkout should call Stripe checkout.Session.create and return a response."""
         mock_session = MagicMock()
@@ -229,6 +229,7 @@ class TestCheckoutCreation:
         )
 
         import asyncio
+
         response = asyncio.get_event_loop().run_until_complete(create_checkout(request))
 
         assert response.session_id == "cs_test_abc"
@@ -239,17 +240,18 @@ class TestCheckoutCreation:
         mock_stripe.checkout.Session.create.assert_called_once()
 
     @patch("services.ingestion.app.stripe_billing.stripe")
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m",
+        },
+    )
     def test_checkout_stripe_error_raises_502(self, mock_stripe):
         """Stripe API errors during checkout should raise HTTPException 502."""
         import stripe as real_stripe
 
-        mock_stripe.checkout.Session.create.side_effect = real_stripe.error.StripeError(
-            message="API error"
-        )
+        mock_stripe.checkout.Session.create.side_effect = real_stripe.error.StripeError(message="API error")
         mock_stripe.error = real_stripe.error
 
         from services.ingestion.app.stripe_billing import create_checkout
@@ -257,6 +259,7 @@ class TestCheckoutCreation:
         request = CheckoutRequest(plan_id="growth", billing_period="monthly")
 
         import asyncio
+
         with pytest.raises(HTTPException) as exc_info:
             asyncio.get_event_loop().run_until_complete(create_checkout(request))
         assert exc_info.value.status_code == 502
@@ -269,10 +272,13 @@ class TestWebhookSignatureVerification:
     """Tests for webhook signature verification in _process_stripe_webhook."""
 
     @pytest.mark.asyncio
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
+        },
+    )
     @patch("services.ingestion.app.stripe_billing._handle_stripe_event", new_callable=AsyncMock)
     @patch("services.ingestion.app.stripe_billing.stripe")
     async def test_valid_signature_processes_event(self, mock_stripe, mock_handle):
@@ -291,20 +297,21 @@ class TestWebhookSignatureVerification:
         mock_handle.assert_called_once_with(mock_event)
 
     @pytest.mark.asyncio
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
+        },
+    )
     @patch("services.ingestion.app.stripe_billing.stripe")
     async def test_invalid_signature_raises_401(self, mock_stripe):
         """An invalid Stripe-Signature should raise HTTPException 401."""
         import stripe as real_stripe
 
-        mock_stripe.Webhook.construct_event.side_effect = (
-            real_stripe.error.SignatureVerificationError(
-                message="Invalid signature",
-                sig_header="t=123,v1=bad",
-            )
+        mock_stripe.Webhook.construct_event.side_effect = real_stripe.error.SignatureVerificationError(
+            message="Invalid signature",
+            sig_header="t=123,v1=bad",
         )
         mock_stripe.error = real_stripe.error
 
@@ -316,10 +323,13 @@ class TestWebhookSignatureVerification:
         assert exc_info.value.status_code == 401
 
     @pytest.mark.asyncio
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
+        },
+    )
     @patch("services.ingestion.app.stripe_billing.stripe")
     async def test_invalid_payload_raises_400(self, mock_stripe):
         """A malformed payload should raise HTTPException 400."""
@@ -337,6 +347,7 @@ class TestWebhookSignatureVerification:
     async def test_missing_webhook_secret_raises_500(self):
         """Missing STRIPE_WEBHOOK_SECRET should raise 500."""
         import os
+
         os.environ.pop("STRIPE_WEBHOOK_SECRET", None)
 
         mock_request = AsyncMock()
@@ -347,10 +358,13 @@ class TestWebhookSignatureVerification:
         assert exc_info.value.status_code == 500
 
     @pytest.mark.asyncio
-    @patch.dict("os.environ", {
-        "STRIPE_SECRET_KEY": "sk_test_123",
-        "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
-    })
+    @patch.dict(
+        "os.environ",
+        {
+            "STRIPE_SECRET_KEY": "sk_test_123",
+            "STRIPE_WEBHOOK_SECRET": "whsec_test_123",
+        },
+    )
     async def test_missing_signature_header_raises_400(self):
         """Missing Stripe-Signature header should raise 400."""
         mock_request = AsyncMock()
@@ -371,9 +385,7 @@ class TestHandleCheckoutCompleted:
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._redis_client")
     @patch("services.ingestion.app.stripe_billing.stripe")
-    async def test_checkout_completed_stores_mapping(
-        self, mock_stripe, mock_redis_client, mock_store
-    ):
+    async def test_checkout_completed_stores_mapping(self, mock_stripe, mock_redis_client, mock_store):
         """checkout.session.completed should store a server-bound tenant mapping."""
         mock_client = MagicMock()
         mock_client.get.side_effect = ["tenant-abc", None]
@@ -454,9 +466,7 @@ class TestHandleSubscriptionDeleted:
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._get_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._find_tenant_id")
-    async def test_subscription_deleted_sets_canceled(
-        self, mock_find_tenant, mock_get_mapping, mock_store
-    ):
+    async def test_subscription_deleted_sets_canceled(self, mock_find_tenant, mock_get_mapping, mock_store):
         """customer.subscription.deleted should set status to 'canceled'."""
         mock_find_tenant.return_value = "tenant-abc"
         mock_get_mapping.return_value = {
@@ -492,9 +502,7 @@ class TestHandleSubscriptionDeleted:
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._get_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._find_tenant_id")
-    async def test_subscription_updated_preserves_status(
-        self, mock_find_tenant, mock_get_mapping, mock_store
-    ):
+    async def test_subscription_updated_preserves_status(self, mock_find_tenant, mock_get_mapping, mock_store):
         """customer.subscription.updated should use the sub's actual status."""
         mock_find_tenant.return_value = "tenant-abc"
         mock_get_mapping.return_value = {
@@ -535,9 +543,7 @@ class TestHandleInvoicePaid:
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._get_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._find_tenant_id")
-    async def test_invoice_paid_sets_active(
-        self, mock_find_tenant, mock_get_mapping, mock_store, mock_emit
-    ):
+    async def test_invoice_paid_sets_active(self, mock_find_tenant, mock_get_mapping, mock_store, mock_emit):
         """invoice.paid should update subscription status to active."""
         mock_find_tenant.return_value = "tenant-abc"
         mock_get_mapping.return_value = {
@@ -579,9 +585,7 @@ class TestHandleInvoicePaymentFailed:
     @patch("services.ingestion.app.stripe_billing._store_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._get_subscription_mapping")
     @patch("services.ingestion.app.stripe_billing._find_tenant_id")
-    async def test_payment_failed_sets_past_due(
-        self, mock_find_tenant, mock_get_mapping, mock_store
-    ):
+    async def test_payment_failed_sets_past_due(self, mock_find_tenant, mock_get_mapping, mock_store):
         """invoice.payment_failed should set status to past_due."""
         mock_find_tenant.return_value = "tenant-abc"
         mock_get_mapping.return_value = {
@@ -637,9 +641,10 @@ class TestAuthenticationRequirements:
 
     def test_subscription_endpoint_requires_subscription_read_permission(self):
         """GET /subscription/{tenant_id} should require subscription read scope."""
+        import inspect
+
         from services.ingestion.app.stripe_billing import get_subscription
 
-        import inspect
         sig = inspect.signature(get_subscription)
         params = sig.parameters
 
@@ -650,9 +655,10 @@ class TestAuthenticationRequirements:
 
     def test_portal_endpoint_requires_principal(self):
         """POST /portal should depend on get_ingestion_principal."""
+        import inspect
+
         from services.ingestion.app.stripe_billing import create_portal_session_for_tenant
 
-        import inspect
         sig = inspect.signature(create_portal_session_for_tenant)
         params = sig.parameters
 
@@ -662,9 +668,10 @@ class TestAuthenticationRequirements:
 
     def test_invoices_endpoint_requires_permission(self):
         """GET /invoices should depend on require_permission('billing.invoices.read')."""
+        import inspect
+
         from services.ingestion.app.stripe_billing import list_invoices
 
-        import inspect
         sig = inspect.signature(list_invoices)
         params = sig.parameters
 
@@ -674,9 +681,10 @@ class TestAuthenticationRequirements:
 
     def test_invoice_pdf_endpoint_requires_permission(self):
         """GET /invoices/{invoice_id}/pdf should require billing.invoices.read permission."""
+        import inspect
+
         from services.ingestion.app.stripe_billing import get_invoice_pdf
 
-        import inspect
         sig = inspect.signature(get_invoice_pdf)
         params = sig.parameters
 
@@ -686,9 +694,10 @@ class TestAuthenticationRequirements:
 
     def test_webhook_endpoint_does_not_require_auth(self):
         """POST /webhooks should NOT require auth (Stripe signs the payload)."""
+        import inspect
+
         from services.ingestion.app.stripe_billing import stripe_webhooks
 
-        import inspect
         sig = inspect.signature(stripe_webhooks)
         params = sig.parameters
 

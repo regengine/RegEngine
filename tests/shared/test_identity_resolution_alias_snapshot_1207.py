@@ -33,7 +33,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-1207"
 SRC = "11111111-1111-1111-1111-111111111111"
 TGT = "22222222-2222-2222-2222-222222222222"
@@ -173,22 +172,14 @@ class TestMergeCapturesSnapshot_Issue1207:
         kinds = [c[0] for c in session.calls]
         snap_idx = kinds.index("snapshot_select")
         ins_idx = kinds.index("history_insert")
-        assert snap_idx < ins_idx, (
-            f"snapshot_select must precede history_insert; got {kinds}"
-        )
+        assert snap_idx < ins_idx, f"snapshot_select must precede history_insert; got {kinds}"
         # The INSERT params must carry the full alias list as JSON.
-        insert_params = dict(
-            c for c in session.calls if c[0] == "history_insert"
-        )
+        insert_params = dict(c for c in session.calls if c[0] == "history_insert")
         raw = insert_params["history_insert"]["alias_snapshot"]
         snapshot = json.loads(raw)
         assert SRC in snapshot
-        stored_pairs = {
-            (a["alias_type"], a["alias_value"]) for a in snapshot[SRC]
-        }
-        assert stored_pairs == set(aliases), (
-            f"snapshot must preserve all 4 aliases, got {stored_pairs}"
-        )
+        stored_pairs = {(a["alias_type"], a["alias_value"]) for a in snapshot[SRC]}
+        assert stored_pairs == set(aliases), f"snapshot must preserve all 4 aliases, got {stored_pairs}"
 
     def test_empty_source_aliases_snapshot_is_empty_list(self):
         """If the source has zero aliases, the snapshot still records an
@@ -228,18 +219,12 @@ class TestSplitReplaysSnapshot_Issue1207:
         merge_row = (MERGE_ID, [SRC], TGT, "merge", False, snapshot)
         session = _SplitSession(merge_row=merge_row)
 
-        _svc(session).split_entity(
-            tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2"
-        )
+        _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2")
 
         # 3 alias_move_back calls (one per snapshot entry).
         moves = [c for c in session.calls if c[0] == "alias_move_back"]
-        assert len(moves) == 3, (
-            f"expected 3 alias moves (name + gln + gtin), got {len(moves)}"
-        )
-        moved_pairs = {
-            (m[1]["alias_type"], m[1]["alias_value"]) for m in moves
-        }
+        assert len(moves) == 3, f"expected 3 alias moves (name + gln + gtin), got {len(moves)}"
+        moved_pairs = {(m[1]["alias_type"], m[1]["alias_value"]) for m in moves}
         assert moved_pairs == {
             ("name", "ABC Foods"),
             ("gln", "0123456789012"),
@@ -257,9 +242,7 @@ class TestSplitReplaysSnapshot_Issue1207:
         merge_row = (MERGE_ID, [SRC], TGT, "merge", False, json.dumps(snapshot_obj))
         session = _SplitSession(merge_row=merge_row)
 
-        _svc(session).split_entity(
-            tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2"
-        )
+        _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2")
 
         moves = [c for c in session.calls if c[0] == "alias_move_back"]
         assert len(moves) == 1
@@ -272,9 +255,7 @@ class TestSplitReplaysSnapshot_Issue1207:
         merge_row = (MERGE_ID, [SRC], TGT, "merge", False, {SRC: []})
         session = _SplitSession(merge_row=merge_row)
 
-        _svc(session).split_entity(
-            tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2"
-        )
+        _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2")
 
         moves = [c for c in session.calls if c[0] == "alias_move_back"]
         assert moves == []
@@ -294,9 +275,7 @@ class TestSplitRefusesPreV069Merge_Issue1207:
         session = _SplitSession(merge_row=merge_row)
 
         with pytest.raises(ValueError, match="no alias_snapshot"):
-            _svc(session).split_entity(
-                tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2"
-            )
+            _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2")
 
     def test_null_snapshot_issues_no_mutations(self):
         """When the pre-v069 guard fires, NO alias moves or
@@ -305,15 +284,11 @@ class TestSplitRefusesPreV069Merge_Issue1207:
         session = _SplitSession(merge_row=merge_row)
 
         with pytest.raises(ValueError):
-            _svc(session).split_entity(
-                tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2"
-            )
+            _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID, performed_by="op-2")
 
         kinds = [c[0] for c in session.calls]
         # Only the history_fetch should have run.
-        assert kinds == ["history_fetch"], (
-            f"guard fired after side effects: {kinds}"
-        )
+        assert kinds == ["history_fetch"], f"guard fired after side effects: {kinds}"
 
 
 # ===========================================================================
@@ -325,26 +300,20 @@ class TestSplitExistingGuards_Issue1207:
     def test_unknown_merge_id_raises(self):
         session = _SplitSession(merge_row=None)
         with pytest.raises(ValueError, match="not found"):
-            _svc(session).split_entity(
-                tenant_id=TENANT, merge_id="does-not-exist"
-            )
+            _svc(session).split_entity(tenant_id=TENANT, merge_id="does-not-exist")
 
     def test_non_merge_action_raises(self):
         # action = 'split' instead of 'merge'
         merge_row = (MERGE_ID, [SRC], TGT, "split", False, {SRC: []})
         session = _SplitSession(merge_row=merge_row)
         with pytest.raises(ValueError, match="not a merge action"):
-            _svc(session).split_entity(
-                tenant_id=TENANT, merge_id=MERGE_ID
-            )
+            _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID)
 
     def test_already_reversed_raises(self):
         merge_row = (MERGE_ID, [SRC], TGT, "merge", True, {SRC: []})
         session = _SplitSession(merge_row=merge_row)
         with pytest.raises(ValueError, match="already been reversed"):
-            _svc(session).split_entity(
-                tenant_id=TENANT, merge_id=MERGE_ID
-            )
+            _svc(session).split_entity(tenant_id=TENANT, merge_id=MERGE_ID)
 
 
 # ===========================================================================

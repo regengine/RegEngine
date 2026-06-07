@@ -8,12 +8,10 @@ from typing import Mapping, Optional
 
 import structlog
 from fastapi import HTTPException
-
 from shared.kafka_auth import KafkaAuthError, sign_event
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
 from .config import get_settings
-
 
 # Producer service identity used when this service publishes to Kafka.
 # Must match the value downstream consumers expect in their
@@ -31,6 +29,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional in local/test environ
 
 logger = structlog.get_logger("kafka_utils")
 
+
 @lru_cache(maxsize=1)
 def get_producer() -> SerializingProducer:
     """Return a configured Kafka producer using JSON serialization.
@@ -47,15 +46,18 @@ def get_producer() -> SerializingProducer:
         raise RuntimeError("confluent_kafka producer is not installed")
     settings = get_settings()
 
-    return SerializingProducer({
-        'bootstrap.servers': settings.kafka_bootstrap_servers,
-        'key.serializer': KeySerializer(),
-        'value.serializer': lambda v, ctx: json.dumps(v).encode("utf-8")
-    })
+    return SerializingProducer(
+        {
+            "bootstrap.servers": settings.kafka_bootstrap_servers,
+            "key.serializer": KeySerializer(),
+            "value.serializer": lambda v, ctx: json.dumps(v).encode("utf-8"),
+        }
+    )
 
 
 class KeySerializer:
     """Callable class for key serialization to match Confluent Kafka interface."""
+
     def __call__(self, obj, ctx=None):
         if obj is None:
             return None

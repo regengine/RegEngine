@@ -1,15 +1,17 @@
 """
 Demo Tenant Bootstrapper.
 
-Autonomous logic for provisioning isolated 'Demo Tenants' 
+Autonomous logic for provisioning isolated 'Demo Tenants'
 for prospective clients within the K8s cluster.
 """
-import uuid
+
 import logging
+import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger("demo-bootstrap")
+
 
 class DemoBootstrapper:
     """
@@ -18,7 +20,7 @@ class DemoBootstrapper:
     - Seeds vertical-specific sample data.
     - Sets 24-hour expiration hooks.
     """
-    
+
     def __init__(self, vertical: str = "general"):
         self.vertical = vertical
         self.tenant_id = f"demo-{uuid.uuid4().hex[:8]}"
@@ -31,14 +33,14 @@ class DemoBootstrapper:
         3. Notify the Swarm to watch for 'Demo Interaction' events.
         """
         logger.info(f"Provisioning Demo Tenant: {self.tenant_id} for vertical: {self.vertical}")
-        
+
         # In production, this would trigger SQL migrations or API calls.
         # JWT generation deferred until Supabase auth provisioning is integrated.
         return {
             "tenant_id": self.tenant_id,
             "status": "PROVISIONED",
             "vertical": self.vertical,
-            "expires_at": datetime.now(timezone.utc).isoformat(), # +24h in real logic
+            "expires_at": datetime.now(timezone.utc).isoformat(),  # +24h in real logic
         }
 
     def cleanup(self):

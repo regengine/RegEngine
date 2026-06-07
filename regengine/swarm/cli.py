@@ -64,35 +64,62 @@ def cmd_run(args) -> None:
         print("🏜️  DRY RUN MODE — using mock LLM\n")
         mock_responses = [
             # Planner response
-            json.dumps({
-                "steps": [
-                    {"id": 1, "action": "Analyze requirements", "files": ["requirements.md"], "details": "Review task", "acceptance_criteria": "Requirements understood"},
-                    {"id": 2, "action": "Implement changes", "files": ["app.py"], "details": "Write code", "acceptance_criteria": "Code compiles"},
-                ],
-                "risks": ["Needs integration testing"],
-                "estimated_complexity": "medium",
-            }),
+            json.dumps(
+                {
+                    "steps": [
+                        {
+                            "id": 1,
+                            "action": "Analyze requirements",
+                            "files": ["requirements.md"],
+                            "details": "Review task",
+                            "acceptance_criteria": "Requirements understood",
+                        },
+                        {
+                            "id": 2,
+                            "action": "Implement changes",
+                            "files": ["app.py"],
+                            "details": "Write code",
+                            "acceptance_criteria": "Code compiles",
+                        },
+                    ],
+                    "risks": ["Needs integration testing"],
+                    "estimated_complexity": "medium",
+                }
+            ),
             # Coder response
-            json.dumps({
-                "files": [{"path": "app.py", "action": "modify", "content": "# Implementation placeholder\n", "language": "python"}],
-                "summary": "Implemented changes per plan",
-                "dependencies_added": [],
-            }),
+            json.dumps(
+                {
+                    "files": [
+                        {
+                            "path": "app.py",
+                            "action": "modify",
+                            "content": "# Implementation placeholder\n",
+                            "language": "python",
+                        }
+                    ],
+                    "summary": "Implemented changes per plan",
+                    "dependencies_added": [],
+                }
+            ),
             # Reviewer response
-            json.dumps({
-                "verdict": "approve",
-                "score": 0.85,
-                "issues": [],
-                "strengths": ["Clean implementation", "Follows patterns"],
-                "summary": "Code looks good",
-            }),
+            json.dumps(
+                {
+                    "verdict": "approve",
+                    "score": 0.85,
+                    "issues": [],
+                    "strengths": ["Clean implementation", "Follows patterns"],
+                    "summary": "Code looks good",
+                }
+            ),
             # Tester response
-            json.dumps({
-                "test_files": [{"path": "test_app.py", "content": "def test_example(): pass\n", "test_count": 1}],
-                "scenarios_covered": ["happy_path", "edge_case", "error_handling"],
-                "coverage_estimate": "85%",
-                "summary": "Tests generated",
-            }),
+            json.dumps(
+                {
+                    "test_files": [{"path": "test_app.py", "content": "def test_example(): pass\n", "test_count": 1}],
+                    "scenarios_covered": ["happy_path", "edge_case", "error_handling"],
+                    "coverage_estimate": "85%",
+                    "summary": "Tests generated",
+                }
+            ),
         ]
         llm = MockLLMClient(responses=mock_responses)
     else:
@@ -101,40 +128,42 @@ def cmd_run(args) -> None:
 
     swarm = AgentSwarm(llm_client=llm, max_iterations=args.max_iterations)
     import asyncio
-    
+
     if args.agent:
         print(f"🕵️  Directing task to: {args.agent}\n")
         agent_instance = swarm.agents.get(args.agent)
         if not agent_instance:
             print(f"❌ Error: Agent '{args.agent}' not found. Available: {list(swarm.agents.keys())}")
             sys.exit(1)
-        
+
         # Security audit logic for direct agent call
         if args.agent == "security":
             result_data = asyncio.run(agent_instance.run(args.task))
             print(json.dumps(result_data, indent=2))
-            
+
             # Post to GitHub if in CI and it's a PR
             if os.getenv("GITHUB_ACTIONS") == "true":
                 try:
                     from regengine.swarm.github_integration import GitHubClient
+
                     gh = GitHubClient()
-                    
+
                     # Extract PR number from task or env if possible
                     # Task format usually: "Audit PR #123 ..."
                     import re
+
                     match = re.search(r"PR #(\d+)", args.task)
                     pr_num = int(match.group(1)) if match else None
-                    
+
                     if pr_num:
                         res = result_data.get("result", {})
                         vulnerabilities = res.get("vulnerabilities", [])
                         verdict = "✅ PASS" if res.get("verdict") == "pass" else "❌ FAIL"
-                        
+
                         comment = f"### 🛡️ Autonomous Security Audit: {verdict}\n\n"
                         comment += f"**Summary:** {res.get('summary', 'Audit complete')}\n"
-                        comment += f"**Score:** {res.get('score', 0.0)*100:.1f}%\n\n"
-                        
+                        comment += f"**Score:** {res.get('score', 0.0) * 100:.1f}%\n\n"
+
                         if vulnerabilities:
                             comment += "#### ⚠️ Findings:\n"
                             for v in vulnerabilities:
@@ -142,7 +171,7 @@ def cmd_run(args) -> None:
                                 comment += f"  - *Remediation:* {v['remediation']}\n"
                         else:
                             comment += "✨ No critical vulnerabilities identified.\n"
-                        
+
                         gh.comment_on_issue(pr_num, comment)
                         print(f"💬 Security report posted to PR #{pr_num}")
                 except Exception as e:
@@ -152,32 +181,35 @@ def cmd_run(args) -> None:
         # Janitor logic for direct agent call
         if args.agent == "janitor":
             from regengine.swarm.github_integration import GitHubClient
+
             gh = GitHubClient()
             prs = gh.repo.get_pulls(state="open")
-            
+
             print(f"🧹 Janitor scanning {prs.totalCount} open Pull Requests...\n")
-            
+
             for pr in prs:
                 print(f"🔍 Evaluating PR #{pr.number}: {pr.title}")
-                
+
                 # Gather context for Janitor
                 security_comments = [c.body for c in pr.get_issue_comments() if "Security Audit" in c.body]
                 test_results = "CI status: " + gh.get_pr_checks_status(pr.number)
-                
+
                 context = {
-                    "security_scorecard": "\n".join(security_comments) if security_comments else "No security audit found.",
+                    "security_scorecard": "\n".join(security_comments)
+                    if security_comments
+                    else "No security audit found.",
                     "test_results": test_results,
-                    "ci_status": gh.get_pr_checks_status(pr.number)
+                    "ci_status": gh.get_pr_checks_status(pr.number),
                 }
-                
+
                 agent_output = asyncio.run(agent_instance.run(f"Evaluate PR #{pr.number}", context))
                 res = agent_output.get("result", {})
                 decision = res.get("decision", "hold")
                 reasoning = res.get("reasoning", "No reasoning.")
-                
+
                 print(f"   - Decision: {decision.upper()}")
                 print(f"   - Reasoning: {reasoning}")
-                
+
                 if decision == "merge":
                     print(f"   🚀 AUTOMATIC MERGE TRIGGERED for PR #{pr.number}...")
                     success = gh.merge_pr(pr.number)
@@ -213,6 +245,7 @@ def cmd_troubleshoot(args) -> None:
     _require_legacy_swarm_enabled("troubleshoot")
 
     import asyncio
+
     from regengine.swarm.coordinator import AgentSwarm
 
     # Resolve log content: --log-file takes precedence over --logs
@@ -246,8 +279,8 @@ def cmd_solve(args) -> None:
     """Solve a GitHub issue using the agent swarm."""
     _require_legacy_swarm_enabled("solve")
 
-    from regengine.swarm.github_integration import GitHubClient
     from regengine.swarm.coordinator import AgentSwarm
+    from regengine.swarm.github_integration import GitHubClient
 
     print(f"🧬 Agent Swarm — Solving Issue #{args.issue}\n")
 
@@ -262,6 +295,7 @@ def cmd_solve(args) -> None:
 
     swarm = AgentSwarm()
     import asyncio
+
     result = asyncio.run(swarm.solve(task))
 
     print(f"\n📊 Result: {result.status}")
@@ -296,11 +330,13 @@ def cmd_label(args) -> None:
     gh = GitHubClient(repo_name=args.repo)
 
     if args.mock:
-        mock_response = json.dumps({
-            "categories": ["security", "bug"],
-            "confidence": 0.85,
-            "reasoning": "Issue mentions authentication and vulnerability",
-        })
+        mock_response = json.dumps(
+            {
+                "categories": ["security", "bug"],
+                "confidence": 0.85,
+                "reasoning": "Issue mentions authentication and vulnerability",
+            }
+        )
         llm = MockLLMClient(responses=[mock_response])
     else:
         llm = LLMClientFactory.create()
@@ -367,7 +403,9 @@ def cmd_sweep(args) -> None:
     _require_legacy_swarm_enabled("sweep")
 
     import asyncio
+
     from scripts.swarm_sweep import SwarmSweeper
+
     sweeper = SwarmSweeper()
     asyncio.run(sweeper.sweep(limit=args.limit))
 
@@ -377,7 +415,9 @@ def cmd_compliance(args) -> None:
     _require_legacy_swarm_enabled("compliance")
 
     import asyncio
+
     from scripts.compliance_sweep import roll_out_compliance
+
     asyncio.run(roll_out_compliance(standard=args.standard))
 
 

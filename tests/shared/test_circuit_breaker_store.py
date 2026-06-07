@@ -1,7 +1,6 @@
 """Tests for circuit breaker storage backends."""
 
 import pytest
-
 from shared.circuit_breaker_store import (
     MemoryCircuitStore,
     get_store,

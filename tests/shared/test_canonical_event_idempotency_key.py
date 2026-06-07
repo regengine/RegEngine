@@ -23,7 +23,6 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-
 from shared.canonical_event import (
     CTEType,
     EventStatus,
@@ -62,26 +61,24 @@ def _make_canonical_event(kdes: dict) -> TraceabilityEvent:
 
 class TestCanonicalIdempotencyKey_Issue1313Mirror:
     def test_datetime_kde_does_not_raise(self):
-        evt = _make_canonical_event(
-            {"last_updated_at": datetime(2026, 4, 18, tzinfo=timezone.utc)}
-        )
+        evt = _make_canonical_event({"last_updated_at": datetime(2026, 4, 18, tzinfo=timezone.utc)})
         key = evt.compute_idempotency_key()
         assert isinstance(key, str) and len(key) == 64
 
     def test_decimal_kde_does_not_raise(self):
-        evt = _make_canonical_event(
-            {"quantity": Decimal("10.5"), "net_weight": Decimal("1234.56")}
-        )
+        evt = _make_canonical_event({"quantity": Decimal("10.5"), "net_weight": Decimal("1234.56")})
         key = evt.compute_idempotency_key()
         assert isinstance(key, str) and len(key) == 64
 
     def test_mixed_non_jsonable_kdes(self):
-        evt = _make_canonical_event({
-            "quantity": Decimal("42"),
-            "harvested_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "gtin": "09506000134352",
-            "organic": True,
-        })
+        evt = _make_canonical_event(
+            {
+                "quantity": Decimal("42"),
+                "harvested_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                "gtin": "09506000134352",
+                "organic": True,
+            }
+        )
         key = evt.compute_idempotency_key()
         assert isinstance(key, str) and len(key) == 64
 

@@ -8,16 +8,19 @@ from typing import List
 import redis
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-
 from shared.auth import APIKey, require_api_key
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
 
 from .config import get_settings
 from .models import (
-    DiscoveryQueueItem, BulkDiscoveryRequest, ManualQueueResponse,
-    DiscoveryApprovalResponse, DiscoveryRejectionResponse,
-    BulkDiscoveryApprovalResponse, BulkDiscoveryRejectionResponse
+    BulkDiscoveryApprovalResponse,
+    BulkDiscoveryRejectionResponse,
+    BulkDiscoveryRequest,
+    DiscoveryApprovalResponse,
+    DiscoveryQueueItem,
+    DiscoveryRejectionResponse,
+    ManualQueueResponse,
 )
 
 logger = structlog.get_logger("ingestion.discovery")

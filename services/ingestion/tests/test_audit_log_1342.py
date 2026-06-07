@@ -14,13 +14,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import audit_log as al
 from app.audit_log import (
     AuditEntry,
     AuditLogResponse,
+    _get_admin_db_session,
     _normalize_audit_event_type,
     _normalize_category,
     _query_admin_audit_logs,
@@ -29,12 +27,13 @@ from app.audit_log import (
     _query_exports,
     _table_exists,
     _to_iso,
-    _get_admin_db_session,
     router,
 )
 from app.webhook_compat import _verify_api_key
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -92,8 +91,13 @@ def _mock_session_with_queries(results_by_sql):
 class TestPydanticModels:
     def test_audit_entry_defaults(self):
         e = AuditEntry(
-            id="1", timestamp="2026-04-18T00:00:00Z", event_type="x",
-            category="y", actor="z", action="w", resource="r",
+            id="1",
+            timestamp="2026-04-18T00:00:00Z",
+            event_type="x",
+            category="y",
+            actor="z",
+            action="w",
+            resource="r",
         )
         assert e.details == {}
         assert e.ip_address == ""
@@ -123,7 +127,8 @@ class TestToIso:
         assert dt.tzinfo is not None
 
     def test_tz_aware_datetime_converted_to_utc(self):
-        from datetime import timezone, timedelta
+        from datetime import timedelta, timezone
+
         dt = datetime(2026, 4, 18, 10, 0, tzinfo=timezone(timedelta(hours=5)))
         result = _to_iso(dt)
         # Converted to UTC
@@ -149,20 +154,23 @@ class TestToIso:
 
 
 class TestNormalizeEventType:
-    @pytest.mark.parametrize("event_type, category, action, expected", [
-        ("user_login", "", "", "user_login"),
-        ("LOGIN_ATTEMPT", "", "", "user_login"),
-        ("", "authentication", "", "user_login"),
-        ("", "Authentication", "", "user_login"),
-        ("export_generated", "", "", "export"),
-        ("", "", "export_fda", "export"),
-        ("alert_raised", "", "", "alert"),
-        ("compliance_check", "", "", "compliance_change"),
-        ("", "COMPLIANCE", "", "compliance_change"),
-        ("cte_recorded", "", "", "cte_recorded"),
-        ("random_event", "", "", "api_call"),
-        ("", "", "", "api_call"),
-    ])
+    @pytest.mark.parametrize(
+        "event_type, category, action, expected",
+        [
+            ("user_login", "", "", "user_login"),
+            ("LOGIN_ATTEMPT", "", "", "user_login"),
+            ("", "authentication", "", "user_login"),
+            ("", "Authentication", "", "user_login"),
+            ("export_generated", "", "", "export"),
+            ("", "", "export_fda", "export"),
+            ("alert_raised", "", "", "alert"),
+            ("compliance_check", "", "", "compliance_change"),
+            ("", "COMPLIANCE", "", "compliance_change"),
+            ("cte_recorded", "", "", "cte_recorded"),
+            ("random_event", "", "", "api_call"),
+            ("", "", "", "api_call"),
+        ],
+    )
     def test_cases(self, event_type, category, action, expected):
         assert _normalize_audit_event_type(event_type, category, action) == expected
 
@@ -337,10 +345,16 @@ class TestQueryAdminAuditLogs:
         to_regclass_result.fetchone.return_value = ("public.audit_logs",)
         rows_result = MagicMock()
         row = SimpleNamespace(
-            id="1", timestamp=None, event_type="x", event_category="y",
-            actor="a", action="b", resource=None,
+            id="1",
+            timestamp=None,
+            event_type="x",
+            event_category="y",
+            actor="a",
+            action="b",
+            resource=None,
             details="not-a-dict",  # string, not dict
-            ip_address=None, integrity_hash=None,
+            ip_address=None,
+            integrity_hash=None,
         )
         rows_result.fetchall.return_value = [row]
         session.execute.side_effect = [to_regclass_result, rows_result]
@@ -388,9 +402,14 @@ class TestQueryCteEvents:
     def test_none_source_becomes_system(self):
         session = MagicMock()
         row = SimpleNamespace(
-            id="1", event_timestamp=None, event_type="shipping",
-            source=None, traceability_lot_code="LOT", product_description="p",
-            quantity=1, sha256_hash=None,
+            id="1",
+            event_timestamp=None,
+            event_type="shipping",
+            source=None,
+            traceability_lot_code="LOT",
+            product_description="p",
+            quantity=1,
+            sha256_hash=None,
         )
         rows_result = MagicMock()
         rows_result.fetchall.return_value = [row]
@@ -433,8 +452,12 @@ class TestQueryExports:
     def test_null_export_type_fallback(self):
         session = MagicMock()
         row = SimpleNamespace(
-            id="1", generated_at=None, generated_by=None,
-            export_type=None, record_count=0, export_hash=None,
+            id="1",
+            generated_at=None,
+            generated_by=None,
+            export_type=None,
+            record_count=0,
+            export_hash=None,
         )
         rows_result = MagicMock()
         rows_result.fetchall.return_value = [row]
@@ -473,8 +496,12 @@ class TestQueryAlertEvents:
         table_check.fetchone.return_value = ("fsma.compliance_alerts",)
         columns_check = MagicMock()
         columns_check.fetchall.return_value = [
-            ("id",), ("severity",), ("alert_type",),
-            ("tenant_id",), ("message",), ("created_at",),
+            ("id",),
+            ("severity",),
+            ("alert_type",),
+            ("tenant_id",),
+            ("message",),
+            ("created_at",),
         ]
         rows_check = MagicMock()
         row = SimpleNamespace(
@@ -502,8 +529,12 @@ class TestQueryAlertEvents:
         table_check.fetchone.return_value = ("fsma.compliance_alerts",)
         columns_check = MagicMock()
         columns_check.fetchall.return_value = [
-            ("id",), ("severity",), ("alert_type",),
-            ("org_id",), ("description",), ("created_at",),
+            ("id",),
+            ("severity",),
+            ("alert_type",),
+            ("org_id",),
+            ("description",),
+            ("created_at",),
         ]
         rows_check = MagicMock()
         rows_check.fetchall.return_value = []
@@ -518,8 +549,12 @@ class TestQueryAlertEvents:
         table_check.fetchone.return_value = ("fsma.compliance_alerts",)
         columns_check = MagicMock()
         columns_check.fetchall.return_value = [
-            ("id",), ("tenant_id",), ("alert_type",), ("severity",),
-            ("title",), ("created_at",),
+            ("id",),
+            ("tenant_id",),
+            ("alert_type",),
+            ("severity",),
+            ("title",),
+            ("created_at",),
         ]
         rows_check = MagicMock()
         rows_check.fetchall.return_value = []
@@ -533,7 +568,11 @@ class TestQueryAlertEvents:
         table_check.fetchone.return_value = ("fsma.compliance_alerts",)
         columns_check = MagicMock()
         columns_check.fetchall.return_value = [
-            ("id",), ("tenant_id",), ("alert_type",), ("severity",), ("created_at",),
+            ("id",),
+            ("tenant_id",),
+            ("alert_type",),
+            ("severity",),
+            ("created_at",),
         ]
         rows_check = MagicMock()
         rows_check.fetchall.return_value = []
@@ -554,25 +593,41 @@ class TestGetAuditLogEndpoint:
     def test_happy_path_merges_sources_and_dedupes(self, client, monkeypatch):
         # Stub all four query helpers
         cte = AuditEntry(
-            id="cte-1", timestamp="2026-04-18T12:00:00+00:00",
-            event_type="cte_recorded", category="data",
-            actor="webhook", action="Recorded shipping CTE", resource="TLC LOT-1",
+            id="cte-1",
+            timestamp="2026-04-18T12:00:00+00:00",
+            event_type="cte_recorded",
+            category="data",
+            actor="webhook",
+            action="Recorded shipping CTE",
+            resource="TLC LOT-1",
         )
         export = AuditEntry(
-            id="export-1", timestamp="2026-04-18T11:00:00+00:00",
-            event_type="export", category="data",
-            actor="alice", action="Generated FDA export", resource="Export: fda",
+            id="export-1",
+            timestamp="2026-04-18T11:00:00+00:00",
+            event_type="export",
+            category="data",
+            actor="alice",
+            action="Generated FDA export",
+            resource="Export: fda",
         )
         admin = AuditEntry(
-            id="admin-1", timestamp="2026-04-18T13:00:00+00:00",
-            event_type="user_login", category="auth",
-            actor="alice", action="login", resource="session",
+            id="admin-1",
+            timestamp="2026-04-18T13:00:00+00:00",
+            event_type="user_login",
+            category="auth",
+            actor="alice",
+            action="login",
+            resource="session",
         )
         # Duplicate the same id across admin and CTE -> should dedup
         duplicate = AuditEntry(
-            id="admin-1", timestamp="2026-04-18T13:00:00+00:00",
-            event_type="user_login", category="auth",
-            actor="alice", action="login", resource="session",
+            id="admin-1",
+            timestamp="2026-04-18T13:00:00+00:00",
+            event_type="user_login",
+            category="auth",
+            actor="alice",
+            action="login",
+            resource="session",
         )
         monkeypatch.setattr(al, "_query_admin_audit_logs", lambda s, t, limit: [admin, duplicate])
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [cte])
@@ -612,6 +667,7 @@ class TestGetAuditLogEndpoint:
 
         def boom(*a, **kw):
             raise RuntimeError("admin-broken")
+
         monkeypatch.setattr(al, "_query_admin_audit_logs", boom)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [])
@@ -627,6 +683,7 @@ class TestGetAuditLogEndpoint:
 
         def boom():
             raise RuntimeError("ingestion-broken")
+
         monkeypatch.setattr(al, "get_db_safe", boom)
         resp = client.get("/api/v1/audit-log/t1")
         assert resp.status_code == 200
@@ -634,12 +691,24 @@ class TestGetAuditLogEndpoint:
 
     def test_event_type_filter(self, client, monkeypatch):
         entries = [
-            AuditEntry(id="1", timestamp="2026-04-18T12:00:00+00:00",
-                       event_type="cte_recorded", category="data",
-                       actor="a", action="a", resource="r"),
-            AuditEntry(id="2", timestamp="2026-04-18T11:00:00+00:00",
-                       event_type="export", category="data",
-                       actor="a", action="a", resource="r"),
+            AuditEntry(
+                id="1",
+                timestamp="2026-04-18T12:00:00+00:00",
+                event_type="cte_recorded",
+                category="data",
+                actor="a",
+                action="a",
+                resource="r",
+            ),
+            AuditEntry(
+                id="2",
+                timestamp="2026-04-18T11:00:00+00:00",
+                event_type="export",
+                category="data",
+                actor="a",
+                action="a",
+                resource="r",
+            ),
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
@@ -654,12 +723,24 @@ class TestGetAuditLogEndpoint:
 
     def test_category_filter(self, client, monkeypatch):
         entries = [
-            AuditEntry(id="1", timestamp="2026-04-18T12:00:00+00:00",
-                       event_type="user_login", category="auth",
-                       actor="a", action="a", resource="r"),
-            AuditEntry(id="2", timestamp="2026-04-18T11:00:00+00:00",
-                       event_type="cte_recorded", category="data",
-                       actor="a", action="a", resource="r"),
+            AuditEntry(
+                id="1",
+                timestamp="2026-04-18T12:00:00+00:00",
+                event_type="user_login",
+                category="auth",
+                actor="a",
+                action="a",
+                resource="r",
+            ),
+            AuditEntry(
+                id="2",
+                timestamp="2026-04-18T11:00:00+00:00",
+                event_type="cte_recorded",
+                category="data",
+                actor="a",
+                action="a",
+                resource="r",
+            ),
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
@@ -676,8 +757,15 @@ class TestGetAuditLogEndpoint:
 
     def test_pagination(self, client, monkeypatch):
         entries = [
-            AuditEntry(id=f"e-{i}", timestamp=f"2026-04-18T00:00:{i:02d}+00:00",
-                       event_type="x", category="y", actor="a", action="a", resource="r")
+            AuditEntry(
+                id=f"e-{i}",
+                timestamp=f"2026-04-18T00:00:{i:02d}+00:00",
+                event_type="x",
+                category="y",
+                actor="a",
+                action="a",
+                resource="r",
+            )
             for i in range(30)
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
@@ -695,8 +783,15 @@ class TestGetAuditLogEndpoint:
 
     def test_page_less_than_one_treated_as_zero_offset(self, client, monkeypatch):
         entries = [
-            AuditEntry(id=f"e-{i}", timestamp=f"2026-04-18T00:00:{i:02d}+00:00",
-                       event_type="x", category="y", actor="a", action="a", resource="r")
+            AuditEntry(
+                id=f"e-{i}",
+                timestamp=f"2026-04-18T00:00:{i:02d}+00:00",
+                event_type="x",
+                category="y",
+                actor="a",
+                action="a",
+                resource="r",
+            )
             for i in range(5)
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
@@ -712,8 +807,15 @@ class TestGetAuditLogEndpoint:
 
     def test_page_beyond_total_returns_empty(self, client, monkeypatch):
         entries = [
-            AuditEntry(id="e-1", timestamp="2026-04-18T00:00:00+00:00",
-                       event_type="x", category="y", actor="a", action="a", resource="r"),
+            AuditEntry(
+                id="e-1",
+                timestamp="2026-04-18T00:00:00+00:00",
+                event_type="x",
+                category="y",
+                actor="a",
+                action="a",
+                resource="r",
+            ),
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())

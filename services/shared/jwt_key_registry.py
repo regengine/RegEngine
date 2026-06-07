@@ -100,9 +100,7 @@ class JWTKeyRegistry:
         if not keys:
             legacy_secret = os.environ.get("AUTH_SECRET_KEY") or os.environ.get("JWT_SECRET")
             if not legacy_secret:
-                raise RuntimeError(
-                    "No JWT signing key configured. Set AUTH_SECRET_KEY env var."
-                )
+                raise RuntimeError("No JWT signing key configured. Set AUTH_SECRET_KEY env var.")
 
             legacy_key = SigningKey(
                 kid="re-legacy-0001",
@@ -300,6 +298,7 @@ class JWTKeyRegistry:
             except Exception as exc:
                 logger.warning("jwt_key_registry_redis_read_failed", error=str(exc))
                 from shared.redis_health import report_redis_fallback
+
                 report_redis_fallback("jwt_key_registry", str(exc))
 
         # Redis unavailable — use in-memory cache

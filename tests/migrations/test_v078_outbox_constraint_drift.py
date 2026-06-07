@@ -4,6 +4,7 @@ Production may already have the outbox dedupe name as either a standalone
 unique index or as the index backing a table constraint. The migration must
 handle both shapes.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -19,14 +20,8 @@ from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_MIGRATION_PATH = (
-    _REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py"
-)
+_MIGRATION_PATH = _REPO_ROOT / "alembic" / "versions" / "20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py"
 
 
 def _load_migration_module():
@@ -45,9 +40,7 @@ def pg_engine() -> Iterator[Engine]:
     except Exception as exc:
         pytest.skip(f"PostgresContainer unavailable: {exc}")
 
-    url = container.get_connection_url().replace(
-        "postgresql+psycopg2://", "postgresql+psycopg://"
-    )
+    url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
     engine = create_engine(url, future=True)
     try:
         yield engine
@@ -199,11 +192,7 @@ def test_outbox_tables_handles_existing_dedupe_shapes(
 
     _run_outbox_tables(pg_engine, monkeypatch)
 
-    assert _constraint_count(
-        pg_engine, "public.graph_outbox", "uq_graph_outbox_dedupe"
-    ) == 1
-    assert _constraint_count(
-        pg_engine, "public.webhook_outbox", "uq_webhook_outbox_dedupe"
-    ) == 1
+    assert _constraint_count(pg_engine, "public.graph_outbox", "uq_graph_outbox_dedupe") == 1
+    assert _constraint_count(pg_engine, "public.webhook_outbox", "uq_webhook_outbox_dedupe") == 1
     assert _standalone_index_count(pg_engine, "uq_graph_outbox_dedupe") == 0
     assert _standalone_index_count(pg_engine, "uq_webhook_outbox_dedupe") == 0

@@ -8,6 +8,7 @@ Usage in conftest.py:
     from tests.env_defaults import apply_defaults
     apply_defaults()
 """
+
 import os
 
 # Database URLs (local Docker by default; CI overrides via env)

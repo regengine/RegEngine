@@ -1,18 +1,18 @@
 """Tests for shared DLQProducer singleton -- #1228."""
+
 from __future__ import annotations
 
 import threading
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
-
-from shared.observability.dlq_producer import DLQProducer
 from shared.dlq import DLQProducer as DLQProducerAlias
-
+from shared.observability.dlq_producer import DLQProducer
 
 # ---------------------------------------------------------------------------
 # Re-export shim
 # ---------------------------------------------------------------------------
+
 
 def test_dlq_alias_is_same_class():
     """shared.dlq.DLQProducer is the same object as the canonical class."""
@@ -22,6 +22,7 @@ def test_dlq_alias_is_same_class():
 # ---------------------------------------------------------------------------
 # confluent-kafka backend
 # ---------------------------------------------------------------------------
+
 
 class TestDLQProducerConfluentBackend:
     def _make(self, mock_producer_cls):

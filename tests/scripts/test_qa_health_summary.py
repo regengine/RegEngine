@@ -4,7 +4,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "qa_health_summary.py"
 
 

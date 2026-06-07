@@ -5,13 +5,10 @@ Issue: #1342
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-
 from app import supplier_mgmt as sm
 from app.supplier_mgmt import (
     CreateSupplierRequest,
@@ -23,8 +20,9 @@ from app.supplier_mgmt import (
     router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -108,9 +106,13 @@ class TestPydanticModels:
 
     def test_supplier_dashboard_schema(self):
         dash = SupplierDashboard(
-            tenant_id="t1", total_suppliers=0, active_portal_links=0,
-            expired_portal_links=0, total_submissions=0,
-            compliance_rate=0, suppliers=[],
+            tenant_id="t1",
+            total_suppliers=0,
+            active_portal_links=0,
+            expired_portal_links=0,
+            total_submissions=0,
+            compliance_rate=0,
+            suppliers=[],
         )
         assert dash.total_suppliers == 0
 
@@ -140,11 +142,22 @@ class TestDbGetSuppliers:
         session.close.assert_called_once()
 
     def test_rows_mapped_to_records(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("t1-sup-001", "Acme", "a@x.com", "portal-abc", "active", 5,
-             "2026-04-18T00:00:00+00:00", "compliant",
-             '["kde1", "kde2"]', '["Spinach"]'),
-        ])
+        session = _mock_db_session(
+            rows=[
+                (
+                    "t1-sup-001",
+                    "Acme",
+                    "a@x.com",
+                    "portal-abc",
+                    "active",
+                    5,
+                    "2026-04-18T00:00:00+00:00",
+                    "compliant",
+                    '["kde1", "kde2"]',
+                    '["Spinach"]',
+                ),
+            ]
+        )
         monkeypatch.setattr(sm, "get_db_safe", lambda: session)
         suppliers = _db_get_suppliers("t1")
         assert len(suppliers) == 1
@@ -157,10 +170,11 @@ class TestDbGetSuppliers:
         assert s.is_sample is False
 
     def test_null_json_fields_become_empty_lists(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("t1-sup-001", "Acme", "a@x.com", None, "no_link", 0,
-             None, "unknown", None, None),
-        ])
+        session = _mock_db_session(
+            rows=[
+                ("t1-sup-001", "Acme", "a@x.com", None, "no_link", 0, None, "unknown", None, None),
+            ]
+        )
         monkeypatch.setattr(sm, "get_db_safe", lambda: session)
         suppliers = _db_get_suppliers("t1")
         assert suppliers[0].missing_kdes == []
@@ -375,7 +389,10 @@ class TestSupplierHealthEndpoint:
         assert body["active_last_30_days"] == 0
         assert body["inactive_30_days"] == 0
         assert body["compliance_breakdown"] == {
-            "compliant": 0, "partial": 0, "non_compliant": 0, "unknown": 0,
+            "compliant": 0,
+            "partial": 0,
+            "non_compliant": 0,
+            "unknown": 0,
         }
 
     def test_active_vs_inactive_partition(self, client, monkeypatch):
@@ -400,9 +417,13 @@ class TestSupplierHealthEndpoint:
         assert breakdown["unknown"] == 0
 
     def test_compliance_breakdown_counts_unknown(self, client, monkeypatch):
-        monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: [
-            _make_supplier(compliance_status="unknown"),
-        ])
+        monkeypatch.setattr(
+            sm,
+            "_db_get_suppliers",
+            lambda tid: [
+                _make_supplier(compliance_status="unknown"),
+            ],
+        )
         resp = client.get("/api/v1/suppliers/t1/health")
         assert resp.json()["compliance_breakdown"]["unknown"] == 1
 

@@ -10,10 +10,9 @@ import logging
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import bindparam, text
-
 from shared.api_key_store import api_key_hash_candidates
 from shared.database import get_db_safe
+from sqlalchemy import bindparam, text
 
 logger = logging.getLogger(__name__)
 

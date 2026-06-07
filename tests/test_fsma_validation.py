@@ -19,25 +19,28 @@ from shared.fsma_validation import (
     verify_gs1_check_digit,
 )
 
-
 # =============================================================================
 # GS1 CHECK DIGIT TESTS
 # =============================================================================
 
+
 class TestGS1CheckDigit:
     """Tests for GS1 check digit calculation and verification."""
 
-    @pytest.mark.parametrize("digits,expected", [
-        # GTIN-8 examples
-        ("9638507", 4),  # → 96385074
-        ("1234567", 8),  # → 12345678
-        # GTIN-12 examples
-        ("03600029145", 8),  # → 036000291458
-        # GTIN-13 examples
-        ("590123412345", 7),  # → 5901234123457
-        # GTIN-14 examples
-        ("1034567890123", 1),  # → 10345678901231
-    ])
+    @pytest.mark.parametrize(
+        "digits,expected",
+        [
+            # GTIN-8 examples
+            ("9638507", 4),  # → 96385074
+            ("1234567", 8),  # → 12345678
+            # GTIN-12 examples
+            ("03600029145", 8),  # → 036000291458
+            # GTIN-13 examples
+            ("590123412345", 7),  # → 5901234123457
+            # GTIN-14 examples
+            ("1034567890123", 1),  # → 10345678901231
+        ],
+    )
     def test_calculate_check_digit(self, digits, expected):
         """Test GS1 check digit calculation."""
         assert calculate_gs1_check_digit(digits) == expected
@@ -47,14 +50,17 @@ class TestGS1CheckDigit:
         with pytest.raises(ValueError):
             calculate_gs1_check_digit("01onal001234")
 
-    @pytest.mark.parametrize("number,expected", [
-        ("96385074", True),  # Valid GTIN-8
-        ("96385075", False),  # Invalid check digit
-        ("036000291458", True),  # Valid GTIN-12
-        ("5901234123457", True),  # Valid GTIN-13
-        ("10345678901231", True),  # Valid GTIN-14
-        ("10345678901239", False),  # Invalid check digit
-    ])
+    @pytest.mark.parametrize(
+        "number,expected",
+        [
+            ("96385074", True),  # Valid GTIN-8
+            ("96385075", False),  # Invalid check digit
+            ("036000291458", True),  # Valid GTIN-12
+            ("5901234123457", True),  # Valid GTIN-13
+            ("10345678901231", True),  # Valid GTIN-14
+            ("10345678901239", False),  # Invalid check digit
+        ],
+    )
     def test_verify_check_digit(self, number, expected):
         """Test GS1 check digit verification."""
         assert verify_gs1_check_digit(number) == expected
@@ -72,15 +78,19 @@ class TestGS1CheckDigit:
 # GTIN VALIDATION TESTS
 # =============================================================================
 
+
 class TestGTINValidation:
     """Tests for GTIN validation."""
 
-    @pytest.mark.parametrize("gtin", [
-        "96385074",  # GTIN-8
-        "036000291458",  # GTIN-12
-        "5901234123457",  # GTIN-13
-        "10345678901231",  # GTIN-14
-    ])
+    @pytest.mark.parametrize(
+        "gtin",
+        [
+            "96385074",  # GTIN-8
+            "036000291458",  # GTIN-12
+            "5901234123457",  # GTIN-13
+            "10345678901231",  # GTIN-14
+        ],
+    )
     def test_valid_gtin(self, gtin):
         """Test valid GTIN formats."""
         result = validate_gtin(gtin)
@@ -88,11 +98,14 @@ class TestGTINValidation:
         assert result.identifier_type == IdentifierType.GTIN
         assert len(result.errors) == 0
 
-    @pytest.mark.parametrize("gtin,error_substring", [
-        ("1234", "8, 12, 13, or 14"),  # Too short
-        ("123456789012345", "8, 12, 13, or 14"),  # Too long
-        ("96385075", "Check digit invalid"),  # Wrong check digit
-    ])
+    @pytest.mark.parametrize(
+        "gtin,error_substring",
+        [
+            ("1234", "8, 12, 13, or 14"),  # Too short
+            ("123456789012345", "8, 12, 13, or 14"),  # Too long
+            ("96385075", "Check digit invalid"),  # Wrong check digit
+        ],
+    )
     def test_invalid_gtin(self, gtin, error_substring):
         """Test invalid GTIN formats."""
         result = validate_gtin(gtin)
@@ -123,6 +136,7 @@ class TestGTINValidation:
 # GLN VALIDATION TESTS
 # =============================================================================
 
+
 class TestGLNValidation:
     """Tests for GLN validation."""
 
@@ -136,10 +150,13 @@ class TestGLNValidation:
         assert result.is_valid
         assert result.identifier_type == IdentifierType.GLN
 
-    @pytest.mark.parametrize("gln,error_substring", [
-        ("12345678901", "13"),  # Too short
-        ("12345678901234", "13"),  # Too long
-    ])
+    @pytest.mark.parametrize(
+        "gln,error_substring",
+        [
+            ("12345678901", "13"),  # Too short
+            ("12345678901234", "13"),  # Too long
+        ],
+    )
     def test_invalid_gln(self, gln, error_substring):
         """Test invalid GLN formats."""
         result = validate_gln(gln)
@@ -157,6 +174,7 @@ class TestGLNValidation:
 # SSCC VALIDATION TESTS
 # =============================================================================
 
+
 class TestSSCCValidation:
     """Tests for SSCC validation."""
 
@@ -171,10 +189,13 @@ class TestSSCCValidation:
         assert result.identifier_type == IdentifierType.SSCC
         assert len(result.normalized_value) == 18
 
-    @pytest.mark.parametrize("sscc,error_substring", [
-        ("1234567890123456", "18"),  # Too short (16)
-        ("12345678901234567890", "18"),  # Too long (20)
-    ])
+    @pytest.mark.parametrize(
+        "sscc,error_substring",
+        [
+            ("1234567890123456", "18"),  # Too short (16)
+            ("12345678901234567890", "18"),  # Too long (20)
+        ],
+    )
     def test_invalid_sscc(self, sscc, error_substring):
         """Test invalid SSCC formats."""
         result = validate_sscc(sscc)
@@ -186,17 +207,21 @@ class TestSSCCValidation:
 # TLC VALIDATION TESTS
 # =============================================================================
 
+
 class TestTLCValidation:
     """Tests for Traceability Lot Code validation."""
 
-    @pytest.mark.parametrize("tlc", [
-        "L-2024-01-15-A",  # Date-based format
-        "BATCH-456",  # BATCH prefix
-        "20240115A",  # Simple date format
-        "ABC20240115B",  # Plant + date
-        "A24015B",  # Julian date format
-        "ABC123XYZ",  # Generic alphanumeric
-    ])
+    @pytest.mark.parametrize(
+        "tlc",
+        [
+            "L-2024-01-15-A",  # Date-based format
+            "BATCH-456",  # BATCH prefix
+            "20240115A",  # Simple date format
+            "ABC20240115B",  # Plant + date
+            "A24015B",  # Julian date format
+            "ABC123XYZ",  # Generic alphanumeric
+        ],
+    )
     def test_valid_tlc_permissive(self, tlc):
         """Test valid TLC formats in permissive mode."""
         result = validate_tlc(tlc)
@@ -248,18 +273,22 @@ class TestTLCValidation:
 # AUTO-DETECTION TESTS
 # =============================================================================
 
+
 class TestIdentifierDetection:
     """Tests for automatic identifier type detection."""
 
-    @pytest.mark.parametrize("value,expected_type", [
-        ("96385074", IdentifierType.GTIN),  # 8 digits → GTIN
-        ("036000291452", IdentifierType.GTIN),  # 12 digits → GTIN
-        ("5901234123457", IdentifierType.GLN),  # 13 digits → GLN
-        ("10345678901231", IdentifierType.GTIN),  # 14 digits → GTIN
-        ("123456789012345678", IdentifierType.SSCC),  # 18 digits → SSCC
-        ("LOT-2024-A", IdentifierType.TLC),  # Alphanumeric → TLC
-        ("ABC123", IdentifierType.TLC),  # Alphanumeric → TLC
-    ])
+    @pytest.mark.parametrize(
+        "value,expected_type",
+        [
+            ("96385074", IdentifierType.GTIN),  # 8 digits → GTIN
+            ("036000291452", IdentifierType.GTIN),  # 12 digits → GTIN
+            ("5901234123457", IdentifierType.GLN),  # 13 digits → GLN
+            ("10345678901231", IdentifierType.GTIN),  # 14 digits → GTIN
+            ("123456789012345678", IdentifierType.SSCC),  # 18 digits → SSCC
+            ("LOT-2024-A", IdentifierType.TLC),  # Alphanumeric → TLC
+            ("ABC123", IdentifierType.TLC),  # Alphanumeric → TLC
+        ],
+    )
     def test_detect_type(self, value, expected_type):
         """Test identifier type detection."""
         assert detect_identifier_type(value) == expected_type
@@ -284,6 +313,7 @@ class TestUnifiedValidation:
 # =============================================================================
 # BATCH VALIDATION TESTS
 # =============================================================================
+
 
 class TestBatchValidation:
     """Tests for batch validation."""
@@ -316,15 +346,19 @@ class TestBatchValidation:
 # UTILITY FUNCTION TESTS
 # =============================================================================
 
+
 class TestUtilityFunctions:
     """Tests for utility functions."""
 
-    @pytest.mark.parametrize("input_gtin,expected", [
-        ("96385074", "00000096385074"),  # GTIN-8 → GTIN-14
-        ("036000291452", "00036000291452"),  # GTIN-12 → GTIN-14
-        ("5901234123457", "05901234123457"),  # GTIN-13 → GTIN-14
-        ("10345678901231", "10345678901231"),  # GTIN-14 unchanged
-    ])
+    @pytest.mark.parametrize(
+        "input_gtin,expected",
+        [
+            ("96385074", "00000096385074"),  # GTIN-8 → GTIN-14
+            ("036000291452", "00036000291452"),  # GTIN-12 → GTIN-14
+            ("5901234123457", "05901234123457"),  # GTIN-13 → GTIN-14
+            ("10345678901231", "10345678901231"),  # GTIN-14 unchanged
+        ],
+    )
     def test_normalize_gtin(self, input_gtin, expected):
         """Test GTIN normalization to 14 digits."""
         assert normalize_gtin(input_gtin) == expected
@@ -340,6 +374,7 @@ class TestUtilityFunctions:
 # =============================================================================
 # VALIDATION RESULT TESTS
 # =============================================================================
+
 
 class TestValidationResult:
     """Tests for ValidationResult dataclass."""
@@ -358,6 +393,7 @@ class TestValidationResult:
 # =============================================================================
 # REAL-WORLD EXAMPLES
 # =============================================================================
+
 
 class TestRealWorldExamples:
     """Tests using real-world identifier patterns."""

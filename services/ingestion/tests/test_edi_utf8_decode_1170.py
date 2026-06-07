@@ -49,7 +49,6 @@ sys.path.insert(0, str(service_dir))
 
 from app.edi_ingestion.routes import _decode_edi_bytes
 
-
 # ---------------------------------------------------------------------------
 # Happy path: clean UTF-8 passes through exactly
 # ---------------------------------------------------------------------------
@@ -61,8 +60,7 @@ class TestValidUtf8_Issue1170:
         decoded = _decode_edi_bytes(raw)
         assert decoded == raw.decode("ascii")
         assert "\ufffd" not in decoded, (
-            "errors='replace' regression: valid ASCII should never produce "
-            "a replacement character"
+            "errors='replace' regression: valid ASCII should never produce a replacement character"
         )
 
     def test_utf8_multibyte_preserved_exactly(self):
@@ -82,14 +80,8 @@ class TestValidUtf8_Issue1170:
         """Valid UTF-8 must not emit the latin-1 fallback warning."""
         with caplog.at_level(logging.WARNING, logger="edi-ingestion"):
             _decode_edi_bytes("N1*ST*SHIPPER CO~".encode("utf-8"))
-        fallback_warnings = [
-            r for r in caplog.records
-            if "edi_decode_fallback_latin1" in r.getMessage()
-        ]
-        assert fallback_warnings == [], (
-            f"Clean UTF-8 must not emit latin-1 fallback warning; "
-            f"saw: {fallback_warnings}"
-        )
+        fallback_warnings = [r for r in caplog.records if "edi_decode_fallback_latin1" in r.getMessage()]
+        assert fallback_warnings == [], f"Clean UTF-8 must not emit latin-1 fallback warning; saw: {fallback_warnings}"
 
 
 # ---------------------------------------------------------------------------
@@ -114,12 +106,9 @@ class TestLatin1Fallback_Issue1170:
 
         # The real ñ must be preserved as U+00F1 — not dropped, not
         # replaced with U+FFFD.
-        assert "Espa\u00f1ola" in decoded, (
-            f"latin-1 fallback must preserve ñ as U+00F1, got: {decoded!r}"
-        )
+        assert "Espa\u00f1ola" in decoded, f"latin-1 fallback must preserve ñ as U+00F1, got: {decoded!r}"
         assert "\ufffd" not in decoded, (
-            "errors='replace' regression: U+FFFD must NOT appear when "
-            "the bytes are valid latin-1"
+            "errors='replace' regression: U+FFFD must NOT appear when the bytes are valid latin-1"
         )
         # Character count matches byte count for single-byte latin-1.
         assert len(decoded) == len(latin1_bytes)
@@ -133,13 +122,10 @@ class TestLatin1Fallback_Issue1170:
         with caplog.at_level(logging.WARNING, logger="edi-ingestion"):
             _decode_edi_bytes(latin1)
         warning_records = [
-            r for r in caplog.records
-            if r.levelname == "WARNING"
-            and "edi_decode_fallback_latin1" in r.getMessage()
+            r for r in caplog.records if r.levelname == "WARNING" and "edi_decode_fallback_latin1" in r.getMessage()
         ]
         assert len(warning_records) == 1, (
-            f"Expected exactly one WARN 'edi_decode_fallback_latin1' log, "
-            f"got {len(warning_records)}"
+            f"Expected exactly one WARN 'edi_decode_fallback_latin1' log, got {len(warning_records)}"
         )
 
     def test_latin1_fallback_warning_includes_byte_count(self, caplog):
@@ -148,13 +134,8 @@ class TestLatin1Fallback_Issue1170:
         raw = b"A\xff\xff\xff_VALID"
         with caplog.at_level(logging.WARNING, logger="edi-ingestion"):
             _decode_edi_bytes(raw)
-        message = next(
-            r.getMessage() for r in caplog.records
-            if "edi_decode_fallback_latin1" in r.getMessage()
-        )
-        assert f"bytes={len(raw)}" in message, (
-            f"warning message missing bytes={len(raw)}: {message!r}"
-        )
+        message = next(r.getMessage() for r in caplog.records if "edi_decode_fallback_latin1" in r.getMessage())
+        assert f"bytes={len(raw)}" in message, f"warning message missing bytes={len(raw)}: {message!r}"
 
     def test_mixed_latin1_bytes_survive_verbatim(self):
         """Every byte value 0x00-0xFF is a valid latin-1 codepoint, so
@@ -192,14 +173,9 @@ class TestNoSilentCorruption_Issue1170:
         raw = b"A\xf1B"
         decoded = _decode_edi_bytes(raw)
         # len must equal the byte count; 'ignore' would drop to len=2.
-        assert len(decoded) == 3, (
-            f"byte drop regression: expected 3 chars, got {len(decoded)} "
-            f"from {decoded!r}"
-        )
+        assert len(decoded) == 3, f"byte drop regression: expected 3 chars, got {len(decoded)} from {decoded!r}"
         # And the middle char is the actual latin-1 ñ, not U+FFFD.
-        assert decoded[1] == "\u00f1", (
-            f"expected middle char to be ñ (U+00F1), got U+{ord(decoded[1]):04X}"
-        )
+        assert decoded[1] == "\u00f1", f"expected middle char to be ñ (U+00F1), got U+{ord(decoded[1]):04X}"
 
     def test_no_replacement_character_in_output(self):
         """``errors='replace'`` regression check: U+FFFD must never
@@ -266,28 +242,30 @@ class TestEndpointRejectsUndecodable_Issue1170:
     corrupted names.
     """
 
-    def test_endpoint_rejects_with_422_when_decode_raises(
-        self, monkeypatch
-    ):
+    def test_endpoint_rejects_with_422_when_decode_raises(self, monkeypatch):
         """Simulate a decode failure that bubbles out of
         ``_decode_edi_bytes``; assert the EDI upload endpoint returns
         HTTP 422 with a decode-failure error body rather than accepting
         corrupted data.
         """
+        import app.edi_ingestion.routes as routes
+        from app.authz import IngestionPrincipal, get_ingestion_principal
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
-        import app.edi_ingestion.routes as routes
-        from app.authz import get_ingestion_principal, IngestionPrincipal
-
         def boom(raw_bytes: bytes) -> str:
             raise UnicodeDecodeError(
-                "utf-8", raw_bytes, 0, 1, "simulated decode failure",
+                "utf-8",
+                raw_bytes,
+                0,
+                1,
+                "simulated decode failure",
             )
 
         monkeypatch.setattr(routes, "_decode_edi_bytes", boom)
         monkeypatch.setattr(
-            routes, "_resolve_tenant_id",
+            routes,
+            "_resolve_tenant_id",
             lambda *args, **kwargs: "tenant-1170-test",
         )
         monkeypatch.setattr(routes, "_verify_partner_id", lambda _pid: None)
@@ -295,10 +273,10 @@ class TestEndpointRejectsUndecodable_Issue1170:
 
         app = FastAPI()
         app.include_router(routes.router)
-        app.dependency_overrides[get_ingestion_principal] = (
-            lambda: IngestionPrincipal(
-                key_id="test-key", scopes=["*"], auth_mode="test",
-            )
+        app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+            key_id="test-key",
+            scopes=["*"],
+            auth_mode="test",
         )
 
         with TestClient(app) as client:
@@ -319,8 +297,7 @@ class TestEndpointRejectsUndecodable_Issue1170:
             )
 
         assert response.status_code == 422, (
-            f"undecodable EDI must be rejected with 422; got "
-            f"{response.status_code}: {response.text}"
+            f"undecodable EDI must be rejected with 422; got {response.status_code}: {response.text}"
         )
         body = response.json()
         assert body["detail"]["error"] == "edi_decode_failed", (

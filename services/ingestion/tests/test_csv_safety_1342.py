@@ -23,30 +23,31 @@ module in production).
 from __future__ import annotations
 
 import pytest
-
 from app.shared.csv_safety import (
     sanitize_cell,
     sanitize_row,
     sanitize_sequence,
 )
 
-
 # ===========================================================================
 # sanitize_cell — formula-prefix neutralization
 # ===========================================================================
 
-class TestSanitizeCellDangerousPrefixes:
 
-    @pytest.mark.parametrize("payload", [
-        "=SUM(A1:A10)",
-        "=WEBSERVICE(\"http://evil/\")",
-        "=cmd|' /C calc'!A0",
-        "+1+cmd",
-        "-2-cmd",
-        "@SUM(1+1)",
-        "\tmalicious",
-        "\rmalicious",
-    ])
+class TestSanitizeCellDangerousPrefixes:
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "=SUM(A1:A10)",
+            '=WEBSERVICE("http://evil/")',
+            "=cmd|' /C calc'!A0",
+            "+1+cmd",
+            "-2-cmd",
+            "@SUM(1+1)",
+            "\tmalicious",
+            "\rmalicious",
+        ],
+    )
     def test_dangerous_prefix_gets_single_quote_escape(self, payload):
         """Every prefix in the module's block-list must be neutralized."""
         result = sanitize_cell(payload)
@@ -77,21 +78,24 @@ class TestSanitizeCellDangerousPrefixes:
 # sanitize_cell — safe passthrough
 # ===========================================================================
 
-class TestSanitizeCellSafeValues:
 
-    @pytest.mark.parametrize("payload", [
-        "Romaine Hearts",
-        "Lot #42",                     # # is safe
-        "hello world",
-        "a=b",                          # = in the middle is safe
-        "abc+xyz",                      # + in middle
-        "back\\slash",
-        "quoted \"inside\"",
-        "3.14",
-        "2026-01-01T00:00:00Z",
-        "tab\tinside\tstring",          # tab in middle is safe
-        "carriage\rreturn\rinside",     # \r in middle is safe
-    ])
+class TestSanitizeCellSafeValues:
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "Romaine Hearts",
+            "Lot #42",  # # is safe
+            "hello world",
+            "a=b",  # = in the middle is safe
+            "abc+xyz",  # + in middle
+            "back\\slash",
+            'quoted "inside"',
+            "3.14",
+            "2026-01-01T00:00:00Z",
+            "tab\tinside\tstring",  # tab in middle is safe
+            "carriage\rreturn\rinside",  # \r in middle is safe
+        ],
+    )
     def test_safe_values_pass_through_unchanged(self, payload):
         assert sanitize_cell(payload) == payload
 
@@ -107,8 +111,8 @@ class TestSanitizeCellSafeValues:
 # sanitize_cell — non-string inputs
 # ===========================================================================
 
-class TestSanitizeCellCoercion:
 
+class TestSanitizeCellCoercion:
     def test_none_becomes_empty_string(self):
         assert sanitize_cell(None) == ""
 
@@ -133,12 +137,14 @@ class TestSanitizeCellCoercion:
         class Thing:
             def __str__(self) -> str:
                 return "my-thing"
+
         assert sanitize_cell(Thing()) == "my-thing"
 
     def test_custom_object_with_dangerous_str_escaped(self):
         class Thing:
             def __str__(self) -> str:
                 return "=evil"
+
         assert sanitize_cell(Thing()) == "'=evil"
 
 
@@ -146,8 +152,8 @@ class TestSanitizeCellCoercion:
 # sanitize_row — dict row helper
 # ===========================================================================
 
-class TestSanitizeRow:
 
+class TestSanitizeRow:
     def test_empty_dict(self):
         assert sanitize_row({}) == {}
 
@@ -193,8 +199,8 @@ class TestSanitizeRow:
 # sanitize_sequence — list/tuple row helper
 # ===========================================================================
 
-class TestSanitizeSequence:
 
+class TestSanitizeSequence:
     def test_empty_sequence(self):
         assert sanitize_sequence([]) == []
         assert sanitize_sequence(()) == []
@@ -216,9 +222,11 @@ class TestSanitizeSequence:
 
     def test_generator_input(self):
         """sanitize_sequence works on any iterable, not just lists."""
+
         def _gen():
             yield "safe"
             yield "=evil"
+
         assert sanitize_sequence(_gen()) == ["safe", "'=evil"]
 
 
@@ -226,10 +234,11 @@ class TestSanitizeSequence:
 # Module surface
 # ===========================================================================
 
-class TestModuleSurface:
 
+class TestModuleSurface:
     def test_public_api_exports(self):
         import app.shared.csv_safety as m
+
         assert m.__all__ == ["sanitize_cell", "sanitize_row", "sanitize_sequence"]
 
     def test_dangerous_prefixes_includes_all_known(self):
@@ -237,4 +246,5 @@ class TestModuleSurface:
         drop one (e.g., tab — which bypasses quoting heuristics in older
         Excel versions)."""
         import app.shared.csv_safety as m
+
         assert set(m._DANGEROUS_PREFIXES) == {"=", "+", "-", "@", "\t", "\r"}

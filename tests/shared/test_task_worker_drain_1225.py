@@ -32,13 +32,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from server.workers import task_processor  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,9 +87,7 @@ class TestInFlightPublication_Issue1225:
             payload={},
             attempts=1,
         )
-        assert seen_ids == [77], (
-            f"handler did not observe in-flight marker = 77; got {seen_ids}"
-        )
+        assert seen_ids == [77], f"handler did not observe in-flight marker = 77; got {seen_ids}"
         # Cleared after.
         assert task_processor._current_task_id is None
         assert task_processor._current_task_attempts == 0
@@ -119,6 +115,7 @@ class TestInFlightPublication_Issue1225:
     def test_current_task_id_cleared_after_handler_exception(self):
         """Even if the handler raises, the marker must be cleared so the
         NEXT task's handler can publish its own id."""
+
         def _handler(_payload):
             raise RuntimeError("boom")
 
@@ -169,6 +166,7 @@ class TestStopTaskWorkerDrain_Issue1225:
         """If the worker thread is wedged inside a handler past the join
         timeout, the drain path must call ``_release_abandoned_task_lock``
         with the published task_id + attempts."""
+
         # Fake a wedged worker by spawning a thread that sleeps through
         # the shutdown event.
         def _run():
@@ -193,6 +191,7 @@ class TestStopTaskWorkerDrain_Issue1225:
         """If the worker is wedged but no task is marked in flight (e.g.
         handler already cleared it but thread is stuck elsewhere), we
         must NOT guess — log and move on without releasing a random row."""
+
         def _run():
             while True:
                 time.sleep(0.05)
@@ -233,8 +232,10 @@ class TestReleaseAbandonedTaskLockSQL_Issue1225:
                 result = MagicMock()
                 result.rowcount = 1
                 return result
+
             def commit(self):
                 pass
+
             def close(self):
                 pass
 
@@ -259,6 +260,7 @@ class TestReleaseAbandonedTaskLockSQL_Issue1225:
         """The release path runs during shutdown — a DB failure must
         not raise out of ``stop_task_worker`` (the process is already
         on its way out)."""
+
         class _ExplodingSession:
             def __init__(self):
                 raise RuntimeError("db unreachable")

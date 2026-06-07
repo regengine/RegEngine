@@ -1,6 +1,6 @@
+import boto3
 import pytest
 from testcontainers.core.container import DockerContainer
-import boto3
 
 
 def _docker_available() -> bool:
@@ -13,6 +13,7 @@ def _docker_available() -> bool:
     """
     try:
         import docker  # type: ignore[import-untyped]
+
         client = docker.from_env()
         client.ping()
         return True
@@ -41,6 +42,7 @@ def minio_container():
     with container as minio:
         yield minio
 
+
 @pytest.fixture
 def s3_client(minio_container):
     """Provide a boto3 S3 client pointing to the test container."""
@@ -50,8 +52,9 @@ def s3_client(minio_container):
         endpoint_url=endpoint_url,
         aws_access_key_id="minio",
         aws_secret_access_key="minio123",
-        region_name="us-east-1"
+        region_name="us-east-1",
     )
+
 
 def test_s3_ingestion_storage(s3_client):
     """
@@ -59,16 +62,16 @@ def test_s3_ingestion_storage(s3_client):
     """
     bucket_name = "reg-engine-raw-data-test"
     s3_client.create_bucket(Bucket=bucket_name)
-    
+
     test_content = b"Sample regulatory document text"
     test_key = "ingest/2026/test-doc.txt"
-    
+
     # Store
     s3_client.put_object(Bucket=bucket_name, Key=test_key, Body=test_content)
-    
+
     # Retrieve
     response = s3_client.get_object(Bucket=bucket_name, Key=test_key)
     retrieved_content = response["Body"].read()
-    
+
     assert retrieved_content == test_content
     print("✅ S3 integration verified with MinIO")

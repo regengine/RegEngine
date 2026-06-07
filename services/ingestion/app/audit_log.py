@@ -17,13 +17,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from .webhook_compat import require_tenant_context
 from .tenant_validation import validate_tenant_id
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("audit-log")
 
@@ -49,7 +49,6 @@ class AuditLogResponse(BaseModel):
     page: int
     page_size: int
     entries: list[AuditEntry]
-
 
 
 # Lazy-init admin DB session factory — only created when first needed.
@@ -287,7 +286,11 @@ def _query_alert_events(db_session, tenant_id: str, limit: int) -> list[AuditEnt
     if tenant_col is None:
         return []
 
-    message_expr = "message" if "message" in columns else ("description" if "description" in columns else ("title" if "title" in columns else "alert_type"))
+    message_expr = (
+        "message"
+        if "message" in columns
+        else ("description" if "description" in columns else ("title" if "title" in columns else "alert_type"))
+    )
 
     rows = db_session.execute(
         text(
@@ -302,7 +305,8 @@ def _query_alert_events(db_session, tenant_id: str, limit: int) -> list[AuditEnt
             WHERE %s = :tenant_id
             ORDER BY created_at DESC
             LIMIT :limit
-            """ % (message_expr, tenant_col)
+            """
+            % (message_expr, tenant_col)
         ),
         {"tenant_id": tenant_id, "limit": limit},
     ).fetchall()
@@ -378,7 +382,7 @@ async def get_audit_log(
 
     total = len(entries)
     start = max((page - 1) * page_size, 0)
-    paged_entries = entries[start:start + page_size]
+    paged_entries = entries[start : start + page_size]
 
     return AuditLogResponse(
         tenant_id=tenant_id,

@@ -4,6 +4,7 @@ Part of the #1342 ingestion coverage sweep. Covers FTL catalog CRUD,
 DB/memory fallback, derive-from-events, GTIN learn path, and router
 endpoints.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,14 +12,10 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import SQLAlchemyError
-
 from app import product_catalog as pc
 from app.product_catalog import (
-    CreateProductRequest,
     FTL_CATEGORIES,
+    CreateProductRequest,
     Product,
     ProductCatalogResponse,
     _db_add_product,
@@ -32,8 +29,10 @@ from app.product_catalog import (
     router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext
-
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -49,6 +48,7 @@ def _clear_store():
 
 class _MappingRow:
     """Mimics a SQLAlchemy Row with ._mapping."""
+
     def __init__(self, mapping: dict):
         self._mapping = mapping
 
@@ -139,9 +139,7 @@ class TestModels:
         assert p2.suppliers == []
 
     def test_catalog_response_model(self):
-        r = ProductCatalogResponse(
-            tenant_id="t1", total=0, ftl_covered=0, categories=[], products=[]
-        )
+        r = ProductCatalogResponse(tenant_id="t1", total=0, ftl_covered=0, categories=[], products=[])
         assert r.tenant_id == "t1"
 
     def test_create_product_request_defaults(self):
@@ -158,12 +156,22 @@ class TestModels:
 
 class TestRowToProduct:
     def test_mapping_row(self):
-        row = _MappingRow({
-            "id": "p1", "name": "Kale", "category": "Leafy Greens",
-            "ftl_covered": True, "sku": "SKU1", "gtin": "GTIN1",
-            "description": "Green", "suppliers": ["A"], "facilities": ["F1"],
-            "cte_count": 5, "last_cte": "2026-04-01", "created_at": "2026-01-01",
-        })
+        row = _MappingRow(
+            {
+                "id": "p1",
+                "name": "Kale",
+                "category": "Leafy Greens",
+                "ftl_covered": True,
+                "sku": "SKU1",
+                "gtin": "GTIN1",
+                "description": "Green",
+                "suppliers": ["A"],
+                "facilities": ["F1"],
+                "cte_count": 5,
+                "last_cte": "2026-04-01",
+                "created_at": "2026-01-01",
+            }
+        )
         p = _row_to_product(row)
         assert p.id == "p1"
         assert p.name == "Kale"
@@ -192,20 +200,34 @@ class TestRowToProduct:
 
 class TestFsmaRowToProduct:
     def test_mapping_row(self):
-        row = _MappingRow({
-            "id": "p1", "name": "Kale", "ftl_category": "Leafy Greens",
-            "ftl_covered": True, "sku": "S", "gtin": "G",
-            "description": "d", "unit_of_measure": "kg", "created_at": "2026-01-01",
-        })
+        row = _MappingRow(
+            {
+                "id": "p1",
+                "name": "Kale",
+                "ftl_category": "Leafy Greens",
+                "ftl_covered": True,
+                "sku": "S",
+                "gtin": "G",
+                "description": "d",
+                "unit_of_measure": "kg",
+                "created_at": "2026-01-01",
+            }
+        )
         p = _fsma_row_to_product(row)
         assert p.category == "Leafy Greens"
         assert p.sku == "S"
 
     def test_null_fields_coalesced_to_empty(self):
-        p = _fsma_row_to_product({
-            "id": "p1", "name": "x", "ftl_category": None,
-            "sku": None, "gtin": None, "description": None,
-        })
+        p = _fsma_row_to_product(
+            {
+                "id": "p1",
+                "name": "x",
+                "ftl_category": None,
+                "sku": None,
+                "gtin": None,
+                "description": None,
+            }
+        )
         assert p.category == ""
         assert p.sku == ""
         assert p.gtin == ""
@@ -225,20 +247,24 @@ class TestFsmaRowToProduct:
 class TestDeriveProducts:
     def test_normal_rows(self):
         rows = [
-            _MappingRow({
-                "product_reference": "Kale",
-                "cte_count": 5,
-                "last_cte": "2026-04-01",
-                "first_seen": "2026-01-01",
-                "lot_codes": ["L1", "L2"],
-            }),
-            _MappingRow({
-                "product_reference": "Spinach",
-                "cte_count": 3,
-                "last_cte": "2026-03-01",
-                "first_seen": "2026-02-01",
-                "lot_codes": [],
-            }),
+            _MappingRow(
+                {
+                    "product_reference": "Kale",
+                    "cte_count": 5,
+                    "last_cte": "2026-04-01",
+                    "first_seen": "2026-01-01",
+                    "lot_codes": ["L1", "L2"],
+                }
+            ),
+            _MappingRow(
+                {
+                    "product_reference": "Spinach",
+                    "cte_count": 3,
+                    "last_cte": "2026-03-01",
+                    "first_seen": "2026-02-01",
+                    "lot_codes": [],
+                }
+            ),
         ]
         db = _FakeSession(responses=[_FakeResult(rows=rows)])
         products = _derive_products_from_events(db, "t1")
@@ -249,13 +275,17 @@ class TestDeriveProducts:
         assert products[0].created_at == "2026-01-01"
 
     def test_null_last_and_first(self):
-        rows = [_MappingRow({
-            "product_reference": "Kale",
-            "cte_count": 0,
-            "last_cte": None,
-            "first_seen": None,
-            "lot_codes": None,
-        })]
+        rows = [
+            _MappingRow(
+                {
+                    "product_reference": "Kale",
+                    "cte_count": 0,
+                    "last_cte": None,
+                    "first_seen": None,
+                    "lot_codes": None,
+                }
+            )
+        ]
         db = _FakeSession(responses=[_FakeResult(rows=rows)])
         products = _derive_products_from_events(db, "t1")
         assert products[0].last_cte is None
@@ -267,13 +297,17 @@ class TestDeriveProducts:
         assert products == []
 
     def test_category_filter_returns_empty(self):
-        rows = [_MappingRow({
-            "product_reference": "Kale",
-            "cte_count": 1,
-            "last_cte": None,
-            "first_seen": None,
-            "lot_codes": [],
-        })]
+        rows = [
+            _MappingRow(
+                {
+                    "product_reference": "Kale",
+                    "cte_count": 1,
+                    "last_cte": None,
+                    "first_seen": None,
+                    "lot_codes": [],
+                }
+            )
+        ]
         db = _FakeSession(responses=[_FakeResult(rows=rows)])
         products = _derive_products_from_events(db, "t1", category="Leafy Greens")
         assert products == []
@@ -321,16 +355,24 @@ class TestDbGetCatalog:
 
     def test_empty_derives_from_events(self, monkeypatch):
         # First call returns empty products; derive fallback returns one row
-        session = _FakeSession(responses=[
-            _FakeResult(rows=[]),  # empty products table
-            _FakeResult(rows=[_MappingRow({
-                "product_reference": "Kale",
-                "cte_count": 3,
-                "last_cte": "2026-04-01",
-                "first_seen": "2026-01-01",
-                "lot_codes": [],
-            })]),
-        ])
+        session = _FakeSession(
+            responses=[
+                _FakeResult(rows=[]),  # empty products table
+                _FakeResult(
+                    rows=[
+                        _MappingRow(
+                            {
+                                "product_reference": "Kale",
+                                "cte_count": 3,
+                                "last_cte": "2026-04-01",
+                                "first_seen": "2026-01-01",
+                                "lot_codes": [],
+                            }
+                        )
+                    ]
+                ),
+            ]
+        )
         monkeypatch.setattr(pc, "get_db_safe", lambda: session)
         products = _db_get_catalog("t1")
         assert len(products) == 1
@@ -415,28 +457,37 @@ class TestLearnFromEvent:
     def test_gtin_from_kdes(self, monkeypatch):
         session = _FakeSession()
         monkeypatch.setattr(pc, "get_db_safe", lambda: session)
-        learn_from_event("t1", {
-            "kdes": {"gtin": "G1"},
-            "product_description": "Kale",
-        })
+        learn_from_event(
+            "t1",
+            {
+                "kdes": {"gtin": "G1"},
+                "product_description": "Kale",
+            },
+        )
         assert session.committed is True
 
     def test_gtin_from_top_level(self, monkeypatch):
         session = _FakeSession()
         monkeypatch.setattr(pc, "get_db_safe", lambda: session)
-        learn_from_event("t1", {
-            "gtin": "G1",
-            "product_description": "Kale",
-        })
+        learn_from_event(
+            "t1",
+            {
+                "gtin": "G1",
+                "product_description": "Kale",
+            },
+        )
         assert session.committed is True
 
     def test_no_db_falls_back_to_memory(self, monkeypatch):
         monkeypatch.setattr(pc, "get_db_safe", lambda: None)
-        learn_from_event("t1", {
-            "gtin": "G1",
-            "product_description": "Kale",
-            "location_name": "Farm A",
-        })
+        learn_from_event(
+            "t1",
+            {
+                "gtin": "G1",
+                "product_description": "Kale",
+                "location_name": "Farm A",
+            },
+        )
         assert len(pc._catalog_store["t1"]) == 1
         assert pc._catalog_store["t1"][0].gtin == "G1"
 
@@ -545,10 +596,7 @@ class TestCatalogGet:
         assert "Poultry" in body["categories"]
 
     def test_pagination_limits_products(self, monkeypatch):
-        products = [
-            Product(id=str(i), name=f"P{i}", category="Leafy Greens")
-            for i in range(10)
-        ]
+        products = [Product(id=str(i), name=f"P{i}", category="Leafy Greens") for i in range(10)]
         monkeypatch.setattr(pc, "_db_get_catalog", lambda tid, cat=None: products)
         client = TestClient(_build_app())
         resp = client.get("/api/v1/products/t1?skip=2&limit=3")
@@ -601,9 +649,13 @@ class TestAddProductEndpoint:
     def test_db_success(self, monkeypatch):
         monkeypatch.setattr(pc, "_db_add_product", lambda *a, **k: True)
         client = TestClient(_build_app())
-        resp = client.post("/api/v1/products/t1", json={
-            "name": "Kale", "category": "Leafy Greens",
-        })
+        resp = client.post(
+            "/api/v1/products/t1",
+            json={
+                "name": "Kale",
+                "category": "Leafy Greens",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["created"] is True
@@ -612,9 +664,13 @@ class TestAddProductEndpoint:
     def test_db_fail_falls_back_to_memory(self, monkeypatch):
         monkeypatch.setattr(pc, "_db_add_product", lambda *a, **k: False)
         client = TestClient(_build_app())
-        resp = client.post("/api/v1/products/t1", json={
-            "name": "Kale", "category": "Leafy Greens",
-        })
+        resp = client.post(
+            "/api/v1/products/t1",
+            json={
+                "name": "Kale",
+                "category": "Leafy Greens",
+            },
+        )
         assert resp.status_code == 200
         assert len(pc._catalog_store["t1"]) == 1
 
@@ -622,33 +678,44 @@ class TestAddProductEndpoint:
         monkeypatch.setattr(pc, "_db_add_product", lambda *a, **k: False)
         pc._catalog_store["t1"] = [Product(id="x", name="existing", category="Herbs")]
         client = TestClient(_build_app())
-        resp = client.post("/api/v1/products/t1", json={
-            "name": "Kale", "category": "Leafy Greens",
-        })
+        resp = client.post(
+            "/api/v1/products/t1",
+            json={
+                "name": "Kale",
+                "category": "Leafy Greens",
+            },
+        )
         assert resp.status_code == 200
         assert len(pc._catalog_store["t1"]) == 2
 
     def test_non_ftl_category_flags_not_covered(self, monkeypatch):
         monkeypatch.setattr(pc, "_db_add_product", lambda *a, **k: True)
         client = TestClient(_build_app())
-        resp = client.post("/api/v1/products/t1", json={
-            "name": "Widget", "category": "Industrial",
-        })
+        resp = client.post(
+            "/api/v1/products/t1",
+            json={
+                "name": "Widget",
+                "category": "Industrial",
+            },
+        )
         body = resp.json()
         assert body["ftl_covered"] is False
 
     def test_full_payload_flows_through(self, monkeypatch):
         monkeypatch.setattr(pc, "_db_add_product", lambda *a, **k: True)
         client = TestClient(_build_app())
-        resp = client.post("/api/v1/products/t1", json={
-            "name": "Kale",
-            "category": "Leafy Greens",
-            "sku": "K-1",
-            "gtin": "0614141000043",
-            "description": "Fresh leafy green",
-            "suppliers": ["FarmA"],
-            "facilities": ["DC1"],
-        })
+        resp = client.post(
+            "/api/v1/products/t1",
+            json={
+                "name": "Kale",
+                "category": "Leafy Greens",
+                "sku": "K-1",
+                "gtin": "0614141000043",
+                "description": "Fresh leafy green",
+                "suppliers": ["FarmA"],
+                "facilities": ["DC1"],
+            },
+        )
         body = resp.json()
         assert body["product"]["suppliers"] == ["FarmA"]
         assert body["product"]["facilities"] == ["DC1"]

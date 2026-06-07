@@ -21,7 +21,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.distributed import DistributedContext
 
 
@@ -46,7 +45,6 @@ def _make_ctx_with_fake_engine(lock_returns: bool = True) -> DistributedContext:
 
 
 class TestLeadershipFlagInWaitForLeadership:
-
     def test_is_leader_true_during_callback(self):
         ctx = _make_ctx_with_fake_engine(lock_returns=True)
 
@@ -58,8 +56,7 @@ class TestLeadershipFlagInWaitForLeadership:
         ctx.wait_for_leadership(cb, poll_interval=0)
 
         assert observed["leader_during_callback"] is True, (
-            "#1162: wait_for_leadership must set _is_leader=True before "
-            "invoking the callback"
+            "#1162: wait_for_leadership must set _is_leader=True before invoking the callback"
         )
 
     def test_is_leader_false_after_callback(self):
@@ -100,10 +97,5 @@ class TestLeadershipFlagInWaitForLeadership:
         # block's `return` suppresses the propagating exception.
         ctx.wait_for_leadership(cb, poll_interval=0)
 
-        assert observed["leader_at_raise"] is True, (
-            "While callback was running, _is_leader must be True"
-        )
-        assert ctx._is_leader is False, (
-            "After callback raises, _is_leader must be cleared "
-            "in the finally block"
-        )
+        assert observed["leader_at_raise"] is True, "While callback was running, _is_leader must be True"
+        assert ctx._is_leader is False, "After callback raises, _is_leader must be cleared in the finally block"

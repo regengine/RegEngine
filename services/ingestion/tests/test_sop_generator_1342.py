@@ -19,9 +19,6 @@ Tracks GitHub issue #1342.
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app.sop_generator import (
     SOPRequest,
     SOPResponse,
@@ -30,7 +27,8 @@ from app.sop_generator import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ===========================================================================
 # App fixture with auth bypass
@@ -43,6 +41,7 @@ def client():
     app = FastAPI()
     app.include_router(router)
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app, default_tenant="tenant-sop-1")
     with TestClient(app) as c:
@@ -67,7 +66,6 @@ def _minimal_payload(**overrides):
 
 
 class TestGenerateCteProceduresByCompanyType:
-
     def test_grower_includes_harvesting_cooling(self):
         out = _generate_cte_procedures("grower", ["Tomatoes"], has_iot=False)
         assert "Harvesting CTE" in out
@@ -118,7 +116,6 @@ class TestGenerateCteProceduresByCompanyType:
 
 
 class TestGenerateCteProceduresIotToggle:
-
     def test_iot_on_cooling_mentions_sensitech(self):
         out = _generate_cte_procedures("manufacturer", ["Tomatoes"], has_iot=True)
         assert "Sensitech" in out or "IoT temperature logger" in out
@@ -145,7 +142,6 @@ class TestGenerateCteProceduresIotToggle:
 
 
 class TestGenerateCteProceduresProductList:
-
     def test_first_five_products_listed(self):
         products = ["A", "B", "C", "D", "E", "F", "G"]
         out = _generate_cte_procedures("manufacturer", products, has_iot=False)
@@ -168,7 +164,6 @@ class TestGenerateCteProceduresProductList:
 
 
 class TestGenerateEndpointHappyPath:
-
     def test_minimal_request_returns_valid_sop(self, client):
         resp = client.post("/api/v1/sop/generate", json=_minimal_payload())
         assert resp.status_code == 200
@@ -220,7 +215,6 @@ class TestGenerateEndpointHappyPath:
 
 
 class TestGenerateEndpointValidation:
-
     def test_empty_products_rejected(self, client):
         resp = client.post(
             "/api/v1/sop/generate",
@@ -249,13 +243,10 @@ class TestGenerateEndpointValidation:
 
 
 class TestGenerateEndpointOptionalContactFields:
-
     def test_contact_title_appended_when_present(self, client):
         resp = client.post(
             "/api/v1/sop/generate",
-            json=_minimal_payload(
-                primary_contact="Jane Roe", contact_title="VP Compliance"
-            ),
+            json=_minimal_payload(primary_contact="Jane Roe", contact_title="VP Compliance"),
         )
         body = resp.json()
         assert "VP Compliance" in body["markdown_content"]
@@ -281,7 +272,6 @@ class TestGenerateEndpointOptionalContactFields:
 
 
 class TestGenerateEndpointRetailerSections:
-
     def test_no_target_retailers_omits_retailer_section(self, client):
         resp = client.post("/api/v1/sop/generate", json=_minimal_payload())
         body = resp.json()
@@ -336,9 +326,7 @@ class TestGenerateEndpointRetailerSections:
     def test_multiple_retailers_all_rendered(self, client):
         resp = client.post(
             "/api/v1/sop/generate",
-            json=_minimal_payload(
-                target_retailers=["Walmart", "Kroger", "Costco"]
-            ),
+            json=_minimal_payload(target_retailers=["Walmart", "Kroger", "Costco"]),
         )
         body = resp.json()
         md = body["markdown_content"]
@@ -353,7 +341,6 @@ class TestGenerateEndpointRetailerSections:
 
 
 class TestGenerateEndpointIntegrationSection:
-
     def test_no_integration_omits_section(self, client):
         resp = client.post("/api/v1/sop/generate", json=_minimal_payload())
         body = resp.json()
@@ -387,9 +374,7 @@ class TestGenerateEndpointIntegrationSection:
     def test_both_erp_and_iot_include_both_subsections(self, client):
         resp = client.post(
             "/api/v1/sop/generate",
-            json=_minimal_payload(
-                has_erp_integration=True, has_iot_monitoring=True
-            ),
+            json=_minimal_payload(has_erp_integration=True, has_iot_monitoring=True),
         )
         body = resp.json()
         md = body["markdown_content"]
@@ -403,7 +388,6 @@ class TestGenerateEndpointIntegrationSection:
 
 
 class TestSectionListOrdering:
-
     def test_default_sections_in_order(self, client):
         resp = client.post("/api/v1/sop/generate", json=_minimal_payload())
         sections = resp.json()["sections"]
@@ -463,7 +447,6 @@ class TestSectionListOrdering:
 
 
 class TestPydanticModels:
-
     def test_sop_request_defaults(self):
         r = SOPRequest(
             company_name="X",

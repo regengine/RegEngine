@@ -29,11 +29,11 @@ from shared.canonical_event import (
     IngestionSource,
     TraceabilityEvent,
 )
-from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import (
     evaluate_field_presence,
     evaluate_multi_field_presence,
 )
+from shared.rules.types import EvaluationSummary, RuleDefinition, RuleEvaluationResult
 
 TENANT = "00000000-0000-0000-0000-000000000099"
 
@@ -90,6 +90,7 @@ def _rule(rule_id="snap-rule-001", eval_logic=None, **extra):
 # ===================================================================
 # Evidence References in Compliance Reports
 # ===================================================================
+
 
 class TestEvidenceReferences:
     """Evidence fields inspected must be stable and complete."""
@@ -152,6 +153,7 @@ class TestEvidenceReferences:
 # Rule Citation Format
 # ===================================================================
 
+
 class TestCitationFormat:
     """Citations must follow consistent format and be present on results."""
 
@@ -199,6 +201,7 @@ class TestCitationFormat:
 # Explanation Structure (why_failed)
 # ===================================================================
 
+
 class TestExplanationStructure:
     """Failure explanations must be human-readable and template-driven."""
 
@@ -245,6 +248,7 @@ class TestExplanationStructure:
 # ===================================================================
 # Deterministic Output
 # ===================================================================
+
 
 class TestDeterministicOutput:
     """Same canonical event + same rules = identical compliance output.
@@ -310,6 +314,7 @@ class TestDeterministicOutput:
 # ===================================================================
 # Result Field Completeness
 # ===================================================================
+
 
 class TestResultFieldCompleteness:
     """Every RuleEvaluationResult must have all fields populated."""

@@ -43,6 +43,19 @@ from fastapi import (
 )
 from prometheus_client import REGISTRY, Counter, Histogram
 
+# Advanced ingestion framework components
+from regengine_ingestion.audit import AuditLogger
+from regengine_ingestion.config import DatabaseConfig as FrameworkDatabaseConfig
+from regengine_ingestion.models import (
+    Document,
+    DocumentHash as FrameworkDocumentHash,
+    DocumentType,
+    IngestionJob,
+    JobStatus,
+    SourceMetadata as FrameworkSourceMetadata,
+)
+from regengine_ingestion.parsers import create_default_registry
+from regengine_ingestion.storage.database import DatabaseManager
 from shared.auth import APIKey, require_api_key
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
@@ -58,6 +71,7 @@ from .models import (
     NormalizedEvent,
 )
 from .normalization import normalize_document
+from .regulation_loader import RegulationLoader
 from .s3_utils import put_bytes, put_json
 from .shared.upload_limits import (
     MAX_REGULATION_FILE_SIZE_BYTES,
@@ -68,22 +82,6 @@ from .shared.upload_limits import (
     validate_regulation_upload_content,
 )
 from .task_handlers_regulation import get_staging_path
-
-# Advanced ingestion framework components
-from regengine_ingestion.audit import AuditLogger
-from regengine_ingestion.config import DatabaseConfig as FrameworkDatabaseConfig
-from regengine_ingestion.models import (
-    Document,
-    DocumentHash as FrameworkDocumentHash,
-    DocumentType,
-    IngestionJob,
-    JobStatus,
-    SourceMetadata as FrameworkSourceMetadata,
-)
-from regengine_ingestion.parsers import create_default_registry
-from regengine_ingestion.storage.database import DatabaseManager
-
-from .regulation_loader import RegulationLoader
 
 PARSER_REGISTRY = create_default_registry()
 
@@ -105,6 +103,7 @@ PROHIBITED_NETWORKS = [
 ]
 MAX_PAYLOAD_BYTES = 25 * 1024 * 1024
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
+
 
 def _registered_metric(name: str):
     collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
@@ -139,15 +138,11 @@ def _get_or_create_histogram(name: str, documentation: str, labelnames: list[str
         raise
 
 
-REQUEST_COUNTER = _get_or_create_counter(
-    "ingestion_requests_total", "Total ingestion requests", ["endpoint", "status"]
-)
+REQUEST_COUNTER = _get_or_create_counter("ingestion_requests_total", "Total ingestion requests", ["endpoint", "status"])
 REQUEST_LATENCY = _get_or_create_histogram(
     "ingestion_request_latency_seconds", "Ingestion request latency", ["endpoint"]
 )
-KAFKA_COUNTER = _get_or_create_counter(
-    "ingestion_kafka_messages_total", "Kafka messages produced", ["topic"]
-)
+KAFKA_COUNTER = _get_or_create_counter("ingestion_kafka_messages_total", "Kafka messages produced", ["topic"])
 
 
 def get_db_manager() -> Optional[DatabaseManager]:
@@ -172,13 +167,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
             # Fallback for simple formats if any
             return None
 
-        config = FrameworkDatabaseConfig(
-            host=host,
-            port=int(port),
-            database=dbname,
-            user=user,
-            password=password
-        )
+        config = FrameworkDatabaseConfig(host=host, port=int(port), database=dbname, user=user, password=password)
         logger.info("db_config_parsed", host=host, dbname=dbname, user=user)
         manager = DatabaseManager(config)
         manager.connect()
@@ -193,6 +182,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
 # ---------------------------------------------------------------------------
 # Per-endpoint rate limiting (OWASP API4:2023)
 # ---------------------------------------------------------------------------
+
 
 def _endpoint_rate_limit(bucket: str, rpm: int):
     """FastAPI dependency factory enforcing a per-tenant, per-endpoint rate limit.
@@ -244,7 +234,9 @@ def _endpoint_rate_limit(bucket: str, rpm: int):
     return _check
 
 
-async def process_regulation_ingestion(job_id: str, name: str, filename: str, tenant_id: str, webhook: Optional[str] = None):
+async def process_regulation_ingestion(
+    job_id: str, name: str, filename: str, tenant_id: str, webhook: Optional[str] = None
+):
     """Background task to process regulation ingestion with webhook notification (v2)."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
@@ -263,16 +255,8 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
 
     try:
         r.setex(f"ingest:status:{job_id}", 7200, "processing")
-        loader = RegulationLoader(
-            uri=settings.neo4j_uri,
-            user=settings.neo4j_user,
-            password=settings.neo4j_password
-        )
-        count = await loader.load(
-            tmp_path,
-            "pdf" if filename.endswith(".pdf") else "docx",
-            name
-        )
+        loader = RegulationLoader(uri=settings.neo4j_uri, user=settings.neo4j_user, password=settings.neo4j_password)
+        count = await loader.load(tmp_path, "pdf" if filename.endswith(".pdf") else "docx", name)
         loader.close()
 
         r.setex(f"ingest:status:{job_id}", 7200, "completed")
@@ -334,10 +318,7 @@ async def ingest_regulation(
     # Entitlement check
     allowed = set(api_key.allowed_jurisdictions or [])
     if "US" not in allowed and "GLOBAL" not in allowed:
-        raise HTTPException(
-            status_code=403,
-            detail="API key does not have jurisdiction access for US regulations"
-        )
+        raise HTTPException(status_code=403, detail="API key does not have jurisdiction access for US regulations")
 
     # Validate webhook URL early to prevent SSRF (#990)
     if webhook:
@@ -424,7 +405,7 @@ def _process_and_emit(
     job_id: Optional[str] = None,
     audit_logger: Optional[AuditLogger] = None,
     db_manager: Optional[DatabaseManager] = None,
-    vertical: str = "unknown"
+    vertical: str = "unknown",
 ) -> NormalizedEvent:
     """Shared document processing, storage, and emission logic."""
     settings = get_settings()
@@ -440,8 +421,8 @@ def _process_and_emit(
     if db_manager:
         existing = db_manager.get_document_by_hash(content_sha256, tenant_id=tenant_id)
         if existing:
-            document_id = str(existing['id'])
-            normalized_uri = existing['storage_key']
+            document_id = str(existing["id"])
+            normalized_uri = existing["storage_key"]
 
             if audit_logger:
                 audit_logger.log_skip(document_id, "duplicate")
@@ -458,7 +439,7 @@ def _process_and_emit(
                 normalized_s3_path=normalized_uri,
                 timestamp=datetime.now(timezone.utc),
                 content_sha256=content_sha256,
-                is_duplicate=True
+                is_duplicate=True,
             )
 
             # Emit deduplication event to Kafka
@@ -479,7 +460,7 @@ def _process_and_emit(
     text_sha256 = None
     text_sha512 = None
     if parsed_text:
-        text_bytes = parsed_text.encode('utf-8')
+        text_bytes = parsed_text.encode("utf-8")
         text_sha256 = hashlib.sha256(text_bytes).hexdigest()
         text_sha512 = hashlib.sha512(text_bytes).hexdigest()
 
@@ -492,9 +473,7 @@ def _process_and_emit(
             logger.debug("json_parse_skipped", url=url_str, error=str(e))
 
     try:
-        normalized, document_id, _ = normalize_document(
-            raw_json, raw_bytes, url_str, content_type
-        )
+        normalized, document_id, _ = normalize_document(raw_json, raw_bytes, url_str, content_type)
     except (ValueError, KeyError, TypeError) as e:
         logger.error("normalization_failed", url=url_str, error=str(e))
         raise HTTPException(status_code=422, detail=f"Document parsing/normalization failed: {str(e)}")
@@ -548,17 +527,14 @@ def _process_and_emit(
                     content_sha256=content_sha256,
                     content_sha512=content_sha512,
                     text_sha256=text_sha256,
-                    text_sha512=text_sha512
+                    text_sha512=text_sha512,
                 ),
-                source_metadata=FrameworkSourceMetadata(
-                    source_url=url_str,
-                    fetch_timestamp=timestamp
-                ),
+                source_metadata=FrameworkSourceMetadata(source_url=url_str, fetch_timestamp=timestamp),
                 text=parsed_text,
                 text_length=len(parsed_text) if parsed_text else 0,
                 storage_key=normalized_uri,
                 content_type=content_type,
-                content_length=len(raw_bytes)
+                content_length=len(raw_bytes),
             )
             db_manager.insert_document(doc)
         except (psycopg.Error, ConnectionError, OSError, RuntimeError) as db_exc:
@@ -628,7 +604,7 @@ async def ingest_direct(
             source_type="direct",
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config={"source_url": url_str}
+            config={"source_url": url_str},
         )
         try:
             db_manager.insert_job(job)
@@ -647,7 +623,7 @@ async def ingest_direct(
             job_id=job_id,
             audit_logger=audit_logger,
             db_manager=db_manager,
-            vertical=payload.vertical or "unknown"
+            vertical=payload.vertical or "unknown",
         )
 
         if db_manager:
@@ -667,7 +643,8 @@ async def ingest_direct(
             job.error_message = str(exc)
             job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
-        logger.exception("ingestion_error", error=str(exc)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("ingestion_error", error=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if db_manager:
             db_manager.close()
@@ -704,7 +681,7 @@ async def ingest_file(
             source_type="file_upload",
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config={"filename": safe_filename}
+            config={"filename": safe_filename},
         )
         try:
             db_manager.insert_job(job)
@@ -727,7 +704,7 @@ async def ingest_file(
             job_id=job_id,
             audit_logger=audit_logger,
             db_manager=db_manager,
-            vertical=vertical or "unknown"
+            vertical=vertical or "unknown",
         )
 
         if db_manager:
@@ -793,7 +770,7 @@ async def ingest_url(
             source_type="url",
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config={"url": url_str}
+            config={"url": url_str},
         )
         try:
             db_manager.insert_job(job)
@@ -815,7 +792,7 @@ async def ingest_url(
             job_id=job_id,
             audit_logger=audit_logger,
             db_manager=db_manager,
-            vertical=payload.vertical or "unknown"
+            vertical=payload.vertical or "unknown",
         )
 
         if db_manager:
@@ -912,7 +889,13 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
             except (HTTPException, ValueError, KeyError, TypeError, ConnectionError, OSError) as e:
                 failed_count += 1
                 if audit_logger:
-                    audit_logger.log("ingest", "document", status="failure", error=str(e), details={"url": source_metadata.source_url})
+                    audit_logger.log(
+                        "ingest",
+                        "document",
+                        status="failure",
+                        error=str(e),
+                        details={"url": source_metadata.source_url},
+                    )
                 logger.error("federal_ingest_item_failed", url=source_metadata.source_url, error=str(e))
 
         logger.info("federal_ingest_completed", source=adapter.get_source_name(), count=count)
@@ -972,20 +955,20 @@ async def _fetch(url: str) -> tuple[bytes, str]:
 
     # SSRF defense (RE-SEC-001/002): follow redirects manually, re-validating
     # each hop and pinning the connection to a validated IP via safe_httpx_client.
-    from shared.safe_http import safe_httpx_client
     from urllib.parse import urljoin
+
+    from shared.safe_http import safe_httpx_client
 
     MAX_REDIRECTS = 5
     current_url = url
     try:
         import httpx
+
         for hop in range(MAX_REDIRECTS + 1):
             # Re-run the route's own validator on every hop (handles host
             # allowlist / port checks consistently with non-redirect paths).
             _validate_url(current_url)
-            async with safe_httpx_client(
-                url=current_url, timeout=60.0, http2=True, headers=headers
-            ) as client:
+            async with safe_httpx_client(url=current_url, timeout=60.0, http2=True, headers=headers) as client:
                 async with client.stream("GET", current_url) as response:
                     if response.is_redirect:
                         location = response.headers.get("location")
@@ -1009,9 +992,7 @@ async def _fetch(url: str) -> tuple[bytes, str]:
                             url=current_url,
                             status=response.status_code,
                         )
-                        raise HTTPException(
-                            status_code=502, detail="Source system returned error"
-                        )
+                        raise HTTPException(status_code=502, detail="Source system returned error")
 
                     content_type = response.headers.get("Content-Type", content_type)
 
@@ -1073,9 +1054,7 @@ def _resolve_and_validate(host: str) -> set[str]:
     for addr in addresses:
         ip = ip_address(addr)
         if any(ip in network for network in PROHIBITED_NETWORKS):
-            raise HTTPException(
-                status_code=400, detail="Host resolved to a private network"
-            )
+            raise HTTPException(status_code=400, detail="Host resolved to a private network")
 
     return addresses
 

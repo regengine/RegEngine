@@ -35,12 +35,13 @@ def _audit_log_validation_failure(
     """Fire-and-forget audit log for FSMA validation failures."""
     try:
         import asyncio
+
         from shared.audit_logging import (
-            AuditLogger,
             AuditActor,
-            AuditResource,
-            AuditEventType,
             AuditEventCategory,
+            AuditEventType,
+            AuditLogger,
+            AuditResource,
             AuditSeverity,
         )
 
@@ -94,8 +95,8 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
     (errors are logged and audit-trailed but do not block ingestion).
     """
     try:
-        from shared.schemas import FSMAEvent, FSMAEventType
         from pydantic import ValidationError
+        from shared.schemas import FSMAEvent, FSMAEventType
 
         # Map internal event_type strings to FSMAEventType enum
         event_type_map = {
@@ -148,10 +149,7 @@ def _validate_gln_format(gln: str) -> bool:
         logger.debug("shared.fsma_validation unavailable — using inline GLN check")
         if not gln.isdigit() or len(gln) != 13:
             return False
-        total = sum(
-            int(digit) * (3 if index % 2 else 1)
-            for index, digit in enumerate(reversed(gln[:-1]))
-        )
+        total = sum(int(digit) * (3 if index % 2 else 1) for index, digit in enumerate(reversed(gln[:-1])))
         expected = (10 - (total % 10)) % 10
         return int(gln[-1]) == expected
 

@@ -34,14 +34,13 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "services"))
 
 from shared.canonical_event import (
+    SCHEMA_VERSION,
     CTEType,
     IngestionSource,
     ProvenanceMetadata,
     TraceabilityEvent,
-    SCHEMA_VERSION,
 )
 from shared.rules_engine import FSMA_RULE_SEEDS
-
 
 # ---------------------------------------------------------------------------
 # Demo Companies & Facilities
@@ -94,6 +93,7 @@ PRODUCTS = [
 # ---------------------------------------------------------------------------
 # Event Builder
 # ---------------------------------------------------------------------------
+
 
 def _make_event(
     event_type: str,
@@ -151,145 +151,358 @@ def build_demo_events() -> list[TraceabilityEvent]:
     events = []
 
     # --- Product 0: Romaine Lettuce (complete chain, all compliant) ---
-    events.append(_make_event("harvesting", 0, "2026Q1-001", 72, "fresh_farms", quantity=2000, unit="lbs", kdes={
-        "harvest_date": (NOW - timedelta(hours=72)).strftime("%Y-%m-%d"),
-        "field_name": "Field 7A - North Block",
-        "reference_document": "HARVEST-2026-0322-001",
-        "product_description": "Romaine Lettuce, Whole Head",
-    }))
-    events.append(_make_event("cooling", 0, "2026Q1-001", 70, "fresh_farms", quantity=2000, unit="lbs", kdes={
-        "cooling_date": (NOW - timedelta(hours=70)).strftime("%Y-%m-%d"),
-        "location_name": "Fresh Farms Cold Storage A",
-        "reference_document": "COOL-2026-0322-001",
-    }))
-    events.append(_make_event("initial_packing", 0, "2026Q1-001", 66, "sunshine_packing", quantity=500, kdes={
-        "packing_date": (NOW - timedelta(hours=66)).strftime("%Y-%m-%d"),
-        "reference_document": "PACK-2026-0322-001",
-        "harvester_business_name": "Fresh Farms LLC",
-        "contact_phone": "831-555-0100",
-    }))
-    events.append(_make_event("shipping", 0, "2026Q1-001", 48, "sunshine_packing", "metro_distribution", kdes={
-        "ship_date": (NOW - timedelta(hours=48)).strftime("%Y-%m-%d"),
-        "ship_from_location": "Sunshine Packing Co",
-        "ship_from_gln": "0061414100020",
-        "ship_to_location": "Metro Distribution Center",
-        "ship_to_gln": "0061414100030",
-        "reference_document": "BOL-2026-0323-001",
-        "carrier": "FedEx Freight",
-        "tlc_source_reference": "0061414100020",
-    }))
-    events.append(_make_event("receiving", 0, "2026Q1-001", 24, "metro_distribution", quantity=500, kdes={
-        "receive_date": (NOW - timedelta(hours=24)).strftime("%Y-%m-%d"),
-        "receiving_location": "Metro Distribution Center",
-        "immediate_previous_source": "Sunshine Packing Co",
-        "reference_document": "RCV-2026-0324-001",
-        "tlc_source_reference": "0061414100020",
-    }))
+    events.append(
+        _make_event(
+            "harvesting",
+            0,
+            "2026Q1-001",
+            72,
+            "fresh_farms",
+            quantity=2000,
+            unit="lbs",
+            kdes={
+                "harvest_date": (NOW - timedelta(hours=72)).strftime("%Y-%m-%d"),
+                "field_name": "Field 7A - North Block",
+                "reference_document": "HARVEST-2026-0322-001",
+                "product_description": "Romaine Lettuce, Whole Head",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "cooling",
+            0,
+            "2026Q1-001",
+            70,
+            "fresh_farms",
+            quantity=2000,
+            unit="lbs",
+            kdes={
+                "cooling_date": (NOW - timedelta(hours=70)).strftime("%Y-%m-%d"),
+                "location_name": "Fresh Farms Cold Storage A",
+                "reference_document": "COOL-2026-0322-001",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "initial_packing",
+            0,
+            "2026Q1-001",
+            66,
+            "sunshine_packing",
+            quantity=500,
+            kdes={
+                "packing_date": (NOW - timedelta(hours=66)).strftime("%Y-%m-%d"),
+                "reference_document": "PACK-2026-0322-001",
+                "harvester_business_name": "Fresh Farms LLC",
+                "contact_phone": "831-555-0100",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "shipping",
+            0,
+            "2026Q1-001",
+            48,
+            "sunshine_packing",
+            "metro_distribution",
+            kdes={
+                "ship_date": (NOW - timedelta(hours=48)).strftime("%Y-%m-%d"),
+                "ship_from_location": "Sunshine Packing Co",
+                "ship_from_gln": "0061414100020",
+                "ship_to_location": "Metro Distribution Center",
+                "ship_to_gln": "0061414100030",
+                "reference_document": "BOL-2026-0323-001",
+                "carrier": "FedEx Freight",
+                "tlc_source_reference": "0061414100020",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "receiving",
+            0,
+            "2026Q1-001",
+            24,
+            "metro_distribution",
+            quantity=500,
+            kdes={
+                "receive_date": (NOW - timedelta(hours=24)).strftime("%Y-%m-%d"),
+                "receiving_location": "Metro Distribution Center",
+                "immediate_previous_source": "Sunshine Packing Co",
+                "reference_document": "RCV-2026-0324-001",
+                "tlc_source_reference": "0061414100020",
+            },
+        )
+    )
 
     # --- Product 1: Baby Spinach (missing some KDEs — will trigger rule failures) ---
-    events.append(_make_event("harvesting", 1, "2026Q1-002", 60, "fresh_farms", quantity=1500, unit="lbs", kdes={
-        "harvest_date": (NOW - timedelta(hours=60)).strftime("%Y-%m-%d"),
-        "field_name": "Greenhouse B3",
-        "reference_document": "HARVEST-SPN-001",
-    }))
-    events.append(_make_event("initial_packing", 1, "2026Q1-002", 54, "sunshine_packing", quantity=300, kdes={
-        "packing_date": (NOW - timedelta(hours=54)).strftime("%Y-%m-%d"),
-        "reference_document": "PACK-SPN-001",
-        # Missing harvester_business_name — will trigger rule failure
-    }))
-    events.append(_make_event("shipping", 1, "2026Q1-002", 36, "sunshine_packing", "metro_distribution", kdes={
-        "ship_date": (NOW - timedelta(hours=36)).strftime("%Y-%m-%d"),
-        "ship_from_location": "Sunshine Packing Co",
-        "ship_to_location": "Metro Distribution Center",
-        "reference_document": "BOL-SPN-001",
-        # Missing tlc_source_reference — will trigger rule failure
-    }))
-    events.append(_make_event("receiving", 1, "2026Q1-002", 12, "metro_distribution", quantity=300, kdes={
-        "receive_date": (NOW - timedelta(hours=12)).strftime("%Y-%m-%d"),
-        "receiving_location": "Metro Distribution Center",
-        # Missing immediate_previous_source — will trigger CRITICAL rule failure
-        # Missing tlc_source_reference — will trigger CRITICAL rule failure
-    }, confidence=0.85))
+    events.append(
+        _make_event(
+            "harvesting",
+            1,
+            "2026Q1-002",
+            60,
+            "fresh_farms",
+            quantity=1500,
+            unit="lbs",
+            kdes={
+                "harvest_date": (NOW - timedelta(hours=60)).strftime("%Y-%m-%d"),
+                "field_name": "Greenhouse B3",
+                "reference_document": "HARVEST-SPN-001",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "initial_packing",
+            1,
+            "2026Q1-002",
+            54,
+            "sunshine_packing",
+            quantity=300,
+            kdes={
+                "packing_date": (NOW - timedelta(hours=54)).strftime("%Y-%m-%d"),
+                "reference_document": "PACK-SPN-001",
+                # Missing harvester_business_name — will trigger rule failure
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "shipping",
+            1,
+            "2026Q1-002",
+            36,
+            "sunshine_packing",
+            "metro_distribution",
+            kdes={
+                "ship_date": (NOW - timedelta(hours=36)).strftime("%Y-%m-%d"),
+                "ship_from_location": "Sunshine Packing Co",
+                "ship_to_location": "Metro Distribution Center",
+                "reference_document": "BOL-SPN-001",
+                # Missing tlc_source_reference — will trigger rule failure
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "receiving",
+            1,
+            "2026Q1-002",
+            12,
+            "metro_distribution",
+            quantity=300,
+            kdes={
+                "receive_date": (NOW - timedelta(hours=12)).strftime("%Y-%m-%d"),
+                "receiving_location": "Metro Distribution Center",
+                # Missing immediate_previous_source — will trigger CRITICAL rule failure
+                # Missing tlc_source_reference — will trigger CRITICAL rule failure
+            },
+            confidence=0.85,
+        )
+    )
 
     # --- Product 2: Cherry Tomatoes (partial chain) ---
-    events.append(_make_event("harvesting", 2, "2026Q1-003", 96, "fresh_farms", quantity=800, unit="lbs", kdes={
-        "harvest_date": (NOW - timedelta(hours=96)).strftime("%Y-%m-%d"),
-        "field_name": "Tomato Row 12",
-        "reference_document": "HARVEST-TOM-001",
-    }))
-    events.append(_make_event("initial_packing", 2, "2026Q1-003", 90, "sunshine_packing", quantity=200, kdes={
-        "packing_date": (NOW - timedelta(hours=90)).strftime("%Y-%m-%d"),
-        "reference_document": "PACK-TOM-001",
-        "harvester_business_name": "Fresh Farms LLC",
-    }))
-    events.append(_make_event("shipping", 2, "2026Q1-003", 84, "sunshine_packing", "city_grocery", quantity=200, kdes={
-        "ship_date": (NOW - timedelta(hours=84)).strftime("%Y-%m-%d"),
-        "ship_from_location": "Sunshine Packing Co",
-        "ship_to_location": "City Grocery #1247",
-        "reference_document": "BOL-TOM-001",
-        "carrier": "Local Fresh Delivery",
-        "tlc_source_reference": "0061414100020",
-    }))
+    events.append(
+        _make_event(
+            "harvesting",
+            2,
+            "2026Q1-003",
+            96,
+            "fresh_farms",
+            quantity=800,
+            unit="lbs",
+            kdes={
+                "harvest_date": (NOW - timedelta(hours=96)).strftime("%Y-%m-%d"),
+                "field_name": "Tomato Row 12",
+                "reference_document": "HARVEST-TOM-001",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "initial_packing",
+            2,
+            "2026Q1-003",
+            90,
+            "sunshine_packing",
+            quantity=200,
+            kdes={
+                "packing_date": (NOW - timedelta(hours=90)).strftime("%Y-%m-%d"),
+                "reference_document": "PACK-TOM-001",
+                "harvester_business_name": "Fresh Farms LLC",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "shipping",
+            2,
+            "2026Q1-003",
+            84,
+            "sunshine_packing",
+            "city_grocery",
+            quantity=200,
+            kdes={
+                "ship_date": (NOW - timedelta(hours=84)).strftime("%Y-%m-%d"),
+                "ship_from_location": "Sunshine Packing Co",
+                "ship_to_location": "City Grocery #1247",
+                "reference_document": "BOL-TOM-001",
+                "carrier": "Local Fresh Delivery",
+                "tlc_source_reference": "0061414100020",
+            },
+        )
+    )
 
     # --- Product 3: Salmon (seafood chain with first_land_based_receiving) ---
-    events.append(_make_event("first_land_based_receiving", 3, "2026Q1-004", 48, "pacific_seafood", quantity=400, unit="lbs", kdes={
-        "landing_date": (NOW - timedelta(hours=48)).strftime("%Y-%m-%d"),
-        "reference_document": "LAND-SAL-001",
-        "receiving_location": "Pacific Seafood Dock 3",
-        "harvest_date": (NOW - timedelta(hours=52)).strftime("%Y-%m-%d"),
-    }))
-    events.append(_make_event("cooling", 3, "2026Q1-004", 46, "pacific_seafood", quantity=400, unit="lbs", kdes={
-        "cooling_date": (NOW - timedelta(hours=46)).strftime("%Y-%m-%d"),
-        "location_name": "Pacific Seafood Cold Room",
-        "reference_document": "COOL-SAL-001",
-    }))
-    events.append(_make_event("shipping", 3, "2026Q1-004", 30, "pacific_seafood", "metro_distribution", quantity=400, unit="lbs", kdes={
-        "ship_date": (NOW - timedelta(hours=30)).strftime("%Y-%m-%d"),
-        "ship_from_location": "Pacific Seafood Co",
-        "ship_to_location": "Metro Distribution Center",
-        "reference_document": "BOL-SAL-001",
-        "carrier": "Refrigerated Express",
-        "tlc_source_reference": "0061414100050",
-    }))
-    events.append(_make_event("receiving", 3, "2026Q1-004", 6, "metro_distribution", quantity=400, unit="lbs", kdes={
-        "receive_date": (NOW - timedelta(hours=6)).strftime("%Y-%m-%d"),
-        "receiving_location": "Metro Distribution Center",
-        "immediate_previous_source": "Pacific Seafood Co",
-        "reference_document": "RCV-SAL-001",
-        "tlc_source_reference": "0061414100050",
-    }))
+    events.append(
+        _make_event(
+            "first_land_based_receiving",
+            3,
+            "2026Q1-004",
+            48,
+            "pacific_seafood",
+            quantity=400,
+            unit="lbs",
+            kdes={
+                "landing_date": (NOW - timedelta(hours=48)).strftime("%Y-%m-%d"),
+                "reference_document": "LAND-SAL-001",
+                "receiving_location": "Pacific Seafood Dock 3",
+                "harvest_date": (NOW - timedelta(hours=52)).strftime("%Y-%m-%d"),
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "cooling",
+            3,
+            "2026Q1-004",
+            46,
+            "pacific_seafood",
+            quantity=400,
+            unit="lbs",
+            kdes={
+                "cooling_date": (NOW - timedelta(hours=46)).strftime("%Y-%m-%d"),
+                "location_name": "Pacific Seafood Cold Room",
+                "reference_document": "COOL-SAL-001",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "shipping",
+            3,
+            "2026Q1-004",
+            30,
+            "pacific_seafood",
+            "metro_distribution",
+            quantity=400,
+            unit="lbs",
+            kdes={
+                "ship_date": (NOW - timedelta(hours=30)).strftime("%Y-%m-%d"),
+                "ship_from_location": "Pacific Seafood Co",
+                "ship_to_location": "Metro Distribution Center",
+                "reference_document": "BOL-SAL-001",
+                "carrier": "Refrigerated Express",
+                "tlc_source_reference": "0061414100050",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "receiving",
+            3,
+            "2026Q1-004",
+            6,
+            "metro_distribution",
+            quantity=400,
+            unit="lbs",
+            kdes={
+                "receive_date": (NOW - timedelta(hours=6)).strftime("%Y-%m-%d"),
+                "receiving_location": "Metro Distribution Center",
+                "immediate_previous_source": "Pacific Seafood Co",
+                "reference_document": "RCV-SAL-001",
+                "tlc_source_reference": "0061414100050",
+            },
+        )
+    )
 
     # --- Transformation event (salad mix from romaine + spinach) ---
-    events.append(_make_event("transformation", 0, "2026Q1-MIX", 4, "metro_distribution", quantity=250, kdes={
-        "transformation_date": (NOW - timedelta(hours=4)).strftime("%Y-%m-%d"),
-        "location_name": "Metro Distribution - Processing Line 2",
-        "reference_document": "TRANSFORM-MIX-001",
-        "input_traceability_lot_codes": [
-            f"{PRODUCTS[0]['gtin']}{PRODUCTS[0]['tlc_prefix']}2026Q1-001",
-            f"{PRODUCTS[1]['gtin']}{PRODUCTS[1]['tlc_prefix']}2026Q1-002",
-        ],
-    }))
+    events.append(
+        _make_event(
+            "transformation",
+            0,
+            "2026Q1-MIX",
+            4,
+            "metro_distribution",
+            quantity=250,
+            kdes={
+                "transformation_date": (NOW - timedelta(hours=4)).strftime("%Y-%m-%d"),
+                "location_name": "Metro Distribution - Processing Line 2",
+                "reference_document": "TRANSFORM-MIX-001",
+                "input_traceability_lot_codes": [
+                    f"{PRODUCTS[0]['gtin']}{PRODUCTS[0]['tlc_prefix']}2026Q1-001",
+                    f"{PRODUCTS[1]['gtin']}{PRODUCTS[1]['tlc_prefix']}2026Q1-002",
+                ],
+            },
+        )
+    )
 
     # --- Second batch of romaine (for volume) ---
-    events.append(_make_event("harvesting", 0, "2026Q1-005", 36, "fresh_farms", quantity=3000, unit="lbs", kdes={
-        "harvest_date": (NOW - timedelta(hours=36)).strftime("%Y-%m-%d"),
-        "field_name": "Field 12B - South Block",
-        "reference_document": "HARVEST-2026-0324-002",
-    }))
-    events.append(_make_event("initial_packing", 0, "2026Q1-005", 30, "sunshine_packing", quantity=750, kdes={
-        "packing_date": (NOW - timedelta(hours=30)).strftime("%Y-%m-%d"),
-        "reference_document": "PACK-2026-0324-002",
-        "harvester_business_name": "Fresh Farms LLC",
-        "contact_phone": "831-555-0100",
-    }))
-    events.append(_make_event("shipping", 0, "2026Q1-005", 18, "sunshine_packing", "metro_distribution", quantity=750, kdes={
-        "ship_date": (NOW - timedelta(hours=18)).strftime("%Y-%m-%d"),
-        "ship_from_location": "Sunshine Packing Co",
-        "ship_to_location": "Metro Distribution Center",
-        "reference_document": "BOL-2026-0324-002",
-        "carrier": "FedEx Freight",
-        "tlc_source_reference": "0061414100020",
-    }))
+    events.append(
+        _make_event(
+            "harvesting",
+            0,
+            "2026Q1-005",
+            36,
+            "fresh_farms",
+            quantity=3000,
+            unit="lbs",
+            kdes={
+                "harvest_date": (NOW - timedelta(hours=36)).strftime("%Y-%m-%d"),
+                "field_name": "Field 12B - South Block",
+                "reference_document": "HARVEST-2026-0324-002",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "initial_packing",
+            0,
+            "2026Q1-005",
+            30,
+            "sunshine_packing",
+            quantity=750,
+            kdes={
+                "packing_date": (NOW - timedelta(hours=30)).strftime("%Y-%m-%d"),
+                "reference_document": "PACK-2026-0324-002",
+                "harvester_business_name": "Fresh Farms LLC",
+                "contact_phone": "831-555-0100",
+            },
+        )
+    )
+    events.append(
+        _make_event(
+            "shipping",
+            0,
+            "2026Q1-005",
+            18,
+            "sunshine_packing",
+            "metro_distribution",
+            quantity=750,
+            kdes={
+                "ship_date": (NOW - timedelta(hours=18)).strftime("%Y-%m-%d"),
+                "ship_from_location": "Sunshine Packing Co",
+                "ship_to_location": "Metro Distribution Center",
+                "reference_document": "BOL-2026-0324-002",
+                "carrier": "FedEx Freight",
+                "tlc_source_reference": "0061414100020",
+            },
+        )
+    )
 
     return events
 
@@ -301,9 +514,9 @@ def build_demo_rules() -> list[dict]:
 
 def print_summary(events: list[TraceabilityEvent]) -> None:
     """Print a summary of generated demo data."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  FSMA 204 Demo Data — {len(events)} Canonical Events")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     by_type: dict[str, int] = {}
     by_product: dict[str, int] = {}
@@ -323,12 +536,15 @@ def print_summary(events: list[TraceabilityEvent]) -> None:
     print(f"\n  Tenant:       {DEMO_TENANT_ID}")
     print(f"  Schema:       {SCHEMA_VERSION}")
     print(f"  Facilities:   {len(FACILITIES)}")
-    print(f"  Time range:   {(NOW - timedelta(hours=96)).strftime('%Y-%m-%d %H:%M')} → {NOW.strftime('%Y-%m-%d %H:%M')}")
-    print(f"{'='*60}\n")
+    print(
+        f"  Time range:   {(NOW - timedelta(hours=96)).strftime('%Y-%m-%d %H:%M')} → {NOW.strftime('%Y-%m-%d %H:%M')}"
+    )
+    print(f"{'=' * 60}\n")
 
 
 def main() -> int:
     import argparse
+
     parser = argparse.ArgumentParser(description="Seed FSMA 204 demo data")
     parser.add_argument("--dry-run", action="store_true", help="Print events without persisting")
     parser.add_argument("--tenant-id", default=DEMO_TENANT_ID, help="Tenant UUID")
@@ -345,8 +561,8 @@ def main() -> int:
 
     # Persist to database
     try:
-        from shared.database import SessionLocal
         from shared.canonical_persistence import CanonicalEventStore
+        from shared.database import SessionLocal
         from shared.rules_engine import RulesEngine, seed_rule_definitions
 
         db = SessionLocal()
@@ -398,19 +614,19 @@ def main() -> int:
         # Create exception cases from failures
         print("  Creating exception cases from failures...")
         from shared.exception_queue import ExceptionQueueService
+
         exc_svc = ExceptionQueueService(db)
         exc_count = 0
         for summary in summaries:
             if not summary.compliant:
-                exc_count += exc_svc.create_exceptions_from_evaluation(
-                    args.tenant_id, summary
-                )
+                exc_count += exc_svc.create_exceptions_from_evaluation(args.tenant_id, summary)
         db.commit()
         print(f"  {exc_count} exception cases created")
 
         # Create an active request case
         print("  Creating demo request case...")
         from shared.request_workflow import RequestWorkflow
+
         wf = RequestWorkflow(db)
         request_id = wf.create_request_case(
             tenant_id=args.tenant_id,
@@ -434,6 +650,7 @@ def main() -> int:
         print(f"\n  ERROR: {e}")
         print("  Make sure DATABASE_URL is set and the database has migrations applied.\n")
         import traceback
+
         traceback.print_exc()
         return 1
 

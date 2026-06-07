@@ -14,9 +14,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("sop-generator")
 
@@ -25,11 +25,9 @@ router = APIRouter(prefix="/api/v1/sop", tags=["SOP Generator"])
 
 class SOPRequest(BaseModel):
     """Request to generate an SOP / Traceability Plan."""
+
     company_name: str = Field(..., description="Company name")
-    company_type: str = Field(
-        "manufacturer",
-        description="Type: grower, manufacturer, distributor, retailer, importer"
-    )
+    company_type: str = Field("manufacturer", description="Type: grower, manufacturer, distributor, retailer, importer")
     products: list[str] = Field(..., description="List of FTL-covered products", min_length=1)
     facilities: list[str] = Field(..., description="Facility names/locations", min_length=1)
     primary_contact: str = Field(..., description="FSMA compliance contact name")
@@ -42,6 +40,7 @@ class SOPRequest(BaseModel):
 
 class SOPResponse(BaseModel):
     """Generated SOP document."""
+
     company_name: str
     generated_at: str
     document_title: str
@@ -76,7 +75,11 @@ def _generate_cte_procedures(company_type: str, products: list[str], has_iot: bo
 **Responsible**: Field Supervisor / Harvest Lead""")
 
     if company_type in ("grower", "manufacturer"):
-        temp_line = "7. Verify IoT temperature logger is recording (Sensitech TempTale or equivalent)" if has_iot else "7. Record manual temperature check at start and end of cooling"
+        temp_line = (
+            "7. Verify IoT temperature logger is recording (Sensitech TempTale or equivalent)"
+            if has_iot
+            else "7. Record manual temperature check at start and end of cooling"
+        )
         sections.append(f"""### 4.2 Cooling CTE (§1.1325(b))
 
 **Scope**: All cooling operations for temperature-sensitive FTL products
@@ -204,9 +207,7 @@ async def generate_sop(
 {"- **Costco**: Requires full lot genealogy for all FTL products. Prefers EPCIS JSON-LD." if "Costco" in request.target_retailers or "costco" in [r.lower() for r in request.target_retailers] else ""}
 """
 
-    cte_procedures = _generate_cte_procedures(
-        request.company_type, request.products, request.has_iot_monitoring
-    )
+    cte_procedures = _generate_cte_procedures(request.company_type, request.products, request.has_iot_monitoring)
 
     integration_section = ""
     if request.has_erp_integration or request.has_iot_monitoring:

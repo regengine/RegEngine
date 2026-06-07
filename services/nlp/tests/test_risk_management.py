@@ -3,18 +3,26 @@
 Uses sys.modules mocking ONLY for the duration of the import, then
 immediately restores original modules to avoid contaminating other tests.
 """
-import unittest
+
 import sys
+import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
 # ----------- Module-level mock-and-restore for import only -----------
 _MOCKED_MODULES = [
-    "pydantic", "pydantic.BaseModel",
-    "shared", "shared.schemas",
-    "structlog", "structlog.contextvars",
-    "langchain", "langchain.agents",
-    "openai", "jsonschema", "requests", "tenacity",
+    "pydantic",
+    "pydantic.BaseModel",
+    "shared",
+    "shared.schemas",
+    "structlog",
+    "structlog.contextvars",
+    "langchain",
+    "langchain.agents",
+    "openai",
+    "jsonschema",
+    "requests",
+    "tenacity",
     "services.nlp.app.extractors.llm_extractor",
     "services.nlp.app.extractors.sec_sci_extractor",
 ]
@@ -33,14 +41,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 # Import our target (this succeeds because heavy deps are mocked)
 from services.nlp.app.extractors.fsma_extractor import (
-    FSMAExtractor,
-    ExtractionConfidence,
-    FSMAExtractionResult,
-    DocumentType,
     CTE,
+    HITL_CONFIDENCE_THRESHOLD,
     TOPIC_GRAPH_UPDATE,
     TOPIC_NEEDS_REVIEW,
-    HITL_CONFIDENCE_THRESHOLD,
+    DocumentType,
+    ExtractionConfidence,
+    FSMAExtractionResult,
+    FSMAExtractor,
 )
 
 # IMMEDIATELY restore all original modules so later imports are not affected
@@ -88,7 +96,7 @@ class TestFSMARiskManagement(unittest.TestCase):
             ctes=[],
             extraction_timestamp="2024-01-01T00:00:00Z",
             confidence_level=ExtractionConfidence.MEDIUM,
-            review_required=True
+            review_required=True,
         )
 
         graph_event = self.extractor.to_graph_event(result)
@@ -141,5 +149,6 @@ class TestFSMARiskManagement(unittest.TestCase):
         self.assertFalse(self.extractor.validate_tlc_format(""))
         self.assertFalse(self.extractor.validate_tlc_format("12345"))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

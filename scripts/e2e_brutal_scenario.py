@@ -49,16 +49,30 @@ if env_path.exists():
 # ── Colour helpers ───────────────────────────────────────────────────────────
 RESET = "\033[0m"
 GREEN = "\033[32m"
-RED   = "\033[31m"
+RED = "\033[31m"
 YELLOW = "\033[33m"
-BOLD  = "\033[1m"
-CYAN  = "\033[36m"
+BOLD = "\033[1m"
+CYAN = "\033[36m"
 
-def ok(msg):   print(f"  {GREEN}✓{RESET} {msg}")
-def fail(msg): print(f"  {RED}✗{RESET} {msg}")
-def warn(msg): print(f"  {YELLOW}⚠{RESET} {msg}")
-def info(msg): print(f"  {CYAN}→{RESET} {msg}")
-def header(msg): print(f"\n{BOLD}{msg}{RESET}\n{'─'*60}")
+
+def ok(msg):
+    print(f"  {GREEN}✓{RESET} {msg}")
+
+
+def fail(msg):
+    print(f"  {RED}✗{RESET} {msg}")
+
+
+def warn(msg):
+    print(f"  {YELLOW}⚠{RESET} {msg}")
+
+
+def info(msg):
+    print(f"  {CYAN}→{RESET} {msg}")
+
+
+def header(msg):
+    print(f"\n{BOLD}{msg}{RESET}\n{'─' * 60}")
 
 
 # ── Messy CSV data ──────────────────────────────────────────────────────────
@@ -107,6 +121,7 @@ def build_headers():
 
 # ── Main scenario ────────────────────────────────────────────────────────────
 
+
 def run():
     results = {"passed": 0, "failed": 0, "warnings": 0}
 
@@ -135,7 +150,8 @@ def run():
         # instead of blocking for 30s waiting for a TCP timeout to a non-routable host.
         _effective_db = (
             "postgresql://regengine:regengine@localhost:9999/regengine"  # port 9999 → instant refused
-            if _is_docker_db else _configured_db
+            if _is_docker_db
+            else _configured_db
         )
         env = {
             **os.environ,
@@ -150,8 +166,18 @@ def run():
             "REGENGINE_API_KEY": E2E_API_KEY,
         }
         proc = subprocess.Popen(
-            ["/usr/local/bin/python3.12", "-m", "uvicorn", "main:app",
-             "--host", "0.0.0.0", "--port", "8002", "--log-level", "warning"],
+            [
+                "/usr/local/bin/python3.12",
+                "-m",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8002",
+                "--log-level",
+                "warning",
+            ],
             cwd=str(ingestion_dir),
             env=env,
             stdout=subprocess.DEVNULL,
@@ -182,7 +208,7 @@ def run():
         except Exception:
             pass
         db_available = svc_data.get("database", "unknown") != "unavailable"
-        check(True, f"Service healthy at {BASE_URL} (kafka={svc_data.get('kafka','?')})", "")
+        check(True, f"Service healthy at {BASE_URL} (kafka={svc_data.get('kafka', '?')})", "")
         if not db_available:
             warn("Database unavailable — persistence/export checks will be warnings only")
         info(f"Tenant: {TENANT_ID}")
@@ -207,15 +233,17 @@ def run():
         header("Step 1: Ingest messy harvest CSV (7 rows, duplicates, missing fields)")
         harvest_bytes = MESSY_HARVEST_CSV.encode()
         resp = request(
-            "POST", "/api/v1/ingest/csv",
+            "POST",
+            "/api/v1/ingest/csv",
             data={"cte_type": "harvesting", "source": "e2e_brutal_test", "tenant_id": TENANT_ID},
             files={"file": ("harvest_messy.csv", harvest_bytes, "text/csv")},
             headers=build_headers(),
         )
         info(f"Status: {resp.status_code}")
         # 500 when DB unreachable is a known env limitation — not a pipeline logic bug
-        ingest_is_db_error = (resp.status_code == 500 and
-            ("unexpected error" in resp.text.lower() or "ingestion failed" in resp.text.lower()))
+        ingest_is_db_error = resp.status_code == 500 and (
+            "unexpected error" in resp.text.lower() or "ingestion failed" in resp.text.lower()
+        )
         harvest_ok = check(
             resp.status_code == 200,
             "CSV ingest accepted (events stored to DB)",
@@ -228,22 +256,39 @@ def run():
             harvest_data = resp.json()
             accepted = harvest_data.get("accepted", 0)
             rejected = harvest_data.get("rejected", 0)
-            check(accepted >= 4, f"Accepted {accepted} rows (expected ≥4)", f"Only {accepted} rows accepted",
-                  warning=not db_live)
-            check(rejected >= 0, f"Rejected/warned: {rejected} rows (idempotency + missing fields expected)", "", warning=True)
+            check(
+                accepted >= 4,
+                f"Accepted {accepted} rows (expected ≥4)",
+                f"Only {accepted} rows accepted",
+                warning=not db_live,
+            )
+            check(
+                rejected >= 0,
+                f"Rejected/warned: {rejected} rows (idempotency + missing fields expected)",
+                "",
+                warning=True,
+            )
             info(f"Accepted: {accepted}, Rejected/skipped: {rejected}")
 
             # Check for SHA-256 hashes on accepted events (rejected events don't get hashes)
             events = harvest_data.get("events", [])
             accepted_events = [e for e in events if e.get("status") == "accepted"]
             hashed = sum(1 for e in accepted_events if e.get("sha256_hash"))
-            check(hashed == len(accepted_events), f"All {hashed}/{len(accepted_events)} accepted events have SHA-256 hash",
-                  f"Only {hashed}/{len(accepted_events)} accepted events have SHA-256 hash", warning=not db_live)
+            check(
+                hashed == len(accepted_events),
+                f"All {hashed}/{len(accepted_events)} accepted events have SHA-256 hash",
+                f"Only {hashed}/{len(accepted_events)} accepted events have SHA-256 hash",
+                warning=not db_live,
+            )
 
             # Check chain hashes on accepted events
             chained = sum(1 for e in accepted_events if e.get("chain_hash"))
-            check(chained == len(accepted_events), f"All {chained}/{len(accepted_events)} accepted events have chain hash",
-                  f"Only {chained}/{len(accepted_events)} accepted events have chain hash", warning=True)
+            check(
+                chained == len(accepted_events),
+                f"All {chained}/{len(accepted_events)} accepted events have chain hash",
+                f"Only {chained}/{len(accepted_events)} accepted events have chain hash",
+                warning=True,
+            )
 
         # ── Step 1b: Validation-layer check (DB-independent) ─────────────────
         # Send a CSV missing required KDEs → must be rejected with clear errors
@@ -253,7 +298,8 @@ def run():
             "LOT-BAD-001,Spinach,100,cases,2026-04-01,Farm X\n"  # missing reference_document
         ).encode()
         resp_bad = request(
-            "POST", "/api/v1/ingest/csv",
+            "POST",
+            "/api/v1/ingest/csv",
             data={"cte_type": "harvesting", "source": "e2e_validation_test", "tenant_id": TENANT_ID},
             files={"file": ("bad.csv", bad_csv, "text/csv")},
             headers=build_headers(),
@@ -262,37 +308,56 @@ def run():
             bad_data = resp_bad.json()
             bad_accepted = bad_data.get("accepted", 0)
             bad_rejected = bad_data.get("rejected", 0)
-            check(bad_accepted == 0, "Incomplete event correctly rejected (accepted=0)",
-                  f"Incomplete event was incorrectly accepted! accepted={bad_accepted}")
-            check(bad_rejected >= 1, f"Rejection recorded (rejected={bad_rejected})",
-                  "No rejection recorded for bad event")
+            check(
+                bad_accepted == 0,
+                "Incomplete event correctly rejected (accepted=0)",
+                f"Incomplete event was incorrectly accepted! accepted={bad_accepted}",
+            )
+            check(
+                bad_rejected >= 1,
+                f"Rejection recorded (rejected={bad_rejected})",
+                "No rejection recorded for bad event",
+            )
             # Look for the specific KDE error
             bad_events = bad_data.get("events", [])
             has_kde_error = any(
-                any("reference_document" in (e or "") for e in (ev.get("errors") or []))
-                for ev in bad_events
+                any("reference_document" in (e or "") for e in (ev.get("errors") or [])) for ev in bad_events
             )
-            check(has_kde_error, "Rejection reason mentions 'reference_document' KDE",
-                  "Rejection reason does not mention missing KDE — validation message unclear", warning=True)
+            check(
+                has_kde_error,
+                "Rejection reason mentions 'reference_document' KDE",
+                "Rejection reason does not mention missing KDE — validation message unclear",
+                warning=True,
+            )
         else:
             # DB error on bad CSV is same env limitation as Steps 1-3
             bad_db_err = resp_bad.status_code == 500 and "unexpected error" in resp_bad.text.lower()
-            check(bad_db_err, "Validation step hit DB error (same env limitation)",
-                  f"Bad CSV returned unexpected status: {resp_bad.status_code}", warning=bad_db_err)
+            check(
+                bad_db_err,
+                "Validation step hit DB error (same env limitation)",
+                f"Bad CSV returned unexpected status: {resp_bad.status_code}",
+                warning=bad_db_err,
+            )
 
         # ── Step 2: Ingest shipping CSV ──────────────────────────────────────
         header("Step 2: Ingest shipping CSV (4 rows)")
         ship_bytes = MESSY_SHIPPING_CSV.encode()
         resp = request(
-            "POST", "/api/v1/ingest/csv",
+            "POST",
+            "/api/v1/ingest/csv",
             data={"cte_type": "shipping", "source": "e2e_brutal_test", "tenant_id": TENANT_ID},
             files={"file": ("shipping.csv", ship_bytes, "text/csv")},
             headers=build_headers(),
         )
-        ship_db_err = resp.status_code == 500 and ("unexpected error" in resp.text.lower() or "ingestion failed" in resp.text.lower())
-        ship_ok = check(resp.status_code == 200, "Shipping CSV accepted",
-                        f"Shipping CSV: {resp.status_code} — {'DB unreachable' if ship_db_err else resp.text[:200]}",
-                        warning=ship_db_err and not db_live)
+        ship_db_err = resp.status_code == 500 and (
+            "unexpected error" in resp.text.lower() or "ingestion failed" in resp.text.lower()
+        )
+        ship_ok = check(
+            resp.status_code == 200,
+            "Shipping CSV accepted",
+            f"Shipping CSV: {resp.status_code} — {'DB unreachable' if ship_db_err else resp.text[:200]}",
+            warning=ship_db_err and not db_live,
+        )
         if ship_ok:
             ship_data = resp.json()
             info(f"Accepted: {ship_data.get('accepted', 0)}, Rejected: {ship_data.get('rejected', 0)}")
@@ -302,34 +367,39 @@ def run():
         webhook_payload = {
             "source": "erp_webhook",
             "tenant_id": TENANT_ID,
-            "events": [{
-                "cte_type": "transformation",
-                "traceability_lot_code": "LOT-SALAD-2026-0402A",
-                "product_description": "Organic Salad Kit (Baby Spinach + Kale)",
-                "quantity": 450,
-                "unit_of_measure": "cases",
-                "location_name": "FreshPak Processing Salinas CA",
-                "location_gln": "0614141099888",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "kdes": {
-                    "input_lot_codes": ["LOT-SPIN-2026-0401A", "LOT-KALE-2026-0401D"],
-                    "transformation_date": "2026-04-02",
-                    "process_type": "wash_cut_pack",
-                    "food_safety_plan_ref": "HACCP-2026-001",
-                    "reference_document": "XFORM-2026-FP-0001",
+            "events": [
+                {
+                    "cte_type": "transformation",
+                    "traceability_lot_code": "LOT-SALAD-2026-0402A",
+                    "product_description": "Organic Salad Kit (Baby Spinach + Kale)",
+                    "quantity": 450,
+                    "unit_of_measure": "cases",
+                    "location_name": "FreshPak Processing Salinas CA",
+                    "location_gln": "0614141099888",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "kdes": {
+                        "input_lot_codes": ["LOT-SPIN-2026-0401A", "LOT-KALE-2026-0401D"],
+                        "transformation_date": "2026-04-02",
+                        "process_type": "wash_cut_pack",
+                        "food_safety_plan_ref": "HACCP-2026-001",
+                        "reference_document": "XFORM-2026-FP-0001",
+                    },
                 }
-            }]
+            ],
         }
         resp = request(
-            "POST", "/api/v1/webhooks/ingest",
+            "POST",
+            "/api/v1/webhooks/ingest",
             json=webhook_payload,
             headers={**build_headers(), "Content-Type": "application/json"},
         )
         xform_db_err = resp.status_code == 500 and "ingestion failed" in resp.text.lower()
-        xform_ok = check(resp.status_code in (200, 201, 202),
-                         f"Transformation CTE accepted ({resp.status_code})",
-                         f"Transformation CTE: {resp.status_code} — {'DB unreachable' if xform_db_err else resp.text[:200]}",
-                         warning=xform_db_err and not db_live)
+        xform_ok = check(
+            resp.status_code in (200, 201, 202),
+            f"Transformation CTE accepted ({resp.status_code})",
+            f"Transformation CTE: {resp.status_code} — {'DB unreachable' if xform_db_err else resp.text[:200]}",
+            warning=xform_db_err and not db_live,
+        )
         if xform_ok:
             xdata = resp.json()
             info(f"Accepted: {xdata.get('accepted', 0)}")
@@ -337,34 +407,51 @@ def run():
         # ── Step 4: Compliance score ─────────────────────────────────────────
         header("Step 4: Compliance score")
         resp = request("GET", f"/api/v1/compliance/score/{TENANT_ID}", headers=build_headers())
-        score_ok = check(resp.status_code == 200, f"Compliance score returned ({resp.status_code})",
-                         f"Score endpoint failed: {resp.status_code} {resp.text[:200]}")
+        score_ok = check(
+            resp.status_code == 200,
+            f"Compliance score returned ({resp.status_code})",
+            f"Score endpoint failed: {resp.status_code} {resp.text[:200]}",
+        )
         if score_ok:
             score_data = resp.json()
             score = score_data.get("overall_score", 0)
             grade = score_data.get("grade", "?")
             demo_mode = score_data.get("demo_mode", False)
-            check(not demo_mode, "Live score (not demo mode)", "Score is in demo mode — DB data not being used", warning=True)
+            check(
+                not demo_mode,
+                "Live score (not demo mode)",
+                "Score is in demo mode — DB data not being used",
+                warning=True,
+            )
             check(score > 0, f"Score: {score}/100 Grade {grade}", f"Score is 0 — no data registered?", warning=True)
             info(f"Score: {score}/100 | Grade: {grade} | Demo: {demo_mode}")
 
         # ── Step 5: FDA Export — all events ──────────────────────────────────
         header("Step 5: FDA 24-hour export package (all events)")
         resp = request(
-            "GET", "/api/v1/fda/export/all",
+            "GET",
+            "/api/v1/fda/export/all",
             params={"tenant_id": TENANT_ID, "format": "package"},
             headers=build_headers(),
         )
-        exp_db_err = resp.status_code == 500 and ("unexpected error" in resp.text.lower() or "internal" in resp.text.lower())
-        export_ok = check(resp.status_code == 200,
-                          f"FDA export generated ({resp.status_code})",
-                          f"FDA export: {resp.status_code} — {'DB unreachable (no data to export)' if exp_db_err and not db_live else resp.text[:300]}",
-                          warning=exp_db_err and not db_live)
+        exp_db_err = resp.status_code == 500 and (
+            "unexpected error" in resp.text.lower() or "internal" in resp.text.lower()
+        )
+        export_ok = check(
+            resp.status_code == 200,
+            f"FDA export generated ({resp.status_code})",
+            f"FDA export: {resp.status_code} — {'DB unreachable (no data to export)' if exp_db_err and not db_live else resp.text[:300]}",
+            warning=exp_db_err and not db_live,
+        )
 
         if export_ok:
             content_type = resp.headers.get("content-type", "")
-            check("zip" in content_type or "octet" in content_type,
-                  f"Response is zip ({content_type})", f"Unexpected content type: {content_type}", warning=True)
+            check(
+                "zip" in content_type or "octet" in content_type,
+                f"Response is zip ({content_type})",
+                f"Unexpected content type: {content_type}",
+                warning=True,
+            )
 
             # ── Step 6: Inspect zip ──────────────────────────────────────────
             header("Step 6: Inspect zip package")
@@ -382,28 +469,41 @@ def run():
 
                     # CSV file
                     csv_files = [n for n in names if n.endswith(".csv")]
-                    check(len(csv_files) == 1, f"CSV file present: {csv_files[0] if csv_files else '?'}",
-                          "No CSV file in zip")
+                    check(
+                        len(csv_files) == 1,
+                        f"CSV file present: {csv_files[0] if csv_files else '?'}",
+                        "No CSV file in zip",
+                    )
 
                     # chain verification JSON
                     chain_files = [n for n in names if "chain" in n and n.endswith(".json")]
-                    check(len(chain_files) >= 1, f"Chain verification JSON present: {chain_files}",
-                          "No chain verification JSON", warning=True)
+                    check(
+                        len(chain_files) >= 1,
+                        f"Chain verification JSON present: {chain_files}",
+                        "No chain verification JSON",
+                        warning=True,
+                    )
 
                     if csv_files:
                         csv_text = zf.read(csv_files[0]).decode("utf-8")
                         reader = csv.DictReader(io.StringIO(csv_text))
                         rows = list(reader)
                         info(f"CSV rows: {len(rows)}")
-                        check(len(rows) >= 5, f"{len(rows)} rows in FDA CSV (expected ≥5)",
-                              f"Only {len(rows)} rows — ingestion may not have written to DB")
+                        check(
+                            len(rows) >= 5,
+                            f"{len(rows)} rows in FDA CSV (expected ≥5)",
+                            f"Only {len(rows)} rows — ingestion may not have written to DB",
+                        )
 
                         if rows:
                             # System Entry Timestamp (the critical R-01 field)
                             ts_col = "System Entry Timestamp"
                             has_ts_col = ts_col in reader.fieldnames
-                            check(has_ts_col, f"'{ts_col}' column present in CSV",
-                                  f"'{ts_col}' column MISSING — R-01 not fixed!")
+                            check(
+                                has_ts_col,
+                                f"'{ts_col}' column present in CSV",
+                                f"'{ts_col}' column MISSING — R-01 not fixed!",
+                            )
 
                             if has_ts_col:
                                 rows_with_ts = sum(1 for r in rows if r.get(ts_col, "").strip())
@@ -425,15 +525,18 @@ def run():
                             check(
                                 rows_with_hash == len(rows),
                                 f"All {rows_with_hash}/{len(rows)} rows have SHA-256 hash",
-                                f"Only {rows_with_hash}/{len(rows)} rows have SHA-256 hash", warning=True,
+                                f"Only {rows_with_hash}/{len(rows)} rows have SHA-256 hash",
+                                warning=True,
                             )
 
                             # Event types
                             event_types = {r.get("Event Type (CTE)", "").strip() for r in rows}
                             info(f"CTE types in export: {', '.join(sorted(event_types))}")
-                            check("shipping" in event_types or "harvesting" in event_types,
-                                  "Export contains expected CTE types",
-                                  "No expected CTE types in export")
+                            check(
+                                "shipping" in event_types or "harvesting" in event_types,
+                                "Export contains expected CTE types",
+                                "No expected CTE types in export",
+                            )
 
                     # manifest contents
                     if has_manifest:
@@ -443,12 +546,17 @@ def run():
                         kde_coverage = completeness.get("required_kde_coverage_ratio", 0)
                         info(f"Manifest record count: {record_count}")
                         info(f"KDE coverage ratio: {kde_coverage:.1%}")
-                        check(record_count >= 5, f"Manifest: {record_count} records",
-                              f"Manifest says {record_count} records — too few")
-                        check(kde_coverage >= 0.5,
-                              f"KDE coverage {kde_coverage:.1%} (acceptable)",
-                              f"KDE coverage {kde_coverage:.1%} — missing required fields in many events",
-                              warning=kde_coverage < 0.8)
+                        check(
+                            record_count >= 5,
+                            f"Manifest: {record_count} records",
+                            f"Manifest says {record_count} records — too few",
+                        )
+                        check(
+                            kde_coverage >= 0.5,
+                            f"KDE coverage {kde_coverage:.1%} (acceptable)",
+                            f"KDE coverage {kde_coverage:.1%} — missing required fields in many events",
+                            warning=kde_coverage < 0.8,
+                        )
 
                         # Verify package hash from manifest
                         manifest_csv_hash = manifest_data.get("summary", {}).get("csv_content_hash", "")
@@ -472,7 +580,8 @@ def run():
         else:
             try:
                 resp = request(
-                    "GET", "/api/v1/fda/export",
+                    "GET",
+                    "/api/v1/fda/export",
                     params={"tenant_id": TENANT_ID, "tlc": "LOT-SPIN-2026-0401A", "format": "package"},
                     headers=build_headers(),
                 )
@@ -481,9 +590,11 @@ def run():
                     warn("TLC-specific export: 404 — lot not in DB")
                     results["warnings"] += 1
                 else:
-                    check(resp.status_code == 200,
-                          f"TLC-specific export: {resp.status_code}",
-                          f"TLC export failed: {resp.status_code} {resp.text[:200]}")
+                    check(
+                        resp.status_code == 200,
+                        f"TLC-specific export: {resp.status_code}",
+                        f"TLC export failed: {resp.status_code} {resp.text[:200]}",
+                    )
             except Exception as step7_err:
                 warn(f"TLC-specific export: {step7_err}")
                 results["warnings"] += 1
@@ -491,10 +602,12 @@ def run():
         # ── Summary ──────────────────────────────────────────────────────────
         header("RESULTS")
         total = results["passed"] + results["failed"] + results["warnings"]
-        print(f"  {GREEN}{results['passed']} passed{RESET}  "
-              f"{RED}{results['failed']} failed{RESET}  "
-              f"{YELLOW}{results['warnings']} warnings{RESET}  "
-              f"({total} checks)")
+        print(
+            f"  {GREEN}{results['passed']} passed{RESET}  "
+            f"{RED}{results['failed']} failed{RESET}  "
+            f"{YELLOW}{results['warnings']} warnings{RESET}  "
+            f"({total} checks)"
+        )
 
         if results["failed"] == 0:
             print(f"\n  {BOLD}{GREEN}✓ Pipeline is end-to-end functional{RESET}")
@@ -516,4 +629,4 @@ def run():
 if __name__ == "__main__":
     t0 = time.time()
     run()
-    print(f"\n  Completed in {time.time()-t0:.1f}s\n")
+    print(f"\n  Completed in {time.time() - t0:.1f}s\n")

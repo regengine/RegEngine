@@ -15,6 +15,17 @@ continue to work via the backward-compatible shim in ``fsma_utils.py``.
 """
 
 # -- types --
+# -- chain integrity --
+from .chain_integrity import find_all_gaps, find_broken_chains, find_gaps
+
+# -- data quality --
+from .data_quality import analyze_kde_completeness, find_orphaned_lots
+
+# -- queries --
+from .queries import _tag_event_risk_flag, get_lot_timeline, query_events_by_range
+
+# -- tracing --
+from .tracer import trace_backward, trace_forward
 from .types import (
     DataQualityReport,
     KDECompletenessMetrics,
@@ -24,18 +35,6 @@ from .types import (
 
 # -- validation --
 from .validation import _validate_temporal_order
-
-# -- tracing --
-from .tracer import trace_backward, trace_forward
-
-# -- chain integrity --
-from .chain_integrity import find_all_gaps, find_broken_chains, find_gaps
-
-# -- data quality --
-from .data_quality import analyze_kde_completeness, find_orphaned_lots
-
-# -- queries --
-from .queries import _tag_event_risk_flag, get_lot_timeline, query_events_by_range
 
 __all__ = [
     # types

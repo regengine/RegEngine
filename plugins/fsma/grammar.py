@@ -25,27 +25,28 @@ FSMA_GRAMMAR = {
         "shall provide",
         "required to record",
         "within 24 hours",
-    ]
+    ],
 }
+
 
 def identify_fsma_elements(text: str) -> dict:
     """Identify FSMA-specific elements in a text chunk."""
     import re
-    
+
     found_ctes = []
     for pattern in FSMA_GRAMMAR["cte_patterns"]:
         if re.search(pattern, text):
             found_ctes.append(pattern.replace("(?i)", ""))
-            
+
     found_kdes = []
     for kde, patterns in FSMA_GRAMMAR["kde_patterns"].items():
         for pattern in patterns:
             if re.search(pattern, text):
                 found_kdes.append(kde)
                 break
-                
+
     return {
         "ctes": list(set(found_ctes)),
         "kdes": list(set(found_kdes)),
-        "is_fsma_related": len(found_ctes) > 0 or len(found_kdes) > 0
+        "is_fsma_related": len(found_ctes) > 0 or len(found_kdes) > 0,
     }

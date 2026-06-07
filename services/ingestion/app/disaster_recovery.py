@@ -13,17 +13,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from .webhook_compat import require_tenant_context
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("disaster-recovery")
-
 
 
 router = APIRouter(
@@ -38,6 +35,7 @@ router = APIRouter(
 
 class DRCheck(BaseModel):
     """A single disaster-recovery readiness check."""
+
     name: str
     status: str = Field(..., description="pass | fail | warn")
     details: str
@@ -46,14 +44,13 @@ class DRCheck(BaseModel):
 
 class DRReport(BaseModel):
     """Aggregate DR readiness report."""
+
     tenant_id: str
     overall_status: str = Field(..., description="ready | at_risk | critical")
     checks: list[DRCheck] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     generated_at: str
-    recovery_time_estimate: str = Field(
-        ..., description="Estimated time to recover, e.g. '2h 15m'"
-    )
+    recovery_time_estimate: str = Field(..., description="Estimated time to recover, e.g. '2h 15m'")
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +74,7 @@ def _check_db_connectivity() -> DRCheck:
         if result and result[0] == 1:
             # Attempt a lightweight replication check (Supabase/Postgres)
             try:
-                rep = db.execute(
-                    text("SELECT state FROM pg_stat_replication LIMIT 1")
-                ).fetchone()
+                rep = db.execute(text("SELECT state FROM pg_stat_replication LIMIT 1")).fetchone()
                 if rep:
                     return DRCheck(
                         name="database_connectivity",
@@ -419,7 +414,9 @@ async def dr_readiness(
     )
     logger.info(
         "dr_readiness_complete tenant=%s status=%s rte=%s",
-        tenant_id, status, rte,
+        tenant_id,
+        status,
+        rte,
     )
     return report
 
@@ -472,27 +469,31 @@ async def test_recovery(
     volume_check, volume_info = _check_data_volume(tenant_id)
     checks.append(volume_check)
     rte = _estimate_recovery_time(volume_info)
-    checks.append(DRCheck(
-        name="re_export_estimate",
-        status="pass" if volume_info["total_events"] > 0 else "warn",
-        details=f"Estimated re-export time: {rte} for {volume_info['total_events']} events",
-        checked_at=now_str,
-    ))
+    checks.append(
+        DRCheck(
+            name="re_export_estimate",
+            status="pass" if volume_info["total_events"] > 0 else "warn",
+            details=f"Estimated re-export time: {rte} for {volume_info['total_events']} events",
+            checked_at=now_str,
+        )
+    )
 
     # 2. Check if hash chain can be rebuilt from events
     chain_check = _check_hash_chain_integrity(tenant_id)
     checks.append(chain_check)
     chain_rebuildable = chain_check.status in ("pass", "warn")
-    checks.append(DRCheck(
-        name="chain_rebuild_feasibility",
-        status="pass" if chain_rebuildable else "fail",
-        details=(
-            "Hash chain can be rebuilt from event data"
-            if chain_rebuildable
-            else "Hash chain rebuild may not be possible — gaps detected"
-        ),
-        checked_at=now_str,
-    ))
+    checks.append(
+        DRCheck(
+            name="chain_rebuild_feasibility",
+            status="pass" if chain_rebuildable else "fail",
+            details=(
+                "Hash chain can be rebuilt from event data"
+                if chain_rebuildable
+                else "Hash chain rebuild may not be possible — gaps detected"
+            ),
+            checked_at=now_str,
+        )
+    )
 
     # 3. KDE completeness for recovery
     db = get_db_safe()
@@ -519,12 +520,14 @@ async def test_recovery(
         finally:
             db.close()
 
-    checks.append(DRCheck(
-        name="kde_recovery_completeness",
-        status=kde_status,
-        details=kde_details,
-        checked_at=now_str,
-    ))
+    checks.append(
+        DRCheck(
+            name="kde_recovery_completeness",
+            status=kde_status,
+            details=kde_details,
+            checked_at=now_str,
+        )
+    )
 
     recommendations = _compile_recommendations(checks)
     status = _overall_status(checks)
@@ -539,6 +542,8 @@ async def test_recovery(
     )
     logger.info(
         "recovery_simulation_complete tenant=%s status=%s rte=%s",
-        tenant_id, status, rte,
+        tenant_id,
+        status,
+        rte,
     )
     return report

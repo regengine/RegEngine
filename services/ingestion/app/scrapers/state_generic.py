@@ -6,7 +6,7 @@ from typing import Optional
 
 import httpx
 from shared.safe_http import safe_httpx_get_sync
-from shared.url_validation import validate_url, SSRFError
+from shared.url_validation import SSRFError, validate_url
 
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
@@ -40,9 +40,7 @@ class StateRegistryScraper:
         self.s3 = s3_client or S3Client()
         self.kafka = kafka or KafkaProducer()
 
-    async def fetch_document(
-        self, url: str, jurisdiction_code: str, tenant_id: Optional[str] = None
-    ) -> dict:
+    async def fetch_document(self, url: str, jurisdiction_code: str, tenant_id: Optional[str] = None) -> dict:
         # SSRF protection: validate URL before fetching
         try:
             url = validate_url(url)
@@ -70,9 +68,7 @@ class StateRegistryScraper:
         # The S3 upload is also I/O bound.
 
         def _upload_and_emit():
-            s3_uri = self.s3.upload_bytes(
-                self.s3_bucket, key, resp.content, content_type
-            )
+            s3_uri = self.s3.upload_bytes(self.s3_bucket, key, resp.content, content_type)
             return s3_uri
 
         s3_uri = await loop.run_in_executor(None, _upload_and_emit)

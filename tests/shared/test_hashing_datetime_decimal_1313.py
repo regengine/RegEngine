@@ -26,13 +26,11 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-
 from shared.cte_persistence.hashing import (
     _normalize_for_hashing,
     compute_event_hash,
     compute_idempotency_key,
 )
-
 
 BASE_KEY_ARGS: dict = {
     "event_type": "shipping",
@@ -117,7 +115,8 @@ class TestComputeEventHashDoesNotRaise:
 
     def test_decimal_kde_does_not_raise(self):
         h = compute_event_hash(
-            **BASE_EVENT_ARGS, kdes={"weight": Decimal("5.00")},
+            **BASE_EVENT_ARGS,
+            kdes={"weight": Decimal("5.00")},
         )
         assert isinstance(h, str)
 
@@ -146,12 +145,8 @@ class TestStabilityAcrossEqualButDistinctObjects:
         assert dt_a is not dt_b  # sanity: two different objects
         assert dt_a == dt_b  # sanity: value-equal
 
-        k1 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": dt_a}
-        )
-        k2 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": dt_b}
-        )
+        k1 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": dt_a})
+        k2 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": dt_b})
         assert k1 == k2
 
     def test_decimal_two_distinct_but_equal_objects_yield_same_key(self):
@@ -160,12 +155,8 @@ class TestStabilityAcrossEqualButDistinctObjects:
         assert d_a is not d_b
         assert d_a == d_b
 
-        k1 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": d_a}
-        )
-        k2 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": d_b}
-        )
+        k1 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": d_a})
+        k2 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": d_b})
         assert k1 == k2
 
     def test_compute_event_hash_stability(self):
@@ -209,12 +200,8 @@ class TestCanonicalDatetimeForm:
         ``+00:00`` vs ``Z``. If this test ever starts failing, that's a
         deliberate-break decision requiring a migration plan for
         existing idempotency_key rows."""
-        k_offset = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": "2026-04-20T00:00:00+00:00"}
-        )
-        k_zulu = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": "2026-04-20T00:00:00Z"}
-        )
+        k_offset = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": "2026-04-20T00:00:00+00:00"})
+        k_zulu = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": "2026-04-20T00:00:00Z"})
         assert k_offset != k_zulu
 
     def test_str_datetime_is_no_longer_canonical(self):
@@ -222,9 +209,7 @@ class TestCanonicalDatetimeForm:
         ever flips, the normalizer has regressed."""
         dt = datetime(2026, 4, 20, tzinfo=timezone.utc)
         k_dt = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": dt})
-        k_str = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": str(dt)}
-        )
+        k_str = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": str(dt)})
         # str(dt) uses a space separator ("2026-04-20 00:00:00+00:00"),
         # isoformat uses "T" ("2026-04-20T00:00:00+00:00"). They MUST
         # hash differently under the new normalizer.
@@ -242,12 +227,8 @@ class TestCanonicalDecimalForm:
         and must produce the same key after normalization, because
         ``format(..., 'f')`` renders both as ``"100"`` (no scientific
         notation)."""
-        k_sci = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": Decimal("1E+2")}
-        )
-        k_plain = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": Decimal("100")}
-        )
+        k_sci = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": Decimal("1E+2")})
+        k_plain = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": Decimal("100")})
         assert k_sci == k_plain
 
     def test_decimal_trailing_zeros_preserved(self):
@@ -256,12 +237,8 @@ class TestCanonicalDecimalForm:
         explicit trailing-zero precision. ``format(..., 'f')`` preserves
         that precision, so they hash differently. Documenting the
         contract."""
-        k_50 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": Decimal("10.50")}
-        )
-        k_5 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"q": Decimal("10.5")}
-        )
+        k_50 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": Decimal("10.50")})
+        k_5 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"q": Decimal("10.5")})
         assert k_50 != k_5
 
 

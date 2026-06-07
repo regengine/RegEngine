@@ -29,6 +29,7 @@ from typing import Any
 # XML
 # ---------------------------------------------------------------------------
 
+
 def xml_escape(text: Any) -> str:
     """Escape ``& < > " '`` for safe XML CDATA / attribute content.
 

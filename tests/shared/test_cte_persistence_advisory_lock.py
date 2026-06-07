@@ -19,7 +19,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from shared.cte_persistence.core import CTEPersistence
 
 from tests.shared.test_cte_persistence_hardening import (
@@ -66,25 +65,18 @@ class TestAdvisoryLock_Issue1332:
             None,
         )
         idemp_idx = next(
-            (i for i, c in enumerate(session.calls)
-             if "FROM fsma.cte_events" in c[0] and "sha256_hash" in c[0]),
+            (i for i, c in enumerate(session.calls) if "FROM fsma.cte_events" in c[0] and "sha256_hash" in c[0]),
             None,
         )
         chain_idx = next(
             (i for i, c in enumerate(session.calls) if "FROM fsma.hash_chain" in c[0]),
             None,
         )
-        assert lock_idx is not None, (
-            "store_event must acquire an advisory lock (#1332)"
-        )
+        assert lock_idx is not None, "store_event must acquire an advisory lock (#1332)"
         assert idemp_idx is not None, "idempotency SELECT must have fired"
         assert chain_idx is not None, "chain-head SELECT must have fired"
-        assert lock_idx < idemp_idx, (
-            "advisory lock must precede the idempotency check"
-        )
-        assert lock_idx < chain_idx, (
-            "advisory lock must precede the chain-head read"
-        )
+        assert lock_idx < idemp_idx, "advisory lock must precede the idempotency check"
+        assert lock_idx < chain_idx, "advisory lock must precede the chain-head read"
 
     def test_store_events_batch_acquires_advisory_lock(self):
         """Batch path needs the same lock as single-event path."""
@@ -99,9 +91,9 @@ class TestAdvisoryLock_Issue1332:
         events = [args]
         store.store_events_batch(tenant_id, events)
 
-        assert any(
-            "pg_advisory_xact_lock" in c[0] for c in session.calls
-        ), "batch path must acquire the advisory lock (#1332)"
+        assert any("pg_advisory_xact_lock" in c[0] for c in session.calls), (
+            "batch path must acquire the advisory lock (#1332)"
+        )
 
     def test_advisory_lock_is_keyed_by_tenant(self):
         """Lock param must be the event's tenant_id so unrelated

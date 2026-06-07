@@ -90,17 +90,17 @@ def main() -> int:
 
     # Report
     if failures:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  VERIFICATION FAILED — {len(failures)} issue(s)")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         for f in failures:
             print(f"  ✗ {f}")
         print()
         return 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  VERIFICATION PASSED — FSMA 204 only, all stubs removed")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
     checks = len(BANNED_DIRS) + len(BANNED_FILES) + sum(len(v) for v in FORBIDDEN_IMPORTS.values())
     print(f"  {checks} checks passed.")
     return 0

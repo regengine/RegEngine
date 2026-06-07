@@ -18,12 +18,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
-
-from .webhook_compat import require_tenant_context
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 from shared.tenant_context import TenantContext
+from sqlalchemy.exc import SQLAlchemyError
+
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("product-catalog")
 
@@ -32,6 +32,7 @@ router = APIRouter(prefix="/api/v1/products", tags=["Product Catalog"])
 
 class Product(BaseModel):
     """A product in the FTL catalog."""
+
     id: str
     name: str
     category: str  # FTL category
@@ -52,6 +53,7 @@ class Product(BaseModel):
 
 class ProductCatalogResponse(BaseModel):
     """Product catalog response."""
+
     tenant_id: str
     total: int
     ftl_covered: int
@@ -61,6 +63,7 @@ class ProductCatalogResponse(BaseModel):
 
 class CreateProductRequest(BaseModel):
     """Request to add a product."""
+
     name: str
     category: str
     sku: str = ""
@@ -72,6 +75,7 @@ class CreateProductRequest(BaseModel):
 
 class UpdateProductRequest(BaseModel):
     """Request to update a product."""
+
     name: str
     category: str
     sku: str = ""
@@ -82,11 +86,24 @@ class UpdateProductRequest(BaseModel):
 
 
 FTL_CATEGORIES = [
-    "Leafy Greens", "Herbs", "Fresh-Cut Fruits", "Fresh-Cut Vegetables",
-    "Finfish", "Crustaceans", "Molluscan Shellfish", "Smoked Finfish",
-    "Soft Cheeses", "Shell Eggs", "Nut Butters", "Ready-to-Eat Deli Salads",
-    "Fresh Tomatoes", "Fresh Peppers", "Fresh Cucumbers", "Fresh Sprouts",
-    "Tropical Tree Fruits", "Fresh Melons",
+    "Leafy Greens",
+    "Herbs",
+    "Fresh-Cut Fruits",
+    "Fresh-Cut Vegetables",
+    "Finfish",
+    "Crustaceans",
+    "Molluscan Shellfish",
+    "Smoked Finfish",
+    "Soft Cheeses",
+    "Shell Eggs",
+    "Nut Butters",
+    "Ready-to-Eat Deli Salads",
+    "Fresh Tomatoes",
+    "Fresh Peppers",
+    "Fresh Cucumbers",
+    "Fresh Sprouts",
+    "Tropical Tree Fruits",
+    "Fresh Melons",
 ]
 
 
@@ -141,6 +158,7 @@ def _derive_products_from_events(db, tenant_id: str, category: str | None = None
     surface so the catalog is not blank.
     """
     from sqlalchemy import text
+
     try:
         rows = db.execute(
             text(
@@ -194,6 +212,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
     products table is empty for this tenant.
     """
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return None
@@ -235,6 +254,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
 def _db_add_product(tenant_id: str, product: Product) -> bool:
     """Insert a product into fsma.products. Returns True on success."""
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return False
@@ -279,6 +299,7 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
 def _db_get_product(tenant_id: str, product_id: str) -> Product | None:
     """Fetch a single product from fsma.products."""
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return None
@@ -302,6 +323,7 @@ def _db_get_product(tenant_id: str, product_id: str) -> Product | None:
 def _db_update_product(tenant_id: str, product_id: str, product: Product) -> Product | None:
     """Update a product in fsma.products."""
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return None
@@ -345,14 +367,13 @@ def _db_update_product(tenant_id: str, product_id: str, product: Product) -> Pro
 def _db_delete_product(tenant_id: str, product_id: str) -> bool:
     """Delete a product from fsma.products."""
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return False
     try:
         result = db.execute(
-            text(
-                "DELETE FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND id = CAST(:id AS uuid)"
-            ),
+            text("DELETE FROM fsma.products WHERE tenant_id = CAST(:tid AS uuid) AND id = CAST(:id AS uuid)"),
             {"tid": tenant_id, "id": product_id},
         )
         db.commit()
@@ -368,6 +389,7 @@ def _db_delete_product(tenant_id: str, product_id: str) -> bool:
 def _db_lookup_by_gtin(tenant_id: str, gtin: str) -> Product | None:
     """Look up a single product by GTIN from Supabase."""
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         return None
@@ -398,6 +420,7 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     from sqlalchemy import text
+
     db = get_db_safe()
     if db is None:
         # Fallback: update in-memory store
@@ -477,19 +500,26 @@ def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str)
             if facility and facility not in p.facilities:
                 p.facilities.append(facility)
             return
-    _catalog_store[tenant_id].append(Product(
-        id=f"{tenant_id}-learned-{gtin[-6:]}",
-        name=name or f"Product {gtin}",
-        category="", ftl_covered=True, gtin=gtin,
-        description=name, facilities=[facility] if facility else [],
-        cte_count=1, last_cte=now,
-        created_at=now,
-    ))
+    _catalog_store[tenant_id].append(
+        Product(
+            id=f"{tenant_id}-learned-{gtin[-6:]}",
+            name=name or f"Product {gtin}",
+            category="",
+            ftl_covered=True,
+            gtin=gtin,
+            description=name,
+            facilities=[facility] if facility else [],
+            cte_count=1,
+            last_cte=now,
+            created_at=now,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/{tenant_id}",
@@ -660,7 +690,9 @@ async def update_product(
         created_at=existing.created_at or now.isoformat(),
     )
 
-    updated = _db_update_product(tenant_id, product_id, product) or _memory_update_product(tenant_id, product_id, product)
+    updated = _db_update_product(tenant_id, product_id, product) or _memory_update_product(
+        tenant_id, product_id, product
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"updated": True, "product": updated.model_dump(), "ftl_covered": is_ftl}

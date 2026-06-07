@@ -29,7 +29,6 @@ from services.shared.identity_resolution import (
     IdentityResolutionService,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -51,11 +50,14 @@ def svc(mock_session):
 # 1. Entity Registration
 # ---------------------------------------------------------------------------
 
+
 class TestRegisterEntity:
     def test_valid_entity_type_succeeds(self, svc, mock_session):
         mock_session.execute.return_value = MagicMock()
         result = svc.register_entity(
-            TENANT, "facility", "Acme Cold Storage",
+            TENANT,
+            "facility",
+            "Acme Cold Storage",
             gln="0012345000015",
         )
         assert result["entity_type"] == "facility"
@@ -79,7 +81,11 @@ class TestRegisterEntity:
         """When gln is provided, it should be registered as an alias."""
         mock_session.execute.return_value = MagicMock()
         svc.register_entity(
-            TENANT, "facility", "Acme", gln="123", gtin="456",
+            TENANT,
+            "facility",
+            "Acme",
+            gln="123",
+            gtin="456",
         )
         # Should have: 1 entity INSERT + 1 name alias + 1 gln alias + 1 gtin alias = 4 executes
         assert mock_session.execute.call_count >= 4
@@ -92,7 +98,10 @@ class TestRegisterEntity:
     def test_custom_confidence_score(self, svc, mock_session):
         mock_session.execute.return_value = MagicMock()
         result = svc.register_entity(
-            TENANT, "facility", "Test", confidence_score=0.75,
+            TENANT,
+            "facility",
+            "Test",
+            confidence_score=0.75,
         )
         assert result["confidence_score"] == 0.75
 
@@ -100,6 +109,7 @@ class TestRegisterEntity:
 # ---------------------------------------------------------------------------
 # 2. Add Alias — validation
 # ---------------------------------------------------------------------------
+
 
 class TestAddAlias:
     def test_invalid_alias_type_raises(self, svc):
@@ -110,8 +120,16 @@ class TestAddAlias:
         # #1175: 'tlc' added as canonical verbatim Traceability Lot Code
         # alias type; 'tlc_prefix' retained as secondary fuzzy-lookup alias.
         expected_types = {
-            "name", "gln", "gtin", "fda_registration", "internal_code",
-            "duns", "tlc", "tlc_prefix", "address_variant", "abbreviation",
+            "name",
+            "gln",
+            "gtin",
+            "fda_registration",
+            "internal_code",
+            "duns",
+            "tlc",
+            "tlc_prefix",
+            "address_variant",
+            "abbreviation",
             "trade_name",
         }
         assert VALID_ALIAS_TYPES == expected_types
@@ -126,7 +144,11 @@ class TestAddAlias:
         # _require_entity succeeds
         mock_session.execute.return_value.fetchone.return_value = (1,)
         result = svc.add_alias(
-            TENANT, "ent-1", "name", "Acme LLC", "csv_upload",
+            TENANT,
+            "ent-1",
+            "name",
+            "Acme LLC",
+            "csv_upload",
             confidence=0.9,
         )
         assert result["alias_type"] == "name"
@@ -139,12 +161,28 @@ class TestAddAlias:
 # 3. Find Entity by Alias (exact match)
 # ---------------------------------------------------------------------------
 
+
 class TestFindEntityByAlias:
     def test_returns_matching_entities(self, svc, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
             # Simulating a row tuple
-            ("eid-1", "facility", "Acme Cold Storage", "GLN1", None, None, None,
-             "unverified", 1.0, True, "aid-1", "name", "Acme Cold Storage", "csv", 1.0),
+            (
+                "eid-1",
+                "facility",
+                "Acme Cold Storage",
+                "GLN1",
+                None,
+                None,
+                None,
+                "unverified",
+                1.0,
+                True,
+                "aid-1",
+                "name",
+                "Acme Cold Storage",
+                "csv",
+                1.0,
+            ),
         ]
         results = svc.find_entity_by_alias(TENANT, "name", "Acme Cold Storage")
         assert len(results) == 1
@@ -162,13 +200,13 @@ class TestFindEntityByAlias:
 # 4. Confidence Scoring — Fuzzy Matching
 # ---------------------------------------------------------------------------
 
+
 class TestFindPotentialMatches:
     def test_high_similarity_returned(self, svc, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
             # (entity_id, entity_type, canonical_name, gln, gtin,
             #  verification_status, confidence_score, alias_value)
-            ("eid-1", "facility", "Acme Cold Storage", None, None,
-             "unverified", 1.0, "Acme Cold Storage"),
+            ("eid-1", "facility", "Acme Cold Storage", None, None, "unverified", 1.0, "Acme Cold Storage"),
         ]
         results = svc.find_potential_matches(TENANT, "Acme Cold Storag")
         assert len(results) == 1
@@ -176,18 +214,15 @@ class TestFindPotentialMatches:
 
     def test_low_similarity_filtered_out(self, svc, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
-            ("eid-1", "facility", "Zebra Inc", None, None,
-             "unverified", 1.0, "Zebra Inc"),
+            ("eid-1", "facility", "Zebra Inc", None, None, "unverified", 1.0, "Zebra Inc"),
         ]
         results = svc.find_potential_matches(TENANT, "Acme Cold Storage")
         assert len(results) == 0
 
     def test_results_sorted_by_confidence_descending(self, svc, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
-            ("eid-1", "facility", "Acme Warehouse", None, None,
-             "unverified", 1.0, "Acme Warehouse"),
-            ("eid-2", "facility", "Acme Cold Storage", None, None,
-             "unverified", 1.0, "Acme Cold Storage"),
+            ("eid-1", "facility", "Acme Warehouse", None, None, "unverified", 1.0, "Acme Warehouse"),
+            ("eid-2", "facility", "Acme Cold Storage", None, None, "unverified", 1.0, "Acme Cold Storage"),
         ]
         results = svc.find_potential_matches(TENANT, "Acme Cold Storage")
         if len(results) > 1:
@@ -195,8 +230,7 @@ class TestFindPotentialMatches:
 
     def test_custom_threshold(self, svc, mock_session):
         mock_session.execute.return_value.fetchall.return_value = [
-            ("eid-1", "facility", "Acme Storage", None, None,
-             "unverified", 1.0, "Acme Storage"),
+            ("eid-1", "facility", "Acme Storage", None, None, "unverified", 1.0, "Acme Storage"),
         ]
         # With very high threshold, should filter out moderate matches
         results = svc.find_potential_matches(TENANT, "Acme Storag", threshold=0.99)
@@ -204,13 +238,15 @@ class TestFindPotentialMatches:
 
     def test_limit_respected(self, svc, mock_session):
         rows = [
-            (f"eid-{i}", "facility", f"Acme Branch {i}", None, None,
-             "unverified", 1.0, f"Acme Branch {i}")
+            (f"eid-{i}", "facility", f"Acme Branch {i}", None, None, "unverified", 1.0, f"Acme Branch {i}")
             for i in range(10)
         ]
         mock_session.execute.return_value.fetchall.return_value = rows
         results = svc.find_potential_matches(
-            TENANT, "Acme Branch", threshold=0.5, limit=3,
+            TENANT,
+            "Acme Branch",
+            threshold=0.5,
+            limit=3,
         )
         assert len(results) <= 3
 
@@ -233,6 +269,7 @@ class TestFindPotentialMatches:
 # ---------------------------------------------------------------------------
 # 5. Confidence Score Calculation (SequenceMatcher)
 # ---------------------------------------------------------------------------
+
 
 class TestConfidenceScoring:
     """Verify the SequenceMatcher-based confidence scoring behavior."""
@@ -263,6 +300,7 @@ class TestConfidenceScoring:
 # 6. Merge Operations
 # ---------------------------------------------------------------------------
 
+
 class TestMergeEntities:
     def test_merge_self_raises(self, svc):
         with pytest.raises(ValueError, match="Cannot merge an entity with itself"):
@@ -278,7 +316,9 @@ class TestMergeEntities:
         # All _require_entity calls succeed
         mock_session.execute.return_value.fetchone.return_value = (1,)
         result = svc.merge_entities(
-            TENANT, "eid-1", "eid-2",
+            TENANT,
+            "eid-1",
+            "eid-2",
             reason="Duplicate entry",
             performed_by="admin",
         )
@@ -303,6 +343,7 @@ class TestMergeEntities:
 # 7. Split Operations (merge reversal)
 # ---------------------------------------------------------------------------
 
+
 class TestSplitEntity:
     def test_split_nonexistent_merge_raises(self, svc, mock_session):
         mock_session.execute.return_value.fetchone.return_value = None
@@ -312,14 +353,22 @@ class TestSplitEntity:
     def test_split_already_reversed_raises(self, svc, mock_session):
         # (merge_id, source_entity_ids, target_entity_id, action, is_reversed)
         mock_session.execute.return_value.fetchone.return_value = (
-            "m1", ["eid-1"], "eid-2", "merge", True,
+            "m1",
+            ["eid-1"],
+            "eid-2",
+            "merge",
+            True,
         )
         with pytest.raises(ValueError, match="already been reversed"):
             svc.split_entity(TENANT, "m1")
 
     def test_split_non_merge_action_raises(self, svc, mock_session):
         mock_session.execute.return_value.fetchone.return_value = (
-            "m1", ["eid-1"], "eid-2", "split", False,
+            "m1",
+            ["eid-1"],
+            "eid-2",
+            "split",
+            False,
         )
         with pytest.raises(ValueError, match="not a merge action"):
             svc.split_entity(TENANT, "m1")
@@ -328,7 +377,11 @@ class TestSplitEntity:
         # First call: fetch merge record
         fetch_merge = MagicMock()
         fetch_merge.fetchone.return_value = (
-            "m1", ["eid-source"], "eid-target", "merge", False,
+            "m1",
+            ["eid-source"],
+            "eid-target",
+            "merge",
+            False,
             {"eid-source": []},
         )
         # Subsequent calls: various updates and lookups
@@ -338,6 +391,7 @@ class TestSplitEntity:
         name_mock.fetchone.return_value = ("Source Entity Name",)
 
         call_idx = [0]
+
         def side_effect(*args, **kwargs):
             call_idx[0] += 1
             if call_idx[0] == 1:
@@ -360,6 +414,7 @@ class TestSplitEntity:
 # 8. Ambiguity Detection — Review Queue
 # ---------------------------------------------------------------------------
 
+
 class TestQueueForReview:
     def test_invalid_match_type_raises(self, svc):
         with pytest.raises(ValueError, match="Invalid match_type"):
@@ -375,7 +430,9 @@ class TestQueueForReview:
     def test_idempotent_on_existing(self, svc, mock_session):
         # Existing record found
         mock_session.execute.return_value.fetchone.return_value = (
-            "review-existing", "pending", 0.85,
+            "review-existing",
+            "pending",
+            0.85,
         )
         result = svc.queue_for_review(TENANT, "a", "b", "ambiguous", 0.85)
         assert result["idempotent"] is True
@@ -399,6 +456,7 @@ class TestQueueForReview:
 # 9. Resolve Review
 # ---------------------------------------------------------------------------
 
+
 class TestResolveReview:
     def test_invalid_resolution_raises(self, svc):
         with pytest.raises(ValueError, match="Invalid resolution"):
@@ -416,7 +474,10 @@ class TestResolveReview:
 
     def test_already_resolved_raises(self, svc, mock_session):
         mock_session.execute.return_value.fetchone.return_value = (
-            "r1", "eid-a", "eid-b", "confirmed_match",
+            "r1",
+            "eid-a",
+            "eid-b",
+            "confirmed_match",
         )
         with pytest.raises(ValueError, match="already resolved"):
             svc.resolve_review(TENANT, "r1", "confirmed_distinct")
@@ -426,6 +487,7 @@ class TestResolveReview:
 # 10. Ambiguity Thresholds
 # ---------------------------------------------------------------------------
 
+
 class TestAmbiguityThresholds:
     def test_threshold_constants(self):
         assert AMBIGUOUS_THRESHOLD_LOW == 0.60
@@ -433,23 +495,20 @@ class TestAmbiguityThresholds:
 
     def test_high_similarity_should_flag_for_review(self):
         """>=85% similarity should block submission per check_blocking_defects."""
-        similarity = SequenceMatcher(
-            None, "acme cold storage", "acme cold storag"
-        ).ratio()
+        similarity = SequenceMatcher(None, "acme cold storage", "acme cold storag").ratio()
         # This pair is >85% similar
         assert similarity >= 0.85
 
     def test_moderate_similarity_below_review_threshold(self):
         """Sufficiently different names should NOT trigger review."""
-        similarity = SequenceMatcher(
-            None, "acme cold storage", "beta warehousing"
-        ).ratio()
+        similarity = SequenceMatcher(None, "acme cold storage", "beta warehousing").ratio()
         assert similarity < 0.60
 
 
 # ---------------------------------------------------------------------------
 # 11. Entity Type Validation
 # ---------------------------------------------------------------------------
+
 
 class TestEntityTypeValidation:
     def test_valid_types_are_frozenset(self):

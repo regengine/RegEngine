@@ -30,6 +30,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -43,6 +44,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -70,6 +72,7 @@ def tenant_id():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -77,6 +80,7 @@ def workflow(db_session):
 def identity_service(db_session):
     """Create an IdentityResolutionService instance."""
     from shared.identity_resolution import IdentityResolutionService
+
     return IdentityResolutionService(db_session)
 
 
@@ -84,6 +88,7 @@ def identity_service(db_session):
 def rules_engine(db_session):
     """Create a RulesEngine instance."""
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
 
 
@@ -91,6 +96,7 @@ def rules_engine(db_session):
 def canonical_store(db_session):
     """Create a CanonicalEventStore instance."""
     from shared.canonical_persistence import CanonicalEventStore
+
     return CanonicalEventStore(db_session)
 
 
@@ -99,7 +105,7 @@ def canonical_store(db_session):
 # ---------------------------------------------------------------------------
 
 FACILITY_A = "Salinas Valley Farms"
-FACILITY_B = "Salinas Valley Farm"   # typo — missing trailing 's'
+FACILITY_B = "Salinas Valley Farm"  # typo — missing trailing 's'
 PRODUCT = "Organic Romaine Hearts"
 
 
@@ -157,6 +163,7 @@ def _make_events(tenant_id: str) -> List[Dict]:
 # The Test: Identity Ambiguity Blocks Submission
 # ---------------------------------------------------------------------------
 
+
 class TestIdentityAmbiguityBlocksSubmission:
     """Prove that unresolved identity ambiguity blocks FDA package submission."""
 
@@ -165,6 +172,7 @@ class TestIdentityAmbiguityBlocksSubmission:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
@@ -196,9 +204,7 @@ class TestIdentityAmbiguityBlocksSubmission:
                 to_facility_reference=event_data.get("to_facility_reference"),
                 kdes=event_data.get("kdes", {}),
                 confidence_score=event_data.get("confidence_score"),
-                source_system=IngestionSource(
-                    event_data.get("source_system", "csv_upload")
-                ),
+                source_system=IngestionSource(event_data.get("source_system", "csv_upload")),
                 status="active",
             )
             result = canonical_store.persist_event(te)
@@ -250,14 +256,10 @@ class TestIdentityAmbiguityBlocksSubmission:
 
         # We expect at least one match with the other entity
         other_entity_id = self.__class__._entity_a_id
-        high_matches = [
-            m for m in matches
-            if m["entity_id"] == other_entity_id and m["confidence"] >= 0.85
-        ]
+        high_matches = [m for m in matches if m["entity_id"] == other_entity_id and m["confidence"] >= 0.85]
 
         assert len(high_matches) >= 1, (
-            f"Expected fuzzy match between '{FACILITY_A}' and '{FACILITY_B}' "
-            f"at >=85% but got: {matches}"
+            f"Expected fuzzy match between '{FACILITY_A}' and '{FACILITY_B}' at >=85% but got: {matches}"
         )
 
         self.__class__._match_confidence = high_matches[0]["confidence"]
@@ -310,9 +312,7 @@ class TestIdentityAmbiguityBlocksSubmission:
     # Step 6: check_blocking_defects returns identity_ambiguity blocker
     # ------------------------------------------------------------------
 
-    def test_06_identity_ambiguity_blocks_submission(
-        self, db_session, tenant_id, workflow
-    ):
+    def test_06_identity_ambiguity_blocks_submission(self, db_session, tenant_id, workflow):
         """check_blocking_defects() must include identity_ambiguity blocker."""
         case_id = self.__class__._case_id
 
@@ -330,15 +330,11 @@ class TestIdentityAmbiguityBlocksSubmission:
 
         # Submission must be blocked
         assert not check["can_submit"], (
-            f"Expected submission to be BLOCKED but can_submit=True. "
-            f"Blockers: {check['blockers']}"
+            f"Expected submission to be BLOCKED but can_submit=True. Blockers: {check['blockers']}"
         )
 
         # Specifically verify identity_ambiguity is among the blockers
-        identity_blockers = [
-            b for b in check["blockers"]
-            if b["type"] == "identity_ambiguity"
-        ]
+        identity_blockers = [b for b in check["blockers"] if b["type"] == "identity_ambiguity"]
         assert len(identity_blockers) >= 1, (
             f"Expected at least 1 identity_ambiguity blocker but found none. "
             f"All blockers: {[b['type'] for b in check['blockers']]}"
@@ -355,9 +351,7 @@ class TestIdentityAmbiguityBlocksSubmission:
     # Step 7: Resolve the identity review (merge entities)
     # ------------------------------------------------------------------
 
-    def test_07_resolve_identity_review(
-        self, db_session, tenant_id, identity_service
-    ):
+    def test_07_resolve_identity_review(self, db_session, tenant_id, identity_service):
         """Resolve the review as confirmed_match — triggers auto-merge."""
         result = identity_service.resolve_review(
             tenant_id=tenant_id,
@@ -385,10 +379,7 @@ class TestIdentityAmbiguityBlocksSubmission:
 
         check = workflow.check_blocking_defects(tenant_id, case_id)
 
-        identity_blockers = [
-            b for b in check["blockers"]
-            if b["type"] == "identity_ambiguity"
-        ]
+        identity_blockers = [b for b in check["blockers"] if b["type"] == "identity_ambiguity"]
         assert len(identity_blockers) == 0, (
             f"Expected 0 identity_ambiguity blockers after merge, "
             f"but found {len(identity_blockers)}: {identity_blockers}"

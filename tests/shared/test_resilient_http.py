@@ -1,22 +1,21 @@
 """Tests for resilient HTTP client with retry + circuit breaker integration."""
 
-import pytest
 import httpx
-
+import pytest
+from shared.circuit_breaker import CircuitOpenError, CircuitState
 from shared.circuit_breaker_store import reset_store
 from shared.resilient_http import (
-    resilient_client,
-    get_http_circuit,
-    _http_circuits,
-    RetryTransport,
     _RETRYABLE_STATUS_CODES,
+    RetryTransport,
+    _http_circuits,
+    get_http_circuit,
+    resilient_client,
 )
-from shared.circuit_breaker import CircuitOpenError, CircuitState
-
 
 # ---------------------------------------------------------------------------
 # Helpers — fake transport that returns controlled responses
 # ---------------------------------------------------------------------------
+
 
 class FakeTransport(httpx.AsyncBaseTransport):
     """Transport that returns pre-configured responses for testing."""
@@ -55,6 +54,7 @@ class FakeTransport(httpx.AsyncBaseTransport):
 # RetryTransport tests
 # ---------------------------------------------------------------------------
 
+
 class TestRetryTransport:
     """Tests for the retry transport layer."""
 
@@ -73,11 +73,13 @@ class TestRetryTransport:
     @pytest.mark.asyncio
     async def test_retries_on_502(self):
         """Should retry on 502 then succeed."""
-        fake = FakeTransport(responses=[
-            (502, {"error": "bad gateway"}),
-            (502, {"error": "bad gateway"}),
-            (200, {"status": "ok"}),
-        ])
+        fake = FakeTransport(
+            responses=[
+                (502, {"error": "bad gateway"}),
+                (502, {"error": "bad gateway"}),
+                (200, {"status": "ok"}),
+            ]
+        )
         transport = RetryTransport(wrapped=fake, retries=3, backoff_base=0.01)
 
         request = httpx.Request("GET", "http://test/api")
@@ -89,10 +91,12 @@ class TestRetryTransport:
     @pytest.mark.asyncio
     async def test_retries_on_503(self):
         """Should retry on 503."""
-        fake = FakeTransport(responses=[
-            (503, {"error": "unavailable"}),
-            (200, {"ok": True}),
-        ])
+        fake = FakeTransport(
+            responses=[
+                (503, {"error": "unavailable"}),
+                (200, {"ok": True}),
+            ]
+        )
         transport = RetryTransport(wrapped=fake, retries=2, backoff_base=0.01)
 
         request = httpx.Request("GET", "http://test/api")
@@ -104,10 +108,12 @@ class TestRetryTransport:
     @pytest.mark.asyncio
     async def test_retries_on_504(self):
         """Should retry on 504."""
-        fake = FakeTransport(responses=[
-            (504, {"error": "timeout"}),
-            (200, {"ok": True}),
-        ])
+        fake = FakeTransport(
+            responses=[
+                (504, {"error": "timeout"}),
+                (200, {"ok": True}),
+            ]
+        )
         transport = RetryTransport(wrapped=fake, retries=2, backoff_base=0.01)
 
         request = httpx.Request("GET", "http://test/api")
@@ -154,12 +160,14 @@ class TestRetryTransport:
     @pytest.mark.asyncio
     async def test_exhausted_retries_returns_last_response(self):
         """When retries exhausted, should return the last 5xx response."""
-        fake = FakeTransport(responses=[
-            (502, {"error": "1"}),
-            (503, {"error": "2"}),
-            (504, {"error": "3"}),
-            (502, {"error": "4"}),
-        ])
+        fake = FakeTransport(
+            responses=[
+                (502, {"error": "1"}),
+                (503, {"error": "2"}),
+                (504, {"error": "3"}),
+                (502, {"error": "4"}),
+            ]
+        )
         transport = RetryTransport(wrapped=fake, retries=3, backoff_base=0.01)
 
         request = httpx.Request("GET", "http://test/api")
@@ -234,6 +242,7 @@ class TestRetryTransport:
 # resilient_client context manager tests
 # ---------------------------------------------------------------------------
 
+
 class TestResilientClient:
     """Tests for the resilient_client context manager."""
 
@@ -259,6 +268,7 @@ class TestResilientClient:
 # ---------------------------------------------------------------------------
 # Circuit breaker integration tests
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerIntegration:
     """Tests for circuit breaker integration with resilient_client."""
@@ -320,9 +330,7 @@ class TestCircuitBreakerIntegration:
         # Simulate what resilient_client does internally
         fake_request = httpx.Request("GET", "http://test/api")
         fake_response = httpx.Response(500, json={"error": "internal"}, request=fake_request)
-        circuit._record_failure(
-            httpx.HTTPStatusError("500", request=fake_request, response=fake_response)
-        )
+        circuit._record_failure(httpx.HTTPStatusError("500", request=fake_request, response=fake_response))
 
         assert circuit._failure_count == 1
 
@@ -375,6 +383,7 @@ class TestCircuitBreakerIntegration:
 # ---------------------------------------------------------------------------
 # Retryable status codes
 # ---------------------------------------------------------------------------
+
 
 class TestRetryableStatusCodes:
     """Verify the retryable status code set."""

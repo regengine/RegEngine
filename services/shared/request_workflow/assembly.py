@@ -39,10 +39,7 @@ class AssemblyMixin:
         case = self._get_case(tenant_id, request_case_id)
         allowed = ("gap_analysis", "exception_triage", "assembling", "internal_review")
         if case["package_status"] not in allowed:
-            raise ValueError(
-                f"Cannot assemble in status '{case['package_status']}'. "
-                f"Case must be in one of {allowed}."
-            )
+            raise ValueError(f"Cannot assemble in status '{case['package_status']}'. Case must be in one of {allowed}.")
 
         # Determine version number
         ver_result = self.db.execute(
@@ -80,9 +77,7 @@ class AssemblyMixin:
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
-            events_data = [
-                row_to_serializable(r) for r in ev_result.mappings().fetchall()
-            ]
+            events_data = [row_to_serializable(r) for r in ev_result.mappings().fetchall()]
 
         # Gather rule evaluations
         rule_evaluations: List[Dict[str, Any]] = []
@@ -104,9 +99,7 @@ class AssemblyMixin:
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
-            rule_evaluations = [
-                row_to_serializable(r) for r in re_result.mappings().fetchall()
-            ]
+            rule_evaluations = [row_to_serializable(r) for r in re_result.mappings().fetchall()]
 
         # Gather exception case status
         exception_cases: List[Dict[str, Any]] = []
@@ -129,14 +122,10 @@ class AssemblyMixin:
                 "event_ids": event_ids or [],
             },
         )
-        exception_cases = [
-            row_to_serializable(r) for r in exc_result.mappings().fetchall()
-        ]
+        exception_cases = [row_to_serializable(r) for r in exc_result.mappings().fetchall()]
 
         # Run gap analysis snapshot
-        gap_analysis = self._compute_gap_snapshot(
-            tenant_id, request_case_id, event_ids
-        )
+        gap_analysis = self._compute_gap_snapshot(tenant_id, request_case_id, event_ids)
 
         # Snapshot rule versions at assembly time
         rule_versions = {}
@@ -178,9 +167,7 @@ class AssemblyMixin:
                         "aliases": [],
                     }
                 if row.get("alias_value"):
-                    identity_state[eid]["aliases"].append(
-                        {"value": row["alias_value"], "type": row["alias_type"]}
-                    )
+                    identity_state[eid]["aliases"].append({"value": row["alias_value"], "type": row["alias_type"]})
         except Exception:
             logger.debug("identity_state_snapshot_skipped", exc_info=True)
 
@@ -201,14 +188,12 @@ class AssemblyMixin:
             logger.debug("signoff_state_snapshot_skipped", exc_info=True)
 
         # Waiver state — waived exception IDs
-        waiver_state = [
-            str(e.get("exception_id"))
-            for e in exception_cases
-            if e.get("status") == "waived"
-        ]
+        waiver_state = [str(e.get("exception_id")) for e in exception_cases if e.get("status") == "waived"]
 
         # Build package contents with full manifest
-        sorted_event_ids = sorted([str(e.get("event_id", e) if isinstance(e, dict) else e) for e in event_ids]) if event_ids else []
+        sorted_event_ids = (
+            sorted([str(e.get("event_id", e) if isinstance(e, dict) else e) for e in event_ids]) if event_ids else []
+        )
         eval_ids = sorted([str(r.get("evaluation_id", "")) for r in rule_evaluations if r.get("evaluation_id")])
 
         package_contents = {
@@ -247,17 +232,10 @@ class AssemblyMixin:
             "summary": {
                 "total_events": len(events_data),
                 "total_rule_evaluations": len(rule_evaluations),
-                "failed_evaluations": sum(
-                    1 for r in rule_evaluations if r.get("result") == "fail"
-                ),
-                "warned_evaluations": sum(
-                    1 for r in rule_evaluations if r.get("result") == "warn"
-                ),
+                "failed_evaluations": sum(1 for r in rule_evaluations if r.get("result") == "fail"),
+                "warned_evaluations": sum(1 for r in rule_evaluations if r.get("result") == "warn"),
                 "total_exceptions": len(exception_cases),
-                "open_exceptions": sum(
-                    1 for e in exception_cases
-                    if e.get("status") not in ("resolved", "waived")
-                ),
+                "open_exceptions": sum(1 for e in exception_cases if e.get("status") not in ("resolved", "waived")),
             },
         }
 
@@ -273,9 +251,7 @@ class AssemblyMixin:
         # Compute diff from previous version
         diff_from_previous = None
         if version_number > 1:
-            diff_from_previous = self._compute_diff(
-                tenant_id, request_case_id, version_number - 1, package_contents
-            )
+            diff_from_previous = self._compute_diff(tenant_id, request_case_id, version_number - 1, package_contents)
 
         # Insert package
         package_id = str(uuid4())
@@ -364,10 +340,7 @@ class AssemblyMixin:
             - submission_authorization -> ready (no further advance)
         """
         if signoff_type not in VALID_SIGNOFF_TYPES:
-            raise ValueError(
-                f"Invalid signoff_type: {signoff_type}. "
-                f"Must be one of {VALID_SIGNOFF_TYPES}."
-            )
+            raise ValueError(f"Invalid signoff_type: {signoff_type}. Must be one of {VALID_SIGNOFF_TYPES}.")
 
         case = self._get_case(tenant_id, request_case_id)
 
@@ -426,7 +399,7 @@ class AssemblyMixin:
         self.db.execute(
             text(f"""
                 UPDATE fsma.request_cases
-                SET {', '.join(update_fields)}
+                SET {", ".join(update_fields)}
                 WHERE request_case_id = :case_id
                   AND tenant_id = :tenant_id
             """),
@@ -501,18 +474,20 @@ class AssemblyMixin:
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
             for row in critical_fails.mappings().fetchall():
-                blockers.append({
-                    "type": "critical_rule_failure",
-                    "event_id": str(row["event_id"]),
-                    "rule_id": row["rule_id"],
-                    "rule_title": row["rule_title"],
-                    "citation": row["citation_reference"],
-                    "why_failed": row["why_failed"],
-                    "message": (
-                        f"Critical rule '{row['rule_title']}' failed on event "
-                        f"{str(row['event_id'])[:8]}... with no waiver or resolution."
-                    ),
-                })
+                blockers.append(
+                    {
+                        "type": "critical_rule_failure",
+                        "event_id": str(row["event_id"]),
+                        "rule_id": row["rule_id"],
+                        "rule_title": row["rule_title"],
+                        "citation": row["citation_reference"],
+                        "why_failed": row["why_failed"],
+                        "message": (
+                            f"Critical rule '{row['rule_title']}' failed on event "
+                            f"{str(row['event_id'])[:8]}... with no waiver or resolution."
+                        ),
+                    }
+                )
 
         # 2. Unresolved critical exceptions
         critical_exceptions = self.db.execute(
@@ -533,16 +508,18 @@ class AssemblyMixin:
             },
         )
         for row in critical_exceptions.mappings().fetchall():
-            blockers.append({
-                "type": "unresolved_critical_exception",
-                "exception_id": str(row["case_id"]),
-                "supplier": row["source_supplier"],
-                "rule_category": row["rule_category"],
-                "message": (
-                    f"Critical exception from {row['source_supplier'] or 'unknown'} "
-                    f"in '{row['rule_category'] or 'unknown'}' is unresolved."
-                ),
-            })
+            blockers.append(
+                {
+                    "type": "unresolved_critical_exception",
+                    "exception_id": str(row["case_id"]),
+                    "supplier": row["source_supplier"],
+                    "rule_category": row["rule_category"],
+                    "message": (
+                        f"Critical exception from {row['source_supplier'] or 'unknown'} "
+                        f"in '{row['rule_category'] or 'unknown'}' is unresolved."
+                    ),
+                }
+            )
 
         # 3. Events with zero rule evaluations (unevaluated data)
         if event_ids:
@@ -562,16 +539,18 @@ class AssemblyMixin:
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
             for row in unevaluated.mappings().fetchall():
-                blockers.append({
-                    "type": "unevaluated_event",
-                    "event_id": str(row["event_id"]),
-                    "event_type": row["event_type"],
-                    "tlc": row["traceability_lot_code"],
-                    "message": (
-                        f"Event {str(row['event_id'])[:8]}... ({row['event_type']}) "
-                        f"has no rule evaluations — cannot verify compliance."
-                    ),
-                })
+                blockers.append(
+                    {
+                        "type": "unevaluated_event",
+                        "event_id": str(row["event_id"]),
+                        "event_type": row["event_type"],
+                        "tlc": row["traceability_lot_code"],
+                        "message": (
+                            f"Event {str(row['event_id'])[:8]}... ({row['event_type']}) "
+                            f"has no rule evaluations — cannot verify compliance."
+                        ),
+                    }
+                )
 
         # 4. Missing required signoff types
         signoff_result = self.db.execute(
@@ -586,11 +565,13 @@ class AssemblyMixin:
         existing_signoffs = {r[0] for r in signoff_result.fetchall()}
         missing_signoffs = REQUIRED_SIGNOFF_TYPES - existing_signoffs
         for missing in sorted(missing_signoffs):
-            blockers.append({
-                "type": "missing_signoff",
-                "signoff_type": missing,
-                "message": f"Required signoff '{missing}' has not been provided.",
-            })
+            blockers.append(
+                {
+                    "type": "missing_signoff",
+                    "signoff_type": missing,
+                    "message": f"Required signoff '{missing}' has not been provided.",
+                }
+            )
 
         # 5. Pending identity reviews for entities in scope
         #    High-confidence matches (>=0.85) that haven't been resolved
@@ -614,18 +595,20 @@ class AssemblyMixin:
                 {"tenant_id": tenant_id},
             )
             for row in identity_issues.mappings().fetchall():
-                blockers.append({
-                    "type": "identity_ambiguity",
-                    "review_id": str(row["review_id"]),
-                    "entity_a": row["entity_a_name"],
-                    "entity_b": row["entity_b_name"],
-                    "similarity": float(row["match_confidence"]),
-                    "message": (
-                        f"Identity ambiguity: '{row['entity_a_name']}' and "
-                        f"'{row['entity_b_name']}' are {int(row['match_confidence'] * 100)}% "
-                        f"similar but unresolved. This may split traceability chains."
-                    ),
-                })
+                blockers.append(
+                    {
+                        "type": "identity_ambiguity",
+                        "review_id": str(row["review_id"]),
+                        "entity_a": row["entity_a_name"],
+                        "entity_b": row["entity_b_name"],
+                        "similarity": float(row["match_confidence"]),
+                        "message": (
+                            f"Identity ambiguity: '{row['entity_a_name']}' and "
+                            f"'{row['entity_b_name']}' are {int(row['match_confidence'] * 100)}% "
+                            f"similar but unresolved. This may split traceability chains."
+                        ),
+                    }
+                )
         except Exception:
             # identity_review_queue table may not exist yet — non-fatal
             logger.debug("identity_review_check_skipped", reason="table_not_available")
@@ -666,17 +649,21 @@ class AssemblyMixin:
                             reason = "event_modified"
                         else:
                             reason = "rule_version_changed"
-                        stale_details.append({
-                            "event_id": str(sr["event_id"]),
-                            "rule_id": str(sr["rule_id"]),
-                            "reason": reason,
-                        })
-                    blockers.append({
-                        "type": "stale_evaluations",
-                        "count": len(stale_details),
-                        "details": stale_details,
-                        "message": f"{len(stale_details)} evaluation(s) are stale — re-evaluate before submission.",
-                    })
+                        stale_details.append(
+                            {
+                                "event_id": str(sr["event_id"]),
+                                "rule_id": str(sr["rule_id"]),
+                                "reason": reason,
+                            }
+                        )
+                    blockers.append(
+                        {
+                            "type": "stale_evaluations",
+                            "count": len(stale_details),
+                            "details": stale_details,
+                            "message": f"{len(stale_details)} evaluation(s) are stale — re-evaluate before submission.",
+                        }
+                    )
             except Exception:
                 logger.debug("stale_evaluation_check_skipped", reason="query_failed")
 
@@ -697,11 +684,13 @@ class AssemblyMixin:
             )
             warn_count = non_critical_fails.scalar() or 0
             if warn_count > 0:
-                warnings.append({
-                    "type": "non_critical_failures",
-                    "count": warn_count,
-                    "message": f"{warn_count} non-critical rule warning(s) present.",
-                })
+                warnings.append(
+                    {
+                        "type": "non_critical_failures",
+                        "count": warn_count,
+                        "message": f"{warn_count} non-critical rule warning(s) present.",
+                    }
+                )
 
         can_submit = len(blockers) == 0
 
@@ -768,18 +757,20 @@ class AssemblyMixin:
             else:
                 urgency = "normal"
 
-            cases.append({
-                "request_case_id": str(row["request_case_id"]),
-                "package_status": row["package_status"],
-                "requesting_party": row["requesting_party"],
-                "scope_description": row["scope_description"],
-                "response_due_at": row["response_due_at"].isoformat() if row["response_due_at"] else None,
-                "hours_remaining": round(hours, 2),
-                "countdown_display": format_countdown(hours),
-                "urgency": urgency,
-                "gap_count": row["gap_count"],
-                "active_exception_count": row["active_exception_count"],
-            })
+            cases.append(
+                {
+                    "request_case_id": str(row["request_case_id"]),
+                    "package_status": row["package_status"],
+                    "requesting_party": row["requesting_party"],
+                    "scope_description": row["scope_description"],
+                    "response_due_at": row["response_due_at"].isoformat() if row["response_due_at"] else None,
+                    "hours_remaining": round(hours, 2),
+                    "countdown_display": format_countdown(hours),
+                    "urgency": urgency,
+                    "gap_count": row["gap_count"],
+                    "active_exception_count": row["active_exception_count"],
+                }
+            )
 
         overdue_count = sum(1 for c in cases if c["urgency"] == "overdue")
         critical_count = sum(1 for c in cases if c["urgency"] == "critical")

@@ -17,6 +17,7 @@ They also enumerate every public model in the module and ensure any future
 ``Provision`` is intentionally excluded: it lives in the global
 ``reg_global`` database and is not tenant-scoped.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -27,7 +28,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-
 
 # ---- Load services.shared.tenant_models without depending on package __init__ ----
 _shared_dir = Path(__file__).resolve().parent.parent
@@ -329,12 +329,7 @@ def test_provision_node_is_not_tenant_scoped_in_control_mapping():
     query, _ = mapping.to_cypher_create()
 
     # The provision node pattern must be present and must NOT carry tenant_id.
-    provision_patterns = re.findall(
-        r"\(:Provision\s*\{[^}]*\}\)", query
-    )
+    provision_patterns = re.findall(r"\(:Provision\s*\{[^}]*\}\)", query)
     assert provision_patterns, "ControlMapping must still reference Provision"
     for pat in provision_patterns:
-        assert "tenant_id" not in pat, (
-            f"Provision is global reference data — must NOT carry "
-            f"tenant_id. Got: {pat}"
-        )
+        assert "tenant_id" not in pat, f"Provision is global reference data — must NOT carry tenant_id. Got: {pat}"

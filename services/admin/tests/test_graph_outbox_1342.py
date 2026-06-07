@@ -60,18 +60,16 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.graph_outbox import (
     GraphOutboxDrainer,
+    GraphOutboxDrainer as _Drainer,  # alias for _parse_params
     _json_default,
     enqueue_graph_write,
     reconcile_graph_outbox,
 )
-from app.graph_outbox import GraphOutboxDrainer as _Drainer  # alias for _parse_params
-
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # ---------------------------------------------------------------------------
 # Fixture: same SQLite schema as the base test module
@@ -86,7 +84,8 @@ def session() -> Session:
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE graph_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NULL,
@@ -102,7 +101,8 @@ def session() -> Session:
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 dedupe_key      TEXT NULL
             )
-        """))
+        """)
+        )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     s = SessionLocal()
     yield s

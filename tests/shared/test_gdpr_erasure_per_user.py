@@ -17,6 +17,7 @@ that #1441 did not fully close:
 These tests exercise the per-user anonymization helper introduced to
 close #1092 and ensure the AuditActor construction path works.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,14 +25,12 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from shared.audit_logging import AuditActor
 from shared.data_retention import (
     DataRetentionManager,
     DeletionRequest,
     RetentionPolicy,
 )
-
 
 TENANT = uuid.uuid4()
 USER = uuid.uuid4()
@@ -87,16 +86,12 @@ def test_audit_actor_uses_email_not_actor_email():
     the constructor fails CI loudly.
     """
     # This must NOT raise
-    actor = AuditActor(
-        actor_type="user", actor_id=str(USER), email="user@example.com"
-    )
+    actor = AuditActor(actor_type="user", actor_id=str(USER), email="user@example.com")
     assert actor.email == "user@example.com"
 
     # And the old, wrong name must raise
     with pytest.raises(TypeError, match="actor_email"):
-        AuditActor(
-            actor_type="user", actor_id=str(USER), actor_email="user@example.com"
-        )
+        AuditActor(actor_type="user", actor_id=str(USER), actor_email="user@example.com")
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +138,10 @@ def test_anonymize_for_user_counts_blast_radius():
 
     records_affected, errors = _run(
         mgr.anonymize_audit_logs_for_user(
-            db=db, user_id=USER, tenant_id=TENANT, actor=_actor(),
+            db=db,
+            user_id=USER,
+            tenant_id=TENANT,
+            actor=_actor(),
         )
     )
 
@@ -172,7 +170,10 @@ def test_anonymize_for_user_writes_append_only_marker():
 
     _run(
         mgr.anonymize_audit_logs_for_user(
-            db=db, user_id=USER, tenant_id=TENANT, actor=_actor(),
+            db=db,
+            user_id=USER,
+            tenant_id=TENANT,
+            actor=_actor(),
         )
     )
 
@@ -216,18 +217,17 @@ def test_anonymize_for_user_never_issues_update_on_audit_logs():
 
     _run(
         mgr.anonymize_audit_logs_for_user(
-            db=db, user_id=USER, tenant_id=TENANT, actor=_actor(),
+            db=db,
+            user_id=USER,
+            tenant_id=TENANT,
+            actor=_actor(),
         )
     )
 
     for sql in sql_calls:
         upper = sql.upper()
-        assert "UPDATE AUDIT_LOGS" not in upper, (
-            f"Per-user anonymization must not UPDATE audit_logs: {sql}"
-        )
-        assert "DELETE FROM AUDIT_LOGS" not in upper, (
-            f"Per-user anonymization must not DELETE audit_logs: {sql}"
-        )
+        assert "UPDATE AUDIT_LOGS" not in upper, f"Per-user anonymization must not UPDATE audit_logs: {sql}"
+        assert "DELETE FROM AUDIT_LOGS" not in upper, f"Per-user anonymization must not DELETE audit_logs: {sql}"
 
 
 @pytest.mark.security
@@ -242,7 +242,10 @@ def test_anonymize_for_user_handles_db_error_gracefully():
 
     records_affected, errors = _run(
         mgr.anonymize_audit_logs_for_user(
-            db=db, user_id=USER, tenant_id=TENANT, actor=_actor(),
+            db=db,
+            user_id=USER,
+            tenant_id=TENANT,
+            actor=_actor(),
         )
     )
     assert records_affected == 0
@@ -264,13 +267,15 @@ def test_anonymize_for_user_does_not_target_retention_threshold():
 
     _run(
         mgr.anonymize_audit_logs_for_user(
-            db=db, user_id=USER, tenant_id=TENANT, actor=_actor(),
+            db=db,
+            user_id=USER,
+            tenant_id=TENANT,
+            actor=_actor(),
         )
     )
 
     sql_arg, _ = db.execute.call_args.args
     sql = str(sql_arg)
     assert "timestamp <" not in sql, (
-        "Per-user anonymization must not filter by retention threshold; "
-        "it is user-scoped, not time-scoped."
+        "Per-user anonymization must not filter by retention threshold; it is user-scoped, not time-scoped."
     )

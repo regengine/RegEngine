@@ -296,9 +296,7 @@ class TableExtractor:
         # the HTTP-fetch path. Callers that pass ``pdf_bytes`` directly would
         # otherwise bypass it and pin memory on a malicious large PDF.
         if pdf_bytes is not None and len(pdf_bytes) > MAX_DOC_BYTES:
-            raise ValueError(
-                f"PDF exceeds size limit: {len(pdf_bytes)} > {MAX_DOC_BYTES}"
-            )
+            raise ValueError(f"PDF exceeds size limit: {len(pdf_bytes)} > {MAX_DOC_BYTES}")
 
         # Try deep learning approach first
         if _TORCH_AVAILABLE and _TRANSFORMERS_AVAILABLE and _PDF2IMAGE_AVAILABLE:
@@ -333,9 +331,7 @@ class TableExtractor:
         # an attacker can't pin GPU/CPU memory by feeding a huge multipage
         # PDF that fits under the byte cap.
         try:
-            images = convert_from_bytes(
-                pdf_bytes, dpi=200, last_page=MAX_PDF_PAGES
-            )
+            images = convert_from_bytes(pdf_bytes, dpi=200, last_page=MAX_PDF_PAGES)
         except Exception as e:
             logger.error("pdf_to_image_failed", error=str(e))
             return []
@@ -403,9 +399,7 @@ class TableExtractor:
         )[0]
 
         detections = []
-        for score, label, box in zip(
-            results["scores"], results["labels"], results["boxes"]
-        ):
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
             # Label 0 is typically "table" in table-transformer
             if label.item() == 0:
                 bbox = BoundingBox(
@@ -445,9 +439,7 @@ class TableExtractor:
         row_boxes = []
         cell_boxes = []
 
-        for score, label, box in zip(
-            results["scores"], results["labels"], results["boxes"]
-        ):
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
             bbox = BoundingBox(
                 x_min=box[0].item(),
                 y_min=box[1].item(),
@@ -573,9 +565,7 @@ class TableExtractor:
                         )
                         for i, r in enumerate(current_rows)
                     ]
-                    tables.append(
-                        DetectedTable(page_number=1, rows=rows, confidence=0.6)
-                    )
+                    tables.append(DetectedTable(page_number=1, rows=rows, confidence=0.6))
                 current_rows = []
             else:
                 # Check if line looks like table data (has tabs or consistent spacing)

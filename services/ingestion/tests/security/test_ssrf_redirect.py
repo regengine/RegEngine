@@ -13,7 +13,6 @@ import threading
 from contextlib import contextmanager
 
 import pytest
-
 from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import SSRFError
 

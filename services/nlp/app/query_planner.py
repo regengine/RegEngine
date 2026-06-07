@@ -88,9 +88,7 @@ def parse_query(
     days_stagnant: Optional[int] = None
 
     if intent in {"trace_forward", "trace_backward", "lot_timeline"} and not tlc:
-        warnings.append(
-            "No traceability lot code found; running a filtered event search instead."
-        )
+        warnings.append("No traceability lot code found; running a filtered event search instead.")
         intent = "events_search"
 
     if intent == "events_search":

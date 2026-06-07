@@ -68,6 +68,7 @@ Revision ID: e9f0a1b2c3d4
 Revises: d8e9f0a1b2c3
 Create Date: 2026-04-24
 """
+
 from typing import Optional, Sequence, Tuple, Union
 
 from alembic import op
@@ -110,8 +111,7 @@ _FIXES: Tuple[Tuple[str, str, str, bool, Optional[str], Optional[str]], ...] = (
         "tenant_id",
         True,
         "tenant_isolation_tasks",
-        "(tenant_id::text = current_setting('app.tenant_id', true) "
-        "OR current_setting('app.tenant_id', true) = '')",
+        "(tenant_id::text = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = '')",
     ),
     # transformation_links — origin v057, NOT NULL, RLS policy is
     # created later by v068 (so v067 has nothing to drop here).
@@ -215,13 +215,8 @@ def _scrub_drop_alter_recreate(
         # the outer EXECUTE string literal early. Doubling them is the
         # standard PL/pgSQL escape inside a single-quoted SQL string.
         escaped_using = policy_using_clause.replace("'", "''")
-        drop_policy_sql = (
-            f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
-        )
-        recreate_policy_sql = (
-            f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} "
-            f"USING {escaped_using}';"
-        )
+        drop_policy_sql = f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
+        recreate_policy_sql = f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} USING {escaped_using}';"
     else:
         drop_policy_sql = "-- no RLS policy on this column at v067 time"
         recreate_policy_sql = "-- no RLS policy to recreate"
@@ -274,13 +269,8 @@ def _alter_uuid_to_text(
         # USING clause apostrophes must be doubled so they survive
         # embedding inside the outer EXECUTE string literal.
         escaped_using = policy_using_clause.replace("'", "''")
-        drop_policy_sql = (
-            f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
-        )
-        recreate_policy_sql = (
-            f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} "
-            f"USING {escaped_using}';"
-        )
+        drop_policy_sql = f"EXECUTE 'DROP POLICY IF EXISTS {policy_name} ON {fq_table}';"
+        recreate_policy_sql = f"EXECUTE 'CREATE POLICY {policy_name} ON {fq_table} USING {escaped_using}';"
     else:
         drop_policy_sql = "-- no RLS policy on this column at v067 time"
         recreate_policy_sql = "-- no RLS policy to recreate"
@@ -344,6 +334,4 @@ def downgrade() -> None:
     # Reverse in reverse order purely for symmetry; the ALTERs are
     # independent so order doesn't actually matter here.
     for schema, table, column, _, policy_name, policy_using in reversed(_FIXES):
-        op.execute(
-            _alter_uuid_to_text(schema, table, column, policy_name, policy_using)
-        )
+        op.execute(_alter_uuid_to_text(schema, table, column, policy_name, policy_using))

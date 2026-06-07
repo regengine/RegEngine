@@ -5,6 +5,7 @@ Exposes:
   change_password       — handler (re-exported from auth_routes for compat)
   ChangePasswordRequest — request schema (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -13,18 +14,18 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from shared.rate_limit import limiter
+from shared.supabase_client import get_supabase
 from sqlalchemy.orm import Session
 
 from ..auth_utils import decode_access_token, get_password_hash, verify_password
 from ..database import get_session
 from ..dependencies import get_current_user, get_session_store
 from ..models import ChangePasswordResponse
-from ..password_policy import validate_password, PasswordPolicyError
+from ..password_policy import PasswordPolicyError, validate_password
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
-from shared.rate_limit import limiter
-from shared.supabase_client import get_supabase
 
 router = APIRouter()
 logger = structlog.get_logger("auth")

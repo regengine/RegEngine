@@ -31,7 +31,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-1234"
 ALIAS_TYPE = "name"
 ALIAS_VALUE = "Acme Cold Storage"
@@ -41,28 +40,28 @@ ALIAS_VALUE = "Acme Cold Storage"
 # created_at values. HIGH_CONF is the established canonical; MID and LOW are
 # the kind of duplicate rows that #1193 will eventually auto-merge away.
 HIGH_CONF_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"  # confidence 0.95, oldest
-MID_CONF_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"   # confidence 0.80, middle
-LOW_CONF_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"   # confidence 0.50, newest
+MID_CONF_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"  # confidence 0.80, middle
+LOW_CONF_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc"  # confidence 0.50, newest
 
 
 def _row(entity_id: str, alias_id: str, confidence_score: float) -> Tuple[Any, ...]:
     """Shape matches the SELECT in ``find_entity_by_alias`` exactly."""
     return (
-        entity_id,            # ce.entity_id
-        "facility",           # ce.entity_type
+        entity_id,  # ce.entity_id
+        "facility",  # ce.entity_type
         "Acme Cold Storage",  # ce.canonical_name
-        None,                 # ce.gln
-        None,                 # ce.gtin
-        None,                 # ce.fda_registration
-        None,                 # ce.internal_id
-        "unverified",         # ce.verification_status
-        confidence_score,     # ce.confidence_score
-        True,                 # ce.is_active
-        alias_id,             # ea.alias_id
-        ALIAS_TYPE,           # ea.alias_type
-        ALIAS_VALUE,          # ea.alias_value
-        "csv",                # ea.source_system
-        1.0,                  # ea.alias_confidence
+        None,  # ce.gln
+        None,  # ce.gtin
+        None,  # ce.fda_registration
+        None,  # ce.internal_id
+        "unverified",  # ce.verification_status
+        confidence_score,  # ce.confidence_score
+        True,  # ce.is_active
+        alias_id,  # ea.alias_id
+        ALIAS_TYPE,  # ea.alias_type
+        ALIAS_VALUE,  # ea.alias_value
+        "csv",  # ea.source_system
+        1.0,  # ea.alias_confidence
     )
 
 
@@ -109,18 +108,12 @@ class TestFindEntityByAliasOrderBy:
         # The SQL must name a stable ordering. Whitespace-tolerant check so
         # incidental formatting changes don't flap this test.
         normalized = re.sub(r"\s+", " ", sess.last_sql).lower()
-        assert "order by" in normalized, (
-            "find_entity_by_alias must emit ORDER BY — see #1234"
-        )
+        assert "order by" in normalized, "find_entity_by_alias must emit ORDER BY — see #1234"
         assert "ce.confidence_score desc" in normalized, (
             "ORDER BY must lead with ce.confidence_score DESC (higher quality wins)"
         )
-        assert "ce.created_at asc" in normalized, (
-            "ORDER BY must include ce.created_at ASC (oldest wins on ties)"
-        )
-        assert "ce.entity_id asc" in normalized, (
-            "ORDER BY must include ce.entity_id ASC as stable UUID tiebreak"
-        )
+        assert "ce.created_at asc" in normalized, "ORDER BY must include ce.created_at ASC (oldest wins on ties)"
+        assert "ce.entity_id asc" in normalized, "ORDER BY must include ce.entity_id ASC as stable UUID tiebreak"
         # confidence_score must precede created_at which must precede entity_id.
         idx_conf = normalized.index("ce.confidence_score desc")
         idx_created = normalized.index("ce.created_at asc")
@@ -144,9 +137,7 @@ class TestFindEntityByAliasOrderBy:
             assert len(results) == 3, "all three matching entities should return"
             first_results.append(results[0]["entity_id"])
 
-        assert len(set(first_results)) == 1, (
-            f"non-deterministic top result across 10 calls: {first_results}"
-        )
+        assert len(set(first_results)) == 1, f"non-deterministic top result across 10 calls: {first_results}"
         assert first_results[0] == HIGH_CONF_ID, (
             "highest-confidence canonical entity must win — a lower-confidence "
             "duplicate must not clobber an established canonical"

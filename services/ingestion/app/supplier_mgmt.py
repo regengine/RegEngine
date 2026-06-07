@@ -7,19 +7,19 @@ and monitoring supplier compliance health.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-import json
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
 from .webhook_compat import require_tenant_context
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("supplier-mgmt")
 
@@ -29,6 +29,7 @@ router = APIRouter(prefix="/api/v1/suppliers", tags=["Supplier Management"])
 
 class SupplierRecord(BaseModel):
     """A managed supplier record."""
+
     id: str
     name: str
     contact_email: str
@@ -47,6 +48,7 @@ class SupplierRecord(BaseModel):
 
 class SupplierDashboard(BaseModel):
     """Supplier management dashboard data."""
+
     tenant_id: str
     total_suppliers: int
     active_portal_links: int
@@ -58,6 +60,7 @@ class SupplierDashboard(BaseModel):
 
 class CreateSupplierRequest(BaseModel):
     """Request to create a supplier record."""
+
     name: str
     contact_email: str
     products: list[str] = Field(default_factory=list)
@@ -75,24 +78,28 @@ def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
         return None
     try:
         rows = db.execute(
-            text("SELECT id, name, contact_email, portal_link_id, portal_status, submissions_count, last_submission, compliance_status, missing_kdes, products FROM fsma.tenant_suppliers WHERE tenant_id = :tid"),
-            {"tid": tenant_id}
+            text(
+                "SELECT id, name, contact_email, portal_link_id, portal_status, submissions_count, last_submission, compliance_status, missing_kdes, products FROM fsma.tenant_suppliers WHERE tenant_id = :tid"
+            ),
+            {"tid": tenant_id},
         ).fetchall()
         suppliers = []
         for row in rows:
-            suppliers.append(SupplierRecord(
-                id=row[0],
-                name=row[1],
-                contact_email=row[2],
-                portal_link_id=row[3],
-                portal_status=row[4],
-                submissions_count=row[5],
-                last_submission=row[6],
-                compliance_status=row[7],
-                missing_kdes=json.loads(row[8]) if row[8] else [],
-                products=json.loads(row[9]) if row[9] else [],
-                is_sample=False,
-            ))
+            suppliers.append(
+                SupplierRecord(
+                    id=row[0],
+                    name=row[1],
+                    contact_email=row[2],
+                    portal_link_id=row[3],
+                    portal_status=row[4],
+                    submissions_count=row[5],
+                    last_submission=row[6],
+                    compliance_status=row[7],
+                    missing_kdes=json.loads(row[8]) if row[8] else [],
+                    products=json.loads(row[9]) if row[9] else [],
+                    is_sample=False,
+                )
+            )
         return suppliers
     except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as exc:
         logger.warning("db_read_failed error=%s", str(exc))
@@ -131,7 +138,7 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
                 "comp": supplier.compliance_status,
                 "kdes": json.dumps(supplier.missing_kdes),
                 "prods": json.dumps(supplier.products),
-            }
+            },
         )
         db.commit()
         return True
@@ -157,7 +164,7 @@ async def get_supplier_dashboard(
     tenant_id = ctx.tenant_id
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
-    
+
     # Fall back to memory if DB unavailable
     if suppliers is None:
         with _suppliers_lock:
@@ -240,7 +247,7 @@ async def send_portal_link(
         if supplier.id == supplier_id:
             supplier.portal_link_id = f"portal-{supplier_id[-3:]}-new"
             supplier.portal_status = "active"
-            
+
             # Update in DB or memory
             db_success = _db_add_supplier(tenant_id, supplier)
             if not db_success:
@@ -250,7 +257,7 @@ async def send_portal_link(
                             if mem_sup.id == supplier_id:
                                 mem_sup.portal_link_id = supplier.portal_link_id
                                 mem_sup.portal_status = supplier.portal_status
-            
+
             return {
                 "sent": True,
                 "supplier_id": supplier_id,

@@ -27,6 +27,7 @@ def client():
     """
     from app.epcis.router import router
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
     app = FastAPI()
@@ -97,7 +98,7 @@ def test_xml_ingest_rejects_tenant_query_override(client):
         "/api/v1/epcis/events/xml",
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant", "Content-Type": "application/xml"},
-        content=b"<?xml version=\"1.0\"?><EPCISDocument/>",
+        content=b'<?xml version="1.0"?><EPCISDocument/>',
     )
     assert resp.status_code == 409
 
@@ -111,6 +112,7 @@ def test_resolve_authenticated_tenant_ignores_explicit_tenant():
     """_resolve_authenticated_tenant must never pass an explicit_tenant_id
     from the query string to resolve_tenant_id."""
     from unittest.mock import MagicMock
+
     from app.epcis import router as epcis_router
 
     captured = {}
@@ -138,9 +140,10 @@ def test_resolve_authenticated_tenant_ignores_explicit_tenant():
 
 
 def test_reject_tenant_query_override_raises():
-    from fastapi import HTTPException
     from unittest.mock import MagicMock
+
     from app.epcis.router import _reject_tenant_query_override
+    from fastapi import HTTPException
 
     request = MagicMock()
     request.query_params = {"tenant_id": "foo"}

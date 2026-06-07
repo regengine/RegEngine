@@ -14,11 +14,10 @@ from __future__ import annotations
 import hashlib
 from unittest.mock import MagicMock
 
+import app.routes_discovery as routes_discovery
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from shared.auth import APIKey, require_api_key
-import app.routes_discovery as routes_discovery
 
 router = routes_discovery.router
 
@@ -77,9 +76,7 @@ class TestApproveDiscovery:
         assert kw["task_type"] == "discovery_scrape"
         assert kw["payload"] == {"body": "CPPA Warning", "url": "https://cppa.ca.gov/item/1"}
         assert kw["tenant_id"] == "tenant-disco"
-        expected_hash = hashlib.sha256(
-            "CPPA Warninghttps://cppa.ca.gov/item/1".encode("utf-8")
-        ).hexdigest()
+        expected_hash = hashlib.sha256("CPPA Warninghttps://cppa.ca.gov/item/1".encode("utf-8")).hexdigest()
         assert kw["idempotency_key"] == f"discovery_scrape:tenant-disco:{expected_hash}"
 
     def test_item_removed_from_redis(self, monkeypatch):
@@ -126,10 +123,13 @@ class TestBulkApproveDiscovery:
 
     def test_enqueues_one_task_per_item(self, monkeypatch):
         client, fake_redis, mock_enqueue, _ = _build_client(monkeypatch)
-        self._redis_with_items(fake_redis, [
-            b"Reg A:https://example.com/a",
-            b"Reg B:https://example.com/b",
-        ])
+        self._redis_with_items(
+            fake_redis,
+            [
+                b"Reg A:https://example.com/a",
+                b"Reg B:https://example.com/b",
+            ],
+        )
 
         resp = client.post(self.ENDPOINT, json={"indices": [0, 1]})
 
@@ -221,8 +221,8 @@ class TestRejectRoutes:
 
 class TestRegisterDiscoveryHandlers:
     def test_registers_discovery_scrape(self):
-        from shared.task_queue import TASK_HANDLERS
         from app.task_handlers_discovery import register_discovery_handlers
+        from shared.task_queue import TASK_HANDLERS
 
         TASK_HANDLERS.pop("discovery_scrape", None)
         register_discovery_handlers()

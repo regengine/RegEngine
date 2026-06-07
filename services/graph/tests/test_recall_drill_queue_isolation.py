@@ -14,6 +14,7 @@ Fixes under test:
     rows are never claimed even if their status somehow becomes
     'pending'.
 """
+
 from __future__ import annotations
 
 import sys
@@ -27,20 +28,19 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from services.graph.app.fsma_recall.persistence import (
-    _RECALL_DRILL_TASK_QUEUE_STATUS,
-    _TASK_QUEUE_ALLOWED_STATUSES,
-    _upsert_drill_row,
-    _update_drill_row,
-)
+from server.workers import task_processor
 from services.graph.app.fsma_recall.models import (
     RecallDrill,
     RecallSeverity,
     RecallStatus,
     RecallType,
 )
-from server.workers import task_processor
-
+from services.graph.app.fsma_recall.persistence import (
+    _RECALL_DRILL_TASK_QUEUE_STATUS,
+    _TASK_QUEUE_ALLOWED_STATUSES,
+    _update_drill_row,
+    _upsert_drill_row,
+)
 
 TENANT_A = str(uuid.UUID("11111111-1111-1111-1111-111111111111"))
 

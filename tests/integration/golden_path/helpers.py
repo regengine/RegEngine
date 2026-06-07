@@ -165,7 +165,9 @@ GOLDEN_RULE_SEEDS: List[RuleDefinition] = [
         evaluation_logic={
             "type": "multi_field_presence",
             "field": "from_entity_reference",
-            "params": {"fields": ["from_entity_reference", "kdes.immediate_previous_source", "kdes.ship_from_location"]},
+            "params": {
+                "fields": ["from_entity_reference", "kdes.immediate_previous_source", "kdes.ship_from_location"]
+            },
         },
         failure_reason_template="Receiving event missing {field_name} \u2014 cannot identify immediate previous source ({citation})",
         remediation_suggestion="Record the business name and location of the shipping entity",

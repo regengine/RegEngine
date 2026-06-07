@@ -32,7 +32,6 @@ from services.graph.app.fsma.queries import (
     query_events_by_range,
 )
 
-
 TENANT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 TENANT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
@@ -69,9 +68,7 @@ async def test_get_lot_timeline_cypher_scopes_lot_event_and_facility():
     await get_lot_timeline(mock_client, tlc="LOT-A", tenant_id=TENANT_A)
 
     cypher = mock_session.run.call_args[0][0]
-    assert "l.tenant_id = $tenant_id" in cypher, (
-        "get_lot_timeline must scope the Lot by tenant"
-    )
+    assert "l.tenant_id = $tenant_id" in cypher, "get_lot_timeline must scope the Lot by tenant"
     assert "e.tenant_id = $tenant_id" in cypher, (
         "get_lot_timeline must scope the TraceEvent by tenant — without "
         "this predicate, a lot that UNDERWENT an event in another tenant "
@@ -101,9 +98,7 @@ async def test_query_events_by_range_cypher_scopes_event_lot_and_facility():
         "FDA Sortable Spreadsheet export was leaking cross-tenant "
         "product_description and quantity without this predicate (#1261)"
     )
-    assert "f.tenant_id = $tenant_id" in cypher, (
-        "query_events_by_range must scope the joined Facility by tenant"
-    )
+    assert "f.tenant_id = $tenant_id" in cypher, "query_events_by_range must scope the joined Facility by tenant"
 
 
 # ─────────────────────────────────────────────────────────────────────

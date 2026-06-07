@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 
 from .base import (
     AuthType,
-    ConnectorConfig,
     ConnectionStatus,
+    ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
 )
@@ -174,7 +174,8 @@ class KrogerConnector(IntegrationConnector):
             return True
         logger.info(
             "kroger_push_prepared tlc=%s product=%s",
-            event.traceability_lot_code, event.product_description,
+            event.traceability_lot_code,
+            event.product_description,
         )
         return True
 
@@ -296,8 +297,7 @@ class CostcoConnector(IntegrationConnector):
             "name": "Costco Wholesale",
             "category": "retailer",
             "description": (
-                "Exchange traceability documentation with Costco's "
-                "food safety and supplier compliance portal."
+                "Exchange traceability documentation with Costco's food safety and supplier compliance portal."
             ),
             "supported_cte_types": ["shipping"],
             "auth_type": AuthType.API_KEY.value,

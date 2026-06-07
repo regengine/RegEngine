@@ -44,7 +44,6 @@ from app.models import (  # noqa: E402
     _reject_private_host,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -64,10 +63,7 @@ def _patch_resolver(monkeypatch: pytest.MonkeyPatch, ips: list[str]) -> None:
     """Force ``socket.getaddrinfo`` to return ``ips`` regardless of host."""
 
     def _fake(host, port, *args, **kwargs):
-        return [
-            _addrinfo(ip, socket.AF_INET6 if ":" in ip else socket.AF_INET)
-            for ip in ips
-        ]
+        return [_addrinfo(ip, socket.AF_INET6 if ":" in ip else socket.AF_INET) for ip in ips]
 
     monkeypatch.setattr("app.models.socket.getaddrinfo", _fake)
 
@@ -78,13 +74,10 @@ def _patch_resolver(monkeypatch: pytest.MonkeyPatch, ips: list[str]) -> None:
 
 
 class TestRejectPrivateHost:
-
     def test_public_host_passes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # 8.8.8.8 is not private/loopback/link_local/reserved/in-blocked-net.
         _patch_resolver(monkeypatch, ["8.8.8.8"])
-        url = IngestRequest.model_validate(
-            {"url": "https://example.com/x", "source_system": "src"}
-        ).url
+        url = IngestRequest.model_validate({"url": "https://example.com/x", "source_system": "src"}).url
         # Validator path already covered by this call. For the direct
         # helper assertion, re-invoke against the public IP.
         _reject_private_host(url)  # must not raise
@@ -127,9 +120,7 @@ class TestRejectPrivateHost:
         with pytest.raises(ValueError, match="metadata endpoint"):
             _reject_private_host(_Ipv6Url())  # type: ignore[arg-type]
 
-    def test_ipv6_literal_private_rejected_without_dns(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_ipv6_literal_private_rejected_without_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Literal-IP URLs should be short-circuited before DNS. Use a
         # ULA address that is *not* on the hostname blocklist so the
         # rejection path is the literal-IP range check.
@@ -138,14 +129,10 @@ class TestRejectPrivateHost:
 
         monkeypatch.setattr("app.models.socket.getaddrinfo", _boom)
         with pytest.raises(ValidationError) as exc:
-            IngestRequest(
-                url="https://[fd12:3456::1]/x", source_system="src"
-            )
+            IngestRequest(url="https://[fd12:3456::1]/x", source_system="src")
         assert "private or reserved" in str(exc.value)
 
-    def test_ipv4_literal_private_rejected_without_dns(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_ipv4_literal_private_rejected_without_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # 10.1.2.3 is not on the hostname blocklist but is in the
         # private range. Literal IPv4 URLs must also skip DNS.
         def _boom(*_a, **_kw):
@@ -156,9 +143,7 @@ class TestRejectPrivateHost:
             IngestRequest(url="https://10.1.2.3/x", source_system="src")
         assert "private or reserved" in str(exc.value)
 
-    def test_ipv4_literal_public_passes_without_dns(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_ipv4_literal_public_passes_without_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # A public IPv4 literal must pass the literal short-circuit
         # without ever hitting DNS.
         def _boom(*_a, **_kw):
@@ -183,9 +168,7 @@ class TestRejectPrivateHost:
         with pytest.raises(ValueError, match="must include a hostname"):
             _reject_private_host(_NoneHostUrl())  # type: ignore[arg-type]
 
-    def test_blocked_hostname_case_insensitive(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_blocked_hostname_case_insensitive(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Uppercase metadata host must still hit the blocklist branch.
         monkeypatch.setattr(
             "app.models.socket.getaddrinfo",
@@ -204,50 +187,38 @@ class TestRejectPrivateHost:
 
         monkeypatch.setattr("app.models.socket.getaddrinfo", _fail)
         with pytest.raises(ValidationError) as exc:
-            IngestRequest(
-                url="https://nx.example.invalid/x", source_system="src"
-            )
+            IngestRequest(url="https://nx.example.invalid/x", source_system="src")
         assert "Unable to resolve" in str(exc.value)
 
     @pytest.mark.parametrize(
         "ip",
         [
-            "10.1.2.3",        # is_private
-            "192.168.1.5",     # is_private
-            "172.16.0.1",      # is_private
-            "127.0.0.1",       # is_loopback
+            "10.1.2.3",  # is_private
+            "192.168.1.5",  # is_private
+            "172.16.0.1",  # is_private
+            "127.0.0.1",  # is_loopback
             "169.254.169.254",  # is_link_local (different from hostname case)
-            "::1",             # is_loopback (IPv6)
-            "fe80::1",         # is_link_local (IPv6)
-            "fd00::1",         # is_private (IPv6 ULA per stdlib)
+            "::1",  # is_loopback (IPv6)
+            "fe80::1",  # is_link_local (IPv6)
+            "fd00::1",  # is_private (IPv6 ULA per stdlib)
         ],
     )
-    def test_private_ip_resolution_rejected(
-        self, monkeypatch: pytest.MonkeyPatch, ip: str
-    ) -> None:
+    def test_private_ip_resolution_rejected(self, monkeypatch: pytest.MonkeyPatch, ip: str) -> None:
         # Line 58-62. Hostname is public-looking; DNS yields a private IP.
         _patch_resolver(monkeypatch, [ip])
         with pytest.raises(ValidationError) as exc:
-            IngestRequest(
-                url="https://attacker.example.com/x", source_system="src"
-            )
+            IngestRequest(url="https://attacker.example.com/x", source_system="src")
         assert "private or reserved" in str(exc.value)
 
-    def test_any_private_in_multi_ip_response_rejects(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_any_private_in_multi_ip_response_rejects(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Resolver returns a public IP plus a private IP — the latter
         # must still trigger rejection (defense against DNS-rebinding
         # where multiple A records are returned).
         _patch_resolver(monkeypatch, ["8.8.8.8", "10.0.0.1"])
         with pytest.raises(ValidationError):
-            IngestRequest(
-                url="https://multi.example.com/x", source_system="src"
-            )
+            IngestRequest(url="https://multi.example.com/x", source_system="src")
 
-    def test_unparseable_ip_is_skipped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unparseable_ip_is_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Line 56-57 (``except ValueError: continue``). Forge a resolver
         # that yields an unparseable address, then a public one. The
         # unparseable entry should be silently skipped rather than
@@ -260,13 +231,9 @@ class TestRejectPrivateHost:
 
         monkeypatch.setattr("app.models.socket.getaddrinfo", _fake)
         # Should not raise — the public IP is still valid.
-        IngestRequest(
-            url="https://weird.example.com/x", source_system="src"
-        )
+        IngestRequest(url="https://weird.example.com/x", source_system="src")
 
-    def test_blocked_network_defense_in_depth(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_blocked_network_defense_in_depth(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Line 63-68. In real stdlib, every IP in _SSRF_BLOCKED_NETWORKS
         # already matches ``is_private``/``is_loopback``/``is_link_local``/
         # ``is_reserved``, so this branch is defense-in-depth. To hit it
@@ -308,18 +275,12 @@ class TestRejectPrivateHost:
                 return True
             return original_contains(self, item)
 
-        monkeypatch.setattr(
-            "app.models.ipaddress.ip_address", lambda _s: sneaky
-        )
-        monkeypatch.setattr(
-            ipaddress.IPv4Network, "__contains__", _patched_contains
-        )
+        monkeypatch.setattr("app.models.ipaddress.ip_address", lambda _s: sneaky)
+        monkeypatch.setattr(ipaddress.IPv4Network, "__contains__", _patched_contains)
         _patch_resolver(monkeypatch, ["10.99.99.99"])
 
         with pytest.raises(ValidationError) as exc:
-            IngestRequest(
-                url="https://sneaky.example.com/x", source_system="src"
-            )
+            IngestRequest(url="https://sneaky.example.com/x", source_system="src")
         assert "private or reserved" in str(exc.value)
 
 
@@ -329,25 +290,18 @@ class TestRejectPrivateHost:
 
 
 class TestIngestRequestValidator:
-
     def test_public_url_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_resolver(monkeypatch, ["93.184.216.34"])  # example.com
-        req = IngestRequest(
-            url="https://example.com/api", source_system="fda"
-        )
+        req = IngestRequest(url="https://example.com/api", source_system="fda")
         assert str(req.url).startswith("https://example.com")
         assert req.source_system == "fda"
 
-    def test_private_url_rejected_via_validator(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_private_url_rejected_via_validator(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Confirms the decorator is still wired up — if the @field_validator
         # line goes away, this test fails loudly.
         _patch_resolver(monkeypatch, ["10.0.0.1"])
         with pytest.raises(ValidationError):
-            IngestRequest(
-                url="https://internal.example.com/", source_system="fda"
-            )
+            IngestRequest(url="https://internal.example.com/", source_system="fda")
 
 
 # --------------------------------------------------------------------------- #
@@ -356,10 +310,7 @@ class TestIngestRequestValidator:
 
 
 class TestNormalizedDocumentValidator:
-
-    def test_public_source_url_accepted(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_public_source_url_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from datetime import datetime, timezone
 
         _patch_resolver(monkeypatch, ["93.184.216.34"])
@@ -373,9 +324,7 @@ class TestNormalizedDocumentValidator:
         )
         assert doc.document_id == "doc-1"
 
-    def test_private_source_url_rejected(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_private_source_url_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from datetime import datetime, timezone
 
         _patch_resolver(monkeypatch, ["127.0.0.1"])

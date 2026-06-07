@@ -26,10 +26,9 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import identity_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.identity_router import _get_service  # noqa: E402
-
 
 TENANT = "tenant-id-1342"
 
@@ -67,9 +66,7 @@ class TestGetServiceNoDb:
         assert exc.value.status_code == 503
         assert exc.value.detail == "Database unavailable"
 
-    def test_constructs_service_with_principal_tenant_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_constructs_service_with_principal_tenant_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, object] = {}
 
         class _FakeIdentityResolutionService:
@@ -89,9 +86,7 @@ class TestGetServiceNoDb:
         assert captured["principal_tenant_id"] == TENANT
         assert captured["allow_cross_tenant"] is False
 
-    def test_allow_cross_tenant_flag_passed_through(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_allow_cross_tenant_flag_passed_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, object] = {}
 
         class _FakeIdentityResolutionService:
@@ -105,9 +100,7 @@ class TestGetServiceNoDb:
         _get_service(MagicMock(), _make_principal(), allow_cross_tenant=True)
         assert captured["allow_cross_tenant"] is True
 
-    def test_no_principal_yields_none_tenant_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_principal_yields_none_tenant_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: dict[str, object] = {}
 
         class _FakeIdentityResolutionService:
@@ -128,9 +121,7 @@ class TestGetServiceNoDb:
 # --------------------------------------------------------------------------- #
 
 
-def _build_client_with_stubbed_service(
-    mock_svc: MagicMock, mock_db: MagicMock | None = None
-) -> TestClient:
+def _build_client_with_stubbed_service(mock_svc: MagicMock, mock_db: MagicMock | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(identity_router.router)
     app.dependency_overrides[get_ingestion_principal] = lambda: _make_principal()

@@ -56,7 +56,6 @@ from shared.identity_resolution.service import (  # noqa: E402
     IdentityResolutionService,
 )
 
-
 # ── 1. Constructor: keyword-only safety invariants ────────────────────────
 
 
@@ -66,9 +65,7 @@ def test_principal_tenant_id_is_keyword_only():
     something else into the slot would silently misbind the lock."""
     sig = inspect.signature(IdentityResolutionService.__init__)
     param = sig.parameters["principal_tenant_id"]
-    assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        "principal_tenant_id must be keyword-only (#1230)"
-    )
+    assert param.kind == inspect.Parameter.KEYWORD_ONLY, "principal_tenant_id must be keyword-only (#1230)"
 
 
 def test_allow_cross_tenant_is_keyword_only():
@@ -95,9 +92,7 @@ def test_constructor_defaults_preserve_backcompat():
 
 def test_guard_passes_on_matching_tenant():
     """The happy path: principal bound, caller supplied the same tenant."""
-    svc = IdentityResolutionService(
-        MagicMock(), principal_tenant_id="tenant-acme"
-    )
+    svc = IdentityResolutionService(MagicMock(), principal_tenant_id="tenant-acme")
     # No exception.
     svc._verify_tenant_access("tenant-acme")
 
@@ -105,9 +100,7 @@ def test_guard_passes_on_matching_tenant():
 def test_guard_rejects_mismatched_tenant():
     """The whole point of the lock: a principal bound to one tenant
     must not be able to reach into another."""
-    svc = IdentityResolutionService(
-        MagicMock(), principal_tenant_id="tenant-acme"
-    )
+    svc = IdentityResolutionService(MagicMock(), principal_tenant_id="tenant-acme")
     with pytest.raises(PermissionError, match="does not match"):
         svc._verify_tenant_access("tenant-globex")
 
@@ -115,9 +108,7 @@ def test_guard_rejects_mismatched_tenant():
 def test_guard_rejects_empty_tenant_when_bound():
     """An empty string tenant slipping through the router is a bug,
     not a valid state."""
-    svc = IdentityResolutionService(
-        MagicMock(), principal_tenant_id="tenant-acme"
-    )
+    svc = IdentityResolutionService(MagicMock(), principal_tenant_id="tenant-acme")
     with pytest.raises(PermissionError):
         svc._verify_tenant_access("")
 
@@ -137,9 +128,7 @@ def test_allow_cross_tenant_bypasses_guard():
 def test_guard_error_mentions_issue_reference():
     """Regression: the error message should point a debugger at #1230
     so the constraint is self-explaining."""
-    svc = IdentityResolutionService(
-        MagicMock(), principal_tenant_id="tenant-acme"
-    )
+    svc = IdentityResolutionService(MagicMock(), principal_tenant_id="tenant-acme")
     with pytest.raises(PermissionError) as exc_info:
         svc._verify_tenant_access("tenant-globex")
     assert "#1230" in str(exc_info.value)
@@ -180,8 +169,7 @@ def test_write_method_calls_verify_tenant_access(method_name):
     # Match the exact guard call with the tenant_id param.
     pattern = r"self\._verify_tenant_access\(\s*tenant_id\s*\)"
     assert re.search(pattern, src), (
-        f"#1230: {method_name} must call "
-        f"self._verify_tenant_access(tenant_id) before any side effects."
+        f"#1230: {method_name} must call self._verify_tenant_access(tenant_id) before any side effects."
     )
 
 
@@ -199,19 +187,14 @@ def test_read_methods_do_not_require_guard():
         "list_pending_reviews",
     }
     for name in read_methods:
-        assert hasattr(IdentityResolutionService, name), (
-            f"Read method {name} missing — update this test if renamed."
-        )
+        assert hasattr(IdentityResolutionService, name), f"Read method {name} missing — update this test if renamed."
 
 
 # ── 4. Router plumbs principal through _get_service (source check) ────────
 
 
 def _router_source() -> str:
-    p = (
-        Path(__file__).resolve().parents[2]
-        / "services" / "ingestion" / "app" / "identity_router.py"
-    )
+    p = Path(__file__).resolve().parents[2] / "services" / "ingestion" / "app" / "identity_router.py"
     return p.read_text()
 
 
@@ -223,9 +206,7 @@ def test_router_get_service_accepts_principal():
     assert re.search(
         r"def\s+_get_service\s*\(\s*\n?\s*db_session,\s*\n?\s*principal",
         src,
-    ), (
-        "#1230: _get_service must accept principal as its second arg."
-    )
+    ), "#1230: _get_service must accept principal as its second arg."
 
 
 def test_router_passes_principal_tenant_id_to_service():
@@ -233,8 +214,7 @@ def test_router_passes_principal_tenant_id_to_service():
     in the router must bind the principal's tenant."""
     src = _router_source()
     assert "principal_tenant_id=principal_tenant_id" in src, (
-        "#1230: _get_service must pass principal_tenant_id to "
-        "IdentityResolutionService so writes are tenant-locked."
+        "#1230: _get_service must pass principal_tenant_id to IdentityResolutionService so writes are tenant-locked."
     )
 
 
@@ -254,9 +234,7 @@ def test_all_router_callsites_pass_principal():
     callsites = [c for c in callsites if "IngestionPrincipal" not in c]
     assert callsites, "Expected to find call sites to _get_service"
     for args in callsites:
-        assert "principal" in args, (
-            f"#1230: _get_service call is missing principal arg: {args!r}"
-        )
+        assert "principal" in args, f"#1230: _get_service call is missing principal arg: {args!r}"
 
 
 # ── 5. Sanity: the fix doesn't break ordinary construction ────────────────
@@ -271,9 +249,7 @@ def test_default_construction_is_unbound():
 
 
 def test_bound_construction_stores_principal():
-    svc = IdentityResolutionService(
-        MagicMock(), principal_tenant_id="tenant-acme"
-    )
+    svc = IdentityResolutionService(MagicMock(), principal_tenant_id="tenant-acme")
     assert svc._principal_tenant_id == "tenant-acme"
     assert svc._allow_cross_tenant is False
 

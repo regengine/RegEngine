@@ -134,14 +134,18 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
     mode = current_mode()
     if mode == EnforcementMode.OFF:
         logger.warning(
-            "rules_preeval_skipped where=%s error=%s", where, str(err),
+            "rules_preeval_skipped where=%s error=%s",
+            where,
+            str(err),
         )
         return
 
     # cte_only / all — fail loud.
     logger.error(
         "rules_preeval_failed where=%s mode=%s error=%s",
-        where, mode, str(err),
+        where,
+        mode,
+        str(err),
     )
     try:
         import sentry_sdk  # noqa: PLC0415
@@ -167,8 +171,7 @@ def handle_preeval_exception(err: BaseException, *, where: str) -> None:
         detail={
             "error": "RULES_ENGINE_EVAL_FAILED",
             "message": (
-                "Rules engine pre-evaluation failed under enforcement "
-                "mode. Refusing to silently accept the event."
+                "Rules engine pre-evaluation failed under enforcement mode. Refusing to silently accept the event."
             ),
             "where": where,
         },

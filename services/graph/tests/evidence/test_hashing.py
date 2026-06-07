@@ -5,15 +5,15 @@ Covers: compute_payload_hash, compute_envelope_hash, verify_hash.
 """
 
 import pytest
+
 from services.graph.app.evidence.hashing import (
-    compute_payload_hash,
     compute_envelope_hash,
+    compute_payload_hash,
     verify_hash,
 )
 
 
 class TestComputePayloadHash:
-
     def test_returns_64_char_hex_string(self):
         """SHA-256 hex digest is exactly 64 characters."""
         h = compute_payload_hash({"key": "value"})
@@ -65,7 +65,6 @@ class TestComputePayloadHash:
 
 
 class TestComputeEnvelopeHash:
-
     def test_excludes_current_hash_field(self):
         """current_hash is excluded from the hash computation (no circular dep)."""
         envelope_without = {"payload": "data", "timestamp": "2026-01-01T00:00:00Z"}
@@ -87,7 +86,6 @@ class TestComputeEnvelopeHash:
 
 
 class TestVerifyHash:
-
     def test_correct_hash_returns_true(self):
         payload = {"status": "approved", "score": 0.95}
         correct_hash = compute_payload_hash(payload)

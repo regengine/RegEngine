@@ -29,6 +29,7 @@ Revision ID: c2d3e4f5a6b7
 Revises: b1c2d3e4f5a6
 Create Date: 2026-04-15
 """
+
 from alembic import op
 
 revision = "c2d3e4f5a6b7"
@@ -186,16 +187,31 @@ def upgrade() -> None:
 
     # 1e. Update RLS policies with dual session+role check + audit triggers
     _rls_tables = [
-        ("ingestion.documents", "tenant_isolation_docs", "trg_audit_sysadmin_docs",
-         "tenant_id = get_tenant_context()"),
-        ("vertical_projects", "tenant_isolation_projects", "trg_audit_sysadmin_projects",
-         "tenant_id = get_tenant_context()"),
-        ("evidence_logs", "tenant_isolation_evidence", "trg_audit_sysadmin_evidence",
-         "tenant_id = get_tenant_context()"),
-        ("audit_logs", "tenant_isolation_audit", "trg_audit_sysadmin_audit_logs",
-         "tenant_id::uuid = get_tenant_context()"),
-        ("memberships", "tenant_isolation_memberships", "trg_audit_sysadmin_memberships",
-         "tenant_id = get_tenant_context()"),
+        ("ingestion.documents", "tenant_isolation_docs", "trg_audit_sysadmin_docs", "tenant_id = get_tenant_context()"),
+        (
+            "vertical_projects",
+            "tenant_isolation_projects",
+            "trg_audit_sysadmin_projects",
+            "tenant_id = get_tenant_context()",
+        ),
+        (
+            "evidence_logs",
+            "tenant_isolation_evidence",
+            "trg_audit_sysadmin_evidence",
+            "tenant_id = get_tenant_context()",
+        ),
+        (
+            "audit_logs",
+            "tenant_isolation_audit",
+            "trg_audit_sysadmin_audit_logs",
+            "tenant_id::uuid = get_tenant_context()",
+        ),
+        (
+            "memberships",
+            "tenant_isolation_memberships",
+            "trg_audit_sysadmin_memberships",
+            "tenant_id = get_tenant_context()",
+        ),
     ]
     for table, policy, trigger, using_clause in _rls_tables:
         op.execute(f"""
@@ -242,8 +258,7 @@ def upgrade() -> None:
     # ================================================================
 
     # Fix PCOS table policies (were using wrong session variable)
-    for table in ("pcos_authority_documents", "pcos_extracted_facts",
-                  "pcos_fact_citations", "pcos_analysis_runs"):
+    for table in ("pcos_authority_documents", "pcos_extracted_facts", "pcos_fact_citations", "pcos_analysis_runs"):
         policy = f"{table}_tenant_isolation"
         op.execute(f"""
             DO $$ BEGIN
@@ -373,8 +388,7 @@ def downgrade() -> None:
     op.execute("DROP POLICY IF EXISTS obligations_select_tenant_scoped ON public.obligations")
     op.execute("DROP POLICY IF EXISTS obligation_cte_rules_select_via_obligation ON public.obligation_cte_rules")
 
-    for table in ("pcos_authority_documents", "pcos_extracted_facts",
-                  "pcos_fact_citations", "pcos_analysis_runs"):
+    for table in ("pcos_authority_documents", "pcos_extracted_facts", "pcos_fact_citations", "pcos_analysis_runs"):
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {table}")
 
     op.execute("DROP POLICY IF EXISTS user_self_isolation ON users")

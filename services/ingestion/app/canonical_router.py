@@ -24,16 +24,15 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.canonical_persistence import CanonicalEventStore
-from shared.tenant_context import set_tenant_guc
 from shared.database import get_db_session
+from shared.tenant_context import set_tenant_guc
+from sqlalchemy import text
+
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 # Backwards-compat alias: tests override this private name via
 # ``app.dependency_overrides[_get_db_session]``. Point it at the canonical
@@ -47,22 +46,23 @@ router = APIRouter(prefix="/api/v1/records", tags=["Canonical Records"])
 # Defense-in-depth: whitelist of fragments allowed in dynamic WHERE clauses.
 # All filter columns are hardcoded in endpoint logic — this assertion catches
 # regressions if a future change introduces an unsafe column reference.
-_ALLOWED_WHERE_FRAGMENTS = frozenset({
-    "tenant_id = :tid",
-    "traceability_lot_code = :tlc",
-    "event_type = :event_type",
-    "status = :status",
-    "source_system = :source_system",
-    "event_timestamp >= :start_date",
-    "event_timestamp <= :end_date",
-})
-
-
+_ALLOWED_WHERE_FRAGMENTS = frozenset(
+    {
+        "tenant_id = :tid",
+        "traceability_lot_code = :tlc",
+        "event_type = :event_type",
+        "status = :status",
+        "source_system = :source_system",
+        "event_timestamp >= :start_date",
+        "event_timestamp <= :end_date",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "",
@@ -130,8 +130,7 @@ async def list_records(
             " event_timestamp, source_system, status,"
             " confidence_score, schema_version, created_at"
             " FROM fsma.traceability_events"
-            " WHERE " + where +
-            " ORDER BY event_timestamp DESC"
+            " WHERE " + where + " ORDER BY event_timestamp DESC"
             " LIMIT :lim OFFSET :off"
         ),
         params,
@@ -193,8 +192,7 @@ async def list_ingestion_runs(
             " accepted_count, rejected_count, status, mapper_version,"
             " initiated_by, started_at, completed_at"
             " FROM fsma.ingestion_runs"
-            " WHERE " + where +
-            " ORDER BY started_at DESC"
+            " WHERE " + where + " ORDER BY started_at DESC"
             " LIMIT :lim"
         ),
         params,
@@ -288,6 +286,7 @@ async def get_record(
 
     tid = resolve_tenant(tenant_id, principal)
     from shared.canonical_persistence import CanonicalEventStore
+
     store = CanonicalEventStore(db_session, dual_write=False)
     # #1297: this endpoint's OpenAPI docstring advertises
     # "the complete canonical event including raw payload" — opt in
@@ -300,6 +299,7 @@ async def get_record(
 
     # Enrich with rule evaluations
     from sqlalchemy import text
+
     eval_rows = db_session.execute(
         text("""
             SELECT e.result, e.why_failed, r.title, r.severity,
@@ -393,11 +393,14 @@ def _get_amendment_chain(db_session, tenant_id: str, event_id: str) -> List[Dict
         ).fetchone()
         if not row or not row[1]:
             break
-        chain.insert(0, {
-            "event_id": str(row[1]),
-            "superseded_by": str(row[0]),
-            "status": "superseded",
-        })
+        chain.insert(
+            0,
+            {
+                "event_id": str(row[1]),
+                "superseded_by": str(row[0]),
+                "status": "superseded",
+            },
+        )
         current_id = str(row[1])
 
     # Walk forward (what supersedes this event?)
@@ -413,12 +416,14 @@ def _get_amendment_chain(db_session, tenant_id: str, event_id: str) -> List[Dict
         ).fetchone()
         if not row:
             break
-        chain.append({
-            "event_id": str(row[0]),
-            "supersedes": current_id,
-            "status": row[1],
-            "created_at": row[2].isoformat() if row[2] else None,
-        })
+        chain.append(
+            {
+                "event_id": str(row[0]),
+                "supersedes": current_id,
+                "status": row[1],
+                "created_at": row[2].isoformat() if row[2] else None,
+            }
+        )
         current_id = str(row[0])
 
     return chain
@@ -427,6 +432,7 @@ def _get_amendment_chain(db_session, tenant_id: str, event_id: str) -> List[Dict
 # ---------------------------------------------------------------------------
 # Trace Endpoints — Forward/Backward Lot Traceability
 # ---------------------------------------------------------------------------
+
 
 class TraceLink(BaseModel):
     input_tlc: str
@@ -489,7 +495,9 @@ def trace_forward(
         for r in raw_links
     ]
     return TraceResponse(
-        tlc=tlc, direction="forward", links=links,
+        tlc=tlc,
+        direction="forward",
+        links=links,
         total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
         truncated=truncated,
     )
@@ -531,7 +539,9 @@ def trace_backward(
         for r in raw_links
     ]
     return TraceResponse(
-        tlc=tlc, direction="backward", links=links,
+        tlc=tlc,
+        direction="backward",
+        links=links,
         total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
         truncated=truncated,
     )

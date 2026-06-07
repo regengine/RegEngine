@@ -12,12 +12,11 @@ from typing import Any, Dict, List, Optional
 
 from .base import (
     AuthType,
-    ConnectorConfig,
     ConnectionStatus,
+    ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
 )
-
 
 SUPPORTED_CTE_TYPES = [
     "harvesting",

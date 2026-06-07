@@ -47,12 +47,14 @@ class _FakeRegulationLoader:
         self.closed = False
 
     async def load(self, tmp_path, fmt, name):
-        _FakeRegulationLoader.captured.append({
-            "tmp_path": tmp_path,
-            "format": fmt,
-            "name": name,
-            "uri": self.uri,
-        })
+        _FakeRegulationLoader.captured.append(
+            {
+                "tmp_path": tmp_path,
+                "format": fmt,
+                "name": name,
+                "uri": self.uri,
+            }
+        )
         # Count returned is checked by the caller — make it deterministic.
         return 42
 
@@ -74,6 +76,7 @@ _REAL_APP_REGULATION_LOADER = sys.modules.get("app.regulation_loader")
 sys.modules["app.regulation_loader"] = _loader_mod
 
 import app as _app_pkg  # noqa: E402
+
 _REAL_APP_REGULATION_LOADER_ATTR = getattr(_app_pkg, "regulation_loader", None)
 _app_pkg.regulation_loader = _loader_mod
 
@@ -109,7 +112,6 @@ from app.task_handlers_regulation import (  # noqa: E402
     get_staging_path,
     register_regulation_handlers,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test fakes
@@ -164,6 +166,7 @@ def _reset_fakes():
     # lazy ``from .regulation_loader`` inside the handler resolvable.
     sys.modules["app.regulation_loader"] = _loader_mod
     import app as _app_pkg
+
     _app_pkg.regulation_loader = _loader_mod
 
     _FakeRegulationLoader.captured.clear()
@@ -297,9 +300,7 @@ class TestProcessRegulationHappyPath:
     def _run(self, **kwargs):
         return asyncio.run(_process_regulation_from_file(**kwargs))
 
-    def test_pdf_file_flow_writes_status_and_result(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
+    def test_pdf_file_flow_writes_status_and_result(self, fake_redis, fake_settings, fake_httpx, staged_pdf):
         self._run(
             job_id="j1",
             name="FDA FSMA 204",
@@ -324,15 +325,19 @@ class TestProcessRegulationHappyPath:
         # Result is JSON with sections + name + tenant_id
         result_body = json.loads(fake_redis.calls[2][2])
         assert result_body == {
-            "sections": 42, "name": "FDA FSMA 204", "tenant_id": "tenant-42",
+            "sections": 42,
+            "name": "FDA FSMA 204",
+            "tenant_id": "tenant-42",
         }
 
-    def test_loader_receives_settings_config(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
+    def test_loader_receives_settings_config(self, fake_redis, fake_settings, fake_httpx, staged_pdf):
         self._run(
-            job_id="j1", name="R", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
+            job_id="j1",
+            name="R",
+            filename="r.pdf",
+            tenant_id="t",
+            file_path=str(staged_pdf),
+            webhook=None,
         )
         assert len(_FakeRegulationLoader.captured) == 1
         call = _FakeRegulationLoader.captured[0]
@@ -340,18 +345,18 @@ class TestProcessRegulationHappyPath:
         assert call["name"] == "R"
         assert call["uri"] == "bolt://neo4j:7687"
 
-    def test_docx_file_uses_docx_format(
-        self, fake_redis, fake_settings, fake_httpx, staged_docx
-    ):
+    def test_docx_file_uses_docx_format(self, fake_redis, fake_settings, fake_httpx, staged_docx):
         self._run(
-            job_id="j2", name="Policy X", filename="policy.docx",
-            tenant_id="t", file_path=str(staged_docx), webhook=None,
+            job_id="j2",
+            name="Policy X",
+            filename="policy.docx",
+            tenant_id="t",
+            file_path=str(staged_docx),
+            webhook=None,
         )
         assert _FakeRegulationLoader.captured[0]["format"] == "docx"
 
-    def test_tmp_file_is_removed_in_finally(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf, monkeypatch
-    ):
+    def test_tmp_file_is_removed_in_finally(self, fake_redis, fake_settings, fake_httpx, staged_pdf, monkeypatch):
         removed_paths: list[str] = []
         real_remove = os.remove
 
@@ -362,31 +367,40 @@ class TestProcessRegulationHappyPath:
         monkeypatch.setattr(thr.os, "remove", _tracked_remove)
 
         self._run(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
+            job_id="j",
+            name="r",
+            filename="r.pdf",
+            tenant_id="t",
+            file_path=str(staged_pdf),
+            webhook=None,
         )
         # Both the tempfile copy AND the staging file were removed.
         # Staging file last — the finally drops staging after tmp.
         assert str(staged_pdf) in removed_paths
         assert not staged_pdf.exists()
 
-    def test_staging_file_already_gone_does_not_raise(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
+    def test_staging_file_already_gone_does_not_raise(self, fake_redis, fake_settings, fake_httpx, staged_pdf):
         # Simulate a concurrent cleanup by running the handler twice
         # against the same path — the second pass should swallow the
         # ``FileNotFoundError`` inside the ``except OSError: pass`` block.
         self._run(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
+            job_id="j",
+            name="r",
+            filename="r.pdf",
+            tenant_id="t",
+            file_path=str(staged_pdf),
+            webhook=None,
         )
         assert not staged_pdf.exists()
 
         # Re-stage a different job; but swap ``os.remove`` so the second
         # call on a non-existent path raises into our except block.
         self._run(
-            job_id="j2", name="r2", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),  # already gone
+            job_id="j2",
+            name="r2",
+            filename="r.pdf",
+            tenant_id="t",
+            file_path=str(staged_pdf),  # already gone
             webhook=None,
         )
         # Second run hits the staging-file-missing branch instead.
@@ -404,19 +418,19 @@ class TestProcessRegulationHappyPath:
 
 
 class TestStagingFileMissing:
-    def test_missing_file_writes_failed_status_and_returns(
-        self, fake_redis, fake_settings, fake_httpx, tmp_path
-    ):
+    def test_missing_file_writes_failed_status_and_returns(self, fake_redis, fake_settings, fake_httpx, tmp_path):
         missing = str(tmp_path / "does-not-exist.pdf")
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j-missing",
-            name="X",
-            filename="x.pdf",
-            tenant_id="t",
-            file_path=missing,
-            webhook=None,
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j-missing",
+                name="X",
+                filename="x.pdf",
+                tenant_id="t",
+                file_path=missing,
+                webhook=None,
+            )
+        )
 
         # Only one Redis write — and it's the failure status — because
         # the function returns before the processing-status write.
@@ -436,14 +450,17 @@ class TestStagingFileMissing:
 
 
 class TestWebhookOnSuccess:
-    def test_completed_webhook_includes_sections(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="FSMA 204", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com/hook",
-        ))
+    def test_completed_webhook_includes_sections(self, fake_redis, fake_settings, fake_httpx, staged_pdf):
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="FSMA 204",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com/hook",
+            )
+        )
 
         # Exactly one webhook POST was made with completed payload.
         assert len(_FakeAsyncClient.instances) == 1
@@ -458,40 +475,41 @@ class TestWebhookOnSuccess:
             "sections": 42,
         }
 
-    def test_webhook_post_failure_swallowed_via_except(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf, caplog
-    ):
+    def test_webhook_post_failure_swallowed_via_except(self, fake_redis, fake_settings, fake_httpx, staged_pdf, caplog):
         import httpx
 
-        fake_httpx["factory"] = lambda: _FakeAsyncClient(
-            raise_on_post=httpx.HTTPError("boom")
-        )
+        fake_httpx["factory"] = lambda: _FakeAsyncClient(raise_on_post=httpx.HTTPError("boom"))
 
         # Must NOT raise — webhook failure is logged but not re-raised.
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com",
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com",
+            )
+        )
 
         # Core status keys still flowed to completion — webhook is a
         # side channel, not a gate.
-        statuses = [c[2] for c in fake_redis.calls
-                    if c[0] == "ingest:status:j"]
+        statuses = [c[2] for c in fake_redis.calls if c[0] == "ingest:status:j"]
         assert "completed" in statuses
 
-    def test_webhook_post_oserror_swallowed(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
-        fake_httpx["factory"] = lambda: _FakeAsyncClient(
-            raise_on_post=OSError("connection refused")
-        )
+    def test_webhook_post_oserror_swallowed(self, fake_redis, fake_settings, fake_httpx, staged_pdf):
+        fake_httpx["factory"] = lambda: _FakeAsyncClient(raise_on_post=OSError("connection refused"))
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com",
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com",
+            )
+        )
 
         # Completion status still written despite webhook OSError.
         assert any(c[2] == "completed" for c in fake_redis.calls)
@@ -517,24 +535,25 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(
-            sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader
+        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
+
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j-err",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook=None,
+            )
         )
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j-err", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
-        ))
-
         # Status ends in ``failed: disk gone``.
-        failure_status = [c for c in fake_redis.calls
-                          if c[0] == "ingest:status:j-err"][-1]
+        failure_status = [c for c in fake_redis.calls if c[0] == "ingest:status:j-err"][-1]
         assert failure_status[2].startswith("failed: ")
         assert "disk gone" in failure_status[2]
 
-    def test_loader_value_error_also_reported(
-        self, monkeypatch, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
+    def test_loader_value_error_also_reported(self, monkeypatch, fake_redis, fake_settings, fake_httpx, staged_pdf):
         class _BadLoader:
             def __init__(self, **_):
                 pass
@@ -545,16 +564,19 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(
-            sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader
-        )
+        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j-v", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
-        ))
-        failure = [c for c in fake_redis.calls
-                   if c[0] == "ingest:status:j-v"][-1]
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j-v",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook=None,
+            )
+        )
+        failure = [c for c in fake_redis.calls if c[0] == "ingest:status:j-v"][-1]
         assert "bad format" in failure[2]
 
     def test_loader_failure_posts_webhook_with_failed_status(
@@ -570,15 +592,18 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(
-            sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader
-        )
+        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com",
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com",
+            )
+        )
 
         assert len(_FakeAsyncClient.instances) == 1
         url, body = _FakeAsyncClient.instances[0].posts[0]
@@ -599,21 +624,23 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(
-            sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader
-        )
+        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
 
         import httpx
-        fake_httpx["factory"] = lambda: _FakeAsyncClient(
-            raise_on_post=httpx.HTTPError("webhook down")
-        )
+
+        fake_httpx["factory"] = lambda: _FakeAsyncClient(raise_on_post=httpx.HTTPError("webhook down"))
 
         # Must not raise despite both loader AND webhook failing.
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com",
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com",
+            )
+        )
 
     def test_loader_failure_webhook_oserror_swallowed(
         self, monkeypatch, fake_redis, fake_settings, fake_httpx, staged_pdf
@@ -628,19 +655,20 @@ class TestLoaderFailure:
             def close(self):
                 pass
 
-        monkeypatch.setattr(
-            sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader
-        )
+        monkeypatch.setattr(sys.modules["app.regulation_loader"], "RegulationLoader", _BadLoader)
 
-        fake_httpx["factory"] = lambda: _FakeAsyncClient(
-            raise_on_post=OSError("connection refused")
-        )
+        fake_httpx["factory"] = lambda: _FakeAsyncClient(raise_on_post=OSError("connection refused"))
 
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf),
-            webhook="https://cb.example.com",
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook="https://cb.example.com",
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -649,9 +677,7 @@ class TestLoaderFailure:
 
 
 class TestFinallyCleanup:
-    def test_staging_cleanup_oserror_swallowed(
-        self, fake_redis, fake_settings, fake_httpx, staged_pdf, monkeypatch
-    ):
+    def test_staging_cleanup_oserror_swallowed(self, fake_redis, fake_settings, fake_httpx, staged_pdf, monkeypatch):
         real_remove = os.remove
         removed: list[str] = []
 
@@ -666,10 +692,16 @@ class TestFinallyCleanup:
         monkeypatch.setattr(thr.os, "remove", _fickle_remove)
 
         # Must NOT raise.
-        asyncio.run(_process_regulation_from_file(
-            job_id="j", name="r", filename="r.pdf",
-            tenant_id="t", file_path=str(staged_pdf), webhook=None,
-        ))
+        asyncio.run(
+            _process_regulation_from_file(
+                job_id="j",
+                name="r",
+                filename="r.pdf",
+                tenant_id="t",
+                file_path=str(staged_pdf),
+                webhook=None,
+            )
+        )
 
         # The handler attempted the staging cleanup despite the race.
         assert str(staged_pdf) in removed
@@ -681,17 +713,13 @@ class TestFinallyCleanup:
 
 
 class TestHandleRegulationIngestSyncWrapper:
-    def test_forwards_kwargs_to_async_processor(
-        self, monkeypatch, fake_redis, fake_settings, fake_httpx, staged_pdf
-    ):
+    def test_forwards_kwargs_to_async_processor(self, monkeypatch, fake_redis, fake_settings, fake_httpx, staged_pdf):
         captured = {}
 
         async def _capturing_process(**kwargs):
             captured.update(kwargs)
 
-        monkeypatch.setattr(
-            thr, "_process_regulation_from_file", _capturing_process
-        )
+        monkeypatch.setattr(thr, "_process_regulation_from_file", _capturing_process)
 
         _handle_regulation_ingest(
             job_id="j1",
@@ -718,9 +746,7 @@ class TestHandleRegulationIngestSyncWrapper:
         async def _capturing_process(**kwargs):
             captured.update(kwargs)
 
-        monkeypatch.setattr(
-            thr, "_process_regulation_from_file", _capturing_process
-        )
+        monkeypatch.setattr(thr, "_process_regulation_from_file", _capturing_process)
 
         _handle_regulation_ingest(
             job_id="j",

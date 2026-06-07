@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from shared.cors import get_allowed_headers
 
 _CLOUD_ENV_VARS = (

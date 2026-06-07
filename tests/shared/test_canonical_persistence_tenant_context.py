@@ -22,7 +22,6 @@ from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-
 from shared.canonical_persistence.writer import CanonicalEventStore
 
 from tests.shared.test_canonical_persistence_hardening import (
@@ -49,10 +48,7 @@ def _first_call_containing(session: FakeSession, needle: str) -> int | None:
 
 def _set_tenant_context_params(session: FakeSession) -> List[Dict[str, Any]]:
     """Return the params of every tenant-context GUC call in order."""
-    return [
-        params for sql, params in session.calls
-        if TENANT_CONTEXT_NEEDLE in sql
-    ]
+    return [params for sql, params in session.calls if TENANT_CONTEXT_NEEDLE in sql]
 
 
 # ---------------------------------------------------------------------------
@@ -67,16 +63,16 @@ class TestTenantContext_Issue1265_PersistEvent:
         session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
 
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         evt = _make_event()
         store.persist_event(evt)
 
         set_idx = _first_call_containing(session, TENANT_CONTEXT_NEEDLE)
         lock_idx = _first_call_containing(session, "pg_advisory_xact_lock")
-        assert set_idx is not None, (
-            "persist_event must set the RLS tenant context (#1265)"
-        )
+        assert set_idx is not None, "persist_event must set the RLS tenant context (#1265)"
         assert lock_idx is not None, "advisory lock call should exist"
         assert set_idx < lock_idx, (
             "Tenant-context GUC write must execute before the first "
@@ -91,7 +87,9 @@ class TestTenantContext_Issue1265_PersistEvent:
 
         tid = uuid4()
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         evt = _make_event(tenant_id=tid)
         store.persist_event(evt)
@@ -100,8 +98,7 @@ class TestTenantContext_Issue1265_PersistEvent:
         assert set_params, "no tenant-context GUC call was issued"
         # The writer binds str(tenant_id) under the :tid key.
         assert set_params[0].get("tid") == str(tid), (
-            f"GUC bound to wrong tenant: expected {tid}, "
-            f"got {set_params[0].get('tid')!r}"
+            f"GUC bound to wrong tenant: expected {tid}, got {set_params[0].get('tid')!r}"
         )
 
 
@@ -117,7 +114,9 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
         session.add_rule(r"FROM fsma\.hash_chain", _FakeResult(rows=[]))
 
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         tid = uuid4()
         store.persist_events_batch([_make_event(tenant_id=tid)])
@@ -133,7 +132,9 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
         The writer fails loud instead."""
         session = FakeSession()
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         evt_a = _make_event(tenant_id=uuid4(), idemp_key="a")
         evt_b = _make_event(tenant_id=uuid4(), idemp_key="b")
@@ -143,23 +144,23 @@ class TestTenantContext_Issue1265_PersistEventsBatch:
 
         # And no GUC / no chain write should have been issued — invariant
         # is checked before any SQL touches the DB.
-        assert not any(
-            TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls
-        ), "must not SET tenant context on invalid batch"
-        assert not any(
-            "pg_advisory_xact_lock" in sql for sql, _ in session.calls
-        ), "must not acquire chain lock on invalid batch"
+        assert not any(TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls), (
+            "must not SET tenant context on invalid batch"
+        )
+        assert not any("pg_advisory_xact_lock" in sql for sql, _ in session.calls), (
+            "must not acquire chain lock on invalid batch"
+        )
 
     def test_batch_empty_returns_without_setting_context(self):
         session = FakeSession()
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         result = store.persist_events_batch([])
         assert result == []
-        assert not any(
-            TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls
-        ), "empty batch must not issue SET"
+        assert not any(TENANT_CONTEXT_NEEDLE in sql for sql, _ in session.calls), "empty batch must not issue SET"
 
 
 # ---------------------------------------------------------------------------
@@ -188,17 +189,15 @@ class TestTenantContext_Issue1265_CreateIngestionRun:
 
         session = FakeSession()
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         store.create_ingestion_run(run)
 
         set_idx = _first_call_containing(session, TENANT_CONTEXT_NEEDLE)
-        insert_idx = _first_call_containing(
-            session, "INSERT INTO fsma.ingestion_runs"
-        )
-        assert set_idx is not None, (
-            "create_ingestion_run must set RLS tenant context (#1265)"
-        )
+        insert_idx = _first_call_containing(session, "INSERT INTO fsma.ingestion_runs")
+        assert set_idx is not None, "create_ingestion_run must set RLS tenant context (#1265)"
         assert insert_idx is not None, "INSERT must execute"
         assert set_idx < insert_idx, (
             "Tenant-context GUC write must execute before INSERT so the "

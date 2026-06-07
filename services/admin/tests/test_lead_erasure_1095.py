@@ -90,6 +90,7 @@ def disable_slowapi(monkeypatch):
     """
     try:
         import slowapi.extension as _se
+
         monkeypatch.setattr(_se.Limiter, "_check_request_limit", lambda *a, **k: None)
     except Exception:
         pass
@@ -225,9 +226,7 @@ async def test_confirm_lead_erasure_wrong_code_returns_400(tvr):
 
     # Store a code for lead@corp.com
     with patch.object(tvr, "_send_erasure_email"):
-        await tvr.request_lead_erasure(
-            request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com")
-        )
+        await tvr.request_lead_erasure(request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com"))
 
     # Submit the wrong code and expect a 400.
     wrong = tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code="000000")
@@ -262,9 +261,7 @@ async def test_confirm_lead_erasure_missing_code_returns_400(tvr):
     must be rejected -- no session, no erasure."""
     from fastapi import HTTPException
 
-    payload = tvr.ConfirmLeadErasureRequest(
-        email="no-session@corp.com", code="123456"
-    )
+    payload = tvr.ConfirmLeadErasureRequest(email="no-session@corp.com", code="123456")
 
     with pytest.raises(HTTPException) as excinfo:
         await tvr.confirm_lead_erasure(request=_stub_request(), payload=payload)
@@ -277,9 +274,7 @@ async def test_confirm_lead_erasure_correct_code_deletes_and_returns_200(tvr):
     """Happy path: a correct code deletes the tool_leads row."""
     # Store a code via /request and capture it from the in-memory store.
     with patch.object(tvr, "_send_erasure_email"):
-        await tvr.request_lead_erasure(
-            request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com")
-        )
+        await tvr.request_lead_erasure(request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com"))
     stored_code = tvr._memory_store["lead_erasure:lead@corp.com"]["code"]
 
     # Capture the DELETE statement text + bound params without hitting
@@ -302,9 +297,7 @@ async def test_confirm_lead_erasure_correct_code_deletes_and_returns_200(tvr):
         def close(self):
             executed.append(("CLOSE", None))
 
-    payload = tvr.ConfirmLeadErasureRequest(
-        email="lead@corp.com", code=stored_code
-    )
+    payload = tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code)
 
     with patch("app.database.SessionLocal", lambda: _FakeSession()):
         result = await tvr.confirm_lead_erasure(request=_stub_request(), payload=payload)
@@ -318,9 +311,7 @@ async def test_confirm_lead_erasure_correct_code_deletes_and_returns_200(tvr):
     # And the param is the lower-cased email -- matches LOWER(email) on
     # the WHERE side so any cased variant inserted originally is
     # still captured.
-    delete_params = next(
-        p for s, p in executed if "DELETE FROM tool_leads" in s
-    )
+    delete_params = next(p for s, p in executed if "DELETE FROM tool_leads" in s)
     assert delete_params == {"email": "lead@corp.com"}
 
 
@@ -333,32 +324,33 @@ async def test_confirm_lead_erasure_consumes_code_single_use(tvr):
     from fastapi import HTTPException
 
     with patch.object(tvr, "_send_erasure_email"):
-        await tvr.request_lead_erasure(
-            request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com")
-        )
+        await tvr.request_lead_erasure(request=_stub_request(), payload=tvr.LeadErasureRequest(email="lead@corp.com"))
     stored_code = tvr._memory_store["lead_erasure:lead@corp.com"]["code"]
 
     class _FakeSession:
-        def execute(self, *a, **k): return None
-        def commit(self): pass
-        def rollback(self): pass
-        def close(self): pass
+        def execute(self, *a, **k):
+            return None
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
 
     with patch("app.database.SessionLocal", lambda: _FakeSession()):
         await tvr.confirm_lead_erasure(
             request=_stub_request(),
-            payload=tvr.ConfirmLeadErasureRequest(
-                email="lead@corp.com", code=stored_code
-            ),
+            payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code),
         )
 
         # Replay -- the code is now gone.
         with pytest.raises(HTTPException) as excinfo:
             await tvr.confirm_lead_erasure(
                 request=_stub_request(),
-                payload=tvr.ConfirmLeadErasureRequest(
-                    email="lead@corp.com", code=stored_code
-                ),
+                payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code),
             )
     assert excinfo.value.status_code == 400
 
@@ -377,18 +369,23 @@ async def test_verification_code_cannot_be_used_for_erasure(tvr):
     await tvr._store_code("lead@corp.com", "654321")  # verify namespace
 
     class _FakeSession:
-        def execute(self, *a, **k): return None
-        def commit(self): pass
-        def rollback(self): pass
-        def close(self): pass
+        def execute(self, *a, **k):
+            return None
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
 
     with patch("app.database.SessionLocal", lambda: _FakeSession()):
         with pytest.raises(HTTPException) as excinfo:
             await tvr.confirm_lead_erasure(
                 request=_stub_request(),
-                payload=tvr.ConfirmLeadErasureRequest(
-                    email="lead@corp.com", code="654321"
-                ),
+                payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code="654321"),
             )
     assert excinfo.value.status_code == 400
 
@@ -402,9 +399,7 @@ async def test_erasure_code_cannot_be_used_for_verification(tvr):
 
     await tvr._store_erasure_code("lead@corp.com", "987654")
 
-    payload = tvr.ConfirmCodeRequest(
-        email="lead@corp.com", code="987654", tool_name="unit-test"
-    )
+    payload = tvr.ConfirmCodeRequest(email="lead@corp.com", code="987654", tool_name="unit-test")
     with pytest.raises(HTTPException) as excinfo:
         await tvr.confirm_code(payload=payload, request=_stub_request())
     assert excinfo.value.status_code == 400
@@ -441,17 +436,22 @@ async def test_lead_erasure_logs_use_mask_email(tvr):
         stored_code = tvr._memory_store["lead_erasure:lead@corp.com"]["code"]
 
         class _FakeSession:
-            def execute(self, *a, **k): return None
-            def commit(self): pass
-            def rollback(self): pass
-            def close(self): pass
+            def execute(self, *a, **k):
+                return None
+
+            def commit(self):
+                pass
+
+            def rollback(self):
+                pass
+
+            def close(self):
+                pass
 
         with patch("app.database.SessionLocal", lambda: _FakeSession()):
             await tvr.confirm_lead_erasure(
                 request=_stub_request(),
-                payload=tvr.ConfirmLeadErasureRequest(
-                    email="lead@corp.com", code=stored_code
-                ),
+                payload=tvr.ConfirmLeadErasureRequest(email="lead@corp.com", code=stored_code),
             )
 
     # Raw email must never reach the log.

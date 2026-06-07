@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-
 from shared.error_handling import ClientSafeValueError, install_exception_handlers
 
 

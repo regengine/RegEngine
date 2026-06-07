@@ -68,6 +68,7 @@ Revision ID: c7d8e9f0a1b2
 Revises: b6c7d8e9f0a1
 Create Date: 2026-04-23
 """
+
 from typing import Sequence, Union
 
 from alembic import op

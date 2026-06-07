@@ -19,10 +19,8 @@ from typing import Any, Dict, List, Tuple
 from unittest.mock import MagicMock
 
 import pytest
-
 from shared.cte_persistence.core import CTEPersistence
 from shared.cte_persistence.hashing import compute_event_hash
-
 
 # ---------------------------------------------------------------------------
 # Minimal fake session — same shape as the canonical tests
@@ -108,9 +106,7 @@ class TestQuantityClamp_Issue1306:
         _, params = cte_inserts[0]
         qty_params = {k: v for k, v in params.items() if k.startswith("qty_")}
         assert qty_params, "quantity bind parameters should be present"
-        assert all(v == 0.25 for v in qty_params.values()), (
-            f"quantity was mutated from 0.25: {qty_params}"
-        )
+        assert all(v == 0.25 for v in qty_params.values()), f"quantity was mutated from 0.25: {qty_params}"
 
     def test_batch_and_single_produce_identical_hashes_for_same_input(self):
         """The single-event and batch code paths must now compute the same
@@ -121,17 +117,31 @@ class TestQuantityClamp_Issue1306:
 
         # Reproduce the hash compute_event_hash would produce for both paths
         ref = compute_event_hash(
-            "fixed-event-id", "harvesting", "TLC-1",
-            "Lettuce", quantity, "kg", None, None,
-            "2026-04-15T12:00:00Z", kdes,
+            "fixed-event-id",
+            "harvesting",
+            "TLC-1",
+            "Lettuce",
+            quantity,
+            "kg",
+            None,
+            None,
+            "2026-04-15T12:00:00Z",
+            kdes,
         )
         # If quantity were still clamped, the reference would be different
         # than the hash for 1.0.  Assert the two are distinct to guarantee
         # the test catches regressions.
         clamped = compute_event_hash(
-            "fixed-event-id", "harvesting", "TLC-1",
-            "Lettuce", 1.0, "kg", None, None,
-            "2026-04-15T12:00:00Z", kdes,
+            "fixed-event-id",
+            "harvesting",
+            "TLC-1",
+            "Lettuce",
+            1.0,
+            "kg",
+            None,
+            None,
+            "2026-04-15T12:00:00Z",
+            kdes,
         )
         assert ref != clamped
 
@@ -174,10 +184,7 @@ class TestBatchChainGuard_Issue1307:
         p = CTEPersistence(session=session)
         p.store_events_batch(tenant_id="t-1", events=[_base_event()])
 
-        chain_inserts = [
-            c for c in session.calls
-            if "INSERT INTO fsma.hash_chain" in c[0]
-        ]
+        chain_inserts = [c for c in session.calls if "INSERT INTO fsma.hash_chain" in c[0]]
         assert chain_inserts, "hash_chain INSERT should have been issued"
         sql, _ = chain_inserts[0]
         normalized = " ".join(sql.split())
@@ -301,14 +308,11 @@ class TestKDEJsonb_Issue1311:
         assert kde_inserts, "cte_kdes INSERT expected"
         sql, params = kde_inserts[0]
         assert self._has_jsonb_cast(sql), (
-            "KDE value must be cast to jsonb so structured dicts round-trip "
-            "instead of being stored as Python repr"
+            "KDE value must be cast to jsonb so structured dicts round-trip instead of being stored as Python repr"
         )
         # The bound kde_value must be JSON text, NOT python repr
         assert isinstance(params["kde_value"], str)
-        assert not params["kde_value"].startswith("{'"), (
-            "kde_value appears to be Python repr, not JSON"
-        )
+        assert not params["kde_value"].startswith("{'"), "kde_value appears to be Python repr, not JSON"
 
     def test_batch_event_kde_insert_casts_to_jsonb(self):
         session = FakeSession()
@@ -327,7 +331,6 @@ class TestKDEJsonb_Issue1311:
         kv_params = [v for k, v in params.items() if k.startswith("kv_")]
         assert kv_params, "kv_* bind params expected"
         # Check that at least one value looks like JSON (not repr)
-        assert any(
-            isinstance(v, str) and v.startswith("{") and '"gln"' in v
-            for v in kv_params
-        ), f"KDE values should be JSON text, got: {kv_params!r}"
+        assert any(isinstance(v, str) and v.startswith("{") and '"gln"' in v for v in kv_params), (
+            f"KDE values should be JSON text, got: {kv_params!r}"
+        )

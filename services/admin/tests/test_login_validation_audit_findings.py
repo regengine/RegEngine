@@ -1,4 +1,5 @@
 """Regression tests for login validation audit findings #4 and #5."""
+
 from __future__ import annotations
 
 import os
@@ -30,7 +31,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from services.admin.app.auth import login_router
-
 
 GENERIC_AUTH_ERROR = {"detail": "Incorrect email or password"}
 

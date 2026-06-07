@@ -27,6 +27,7 @@ Usage (CI):    same. Non-zero exit fails the step.
 Forward-port any required DDL through ``alembic/versions/``. Do not add
 new grandfathered entries to ``scripts/orphan_migrations_allowlist.txt``.
 """
+
 from __future__ import annotations
 
 import sys

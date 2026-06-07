@@ -14,29 +14,30 @@ Features:
 from __future__ import annotations
 
 import os
+
+# --- Standardized Bootstrap ---
+import sys
 import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 import structlog
 from apscheduler.events import (
-    EVENT_JOB_EXECUTED,
     EVENT_JOB_ERROR,
+    EVENT_JOB_EXECUTED,
     EVENT_JOB_MISSED,
 )
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.schedulers.base import SchedulerNotRunningError
-from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.schedulers.base import SchedulerNotRunningError
+from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
 
-# --- Standardized Bootstrap ---
-import sys
-from pathlib import Path
 _SERVICE_DIR = Path(__file__).resolve().parent
 _SERVICES_DIR = _SERVICE_DIR.parent
 if str(_SERVICE_DIR) not in sys.path:
@@ -45,6 +46,7 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 # ------------------------------
 
@@ -62,16 +64,18 @@ require_env("DATABASE_URL", "REDIS_URL")
 
 # Sentry error tracking (must be before service initialization)
 from shared.error_handling import init_sentry
+
 init_sentry()
 
 # OpenTelemetry (standalone — no FastAPI)
 from shared.observability import setup_standalone_observability
+
 _tracer = setup_standalone_observability("scheduler")
 
-from shared.observability.context import wrap_job_with_new_correlation
-
-from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
+from app.config import get_settings
+from app.distributed import DistributedContext
+from app.fda_fsma_transformer import get_fsma_transformer
 from app.kafka_producer import get_kafka_producer
 from app.metrics import metrics
 from app.models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
@@ -84,8 +88,7 @@ from app.scrapers import (
 )
 from app.scrapers.base import BaseScraper
 from app.state import StateManager
-from app.fda_fsma_transformer import get_fsma_transformer
-from app.distributed import DistributedContext
+from shared.observability.context import wrap_job_with_new_correlation
 
 # Configure structured logging
 structlog.configure(
@@ -112,25 +115,18 @@ class SchedulerService:
         )
         self.kafka_producer = get_kafka_producer()
         self.distributed_context = DistributedContext()
-        
+
         # Fortune Top 15 Resilience Configuration
-        jobstores = {
-            'default': MemoryJobStore()
-        }
-        executors = {
-            'default': ThreadPoolExecutor(20)
-        }
+        jobstores = {"default": MemoryJobStore()}
+        executors = {"default": ThreadPoolExecutor(20)}
         job_defaults = {
-            'coalesce': True,            # Roll multiple missed executions into one
-            'max_instances': 3,
-            'misfire_grace_time': 3600   # 1 hour grace for missed jobs (resilience)
+            "coalesce": True,  # Roll multiple missed executions into one
+            "max_instances": 3,
+            "misfire_grace_time": 3600,  # 1 hour grace for missed jobs (resilience)
         }
-        
+
         self.scheduler = BlockingScheduler(
-            jobstores=jobstores,
-            executors=executors,
-            job_defaults=job_defaults,
-            timezone=utc
+            jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=utc
         )
         self.scheduler_thread = None
         self._start_time = time.time()
@@ -268,7 +264,7 @@ class SchedulerService:
                     success=False,
                     duration_seconds=duration_seconds,
                 )
-            
+
             # Update last results for health reporting
             self.last_results[source_type] = result
 
@@ -291,9 +287,7 @@ class SchedulerService:
         finally:
             metrics.record_circuit_state(source_type.value, circuit_breaker.state.value)
 
-    def _filter_new_items(
-        self, items: List[EnforcementItem], source_type: SourceType
-    ) -> List[EnforcementItem]:
+    def _filter_new_items(self, items: List[EnforcementItem], source_type: SourceType) -> List[EnforcementItem]:
         """Filter out previously seen items.
 
         NOTE: This method INTENTIONALLY does not call ``mark_seen``. Marking an
@@ -319,9 +313,7 @@ class SchedulerService:
 
         return new_items
 
-    def _mark_items_seen(
-        self, items: List[EnforcementItem], source_type: SourceType
-    ) -> None:
+    def _mark_items_seen(self, items: List[EnforcementItem], source_type: SourceType) -> None:
         """Persist the ``seen`` mark for items that have been emitted.
 
         Used as the second half of an at-least-once emit-then-ack flow
@@ -349,9 +341,7 @@ class SchedulerService:
                 # Stop marking; remaining items will be re-attempted next run.
                 return
 
-    def _process_new_items(
-        self, items: List[EnforcementItem], source_type: SourceType
-    ) -> None:
+    def _process_new_items(self, items: List[EnforcementItem], source_type: SourceType) -> None:
         """Process newly detected enforcement items.
 
         Emits first, then marks items as seen only if the primary emission
@@ -436,6 +426,7 @@ class SchedulerService:
         if source_type == SourceType.FDA_RECALL and items:
             try:
                 from app.compliance_integration import get_compliance_integration
+
                 integration = get_compliance_integration()
                 for item in items:
                     integration.process_enforcement_item(item)
@@ -729,9 +720,7 @@ class SchedulerService:
         from shared.safe_http import safe_httpx_post_sync
 
         settings = _get_settings()
-        ingestion_url = os.getenv(
-            "INGESTION_SERVICE_URL", settings.ingestion_service_url
-        )
+        ingestion_url = os.getenv("INGESTION_SERVICE_URL", settings.ingestion_service_url)
 
         # #1063 — fail loudly if the internal auth secret is missing or
         # empty rather than sending a blank X-RegEngine-API-Key header
@@ -806,6 +795,7 @@ class SchedulerService:
                 for tid in tenant_ids:
                     # Set tenant context for RLS before per-tenant queries
                     from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
                     set_tenant_guc(db, tid)
                     cases = workflow.check_deadline_status(tid)
                     overdue = [c for c in cases if c["urgency"] == "overdue"]
@@ -995,12 +985,12 @@ class SchedulerService:
     def start(self) -> None:
         """Start the scheduler service with distributed leadership."""
         self.initialize()
-        
+
         logger.info("scheduler_joining_cluster")
-        
-        # Calculate robust lock ID based on service name if needed, 
+
+        # Calculate robust lock ID based on service name if needed,
         # but DistributedContext uses a constant.
-        
+
         try:
             # This blocks until leadership is acquired, then runs local scheduler
             # #1142 — register a leadership-lost handler. When the heartbeat
@@ -1065,7 +1055,7 @@ class SchedulerService:
         except Exception as e:
             logger.error("scheduler_crashed", error=str(e))
             raise e
-            
+
     def cleanup_state(self) -> None:
         """Wrapper for state cleanup to avoid lambda serialization issues."""
         self.state_manager.cleanup_old_items(days=90)
@@ -1097,9 +1087,7 @@ class SchedulerService:
                     logger.error(
                         "scheduler_job_missed",
                         job_id=event.job_id,
-                        scheduled_run_time=str(
-                            getattr(event, "scheduled_run_time", "unknown")
-                        ),
+                        scheduled_run_time=str(getattr(event, "scheduled_run_time", "unknown")),
                     )
                     state_manager.record_job_run(
                         event.job_id,
@@ -1216,7 +1204,9 @@ class HealthHandler(BaseHTTPRequestHandler):
                     "warnings": list(getattr(r, "warnings", []) or []),
                 }
                 for st, r in self.scheduler_service.last_results.items()
-            } if self.scheduler_service else {}
+            }
+            if self.scheduler_service
+            else {},
         }
 
         self.send_response(200)
@@ -1295,5 +1285,6 @@ if __name__ == "__main__":
     except Exception as e:
         # Use basic logging as fallback if structlog fails
         import logging
+
         logging.error(f"Critical scheduler failure: {e}", exc_info=True)
         sys.exit(1)

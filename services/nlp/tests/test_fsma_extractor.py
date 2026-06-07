@@ -109,7 +109,9 @@ class TestLotCodeExtraction:
         invoices.  Now invoices produce zero CTEs and always land in the HITL
         review queue so a human can determine the correct CTE classification.
         """
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_INVOICE_TEXT, "test-doc-002", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.document_type.value == "INVOICE"
         assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
@@ -126,9 +128,7 @@ class TestLotCodeExtraction:
 
         tlc = result.ctes[0].kdes.traceability_lot_code
         assert tlc is not None
-        assert not tlc.startswith("00012345678901"), (
-            f"TLC was mutated by GTIN prepend: {tlc!r} — #1104 regression"
-        )
+        assert not tlc.startswith("00012345678901"), f"TLC was mutated by GTIN prepend: {tlc!r} — #1104 regression"
         # GTIN is now stored on its own KDE field.
         assert result.ctes[0].kdes.gtin == "00012345678901"
 
@@ -145,7 +145,9 @@ class TestQuantityExtraction:
 
     def test_extract_quantity_from_invoice(self, extractor):
         """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_INVOICE_TEXT, "test-doc-005", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         # No CTEs for invoices — quantity available only via line_items or HITL
         assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
@@ -180,7 +182,9 @@ class TestDateExtraction:
 
     def test_extract_date_iso(self, extractor):
         """Invoice documents emit no CTEs after #1288 — verify HITL routing."""
-        result = extractor.extract(SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_INVOICE_TEXT, "test-doc-009", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         # No CTEs for invoices — date visible only via HITL queue (#1288)
         assert len(result.ctes) == 0, "Invoices must not emit CTEs (#1288)"
@@ -230,7 +234,7 @@ class TestWeightedConfidence:
         """Missing weight-3 field (event_date) → score capped at 0.5."""
         kde = KDE(
             traceability_lot_code="L-001",
-            event_date=None,            # required field missing
+            event_date=None,  # required field missing
             location_identifier="1234567890123",
             quantity=50.0,
             unit_of_measure="cases",
@@ -323,7 +327,9 @@ class TestCTETypeAssignment:
 
     def test_cte_type_transformation_for_production(self, extractor):
         """Test CTE type assignment for production log."""
-        result = extractor.extract(SAMPLE_PRODUCTION_LOG, "test-doc-016", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_PRODUCTION_LOG, "test-doc-016", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.ctes[0].type == CTEType.TRANSFORMATION
 
@@ -355,7 +361,9 @@ class TestTLCSourceFDARegistration:
 
     def test_extract_tlc_source_fda_reg(self, extractor):
         """Ensure FDA Reg near TLC source cues is captured."""
-        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-024", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_TLC_SOURCE_FDA, "test-doc-024", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.ctes[0].kdes.tlc_source_fda_reg == "fda:12345678901"
         # With no GLN present, FDA reg should backfill location identifier
@@ -363,7 +371,9 @@ class TestTLCSourceFDARegistration:
 
     def test_graph_event_includes_tlc_source_fda_reg(self, extractor):
         """Graph event should emit TLC source FDA registration."""
-        result = extractor.extract(SAMPLE_TLC_SOURCE_FDA, "test-doc-025", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_TLC_SOURCE_FDA, "test-doc-025", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
         graph_event = extractor.to_graph_event(result)
 
         assert graph_event["ctes"][0]["kdes"]["tlc_source_fda_reg"] == "fda:12345678901"
@@ -395,7 +405,9 @@ class TestExtractionResult:
 
     def test_result_has_document_id(self, extractor):
         """Test that result includes document ID."""
-        result = extractor.extract(SAMPLE_BOL_TEXT, "my-custom-doc-id", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_BOL_TEXT, "my-custom-doc-id", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.document_id == "my-custom-doc-id"
 
@@ -423,10 +435,7 @@ class TestExtractionResult:
         """F-NLP-2: PII embedded in BOL text must not survive into the
         stored ``raw_text`` snippet. Redaction runs AFTER the regex pass
         (so GLNs/lot codes are not mutilated) but BEFORE persistence."""
-        text_with_pii = (
-            SAMPLE_BOL_TEXT
-            + "\nContact dispatcher at john.doe@example.com or 415-555-0123 for questions."
-        )
+        text_with_pii = SAMPLE_BOL_TEXT + "\nContact dispatcher at john.doe@example.com or 415-555-0123 for questions."
         result = extractor.extract(
             text_with_pii,
             "test-doc-pii",
@@ -460,7 +469,9 @@ class TestSevenKDEExtraction:
 
     def test_extract_7_kdes_from_bol(self, extractor):
         """Test that 7 KDEs are extracted with confidence > 0."""
-        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert len(result.ctes) > 0
         cte = result.ctes[0]
@@ -485,7 +496,9 @@ class TestSevenKDEExtraction:
 
     def test_fsma_events_output(self, extractor):
         """Test to_fsma_events outputs events with 7 KDEs."""
-        result = extractor.extract(SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-002", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            SAMPLE_BOL_WITH_GTIN14, "test-doc-kde-002", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
         events = extractor.to_fsma_events(result)
 
         # Should have at least one event

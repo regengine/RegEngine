@@ -24,10 +24,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
+
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 # Backwards-compat alias for tests:
 # ``app.dependency_overrides[_get_db_session]`` matches ``Depends(get_db_session)``
@@ -61,6 +61,7 @@ def _get_service(
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     from shared.identity_resolution import IdentityResolutionService
+
     principal_tenant_id = principal.tenant_id if principal is not None else None
     return IdentityResolutionService(
         db_session,
@@ -69,11 +70,10 @@ def _get_service(
     )
 
 
-
-
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
+
 
 class RegisterEntityRequest(BaseModel):
     entity_type: str  # firm, facility, product, lot, trading_relationship
@@ -126,6 +126,7 @@ class ResolveReviewRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/entities",
     summary="List/search canonical entities",
@@ -144,6 +145,7 @@ async def list_entities(
     else:
         # List all entities of a type
         from sqlalchemy import text
+
         query = "SELECT entity_id, entity_type, canonical_name, gln, gtin, verification_status, confidence_score FROM fsma.canonical_entities WHERE tenant_id = :tid AND is_active = TRUE"
         params: Dict[str, Any] = {"tid": tid}
         if entity_type:
@@ -152,8 +154,15 @@ async def list_entities(
         query += " ORDER BY canonical_name LIMIT 100"
         rows = db_session.execute(text(query), params).fetchall()
         entities = [
-            {"entity_id": str(r[0]), "entity_type": r[1], "canonical_name": r[2],
-             "gln": r[3], "gtin": r[4], "verification_status": r[5], "confidence_score": float(r[6]) if r[6] else 1.0}
+            {
+                "entity_id": str(r[0]),
+                "entity_type": r[1],
+                "canonical_name": r[2],
+                "gln": r[3],
+                "gtin": r[4],
+                "verification_status": r[5],
+                "confidence_score": float(r[6]) if r[6] else 1.0,
+            }
             for r in rows
         ]
     return {"tenant_id": tid, "entities": entities, "total": len(entities)}
@@ -267,7 +276,10 @@ async def find_matches(
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session, principal)
     matches = svc.find_potential_matches(
-        tid, name, entity_type=entity_type, min_confidence=min_confidence,
+        tid,
+        name,
+        entity_type=entity_type,
+        min_confidence=min_confidence,
     )
     return {"tenant_id": tid, "matches": matches, "total": len(matches)}
 

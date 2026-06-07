@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 
@@ -119,16 +118,16 @@ class TestSignupEmailOracle:
 
         # Must be a JSONResponse (202) — NOT a TokenResponse or HTTPException
         from starlette.responses import JSONResponse
-        assert isinstance(result, JSONResponse), (
-            f"Expected JSONResponse for existing email, got {type(result)}"
-        )
+
+        assert isinstance(result, JSONResponse), f"Expected JSONResponse for existing email, got {type(result)}"
         assert result.status_code == 202
 
     @pytest.mark.asyncio
     async def test_existing_email_response_body_identical_to_new_email(self, monkeypatch):
         """The 202 body message must be a generic 'check your inbox' to avoid leakage."""
-        from services.admin.app import auth_routes
         import json as json_mod
+
+        from services.admin.app import auth_routes
 
         monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
         monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
@@ -160,8 +159,9 @@ class TestSignupEmailOracle:
     @pytest.mark.asyncio
     async def test_new_email_signup_returns_same_generic_body(self, monkeypatch):
         """A new email gets the same response shape as an existing email."""
-        from services.admin.app import auth_routes
         import json as json_mod
+
+        from services.admin.app import auth_routes
 
         monkeypatch.setattr(auth_routes, "get_supabase", lambda: None)
         monkeypatch.setattr(auth_routes.AuditLogger, "log_event", lambda *a, **k: None)
@@ -182,6 +182,7 @@ class TestSignupEmailOracle:
         )
 
         from starlette.responses import JSONResponse
+
         assert isinstance(result, JSONResponse)
         assert result.status_code == 202
         assert set(json_mod.loads(result.body).keys()) == {"detail"}
@@ -236,9 +237,7 @@ class TestSignupRace:
         assert "supabase.create_user" in call_order, "supabase.create_user was never called"
         first_flush_idx = next(i for i, s in enumerate(call_order) if s == "db.flush")
         sb_idx = call_order.index("supabase.create_user")
-        assert first_flush_idx < sb_idx, (
-            f"Supabase must be called AFTER db.flush; call order was {call_order}"
-        )
+        assert first_flush_idx < sb_idx, f"Supabase must be called AFTER db.flush; call order was {call_order}"
 
     @pytest.mark.asyncio
     async def test_concurrent_signup_same_email_no_500(self, monkeypatch):
@@ -265,10 +264,9 @@ class TestSignupRace:
         )
 
         from starlette.responses import JSONResponse
+
         assert isinstance(result, JSONResponse)
-        assert result.status_code == 202, (
-            f"Concurrent signup should return 202, got {result.status_code}"
-        )
+        assert result.status_code == 202, f"Concurrent signup should return 202, got {result.status_code}"
 
     @pytest.mark.asyncio
     async def test_cleanup_supabase_user_swallows_errors(self, monkeypatch):
@@ -292,8 +290,9 @@ class TestRateLimitOracle:
 
     @pytest.mark.asyncio
     async def test_rate_limited_email_returns_401(self, monkeypatch):
-        from services.admin.app import auth_routes
         import asyncio
+
+        from services.admin.app import auth_routes
 
         # Suppress the artificial sleep so tests run fast
         monkeypatch.setattr(auth_routes.asyncio, "sleep", AsyncMock(return_value=None))
@@ -319,9 +318,7 @@ class TestRateLimitOracle:
             await auth_routes._check_email_rate_limit(ss, "victim@company.com")
 
         headers = exc_info.value.headers or {}
-        assert "Retry-After" not in headers, (
-            "Retry-After header must not be present (leaks rate-limit state)"
-        )
+        assert "Retry-After" not in headers, "Retry-After header must not be present (leaks rate-limit state)"
 
     @pytest.mark.asyncio
     async def test_rate_limited_same_status_as_wrong_password(self, monkeypatch):
@@ -404,7 +401,8 @@ class TestRefreshTenantStatus:
         session.id = uuid_mod.uuid4()
         session.user_id = user.id
         session.is_revoked = False
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         session.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         session.refresh_token_hash = token_hash
 
@@ -458,7 +456,8 @@ class TestRefreshTenantStatus:
         db.get.side_effect = _db_get
 
         raw_rt = create_refresh_token()
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         session = MagicMock()
         session.id = uuid_mod.uuid4()
         session.user_id = user.id
@@ -528,8 +527,12 @@ class TestRefreshUnverifiedJWTFallback:
         membership_b.is_active = True
         membership_b.role_id = uuid_mod.uuid4()
 
-        tenant_a = MagicMock(); tenant_a.id = tenant_a_id; tenant_a.status = "active"
-        tenant_b = MagicMock(); tenant_b.id = tenant_b_id; tenant_b.status = "active"
+        tenant_a = MagicMock()
+        tenant_a.id = tenant_a_id
+        tenant_a.status = "active"
+        tenant_b = MagicMock()
+        tenant_b.id = tenant_b_id
+        tenant_b.status = "active"
 
         def _db_get(model, id_):
             name = getattr(model, "__name__", str(model))
@@ -550,7 +553,7 @@ class TestRefreshUnverifiedJWTFallback:
         return db, user, tenant_a_id, tenant_b_id
 
     def _make_session(self, user_id, raw_rt):
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         from services.admin.app.auth_utils import hash_token
 
@@ -620,8 +623,7 @@ class TestRefreshUnverifiedJWTFallback:
             f"deterministic first membership {tenant_a_id}. RE-SEC-003 regression."
         )
         assert chosen_tid != str(tenant_b_id), (
-            "Attacker-chosen tenant_id was honored — unverified-decode "
-            "fallback is back."
+            "Attacker-chosen tenant_id was honored — unverified-decode fallback is back."
         )
 
     @pytest.mark.asyncio
@@ -665,17 +667,14 @@ class TestRefreshUnverifiedJWTFallback:
 
         await auth_routes.refresh_session.__wrapped__(
             payload=auth_routes.RefreshRequest(refresh_token=raw_rt),
-            request=_make_request(
-                headers={"authorization": f"Bearer {valid_old_access}"}
-            ),
+            request=_make_request(headers={"authorization": f"Bearer {valid_old_access}"}),
             db=db,
             session_store=ss,
         )
 
         assert captured, "create_access_token was never called"
         assert captured[-1]["tid"] == str(tenant_b_id), (
-            f"Verified-decode path must preserve original tenant; got "
-            f"{captured[-1]['tid']!r}, expected {tenant_b_id!r}"
+            f"Verified-decode path must preserve original tenant; got {captured[-1]['tid']!r}, expected {tenant_b_id!r}"
         )
 
 
@@ -778,9 +777,7 @@ class TestChangePasswordRevoke:
 
         call_kwargs = ss.revoke_all_user_sessions.call_args
         passed_except = (call_kwargs.kwargs or {}).get("except_session_id")
-        assert passed_except == current_sid, (
-            f"Expected except_session_id={current_sid}, got {passed_except}"
-        )
+        assert passed_except == current_sid, f"Expected except_session_id={current_sid}, got {passed_except}"
 
 
 # ── #1089 — Supabase sync failure → 503, no DB commit ────────────────────────
@@ -871,9 +868,7 @@ class TestSupabaseSyncFail:
             )
 
         assert exc_info.value.status_code == 503
-        db.commit.assert_not_called(), (
-            "db.commit must NOT be called when Supabase sync fails"
-        )
+        db.commit.assert_not_called(), ("db.commit must NOT be called when Supabase sync fails")
 
     @pytest.mark.asyncio
     async def test_supabase_sync_success_commits_db(self, monkeypatch):

@@ -32,7 +32,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-001"
 
 
@@ -68,14 +67,18 @@ class TestMergeBulkValidation_Issue1195:
     def test_duplicate_sources_raises(self, svc, mock_session):
         with pytest.raises(ValueError, match="duplicates"):
             svc.merge_entities_bulk(
-                TENANT, ["eid-1", "eid-2", "eid-1"], "eid-target",
+                TENANT,
+                ["eid-1", "eid-2", "eid-1"],
+                "eid-target",
             )
         assert mock_session.execute.call_count == 0
 
     def test_target_in_sources_raises(self, svc, mock_session):
         with pytest.raises(ValueError, match="Cannot merge an entity with itself"):
             svc.merge_entities_bulk(
-                TENANT, ["eid-1", "eid-target", "eid-2"], "eid-target",
+                TENANT,
+                ["eid-1", "eid-target", "eid-2"],
+                "eid-target",
             )
         assert mock_session.execute.call_count == 0
 
@@ -83,7 +86,9 @@ class TestMergeBulkValidation_Issue1195:
         mock_session.execute.return_value.fetchone.return_value = None
         with pytest.raises(ValueError, match="not found"):
             svc.merge_entities_bulk(
-                TENANT, ["eid-missing"], "eid-target",
+                TENANT,
+                ["eid-missing"],
+                "eid-target",
             )
 
 
@@ -145,7 +150,9 @@ class TestMergeBulkSingleHistoryRow_Issue1195:
         _require_entity_all_exist(mock_session)
 
         svc.merge_entities_bulk(
-            TENANT, ["eid-a", "eid-b"], "eid-target",
+            TENANT,
+            ["eid-a", "eid-b"],
+            "eid-target",
         )
 
         history_call = next(
@@ -187,9 +194,9 @@ class TestMergeBulkSqlUsesAny_Issue1195:
         svc.merge_entities_bulk(TENANT, ["eid-a", "eid-b"], "eid-target")
 
         alias_updates = [
-            c for c in mock_session.execute.call_args_list
-            if "UPDATE fsma.entity_aliases" in str(c[0][0])
-            and "SET entity_id = :target_entity_id" in str(c[0][0])
+            c
+            for c in mock_session.execute.call_args_list
+            if "UPDATE fsma.entity_aliases" in str(c[0][0]) and "SET entity_id = :target_entity_id" in str(c[0][0])
         ]
         assert len(alias_updates) == 1
         assert "ANY(:source_entity_ids)" in str(alias_updates[0][0][0])
@@ -199,8 +206,7 @@ class TestMergeBulkSqlUsesAny_Issue1195:
         svc.merge_entities_bulk(TENANT, ["eid-a", "eid-b"], "eid-target")
 
         alias_deletes = [
-            c for c in mock_session.execute.call_args_list
-            if "DELETE FROM fsma.entity_aliases" in str(c[0][0])
+            c for c in mock_session.execute.call_args_list if "DELETE FROM fsma.entity_aliases" in str(c[0][0])
         ]
         assert len(alias_deletes) == 1
         assert "ANY(:source_entity_ids)" in str(alias_deletes[0][0][0])
@@ -210,9 +216,9 @@ class TestMergeBulkSqlUsesAny_Issue1195:
         svc.merge_entities_bulk(TENANT, ["eid-a", "eid-b"], "eid-target")
 
         deactivations = [
-            c for c in mock_session.execute.call_args_list
-            if "UPDATE fsma.canonical_entities" in str(c[0][0])
-            and "is_active = FALSE" in str(c[0][0])
+            c
+            for c in mock_session.execute.call_args_list
+            if "UPDATE fsma.canonical_entities" in str(c[0][0]) and "is_active = FALSE" in str(c[0][0])
         ]
         assert len(deactivations) == 1
         assert "ANY(:source_entity_ids)" in str(deactivations[0][0][0])
@@ -222,8 +228,7 @@ class TestMergeBulkSqlUsesAny_Issue1195:
         svc.merge_entities_bulk(TENANT, ["eid-a", "eid-b"], "eid-target")
 
         review_updates = [
-            c for c in mock_session.execute.call_args_list
-            if "UPDATE fsma.identity_review_queue" in str(c[0][0])
+            c for c in mock_session.execute.call_args_list if "UPDATE fsma.identity_review_queue" in str(c[0][0])
         ]
         assert len(review_updates) == 1
         sql = str(review_updates[0][0][0])
@@ -242,13 +247,14 @@ class TestMergeBulkValidatesAllParticipants_Issue1195:
         _require_entity_all_exist(mock_session)
 
         svc.merge_entities_bulk(
-            TENANT, ["eid-a", "eid-b", "eid-c"], "eid-target",
+            TENANT,
+            ["eid-a", "eid-b", "eid-c"],
+            "eid-target",
         )
 
         # _require_entity is a SELECT with WHERE tenant_id AND entity_id.
         require_checks = [
-            c for c in mock_session.execute.call_args_list
-            if "SELECT 1 FROM fsma.canonical_entities" in str(c[0][0])
+            c for c in mock_session.execute.call_args_list if "SELECT 1 FROM fsma.canonical_entities" in str(c[0][0])
         ]
         # 3 sources + 1 target = 4 validation calls.
         assert len(require_checks) == 4
@@ -264,8 +270,11 @@ class TestMergeEntitiesThinWrapper_Issue1195:
     def test_1to1_merge_still_works(self, svc, mock_session):
         _require_entity_all_exist(mock_session)
         result = svc.merge_entities(
-            TENANT, "eid-source", "eid-target",
-            reason="legacy", performed_by="admin",
+            TENANT,
+            "eid-source",
+            "eid-target",
+            reason="legacy",
+            performed_by="admin",
         )
         assert result["action"] == "merge"
         assert result["source_entity_ids"] == ["eid-source"]
@@ -283,8 +292,7 @@ class TestMergeEntitiesThinWrapper_Issue1195:
         svc.merge_entities(TENANT, "eid-source", "eid-target")
 
         history_inserts = [
-            c for c in mock_session.execute.call_args_list
-            if "INSERT INTO fsma.entity_merge_history" in str(c[0][0])
+            c for c in mock_session.execute.call_args_list if "INSERT INTO fsma.entity_merge_history" in str(c[0][0])
         ]
         assert len(history_inserts) == 1
 
@@ -295,8 +303,7 @@ class TestMergeEntitiesThinWrapper_Issue1195:
         svc.merge_entities(TENANT, "eid-source", "eid-target")
 
         history_call = next(
-            c for c in mock_session.execute.call_args_list
-            if "INSERT INTO fsma.entity_merge_history" in str(c[0][0])
+            c for c in mock_session.execute.call_args_list if "INSERT INTO fsma.entity_merge_history" in str(c[0][0])
         )
         params = history_call[0][1]
         assert params["source_entity_ids"] == ["eid-source"]
@@ -347,19 +354,14 @@ class TestSplitReversesNwayMerge_Issue1195:
 
         # Must re-activate each of the 3 sources.
         reactivations = [
-            c for c in mock_session.execute.call_args_list
-            if "UPDATE fsma.canonical_entities" in str(c[0][0])
-            and "is_active = TRUE" in str(c[0][0])
+            c
+            for c in mock_session.execute.call_args_list
+            if "UPDATE fsma.canonical_entities" in str(c[0][0]) and "is_active = TRUE" in str(c[0][0])
         ]
-        assert len(reactivations) == 3, (
-            f"Expected 3 source re-activations for a 3-way split, "
-            f"got {len(reactivations)}"
-        )
+        assert len(reactivations) == 3, f"Expected 3 source re-activations for a 3-way split, got {len(reactivations)}"
 
         # Each re-activation targets one of the original sources.
-        reactivated_ids = {
-            c[0][1]["entity_id"] for c in reactivations
-        }
+        reactivated_ids = {c[0][1]["entity_id"] for c in reactivations}
         assert reactivated_ids == {"eid-a", "eid-b", "eid-c"}
 
         assert "split_id" in result

@@ -140,9 +140,7 @@ def _run_stripe_trigger(stripe_cli_bin: str, event_name: str, add_fields: list[s
 
     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if proc.returncode != 0:
-        raise ValidationError(
-            f"Stripe trigger failed for '{event_name}'. stderr: {proc.stderr.strip() or '<empty>'}"
-        )
+        raise ValidationError(f"Stripe trigger failed for '{event_name}'. stderr: {proc.stderr.strip() or '<empty>'}")
     return proc.stdout.strip()
 
 
@@ -198,9 +196,7 @@ def main() -> int:
 
         mapping_after_checkout = _redis_mapping(redis_client, args.tenant_id)
         if mapping_after_checkout.get("session_id") != session_id:
-            raise ValidationError(
-                "Checkout session hint not persisted to Redis (session_id mismatch)."
-            )
+            raise ValidationError("Checkout session hint not persisted to Redis (session_id mismatch).")
 
         print("[2/6] Triggering checkout.session.completed webhook via Stripe CLI...")
         _run_stripe_trigger(
@@ -270,11 +266,7 @@ def main() -> int:
         )
 
         _wait_for(
-            lambda: (
-                m
-                if (m := _redis_mapping(redis_client, args.tenant_id)).get("status") == "past_due"
-                else None
-            ),
+            lambda: m if (m := _redis_mapping(redis_client, args.tenant_id)).get("status") == "past_due" else None,
             timeout_seconds=args.timeout_seconds,
             description="invoice.payment_failed status transition",
         )
@@ -320,9 +312,7 @@ def main() -> int:
             print(f"      invoice_id={invoice_id}")
             print(f"      pdf_url={pdf_url}")
         else:
-            print(
-                "      No invoices listed yet. This can happen if Stripe test fixtures have not fully propagated."
-            )
+            print("      No invoices listed yet. This can happen if Stripe test fixtures have not fully propagated.")
 
     print("\nStripe billing flow validation passed.")
     print(json.dumps(_redis_mapping(redis_client, args.tenant_id), indent=2, sort_keys=True))

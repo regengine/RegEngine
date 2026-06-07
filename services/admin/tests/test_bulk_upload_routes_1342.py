@@ -23,12 +23,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.bulk_upload.routes import (
     BulkUploadCommitSummary,
     _coerce_commit_summary,
@@ -43,6 +37,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -72,9 +71,9 @@ class _SessionStore:
     async def update_session(self, tenant_id, user_id, session_id, payload):
         self._store[f"{tenant_id}:{user_id}:{session_id}"] = payload
 
-    async def try_claim_commit(self, tenant_id, user_id, session_id, *,
-                               from_status="validated", to_status="processing",
-                               mutations=None):
+    async def try_claim_commit(
+        self, tenant_id, user_id, session_id, *, from_status="validated", to_status="processing", mutations=None
+    ):
         key = f"{tenant_id}:{user_id}:{session_id}"
         payload = self._store.get(key)
         if payload is None or payload.get("status") != from_status:
@@ -109,12 +108,12 @@ def db_session() -> Session:
     ]
     for t in tables:
         t.create(bind=engine)
-    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False,
-                      expire_on_commit=False, future=True)
+    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=TEST_USER_ID, email="u@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
+    session.add(
+        UserModel(id=TEST_USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False)
+    )
     session.commit()
     try:
         yield session
@@ -130,8 +129,7 @@ def db_session() -> Session:
 # ---------------------------------------------------------------------------
 
 
-def _make_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID,
-                 store=None):
+def _make_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID, store=None):
     import app.bulk_upload.routes as bulk_routes
 
     app = FastAPI()
@@ -148,8 +146,7 @@ def _make_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID,
     app.dependency_overrides[bulk_routes.get_session] = _get_session
     app.dependency_overrides[bulk_routes.get_current_user] = _get_user
 
-    monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context",
-                        lambda _db: tenant)
+    monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: tenant)
     if store is not None:
         monkeypatch.setattr(bulk_routes, "session_store", store)
 
@@ -179,7 +176,6 @@ def client_no_tenant(db_session, monkeypatch):
 
 
 class TestCoerceHelpers:
-
     def test_coerce_commit_summary_non_dict_returns_default(self):
         """Line 111: non-dict value → empty BulkUploadCommitSummary."""
         result = _coerce_commit_summary(None)
@@ -194,6 +190,7 @@ class TestCoerceHelpers:
     def test_coerce_validation_preview_non_dict_returns_none(self):
         """Line 117: non-dict value → None."""
         from app.bulk_upload.routes import _coerce_validation_preview
+
         assert _coerce_validation_preview(None) is None
         assert _coerce_validation_preview("oops") is None
         assert _coerce_validation_preview(42) is None
@@ -205,7 +202,6 @@ class TestCoerceHelpers:
 
 
 class TestTenantAndUserGuard:
-
     def test_parse_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 123: any endpoint that calls _tenant_and_user raises 400 on missing tenant."""
         resp = client_no_tenant.post(
@@ -217,16 +213,12 @@ class TestTenantAndUserGuard:
 
     def test_validate_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 123: validate also uses _tenant_and_user."""
-        resp = client_no_tenant.post(
-            "/v1/supplier/bulk-upload/validate?session_id=session-00000001"
-        )
+        resp = client_no_tenant.post("/v1/supplier/bulk-upload/validate?session_id=session-00000001")
         assert resp.status_code == 400
 
     def test_commit_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 123: commit also uses _tenant_and_user."""
-        resp = client_no_tenant.post(
-            "/v1/supplier/bulk-upload/commit?session_id=session-00000001"
-        )
+        resp = client_no_tenant.post("/v1/supplier/bulk-upload/commit?session_id=session-00000001")
         assert resp.status_code == 400
 
     def test_status_no_tenant_returns_400(self, client_no_tenant: TestClient):
@@ -241,12 +233,9 @@ class TestTenantAndUserGuard:
 
 
 class TestValidateSessionNotFound:
-
     def test_missing_session_returns_404(self, client: TestClient):
         """Line 178: session_id not in store → 404."""
-        resp = client.post(
-            "/v1/supplier/bulk-upload/validate?session_id=session-99999999"
-        )
+        resp = client.post("/v1/supplier/bulk-upload/validate?session_id=session-99999999")
         assert resp.status_code == 404
         assert "Session expired or not found" in resp.json()["detail"]
 
@@ -257,12 +246,9 @@ class TestValidateSessionNotFound:
 
 
 class TestCommitSessionNotFound:
-
     def test_missing_session_returns_404(self, client: TestClient):
         """Line 226: get_session returns None → 404 on fast idempotency check."""
-        resp = client.post(
-            "/v1/supplier/bulk-upload/commit?session_id=session-99999999"
-        )
+        resp = client.post("/v1/supplier/bulk-upload/commit?session_id=session-99999999")
         assert resp.status_code == 404
         assert "Session expired or not found" in resp.json()["detail"]
 
@@ -273,26 +259,22 @@ class TestCommitSessionNotFound:
 
 
 class TestCommitCASRace:
-
-    def test_cas_fail_and_refreshed_none_returns_404(
-        self, db_session, monkeypatch, store
-    ):
+    def test_cas_fail_and_refreshed_none_returns_404(self, db_session, monkeypatch, store):
         """Line 257: CAS returns None AND re-read also returns None → 404.
 
         This simulates: session was found on first read (status=parsed),
         CAS fails (wrong status), and then the session disappears (TTL'd out)
         before the re-read.
         """
-        import app.bulk_upload.routes as bulk_routes
-
         # Prime store with a parsed (not validated) session
         import asyncio
+
+        import app.bulk_upload.routes as bulk_routes
+
         loop = asyncio.new_event_loop()
         tenant_key = str(TEST_TENANT_ID)
         user_key = str(TEST_USER_ID)
-        sid = loop.run_until_complete(
-            store.create_session(tenant_key, user_key, {"status": "parsed"})
-        )
+        sid = loop.run_until_complete(store.create_session(tenant_key, user_key, {"status": "parsed"}))
         loop.close()
 
         app = FastAPI()
@@ -307,8 +289,7 @@ class TestCommitCASRace:
 
         app.dependency_overrides[bulk_routes.get_session] = _get_session
         app.dependency_overrides[bulk_routes.get_current_user] = _get_user
-        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context",
-                            lambda _db: TEST_TENANT_ID)
+        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
 
         # try_claim_commit returns None (status != validated),
         # then get_session also returns None (simulate expiry)
@@ -339,8 +320,7 @@ class TestCommitCASRace:
 
         assert resp.status_code == 404
 
-    def _race_client(self, db_session, monkeypatch, first_status, second_status,
-                     summary=None):
+    def _race_client(self, db_session, monkeypatch, first_status, second_status, summary=None):
         """Helper: builds a TestClient where first get returns first_status,
         CAS fails, re-read returns second_status."""
         import app.bulk_upload.routes as bulk_routes
@@ -369,8 +349,7 @@ class TestCommitCASRace:
 
         app.dependency_overrides[bulk_routes.get_session] = lambda: (yield db_session)
         app.dependency_overrides[bulk_routes.get_current_user] = lambda: current_user
-        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context",
-                            lambda _db: TEST_TENANT_ID)
+        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
         monkeypatch.setattr(bulk_routes, "session_store", race_store)
         return TestClient(app)
 
@@ -390,9 +369,7 @@ class TestCommitCASRace:
         assert resp.status_code == 400
         assert "must be validated" in resp.json()["detail"]
 
-    def test_cas_fail_and_refreshed_completed_returns_200(
-        self, db_session, monkeypatch
-    ):
+    def test_cas_fail_and_refreshed_completed_returns_200(self, db_session, monkeypatch):
         """Line 262: CAS returns None but re-read shows completed → return summary.
 
         Simulates a race where a concurrent commit finished between the
@@ -401,10 +378,15 @@ class TestCommitCASRace:
         import app.bulk_upload.routes as bulk_routes
 
         summary_payload = {
-            "events_chained": 3, "facilities_created": 1,
-            "facilities_updated": 0, "ftl_scopes_upserted": 0,
-            "tlcs_created": 1, "tlcs_updated": 0, "last_merkle_hash": "abc",
-            "sync_warning_count": 0, "sync_warnings": [],
+            "events_chained": 3,
+            "facilities_created": 1,
+            "facilities_updated": 0,
+            "ftl_scopes_upserted": 0,
+            "tlcs_created": 1,
+            "tlcs_updated": 0,
+            "last_merkle_hash": "abc",
+            "sync_warning_count": 0,
+            "sync_warnings": [],
         }
 
         call_count = [0]
@@ -434,8 +416,7 @@ class TestCommitCASRace:
 
         app.dependency_overrides[bulk_routes.get_session] = _get_session
         app.dependency_overrides[bulk_routes.get_current_user] = _get_user
-        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context",
-                            lambda _db: TEST_TENANT_ID)
+        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
         monkeypatch.setattr(bulk_routes, "session_store", race_store)
 
         with TestClient(app) as c:
@@ -453,13 +434,11 @@ class TestCommitCASRace:
 
 
 class TestCommitExceptionHandler:
-
-    def test_execute_bulk_commit_raises_sets_failed_status(
-        self, db_session, monkeypatch, store
-    ):
+    def test_execute_bulk_commit_raises_sets_failed_status(self, db_session, monkeypatch, store):
         """Lines 284-289: if execute_bulk_commit raises, session set to 'failed'
         and HTTP 400 returned. The exception message is surfaced in the detail."""
         import asyncio
+
         import app.bulk_upload.routes as bulk_routes
 
         tenant_key = str(TEST_TENANT_ID)
@@ -471,9 +450,7 @@ class TestCommitExceptionHandler:
             "normalized_data": {},
             "error": None,
         }
-        sid = loop.run_until_complete(
-            store.create_session(tenant_key, user_key, validated_payload)
-        )
+        sid = loop.run_until_complete(store.create_session(tenant_key, user_key, validated_payload))
         loop.close()
 
         app = FastAPI()
@@ -488,12 +465,10 @@ class TestCommitExceptionHandler:
 
         app.dependency_overrides[bulk_routes.get_session] = _get_session
         app.dependency_overrides[bulk_routes.get_current_user] = _get_user
-        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context",
-                            lambda _db: TEST_TENANT_ID)
+        monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
         monkeypatch.setattr(bulk_routes, "session_store", store)
         monkeypatch.setattr(
-            bulk_routes, "execute_bulk_commit",
-            lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("DB exploded"))
+            bulk_routes, "execute_bulk_commit", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("DB exploded"))
         )
 
         with TestClient(app) as c:
@@ -504,10 +479,9 @@ class TestCommitExceptionHandler:
 
         # Verify session was transitioned to "failed"
         import asyncio
+
         loop2 = asyncio.new_event_loop()
-        session_after = loop2.run_until_complete(
-            store.get_session(tenant_key, user_key, sid)
-        )
+        session_after = loop2.run_until_complete(store.get_session(tenant_key, user_key, sid))
         loop2.close()
         assert session_after["status"] == "failed"
         assert "DB exploded" in session_after["error"]
@@ -519,7 +493,6 @@ class TestCommitExceptionHandler:
 
 
 class TestStatusSessionNotFound:
-
     def test_missing_session_returns_404(self, client: TestClient):
         """Line 313: get_session returns None → 404."""
         resp = client.get("/v1/supplier/bulk-upload/status/session-99999999")
@@ -533,7 +506,6 @@ class TestStatusSessionNotFound:
 
 
 class TestDownloadTemplate:
-
     def test_csv_template_downloads(self, client: TestClient):
         """Lines 334-336: GET /template?format=csv returns streaming CSV."""
         resp = client.get("/v1/supplier/bulk-upload/template?format=csv")

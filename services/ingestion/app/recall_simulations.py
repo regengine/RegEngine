@@ -16,11 +16,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from shared.tenant_settings import get_tenant_data, list_tenant_data, set_tenant_data
 
 from .authz import IngestionPrincipal, require_permission
 from .disclaimers import SIMULATION_DISCLAIMER
 from .shared.tenant_resolution import resolve_principal_tenant_id
-from shared.tenant_settings import get_tenant_data, set_tenant_data, list_tenant_data
 
 logger = logging.getLogger("recall-simulations")
 
@@ -30,27 +30,42 @@ def _query_tenant_recall_metrics(tenant_id: str) -> dict | None:
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
+
         db = SessionLocal()
         try:
-            cte_count = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
-            
+            cte_count = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
+
             if cte_count == 0:
                 return None
-            
-            supplier_count = db.execute(text(
-                "SELECT COUNT(DISTINCT supplier_id) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
-            
-            tlc_count = db.execute(text(
-                "SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
-            
-            has_export = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
-            
+
+            supplier_count = (
+                db.execute(
+                    text("SELECT COUNT(DISTINCT supplier_id) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
+
+            tlc_count = (
+                db.execute(
+                    text("SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
+
+            has_export = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
+
             return {
                 "cte_count": cte_count,
                 "supplier_count": supplier_count,
@@ -62,6 +77,7 @@ def _query_tenant_recall_metrics(tenant_id: str) -> dict | None:
     except Exception as exc:
         logger.warning("recall_metrics_query_failed error=%s", str(exc))
         return None
+
 
 router = APIRouter(prefix="/api/v1/simulations", tags=["Recall Simulations"])
 
@@ -422,9 +438,7 @@ async def run_recall_simulation(
     # is supplied and disagrees with the principal, this raises 403.
     # If no tenant context is available at all, this raises 400 — we never
     # fall back to a magic "default" namespace (security: F-7).
-    resolved_tenant_id = resolve_principal_tenant_id(
-        tenant_id, x_tenant_id, principal.tenant_id
-    )
+    resolved_tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
     scenario = _get_scenario_or_400(request.scenario_id)
     metrics = _calculate_metrics(scenario)
@@ -453,9 +467,7 @@ async def run_recall_simulation(
             metrics["affected_locations"] = max(1, int(scenario["locations_involved"] * min(scale, 1.5)))
             # Tenant with export capability gets faster response estimate
             if tenant_data["has_export"]:
-                metrics["with_regengine"]["response_time_minutes"] = max(
-                    5, scenario["regengine_response_minutes"] - 10
-                )
+                metrics["with_regengine"]["response_time_minutes"] = max(5, scenario["regengine_response_minutes"] - 10)
                 metrics["with_regengine"]["kde_completeness"] = min(1.0, scenario["regengine_completeness"] + 0.01)
 
     simulation_record = {
@@ -495,9 +507,7 @@ async def get_simulation(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    resolved_tenant_id = resolve_principal_tenant_id(
-        tenant_id, x_tenant_id, principal.tenant_id
-    )
+    resolved_tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
     return _get_simulation_or_404(simulation_id, resolved_tenant_id)
 
 
@@ -508,9 +518,7 @@ async def get_simulation_timeline(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    resolved_tenant_id = resolve_principal_tenant_id(
-        tenant_id, x_tenant_id, principal.tenant_id
-    )
+    resolved_tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
     simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
     return {
         "simulation_id": simulation_id,
@@ -525,9 +533,7 @@ async def get_simulation_impact_graph(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("simulations.read")),
 ):
-    resolved_tenant_id = resolve_principal_tenant_id(
-        tenant_id, x_tenant_id, principal.tenant_id
-    )
+    resolved_tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
     simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
     graph = simulation["metrics"]["supply_chain_graph"]
     return {
@@ -546,9 +552,7 @@ async def export_simulation(
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("simulations.export")),
 ):
-    resolved_tenant_id = resolve_principal_tenant_id(
-        tenant_id, x_tenant_id, principal.tenant_id
-    )
+    resolved_tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
     simulation = _get_simulation_or_404(simulation_id, resolved_tenant_id)
 
     if format == "csv":

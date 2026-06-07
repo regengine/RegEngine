@@ -25,14 +25,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import sla_tracking
 from app.sla_tracking import (
     ALERT_THRESHOLD_HOURS,
-    FDARequest,
     SLA_HOURS,
+    FDARequest,
     SLAAlert,
     SLADashboard,
     _generate_alerts_for_request,
@@ -43,8 +40,10 @@ from app.sla_tracking import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 # ===========================================================================
 # Fixtures
@@ -94,7 +93,6 @@ def _mk_req(**overrides):
 
 
 class TestFDARequestProperties:
-
     def test_time_remaining_is_none_for_completed(self):
         req = FDARequest(
             tenant_id="tenant-1",
@@ -161,7 +159,6 @@ class TestFDARequestProperties:
 
 
 class TestRefreshOverdueStatuses:
-
     def test_open_past_deadline_becomes_overdue(self):
         req = FDARequest(
             tenant_id="t",
@@ -212,7 +209,6 @@ class TestRefreshOverdueStatuses:
 
 
 class TestGenerateAlerts:
-
     def test_completed_generates_no_alerts(self):
         req = FDARequest(
             tenant_id="t",
@@ -254,8 +250,7 @@ class TestGenerateAlerts:
         """Strict <= on threshold — exactly 4h remaining is still approaching."""
         req = FDARequest(
             tenant_id="t",
-            deadline_at=datetime.now(timezone.utc)
-            + timedelta(hours=ALERT_THRESHOLD_HOURS),
+            deadline_at=datetime.now(timezone.utc) + timedelta(hours=ALERT_THRESHOLD_HOURS),
         )
         alerts = _generate_alerts_for_request(req)
         # There may be slight clock drift (millis), but < or == 4h both
@@ -279,7 +274,6 @@ class TestGenerateAlerts:
 
 
 class TestRequestToDict:
-
     def test_basic_shape(self):
         req = FDARequest(tenant_id="t", notes="example")
         d = _request_to_dict(req)
@@ -325,7 +319,6 @@ class TestRequestToDict:
 
 
 class TestBestEffortDb:
-
     def test_persist_swallows_import_failure(self, monkeypatch):
         """SessionLocal not available → _try_persist_request logs and returns."""
         import shared.database
@@ -350,6 +343,7 @@ class TestBestEffortDb:
     def test_persist_happy_path_executes_and_commits(self, monkeypatch):
         """Real body runs: db.execute(...) then db.commit() then db.close()."""
         from unittest.mock import MagicMock
+
         import shared.database
 
         session = MagicMock()
@@ -371,6 +365,7 @@ class TestBestEffortDb:
 
     def test_persist_no_export_ids_sends_none(self, monkeypatch):
         from unittest.mock import MagicMock
+
         import shared.database
 
         session = MagicMock()
@@ -383,6 +378,7 @@ class TestBestEffortDb:
     def test_persist_db_close_always_called_on_execute_failure(self, monkeypatch):
         """Even if execute() raises, finally: db.close() still fires."""
         from unittest.mock import MagicMock
+
         import shared.database
 
         session = MagicMock()
@@ -398,6 +394,7 @@ class TestBestEffortDb:
     def test_load_happy_path_returns_list(self, monkeypatch):
         """Real DB load path — rows come back and round-trip into FDARequest."""
         from unittest.mock import MagicMock
+
         import shared.database
 
         now = datetime.now(timezone.utc)
@@ -433,6 +430,7 @@ class TestBestEffortDb:
 
     def test_load_empty_export_ids_becomes_empty_list(self, monkeypatch):
         from unittest.mock import MagicMock
+
         import shared.database
 
         now = datetime.now(timezone.utc)
@@ -459,6 +457,7 @@ class TestBestEffortDb:
     def test_load_db_close_called_on_exception(self, monkeypatch):
         """Exception raised after SessionLocal() → still returns None."""
         from unittest.mock import MagicMock
+
         import shared.database
 
         session = MagicMock()
@@ -476,7 +475,6 @@ class TestBestEffortDb:
 
 
 class TestCreateEndpoint:
-
     def test_creates_open_request_with_24h_deadline(self, client):
         resp = client.post("/api/v1/sla/requests", json=_mk_req())
         assert resp.status_code == 200
@@ -493,15 +491,11 @@ class TestCreateEndpoint:
         assert 23.9 < delta < 24.1
 
     def test_recall_request_type_honored(self, client):
-        resp = client.post(
-            "/api/v1/sla/requests", json=_mk_req(request_type="recall")
-        )
+        resp = client.post("/api/v1/sla/requests", json=_mk_req(request_type="recall"))
         assert resp.json()["request"]["request_type"] == "recall"
 
     def test_inspection_request_type_honored(self, client):
-        resp = client.post(
-            "/api/v1/sla/requests", json=_mk_req(request_type="inspection")
-        )
+        resp = client.post("/api/v1/sla/requests", json=_mk_req(request_type="inspection"))
         assert resp.json()["request"]["request_type"] == "inspection"
 
     def test_invalid_request_type_rejected(self, client):
@@ -525,7 +519,6 @@ class TestCreateEndpoint:
 
 
 class TestListRequestsEndpoint:
-
     def test_empty_for_unknown_tenant(self, client):
         resp = client.get("/api/v1/sla/requests/tenant-unknown")
         assert resp.status_code == 200
@@ -571,9 +564,7 @@ class TestListRequestsEndpoint:
         """When _try_load_requests returns rows, in-memory filter is skipped."""
         sentinel = FDARequest(tenant_id="A", notes="from-db")
 
-        monkeypatch.setattr(
-            sla_tracking, "_try_load_requests", lambda tid: [sentinel]
-        )
+        monkeypatch.setattr(sla_tracking, "_try_load_requests", lambda tid: [sentinel])
         resp = client.get("/api/v1/sla/requests/A")
         assert resp.status_code == 200
         assert resp.json()["total"] == 1
@@ -586,18 +577,13 @@ class TestListRequestsEndpoint:
 
 
 class TestCompleteEndpoint:
-
     def test_404_for_unknown_request(self, client):
         resp = client.patch("/api/v1/sla/requests/no-such-id/complete")
         assert resp.status_code == 404
 
     def test_marks_request_completed(self, client):
-        created = client.post(
-            "/api/v1/sla/requests", json=_mk_req()
-        ).json()["request"]
-        resp = client.patch(
-            f"/api/v1/sla/requests/{created['id']}/complete"
-        )
+        created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
+        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "completed"
@@ -605,12 +591,8 @@ class TestCompleteEndpoint:
         assert body["request"]["completed_at"] is not None
 
     def test_completion_within_24h_sets_met_sla_true(self, client):
-        created = client.post(
-            "/api/v1/sla/requests", json=_mk_req()
-        ).json()["request"]
-        resp = client.patch(
-            f"/api/v1/sla/requests/{created['id']}/complete"
-        )
+        created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
+        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
         assert resp.json()["met_sla"] is True
 
     def test_completion_past_deadline_sets_met_sla_false(self, client):
@@ -627,24 +609,14 @@ class TestCompleteEndpoint:
         assert resp.json()["met_sla"] is False
 
     def test_export_ids_appended(self, client):
-        created = client.post(
-            "/api/v1/sla/requests", json=_mk_req()
-        ).json()["request"]
-        resp = client.patch(
-            f"/api/v1/sla/requests/{created['id']}/complete"
-            f"?export_ids=exp-1&export_ids=exp-2"
-        )
+        created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
+        resp = client.patch(f"/api/v1/sla/requests/{created['id']}/complete?export_ids=exp-1&export_ids=exp-2")
         assert resp.json()["request"]["export_ids"] == ["exp-1", "exp-2"]
 
     def test_completion_produces_stored_alert(self, client):
-        created = client.post(
-            "/api/v1/sla/requests", json=_mk_req()
-        ).json()["request"]
+        created = client.post("/api/v1/sla/requests", json=_mk_req()).json()["request"]
         client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
-        stored_alerts = [
-            a for a in sla_tracking._alerts_store.values()
-            if a.request_id == created["id"]
-        ]
+        stored_alerts = [a for a in sla_tracking._alerts_store.values() if a.request_id == created["id"]]
         assert len(stored_alerts) == 1
         assert stored_alerts[0].alert_type == "completed"
 
@@ -655,7 +627,6 @@ class TestCompleteEndpoint:
 
 
 class TestDashboardEndpoint:
-
     def test_empty_tenant_returns_zero_counts(self, client):
         resp = client.get("/api/v1/sla/dashboard/empty-tenant")
         body = resp.json()
@@ -712,9 +683,7 @@ class TestDashboardEndpoint:
             requested_at=datetime.now(timezone.utc) - timedelta(hours=2),
             completed_at=datetime.now(timezone.utc),
         )
-        monkeypatch.setattr(
-            sla_tracking, "_try_load_requests", lambda tid: [sentinel]
-        )
+        monkeypatch.setattr(sla_tracking, "_try_load_requests", lambda tid: [sentinel])
         resp = client.get("/api/v1/sla/dashboard/A")
         assert resp.status_code == 200
         assert resp.json()["compliance_rate_pct"] == 100.0
@@ -726,7 +695,6 @@ class TestDashboardEndpoint:
 
 
 class TestAlertsEndpoint:
-
     def test_empty_tenant_zero_alerts(self, client):
         resp = client.get("/api/v1/sla/alerts/empty-tenant")
         assert resp.json()["total"] == 0
@@ -754,15 +722,10 @@ class TestAlertsEndpoint:
         assert any(a["alert_type"] == "deadline_approaching" for a in alerts)
 
     def test_stored_completion_alert_included(self, client):
-        created = client.post(
-            "/api/v1/sla/requests", json=_mk_req(tenant_id="tenant-1")
-        ).json()["request"]
+        created = client.post("/api/v1/sla/requests", json=_mk_req(tenant_id="tenant-1")).json()["request"]
         client.patch(f"/api/v1/sla/requests/{created['id']}/complete")
         resp = client.get("/api/v1/sla/alerts/tenant-1")
-        assert any(
-            a["alert_type"] == "completed"
-            for a in resp.json()["alerts"]
-        )
+        assert any(a["alert_type"] == "completed" for a in resp.json()["alerts"])
 
     def test_include_acknowledged_toggle(self, client):
         """Acknowledged alerts are filtered out by default, included on toggle."""
@@ -777,9 +740,7 @@ class TestAlertsEndpoint:
         sla_tracking._alerts_store[ack.id] = ack
 
         default = client.get("/api/v1/sla/alerts/A").json()
-        toggled = client.get(
-            "/api/v1/sla/alerts/A?include_acknowledged=true"
-        ).json()
+        toggled = client.get("/api/v1/sla/alerts/A?include_acknowledged=true").json()
 
         default_ids = [a["id"] for a in default["alerts"]]
         toggled_ids = [a["id"] for a in toggled["alerts"]]
@@ -820,7 +781,6 @@ class TestAlertsEndpoint:
 
 
 class TestPydanticSurface:
-
     def test_sla_dashboard_defaults(self):
         d = SLADashboard(tenant_id="t")
         assert d.open_requests == 0

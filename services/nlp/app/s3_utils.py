@@ -1,6 +1,6 @@
 import boto3
-from botocore.config import Config
 import structlog
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from .config import get_settings

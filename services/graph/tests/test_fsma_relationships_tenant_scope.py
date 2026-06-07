@@ -22,6 +22,7 @@ These tests lock in:
    rows, turning the MERGE into a no-op. Better than a cross-tenant
    edge, but still a regression worth catching.
 """
+
 from __future__ import annotations
 
 import re
@@ -35,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.models.fsma_nodes import FSMARelationships
-
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
 TENANT_B = "22222222-2222-2222-2222-222222222222"
@@ -76,15 +76,12 @@ def test_every_template_scopes_both_match_nodes(name, cypher):
 
     # There are exactly 2 MATCH clauses per template.
     match_count = flat.count("MATCH (")
-    assert match_count == 2, (
-        f"#1284: {name} expected 2 MATCH clauses, found {match_count}"
-    )
+    assert match_count == 2, f"#1284: {name} expected 2 MATCH clauses, found {match_count}"
 
     # Both MATCHes must include tenant_id in the map.
     tenant_occurrences = flat.count("tenant_id: $tenant_id")
     assert tenant_occurrences >= 2, (
-        f"#1284: {name} must scope BOTH MATCH nodes by tenant_id "
-        f"(found {tenant_occurrences}). Cypher:\n{cypher}"
+        f"#1284: {name} must scope BOTH MATCH nodes by tenant_id (found {tenant_occurrences}). Cypher:\n{cypher}"
     )
 
 
@@ -99,13 +96,9 @@ def test_no_identifier_only_match_remains(name, cypher):
     # Every MATCH (...:Label { ... }) block must contain tenant_id.
     # Strategy: find each "MATCH (...)" segment, verify tenant_id in it.
     match_blocks = re.findall(r"MATCH\s*\([^)]+\)", flat)
-    assert len(match_blocks) == 2, (
-        f"#1284: {name} expected 2 MATCH blocks, got {len(match_blocks)}"
-    )
+    assert len(match_blocks) == 2, f"#1284: {name} expected 2 MATCH blocks, got {len(match_blocks)}"
     for block in match_blocks:
-        assert "tenant_id" in block, (
-            f"#1284: {name} has a MATCH block without tenant_id: {block}"
-        )
+        assert "tenant_id" in block, f"#1284: {name} has a MATCH block without tenant_id: {block}"
 
 
 # ── Call-site inspection (router) ──────────────────────────────────────────
@@ -122,13 +115,7 @@ def test_traceability_router_source_passes_tenant_id_to_relationships():
     fragile. The failure mode we care about — a reviewer deleting the
     ``tenant_id=...`` kwarg — is structural, not behavioural.
     """
-    src_path = (
-        Path(__file__).resolve().parents[1]
-        / "app"
-        / "routers"
-        / "fsma"
-        / "traceability.py"
-    )
+    src_path = Path(__file__).resolve().parents[1] / "app" / "routers" / "fsma" / "traceability.py"
     source = src_path.read_text()
 
     # Find every call like `session.run(FSMARelationships.NAME, ...)`.
@@ -139,13 +126,11 @@ def test_traceability_router_source_passes_tenant_id_to_relationships():
     )
     matches = pattern.findall(source)
     assert matches, (
-        "expected at least one session.run(FSMARelationships.*) call in "
-        "traceability.py; did the router change shape?"
+        "expected at least one session.run(FSMARelationships.*) call in traceability.py; did the router change shape?"
     )
     for body in matches:
         assert "tenant_id" in body, (
-            f"#1284: relationship call in traceability.py missing tenant_id "
-            f"kwarg. Call body:\n{body}"
+            f"#1284: relationship call in traceability.py missing tenant_id kwarg. Call body:\n{body}"
         )
 
 
@@ -197,22 +182,16 @@ async def test_fsma_consumer_passes_tenant_id_to_relationships():
         args = call.args
         if args and isinstance(args[0], str):
             cypher = args[0]
-            if (
-                ":UNDERWENT]" in cypher
-                or ":OCCURRED_AT]" in cypher
-                or ":EVIDENCES]" in cypher
-            ):
+            if ":UNDERWENT]" in cypher or ":OCCURRED_AT]" in cypher or ":EVIDENCES]" in cypher:
                 relationship_calls.append(call)
 
     assert len(relationship_calls) >= 2, (
-        f"expected ≥2 relationship calls, got {len(relationship_calls)}: "
-        f"{[c.args[0][:60] for c in relationship_calls]}"
+        f"expected ≥2 relationship calls, got {len(relationship_calls)}: {[c.args[0][:60] for c in relationship_calls]}"
     )
     for call in relationship_calls:
         kwargs = call.kwargs
         assert kwargs.get("tenant_id") == TENANT_A, (
-            f"#1284: consumer relationship call missing/wrong tenant_id; "
-            f"cypher={call.args[0][:80]!r} kwargs={kwargs!r}"
+            f"#1284: consumer relationship call missing/wrong tenant_id; cypher={call.args[0][:80]!r} kwargs={kwargs!r}"
         )
 
 
@@ -237,8 +216,7 @@ def test_templates_never_accept_implicit_cross_tenant_match():
             pattern = re.compile(rf"MATCH\s*\([^)]*:{label}\s*\{{([^}}]+)\}}")
             for map_body in pattern.findall(flat):
                 assert "tenant_id" in map_body, (
-                    f"#1284: {name} MATCHes :{label} without tenant_id in map; "
-                    f"map_body={map_body!r}"
+                    f"#1284: {name} MATCHes :{label} without tenant_id in map; map_body={map_body!r}"
                 )
 
 

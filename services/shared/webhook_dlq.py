@@ -53,9 +53,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
+from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import Any, Optional
 
 from sqlalchemy import (
     Column,
@@ -63,9 +63,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    text,
-    select,
     and_,
+    select,
+    text,
     update,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -79,6 +79,7 @@ Base = declarative_base()
 
 class WebhookFailureStatus(str, Enum):
     """Status of a webhook DLQ entry."""
+
     PENDING = "pending"
     RETRYING = "retrying"
     DEAD = "dead"
@@ -192,18 +193,21 @@ class WebhookDLQ:
                     status = :status
             """)
 
-            self.db_session.execute(stmt, {
-                "id": webhook_id,
-                "payload": json.dumps(payload),
-                "error_msg": error_message,
-                "max_retries": max_retries,
-                "next_retry": next_retry_at,
-                "status": WebhookFailureStatus.PENDING.value,
-                "created": now,
-                "updated": now,
-                "tenant": self.tenant_id,
-                "source": source,
-            })
+            self.db_session.execute(
+                stmt,
+                {
+                    "id": webhook_id,
+                    "payload": json.dumps(payload),
+                    "error_msg": error_message,
+                    "max_retries": max_retries,
+                    "next_retry": next_retry_at,
+                    "status": WebhookFailureStatus.PENDING.value,
+                    "created": now,
+                    "updated": now,
+                    "tenant": self.tenant_id,
+                    "source": source,
+                },
+            )
             self.db_session.commit()
 
             logger.info(
@@ -270,19 +274,21 @@ class WebhookDLQ:
 
             results = []
             for row in rows:
-                results.append({
-                    "id": str(row[0]),
-                    "payload": json.loads(row[1]) if isinstance(row[1], str) else row[1],
-                    "error_message": row[2],
-                    "retry_count": row[3],
-                    "max_retries": row[4],
-                    "next_retry_at": row[5],
-                    "status": row[6],
-                    "source": row[7],
-                    "created_at": row[8],
-                    "updated_at": row[9],
-                    "tenant_id": row[10],
-                })
+                results.append(
+                    {
+                        "id": str(row[0]),
+                        "payload": json.loads(row[1]) if isinstance(row[1], str) else row[1],
+                        "error_message": row[2],
+                        "retry_count": row[3],
+                        "max_retries": row[4],
+                        "next_retry_at": row[5],
+                        "status": row[6],
+                        "source": row[7],
+                        "created_at": row[8],
+                        "updated_at": row[9],
+                        "tenant_id": row[10],
+                    }
+                )
 
             if results:
                 logger.debug(
@@ -381,14 +387,17 @@ class WebhookDLQ:
                 WHERE id = CAST(:id AS uuid)
             """)
 
-            self.db_session.execute(update_stmt, {
-                "id": webhook_id,
-                "retry_count": new_retry_count,
-                "status": new_status,
-                "next_retry": next_retry_at,
-                "error_msg": error_message,
-                "updated": now,
-            })
+            self.db_session.execute(
+                update_stmt,
+                {
+                    "id": webhook_id,
+                    "retry_count": new_retry_count,
+                    "status": new_status,
+                    "next_retry": next_retry_at,
+                    "error_msg": error_message,
+                    "updated": now,
+                },
+            )
             self.db_session.commit()
 
             return True
@@ -462,9 +471,7 @@ class WebhookDLQ:
                                 SELECT status FROM dlq.webhook_failures
                                 WHERE id = CAST(:id AS uuid)
                             """)
-                            status_row = self.db_session.execute(
-                                check_stmt, {"id": webhook_id}
-                            ).fetchone()
+                            status_row = self.db_session.execute(check_stmt, {"id": webhook_id}).fetchone()
                             if status_row and status_row[0] == WebhookFailureStatus.DEAD.value:
                                 stats["dead"] += 1
                             else:
@@ -523,12 +530,15 @@ class WebhookDLQ:
                 WHERE id = CAST(:id AS uuid)
             """)
 
-            result = self.db_session.execute(update_stmt, {
-                "id": webhook_id,
-                "status": WebhookFailureStatus.PENDING.value,
-                "next_retry": now,
-                "updated": now,
-            })
+            result = self.db_session.execute(
+                update_stmt,
+                {
+                    "id": webhook_id,
+                    "status": WebhookFailureStatus.PENDING.value,
+                    "next_retry": now,
+                    "updated": now,
+                },
+            )
             self.db_session.commit()
 
             if result.rowcount == 0:

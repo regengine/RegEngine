@@ -29,7 +29,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 
@@ -248,8 +247,7 @@ def test_rate_limit_decorator_present_on_endpoint():
 
     registry = getattr(review_mod.limiter, "_route_limits", None) or {}
     assert "app.review_routes.get_review_queue" in registry, (
-        "expected @limiter.limit('30/minute') to register "
-        "app.review_routes.get_review_queue in limiter._route_limits"
+        "expected @limiter.limit('30/minute') to register app.review_routes.get_review_queue in limiter._route_limits"
     )
 
 
@@ -266,9 +264,7 @@ def test_rate_limit_value_is_30_per_minute():
     source = inspect.getsource(review_mod.get_review_queue)
     # The decorator lives on the function definition right above.
     module_src = inspect.getsource(review_mod)
-    assert '@limiter.limit("30/minute")' in module_src, (
-        "expected @limiter.limit(\"30/minute\") literal on the endpoint"
-    )
+    assert '@limiter.limit("30/minute")' in module_src, 'expected @limiter.limit("30/minute") literal on the endpoint'
     # And the endpoint body references the cap-at-100 rationale.
     assert "100" in source
 

@@ -13,11 +13,10 @@ Regression tests for the review-queue hardening cluster:
 from __future__ import annotations
 
 import os
-from uuid import UUID, uuid4
 from unittest.mock import patch
+from uuid import UUID, uuid4
 
 import pytest
-
 
 # -------------------------------------------------------------------------
 # Shared fake infrastructure -- mirrors the pattern in
@@ -358,12 +357,9 @@ def test_resolve_hallucination_writes_to_audit_chain(tracker_with_audit):
 
     # Filter for the review.decision audit entry (ignore any other
     # audits emitted by other code paths).
-    review_entries = [
-        e for e in audit_sink if getattr(e, "event_type", None) == "review.decision"
-    ]
+    review_entries = [e for e in audit_sink if getattr(e, "event_type", None) == "review.decision"]
     assert len(review_entries) >= 1, (
-        "Expected at least one audit_logs entry with "
-        "event_type='review.decision' after approval (#1369)"
+        "Expected at least one audit_logs entry with event_type='review.decision' after approval (#1369)"
     )
 
     entry = review_entries[0]
@@ -419,9 +415,7 @@ def test_verify_review_event_rejects_tampered_body(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("KAFKA_EVENT_SIGNING_KEY", "test-signing-key")
 
-    signed_body, signed_headers = _signed_review_event(
-        {"tenant_id": "abc", "document_id": "doc-1", "extraction": {}}
-    )
+    signed_body, signed_headers = _signed_review_event({"tenant_id": "abc", "document_id": "doc-1", "extraction": {}})
     tampered = dict(signed_body)
     tampered["tenant_id"] = "forged-tenant"
 
@@ -447,8 +441,9 @@ def test_verify_review_event_rejects_wrong_producer(monkeypatch):
 
 
 def test_verify_review_event_dev_bypass_requires_local_env(monkeypatch):
-    from services.admin.app import review_consumer as rc_mod
     from shared.kafka_auth import BODY_FIELD_PRODUCER_SERVICE
+
+    from services.admin.app import review_consumer as rc_mod
 
     monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
@@ -512,18 +507,16 @@ def test_extract_and_record_uses_verified_signed_payload(monkeypatch):
 
 def test_require_tenant_scoped_key_rejects_null_tenant():
     from fastapi import HTTPException
+    from shared.auth import APIKey
 
     from services.admin.app.review_routes import _require_tenant_scoped_key
-    from shared.auth import APIKey
 
     key_no_tenant = APIKey(
         key_id="rge_legacy",
         key_hash="x",
         name="legacy",
         tenant_id=None,
-        created_at=__import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ),
+        created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
     )
     with pytest.raises(HTTPException) as excinfo:
         _require_tenant_scoped_key(key_no_tenant)
@@ -531,17 +524,16 @@ def test_require_tenant_scoped_key_rejects_null_tenant():
 
 
 def test_require_tenant_scoped_key_accepts_tenant_bound():
-    from services.admin.app.review_routes import _require_tenant_scoped_key
     from shared.auth import APIKey
+
+    from services.admin.app.review_routes import _require_tenant_scoped_key
 
     key = APIKey(
         key_id="rge_ok",
         key_hash="x",
         name="ok",
         tenant_id="11111111-1111-1111-1111-111111111111",
-        created_at=__import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        ),
+        created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
     )
     assert _require_tenant_scoped_key(key) == "11111111-1111-1111-1111-111111111111"
 
@@ -659,6 +651,5 @@ def test_record_with_retry_default_cap_is_configured(monkeypatch):
     rc_mod = importlib.reload(rc_mod)
 
     assert 0 < rc_mod.REVIEW_CONSUMER_RETRY_MAX_WAIT_SECONDS < 300, (
-        "default retry cap must be well under Kafka "
-        "max.poll.interval.ms (300s) to avoid rebalance death spiral"
+        "default retry cap must be well under Kafka max.poll.interval.ms (300s) to avoid rebalance death spiral"
     )

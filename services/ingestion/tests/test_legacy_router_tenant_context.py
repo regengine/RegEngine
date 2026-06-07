@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 import app.webhook_compat as webhook_compat
 from app import epcis_export, team_mgmt
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 TENANT_A = "00000000-0000-0000-0000-0000000000aa"
 TENANT_B = "00000000-0000-0000-0000-0000000000bb"

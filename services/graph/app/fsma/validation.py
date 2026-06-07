@@ -7,7 +7,7 @@ compatibility with tests.
 
 from __future__ import annotations
 
-from shared.fsma_rules import TraceEvent as SharedTraceEvent, TimeArrowRule
+from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
 
 
 def _validate_temporal_order(events: list) -> list:
@@ -22,7 +22,7 @@ def _validate_temporal_order(events: list) -> list:
     Returns:
         List of violation dicts (empty list if no violations).
     """
-    from shared.fsma_rules import TraceEvent as SharedTraceEvent, TimeArrowRule
+    from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
 
     trace_events = []
     for e in events:
@@ -30,12 +30,14 @@ def _validate_temporal_order(events: list) -> list:
         edate = e.get("event_date")
         if eid and edate:
             try:
-                trace_events.append(SharedTraceEvent(
-                    event_id=eid,
-                    tlc="N/A",
-                    event_date=edate,
-                    event_type=e.get("type"),
-                ))
+                trace_events.append(
+                    SharedTraceEvent(
+                        event_id=eid,
+                        tlc="N/A",
+                        event_date=edate,
+                        event_type=e.get("type"),
+                    )
+                )
             except (ValueError, TypeError):
                 continue
 
@@ -49,13 +51,15 @@ def _validate_temporal_order(events: list) -> list:
     if not result.passed:
         for v in result.violations:
             details = v.details or {}
-            violations.append({
-                "violation_type": "TIME_ARROW",
-                "description": v.description,
-                "prev_event_id": v.event_ids[0] if v.event_ids else None,
-                "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
-                "prev_event_date": details.get("upstream_date"),
-                "curr_event_date": details.get("downstream_date"),
-            })
+            violations.append(
+                {
+                    "violation_type": "TIME_ARROW",
+                    "description": v.description,
+                    "prev_event_id": v.event_ids[0] if v.event_ids else None,
+                    "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
+                    "prev_event_date": details.get("upstream_date"),
+                    "curr_event_date": details.get("downstream_date"),
+                }
+            )
 
     return violations

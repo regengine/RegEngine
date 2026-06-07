@@ -26,15 +26,25 @@ from shared.tenant_models import (
     ProductType,
     TenantControl,
 )
-from .models import ControlResponse, ProductResponse, MappingResponse, LinkResponse, ControlsListResponse, ProductsListResponse
+
+from .models import (
+    ControlResponse,
+    ControlsListResponse,
+    LinkResponse,
+    MappingResponse,
+    ProductResponse,
+    ProductsListResponse,
+)
 
 # Try to import overlay utilities - may not be available in all environments
 try:
     # Use standardized path helper for cross-service import
     from shared.paths import add_to_path
+
     add_to_path(Path(__file__).resolve().parents[2] / "graph" / "app")
     from overlay_resolver import OverlayResolver
     from overlay_writer import OverlayWriter
+
     OVERLAY_AVAILABLE = True
 except ImportError:
     OVERLAY_AVAILABLE = False
@@ -176,7 +186,9 @@ async def list_controls(
     try:
         writer = OverlayWriter(tenant_id)
         controls, total = await writer.list_controls(
-            framework=framework, skip=pagination.skip, limit=pagination.limit,
+            framework=framework,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
         return {
             "controls": controls,
@@ -257,8 +269,7 @@ async def update_control(
 
         if not updated:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Control {control_id} not found or not owned by tenant"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Control {control_id} not found or not owned by tenant"
             )
 
         return {
@@ -267,7 +278,7 @@ async def update_control(
             "title": request.title,
             "description": request.description,
             "framework": request.framework,
-            "updated": True
+            "updated": True,
         }
     except HTTPException:
         raise
@@ -301,8 +312,7 @@ async def delete_control(
 
         if not deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Control {control_id} not found or not owned by tenant"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Control {control_id} not found or not owned by tenant"
             )
 
         logger.info("control_deleted", control_id=str(control_id), tenant_id=str(tenant_id))
@@ -386,7 +396,9 @@ async def list_products(
     try:
         writer = OverlayWriter(tenant_id)
         products, total = await writer.list_products(
-            product_type=product_type, skip=pagination.skip, limit=pagination.limit,
+            product_type=product_type,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
         return {
             "products": products,
@@ -495,8 +507,7 @@ async def delete_product(
 
         if not deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Product {product_id} not found or not owned by tenant"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Product {product_id} not found or not owned by tenant"
             )
 
         logger.info("product_deleted", product_id=str(product_id), tenant_id=str(tenant_id))
@@ -634,8 +645,7 @@ async def delete_mapping(
 
         if not deleted:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Mapping {mapping_id} not found or not owned by tenant"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Mapping {mapping_id} not found or not owned by tenant"
             )
 
         logger.info("mapping_deleted", mapping_id=str(mapping_id), tenant_id=str(tenant_id))

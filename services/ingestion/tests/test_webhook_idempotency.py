@@ -8,14 +8,12 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-
-from shared.idempotency import IdempotencyMiddleware, IDEMPOTENCY_KEY_PREFIX
-
+from shared.idempotency import IDEMPOTENCY_KEY_PREFIX, IdempotencyMiddleware
 
 # ---------------------------------------------------------------------------
 # Cache-key composition (#1237)
@@ -86,8 +84,8 @@ def test_resolve_tenant_returns_none_when_nothing_set():
 @pytest.mark.asyncio
 async def test_idempotency_dependency_strict_blocks_missing_header():
     """POST requests without Idempotency-Key get a 400 in strict mode."""
-    from shared.idempotency import IdempotencyDependency
     from fastapi import HTTPException
+    from shared.idempotency import IdempotencyDependency
 
     dep = IdempotencyDependency(strict=True)
     request = MagicMock(spec=Request)
@@ -164,9 +162,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
         self._redis_available = True
         return fake_redis
 
-    monkeypatch.setattr(
-        idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client
-    )
+    monkeypatch.setattr(idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client)
 
     from httpx import ASGITransport, AsyncClient
 
@@ -189,9 +185,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
         )
         assert resp_b.status_code == 200
         body_b = resp_b.json()
-        assert body_b["tenant"] == "tenant-b", (
-            "Tenant B received tenant A's cached response — cross-tenant bleed"
-        )
+        assert body_b["tenant"] == "tenant-b", "Tenant B received tenant A's cached response — cross-tenant bleed"
 
         # Tenant A retry: should hit its own cached response (not tenant B's).
         resp_a_retry = await client.post(

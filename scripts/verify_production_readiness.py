@@ -240,9 +240,7 @@ class ProductionReadinessVerifier:
             ]
 
             missing = [
-                f"{needle} ({description})"
-                for needle, description in required_components
-                if needle not in content
+                f"{needle} ({description})" for needle, description in required_components if needle not in content
             ]
 
             if not missing:

@@ -33,9 +33,7 @@ class TestGetService:
         assert exc.value.status_code == 503
         assert exc.value.detail == "Database unavailable"
 
-    def test_returns_service_instance_when_session_provided(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_service_instance_when_session_provided(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Lines 48-49: lazy-imports ExceptionQueueService and wraps the
         # session. We stub the shared module so the helper can succeed
         # without pulling in a real service dependency tree.

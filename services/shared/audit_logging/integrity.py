@@ -64,11 +64,7 @@ class AuditIntegrity:
 
         data = json.dumps(canonical, sort_keys=True, default=str)
 
-        return hmac.new(
-            self._secret_key,
-            data.encode(),
-            hashlib.sha256
-        ).hexdigest()
+        return hmac.new(self._secret_key, data.encode(), hashlib.sha256).hexdigest()
 
     def sign_event(self, event: AuditEvent) -> AuditEvent:
         """Sign an event with integrity hash.
@@ -182,31 +178,37 @@ def verify_audit_chain(
     for i, event in enumerate(events):
         # Check 1: integrity_hash must be present.
         if not event.integrity_hash:
-            tampered.append({
-                "event_id": event.event_id,
-                "index": i,
-                "issue": "missing_integrity_hash",
-            })
+            tampered.append(
+                {
+                    "event_id": event.event_id,
+                    "index": i,
+                    "issue": "missing_integrity_hash",
+                }
+            )
             previous_hash = None
             continue
 
         # Check 2: previous_hash must reference predecessor.
         if event.previous_hash != previous_hash:
-            tampered.append({
-                "event_id": event.event_id,
-                "index": i,
-                "issue": "chain_link_broken",
-                "expected_previous": previous_hash,
-                "actual_previous": event.previous_hash,
-            })
+            tampered.append(
+                {
+                    "event_id": event.event_id,
+                    "index": i,
+                    "issue": "chain_link_broken",
+                    "expected_previous": previous_hash,
+                    "actual_previous": event.previous_hash,
+                }
+            )
 
         # Check 3: recompute the HMAC and compare.
         if not integrity.verify_event(event):
-            tampered.append({
-                "event_id": event.event_id,
-                "index": i,
-                "issue": "hash_mismatch",
-            })
+            tampered.append(
+                {
+                    "event_id": event.event_id,
+                    "index": i,
+                    "issue": "hash_mismatch",
+                }
+            )
 
         previous_hash = event.integrity_hash
 

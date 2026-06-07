@@ -64,8 +64,8 @@ logger = logging.getLogger("canonical-event")
 # truncated copy is worse than no copy (audit would think it has
 # the original but doesn't).
 
-RAW_PAYLOAD_DEFAULT_MAX_BYTES = 256 * 1024          # 256 KiB
-RAW_PAYLOAD_HARD_CEILING_BYTES = 1024 * 1024        # 1 MiB
+RAW_PAYLOAD_DEFAULT_MAX_BYTES = 256 * 1024  # 256 KiB
+RAW_PAYLOAD_HARD_CEILING_BYTES = 1024 * 1024  # 1 MiB
 
 
 def _raw_payload_max_bytes() -> int:
@@ -86,19 +86,22 @@ def _raw_payload_max_bytes() -> int:
     except ValueError:
         logger.warning(
             "raw_payload_max_bytes_invalid env=%r; falling back to default %d",
-            raw, RAW_PAYLOAD_DEFAULT_MAX_BYTES,
+            raw,
+            RAW_PAYLOAD_DEFAULT_MAX_BYTES,
         )
         return RAW_PAYLOAD_DEFAULT_MAX_BYTES
     if value <= 0:
         logger.warning(
             "raw_payload_max_bytes_non_positive env=%r; falling back to default %d",
-            raw, RAW_PAYLOAD_DEFAULT_MAX_BYTES,
+            raw,
+            RAW_PAYLOAD_DEFAULT_MAX_BYTES,
         )
         return RAW_PAYLOAD_DEFAULT_MAX_BYTES
     if value > RAW_PAYLOAD_HARD_CEILING_BYTES:
         logger.warning(
             "raw_payload_max_bytes_clamped env=%d ceiling=%d",
-            value, RAW_PAYLOAD_HARD_CEILING_BYTES,
+            value,
+            RAW_PAYLOAD_HARD_CEILING_BYTES,
         )
         return RAW_PAYLOAD_HARD_CEILING_BYTES
     return value
@@ -127,8 +130,10 @@ class RawPayloadTooLargeError(ValueError):
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class CTEType(str, Enum):
     """Critical Tracking Event types per FSMA 204 §1.1310."""
+
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"
@@ -140,6 +145,7 @@ class CTEType(str, Enum):
 
 class EventStatus(str, Enum):
     """Lifecycle status of a canonical event."""
+
     ACTIVE = "active"
     SUPERSEDED = "superseded"
     REJECTED = "rejected"
@@ -148,6 +154,7 @@ class EventStatus(str, Enum):
 
 class IngestionSource(str, Enum):
     """Known ingestion source systems."""
+
     WEBHOOK_API = "webhook_api"
     CSV_UPLOAD = "csv_upload"
     XLSX_UPLOAD = "xlsx_upload"
@@ -162,6 +169,7 @@ class IngestionSource(str, Enum):
 
 class IngestionRunStatus(str, Enum):
     """Processing state of an ingestion batch."""
+
     PROCESSING = "processing"
     COMPLETED = "completed"
     PARTIAL = "partial"
@@ -170,6 +178,7 @@ class IngestionRunStatus(str, Enum):
 
 class EvidenceDocumentType(str, Enum):
     """Types of evidence documents."""
+
     BOL = "bol"
     INVOICE = "invoice"
     LAB_REPORT = "lab_report"
@@ -185,6 +194,7 @@ class EvidenceDocumentType(str, Enum):
 # Provenance Metadata
 # ---------------------------------------------------------------------------
 
+
 class ProvenanceMetadata(BaseModel):
     """
     Structured provenance for a canonical event.
@@ -192,11 +202,10 @@ class ProvenanceMetadata(BaseModel):
     Answers: Where did this record come from? How was it normalized?
     What confidence do we have in the mapping?
     """
+
     source_file_hash: Optional[str] = None
     source_file_name: Optional[str] = None
-    ingestion_timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     mapper_name: str = "unknown"
     mapper_version: str = "1.0.0"
     normalization_rules_applied: List[str] = Field(default_factory=list)
@@ -211,8 +220,10 @@ class ProvenanceMetadata(BaseModel):
 # Ingestion Run
 # ---------------------------------------------------------------------------
 
+
 class IngestionRun(BaseModel):
     """Batch provenance — one row per file upload, API call, or EPCIS document."""
+
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
 
@@ -267,9 +278,16 @@ KNOWN_VERSIONS: frozenset[int] = frozenset({1})
 # ``1`` on deserialization so old ``fsma.traceability_events`` rows
 # (DB column is ``TEXT NOT NULL DEFAULT '1.0.0'``) hydrate cleanly
 # without a data migration. New producers emit the integer form.
-_LEGACY_SCHEMA_VERSION_STRINGS: frozenset[str] = frozenset({
-    "1.0.0", "1.0", "1", "v1", "v1.0", "v1.0.0",
-})
+_LEGACY_SCHEMA_VERSION_STRINGS: frozenset[str] = frozenset(
+    {
+        "1.0.0",
+        "1.0",
+        "1",
+        "v1",
+        "v1.0",
+        "v1.0.0",
+    }
+)
 
 
 class TraceabilityEvent(BaseModel):
@@ -346,9 +364,7 @@ class TraceabilityEvent(BaseModel):
     normalized_payload: Dict[str, Any] = Field(default_factory=dict)
 
     # Provenance
-    provenance_metadata: ProvenanceMetadata = Field(
-        default_factory=lambda: ProvenanceMetadata()
-    )
+    provenance_metadata: ProvenanceMetadata = Field(default_factory=lambda: ProvenanceMetadata())
 
     # Quality
     confidence_score: float = Field(default=1.0, ge=0.0, le=1.0)
@@ -438,6 +454,7 @@ class TraceabilityEvent(BaseModel):
                 return dt
             except ValueError:
                 import dateutil.parser
+
                 dt = dateutil.parser.parse(v, fuzzy=False)
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
@@ -446,18 +463,20 @@ class TraceabilityEvent(BaseModel):
 
     def compute_sha256_hash(self) -> str:
         """Compute SHA-256 of canonical form for integrity verification."""
-        canonical = "|".join([
-            str(self.event_id),
-            self.event_type.value,
-            self.traceability_lot_code,
-            self.product_reference or "",
-            str(self.quantity),
-            self.unit_of_measure,
-            self.from_facility_reference or "",
-            self.to_facility_reference or "",
-            self.event_timestamp.isoformat(),
-            json.dumps(self.kdes, sort_keys=True, default=str),
-        ])
+        canonical = "|".join(
+            [
+                str(self.event_id),
+                self.event_type.value,
+                self.traceability_lot_code,
+                self.product_reference or "",
+                str(self.quantity),
+                self.unit_of_measure,
+                self.from_facility_reference or "",
+                self.to_facility_reference or "",
+                self.event_timestamp.isoformat(),
+                json.dumps(self.kdes, sort_keys=True, default=str),
+            ]
+        )
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def compute_idempotency_key(self) -> str:
@@ -638,15 +657,10 @@ def parse_traceability_event(payload: Any) -> "TraceabilityEvent":
     elif isinstance(payload, dict):
         raw = payload
     else:
-        raise TypeError(
-            f"parse_traceability_event expected bytes/str/dict, "
-            f"got {type(payload).__name__}"
-        )
+        raise TypeError(f"parse_traceability_event expected bytes/str/dict, got {type(payload).__name__}")
 
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"traceability_event_payload_not_object: got {type(raw).__name__}"
-        )
+        raise ValueError(f"traceability_event_payload_not_object: got {type(raw).__name__}")
 
     # Peek at the envelope version without triggering full validation.
     # We MUST normalise the peeked value through the same coercion the
@@ -657,10 +671,7 @@ def parse_traceability_event(payload: Any) -> "TraceabilityEvent":
     try:
         peeked = TraceabilityEvent._coerce_schema_version(raw_version)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"schema_version_unsupported:{raw_version!r} "
-            f"(coercion failed: {exc})"
-        ) from exc
+        raise ValueError(f"schema_version_unsupported:{raw_version!r} (coercion failed: {exc})") from exc
 
     if peeked not in KNOWN_VERSIONS:
         raise ValueError(f"schema_version_unsupported:{peeked}")
@@ -672,8 +683,10 @@ def parse_traceability_event(payload: Any) -> "TraceabilityEvent":
 # Evidence Attachment
 # ---------------------------------------------------------------------------
 
+
 class EvidenceAttachment(BaseModel):
     """Source document linked to a canonical event for evidentiary chain."""
+
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
     event_id: UUID
@@ -697,6 +710,7 @@ class EvidenceAttachment(BaseModel):
 # ---------------------------------------------------------------------------
 # Normalization Functions
 # ---------------------------------------------------------------------------
+
 
 def normalize_webhook_event(
     event: Any,
@@ -738,16 +752,9 @@ def normalize_webhook_event(
     if hasattr(event, "input_traceability_lot_codes") and event.input_traceability_lot_codes:
         kdes.setdefault("input_lot_codes", event.input_traceability_lot_codes)
     from_facility = (
-        event.location_gln
-        or kdes.get("ship_from_gln")
-        or kdes.get("ship_from_location")
-        or event.location_name
+        event.location_gln or kdes.get("ship_from_gln") or kdes.get("ship_from_location") or event.location_name
     )
-    to_facility = (
-        kdes.get("ship_to_gln")
-        or kdes.get("ship_to_location")
-        or kdes.get("receiving_location")
-    )
+    to_facility = kdes.get("ship_to_gln") or kdes.get("ship_to_location") or kdes.get("receiving_location")
 
     # For shipping/receiving, map directional references
     event_type_val = event.cte_type.value if hasattr(event.cte_type, "value") else event.cte_type
@@ -769,7 +776,6 @@ def normalize_webhook_event(
         source_system=IngestionSource.WEBHOOK_API,
         source_record_id=None,
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
-
         event_type=CTEType(event_type_val),
         event_timestamp=event.timestamp,
         product_reference=event.product_description,
@@ -777,13 +783,11 @@ def normalize_webhook_event(
         traceability_lot_code=event.traceability_lot_code,
         quantity=event.quantity,
         unit_of_measure=event.unit_of_measure,
-
         from_facility_reference=from_facility,
         to_facility_reference=to_facility,
         from_entity_reference=kdes.get("ship_from_entity") or kdes.get("harvester_business_name"),
         to_entity_reference=kdes.get("ship_to_entity") or kdes.get("immediate_previous_source"),
         transport_reference=kdes.get("carrier") or kdes.get("transport_reference"),
-
         kdes=kdes,
         raw_payload=raw_payload,
         provenance_metadata=provenance,
@@ -808,11 +812,7 @@ def _extract_epcis_quantity(
     """
     # Real EPCIS 2.0 shape — quantityList is nested under extension
     # (some shims put it at the top level, handle both).
-    quantity_list = (
-        epcis_data.get("extension", {}).get("quantityList")
-        or epcis_data.get("quantityList")
-        or []
-    )
+    quantity_list = epcis_data.get("extension", {}).get("quantityList") or epcis_data.get("quantityList") or []
     if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
         raw = quantity_list[0].get("quantity")
         uom = quantity_list[0].get("uom")
@@ -927,11 +927,9 @@ def normalize_epcis_event(
         source_system=IngestionSource.EPCIS_API,
         source_record_id=epcis_data.get("eventID"),
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
-
         event_type=cte_type,
         event_timestamp=epcis_data.get("eventTime", datetime.now(timezone.utc).isoformat()),
         event_timezone=epcis_data.get("eventTimeZoneOffset", "UTC"),
-
         product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
         lot_reference=tlc,
         traceability_lot_code=tlc if len(tlc) >= 3 else f"EPCIS-{tlc or 'UNKNOWN'}",
@@ -940,14 +938,15 @@ def normalize_epcis_event(
         # than silently producing a 1.0-quantity canonical row.
         quantity=_require_epcis_quantity(epcis_data),
         unit_of_measure=_extract_epcis_quantity(epcis_data)[1] or "each",
-
-        from_facility_reference=epcis_data.get("readPoint", {}).get("id") if isinstance(epcis_data.get("readPoint"), dict) else epcis_data.get("readPoint"),
-        to_facility_reference=epcis_data.get("bizLocation", {}).get("id") if isinstance(epcis_data.get("bizLocation"), dict) else epcis_data.get("bizLocation"),
-
+        from_facility_reference=epcis_data.get("readPoint", {}).get("id")
+        if isinstance(epcis_data.get("readPoint"), dict)
+        else epcis_data.get("readPoint"),
+        to_facility_reference=epcis_data.get("bizLocation", {}).get("id")
+        if isinstance(epcis_data.get("bizLocation"), dict)
+        else epcis_data.get("bizLocation"),
         kdes=kdes,
         raw_payload=epcis_data,
         provenance_metadata=provenance,
-
         epcis_event_type=epcis_data.get("type", epcis_data.get("eventType")),
         epcis_action=epcis_data.get("action"),
         epcis_biz_step=biz_step,
@@ -984,14 +983,20 @@ def normalize_csv_row(
     # Required fields with fallbacks
     event_type_raw = str(mapped.get("event_type", "receiving")).lower().strip()
     cte_type_map = {
-        "harvest": "harvesting", "harvesting": "harvesting",
-        "cool": "cooling", "cooling": "cooling",
-        "pack": "initial_packing", "initial_packing": "initial_packing",
+        "harvest": "harvesting",
+        "harvesting": "harvesting",
+        "cool": "cooling",
+        "cooling": "cooling",
+        "pack": "initial_packing",
+        "initial_packing": "initial_packing",
         "initial packing": "initial_packing",
         "first_land_based_receiving": "first_land_based_receiving",
-        "ship": "shipping", "shipping": "shipping",
-        "receive": "receiving", "receiving": "receiving",
-        "transform": "transformation", "transformation": "transformation",
+        "ship": "shipping",
+        "shipping": "shipping",
+        "receive": "receiving",
+        "receiving": "receiving",
+        "transform": "transformation",
+        "transformation": "transformation",
     }
     event_type = cte_type_map.get(event_type_raw, "receiving")
 
@@ -1017,22 +1022,20 @@ def normalize_csv_row(
         source_system=IngestionSource.CSV_UPLOAD,
         source_record_id=str(row_number) if row_number is not None else None,
         ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
-
         event_type=CTEType(event_type),
         event_timestamp=mapped.get("event_timestamp", mapped.get("timestamp", datetime.now(timezone.utc).isoformat())),
-
         product_reference=mapped.get("product_description", mapped.get("product_reference", "")),
         lot_reference=mapped.get("lot_reference", mapped.get("traceability_lot_code", "")),
         traceability_lot_code=mapped.get("traceability_lot_code", mapped.get("tlc", "UNKNOWN")),
         quantity=float(mapped.get("quantity", 1)),
         unit_of_measure=str(mapped.get("unit_of_measure", "each")).lower(),
-
-        from_facility_reference=mapped.get("from_facility_reference", mapped.get("ship_from_location", mapped.get("location_gln"))),
+        from_facility_reference=mapped.get(
+            "from_facility_reference", mapped.get("ship_from_location", mapped.get("location_gln"))
+        ),
         to_facility_reference=mapped.get("to_facility_reference", mapped.get("ship_to_location")),
         from_entity_reference=mapped.get("from_entity_reference"),
         to_entity_reference=mapped.get("to_entity_reference"),
         transport_reference=mapped.get("transport_reference", mapped.get("carrier")),
-
         kdes=kdes,
         raw_payload=row,
         provenance_metadata=provenance,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import httpx
-
 from app.models import EnforcementItem, EnforcementSeverity, SourceType
 from app.scrapers.fda_recalls import FDARecallsScraper
 from app.scrapers.fda_warning_letters import FDAWarningLettersScraper

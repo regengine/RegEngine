@@ -9,30 +9,16 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     """Environment-driven configuration values."""
 
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
-    processed_bucket: str = Field(
-        default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"
-    )
-    kafka_bootstrap: str = Field(
-        default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS"
-    )
+    processed_bucket: str = Field(default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET")
+    kafka_bootstrap: str = Field(default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
     topic_in: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
     topic_out: str = Field(default="nlp.extracted", alias="KAFKA_TOPIC_NLP")
     # Consumer group isolation (#1008) — unique per service, env-configurable.
-    consumer_group_id: str = Field(
-        default="nlp-service", alias="KAFKA_CONSUMER_GROUP_ID"
-    )
+    consumer_group_id: str = Field(default="nlp-service", alias="KAFKA_CONSUMER_GROUP_ID")
 
     # Extraction Thresholds (SR 11-7 validation)
-    extraction_confidence_high: float = Field(
-        default=0.95,
-        ge=0.0, le=1.0,
-        alias="EXTRACTION_CONFIDENCE_HIGH"
-    )
-    extraction_confidence_medium: float = Field(
-        default=0.85,
-        ge=0.0, le=1.0,
-        alias="EXTRACTION_CONFIDENCE_MEDIUM"
-    )
+    extraction_confidence_high: float = Field(default=0.95, ge=0.0, le=1.0, alias="EXTRACTION_CONFIDENCE_HIGH")
+    extraction_confidence_medium: float = Field(default=0.85, ge=0.0, le=1.0, alias="EXTRACTION_CONFIDENCE_MEDIUM")
     graph_service_url: str = Field(
         default="http://graph-service:8200",
         alias="GRAPH_SERVICE_URL",
@@ -61,9 +47,7 @@ try:
 except Exception as exc:
     import logging as _logging
 
-    _logging.getLogger(__name__).error(
-        "Failed to load NLP settings: %s. Falling back to defaults.", exc
-    )
+    _logging.getLogger(__name__).error("Failed to load NLP settings: %s. Falling back to defaults.", exc)
     # Provide a Settings instance with defaults so the module remains importable
     # in test environments with incomplete env vars.
     settings = Settings.model_construct(

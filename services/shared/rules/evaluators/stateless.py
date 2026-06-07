@@ -9,8 +9,8 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
-from shared.rules.utils import get_nested_value
 from shared.rules.uom import resolve_temperature_reading
+from shared.rules.utils import get_nested_value
 
 
 def evaluate_field_presence(
@@ -22,16 +22,16 @@ def evaluate_field_presence(
     field_path = logic.get("field", "")
     value = get_nested_value(event_data, field_path)
 
-    is_present = value is not None and (
-        not isinstance(value, str) or value.strip() != ""
-    )
+    is_present = value is not None and (not isinstance(value, str) or value.strip() != "")
 
-    evidence = [{
-        "field": field_path,
-        "value": str(value)[:200] if value is not None else None,
-        "expected": "not_empty",
-        "actual_present": is_present,
-    }]
+    evidence = [
+        {
+            "field": field_path,
+            "value": str(value)[:200] if value is not None else None,
+            "expected": "not_empty",
+            "actual_present": is_present,
+        }
+    ]
 
     if is_present:
         return RuleEvaluationResult(
@@ -76,11 +76,13 @@ def evaluate_field_format(
     pattern = logic.get("params", {}).get("pattern", ".*")
     value = get_nested_value(event_data, field_path)
 
-    evidence = [{
-        "field": field_path,
-        "value": str(value)[:200] if value else None,
-        "expected_pattern": pattern,
-    }]
+    evidence = [
+        {
+            "field": field_path,
+            "value": str(value)[:200] if value else None,
+            "expected_pattern": pattern,
+        }
+    ]
 
     if value is None or (isinstance(value, str) and value.strip() == ""):
         return RuleEvaluationResult(
@@ -106,15 +108,21 @@ def evaluate_field_format(
 
     if matches:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", evidence_fields_inspected=evidence,
-            citation_reference=rule.citation_reference, category=rule.category,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
         )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
         result="fail",
         why_failed=f"{field_path.split('.')[-1]} value '{str(value)[:50]}' does not match required format ({rule.citation_reference or 'FSMA 204'})",
         evidence_fields_inspected=evidence,
@@ -137,20 +145,26 @@ def evaluate_multi_field_presence(
     for fp in fields:
         value = get_nested_value(event_data, fp)
         is_present = value is not None and (not isinstance(value, str) or value.strip() != "")
-        evidence.append({
-            "field": fp,
-            "value": str(value)[:200] if value is not None else None,
-            "present": is_present,
-        })
+        evidence.append(
+            {
+                "field": fp,
+                "value": str(value)[:200] if value is not None else None,
+                "present": is_present,
+            }
+        )
         if is_present:
             any_present = True
 
     if any_present:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", evidence_fields_inspected=evidence,
-            citation_reference=rule.citation_reference, category=rule.category,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
         )
 
     field_names = ", ".join(f.split(".")[-1].replace("_", " ") for f in fields)
@@ -162,9 +176,12 @@ def evaluate_multi_field_presence(
     )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
-        result="fail", why_failed=why_failed,
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="fail",
+        why_failed=why_failed,
         evidence_fields_inspected=evidence,
         citation_reference=rule.citation_reference,
         remediation_suggestion=rule.remediation_suggestion,
@@ -212,11 +229,7 @@ def _resolve_numeric_value(
     if source == "temperature":
         # Pull from ``kdes`` by default — that is where FSMA 204 KDEs live.
         root_path = params.get("root", "kdes")
-        root = (
-            get_nested_value(event_data, root_path)
-            if root_path
-            else event_data
-        )
+        root = get_nested_value(event_data, root_path) if root_path else event_data
         if not isinstance(root, dict):
             return None, root_path, None
         resolved = resolve_temperature_reading(root)
@@ -264,20 +277,24 @@ def evaluate_numeric_range(
 
     value, evidence_field, note = _resolve_numeric_value(event_data, logic)
 
-    evidence = [{
-        "field": evidence_field,
-        "value": value,
-        "expected_min": min_v,
-        "expected_max": max_v,
-        "unit": unit_label,
-        "note": note,
-    }]
+    evidence = [
+        {
+            "field": evidence_field,
+            "value": value,
+            "expected_min": min_v,
+            "expected_max": max_v,
+            "unit": unit_label,
+            "note": note,
+        }
+    ]
 
     if value is None:
         if params.get("missing_result") == "skip":
             return RuleEvaluationResult(
-                rule_id=rule.rule_id, rule_version=rule.rule_version,
-                rule_title=rule.title, severity=rule.severity,
+                rule_id=rule.rule_id,
+                rule_version=rule.rule_version,
+                rule_title=rule.title,
+                severity=rule.severity,
                 result="skip",
                 evidence_fields_inspected=evidence,
                 citation_reference=rule.citation_reference,
@@ -286,22 +303,27 @@ def evaluate_numeric_range(
         # Missing / non-numeric ⇒ FAIL. Otherwise a blank field fail-opens
         # the cold-chain audit (see issue #1364).
         field_label = (evidence_field or "value").split(".")[-1].replace("_", " ")
-        why_failed = rule.failure_reason_template.format(
-            field_name=field_label,
-            field_path=evidence_field or "",
-            citation=rule.citation_reference or "FSMA 204",
-            event_type=event_data.get("event_type", "unknown"),
-            min=min_v,
-            max=max_v,
-            value="missing",
-            unit=unit_label,
-        ) if rule.failure_reason_template else (
-            f"{field_label} missing — required for {rule.citation_reference or 'FSMA 204'} numeric-range check"
+        why_failed = (
+            rule.failure_reason_template.format(
+                field_name=field_label,
+                field_path=evidence_field or "",
+                citation=rule.citation_reference or "FSMA 204",
+                event_type=event_data.get("event_type", "unknown"),
+                min=min_v,
+                max=max_v,
+                value="missing",
+                unit=unit_label,
+            )
+            if rule.failure_reason_template
+            else (f"{field_label} missing — required for {rule.citation_reference or 'FSMA 204'} numeric-range check")
         )
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="fail", why_failed=why_failed,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="fail",
+            why_failed=why_failed,
             evidence_fields_inspected=evidence,
             citation_reference=rule.citation_reference,
             remediation_suggestion=rule.remediation_suggestion,
@@ -313,9 +335,12 @@ def evaluate_numeric_range(
 
     if not below_min and not above_max:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", evidence_fields_inspected=evidence,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            evidence_fields_inspected=evidence,
             citation_reference=rule.citation_reference,
             category=rule.category,
         )
@@ -329,24 +354,28 @@ def evaluate_numeric_range(
     else:
         direction = f"above maximum {max_v} {unit_label}"
 
-    why_failed = rule.failure_reason_template.format(
-        field_name=field_label,
-        field_path=evidence_field or "",
-        citation=rule.citation_reference or "FSMA 204",
-        event_type=event_data.get("event_type", "unknown"),
-        min=min_v,
-        max=max_v,
-        value=f"{value:.2f}",
-        unit=unit_label,
-    ) if rule.failure_reason_template else (
-        f"{field_label} = {value:.2f} {unit_label} is {direction} "
-        f"({rule.citation_reference or 'FSMA 204'})"
+    why_failed = (
+        rule.failure_reason_template.format(
+            field_name=field_label,
+            field_path=evidence_field or "",
+            citation=rule.citation_reference or "FSMA 204",
+            event_type=event_data.get("event_type", "unknown"),
+            min=min_v,
+            max=max_v,
+            value=f"{value:.2f}",
+            unit=unit_label,
+        )
+        if rule.failure_reason_template
+        else (f"{field_label} = {value:.2f} {unit_label} is {direction} ({rule.citation_reference or 'FSMA 204'})")
     )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
-        result="fail", why_failed=why_failed,
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="fail",
+        why_failed=why_failed,
         evidence_fields_inspected=evidence,
         citation_reference=rule.citation_reference,
         remediation_suggestion=rule.remediation_suggestion,

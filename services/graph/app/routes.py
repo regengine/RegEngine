@@ -1,21 +1,21 @@
-from typing import Optional, Any
+import sys
+import uuid
+from pathlib import Path
+from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, Depends, Request
-from shared.metrics_auth import require_metrics_key
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
-import uuid
-import sys
-from pathlib import Path
+from shared.auth import require_api_key
+from shared.metrics_auth import require_metrics_key
 
 # Add shared utilities (portable path resolution)
 from shared.middleware import get_current_tenant_id
-from shared.auth import require_api_key
+from shared.rate_limit import limiter
 
 from .neo4j_utils import Neo4jClient
-from shared.rate_limit import limiter
 
 # Health/metrics router at root level (operational endpoints)
 router = APIRouter()
@@ -24,7 +24,7 @@ router = APIRouter()
 v1_router = APIRouter(tags=["v1"])
 
 from .routers import labels, lineage_traversal, regulations
-from .routers.fsma import trace_router, science_router, recall_router, metrics_router, compliance_router
+from .routers.fsma import compliance_router, metrics_router, recall_router, science_router, trace_router
 
 logger = structlog.get_logger("graph-api")
 
@@ -32,6 +32,7 @@ logger = structlog.get_logger("graph-api")
 # ---------------------------------------------------------------------------
 # Response Models
 # ---------------------------------------------------------------------------
+
 
 class ProvisionItem(BaseModel):
     hash: str
@@ -75,9 +76,7 @@ async def health():
         return {"status": "healthy", "neo4j": "available"}
     except Exception as exc:
         logger.error("graph_health_neo4j_unavailable", error=str(exc))
-        raise HTTPException(
-            status_code=503, detail="Neo4j unavailable or unreachable"
-        ) from exc
+        raise HTTPException(status_code=503, detail="Neo4j unavailable or unreachable") from exc
     finally:
         if client is not None:
             await client.close()
@@ -133,9 +132,7 @@ async def provisions_by_request_id(
                 "WHERE p.provenance.request_id = $request_id AND p.tenant_id = $tenant_id "
                 "RETURN count(p) AS total"
             )
-            count_result = await session.run(
-                count_query, request_id=request_id, tenant_id=str(tenant_id)
-            )
+            count_result = await session.run(count_query, request_id=request_id, tenant_id=str(tenant_id))
             count_record = await count_result.single()
             total_count = count_record["total"] if count_record else 0
 
@@ -183,9 +180,7 @@ async def provisions_by_request_id(
             "items": results,
         }
     except Exception as exc:  # pragma: no cover - infra dependent
-        logger.exception(
-            "provisions_by_request_error", request_id=request_id, error=str(exc)
-        )
+        logger.exception("provisions_by_request_error", request_id=request_id, error=str(exc))
         raise HTTPException(
             status_code=500,
             detail="Graph database error while fetching provisions.",

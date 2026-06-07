@@ -9,6 +9,7 @@ Revision ID: b6c7d8e9f0a1
 Revises: 85cebda8e7f7
 Create Date: 2026-04-23
 """
+
 from typing import Sequence, Union
 
 from alembic import op

@@ -23,7 +23,6 @@ from app.supplier_graph_sync import (
     SupplierGraphSync,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake Neo4j driver/session plumbing — captures the (query, params) passed to
 # session.run(...) so we can assert on the Cypher shape and its parameters
@@ -95,10 +94,7 @@ def _assert_all_patterns_tenant_scoped(query: str, label: str) -> None:
     patterns = _patterns_for_label(query, label)
     assert patterns, f"No MERGE/MATCH patterns found for label {label!r}"
     for prop_block in patterns:
-        assert "tenant_id" in prop_block, (
-            f"{label} MERGE/MATCH missing tenant_id in pattern properties: "
-            f"{prop_block!r}"
-        )
+        assert "tenant_id" in prop_block, f"{label} MERGE/MATCH missing tenant_id in pattern properties: {prop_block!r}"
 
 
 # -----
@@ -158,9 +154,7 @@ def test_record_invite_accepted_passes_tenant_id_to_driver():
 
 
 def test_facility_ftl_scoping_query_keys_supplier_facility_on_tenant():
-    _assert_all_patterns_tenant_scoped(
-        FACILITY_FTL_SCOPING_QUERY, "SupplierFacility"
-    )
+    _assert_all_patterns_tenant_scoped(FACILITY_FTL_SCOPING_QUERY, "SupplierFacility")
 
 
 def test_cte_event_query_keys_supplier_facility_on_tenant():
@@ -168,9 +162,7 @@ def test_cte_event_query_keys_supplier_facility_on_tenant():
 
 
 def test_facility_required_ctes_query_keys_supplier_facility_on_tenant():
-    _assert_all_patterns_tenant_scoped(
-        FACILITY_REQUIRED_CTES_QUERY, "SupplierFacility"
-    )
+    _assert_all_patterns_tenant_scoped(FACILITY_REQUIRED_CTES_QUERY, "SupplierFacility")
 
 
 def test_get_required_ctes_for_facility_passes_tenant_id_to_driver():
@@ -187,9 +179,9 @@ def test_get_required_ctes_for_facility_passes_tenant_id_to_driver():
     query, params = driver.calls[0]
     assert params["tenant_id"] == "tenant-A"
     assert params["facility_id"] == "facility-1"
-    assert (
-        "{facility_id: $facility_id, tenant_id: $tenant_id}" in query
-    ), "Neo4j MATCH pattern must include tenant_id for defense-in-depth."
+    assert "{facility_id: $facility_id, tenant_id: $tenant_id}" in query, (
+        "Neo4j MATCH pattern must include tenant_id for defense-in-depth."
+    )
 
 
 # -----
@@ -259,12 +251,10 @@ def test_every_query_with_satisfies_edge_has_tenant_scoped_cte():
         # Either (a) the cte node pattern carries tenant_id, or
         # (b) a WHERE clause filters cte.tenant_id.
         cte_has_tenant = bool(
-            re.search(r"(cte|CTEEvent)[^{]*\{[^}]*tenant_id", query)
-            or re.search(r"cte\.tenant_id", query)
+            re.search(r"(cte|CTEEvent)[^{]*\{[^}]*tenant_id", query) or re.search(r"cte\.tenant_id", query)
         )
         assert cte_has_tenant, (
-            f"{attr_name} contains SATISFIES but lacks a tenant_id predicate "
-            f"on the cte side. See issue #1395."
+            f"{attr_name} contains SATISFIES but lacks a tenant_id predicate on the cte side. See issue #1395."
         )
 
 
@@ -290,6 +280,5 @@ def test_all_tenant_owned_merges_are_tenant_scoped():
                 patterns = _patterns_for_label(query, label)
                 for prop_block in patterns:
                     assert "tenant_id" in prop_block, (
-                        f"{query_name}: {label} MERGE/MATCH pattern missing "
-                        f"tenant_id: {prop_block!r}"
+                        f"{query_name}: {label} MERGE/MATCH pattern missing tenant_id: {prop_block!r}"
                     )

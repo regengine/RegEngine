@@ -34,8 +34,8 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.recall_simulations as rs_module
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.recall_simulations import (
     _build_csv_export,
     _csv_rows_for_view,
@@ -45,7 +45,6 @@ from app.recall_simulations import (
     router as recall_simulations_router,
 )
 from fastapi import HTTPException
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -107,16 +106,17 @@ class _FakeDB:
 
 
 class TestQueryTenantRecallMetrics:
-    def test_returns_aggregated_metrics_when_ctes_exist(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_db = _FakeDB([
-            5,   # cte_count
-            2,   # supplier_count
-            3,   # tlc_count
-            1,   # has_export count (> 0 → True)
-        ])
+    def test_returns_aggregated_metrics_when_ctes_exist(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake_db = _FakeDB(
+            [
+                5,  # cte_count
+                2,  # supplier_count
+                3,  # tlc_count
+                1,  # has_export count (> 0 → True)
+            ]
+        )
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_db)
 
         result = _query_tenant_recall_metrics("tenant-A")
@@ -128,32 +128,28 @@ class TestQueryTenantRecallMetrics:
         }
         assert fake_db.closed is True
 
-    def test_has_export_false_when_zero_rows(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_has_export_false_when_zero_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         fake_db = _FakeDB([5, 2, 3, 0])
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_db)
 
         result = _query_tenant_recall_metrics("tenant-A")
         assert result is not None
         assert result["has_export"] is False
 
-    def test_returns_none_when_no_ctes(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_none_when_no_ctes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # cte_count = 0 triggers the early-return branch (line 38-39).
         fake_db = _FakeDB([0])
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_db)
 
         assert _query_tenant_recall_metrics("tenant-B") is None
         # Connection still closed (finally clause).
         assert fake_db.closed is True
 
-    def test_returns_none_on_scalar_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_none_on_scalar_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``.scalar() or 0`` fallback: if the DB returns None, we treat
         # that as 0 and take the early-return path.
         class _NoneScalar:
@@ -164,17 +160,17 @@ class TestQueryTenantRecallMetrics:
                 pass
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: _NoneScalar())
         assert _query_tenant_recall_metrics("tenant-C") is None
 
-    def test_swallows_exceptions_and_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_swallows_exceptions_and_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Any exception during the outer ``try`` block returns None.
         def _raising_session_local():
             raise RuntimeError("db down")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _raising_session_local)
         assert _query_tenant_recall_metrics("tenant-D") is None
 
@@ -185,13 +181,12 @@ class TestQueryTenantRecallMetrics:
 
 
 class TestGetSimulationOr404DBFallback:
-    def test_falls_back_to_db_and_repopulates_cache(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_falls_back_to_db_and_repopulates_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # In-memory store is empty; get_tenant_data returns the simulation.
         stored = {"id": "sim-fallback", "scenario_id": "x", "metrics": {}}
         monkeypatch.setattr(
-            rs_module, "get_tenant_data",
+            rs_module,
+            "get_tenant_data",
             lambda tid, ns, key: stored if key == "sim-fallback" else None,
         )
 
@@ -200,9 +195,7 @@ class TestGetSimulationOr404DBFallback:
         # Cache was re-populated under the per-tenant key.
         assert _simulation_store[("tenant-A", "sim-fallback")] is stored
 
-    def test_rejects_lookup_without_tenant_context(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_rejects_lookup_without_tenant_context(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """F-7: no `default` magic-string fallback. Missing tenant must error."""
         captured = {}
 
@@ -217,10 +210,9 @@ class TestGetSimulationOr404DBFallback:
         # And the DB was never queried with a "default" namespace.
         assert "tid" not in captured
 
-    def test_db_error_does_not_raise(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_db_error_does_not_raise(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """If the DB lookup raises, the function still falls through to 404."""
+
         def _raising(*_args, **_kw):
             raise RuntimeError("boom")
 
@@ -230,9 +222,7 @@ class TestGetSimulationOr404DBFallback:
         assert excinfo.value.status_code == 404
         assert "'missing'" in excinfo.value.detail
 
-    def test_db_returns_none_raises_404(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_db_returns_none_raises_404(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(rs_module, "get_tenant_data", lambda *a, **kw: None)
         with pytest.raises(HTTPException) as excinfo:
             _get_simulation_or_404("nowhere", tenant_id="tenant-A")
@@ -256,29 +246,35 @@ class TestCSVRowsImpactGraph:
         }
 
     def test_impact_graph_rows_include_lot_codes_joined(self) -> None:
-        sim = self._sim([
+        sim = self._sim(
+            [
+                {
+                    "source": "loc-1",
+                    "target": "loc-2",
+                    "affected": True,
+                    "lot_codes": ["LOT-A", "LOT-B"],
+                },
+            ]
+        )
+        rows = _csv_rows_for_view(sim, view="impact_graph")
+        assert rows == [
             {
+                "simulation_id": "sim-1",
+                "scenario_id": "test",
+                "scenario_name": "Test Scenario",
                 "source": "loc-1",
                 "target": "loc-2",
                 "affected": True,
-                "lot_codes": ["LOT-A", "LOT-B"],
-            },
-        ])
-        rows = _csv_rows_for_view(sim, view="impact_graph")
-        assert rows == [{
-            "simulation_id": "sim-1",
-            "scenario_id": "test",
-            "scenario_name": "Test Scenario",
-            "source": "loc-1",
-            "target": "loc-2",
-            "affected": True,
-            "lot_codes": "LOT-A,LOT-B",
-        }]
+                "lot_codes": "LOT-A,LOT-B",
+            }
+        ]
 
     def test_impact_graph_affected_coerced_to_bool(self) -> None:
-        sim = self._sim([
-            {"source": "s", "target": "t", "affected": 0, "lot_codes": []},
-        ])
+        sim = self._sim(
+            [
+                {"source": "s", "target": "t", "affected": 0, "lot_codes": []},
+            ]
+        )
         rows = _csv_rows_for_view(sim, view="impact_graph")
         assert rows[0]["affected"] is False
         assert rows[0]["lot_codes"] == ""
@@ -310,19 +306,16 @@ class TestBuildCSVExportEmpty:
 class TestRunSimulationTenantBranch:
     ENDPOINT = "/api/v1/simulations/run"
 
-    def _setup_tenant_metrics(
-        self, monkeypatch: pytest.MonkeyPatch, tenant_data: dict | None
-    ) -> None:
+    def _setup_tenant_metrics(self, monkeypatch: pytest.MonkeyPatch, tenant_data: dict | None) -> None:
         monkeypatch.setattr(
-            rs_module, "_query_tenant_recall_metrics",
+            rs_module,
+            "_query_tenant_recall_metrics",
             lambda tid: tenant_data,
         )
         # Stub out set_tenant_data so DB writes don't touch real infra.
         monkeypatch.setattr(rs_module, "set_tenant_data", lambda *a, **kw: None)
 
-    def test_tenant_branch_marks_non_illustrative_and_scales_metrics(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tenant_branch_marks_non_illustrative_and_scales_metrics(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._setup_tenant_metrics(
             monkeypatch,
             {
@@ -380,9 +373,7 @@ class TestRunSimulationTenantBranch:
         # has_export=False → no adjustment, original 42 preserved.
         assert body["metrics"]["with_regengine"]["response_time_minutes"] == 42
 
-    def test_tenant_branch_skipped_when_cte_count_is_zero(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tenant_branch_skipped_when_cte_count_is_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Real tenant_data returned with cte_count=0 falls through to the
         # is_illustrative=True default (the ``> 0`` guard).
         self._setup_tenant_metrics(
@@ -405,9 +396,7 @@ class TestRunSimulationTenantBranch:
         assert body["data_source"] == "demo"
         assert body["tenant_metrics"] is None
 
-    def test_tenant_branch_skipped_when_metrics_query_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tenant_branch_skipped_when_metrics_query_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``_query_tenant_recall_metrics`` returning None → demo path.
         self._setup_tenant_metrics(monkeypatch, None)
         resp = _client().post(
@@ -420,12 +409,8 @@ class TestRunSimulationTenantBranch:
 
 
 class TestPersistTenantDataErrorSwallowed:
-    def test_set_tenant_data_exception_does_not_fail_request(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            rs_module, "_query_tenant_recall_metrics", lambda tid: None
-        )
+    def test_set_tenant_data_exception_does_not_fail_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(rs_module, "_query_tenant_recall_metrics", lambda tid: None)
 
         def _raising(*_args, **_kwargs):
             raise RuntimeError("write boom")
@@ -448,14 +433,10 @@ class TestPersistTenantDataErrorSwallowed:
 
 
 class TestGetSimulationEndpoint:
-    def test_returns_simulation_from_store(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_simulation_from_store(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Seed the in-memory store directly so the GET path exercises the
         # cache-hit branch (no DB fallback).
-        monkeypatch.setattr(
-            rs_module, "_query_tenant_recall_metrics", lambda tid: None
-        )
+        monkeypatch.setattr(rs_module, "_query_tenant_recall_metrics", lambda tid: None)
         monkeypatch.setattr(rs_module, "set_tenant_data", lambda *a, **kw: None)
         client = _client(tenant_id="tenant-A")
         # Run to seed.
@@ -473,13 +454,9 @@ class TestGetSimulationEndpoint:
         assert body["id"] == sim_id
         assert body["scenario_id"] == "cheese-listeria"
 
-    def test_404_when_simulation_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_404_when_simulation_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # DB fallback also returns None so the 404 path fires.
         monkeypatch.setattr(rs_module, "get_tenant_data", lambda *a, **kw: None)
-        resp = _client(tenant_id="tenant-A").get(
-            "/api/v1/simulations/does-not-exist"
-        )
+        resp = _client(tenant_id="tenant-A").get("/api/v1/simulations/does-not-exist")
         assert resp.status_code == 404
         assert "'does-not-exist'" in resp.json()["detail"]

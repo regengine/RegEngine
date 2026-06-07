@@ -35,9 +35,7 @@ from uuid import uuid4
 logger = logging.getLogger("edi-ingestion")
 
 
-_EDI_REJECTION_CAP_PER_TENANT = int(
-    os.getenv("EDI_REJECTION_CAP_PER_TENANT", "1000")
-)
+_EDI_REJECTION_CAP_PER_TENANT = int(os.getenv("EDI_REJECTION_CAP_PER_TENANT", "1000"))
 
 # Tenant-scoped in-memory rejection store. Outer dict is keyed by
 # ``tenant_id``; inner OrderedDict is FIFO-evicted once full.
@@ -90,8 +88,7 @@ def record_edi_rejection(
 
     # Always log — the in-memory store is not durable on its own.
     logger.warning(
-        "edi_fsma_rejection_recorded rejection_id=%s tenant=%s set=%s "
-        "tlc=%s partner=%s errors=%d",
+        "edi_fsma_rejection_recorded rejection_id=%s tenant=%s set=%s tlc=%s partner=%s errors=%d",
         rejection_id,
         tenant_id,
         transaction_set,

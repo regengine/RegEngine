@@ -10,9 +10,8 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import Header, HTTPException, status, Depends
-
-from shared.auth import require_api_key, APIKey
+from fastapi import Depends, Header, HTTPException, status
+from shared.auth import APIKey, require_api_key
 
 logger = structlog.get_logger("tenant_middleware")
 
@@ -22,14 +21,14 @@ async def validate_tenant_header(
     api_key: APIKey = Depends(require_api_key),
 ) -> UUID:
     """Validate that X-Tenant-ID header matches API key's tenant.
-    
+
     This middleware provides defense-in-depth:
     1. API key already has tenant_id embedded
     2. This validates the explicit header matches
-    
+
     Returns:
         The validated tenant UUID
-        
+
     Raises:
         HTTPException: If header is missing, invalid, or doesn't match API key
     """
@@ -43,7 +42,7 @@ async def validate_tenant_header(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="X-Tenant-ID header is required",
         )
-    
+
     # Validate UUID format
     try:
         header_tenant_id = UUID(x_tenant_id)
@@ -57,7 +56,7 @@ async def validate_tenant_header(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="X-Tenant-ID must be a valid UUID",
         )
-    
+
     # Validate API key has tenant
     if not api_key.tenant_id:
         logger.warning(
@@ -68,9 +67,9 @@ async def validate_tenant_header(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key is not associated with a tenant",
         )
-    
+
     key_tenant_id = UUID(api_key.tenant_id)
-    
+
     # Validate header matches API key tenant
     if header_tenant_id != key_tenant_id:
         logger.warning(
@@ -83,13 +82,13 @@ async def validate_tenant_header(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="X-Tenant-ID does not match API key tenant",
         )
-    
+
     logger.debug(
         "tenant_validated",
         tenant_id=str(header_tenant_id),
         key_id=api_key.key_id,
     )
-    
+
     return header_tenant_id
 
 
@@ -99,7 +98,7 @@ async def get_tenant_from_key(
     api_key: APIKey = Depends(require_api_key),
 ) -> UUID:
     """Get tenant ID directly from API key without header validation.
-    
+
     Use this for internal/admin endpoints where header is optional.
     """
     if not api_key.tenant_id:

@@ -25,6 +25,7 @@ If you are adding a new auth route: put it in a new ``auth/<name>_router.py``
 module and add an ``include_router`` call below — do NOT add another route
 body to this file.
 """
+
 from __future__ import annotations
 
 import asyncio  # noqa: F401  (re-exported; wave-2 tests patch ar.asyncio.sleep)
@@ -32,6 +33,10 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends
+from shared.funnel_events import emit_funnel_event  # noqa: F401  (re-exported for tests)
+from shared.pii import mask_email  # noqa: F401
+from shared.rate_limit import limiter  # noqa: F401
+from shared.supabase_client import get_supabase  # noqa: F401  (re-exported for tests)
 
 from .audit import AuditLogger  # noqa: F401  (re-exported for tests)
 from .auth_utils import (  # noqa: F401  (re-exported for tests/back-compat)
@@ -45,14 +50,6 @@ from .auth_utils import (  # noqa: F401  (re-exported for tests/back-compat)
     verify_password,
 )
 from .dependencies import PermissionChecker, get_current_user, get_session_store  # noqa: F401
-from .password_policy import validate_password, PasswordPolicyError  # noqa: F401
-from .session_store import RedisSessionStore, SessionData  # noqa: F401
-from .sqlalchemy_models import (  # noqa: F401
-    MembershipModel,
-    RoleModel,
-    TenantModel,
-    UserModel,
-)
 from .models import (  # noqa: F401
     ChangePasswordResponse,
     PermissionCheckResponse,
@@ -62,17 +59,54 @@ from .models import (  # noqa: F401
     SessionListResponse,
     SessionRevokeResponse,
 )
-from shared.funnel_events import emit_funnel_event  # noqa: F401  (re-exported for tests)
-from shared.pii import mask_email  # noqa: F401
-from shared.rate_limit import limiter  # noqa: F401
-from shared.supabase_client import get_supabase  # noqa: F401  (re-exported for tests)
-
+from .password_policy import PasswordPolicyError, validate_password  # noqa: F401
+from .session_store import RedisSessionStore, SessionData  # noqa: F401
+from .sqlalchemy_models import (  # noqa: F401
+    MembershipModel,
+    RoleModel,
+    TenantModel,
+    UserModel,
+)
 
 # ── Router + sub-module includes ─────────────────────────────────────────────
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = structlog.get_logger("auth")
 
 # Helpers / constants — re-exported from auth/lockout.py (sub-split 1/N).
+# Route sub-modules — each owns an APIRouter that we include below. Importing
+# the full module (not just ``router``) keeps ``ar.<handler_name>`` resolution
+# working for tests that call ``await auth_routes.<handler>.__wrapped__(...)``.
+from .auth import (
+    change_password_router as _change_password_router_mod,  # noqa: E402
+    confirm_router as _confirm_router_mod,  # noqa: E402
+    email_code_router as _email_code_router_mod,  # noqa: E402
+    login_router as _login_router_mod,  # noqa: E402
+    refresh_router as _refresh_router_mod,  # noqa: E402
+    register_router as _register_router_mod,  # noqa: E402
+    reset_password_router as _reset_password_router_mod,  # noqa: E402
+    sessions_router as _sessions_router_mod,  # noqa: E402
+    signup_router as _signup_router_mod,  # noqa: E402
+)
+from .auth.change_password_router import (  # noqa: F401,E402
+    ChangePasswordRequest,
+    change_password,
+)
+from .auth.confirm_router import (  # noqa: F401,E402
+    ConfirmPasswordRequest,
+    _elevation_jti_key,
+    confirm_password,
+    require_reauth,
+    unlock_account,
+)
+from .auth.elevation_helpers import (  # noqa: F401,E402
+    _ELEVATION_JTI_KEY_PREFIX,
+    _ELEVATION_TOKEN_TTL_SECONDS,
+    _revoke_all_elevation_tokens_for_user,
+)
+from .auth.email_code_router import (  # noqa: F401,E402
+    confirm_email_login_code,
+    request_email_login_code,
+)
 from .auth.lockout import (  # noqa: F401,E402
     _EMAIL_ATTEMPT_LIMIT,
     _EMAIL_ATTEMPT_WINDOW,
@@ -93,8 +127,23 @@ from .auth.lockout import (  # noqa: F401,E402
     _record_lockout_attempt,
 )
 
+# Handler + schema re-exports for back-compat with ``from auth_routes import X``.
+from .auth.login_router import login  # noqa: F401,E402
+from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
+from .auth.register_router import register_initial_admin  # noqa: F401,E402
+from .auth.reset_password_router import (  # noqa: F401,E402
+    _RECOVERY_ALLOWED_AMR_METHODS,
+    _RECOVERY_TOKEN_MAX_AGE_SECONDS,
+    ResetPasswordRequest,
+    _claim_recovery_token_single_use,
+    _enforce_recovery_token_scope,
+    _parse_supabase_token_claims,
+    reset_password,
+)
+
 # Pydantic schemas + signup helpers — sub-splits 2/N and 3/N.
 from .auth.schemas import (  # noqa: F401,E402
+    _SIGNUP_ACCEPTED_DETAIL,
     EmailCodeConfirmRequest,
     EmailCodeRequest,
     EmailCodeRequestResponse,
@@ -103,69 +152,20 @@ from .auth.schemas import (  # noqa: F401,E402
     SignupAcceptedResponse,
     TokenResponse,
     UserResponse,
-    _SIGNUP_ACCEPTED_DETAIL,
     _signup_accepted_response,
 )
 from .auth.session_helpers import _persist_session  # noqa: F401,E402
-from .auth.signup_helpers import (  # noqa: F401,E402
-    _ensure_unique_tenant_slug,
-    _slugify_tenant_name,
-)
-from .auth.elevation_helpers import (  # noqa: F401,E402
-    _ELEVATION_JTI_KEY_PREFIX,
-    _ELEVATION_TOKEN_TTL_SECONDS,
-    _revoke_all_elevation_tokens_for_user,
-)
-
-# Route sub-modules — each owns an APIRouter that we include below. Importing
-# the full module (not just ``router``) keeps ``ar.<handler_name>`` resolution
-# working for tests that call ``await auth_routes.<handler>.__wrapped__(...)``.
-from .auth import login_router as _login_router_mod  # noqa: E402
-from .auth import email_code_router as _email_code_router_mod  # noqa: E402
-from .auth import signup_router as _signup_router_mod  # noqa: E402
-from .auth import refresh_router as _refresh_router_mod  # noqa: E402
-from .auth import sessions_router as _sessions_router_mod  # noqa: E402
-from .auth import register_router as _register_router_mod  # noqa: E402
-from .auth import change_password_router as _change_password_router_mod  # noqa: E402
-from .auth import reset_password_router as _reset_password_router_mod  # noqa: E402
-from .auth import confirm_router as _confirm_router_mod  # noqa: E402
-
-# Handler + schema re-exports for back-compat with ``from auth_routes import X``.
-from .auth.login_router import login  # noqa: F401,E402
-from .auth.email_code_router import (  # noqa: F401,E402
-    confirm_email_login_code,
-    request_email_login_code,
-)
-from .auth.signup_router import signup  # noqa: F401,E402
-from .auth.refresh_router import RefreshRequest, refresh_session  # noqa: F401,E402
 from .auth.sessions_router import (  # noqa: F401,E402
     list_sessions,
     logout,
     revoke_all_sessions,
     revoke_session,
 )
-from .auth.register_router import register_initial_admin  # noqa: F401,E402
-from .auth.change_password_router import (  # noqa: F401,E402
-    ChangePasswordRequest,
-    change_password,
+from .auth.signup_helpers import (  # noqa: F401,E402
+    _ensure_unique_tenant_slug,
+    _slugify_tenant_name,
 )
-from .auth.reset_password_router import (  # noqa: F401,E402
-    ResetPasswordRequest,
-    _RECOVERY_ALLOWED_AMR_METHODS,
-    _RECOVERY_TOKEN_MAX_AGE_SECONDS,
-    _claim_recovery_token_single_use,
-    _enforce_recovery_token_scope,
-    _parse_supabase_token_claims,
-    reset_password,
-)
-from .auth.confirm_router import (  # noqa: F401,E402
-    ConfirmPasswordRequest,
-    _elevation_jti_key,
-    confirm_password,
-    require_reauth,
-    unlock_account,
-)
-
+from .auth.signup_router import signup  # noqa: F401,E402
 
 # ── Mount every sub-router on /auth ─────────────────────────────────────────
 router.include_router(_login_router_mod.router)

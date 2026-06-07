@@ -12,8 +12,8 @@ Covers:
 
 import os
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -25,13 +25,13 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 
-import pytest
-import httpx
-
-from app.models import EnforcementItem, EnforcementSeverity, SourceType
 import app.notifications as notifications_mod
+import httpx
+import pytest
+from app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 WebhookNotifier = notifications_mod.WebhookNotifier
 DeliveryResult = notifications_mod.DeliveryResult
@@ -120,10 +120,7 @@ class TestRetryBehavior:
         success_response = MagicMock()
         success_response.status_code = 200
 
-        with patch.object(
-            notifier.session, "post",
-            side_effect=[fail_response, success_response]
-        ):
+        with patch.object(notifier.session, "post", side_effect=[fail_response, success_response]):
             results = notifier.notify([_make_item()])
         assert results[0].success is True
         assert results[0].attempts == 2
@@ -133,10 +130,7 @@ class TestRetryBehavior:
         success_response = MagicMock()
         success_response.status_code = 200
 
-        with patch.object(
-            notifier.session, "post",
-            side_effect=[httpx.TimeoutException("timeout"), success_response]
-        ):
+        with patch.object(notifier.session, "post", side_effect=[httpx.TimeoutException("timeout"), success_response]):
             results = notifier.notify([_make_item()])
         assert results[0].success is True
         assert results[0].attempts == 2
@@ -146,10 +140,7 @@ class TestRetryBehavior:
         success_response = MagicMock()
         success_response.status_code = 200
 
-        with patch.object(
-            notifier.session, "post",
-            side_effect=[httpx.ConnectError("refused"), success_response]
-        ):
+        with patch.object(notifier.session, "post", side_effect=[httpx.ConnectError("refused"), success_response]):
             results = notifier.notify([_make_item()])
         assert results[0].success is True
 

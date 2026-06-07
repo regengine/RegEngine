@@ -99,8 +99,8 @@ def test_batch_persist_evaluations_mid_batch_exception_isolates_chunk() -> None:
     savepoint_2 = MagicMock()
     session.begin_nested.side_effect = [savepoint_1, savepoint_2]
     session.execute.side_effect = [
-        None,                        # first chunk INSERT succeeds
-        RuntimeError("disk full"),   # second chunk INSERT fails
+        None,  # first chunk INSERT succeeds
+        RuntimeError("disk full"),  # second chunk INSERT fails
     ]
 
     engine = RulesEngine(session)
@@ -142,10 +142,7 @@ def test_batch_persist_isolates_failures_per_chunk() -> None:
 
     engine = RulesEngine(session)
     # 100 rows for event-a → chunk 1, 100 rows for event-b → chunk 2
-    results = (
-        [("event-a", _result(f"r{i}")) for i in range(100)]
-        + [("event-b", _result(f"s{i}")) for i in range(100)]
-    )
+    results = [("event-a", _result(f"r{i}")) for i in range(100)] + [("event-b", _result(f"s{i}")) for i in range(100)]
     engine._batch_persist_evaluations("tenant-1", results)
 
     assert session.begin_nested.call_count == 2

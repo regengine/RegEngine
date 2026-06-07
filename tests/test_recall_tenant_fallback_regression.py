@@ -38,9 +38,7 @@ from pathlib import Path
 import pytest
 
 SERVICES_ROOT = Path(__file__).resolve().parents[1] / "services"
-RECALL_ROUTER = (
-    SERVICES_ROOT / "graph" / "app" / "routers" / "fsma" / "recall.py"
-)
+RECALL_ROUTER = SERVICES_ROOT / "graph" / "app" / "routers" / "fsma" / "recall.py"
 
 # Make services importable for import-time check (below).
 sys.path.insert(0, str(SERVICES_ROOT))
@@ -105,11 +103,7 @@ def _endpoint_functions(module_path: Path):
             # Decorators are either ast.Call (``@router.get("/foo")``)
             # or ast.Attribute (``@router.get``).
             func = dec.func if isinstance(dec, ast.Call) else dec
-            if (
-                isinstance(func, ast.Attribute)
-                and isinstance(func.value, ast.Name)
-                and func.value.id == "router"
-            ):
+            if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "router":
                 yield node.name, node
                 break
 
@@ -119,14 +113,11 @@ def test_every_recall_endpoint_uses_get_current_tenant_id():
     ``tenant_id`` via ``Depends(get_current_tenant_id)``. Anything
     else (e.g. reading tenant_id from a query param, from
     ``api_key``, or defaulting to a literal) is the original bug."""
-    assert RECALL_ROUTER.exists(), (
-        f"Expected {RECALL_ROUTER} — file moved? Update this test."
-    )
+    assert RECALL_ROUTER.exists(), f"Expected {RECALL_ROUTER} — file moved? Update this test."
 
     endpoints = list(_endpoint_functions(RECALL_ROUTER))
     assert endpoints, (
-        "No endpoint functions found in recall.py — has the file "
-        "been restructured? Update this test if so."
+        "No endpoint functions found in recall.py — has the file been restructured? Update this test if so."
     )
 
     offenders = []
@@ -202,8 +193,7 @@ def test_recall_router_never_references_default_tenant_string():
     # nothing legitimate in recall should need that.
     pattern = re.compile(r"""\.get\s*\([^)]*["']default["']""")
     assert not pattern.search(text), (
-        "#1268: recall.py contains a .get(..., 'default') fallback "
-        "that could mask missing tenant_id."
+        "#1268: recall.py contains a .get(..., 'default') fallback that could mask missing tenant_id."
     )
 
 
@@ -216,18 +206,17 @@ def test_get_current_tenant_id_raises_401_on_missing():
     requests."""
     from unittest.mock import MagicMock
 
-    from shared.middleware.tenant_context import get_current_tenant_id
     from fastapi import HTTPException
+    from shared.middleware.tenant_context import get_current_tenant_id
 
     request = MagicMock()
     # Simulate no tenant_id in state.
     request.state = MagicMock(spec=[])  # no tenant_id attribute
 
     import asyncio
+
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.get_event_loop().run_until_complete(
-            get_current_tenant_id(request)
-        )
+        asyncio.get_event_loop().run_until_complete(get_current_tenant_id(request))
     assert exc_info.value.status_code == 401
 
 

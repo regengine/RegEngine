@@ -18,7 +18,6 @@ from .sqlalchemy_models import (
     UserModel,
 )
 
-
 SUPPORTED_CTE_TYPES = {
     "shipping",
     "receiving",
@@ -69,9 +68,7 @@ def _next_merkle_hash(prev_hash: str | None, payload_sha256: str) -> str:
 
 def _acquire_tenant_merkle_lock(db: Session, tenant_id: uuid_module.UUID) -> None:
     tenant_row = db.execute(
-        select(TenantModel.id)
-        .where(TenantModel.id == tenant_id)
-        .with_for_update()
+        select(TenantModel.id).where(TenantModel.id == tenant_id).with_for_update()
     ).scalar_one_or_none()
     if tenant_row is None:
         raise HTTPException(status_code=400, detail="Tenant not found")
@@ -94,14 +91,15 @@ def _bridge_to_canonical(
     Non-blocking: failures are logged but do not abort the supplier write.
     """
     import logging
+
     _logger = logging.getLogger("supplier-canonical-bridge")
 
     try:
         from shared.canonical_event import (
-            TraceabilityEvent,
             CTEType,
             IngestionSource,
             ProvenanceMetadata,
+            TraceabilityEvent,
         )
         from shared.canonical_persistence import CanonicalEventStore
 
@@ -213,9 +211,7 @@ def _persist_supplier_cte_event(
             facility_id=facility.id,
             tlc_code=normalized_tlc_code,
             product_description=(
-                normalized_kde_data.get("product_description")
-                if isinstance(normalized_kde_data, dict)
-                else None
+                normalized_kde_data.get("product_description") if isinstance(normalized_kde_data, dict) else None
             ),
             status="active",
         )

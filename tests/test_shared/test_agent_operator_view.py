@@ -7,17 +7,15 @@ from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
-
 from shared.agent_operator_view import (
     AgentArtifactTimelineResponse,
-    AgentReviewItem,
     AgentReviewDecisionRequest,
     AgentReviewDecisionResponse,
+    AgentReviewItem,
     fetch_agent_artifact_timeline,
     fetch_agent_review_items,
     upsert_agent_artifact_review,
 )
-
 
 SHA256 = "d" * 64
 
@@ -83,19 +81,11 @@ class _FakeSession:
             return _FakeResult(scalar=self.total)
         if "INSERT INTO fsma.agent_artifact_reviews" in sql:
             return _FakeResult(rows=[self.upsert_row] if self.upsert_row else [])
-        if (
-            "FROM fsma.agent_artifacts aa" in sql
-            and "aa.artifact_id = :artifact_id" in sql
-        ):
-            return _FakeResult(
-                rows=[self.artifact_lookup_row] if self.artifact_lookup_row else []
-            )
+        if "FROM fsma.agent_artifacts aa" in sql and "aa.artifact_id = :artifact_id" in sql:
+            return _FakeResult(rows=[self.artifact_lookup_row] if self.artifact_lookup_row else [])
         if "FROM fsma.ingestion_runs" in sql:
             return _FakeResult(row=self.run_row)
-        if (
-            "FROM fsma.ingestion_run_receipts" in sql
-            and "ORDER BY sequence_num ASC" in sql
-        ):
+        if "FROM fsma.ingestion_run_receipts" in sql and "ORDER BY sequence_num ASC" in sql:
             return _FakeResult(rows=self.timeline_receipt_rows)
         if "FROM fsma.ingestion_run_receipts" in sql and "ORDER BY ingestion_run_id" in sql:
             return _FakeResult(rows=self.receipt_rows)

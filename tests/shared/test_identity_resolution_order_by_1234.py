@@ -41,15 +41,10 @@ class TestFindByAliasOrderBy_Issue1234:
         sql_text = str(sql).replace("\n", " ").lower()
 
         assert "order by" in sql_text, (
-            "find_entity_by_alias SQL must contain ORDER BY to prevent "
-            "non-deterministic results (#1234)"
+            "find_entity_by_alias SQL must contain ORDER BY to prevent non-deterministic results (#1234)"
         )
-        assert "confidence_score" in sql_text, (
-            "ORDER BY must include confidence_score DESC as primary sort key"
-        )
-        assert "created_at" in sql_text, (
-            "ORDER BY must include created_at ASC as tiebreak"
-        )
+        assert "confidence_score" in sql_text, "ORDER BY must include confidence_score DESC as primary sort key"
+        assert "created_at" in sql_text, "ORDER BY must include created_at ASC as tiebreak"
 
     def test_order_by_confidence_desc_created_at_asc(self, svc, mock_session):
         """Verify the ordering direction: highest confidence first, earliest
@@ -67,14 +62,8 @@ class TestFindByAliasOrderBy_Issue1234:
         # confidence_score DESC should appear before created_at in the ORDER BY
         conf_pos = order_clause.find("confidence_score")
         created_pos = order_clause.find("created_at")
-        assert 0 <= conf_pos < created_pos, (
-            "confidence_score must appear before created_at in ORDER BY"
-        )
+        assert 0 <= conf_pos < created_pos, "confidence_score must appear before created_at in ORDER BY"
 
         # Check DESC on confidence_score and ASC on created_at
-        assert "confidence_score desc" in order_clause, (
-            "confidence_score must be sorted DESC"
-        )
-        assert "created_at asc" in order_clause, (
-            "created_at must be sorted ASC (oldest registration wins on tie)"
-        )
+        assert "confidence_score desc" in order_clause, "confidence_score must be sorted DESC"
+        assert "created_at asc" in order_clause, "created_at must be sorted ASC (oldest registration wins on tie)"

@@ -11,9 +11,9 @@ import time
 from typing import Any, Dict, List, Optional
 
 import structlog
+from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
 
 from ..neo4j_utils import Neo4jClient
-from shared.fsma_rules import TraceEvent as SharedTraceEvent, TimeArrowRule
 
 logger = structlog.get_logger("fsma-utils")
 
@@ -119,8 +119,7 @@ async def find_broken_chains(
     # moment a caller forgot to pass tenant_id. Prefer a loud error.
     if not tenant_id:
         raise ValueError(
-            "find_broken_chains requires a non-empty tenant_id; "
-            "null-tenant queries are no longer supported (#1301)"
+            "find_broken_chains requires a non-empty tenant_id; null-tenant queries are no longer supported (#1301)"
         )
 
     start_time = time.time()
@@ -215,9 +214,7 @@ async def find_broken_chains(
                     "lot_tlc": record["lot_tlc"],
                     "product_description": record["product_description"],
                     "violation_type": "broken_chain",
-                    "violation_reason": (
-                        "SHIPPING without CREATION, RECEIVING, INITIAL_PACKING, or TRANSFORMATION"
-                    ),
+                    "violation_reason": ("SHIPPING without CREATION, RECEIVING, INITIAL_PACKING, or TRANSFORMATION"),
                     "gaps": ["missing_origin_event"],
                 }
             )
@@ -270,9 +267,7 @@ async def find_broken_chains(
                     "violation_reason": desc,
                     "gaps": ["temporal_paradox"],
                     "origin_event_id": record["origin_event_id"],
-                    "origin_date": (
-                        str(record["origin_date"]) if record["origin_date"] else None
-                    ),
+                    "origin_date": (str(record["origin_date"]) if record["origin_date"] else None),
                 }
             )
 
@@ -329,37 +324,32 @@ async def find_broken_chains(
             if eid in seen_event_ids:
                 continue
             seen_event_ids.add(eid)
-            violations.append({
-                "event_id": eid,
-                "type": record["type"],
-                "event_date": record["event_date"],
-                "document_id": record["document_id"],
-                "lot_tlc": record["lot_tlc"],
-                "product_description": record["product_description"],
-                "violation_type": "broken_chain",
-                "violation_reason": (
-                    "SHIPPING event hash-chain does not link to any "
-                    "CREATION, RECEIVING, or INITIAL_PACKING event"
-                ),
-                "merkle_hash": record["merkle_hash"],
-                "merkle_prev_hash": record["merkle_prev_hash"],
-                "expected_predecessor": record["expected_predecessors"],
-                "gaps": ["missing_cryptographic_link"],
-            })
+            violations.append(
+                {
+                    "event_id": eid,
+                    "type": record["type"],
+                    "event_date": record["event_date"],
+                    "document_id": record["document_id"],
+                    "lot_tlc": record["lot_tlc"],
+                    "product_description": record["product_description"],
+                    "violation_type": "broken_chain",
+                    "violation_reason": (
+                        "SHIPPING event hash-chain does not link to any CREATION, RECEIVING, or INITIAL_PACKING event"
+                    ),
+                    "merkle_hash": record["merkle_hash"],
+                    "merkle_prev_hash": record["merkle_prev_hash"],
+                    "expected_predecessor": record["expected_predecessors"],
+                    "gaps": ["missing_cryptographic_link"],
+                }
+            )
 
     query_time = (time.time() - start_time) * 1000
     logger.info(
         "broken_chain_analysis_completed",
         violation_count=len(violations),
-        missing_origin_count=sum(
-            1 for v in violations if "missing_origin_event" in v["gaps"]
-        ),
-        temporal_paradox_count=sum(
-            1 for v in violations if "temporal_paradox" in v["gaps"]
-        ),
-        cryptographic_gap_count=sum(
-            1 for v in violations if "missing_cryptographic_link" in v["gaps"]
-        ),
+        missing_origin_count=sum(1 for v in violations if "missing_origin_event" in v["gaps"]),
+        temporal_paradox_count=sum(1 for v in violations if "temporal_paradox" in v["gaps"]),
+        cryptographic_gap_count=sum(1 for v in violations if "missing_cryptographic_link" in v["gaps"]),
         query_time_ms=round(query_time, 2),
     )
 

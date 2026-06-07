@@ -9,21 +9,21 @@ import uuid
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
-
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
 
+from plugins.fsma.sources import FSMA_SOURCES
+
+from .discovery import discovery
+from .models import IngestAllRegulationsResponse, ScrapeRegistryResponse, ScrapeResponse
 from .pipeline import ScraperPipeline
 from .scrapers.state_adaptors.base import StateRegistryScraper as AdaptorRegistryScraper
 from .scrapers.state_adaptors.cppa import CPPAScraper
-from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
-from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
-from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
 from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
-from .models import ScrapeResponse, ScrapeRegistryResponse, IngestAllRegulationsResponse
-from .discovery import discovery
-from plugins.fsma.sources import FSMA_SOURCES
+from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
+from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
+from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
 
 logger = structlog.get_logger("ingestion.scrapers")
 router = APIRouter(include_in_schema=False)
@@ -63,9 +63,7 @@ async def scrape_cppa(
                     "tenant_id": api_key.tenant_id,
                 },
                 tenant_id=api_key.tenant_id,
-                idempotency_key=(
-                    f"state_scrape:{api_key.tenant_id}:cppa:US-CA:{_url_hash(url)}"
-                ),
+                idempotency_key=(f"state_scrape:{api_key.tenant_id}:cppa:US-CA:{_url_hash(url)}"),
             )
             db.commit()
             return {"status": "accepted", "message": "CPPA scrape job started"}
@@ -109,8 +107,10 @@ def scrape_registry(
                 logger.warning("scrape_empty_content", source=src.url)
                 continue
             event = _PIPELINE.process_content(
-                content=fetched.content_bytes, content_type=fetched.content_type,
-                jurisdiction_code=src.jurisdiction_code, source_url=src.url,
+                content=fetched.content_bytes,
+                content_type=fetched.content_type,
+                jurisdiction_code=src.jurisdiction_code,
+                source_url=src.url,
                 tenant_id=api_key.tenant_id,
             )
             if event:
@@ -132,13 +132,17 @@ async def ingest_all_regulations(
 
     logger.info(
         "fsma_ingestion_triggered",
-        job_id=job_id, sources=len(FSMA_SOURCES), tenant_id=api_key.tenant_id,
+        job_id=job_id,
+        sources=len(FSMA_SOURCES),
+        tenant_id=api_key.tenant_id,
     )
 
     tasks = [
         discovery.scrape(
-            body=source["name"], source_url=source["url"],
-            source_type=source["type"], jurisdiction=source["jurisdiction"],
+            body=source["name"],
+            source_url=source["url"],
+            source_type=source["type"],
+            jurisdiction=source["jurisdiction"],
         )
         for source in FSMA_SOURCES
     ]
@@ -146,7 +150,10 @@ async def ingest_all_regulations(
 
     summary: dict[str, int] = {
         "sources_attempted": len(FSMA_SOURCES),
-        "queued_manual": 0, "unchanged": 0, "ingested": 0, "failed": 0,
+        "queued_manual": 0,
+        "unchanged": 0,
+        "ingested": 0,
+        "failed": 0,
     }
     for r in results:
         if isinstance(r, Exception):
@@ -166,6 +173,9 @@ async def ingest_all_regulations(
     logger.info("fsma_ingestion_complete", job_id=job_id, duration_ms=duration_ms, **summary)
 
     return {
-        "job_id": job_id, "status": "complete", "jurisdiction": "FDA",
-        "duration_ms": duration_ms, **summary,
+        "job_id": job_id,
+        "status": "complete",
+        "jurisdiction": "FDA",
+        "duration_ms": duration_ms,
+        **summary,
     }

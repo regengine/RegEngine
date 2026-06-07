@@ -4,6 +4,7 @@ Exposes:
   router   — APIRouter with /login registered; included by auth_routes.py
   login    — the handler function (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 import os
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from shared.env import is_production
+from shared.rate_limit import limiter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,8 +40,6 @@ from .lockout import (
 )
 from .schemas import LoginRequest, TokenResponse
 from .session_helpers import _persist_session
-from shared.rate_limit import limiter
-from shared.env import is_production
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -52,9 +53,7 @@ def _login_rate_limit() -> str:
     flows do not trip the per-IP SlowAPI guard before the deeper email-scoped
     lockout protections engage.
     """
-    return os.getenv("AUTH_LOGIN_RATE_LIMIT") or (
-        "5/minute" if is_production() else "120/minute"
-    )
+    return os.getenv("AUTH_LOGIN_RATE_LIMIT") or ("5/minute" if is_production() else "120/minute")
 
 
 @router.post("/login", response_model=TokenResponse)

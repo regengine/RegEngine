@@ -9,18 +9,17 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..database import get_session
+from ..dependencies import get_current_user
+from ..models import TenantContext
+from ..sqlalchemy_models import UserModel
+from ..supplier_cte_service import SUPPORTED_CTE_TYPES
+from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
 from .parsers import parse_incoming_file
 from .session_store import session_store
 from .templates import generate_template
 from .transaction_manager import build_validation_preview, execute_bulk_commit
 from .validators import validate_and_normalize_payload
-from ..database import get_session
-from ..dependencies import get_current_user
-from ..models import TenantContext
-from ..supplier_cte_service import SUPPORTED_CTE_TYPES
-from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
-from ..sqlalchemy_models import UserModel
-
 
 router = APIRouter()
 

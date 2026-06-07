@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("mock-audit")
 
@@ -28,19 +28,24 @@ def _get_real_tlc(tenant_id: str) -> str | None:
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
+
         db = SessionLocal()
         try:
-            row = db.execute(text(
-                "SELECT traceability_lot_code FROM fsma.cte_events "
-                "WHERE tenant_id = :tid AND traceability_lot_code IS NOT NULL "
-                "ORDER BY random() LIMIT 1"
-            ), {"tid": tenant_id}).fetchone()
+            row = db.execute(
+                text(
+                    "SELECT traceability_lot_code FROM fsma.cte_events "
+                    "WHERE tenant_id = :tid AND traceability_lot_code IS NOT NULL "
+                    "ORDER BY random() LIMIT 1"
+                ),
+                {"tid": tenant_id},
+            ).fetchone()
             return row[0] if row else None
         finally:
             db.close()
     except Exception:
         logger.warning("Mock audit TLC lookup failed", exc_info=True)
         return None
+
 
 router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
 
@@ -95,12 +100,14 @@ FDA_SCENARIOS = _DEMO_FDA_SCENARIOS
 
 class StartDrillRequest(BaseModel):
     """Request to start a mock audit drill."""
+
     tenant_id: str = Field(..., description="Tenant ID to audit")
     scenario_index: Optional[int] = Field(None, description="Specific scenario (0-2), or random if null")
 
 
 class DrillStatus(BaseModel):
     """Current status of an active drill."""
+
     drill_id: str
     scenario: str
     request_text: str
@@ -123,6 +130,7 @@ class DrillStatus(BaseModel):
 
 class DrillResponse(BaseModel):
     """Submitted drill response for grading."""
+
     drill_id: str
     has_lot_genealogy: bool = Field(..., description="Can trace lot from farm to current location")
     has_electronic_records: bool = Field(..., description="Records in electronic sortable format")
@@ -135,6 +143,7 @@ class DrillResponse(BaseModel):
 
 class DrillGrade(BaseModel):
     """Grading result for a completed drill."""
+
     drill_id: str
     grade: str  # A, B, C, D, F
     score: int  # 0-100

@@ -21,7 +21,6 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Unit tests — mock the DB session, verify SQL contains ON CONFLICT
 # ---------------------------------------------------------------------------
@@ -84,8 +83,7 @@ class TestBatchInsertSQLContainsOnConflict:
         # _event_to_params is called N times (once per event in the loop) plus
         # once more for col_names extraction (events[0]) — so N+1 total.
         base_params = [
-            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id}
-            for e in events
+            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id} for e in events
         ]
         params_list = [base_params[0]] + base_params  # leading call for col_names
         with patch.object(writer, "_event_to_params", side_effect=params_list):
@@ -102,8 +100,7 @@ class TestBatchInsertSQLContainsOnConflict:
 
         events = [self._make_event() for _ in range(10)]
         base_params = [
-            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id}
-            for e in events
+            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id} for e in events
         ]
         params_list = [base_params[0]] + base_params
         with patch.object(writer, "_event_to_params", side_effect=params_list):
@@ -119,8 +116,7 @@ class TestBatchInsertSQLContainsOnConflict:
 
         events = [self._make_event() for _ in range(5)]
         base_params = [
-            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id}
-            for e in events
+            {"tenant_id": e.tenant_id, "idempotency_key": e.idempotency_key, "event_id": e.event_id} for e in events
         ]
         params_list = [base_params[0]] + base_params
         with patch.object(writer, "_event_to_params", side_effect=params_list):

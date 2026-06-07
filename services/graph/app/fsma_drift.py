@@ -69,9 +69,7 @@ class AlertStatus(str, Enum):
 class KDESnapshot:
     """Point-in-time snapshot of KDE completeness metrics."""
 
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     supplier_gln: Optional[str] = None
     document_type: Optional[str] = None
 
@@ -128,9 +126,7 @@ class DriftAlert:
     drift_percentage: float = 0.0  # Negative = degradation
 
     # Timestamps
-    detected_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    detected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     acknowledged_at: Optional[str] = None
     resolved_at: Optional[str] = None
 
@@ -319,20 +315,12 @@ class DriftDetector:
                 return result
 
             # Calculate baseline metrics
-            baseline_completeness = statistics.mean(
-                s.completeness_rate for s in baseline_snapshots
-            )
-            baseline_confidence = statistics.mean(
-                s.avg_confidence for s in baseline_snapshots
-            )
+            baseline_completeness = statistics.mean(s.completeness_rate for s in baseline_snapshots)
+            baseline_confidence = statistics.mean(s.avg_confidence for s in baseline_snapshots)
 
             # Calculate recent metrics
-            recent_completeness = statistics.mean(
-                s.completeness_rate for s in recent_snapshots
-            )
-            recent_confidence = statistics.mean(
-                s.avg_confidence for s in recent_snapshots
-            )
+            recent_completeness = statistics.mean(s.completeness_rate for s in recent_snapshots)
+            recent_confidence = statistics.mean(s.avg_confidence for s in recent_snapshots)
 
             # Detect completeness drift
             completeness_drift = recent_completeness - baseline_completeness
@@ -378,9 +366,7 @@ class DriftDetector:
                 1.0 + completeness_drift,  # Drift is negative, so this decreases
                 1.0 + (confidence_drift * 0.5),  # Weight confidence less
             ]
-            result.overall_health_score = max(
-                0.0, min(1.0, statistics.mean(health_factors))
-            )
+            result.overall_health_score = max(0.0, min(1.0, statistics.mean(health_factors)))
 
             # Store new alerts
             self._alerts.extend(result.alerts)
@@ -459,12 +445,8 @@ class DriftDetector:
         """Get summary of current drift status."""
         with self._lock:
             active_alerts = self.get_active_alerts()
-            critical_count = sum(
-                1 for a in active_alerts if a.severity == AlertSeverity.CRITICAL
-            )
-            warning_count = sum(
-                1 for a in active_alerts if a.severity == AlertSeverity.WARNING
-            )
+            critical_count = sum(1 for a in active_alerts if a.severity == AlertSeverity.CRITICAL)
+            warning_count = sum(1 for a in active_alerts if a.severity == AlertSeverity.WARNING)
 
             # Determine overall status
             if critical_count > 0:
@@ -497,11 +479,7 @@ class DriftDetector:
                 recent = max(snapshots, key=lambda s: s.timestamp)
 
                 # Get supplier alerts
-                supplier_alerts = [
-                    a
-                    for a in self._alerts
-                    if a.supplier_gln == gln and a.status == AlertStatus.ACTIVE
-                ]
+                supplier_alerts = [a for a in self._alerts if a.supplier_gln == gln and a.status == AlertStatus.ACTIVE]
 
                 results.append(
                     {
@@ -550,14 +528,8 @@ class DriftDetector:
             )
             alert_type = AlertType.SUPPLIER_FORMAT_CHANGE
         else:
-            message = (
-                f"Overall KDE completeness dropped from "
-                f"{baseline:.1%} to {current:.1%} ({drift_pct:+.1f}%)"
-            )
-            recommended = (
-                "Review recent ingestion batches for quality issues. "
-                "Check extraction pipeline health."
-            )
+            message = f"Overall KDE completeness dropped from {baseline:.1%} to {current:.1%} ({drift_pct:+.1f}%)"
+            recommended = "Review recent ingestion batches for quality issues. Check extraction pipeline health."
             alert_type = AlertType.KDE_COMPLETENESS_DROP
 
         return DriftAlert(
@@ -582,10 +554,7 @@ class DriftDetector:
         """Create an extraction confidence drop alert."""
         drift_pct = drift * 100
 
-        message = (
-            f"Extraction confidence dropped from "
-            f"{baseline:.1%} to {current:.1%} ({drift_pct:+.1f}%)"
-        )
+        message = f"Extraction confidence dropped from {baseline:.1%} to {current:.1%} ({drift_pct:+.1f}%)"
         if supplier_gln:
             message = f"Supplier {supplier_gln}: " + message
 
@@ -613,8 +582,7 @@ class DriftDetector:
             metric_name="new_supplier",
             message=f"New supplier detected: {supplier_gln}",
             recommended_action=(
-                "Verify supplier information and monitor initial document "
-                "quality to establish baseline."
+                "Verify supplier information and monitor initial document quality to establish baseline."
             ),
         )
 

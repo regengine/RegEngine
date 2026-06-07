@@ -37,9 +37,7 @@ try:  # pragma: no cover - metrics are best-effort; never break parse on registr
             # multi-path imports — e.g. app.edi_ingestion.parser vs
             # edi_ingestion.parser).
             for collector in list(REGISTRY._collector_to_names):
-                if _matches_registered_name(
-                    getattr(collector, "_name", None), name
-                ):
+                if _matches_registered_name(getattr(collector, "_name", None), name):
                     return collector
             raise
 
@@ -48,9 +46,7 @@ try:  # pragma: no cover - metrics are best-effort; never break parse on registr
             return Histogram(name, documentation, labelnames, buckets=buckets)
         except ValueError:
             for collector in list(REGISTRY._collector_to_names):
-                if _matches_registered_name(
-                    getattr(collector, "_name", None), name
-                ):
+                if _matches_registered_name(getattr(collector, "_name", None), name):
                     return collector
             raise
 
@@ -127,7 +123,9 @@ def _parse_x12_segments(content: str) -> list[list[str]]:
         ts_label = _peek_transaction_set(compact, element_sep, segment_term)
         logger.warning(
             "edi_segment_cap_exceeded count=%d cap=%d transaction_set=%s",
-            len(raw_segments), cap, ts_label,
+            len(raw_segments),
+            cap,
+            ts_label,
         )
         if _METRICS_ENABLED and EDI_SEGMENT_CAP_REJECTED is not None:
             try:

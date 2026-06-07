@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Tuple
 from unittest.mock import MagicMock
 
 import pytest
-
 from shared.rules.engine import RulesEngine
 
 
@@ -51,9 +50,9 @@ class _RecordingSession:
 
 _RULE_ROW = (
     "rule-001",  # rule_id
-    1,           # rule_version
-    "Test Rule", # title
-    "desc",      # description
+    1,  # rule_version
+    "Test Rule",  # title
+    "desc",  # description
     "critical",  # severity
     "kde_presence",
     {"cte_types": ["receiving"], "ftl_scope": ["ALL"]},
@@ -73,7 +72,8 @@ class TestCacheFreshness_Issue1371:
         assert engine._rules_cache is None
 
         rules = engine.get_applicable_rules(
-            event_type="receiving", event_is_ftl=True,
+            event_type="receiving",
+            event_is_ftl=True,
         )
         assert len(rules) == 1
         assert session.call_count == 1
@@ -89,8 +89,7 @@ class TestCacheFreshness_Issue1371:
         engine.get_applicable_rules(event_type="receiving", event_is_ftl=True)
 
         assert session.call_count == 1, (
-            "cache must satisfy the 2nd and 3rd calls; DB was hit "
-            f"{session.call_count} times"
+            f"cache must satisfy the 2nd and 3rd calls; DB was hit {session.call_count} times"
         )
 
     def test_expired_cache_triggers_reload(self, monkeypatch):
@@ -131,7 +130,8 @@ class TestCacheFreshness_Issue1371:
 
         for _ in range(3):
             engine.get_applicable_rules(
-                event_type="receiving", event_is_ftl=True,
+                event_type="receiving",
+                event_is_ftl=True,
             )
         assert session.call_count == 3
 
@@ -143,9 +143,7 @@ class TestCacheFreshness_Issue1371:
 
         engine.get_applicable_rules(event_type="receiving", event_is_ftl=True)
         engine.get_applicable_rules(event_type="receiving", event_is_ftl=True)
-        assert session.call_count == 1, (
-            "empty-list cache must be treated as populated, not as miss"
-        )
+        assert session.call_count == 1, "empty-list cache must be treated as populated, not as miss"
 
 
 class TestInvalidateCache_Issue1371:

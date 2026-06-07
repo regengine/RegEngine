@@ -44,6 +44,7 @@ def set_tenant_context(tenant_id: str, request_id: str) -> None:
 # triggered it.
 # ---------------------------------------------------------------------------
 
+
 def _capture_observability_context() -> dict:
     """Snapshot the current correlation_id and tenant context.
 
@@ -173,6 +174,7 @@ async def spawn_tracked(
         # Re-bind child correlation_id so the task's logs are distinguishable
         # from the parent while still sharing the same root ID prefix.
         from shared.observability.correlation import correlation_id_ctx as _ctx
+
         _ctx.set(child_cid)
         structlog.contextvars.bind_contextvars(correlation_id=child_cid)
         return await coro
@@ -211,11 +213,13 @@ logger = structlog.get_logger("regengine")
 
 # Safely import OTel logging components
 try:
-    from opentelemetry.sdk._logs import LoggingHandler
     from opentelemetry import _logs as logs
+    from opentelemetry.sdk._logs import LoggingHandler
+
     OTEL_LOGGING_AVAILABLE = True
 except ImportError:
     OTEL_LOGGING_AVAILABLE = False
+
 
 def setup_logging():
     """Setup basic logging configuration and return the global logger."""
@@ -229,16 +233,14 @@ def setup_logging():
     if OTEL_LOGGING_AVAILABLE and enable_otel:
         handlers.append(LoggingHandler(logger_provider=logs.get_logger_provider()))
 
-    logging.basicConfig(
-        format="%(message)s",
-        level=level,
-        handlers=handlers
-    )
+    logging.basicConfig(format="%(message)s", level=level, handlers=handlers)
     return logger
+
 
 def get_logger(name: str):
     """Compatibility alias for setup_logging().get_logger()"""
     return structlog.get_logger(name)
+
 
 # OTel context + sampling flag injection
 def otel_context_processor(logger, method_name, event_dict):
@@ -252,6 +254,7 @@ def otel_context_processor(logger, method_name, event_dict):
         event_dict["trace_sampled"] = False
     return event_dict
 
+
 # Sampling-aware filter (drops INFO/DEBUG for sampled-out traces when disabled)
 def sampling_aware_filter(logger, method_name, event_dict):
     if os.getenv("LOG_ALL_SAMPLED_OUT", "true").lower() == "false":
@@ -259,7 +262,6 @@ def sampling_aware_filter(logger, method_name, event_dict):
             raise structlog.DropEvent
     return event_dict
 
+
 # Inject finalized processors into the configuration
-structlog.configure(
-    processors=[otel_context_processor, sampling_aware_filter] + structlog.get_config()["processors"]
-)
+structlog.configure(processors=[otel_context_processor, sampling_aware_filter] + structlog.get_config()["processors"])

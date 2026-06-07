@@ -68,19 +68,17 @@ class TestFindByAliasIsCaseSensitive_Issue1235:
         normalized = sql_text.replace("\n", " ").lower()
 
         # Positive: the authoritative equality match is present.
-        assert "alias_value = :alias_value" in normalized, (
-            "find_entity_by_alias must use '=' for alias_value equality"
-        )
+        assert "alias_value = :alias_value" in normalized, "find_entity_by_alias must use '=' for alias_value equality"
         # Negative: the case-folding forms must NOT be present.
         assert "lower(ea.alias_value)" not in normalized, (
             "LOWER() on alias_value silently collides ABC-001 with abc-001"
         )
-        assert "ilike" not in normalized, (
-            "ILIKE on alias_value silently collides ABC-001 with abc-001"
-        )
+        assert "ilike" not in normalized, "ILIKE on alias_value silently collides ABC-001 with abc-001"
 
     def test_uppercase_and_lowercase_flow_through_as_distinct_params(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """Call once with ABC-001 and once with abc-001. The params
         dict each execute receives must preserve the caller's casing --
@@ -99,18 +97,33 @@ class TestFindByAliasIsCaseSensitive_Issue1235:
         assert first_params["alias_value"] != second_params["alias_value"]
 
     def test_mock_isolation_abc_and_lower_abc_are_different_keys(
-        self, mock_session,
+        self,
+        mock_session,
     ):
         """End-to-end simulation: if the DB has an entity registered for
         'LOT-ABC-001' and a caller asks for 'lot-abc-001', find returns
         []. Locks in that the service's SQL preserves casing end-to-end."""
         svc = IdentityResolutionService(mock_session)
 
-        registered_rows = [(
-            "eid-upper", "lot", "LOT-ABC-001", None, None, None, None,
-            "unverified", 1.0, True,
-            "alias-upper", "tlc", "LOT-ABC-001", "sys", 1.0,
-        )]
+        registered_rows = [
+            (
+                "eid-upper",
+                "lot",
+                "LOT-ABC-001",
+                None,
+                None,
+                None,
+                None,
+                "unverified",
+                1.0,
+                True,
+                "alias-upper",
+                "tlc",
+                "LOT-ABC-001",
+                "sys",
+                1.0,
+            )
+        ]
 
         def _case_aware(sql, params):
             result = MagicMock()
@@ -146,17 +159,20 @@ class TestResolveOrRegisterForwardsVerbatim_Issue1235:
         original_find = svc.find_entity_by_alias
 
         def _spy(tenant_id, alias_type, alias_value):
-            captured.append({
-                "tenant_id": tenant_id,
-                "alias_type": alias_type,
-                "alias_value": alias_value,
-            })
+            captured.append(
+                {
+                    "tenant_id": tenant_id,
+                    "alias_type": alias_type,
+                    "alias_value": alias_value,
+                }
+            )
             return []
 
         svc.find_entity_by_alias = _spy  # type: ignore[assignment]
         # Short-circuit the register leg so we don't need a full DB.
         svc.register_entity = lambda **kw: {  # type: ignore[assignment]
-            "entity_id": "new-eid", "canonical_name": kw["canonical_name"],
+            "entity_id": "new-eid",
+            "canonical_name": kw["canonical_name"],
             "resolution": "new",
         }
         svc._insert_alias = lambda **kw: "alias-id"  # type: ignore[assignment]
@@ -181,7 +197,9 @@ class TestResolveOrRegisterForwardsVerbatim_Issue1235:
         )
 
     def test_auto_register_from_event_preserves_tlc_case(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """auto_register_from_event must pass traceability_lot_code into
         _resolve_or_register verbatim."""
@@ -202,9 +220,7 @@ class TestResolveOrRegisterForwardsVerbatim_Issue1235:
 
         lot_calls = [c for c in captured if c.get("entity_type") == "lot"]
         assert len(lot_calls) == 1
-        assert lot_calls[0]["reference"] == "LOT-ABC-001", (
-            "TLC must be forwarded verbatim (no case folding)"
-        )
+        assert lot_calls[0]["reference"] == "LOT-ABC-001", "TLC must be forwarded verbatim (no case folding)"
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +230,9 @@ class TestResolveOrRegisterForwardsVerbatim_Issue1235:
 
 class TestFuzzyCaseSensitiveFlag_Issue1235:
     def test_case_sensitive_differs_between_upper_and_lower(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """When case_sensitive=True, comparing 'LOT-ABC' to 'LOT-abc' must
         produce a score strictly less than 1.0. A regression that
@@ -223,22 +241,28 @@ class TestFuzzyCaseSensitiveFlag_Issue1235:
             ("eid-1", "lot", "LOT-abc", None, None, "unverified", 1.0, "LOT-abc"),
         ]
         results = svc.find_potential_matches(
-            TENANT, "LOT-ABC", case_sensitive=True, threshold=0.0,
+            TENANT,
+            "LOT-ABC",
+            case_sensitive=True,
+            threshold=0.0,
         )
         assert len(results) == 1
-        assert results[0]["confidence"] < 1.0, (
-            "case_sensitive=True must not fold case when comparing identifiers"
-        )
+        assert results[0]["confidence"] < 1.0, "case_sensitive=True must not fold case when comparing identifiers"
 
     def test_case_sensitive_exact_match_scores_perfect(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """Sanity check: same casing still scores 1.0 when case_sensitive=True."""
         mock_session.execute.return_value.fetchall.return_value = [
             ("eid-1", "lot", "LOT-ABC", None, None, "unverified", 1.0, "LOT-ABC"),
         ]
         results = svc.find_potential_matches(
-            TENANT, "LOT-ABC", case_sensitive=True, threshold=0.0,
+            TENANT,
+            "LOT-ABC",
+            case_sensitive=True,
+            threshold=0.0,
         )
         assert len(results) == 1
         assert results[0]["confidence"] == 1.0

@@ -31,7 +31,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from services.graph.app import overlay_resolver as overlay_resolver_module
 from services.graph.app.overlay_resolver import OverlayResolver
 
-
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
@@ -158,14 +157,10 @@ async def test_get_regulatory_requirements_mapping_query_scopes_control_and_mapp
     with patch.object(overlay_resolver_module, "Neo4jClient") as mock_cls:
         mock_cls.side_effect = factory
         mock_cls.get_global_database_name = MagicMock(return_value="neo4j")
-        mock_cls.get_tenant_database_name = MagicMock(
-            return_value=f"reg_tenant_{TENANT_A}"
-        )
+        mock_cls.get_tenant_database_name = MagicMock(return_value=f"reg_tenant_{TENANT_A}")
 
         resolver = OverlayResolver(tenant_id=TENANT_A)
-        await resolver.get_regulatory_requirements(
-            product_id=uuid.UUID("22222222-2222-2222-2222-222222222222")
-        )
+        await resolver.get_regulatory_requirements(product_id=uuid.UUID("22222222-2222-2222-2222-222222222222"))
 
     # Second run() call is the mapping_query (first is product_controls_query).
     assert tenant_session.run.call_count >= 2
@@ -208,9 +203,7 @@ async def test_get_provision_with_overlays_scopes_control_and_product():
     with patch.object(overlay_resolver_module, "Neo4jClient") as mock_cls:
         mock_cls.side_effect = factory
         mock_cls.get_global_database_name = MagicMock(return_value="neo4j")
-        mock_cls.get_tenant_database_name = MagicMock(
-            return_value=f"reg_tenant_{TENANT_A}"
-        )
+        mock_cls.get_tenant_database_name = MagicMock(return_value=f"reg_tenant_{TENANT_A}")
 
         resolver = OverlayResolver(tenant_id=TENANT_A)
         await resolver.get_provision_with_overlays(provision_hash="hash-1")
@@ -250,14 +243,10 @@ async def test_get_control_details_scopes_optional_matches():
     with patch.object(overlay_resolver_module, "Neo4jClient") as mock_cls:
         mock_cls.side_effect = factory
         mock_cls.get_global_database_name = MagicMock(return_value="neo4j")
-        mock_cls.get_tenant_database_name = MagicMock(
-            return_value=f"reg_tenant_{TENANT_A}"
-        )
+        mock_cls.get_tenant_database_name = MagicMock(return_value=f"reg_tenant_{TENANT_A}")
 
         resolver = OverlayResolver(tenant_id=TENANT_A)
-        await resolver.get_control_details(
-            control_id=uuid.UUID("33333333-3333-3333-3333-333333333333")
-        )
+        await resolver.get_control_details(control_id=uuid.UUID("33333333-3333-3333-3333-333333333333"))
 
     cypher = _flatten(tenant_session.run.call_args.args[0])
     kwargs = tenant_session.run.call_args.args[1]
@@ -291,9 +280,7 @@ async def test_get_compliance_gaps_scopes_control_and_mapping():
     with patch.object(overlay_resolver_module, "Neo4jClient") as mock_cls:
         mock_cls.side_effect = factory
         mock_cls.get_global_database_name = MagicMock(return_value="neo4j")
-        mock_cls.get_tenant_database_name = MagicMock(
-            return_value=f"reg_tenant_{TENANT_A}"
-        )
+        mock_cls.get_tenant_database_name = MagicMock(return_value=f"reg_tenant_{TENANT_A}")
 
         resolver = OverlayResolver(tenant_id=TENANT_A)
         await resolver.get_compliance_gaps(
@@ -327,9 +314,7 @@ async def test_every_tenant_query_binds_tenant_id_parameter():
         "product": {"id": "prod-1", "tenant_id": str(TENANT_A)},
         "controls": [{"id": "ctrl-1", "tenant_id": str(TENANT_A)}],
     }
-    mapping_record = {
-        "mapping": {"provision_hash": "h", "tenant_id": str(TENANT_A)}
-    }
+    mapping_record = {"mapping": {"provision_hash": "h", "tenant_id": str(TENANT_A)}}
     factory, tenant_session, _ = _install_client_mocks(
         tenant_records=[[product_record], [mapping_record]],
         global_records=[[]],
@@ -338,21 +323,16 @@ async def test_every_tenant_query_binds_tenant_id_parameter():
     with patch.object(overlay_resolver_module, "Neo4jClient") as mock_cls:
         mock_cls.side_effect = factory
         mock_cls.get_global_database_name = MagicMock(return_value="neo4j")
-        mock_cls.get_tenant_database_name = MagicMock(
-            return_value=f"reg_tenant_{TENANT_A}"
-        )
+        mock_cls.get_tenant_database_name = MagicMock(return_value=f"reg_tenant_{TENANT_A}")
 
         resolver = OverlayResolver(tenant_id=TENANT_A)
-        await resolver.get_regulatory_requirements(
-            product_id=uuid.UUID("22222222-2222-2222-2222-222222222222")
-        )
+        await resolver.get_regulatory_requirements(product_id=uuid.UUID("22222222-2222-2222-2222-222222222222"))
 
     # Every call to the tenant session must bind tenant_id.
     for i, call in enumerate(tenant_session.run.call_args_list):
         params = call.args[1] if len(call.args) > 1 else call.kwargs
         assert params.get("tenant_id") == str(TENANT_A), (
-            f"tenant-database query #{i} missing $tenant_id binding; "
-            f"params were {params!r}; Cypher:\n{call.args[0]}"
+            f"tenant-database query #{i} missing $tenant_id binding; params were {params!r}; Cypher:\n{call.args[0]}"
         )
 
 

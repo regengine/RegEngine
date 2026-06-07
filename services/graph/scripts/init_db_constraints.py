@@ -3,6 +3,7 @@
 RegEngine Database Initialization - Apply Neo4j Constraints
 This script applies the required database constraints for production deployment.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -194,17 +195,13 @@ def apply_constraints(neo4j_client: Neo4jClient):
             print("\n✅ Verification - Active Constraints:")
             result = session.run("SHOW CONSTRAINTS")
             for record in result:
-                print(
-                    f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}"
-                )
+                print(f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}")
 
             # Verify indexes
             print("\n✅ Verification - Active Indexes:")
             result = session.run("SHOW INDEXES")
             for record in result:
-                print(
-                    f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}"
-                )
+                print(f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}")
 
     except Exception as e:
         print(f"\n❌ Error applying constraints: {str(e)}")
@@ -227,7 +224,5 @@ if __name__ == "__main__":
         print(f"❌ Failed to connect to Neo4j: {str(e)}")
         print("\nPlease ensure:")
         print("  1. Neo4j is running")
-        print(
-            "  2. Environment variables are set (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)"
-        )
+        print("  2. Environment variables are set (NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)")
         sys.exit(1)

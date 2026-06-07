@@ -14,10 +14,10 @@ Revision ID: 9d60e8724725
 Revises: 5981332730ae
 Create Date: 2026-04-26
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "9d60e8724725"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "5981332730ae"

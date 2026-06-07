@@ -26,15 +26,13 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from shared.cte_persistence.core import CTEPersistence
 
 from tests.shared.test_cte_persistence_hardening import (
     FakeSession,
-    _FakeResult,
     _base_event,
+    _FakeResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1) SQL-shape assertions — RETURNING id + ON CONFLICT DO NOTHING
@@ -74,8 +72,7 @@ class TestBatchInsertSqlShape_Issue1248:
         assert "ON CONFLICT" in sql_upper
         assert "DO NOTHING" in sql_upper
         assert "RETURNING" in sql_upper, (
-            "batch INSERT must RETURNING id so the caller can detect "
-            "which rows actually landed"
+            "batch INSERT must RETURNING id so the caller can detect which rows actually landed"
         )
 
 
@@ -118,12 +115,12 @@ class TestPartialLostRace_Issue1248:
             # event's winner. Pick the idempotency key the writer
             # passed in and return a faked winner row.
             lost_keys = [v for k, v in params.items() if k.startswith("lk")]
-            assert len(lost_keys) == 1, (
-                f"expected exactly one lost idempotency key, got {lost_keys}"
+            assert len(lost_keys) == 1, f"expected exactly one lost idempotency key, got {lost_keys}"
+            return _FakeResult(
+                rows=[
+                    (lost_keys[0], winner_event_id, winner_sha, winner_chain),
+                ]
             )
-            return _FakeResult(rows=[
-                (lost_keys[0], winner_event_id, winner_sha, winner_chain),
-            ])
 
         session.add_rule(
             r"SELECT idempotency_key, id, sha256_hash, chain_hash",
@@ -149,9 +146,7 @@ class TestPartialLostRace_Issue1248:
 
         # Event 1 lost the race — patched to idempotent=True with the
         # winner's id/sha/chain, NOT the id we minted locally.
-        assert results[1].idempotent is True, (
-            "lost-race event must be reported as idempotent"
-        )
+        assert results[1].idempotent is True, "lost-race event must be reported as idempotent"
         assert results[1].event_id == winner_event_id
         assert results[1].event_id != captured_insert_params["id_1"]
         assert results[1].sha256_hash == winner_sha
@@ -190,10 +185,7 @@ class TestFullyLostRace_Issue1248:
             # Reconcile: map each lost key to a fabricated winner row.
             lost_keys = [v for k, v in params.items() if k.startswith("lk")]
             assert len(lost_keys) == 3
-            return _FakeResult(rows=[
-                (lost_keys[i], winner_ids[i], winner_shas[i], winner_chains[i])
-                for i in range(3)
-            ])
+            return _FakeResult(rows=[(lost_keys[i], winner_ids[i], winner_shas[i], winner_chains[i]) for i in range(3)])
 
         session.add_rule(
             r"SELECT idempotency_key, id, sha256_hash, chain_hash",
@@ -205,24 +197,20 @@ class TestFullyLostRace_Issue1248:
         p = CTEPersistence(session=session)
         results = p.store_events_batch(
             tenant_id="t-1",
-            events=[
-                _base_event(traceability_lot_code=f"TLC-{i}") for i in "ABC"
-            ],
+            events=[_base_event(traceability_lot_code=f"TLC-{i}") for i in "ABC"],
         )
 
         assert len(results) == 3
         for r in results:
             assert r.idempotent is True, (
-                "every StoreResult must be marked idempotent when "
-                "the whole batch lost the race"
+                "every StoreResult must be marked idempotent when the whole batch lost the race"
             )
         # Each StoreResult's event_id came from the re-select, not the
         # locally-minted id_N.
         minted_ids = {captured_insert_params[f"id_{i}"] for i in range(3)}
         returned_ids = {r.event_id for r in results}
         assert returned_ids.isdisjoint(minted_ids), (
-            "lost-race StoreResults must carry winner ids, not the "
-            "locally-minted ones"
+            "lost-race StoreResults must carry winner ids, not the locally-minted ones"
         )
         assert returned_ids == set(winner_ids)
 
@@ -258,10 +246,7 @@ class TestNoLostRaceFastPath_Issue1248:
             ],
         )
 
-        idemp_select_calls = [
-            c for c in session.calls
-            if "SELECT idempotency_key, id, sha256_hash, chain_hash" in c[0]
-        ]
+        idemp_select_calls = [c for c in session.calls if "SELECT idempotency_key, id, sha256_hash, chain_hash" in c[0]]
         assert len(idemp_select_calls) == 1, (
             f"fast path must issue exactly one idempotency-shape SELECT "
             f"(the pre-flight). Got {len(idemp_select_calls)}: fired the "
@@ -300,9 +285,11 @@ class TestPreFlightUnaffected_Issue1248:
                 ks = [v for k, v in params.items() if k.startswith("k")]
                 # Mark the first key (event A) as pre-existing so it
                 # short-circuits without an INSERT row.
-                return _FakeResult(rows=[
-                    (ks[0], pre_existing_id, pre_existing_sha, pre_existing_chain),
-                ])
+                return _FakeResult(
+                    rows=[
+                        (ks[0], pre_existing_id, pre_existing_sha, pre_existing_chain),
+                    ]
+                )
             captured_lk_params.append(params)
             return _FakeResult(rows=[])
 
@@ -344,9 +331,7 @@ class TestPreFlightUnaffected_Issue1248:
         # Only ONE row should have been submitted to the INSERT
         # (event B); event A's pre-flight hit should have been
         # filtered out of event_rows entirely.
-        submitted_ids = [
-            k for k in insert_param_capture if k.startswith("id_")
-        ]
+        submitted_ids = [k for k in insert_param_capture if k.startswith("id_")]
         assert submitted_ids == ["id_0"], (
             f"expected exactly one INSERT row (event B), got "
             f"{submitted_ids}; pre-flight idempotent events must NOT "
@@ -391,9 +376,11 @@ class TestPhantomEventIdGuard_Issue1248:
             if idemp_call_count["n"] == 1:
                 return _FakeResult(rows=[])
             lost_keys = [v for k, v in params.items() if k.startswith("lk")]
-            return _FakeResult(rows=[
-                (lost_keys[0], winner_id, "s" * 64, "h" * 64),
-            ])
+            return _FakeResult(
+                rows=[
+                    (lost_keys[0], winner_id, "s" * 64, "h" * 64),
+                ]
+            )
 
         session.add_rule(
             r"SELECT idempotency_key, id, sha256_hash, chain_hash",

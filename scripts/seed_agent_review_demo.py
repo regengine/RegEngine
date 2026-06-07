@@ -27,7 +27,6 @@ from uuid import UUID, uuid5
 
 from sqlalchemy import text
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICES_DIR = REPO_ROOT / "services"
 if str(SERVICES_DIR) in sys.path:
@@ -50,7 +49,6 @@ from shared.agent_task_bridge import (  # noqa: E402
     persist_agent_artifact,
 )
 from shared.tenant_context import set_tenant_guc  # noqa: E402
-
 
 DEFAULT_TENANT_ID = UUID("00000000-de00-4000-8000-000000000001")
 DEFAULT_INGESTION_RUN_ID = UUID("00000000-de00-4000-8000-0000000000a1")
@@ -121,8 +119,7 @@ def build_demo_artifacts(
                 target_canonical_field="traceability_lot_code",
                 normalized_value="ROM-2026-05-19-A23",
                 rationale=(
-                    "The supplier column contains the lot value required for "
-                    "FSMA traceability-lot-code export fields."
+                    "The supplier column contains the lot value required for FSMA traceability-lot-code export fields."
                 ),
             ),
         ),
@@ -349,9 +346,7 @@ def is_safe_database_url_for_demo_seed(database_url: str | None) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Seed deterministic synthetic FSMA agent-review demo artifacts."
-    )
+    parser = argparse.ArgumentParser(description="Seed deterministic synthetic FSMA agent-review demo artifacts.")
     parser.add_argument(
         "--tenant-id",
         type=UUID,
@@ -452,13 +447,9 @@ def _artifact(
         confidence=confidence,
         requires_human_review=requires_human_review,
         context=AgentArtifactContext(
-            evidence_ids=[
-                _stable_uuid(tenant_id, ingestion_run_id, "evidence", key)
-                for key in evidence_keys
-            ],
+            evidence_ids=[_stable_uuid(tenant_id, ingestion_run_id, "evidence", key) for key in evidence_keys],
             canonical_event_ids=[
-                _stable_uuid(tenant_id, ingestion_run_id, "canonical-event", key)
-                for key in canonical_event_keys
+                _stable_uuid(tenant_id, ingestion_run_id, "canonical-event", key) for key in canonical_event_keys
             ],
             ingestion_run_id=ingestion_run_id,
             source_hashes=[_source_hash(key) for key in source_keys],

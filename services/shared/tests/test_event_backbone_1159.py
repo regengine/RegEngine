@@ -3,50 +3,57 @@
 Verifies that kafka_enabled() gates exactly on EVENT_BACKBONE=kafka and that
 the NLP and admin service startup paths honour the flag.
 """
+
 from __future__ import annotations
 
 import importlib
-import threading
 import sys
+import threading
 import types
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Unit tests for shared.event_backbone.kafka_enabled()
 # ---------------------------------------------------------------------------
+
 
 class TestKafkaEnabled:
     def test_default_returns_false(self, monkeypatch):
         monkeypatch.delenv("EVENT_BACKBONE", raising=False)
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is False
 
     def test_pg_explicit_returns_false(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "pg")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is False
 
     def test_pg_uppercase_returns_false(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "PG")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is False
 
     def test_kafka_returns_true(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "kafka")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is True
 
     def test_kafka_uppercase_returns_true(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "KAFKA")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is True
 
     def test_other_value_returns_false(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "rabbitmq")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is False
 
 
@@ -54,18 +61,21 @@ class TestKafkaEnabled:
 # Integration: admin._start_review_consumer() is gated by kafka_enabled()
 # ---------------------------------------------------------------------------
 
+
 class TestAdminStartReviewConsumer:
     """Verify that _start_review_consumer never starts a thread when EVENT_BACKBONE=pg."""
 
     def test_no_thread_when_pg_backbone(self, monkeypatch):
         monkeypatch.delenv("EVENT_BACKBONE", raising=False)
         from shared.event_backbone import kafka_enabled
+
         # Default backbone is pg — kafka_enabled() must return False
         assert kafka_enabled() is False
 
     def test_thread_starts_when_kafka_backbone(self, monkeypatch):
         monkeypatch.setenv("EVENT_BACKBONE", "kafka")
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is True
 
 
@@ -73,12 +83,14 @@ class TestAdminStartReviewConsumer:
 # Focused functional test: _start_review_consumer logic without importing main
 # ---------------------------------------------------------------------------
 
+
 class TestStartReviewConsumerLogic:
     """Test the gating logic in isolation by re-implementing its decision path."""
 
     def _run_gate(self, kafka_env: str | None, enable_consumer: str) -> bool:
         """Simulate _start_review_consumer and return whether thread would start."""
         import os
+
         original_backbone = os.environ.get("EVENT_BACKBONE")
         original_enable = os.environ.get("ENABLE_REVIEW_CONSUMER")
         try:
@@ -90,7 +102,9 @@ class TestStartReviewConsumerLogic:
 
             # Reload to respect patched env
             import importlib
+
             import shared.event_backbone as eb_mod
+
             importlib.reload(eb_mod)
 
             if not eb_mod.kafka_enabled():
@@ -126,6 +140,7 @@ class TestStartReviewConsumerLogic:
 # NLP lifespan: consumer_thread is None when EVENT_BACKBONE=pg
 # ---------------------------------------------------------------------------
 
+
 class TestNlpLifespanGating:
     def test_no_thread_when_pg(self, monkeypatch):
         """When EVENT_BACKBONE=pg, run_consumer must never be called."""
@@ -139,6 +154,7 @@ class TestNlpLifespanGating:
         with patch("shared.event_backbone.kafka_enabled", return_value=False):
             # Verify the gating predicate
             from shared.event_backbone import kafka_enabled
+
             assert not kafka_enabled()
 
         assert called == [], "run_consumer should not be called when backbone=pg"
@@ -148,4 +164,5 @@ class TestNlpLifespanGating:
         monkeypatch.setenv("EVENT_BACKBONE", "kafka")
 
         from shared.event_backbone import kafka_enabled
+
         assert kafka_enabled() is True

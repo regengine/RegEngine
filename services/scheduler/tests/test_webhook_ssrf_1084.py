@@ -24,6 +24,7 @@ def _public_getaddrinfo(ip: str = "93.184.216.34"):
     """
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
 
+
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
@@ -33,15 +34,15 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable  # noqa: E402
+
 ensure_shared_importable()
 
 import pytest  # noqa: E402
-
 from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
 from app.notifications import (  # noqa: E402
+    _RESPONSE_BODY_MAX_BYTES,
     OutboxEntry,
     WebhookNotifier,
-    _RESPONSE_BODY_MAX_BYTES,
 )
 
 
@@ -102,9 +103,7 @@ class TestSSRFGuard_Issue1084:
 
     def test_blocks_imds(self):
         notifier = _make_notifier("http://169.254.169.254/latest/meta-data")
-        result = notifier._deliver_with_retry(
-            "http://169.254.169.254/latest/meta-data", MagicMock()
-        )
+        result = notifier._deliver_with_retry("http://169.254.169.254/latest/meta-data", MagicMock())
         assert not result.success
         assert "SSRF blocked" in result.error
 

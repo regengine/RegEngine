@@ -4,10 +4,9 @@ import asyncio
 import io
 
 import pytest
+from app.bulk_upload.parsers import _parse_pdf_matrix_table, parse_incoming_file
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
-
-from app.bulk_upload.parsers import _parse_pdf_matrix_table, parse_incoming_file
 
 
 def _make_upload_file(filename: str, content: bytes, content_type: str) -> UploadFile:
@@ -26,9 +25,7 @@ tlc,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,
 event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,shipping,2026-03-03T12:00:00Z,"{""quantity"": 120, ""unit_of_measure"": ""cases""}"
 """.replace("Grower|Packer", "Grower,Packer")
 
-    upload_file = _make_upload_file(
-        "supplier.csv", csv_content.encode("utf-8"), "text/csv"
-    )
+    upload_file = _make_upload_file("supplier.csv", csv_content.encode("utf-8"), "text/csv")
     parsed = asyncio.run(parse_incoming_file(upload_file))
 
     assert parsed["detected_format"] == "csv"
@@ -105,16 +102,12 @@ def test_parse_json_sections_skips_non_object_rows():
     assert parsed["detected_format"] == "json"
     assert len(parsed["facilities"]) == 1
     assert len(parsed["ftl_scopes"]) == 1
-    assert any(
-        "facilities section at index 1" in warning for warning in parsed["warnings"]
-    )
+    assert any("facilities section at index 1" in warning for warning in parsed["warnings"])
 
 
 def test_parse_rejects_oversized_upload(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUPPLIER_BULK_UPLOAD_MAX_BYTES", "16")
-    upload_file = _make_upload_file(
-        "supplier.csv", b"record_type\nfacility\n", "text/csv"
-    )
+    upload_file = _make_upload_file("supplier.csv", b"record_type\nfacility\n", "text/csv")
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(parse_incoming_file(upload_file))

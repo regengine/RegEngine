@@ -14,7 +14,6 @@ from typing import List, Optional
 import structlog
 
 from ..neo4j_utils import Neo4jClient
-
 from .types import DataQualityReport, KDECompletenessMetrics, OrphanLot
 
 logger = structlog.get_logger("fsma-utils")
@@ -47,9 +46,7 @@ async def find_orphaned_lots(
     start_time = time.time()
 
     # Calculate cutoff date
-    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_stagnant)).strftime(
-        "%Y-%m-%d"
-    )
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_stagnant)).strftime("%Y-%m-%d")
 
     # Find lots with inbound events but no outbound events
     # Inbound: RECEIVING, CREATION, or PRODUCED by transformation
@@ -143,16 +140,10 @@ async def find_orphaned_lots(
                     product_description=record["product_description"],
                     quantity=record["quantity"],
                     unit_of_measure=record["unit_of_measure"],
-                    created_at=(
-                        str(record["created_at"]) if record["created_at"] else None
-                    ),
+                    created_at=(str(record["created_at"]) if record["created_at"] else None),
                     stagnant_days=stagnant,
                     last_event_type=record["last_event_type"],
-                    last_event_date=(
-                        str(record["last_event_date"])
-                        if record["last_event_date"]
-                        else None
-                    ),
+                    last_event_date=(str(record["last_event_date"]) if record["last_event_date"] else None),
                 )
             )
 

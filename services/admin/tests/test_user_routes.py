@@ -63,9 +63,7 @@ def _load_routes(monkeypatch):
 
     Returns a tuple of (module, audit_calls, set_tenant, clear_tenant).
     """
-    from services.admin.app import user_routes as user_routes_mod
-    from services.admin.app import models as models_mod
-    from services.admin.app import audit as audit_mod
+    from services.admin.app import audit as audit_mod, models as models_mod, user_routes as user_routes_mod
 
     # Install deterministic TenantContext stub.
     monkeypatch.setattr(
@@ -88,9 +86,7 @@ def _load_routes(monkeypatch):
         return 1
 
     monkeypatch.setattr(audit_mod.AuditLogger, "log_event", _fake_log_event)
-    monkeypatch.setattr(
-        user_routes_mod.AuditLogger, "log_event", _fake_log_event
-    )
+    monkeypatch.setattr(user_routes_mod.AuditLogger, "log_event", _fake_log_event)
 
     return user_routes_mod, audit_calls
 
@@ -279,7 +275,8 @@ class TestUpdateUserRole_Issue1341:
         )
 
     def test_allows_demotion_when_other_owners_exist(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """Demotion of an Owner succeeds when at least one other Owner
         remains. Audit log must capture old/new role."""
@@ -303,7 +300,8 @@ class TestUpdateUserRole_Issue1341:
         # Second call returns a non-empty list so the last-owner check
         # passes.
         other_owner = _fake_membership(
-            user_id=uuid.uuid4(), role_id=OWNER_ROLE_ID,
+            user_id=uuid.uuid4(),
+            role_id=OWNER_ROLE_ID,
         )
         call_count = {"n": 0}
 
@@ -341,7 +339,8 @@ class TestUpdateUserRole_Issue1341:
         db.commit.assert_called_once()
 
     def test_non_owner_role_change_skips_last_owner_check(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """Role change from Member → Member (or Admin) does NOT trigger
         the last-owner guard. That guard runs only when demoting AWAY
@@ -478,7 +477,8 @@ class TestDeactivateUser_Issue1341:
         db = MagicMock()
 
         current_membership = _fake_membership(
-            role_id=MEMBER_ROLE_ID, is_active=True,
+            role_id=MEMBER_ROLE_ID,
+            is_active=True,
         )
         member_role = _fake_role(MEMBER_ROLE_ID, "Member")
         db.get.return_value = member_role
@@ -546,7 +546,8 @@ class TestReactivateUser_Issue1341:
         assert exc.value.status_code == 404
 
     def test_blocks_non_sysadmin_reactivating_sysadmin_1406(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """#1406: a regular tenant Owner must NOT be able to reactivate
         a sysadmin's dormant membership. That would let a customer
@@ -556,7 +557,8 @@ class TestReactivateUser_Issue1341:
         db = MagicMock()
 
         dormant_membership = _fake_membership(
-            user_id=TARGET_USER_ID, is_active=False,
+            user_id=TARGET_USER_ID,
+            is_active=False,
         )
         # target user IS a sysadmin
         dormant_sysadmin = _fake_user(TARGET_USER_ID, is_sysadmin=True)
@@ -581,10 +583,7 @@ class TestReactivateUser_Issue1341:
 
         # A "blocked" audit entry must still be emitted so security can
         # see the attempted reactivation.
-        blocked = [
-            c for c in audit_calls
-            if c["event_type"] == "membership.reactivate_blocked"
-        ]
+        blocked = [c for c in audit_calls if c["event_type"] == "membership.reactivate_blocked"]
         assert len(blocked) == 1, (
             "The #1406 block must produce an audit row with event_type "
             "'membership.reactivate_blocked' — silently rejecting would "
@@ -595,7 +594,8 @@ class TestReactivateUser_Issue1341:
         assert dormant_membership.is_active is False
 
     def test_allows_sysadmin_reactivating_sysadmin_target(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """The #1406 block applies specifically when the CALLER is not
         a sysadmin. Another sysadmin may reactivate a sysadmin target
@@ -622,10 +622,7 @@ class TestReactivateUser_Issue1341:
         assert response == {"status": "reactivated"} or response.get("status") == "reactivated"
         assert dormant.is_active is True
         # The audit log should be the reactivate event, NOT the blocked event.
-        reactivates = [
-            c for c in audit_calls
-            if c["event_type"] == "membership.reactivate"
-        ]
+        reactivates = [c for c in audit_calls if c["event_type"] == "membership.reactivate"]
         assert len(reactivates) == 1
 
     def test_happy_path_flips_is_active_true(self, monkeypatch) -> None:

@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -38,6 +39,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -65,6 +67,7 @@ def tenant_id():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -72,6 +75,7 @@ def workflow(db_session):
 def rules_engine(db_session):
     """Create a RulesEngine instance."""
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
 
 
@@ -79,6 +83,7 @@ def rules_engine(db_session):
 def canonical_store(db_session):
     """Create a CanonicalEventStore instance."""
     from shared.canonical_persistence import CanonicalEventStore
+
     return CanonicalEventStore(db_session)
 
 
@@ -158,8 +163,10 @@ def _make_events(tenant_id: str) -> List[Dict]:
 # Shared state between ordered tests
 # ---------------------------------------------------------------------------
 
+
 class _State:
     """Mutable namespace for cross-test state (module-scoped)."""
+
     case_id: str = ""
     package_id: str = ""
     package_hash: str = ""
@@ -171,6 +178,7 @@ class _State:
 # The Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPackageManifest:
     """Prove manifest completeness, reproducibility, and immutability."""
 
@@ -179,6 +187,7 @@ class TestPackageManifest:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
@@ -187,7 +196,7 @@ class TestPackageManifest:
 
     def test_01_ingest_events(self, db_session, tenant_id, canonical_store):
         """Ingest test events into canonical store."""
-        from shared.canonical_event import TraceabilityEvent, IngestionSource
+        from shared.canonical_event import IngestionSource, TraceabilityEvent
 
         events = _make_events(tenant_id)
         persisted = []
@@ -232,10 +241,14 @@ class TestPackageManifest:
         assert len(events) >= 3
 
         for event in events:
-            full = db_session.execute(
-                text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
-                {"eid": str(event["event_id"]), "tid": tenant_id},
-            ).mappings().fetchone()
+            full = (
+                db_session.execute(
+                    text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
+                    {"eid": str(event["event_id"]), "tid": tenant_id},
+                )
+                .mappings()
+                .fetchone()
+            )
             if full:
                 event_dict = dict(full)
                 if event_dict.get("kdes") and isinstance(event_dict["kdes"], str):
@@ -289,7 +302,8 @@ class TestPackageManifest:
         _State.case_id = case["request_case_id"]
 
         workflow.update_scope(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             scope_description="All manifest test romaine lots",
         )
         workflow.collect_records(tenant_id, _State.case_id)
@@ -297,7 +311,8 @@ class TestPackageManifest:
 
         # Add required signoff to advance through workflow
         workflow.add_signoff(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             signoff_type="scope_approval",
             signed_by="qa_lead@test.com",
             notes="Scope approved for manifest test.",
@@ -308,7 +323,8 @@ class TestPackageManifest:
     def test_05_assemble_package_has_manifest_fields(self, tenant_id, workflow):
         """Assemble package and verify all manifest fields are present."""
         package = workflow.assemble_response_package(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             generated_by="manifest_test@test.com",
         )
 
@@ -345,10 +361,7 @@ class TestPackageManifest:
 
         # Verify signoff_state includes our scope_approval
         assert len(contents["signoff_state"]) >= 1
-        assert any(
-            s["signoff_type"] == "scope_approval"
-            for s in contents["signoff_state"]
-        )
+        assert any(s["signoff_type"] == "scope_approval" for s in contents["signoff_state"])
 
     def test_06_reproducibility_same_hash(self, db_session, tenant_id, workflow):
         """Assemble again with same inputs -> same manifest hash.
@@ -359,7 +372,8 @@ class TestPackageManifest:
         identity_state, etc.) matches exactly.
         """
         package2 = workflow.assemble_response_package(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             generated_by="manifest_test@test.com",
         )
         contents2 = package2["package_contents"]
@@ -378,23 +392,21 @@ class TestPackageManifest:
             "waiver_state",
         ]
         for key in deterministic_keys:
-            assert json.dumps(contents2[key], sort_keys=True, default=str) == \
-                   json.dumps(_State.package_contents[key], sort_keys=True, default=str), \
-                   f"Manifest field '{key}' differs between assemblies"
+            assert json.dumps(contents2[key], sort_keys=True, default=str) == json.dumps(
+                _State.package_contents[key], sort_keys=True, default=str
+            ), f"Manifest field '{key}' differs between assemblies"
 
         # Verify the embedded package_hash is self-consistent
         # (remove package_hash, recompute, compare)
         contents2_check = {k: v for k, v in contents2.items() if k != "package_hash"}
-        recomputed = hashlib.sha256(
-            json.dumps(contents2_check, sort_keys=True, default=str).encode()
-        ).hexdigest()
-        assert recomputed == contents2["package_hash"], \
-            "Embedded package_hash must match recomputed hash of manifest"
+        recomputed = hashlib.sha256(json.dumps(contents2_check, sort_keys=True, default=str).encode()).hexdigest()
+        assert recomputed == contents2["package_hash"], "Embedded package_hash must match recomputed hash of manifest"
 
     def test_07_submit_package(self, tenant_id, workflow):
         """Add final_approval signoff and submit the package."""
         workflow.add_signoff(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             signoff_type="final_approval",
             signed_by="vp_quality@test.com",
             notes="Approved for submission.",
@@ -402,7 +414,8 @@ class TestPackageManifest:
 
         # Submit with force=True to bypass any rule-failure blockers
         result = workflow.submit_package(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             package_id=_State.package_id,
             submitted_by="vp_quality@test.com",
             submitted_to="FDA",
@@ -416,15 +429,19 @@ class TestPackageManifest:
         """Re-read the submitted package from DB — contents and hash are intact."""
         from sqlalchemy import text
 
-        row = db_session.execute(
-            text("""
+        row = (
+            db_session.execute(
+                text("""
                 SELECT package_contents, package_hash
                 FROM fsma.response_packages
                 WHERE package_id = :pkg_id
                   AND tenant_id = :tid
             """),
-            {"pkg_id": _State.package_id, "tid": tenant_id},
-        ).mappings().fetchone()
+                {"pkg_id": _State.package_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         assert row is not None
         stored_hash = row["package_hash"]
@@ -444,30 +461,33 @@ class TestPackageManifest:
     def test_09_amendment_preserves_original(self, db_session, tenant_id, workflow):
         """Amend package -> old package still intact with original hash."""
         amendment = workflow.create_amendment(
-            tenant_id, _State.case_id,
+            tenant_id,
+            _State.case_id,
             generated_by="manifest_test@test.com",
         )
         assert amendment["version_number"] == 3  # versions 1, 2 from reproducibility test, now 3
 
         # Re-read version 1 — must still have original hash and contents
         from sqlalchemy import text
-        v1 = db_session.execute(
-            text("""
+
+        v1 = (
+            db_session.execute(
+                text("""
                 SELECT package_contents, package_hash
                 FROM fsma.response_packages
                 WHERE package_id = :pkg_id
                   AND tenant_id = :tid
             """),
-            {"pkg_id": _State.package_id, "tid": tenant_id},
-        ).mappings().fetchone()
+                {"pkg_id": _State.package_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         assert v1 is not None
-        assert v1["package_hash"] == _State.package_hash, \
-            "Original package hash must be preserved after amendment"
+        assert v1["package_hash"] == _State.package_hash, "Original package hash must be preserved after amendment"
 
-    def test_10_identity_change_does_not_mutate_old_package(
-        self, db_session, tenant_id
-    ):
+    def test_10_identity_change_does_not_mutate_old_package(self, db_session, tenant_id):
         """Change an entity name after submission -> old package manifest unchanged."""
         from sqlalchemy import text
 
@@ -485,15 +505,19 @@ class TestPackageManifest:
         db_session.commit()
 
         # Re-read the original package
-        row = db_session.execute(
-            text("""
+        row = (
+            db_session.execute(
+                text("""
                 SELECT package_contents, package_hash
                 FROM fsma.response_packages
                 WHERE package_id = :pkg_id
                   AND tenant_id = :tid
             """),
-            {"pkg_id": _State.package_id, "tid": tenant_id},
-        ).mappings().fetchone()
+                {"pkg_id": _State.package_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         assert row is not None
         stored_contents = row["package_contents"]
@@ -502,15 +526,14 @@ class TestPackageManifest:
 
         # The stored identity_state must still show the OLD name
         entity_snap = stored_contents["identity_state"][_State.entity_id]
-        assert entity_snap["name"] == "Manifest Farm Alpha", \
+        assert entity_snap["name"] == "Manifest Farm Alpha", (
             "Old package must retain original entity name, not the renamed one"
+        )
 
         # Hash must be unchanged
         assert row["package_hash"] == _State.package_hash
 
-    def test_11_rule_change_does_not_mutate_old_package(
-        self, db_session, tenant_id
-    ):
+    def test_11_rule_change_does_not_mutate_old_package(self, db_session, tenant_id):
         """If rule definitions change, old package manifest still has original rule versions."""
         from sqlalchemy import text
 
@@ -535,15 +558,19 @@ class TestPackageManifest:
         db_session.commit()
 
         # Re-read the original package
-        row = db_session.execute(
-            text("""
+        row = (
+            db_session.execute(
+                text("""
                 SELECT package_contents, package_hash
                 FROM fsma.response_packages
                 WHERE package_id = :pkg_id
                   AND tenant_id = :tid
             """),
-            {"pkg_id": _State.package_id, "tid": tenant_id},
-        ).mappings().fetchone()
+                {"pkg_id": _State.package_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         assert row is not None
         stored_contents = row["package_contents"]
@@ -551,8 +578,9 @@ class TestPackageManifest:
             stored_contents = json.loads(stored_contents)
 
         # The stored rule_versions must still show the ORIGINAL version
-        assert stored_contents["rule_versions"][sample_rule_id]["version"] == original_version, \
+        assert stored_contents["rule_versions"][sample_rule_id]["version"] == original_version, (
             "Old package must retain original rule version, not the updated one"
+        )
 
         # Hash must be unchanged
         assert row["package_hash"] == _State.package_hash
@@ -572,15 +600,19 @@ class TestPackageManifest:
         """The embedded package_hash can be verified against the manifest contents."""
         from sqlalchemy import text
 
-        row = db_session.execute(
-            text("""
+        row = (
+            db_session.execute(
+                text("""
                 SELECT package_contents
                 FROM fsma.response_packages
                 WHERE package_id = :pkg_id
                   AND tenant_id = :tid
             """),
-            {"pkg_id": _State.package_id, "tid": tenant_id},
-        ).mappings().fetchone()
+                {"pkg_id": _State.package_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         contents = row["package_contents"]
         if isinstance(contents, str):
@@ -589,9 +621,8 @@ class TestPackageManifest:
         embedded_hash = contents.pop("package_hash")
 
         # Recompute from manifest without the hash field
-        recomputed = hashlib.sha256(
-            json.dumps(contents, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        recomputed = hashlib.sha256(json.dumps(contents, sort_keys=True, default=str).encode()).hexdigest()
 
-        assert recomputed == embedded_hash, \
+        assert recomputed == embedded_hash, (
             "Embedded package_hash must be verifiable by recomputing SHA-256 of manifest"
+        )

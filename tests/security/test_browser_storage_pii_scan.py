@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SCANNER_PATH = ROOT / "scripts/security/scan_browser_storage_pii.py"
 spec = importlib.util.spec_from_file_location("scan_browser_storage_pii", SCANNER_PATH)

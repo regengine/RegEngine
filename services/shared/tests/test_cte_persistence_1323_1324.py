@@ -17,17 +17,16 @@ from uuid import uuid4
 
 import pytest
 
+from services.shared.cte_persistence.core import (
+    _REJECT_SEVERITIES,
+    VALIDATION_STATUS_REJECTED,
+    VALIDATION_STATUS_VALID,
+    VALIDATION_STATUS_WARNING,
+)
 from services.shared.cte_persistence.hashing import (
     compute_event_hash,
     compute_idempotency_key,
 )
-from services.shared.cte_persistence.core import (
-    VALIDATION_STATUS_REJECTED,
-    VALIDATION_STATUS_VALID,
-    VALIDATION_STATUS_WARNING,
-    _REJECT_SEVERITIES,
-)
-
 
 # ===========================================================================
 # #1323 — product_description excluded from event hash
@@ -244,9 +243,7 @@ class TestValidationStatusRejected_Issue1324:
         from services.shared.cte_persistence.core import _is_rejecting_validation_item
 
         for sev in ("reject", "REJECT", "error", "ERROR"):
-            assert _is_rejecting_validation_item({"severity": sev}), (
-                f"{sev!r} should be treated as a reject severity"
-            )
+            assert _is_rejecting_validation_item({"severity": sev}), f"{sev!r} should be treated as a reject severity"
         for sev in ("warning", "WARNING", "info", "INFO"):
             assert not _is_rejecting_validation_item({"severity": sev}), (
                 f"{sev!r} should not be treated as a reject severity"
@@ -279,9 +276,7 @@ def _assert_insert_status(session: MagicMock, expected_status: str) -> None:
     last_insert = inserts[-1]
     params = last_insert.args[1] if len(last_insert.args) > 1 else {}
     actual = params.get("validation_status")
-    assert actual == expected_status, (
-        f"Expected validation_status={expected_status!r}, got {actual!r}"
-    )
+    assert actual == expected_status, f"Expected validation_status={expected_status!r}, got {actual!r}"
 
 
 def _assert_no_chain_insert(session: MagicMock) -> None:
@@ -292,10 +287,7 @@ def _assert_no_chain_insert(session: MagicMock) -> None:
             sql_arg = args[0]
             sql_text = str(sql_arg) if not isinstance(sql_arg, str) else sql_arg
             if "INSERT INTO fsma.hash_chain" in sql_text:
-                raise AssertionError(
-                    "hash_chain INSERT must NOT occur for a rejected event, "
-                    f"but found call: {c}"
-                )
+                raise AssertionError(f"hash_chain INSERT must NOT occur for a rejected event, but found call: {c}")
 
 
 # ===========================================================================
@@ -337,6 +329,7 @@ class TestBatchValidationStatusRejected_Issue1324:
 
     def _call_batch(self, session: MagicMock, events: List[Dict[str, Any]]) -> List:
         from services.shared.cte_persistence.core import CTEPersistence
+
         persistence = CTEPersistence(session)
         return persistence.store_events_batch("tenant-batch-1324", events)
 
@@ -357,9 +350,7 @@ class TestBatchValidationStatusRejected_Issue1324:
             if args and "INSERT INTO fsma.cte_events" in str(args[0]):
                 # Batch INSERT uses positional param keys like :vs_0
                 params = args[1] if len(args) > 1 else {}
-                assert params.get("vs_0") == VALIDATION_STATUS_VALID, (
-                    f"Expected 'valid', got {params.get('vs_0')!r}"
-                )
+                assert params.get("vs_0") == VALIDATION_STATUS_VALID, f"Expected 'valid', got {params.get('vs_0')!r}"
                 found = True
         assert found, "Expected an INSERT INTO fsma.cte_events call"
 
@@ -370,9 +361,7 @@ class TestBatchValidationStatusRejected_Issue1324:
     def test_reject_severity_batch_status_rejected(self):
         """Event with severity='reject' → validation_status='rejected', success=False."""
         session = self._make_session()
-        evt = self._base_event(
-            validator_results=[{"severity": "reject", "reason": "Bad TLC format"}]
-        )
+        evt = self._base_event(validator_results=[{"severity": "reject", "reason": "Bad TLC format"}])
         results = self._call_batch(session, [evt])
         assert len(results) == 1
         result = results[0]
@@ -385,34 +374,25 @@ class TestBatchValidationStatusRejected_Issue1324:
             if args and "INSERT INTO fsma.cte_events" in str(args[0]):
                 params = args[1] if len(args) > 1 else {}
                 actual = params.get("vs_0")
-                assert actual == VALIDATION_STATUS_REJECTED, (
-                    f"Expected 'rejected', got {actual!r}"
-                )
+                assert actual == VALIDATION_STATUS_REJECTED, f"Expected 'rejected', got {actual!r}"
 
     def test_rejected_batch_event_not_in_chain(self):
         """No hash_chain INSERT must occur when all batch events are rejected."""
         session = self._make_session()
-        evt = self._base_event(
-            validator_results=[{"severity": "ERROR", "reason": "Mandatory field absent"}]
-        )
+        evt = self._base_event(validator_results=[{"severity": "ERROR", "reason": "Mandatory field absent"}])
         self._call_batch(session, [evt])
         for c in session.execute.call_args_list:
             args = c.args or ()
             if args and "INSERT INTO fsma.hash_chain" in str(args[0]):
-                raise AssertionError(
-                    "hash_chain INSERT must NOT occur for a rejected batch event"
-                )
+                raise AssertionError("hash_chain INSERT must NOT occur for a rejected batch event")
 
     def test_rejected_batch_event_is_still_persisted(self):
         """Rejected events must still produce an INSERT INTO fsma.cte_events call."""
         session = self._make_session()
-        evt = self._base_event(
-            validator_results=[{"severity": "reject", "reason": "Missing GLN"}]
-        )
+        evt = self._base_event(validator_results=[{"severity": "reject", "reason": "Missing GLN"}])
         self._call_batch(session, [evt])
         insert_calls = [
-            c for c in session.execute.call_args_list
-            if c.args and "INSERT INTO fsma.cte_events" in str(c.args[0])
+            c for c in session.execute.call_args_list if c.args and "INSERT INTO fsma.cte_events" in str(c.args[0])
         ]
         assert insert_calls, "Rejected event must still be INSERTed into cte_events (audit trail)"
 
@@ -436,9 +416,7 @@ class TestBatchValidationStatusRejected_Issue1324:
     def test_warning_severity_not_rejected_batch(self):
         """severity='warning' in validator_results must not trigger rejection in batch."""
         session = self._make_session()
-        evt = self._base_event(
-            validator_results=[{"severity": "warning", "reason": "Temp slightly off"}]
-        )
+        evt = self._base_event(validator_results=[{"severity": "warning", "reason": "Temp slightly off"}])
         results = self._call_batch(session, [evt])
         assert results[0].success is True
         for c in session.execute.call_args_list:
@@ -446,6 +424,4 @@ class TestBatchValidationStatusRejected_Issue1324:
             if args and "INSERT INTO fsma.cte_events" in str(args[0]):
                 params = args[1] if len(args) > 1 else {}
                 actual = params.get("vs_0")
-                assert actual == VALIDATION_STATUS_WARNING, (
-                    f"Warning severity should set 'warning'; got {actual!r}"
-                )
+                assert actual == VALIDATION_STATUS_WARNING, f"Warning severity should set 'warning'; got {actual!r}"

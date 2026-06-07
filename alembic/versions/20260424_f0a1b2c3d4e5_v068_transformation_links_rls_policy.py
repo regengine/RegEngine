@@ -56,10 +56,10 @@ Revision ID: f0a1b2c3d4e5
 Revises: e9f0a1b2c3d4
 Create Date: 2026-04-24
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "f0a1b2c3d4e5"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "e9f0a1b2c3d4"

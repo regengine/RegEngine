@@ -28,23 +28,19 @@ import sys
 from types import ModuleType
 
 import pytest
-
 from app.epcis import xml_parser as xp
 
 # ---------------------------------------------------------------------------
 # Helpers — build real XML trees via lxml (same engine used by the parser)
 # ---------------------------------------------------------------------------
-
 from lxml import etree  # type: ignore
-
 
 EPCIS_NS = "urn:epcglobal:epcis:xsd:2"
 FSMA_NS = "urn:fsma:food:traceability"
 GS1_NS = "https://ref.gs1.org/standards/epcis/2.0.0"
 
 
-def _el(tag: str, *, text: str | None = None, ns: str | None = None,
-        attrib: dict | None = None):
+def _el(tag: str, *, text: str | None = None, ns: str | None = None, attrib: dict | None = None):
     """Build a single lxml Element."""
     qname = f"{{{ns}}}{tag}" if ns else tag
     el = etree.Element(qname, attrib=attrib or {})
@@ -59,7 +55,6 @@ def _el(tag: str, *, text: str | None = None, ns: str | None = None,
 
 
 class TestNamespaceHelpers:
-
     def test_xml_local_strips_namespace(self):
         assert xp._xml_local("{urn:example}tag") == "tag"
 
@@ -76,14 +71,17 @@ class TestNamespaceHelpers:
     def test_xml_ns_prefix_no_ns_returns_empty(self):
         assert xp._xml_ns_prefix("plain") == ""
 
-    @pytest.mark.parametrize("raw,expected", [
-        (b"<?xml version='1.0'?><root/>", True),
-        (b"<root/>", True),
-        (b"   <root/>", True),  # leading whitespace OK
-        (b"{\"json\": true}", False),
-        (b"plain text", False),
-        (b"", False),
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            (b"<?xml version='1.0'?><root/>", True),
+            (b"<root/>", True),
+            (b"   <root/>", True),  # leading whitespace OK
+            (b'{"json": true}', False),
+            (b"plain text", False),
+            (b"", False),
+        ],
+    )
     def test_is_xml_content(self, raw, expected):
         assert xp._is_xml_content(raw) is expected
 
@@ -94,7 +92,6 @@ class TestNamespaceHelpers:
 
 
 class TestXmlChildText:
-
     def test_returns_stripped_text_when_present(self):
         parent = _el("root")
         parent.append(_el("eventTime", text=" 2026-01-01T00:00:00Z "))
@@ -127,7 +124,6 @@ class TestXmlChildText:
 
 
 class TestXmlFindEvents:
-
     def test_finds_events_under_epcis_ns(self):
         root = _el("EPCISDocument")
         ev = _el("ObjectEvent", ns=EPCIS_NS)
@@ -169,7 +165,6 @@ class TestXmlFindEvents:
 
 
 class TestXmlCollectList:
-
     def test_collects_items_from_list_container(self):
         ev = _el("ObjectEvent")
         epc_list = _el("epcList")
@@ -212,7 +207,6 @@ class TestXmlCollectList:
 
 
 class TestQuantityList:
-
     def test_parses_numeric_quantity_and_uom(self):
         ev = _el("ObjectEvent")
         q_list = _el("quantityList")
@@ -223,8 +217,7 @@ class TestQuantityList:
         q_list.append(qe)
         ev.append(q_list)
         quantities = xp._xml_collect_quantity_list(ev)
-        assert quantities == [{"epcClass": "urn:epc:cls:1",
-                               "quantity": 10.5, "uom": "KGM"}]
+        assert quantities == [{"epcClass": "urn:epc:cls:1", "quantity": 10.5, "uom": "KGM"}]
 
     def test_non_numeric_quantity_falls_back_to_string(self):
         ev = _el("ObjectEvent")
@@ -236,10 +229,15 @@ class TestQuantityList:
         quantities = xp._xml_collect_quantity_list(ev)
         assert quantities[0]["quantity"] == "not-a-number"
 
-    @pytest.mark.parametrize("list_tag", [
-        "quantityList", "childQuantityList",
-        "inputQuantityList", "outputQuantityList",
-    ])
+    @pytest.mark.parametrize(
+        "list_tag",
+        [
+            "quantityList",
+            "childQuantityList",
+            "inputQuantityList",
+            "outputQuantityList",
+        ],
+    )
     def test_all_four_container_tags_walked(self, list_tag):
         ev = _el("ObjectEvent")
         q_list = _el(list_tag)
@@ -277,7 +275,6 @@ class TestQuantityList:
 
 
 class TestLocationExtraction:
-
     def test_biz_location_id_extracted(self):
         ev = _el("ObjectEvent")
         biz = _el("bizLocation")
@@ -302,12 +299,10 @@ class TestLocationExtraction:
 
 
 class TestSourceDestList:
-
     def test_source_list_extracted_with_type(self):
         ev = _el("ObjectEvent")
         s_list = _el("sourceList")
-        s_list.append(_el("source", text="urn:src:1",
-                          attrib={"type": "owning_party"}))
+        s_list.append(_el("source", text="urn:src:1", attrib={"type": "owning_party"}))
         ev.append(s_list)
         out = xp._xml_extract_source_dest_list(ev, "sourceList", "source")
         assert out == [{"type": "owning_party", "source": "urn:src:1"}]
@@ -324,9 +319,7 @@ class TestSourceDestList:
         s_list = _el("sourceList")
         s_list.append(_el("source", attrib={"type": "location"}))
         ev.append(s_list)
-        assert xp._xml_extract_source_dest_list(ev, "sourceList", "source") == [
-            {"type": "location"}
-        ]
+        assert xp._xml_extract_source_dest_list(ev, "sourceList", "source") == [{"type": "location"}]
 
     def test_non_list_children_skipped(self):
         ev = _el("ObjectEvent")
@@ -347,7 +340,6 @@ class TestSourceDestList:
 
 
 class TestIlmd:
-
     def test_ilmd_scalar_fields(self):
         ext = _el("extension")
         ilmd = _el("ilmd")
@@ -392,12 +384,10 @@ class TestIlmd:
 
 
 class TestBizTransaction:
-
     def test_biz_transaction_with_type_and_text(self):
         ev = _el("ObjectEvent")
         bt_list = _el("bizTransactionList")
-        bt_list.append(_el("bizTransaction", text="urn:po:1",
-                           attrib={"type": "po"}))
+        bt_list.append(_el("bizTransaction", text="urn:po:1", attrib={"type": "po"}))
         ev.append(bt_list)
         out = xp._xml_extract_biz_transactions(ev)
         assert out == [{"type": "po", "bizTransaction": "urn:po:1"}]
@@ -435,7 +425,6 @@ class TestBizTransaction:
 
 
 class TestEventToDict:
-
     def _make_full_event(self):
         ev = _el("ObjectEvent", ns=EPCIS_NS)
         ev.append(_el("eventTime", text="2026-01-01T00:00:00Z"))
@@ -472,12 +461,10 @@ class TestEventToDict:
 
         # source + destination
         s_list = _el("sourceList")
-        s_list.append(_el("source", text="urn:src:1",
-                          attrib={"type": "owning_party"}))
+        s_list.append(_el("source", text="urn:src:1", attrib={"type": "owning_party"}))
         ev.append(s_list)
         d_list = _el("destinationList")
-        d_list.append(_el("destination", text="urn:dst:1",
-                          attrib={"type": "owning_party"}))
+        d_list.append(_el("destination", text="urn:dst:1", attrib={"type": "owning_party"}))
         ev.append(d_list)
 
         # bizTransaction
@@ -566,25 +553,22 @@ class TestParseEpcisXml:
         monkeypatch.delenv("FSMA_STRICT_MODE", raising=False)
 
     def _doc(self, event_xml: str) -> bytes:
-        return (f'<?xml version="1.0" encoding="UTF-8"?>'
-                f'<EPCISDocument xmlns="{EPCIS_NS}">'
-                f'<EPCISBody><EventList>{event_xml}</EventList></EPCISBody>'
-                f'</EPCISDocument>').encode("utf-8")
+        return (
+            f'<?xml version="1.0" encoding="UTF-8"?>'
+            f'<EPCISDocument xmlns="{EPCIS_NS}">'
+            f"<EPCISBody><EventList>{event_xml}</EventList></EPCISBody>"
+            f"</EPCISDocument>"
+        ).encode("utf-8")
 
     def test_parses_bytes_input(self):
-        raw = self._doc(
-            "<ObjectEvent><eventTime>2026-01-01T00:00:00Z</eventTime>"
-            "<action>ADD</action></ObjectEvent>"
-        )
+        raw = self._doc("<ObjectEvent><eventTime>2026-01-01T00:00:00Z</eventTime><action>ADD</action></ObjectEvent>")
         events = xp._parse_epcis_xml(raw)
         assert len(events) == 1
         assert events[0]["type"] == "ObjectEvent"
         assert events[0]["eventTime"] == "2026-01-01T00:00:00Z"
 
     def test_parses_str_input(self):
-        raw_bytes = self._doc(
-            "<ObjectEvent><eventTime>2026-01-01T00:00:00Z</eventTime></ObjectEvent>"
-        )
+        raw_bytes = self._doc("<ObjectEvent><eventTime>2026-01-01T00:00:00Z</eventTime></ObjectEvent>")
         raw_str = raw_bytes.decode("utf-8")
         events = xp._parse_epcis_xml(raw_str)
         assert len(events) == 1
@@ -608,15 +592,15 @@ class TestParseEpcisXml:
         events = xp._parse_epcis_xml(raw)
         types = {e["type"] for e in events}
         assert types == {
-            "ObjectEvent", "AggregationEvent",
-            "TransactionEvent", "TransformationEvent",
+            "ObjectEvent",
+            "AggregationEvent",
+            "TransactionEvent",
+            "TransformationEvent",
         }
 
     def test_bare_element_xml_also_parsed(self):
         """No-namespace XML should still produce events."""
-        raw = (b"<?xml version='1.0'?><EPCISDocument>"
-               b"<ObjectEvent><eventID>o1</eventID></ObjectEvent>"
-               b"</EPCISDocument>")
+        raw = b"<?xml version='1.0'?><EPCISDocument><ObjectEvent><eventID>o1</eventID></ObjectEvent></EPCISDocument>"
         events = xp._parse_epcis_xml(raw)
         assert len(events) == 1
         assert events[0]["eventID"] == "o1"

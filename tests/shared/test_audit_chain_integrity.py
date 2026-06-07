@@ -10,13 +10,14 @@ Complements the existing test_audit_logging.py by focusing on:
 """
 
 import os
+
 os.environ.setdefault("REGENGINE_ENV", "test")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("AUTH_SECRET_KEY", "test-secret")
 os.environ.setdefault("AUDIT_INTEGRITY_KEY", "test-audit-key-for-integrity")
 
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest

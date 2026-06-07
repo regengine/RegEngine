@@ -76,9 +76,7 @@ class TestFindByAliasTenantScope_Issue1235:
         assert "tenant_id = :tenant_id" in sql_text.replace("\n", " "), (
             "find_entity_by_alias SQL must filter on ea.tenant_id = :tenant_id"
         )
-        assert params["tenant_id"] == TENANT_A, (
-            f"Expected tenant_id={TENANT_A!r} but got {params.get('tenant_id')!r}"
-        )
+        assert params["tenant_id"] == TENANT_A, f"Expected tenant_id={TENANT_A!r} but got {params.get('tenant_id')!r}"
 
     def test_different_tenants_get_different_rowsets(self, mock_session):
         """Simulates Postgres-level isolation: the mock returns different
@@ -91,11 +89,25 @@ class TestFindByAliasTenantScope_Issue1235:
             """Mimic row-level security: only return rows for TENANT_A."""
             result = MagicMock()
             if params.get("tenant_id") == TENANT_A:
-                result.fetchall.return_value = [(
-                    "entity-A", "facility", "Acme A", None, None, None, None,
-                    "unverified", 1.0, True,
-                    "alias-1", "gln", "0614141000012", "sys", 1.0,
-                )]
+                result.fetchall.return_value = [
+                    (
+                        "entity-A",
+                        "facility",
+                        "Acme A",
+                        None,
+                        None,
+                        None,
+                        None,
+                        "unverified",
+                        1.0,
+                        True,
+                        "alias-1",
+                        "gln",
+                        "0614141000012",
+                        "sys",
+                        1.0,
+                    )
+                ]
             else:
                 result.fetchall.return_value = []
             result.fetchone.return_value = (1,)
@@ -135,7 +147,8 @@ class TestRegisterEntityTenantLock_Issue1235:
         """With principal_tenant_id = TENANT_A, a register_entity call
         for TENANT_B must raise PermissionError before any INSERT runs."""
         svc = IdentityResolutionService(
-            mock_session, principal_tenant_id=TENANT_A,
+            mock_session,
+            principal_tenant_id=TENANT_A,
         )
         with pytest.raises(PermissionError):
             svc.register_entity(TENANT_B, "facility", "Bogus Co")
@@ -146,7 +159,8 @@ class TestRegisterEntityTenantLock_Issue1235:
     def test_register_entity_allows_matched_principal(self, mock_session):
         """Principal TENANT_A registering under TENANT_A -- writes proceed."""
         svc = IdentityResolutionService(
-            mock_session, principal_tenant_id=TENANT_A,
+            mock_session,
+            principal_tenant_id=TENANT_A,
         )
         result = svc.register_entity(TENANT_A, "facility", "Good Co")
         assert result["tenant_id"] == TENANT_A
@@ -157,7 +171,8 @@ class TestRegisterEntityTenantLock_Issue1235:
         verify tenant before touching any facility / product / firm /
         lot reference in the event."""
         svc = IdentityResolutionService(
-            mock_session, principal_tenant_id=TENANT_A,
+            mock_session,
+            principal_tenant_id=TENANT_A,
         )
         event = {"from_facility_reference": "0614141000012"}
 
@@ -179,7 +194,8 @@ class TestCrossTenantEscapeHatchIsOptIn_Issue1235:
         explicit allow_cross_tenant opt-in must refuse any mismatched
         tenant_id."""
         svc = IdentityResolutionService(
-            mock_session, principal_tenant_id=TENANT_A,
+            mock_session,
+            principal_tenant_id=TENANT_A,
         )
         with pytest.raises(PermissionError):
             svc.register_entity(TENANT_B, "facility", "Cross-tenant Co")

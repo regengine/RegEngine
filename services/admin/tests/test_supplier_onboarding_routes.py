@@ -5,12 +5,6 @@ import io
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     AuditLogModel,
     SupplierCTEEventModel,
@@ -21,7 +15,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -92,10 +90,10 @@ def db_session() -> Session:
 
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    import app.supplier_onboarding_routes as supplier_routes
-    import app.supplier_facilities_routes as facilities_routes
     import app.supplier_compliance_routes as compliance_routes
+    import app.supplier_facilities_routes as facilities_routes
     import app.supplier_funnel_routes as funnel_routes
+    import app.supplier_onboarding_routes as supplier_routes
 
     test_app = FastAPI()
     test_app.include_router(supplier_routes.router, prefix="/v1")
@@ -112,9 +110,10 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         assert current_user is not None
         return current_user
 
-    from fastapi import Depends
     from app.database import get_session
     from app.dependencies import PermissionChecker, get_current_user
+    from fastapi import Depends
+
     test_app.dependency_overrides[get_session] = override_get_session
     test_app.dependency_overrides[get_current_user] = override_get_current_user
 
@@ -134,7 +133,9 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     monkeypatch.setattr(supplier_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kwargs: None)
-    monkeypatch.setattr(supplier_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda _facility_id, **_kwargs: None)
+    monkeypatch.setattr(
+        supplier_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda _facility_id, **_kwargs: None
+    )
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_cte_event", lambda **_kwargs: None)
 
     with TestClient(test_app) as test_client:
@@ -358,7 +359,10 @@ def test_compliance_score_increases_after_missing_required_cte_submission(client
     assert gaps_before.status_code == 200
     gaps_payload_before = gaps_before.json()
     assert gaps_payload_before["high"] >= 1
-    assert any(gap["cte_type"] == "transforming" and gap["reason"] == "required_cte_missing" for gap in gaps_payload_before["gaps"])
+    assert any(
+        gap["cte_type"] == "transforming" and gap["reason"] == "required_cte_missing"
+        for gap in gaps_payload_before["gaps"]
+    )
 
     transforming_response = client.post(
         f"/v1/supplier/facilities/{facility_id}/cte-events",
@@ -454,9 +458,7 @@ def test_fda_export_xlsx_returns_spreadsheet_payload(client: TestClient):
 def test_demo_reset_seeds_chain_and_focus_gap(client: TestClient):
     # #1407: demo reset now requires an explicit confirmation phrase
     # in addition to the demo-tenant gate + RBAC.
-    response = client.post(
-        "/v1/supplier/demo/reset?confirm=reset-supplier-demo-data"
-    )
+    response = client.post("/v1/supplier/demo/reset?confirm=reset-supplier-demo-data")
 
     assert response.status_code == 200, response.text
     payload = response.json()

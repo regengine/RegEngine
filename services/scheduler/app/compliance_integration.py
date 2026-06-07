@@ -12,53 +12,54 @@ from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 import structlog
-from sqlalchemy import create_engine, select, text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import sessionmaker, Session
 
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
+
 ensure_shared_importable()
 
-from scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 from scheduler.app.config import get_settings
+from scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 logger = structlog.get_logger("compliance.integration")
 
 
 class ComplianceIntegration:
     """Bridges scheduler scrapers to compliance service.
-    
+
     When the scheduler detects a new FDA recall, this integration:
     1. Queries all tenant product profiles
     2. Matches recall to affected tenants
     3. Creates compliance alerts with countdown timers
     4. Triggers notifications
     """
-    
+
     def __init__(self, database_url: Optional[str] = None):
         settings = get_settings()
         self.database_url = database_url or settings.database_url
         self.engine = create_engine(self.database_url)
         self.Session = sessionmaker(bind=self.engine)
-    
+
     def process_enforcement_item(self, item: EnforcementItem) -> List[UUID]:
         """Process an enforcement item and create alerts for affected tenants.
-        
+
         Args:
             item: The enforcement item from a scraper
-            
+
         Returns:
             List of tenant IDs that received alerts
         """
         if item.source_type not in [SourceType.FDA_RECALL, SourceType.FDA_WARNING_LETTER]:
             logger.debug("skipping_non_alert_item", source_type=item.source_type.value)
             return []
-        
+
         with self.Session() as session:
             # Find matching tenants
             matching_tenants = self._find_matching_tenants(session, item)
-            
+
             if not matching_tenants:
                 logger.info(
                     "no_matching_tenants",
@@ -66,7 +67,7 @@ class ComplianceIntegration:
                     source_id=item.source_id,
                 )
                 return []
-            
+
             # Create alerts for each matching tenant
             alerted_tenants = []
             for match in matching_tenants:
@@ -92,13 +93,11 @@ class ComplianceIntegration:
                         error=str(e),
                         error_type=type(e).__name__,
                     )
-            
+
             session.commit()
             return alerted_tenants
-    
-    def _find_matching_tenants(
-        self, session: Session, item: EnforcementItem
-    ) -> List[Dict]:
+
+    def _find_matching_tenants(self, session: Session, item: EnforcementItem) -> List[Dict]:
         """Find tenants whose product profile matches the enforcement item.
 
         Matching tiers (highest confidence first):
@@ -168,63 +167,77 @@ class ComplianceIntegration:
         # Build matching keywords from item
         item_text = f"{item.title} {item.summary or ''}"
         item_text_lower = item_text.lower()
-        
+
         # Common FTL (Food Traceability List) keywords
         ftl_keywords = [
-            "lettuce", "romaine", "spinach", "leaf", "salad", "greens",
-            "pepper", "tomato", "cucumber", "cheese", "nut butter",
-            "sprout", "finfish", "shellfish", "egg",
+            "lettuce",
+            "romaine",
+            "spinach",
+            "leaf",
+            "salad",
+            "greens",
+            "pepper",
+            "tomato",
+            "cucumber",
+            "cheese",
+            "nut butter",
+            "sprout",
+            "finfish",
+            "shellfish",
+            "egg",
         ]
-        
+
         for row in result:
             tenant_id = row[0]
             categories = row[1] or []
             regions = row[2] or []
             suppliers = row[3] or []
-            
+
             match_reasons = []
-            
+
             # Check product category overlap
             for category in categories:
                 if category.lower() in item_text_lower:
                     match_reasons.append(f"product:{category}")
-            
+
             # Check FTL keywords
             for keyword in ftl_keywords:
                 if keyword in item_text_lower:
                     if any(k in cat.lower() for cat in categories for k in [keyword, "greens", "produce"]):
                         match_reasons.append(f"ftl_item:{keyword}")
                         break
-            
+
             # Check region overlap
-            for company in (item.affected_companies or []):
+            for company in item.affected_companies or []:
                 for region in regions:
                     if region.upper() in company.upper():
                         match_reasons.append(f"region:{region}")
-            
+
             # Check supplier name match
-            for company in (item.affected_companies or []):
+            for company in item.affected_companies or []:
                 for supplier in suppliers:
                     if supplier.lower() in company.lower() or company.lower() in supplier.lower():
                         match_reasons.append(f"supplier:{supplier}")
-            
+
             # Merge with Tier 1 reasons if this tenant already matched on lot code
             tid_str = str(tenant_id)
             if tid_str in tier1_tenants:
                 match_reasons = tier1_tenants.pop(tid_str) + match_reasons
 
             if match_reasons:
-                matching.append({
-                    "tenant_id": tenant_id,
-                    "reasons": match_reasons,
-                })
+                matching.append(
+                    {
+                        "tenant_id": tenant_id,
+                        "reasons": match_reasons,
+                    }
+                )
 
         # Any Tier 1 tenants not in tenant_product_profile still get an alert
         for tid_str, reasons in tier1_tenants.items():
             matching.append({"tenant_id": tid_str, "reasons": reasons})
 
         return matching
-    
+
     def _create_alert(
         self,
         session: Session,
@@ -235,7 +248,7 @@ class ComplianceIntegration:
         """Create a compliance alert for a tenant."""
         import json
         from uuid import uuid4
-        
+
         # Determine countdown based on severity
         if item.severity == EnforcementSeverity.CRITICAL:
             countdown_hours = 24
@@ -243,7 +256,7 @@ class ComplianceIntegration:
             countdown_hours = 24
         else:
             countdown_hours = 48
-        
+
         # Map source type
         source_type_map = {
             SourceType.FDA_RECALL: "FDA_RECALL",
@@ -251,7 +264,7 @@ class ComplianceIntegration:
             SourceType.FDA_IMPORT_ALERT: "FDA_IMPORT_ALERT",
         }
         source_type = source_type_map.get(item.source_type, "FDA_RECALL")
-        
+
         # Map severity
         severity_map = {
             EnforcementSeverity.CRITICAL: "CRITICAL",
@@ -260,18 +273,18 @@ class ComplianceIntegration:
             EnforcementSeverity.LOW: "LOW",
         }
         severity = severity_map.get(item.severity, "MEDIUM")
-        
+
         alert_id = str(uuid4())
         now = datetime.now(timezone.utc)
-        
+
         required_actions = [
             {"action": "Review affected lot codes", "completed": False},
             {"action": "Run trace-forward analysis", "completed": False},
             {"action": "Prepare FDA response if required", "completed": False},
         ]
-        
+
         match_reason = {"matched_by": match_reasons}
-        
+
         # Insert alert. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         session.execute(
             text(
@@ -304,14 +317,14 @@ class ComplianceIntegration:
                 "raw_data": json.dumps(item.raw_data) if item.raw_data else None,
                 "created_at": now,
                 "updated_at": now,
-            }
+            },
         )
-        
+
         # Update tenant status
         self._update_tenant_status(session, tenant_id)
-        
+
         return alert_id
-    
+
     def _update_tenant_status(self, session: Session, tenant_id: UUID) -> None:
         """Recalculate and update tenant compliance status."""
         # Count active alerts. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
@@ -326,13 +339,13 @@ class ComplianceIntegration:
                 WHERE tenant_id = :tenant_id
                 """
             ),
-            {"tenant_id": str(tenant_id)}
+            {"tenant_id": str(tenant_id)},
         ).fetchone()
-        
+
         critical_count = result[0] or 0
         high_count = result[1] or 0
         total_active = result[2] or 0
-        
+
         # Determine status
         if critical_count > 0:
             new_status = "NON_COMPLIANT"
@@ -340,7 +353,7 @@ class ComplianceIntegration:
             new_status = "AT_RISK"
         else:
             new_status = "COMPLIANT"
-        
+
         # Get next deadline. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         deadline_result = session.execute(
             text(
@@ -352,14 +365,14 @@ class ComplianceIntegration:
                 LIMIT 1
                 """
             ),
-            {"tenant_id": str(tenant_id)}
+            {"tenant_id": str(tenant_id)},
         ).fetchone()
-        
+
         next_deadline = deadline_result[0] if deadline_result else None
         next_description = deadline_result[1] if deadline_result else None
-        
+
         now = datetime.now(timezone.utc)
-        
+
         # Upsert status. RE-SCH-002: wrap in text() for SQLAlchemy 2.x.
         session.execute(
             text(
@@ -392,13 +405,12 @@ class ComplianceIntegration:
                 "critical_count": critical_count,
                 "next_deadline": next_deadline,
                 "next_description": next_description,
-            }
+            },
         )
 
 
 # Add missing import
 from datetime import timedelta
-
 
 # Singleton for use in scheduler
 _integration: Optional[ComplianceIntegration] = None

@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..supplier_cte_service import _next_merkle_hash, _sha256_json
 
-
 # ── Auto-clean helpers ────────────────────────────────────────────
 # Instead of rejecting rows with short/empty fields, we auto-fill
 # with safe defaults and collect warnings for the user.
@@ -20,12 +19,14 @@ def _autofill_str(value: Any, *, field: str, row_hint: str = "", min_len: int = 
     cleaned = str(value or "").strip()
     if len(cleaned) < min_len:
         replacement = default
-        _AUTOFILL_WARNINGS.append({
-            "field": field,
-            "original": cleaned or "(empty)",
-            "replacement": replacement,
-            "hint": row_hint,
-        })
+        _AUTOFILL_WARNINGS.append(
+            {
+                "field": field,
+                "original": cleaned or "(empty)",
+                "replacement": replacement,
+                "hint": row_hint,
+            }
+        )
         return replacement
     return cleaned
 
@@ -242,12 +243,14 @@ def validate_and_normalize_payload(
                 if cte_type not in supported_cte_types:
                     # Auto-default to "receiving" instead of rejecting
                     payload["cte_type"] = "receiving"
-                    _AUTOFILL_WARNINGS.append({
-                        "field": "cte_type",
-                        "original": cte_type,
-                        "replacement": "receiving",
-                        "hint": f"event row {index}",
-                    })
+                    _AUTOFILL_WARNINGS.append(
+                        {
+                            "field": "cte_type",
+                            "original": cte_type,
+                            "replacement": "receiving",
+                            "hint": f"event row {index}",
+                        }
+                    )
             if section_name == "ftl_scope":
                 category_id = str(payload.get("category_id") or "")
                 if category_id not in valid_ftl_category_ids:
@@ -265,12 +268,14 @@ def validate_and_normalize_payload(
 
     # Convert autofill warnings into the errors list as non-blocking warnings
     for warn in _AUTOFILL_WARNINGS:
-        errors.append({
-            "section": "autofill",
-            "row": 0,
-            "message": f"Auto-filled {warn['field']}: '{warn['original']}' → '{warn['replacement']}'"
-                       + (f" ({warn['hint']})" if warn.get("hint") else ""),
-            "severity": "warning",
-        })
+        errors.append(
+            {
+                "section": "autofill",
+                "row": 0,
+                "message": f"Auto-filled {warn['field']}: '{warn['original']}' → '{warn['replacement']}'"
+                + (f" ({warn['hint']})" if warn.get("hint") else ""),
+                "severity": "warning",
+            }
+        )
 
     return normalized, errors

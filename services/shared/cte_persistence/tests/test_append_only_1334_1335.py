@@ -29,10 +29,10 @@ from services.shared.cte_persistence.core import (
 )
 from services.shared.cte_persistence.models import DuplicateEventError
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_session(existing_sha: Optional[str] = None, existing_id: Optional[str] = None):
     """Return a MagicMock SQLAlchemy session pre-configured for tests.
@@ -64,6 +64,7 @@ def _make_session(existing_sha: Optional[str] = None, existing_id: Optional[str]
 # ===========================================================================
 # #1334 — _assert_not_exists unit tests
 # ===========================================================================
+
 
 class TestAssertNotExists_Issue1334:
     """Unit tests for the _assert_not_exists helper."""
@@ -117,6 +118,7 @@ class TestAssertNotExists_Issue1334:
 # ===========================================================================
 # #1334 — store_event raises DuplicateEventError on overwrite attempt
 # ===========================================================================
+
 
 class TestStoreEventAppendOnly_Issue1334:
     """store_event must raise DuplicateEventError when sha256_hash already exists."""
@@ -208,6 +210,7 @@ class TestStoreEventAppendOnly_Issue1334:
 # #1334 — store_events_batch raises DuplicateEventError on overwrite attempt
 # ===========================================================================
 
+
 class TestStoreEventsBatchAppendOnly_Issue1334:
     """store_events_batch must raise DuplicateEventError when sha256 already exists."""
 
@@ -242,6 +245,7 @@ class TestStoreEventsBatchAppendOnly_Issue1334:
 # ===========================================================================
 # #1335 — DeprecationWarning on LEGACY write methods
 # ===========================================================================
+
 
 class TestLegacyDeprecationWarning_Issue1335:
     """store_event and store_events_batch must emit DeprecationWarning."""
@@ -310,6 +314,7 @@ class TestLegacyDeprecationWarning_Issue1335:
 # #1335 — Callers already dual-write to canonical path (import check)
 # ===========================================================================
 
+
 class TestCallersDualWriteToCanonical_Issue1335:
     """Verify that the primary write callers also call CanonicalEventStore.
 
@@ -321,12 +326,14 @@ class TestCallersDualWriteToCanonical_Issue1335:
 
     def _get_source(self, module_path: str) -> str:
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("_mod", module_path)
         source = spec.loader.get_source("_mod")  # type: ignore[attr-defined]
         return source or ""
 
     def test_webhook_router_v2_imports_canonical_event_store(self):
         import os
+
         path = os.path.join(
             os.path.dirname(__file__),
             "../../../../services/ingestion/app/webhook_router_v2.py",
@@ -335,12 +342,12 @@ class TestCallersDualWriteToCanonical_Issue1335:
         with open(path) as f:
             source = f.read()
         assert "CanonicalEventStore" in source, (
-            "webhook_router_v2.py must reference CanonicalEventStore "
-            "(dual-write to canonical path, #1335)"
+            "webhook_router_v2.py must reference CanonicalEventStore (dual-write to canonical path, #1335)"
         )
 
     def test_epcis_persistence_imports_canonical_event_store(self):
         import os
+
         path = os.path.join(
             os.path.dirname(__file__),
             "../../../../services/ingestion/app/epcis/persistence.py",
@@ -349,8 +356,7 @@ class TestCallersDualWriteToCanonical_Issue1335:
         with open(path) as f:
             source = f.read()
         assert "CanonicalEventStore" in source, (
-            "epcis/persistence.py must reference CanonicalEventStore "
-            "(dual-write to canonical path, #1335)"
+            "epcis/persistence.py must reference CanonicalEventStore (dual-write to canonical path, #1335)"
         )
 
 
@@ -358,15 +364,16 @@ class TestCallersDualWriteToCanonical_Issue1335:
 # #1334 — Migration file contains trigger SQL
 # ===========================================================================
 
+
 class TestMigrationTriggerSQL_Issue1334:
     """The v073 migration file must contain the expected trigger DDL."""
 
     def _get_migration_source(self) -> str:
         import os
+
         path = os.path.join(
             os.path.dirname(__file__),
-            "../../../../alembic/versions/"
-            "20260420_v073_cte_events_append_only_trigger_1334.py",
+            "../../../../alembic/versions/20260420_v073_cte_events_append_only_trigger_1334.py",
         )
         path = os.path.normpath(path)
         with open(path) as f:
@@ -375,8 +382,7 @@ class TestMigrationTriggerSQL_Issue1334:
     def test_migration_contains_before_update_or_delete_trigger(self):
         source = self._get_migration_source()
         assert "BEFORE UPDATE OR DELETE" in source, (
-            "Migration v073 must create a BEFORE UPDATE OR DELETE trigger "
-            "on fsma.cte_events"
+            "Migration v073 must create a BEFORE UPDATE OR DELETE trigger on fsma.cte_events"
         )
 
     def test_migration_contains_trigger_name(self):

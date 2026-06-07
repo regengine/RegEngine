@@ -143,9 +143,7 @@ class RecallDrill:
             "description": self.description,
             "status": self.status.value,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
-            ),
+            "completed_at": (self.completed_at.isoformat() if self.completed_at else None),
             "duration_seconds": self.duration_seconds,
             "sla_status": self.sla_status.value,
             "result": self.result.to_dict() if self.result else None,

@@ -12,26 +12,23 @@ import asyncio
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
-
 from uuid import UUID
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 from shared.audit_logging import (
-    AuditLogger,
     AuditActor,
-    AuditResource,
-    AuditEventType,
     AuditEventCategory,
+    AuditEventType,
+    AuditLogger,
+    AuditResource,
     AuditSeverity,
 )
-from shared.database import get_db, engine
-
+from shared.database import engine, get_db
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +112,7 @@ RETENTION_CONFIGS: Dict[RetentionPolicy, RetentionConfig] = {
 # Allowlist of table names that may be used in retention SQL queries.
 # Derived from RetentionPolicy enum values — prevents SQL injection
 # if resource_type is ever populated from untrusted input.
-_ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(
-    policy.value.replace("-", "_") for policy in RetentionPolicy
-)
+_ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(policy.value.replace("-", "_") for policy in RetentionPolicy)
 
 
 # Resources whose rows span all tenants (no tenant_id column). Tenant
@@ -134,8 +129,7 @@ def _validate_resource_type(resource_type: str) -> None:
     """Validate resource_type against the retention policy allowlist."""
     if resource_type not in _ALLOWED_RESOURCE_TABLES:
         raise ValueError(
-            f"resource_type '{resource_type}' is not in the retention allowlist: "
-            f"{sorted(_ALLOWED_RESOURCE_TABLES)}"
+            f"resource_type '{resource_type}' is not in the retention allowlist: {sorted(_ALLOWED_RESOURCE_TABLES)}"
         )
 
 
@@ -318,9 +312,7 @@ class DataRetentionManager:
 
         tenant_scoped = _is_tenant_scoped(resource_type)
         if tenant_scoped and tenant_id is None:
-            raise ValueError(
-                f"tenant_id is required for tenant-scoped resource '{resource_type}'"
-            )
+            raise ValueError(f"tenant_id is required for tenant-scoped resource '{resource_type}'")
         if not tenant_scoped and tenant_id is not None:
             logger.warning(
                 "soft_delete_tenant_id_ignored_for_global_resource",
@@ -536,9 +528,7 @@ class DataRetentionManager:
         tenant_id_str = str(tenant_id)
 
         config = self.configs.get(RetentionPolicy.USER_ACCOUNT)
-        pii_fields = list(config.pii_fields) if config else [
-            "email", "phone", "name", "address"
-        ]
+        pii_fields = list(config.pii_fields) if config else ["email", "phone", "name", "address"]
 
         try:
             # 1. Count the blast radius — how many audit rows reference
@@ -774,10 +764,7 @@ class DataRetentionManager:
                 config = self.configs[policy]
 
                 # Log that hard-delete is scheduled
-                hard_delete_date = (
-                    datetime.now(timezone.utc) +
-                    timedelta(days=config.hard_delete_days)
-                )
+                hard_delete_date = datetime.now(timezone.utc) + timedelta(days=config.hard_delete_days)
 
                 await self.audit_logger.log(
                     event_type=AuditEventType.DATA_DELETE,
@@ -859,7 +846,7 @@ async def cleanup_deleted_records_job():
 
                 # Find soft-deleted records eligible for hard-delete
                 query = text(f"""
-                    SELECT id FROM {policy.value.replace('-', '_')}
+                    SELECT id FROM {policy.value.replace("-", "_")}
                     WHERE deleted_at IS NOT NULL AND deleted_at < :threshold
                     LIMIT 100
                 """)
@@ -870,7 +857,7 @@ async def cleanup_deleted_records_job():
                     for (record_id,) in results:
                         deleted_ok = await manager.hard_delete_record(
                             db=db,
-                            resource_type=policy.value.replace('-', '_'),
+                            resource_type=policy.value.replace("-", "_"),
                             record_id=record_id,
                             actor=system_actor,
                         )

@@ -7,10 +7,9 @@ import time
 import uuid
 from typing import Any
 
-import structlog
 import redis.asyncio as redis
+import structlog
 from redis.exceptions import WatchError
-
 
 logger = structlog.get_logger("bulk_upload.session_store")
 

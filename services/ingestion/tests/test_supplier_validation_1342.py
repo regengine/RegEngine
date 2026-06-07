@@ -9,20 +9,17 @@ Issue: #1342
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import supplier_validation as sv
 from app.supplier_validation import (
+    _EMAIL_RE,
+    _REQUIRED_CTE_TYPES,
     SupplierValidationResult,
     TenantSupplierReport,
     ValidationCheck,
-    _EMAIL_RE,
-    _REQUIRED_CTE_TYPES,
     _build_report,
     _fetch_supplier_submissions,
     _fetch_suppliers,
@@ -31,7 +28,8 @@ from app.supplier_validation import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -58,6 +56,7 @@ def app():
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     install_tenant_context_override(app)
     return app
 
@@ -118,22 +117,32 @@ class TestPydanticSurface:
         # Pydantic Field enforces ge=0, le=100
         with pytest.raises(ValueError):
             SupplierValidationResult(
-                supplier_id="s", supplier_name="n", status="compliant",
-                last_validated="x", score=101,
+                supplier_id="s",
+                supplier_name="n",
+                status="compliant",
+                last_validated="x",
+                score=101,
             )
 
     def test_supplier_validation_result_defaults(self):
         r = SupplierValidationResult(
-            supplier_id="s", supplier_name="n", status="compliant",
-            last_validated="x", score=85,
+            supplier_id="s",
+            supplier_name="n",
+            status="compliant",
+            last_validated="x",
+            score=85,
         )
         assert r.checks == []
         assert r.missing_requirements == []
 
     def test_tenant_supplier_report_defaults(self):
         r = TenantSupplierReport(
-            tenant_id="t", total_suppliers=0, compliant_count=0,
-            partial_count=0, non_compliant_count=0, overall_compliance_pct=0,
+            tenant_id="t",
+            total_suppliers=0,
+            compliant_count=0,
+            partial_count=0,
+            non_compliant_count=0,
+            overall_compliance_pct=0,
             generated_at="x",
         )
         assert r.suppliers == []
@@ -145,9 +154,18 @@ class TestEmailRegex:
         assert _EMAIL_RE.match("alice.smith@company.co.uk")
         assert _EMAIL_RE.match("user+tag@example.org")
 
-    @pytest.mark.parametrize("bad", [
-        "", "no-at-sign.com", "a@b", "@b.com", "a@.com", "a b@c.com", "a@b c.com",
-    ])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "",
+            "no-at-sign.com",
+            "a@b",
+            "@b.com",
+            "a@.com",
+            "a b@c.com",
+            "a@b c.com",
+        ],
+    )
     def test_invalid_emails(self, bad):
         assert not _EMAIL_RE.match(bad)
 
@@ -177,11 +195,22 @@ class TestFetchSuppliers:
         assert _fetch_suppliers("t1") is None
 
     def test_maps_rows_with_json_fields(self, monkeypatch):
-        session = _mock_db(rows=[
-            ("s1", "Acme", "a@x.com", "pl-1", "active", 3,
-             "2026-04-18T00:00:00+00:00", "compliant",
-             '["kde1"]', '["Spinach"]'),
-        ])
+        session = _mock_db(
+            rows=[
+                (
+                    "s1",
+                    "Acme",
+                    "a@x.com",
+                    "pl-1",
+                    "active",
+                    3,
+                    "2026-04-18T00:00:00+00:00",
+                    "compliant",
+                    '["kde1"]',
+                    '["Spinach"]',
+                ),
+            ]
+        )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
         result = _fetch_suppliers("t1")
         assert len(result) == 1
@@ -190,9 +219,11 @@ class TestFetchSuppliers:
         assert result[0]["products"] == ["Spinach"]
 
     def test_null_json_fields_become_empty(self, monkeypatch):
-        session = _mock_db(rows=[
-            ("s1", "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
-        ])
+        session = _mock_db(
+            rows=[
+                ("s1", "A", "a@x.com", None, "active", 0, None, "unknown", None, None),
+            ]
+        )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
         result = _fetch_suppliers("t1")
         assert result[0]["missing_kdes"] == []
@@ -223,10 +254,12 @@ class TestFetchSupplierSubmissions:
         assert _fetch_supplier_submissions("t1", "s1") is None
 
     def test_maps_rows(self, monkeypatch):
-        session = _mock_db(rows=[
-            ("shipping", 95.5, "1234567890123"),
-            ("receiving", 80.0, None),
-        ])
+        session = _mock_db(
+            rows=[
+                ("shipping", 95.5, "1234567890123"),
+                ("receiving", 80.0, None),
+            ]
+        )
         monkeypatch.setattr(sv, "get_db_safe", lambda: session)
         result = _fetch_supplier_submissions("t1", "s1")
         assert len(result) == 2
@@ -256,8 +289,7 @@ class TestFetchSupplierSubmissions:
 class TestValidateSupplier:
     def test_perfect_supplier_scores_100(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 100
         assert result.status == "compliant"
@@ -269,8 +301,7 @@ class TestValidateSupplier:
         supp = _perfect_supplier()
         # 31 days ago
         supp["last_submission"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 70  # -30 for critical
         assert result.status == "partial"
@@ -281,8 +312,7 @@ class TestValidateSupplier:
     def test_no_last_submission_fails_recent_check(self, monkeypatch):
         supp = _perfect_supplier()
         supp["last_submission"] = None
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         recent_check = next(c for c in result.checks if c.name == "recent_submission")
         assert recent_check.passed is False
@@ -290,8 +320,7 @@ class TestValidateSupplier:
     def test_malformed_last_submission_treated_as_stale(self, monkeypatch):
         supp = _perfect_supplier()
         supp["last_submission"] = "not-a-date"
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         recent_check = next(c for c in result.checks if c.name == "recent_submission")
         assert recent_check.passed is False
@@ -300,8 +329,7 @@ class TestValidateSupplier:
         supp = _perfect_supplier()
         # Use Z suffix (replaced with +00:00 in impl)
         supp["last_submission"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         recent_check = next(c for c in result.checks if c.name == "recent_submission")
         assert recent_check.passed is True
@@ -310,8 +338,7 @@ class TestValidateSupplier:
         supp = _perfect_supplier()
         # Naive datetime string
         supp["last_submission"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         recent_check = next(c for c in result.checks if c.name == "recent_submission")
         assert recent_check.passed is True
@@ -319,8 +346,7 @@ class TestValidateSupplier:
     def test_inactive_portal_fails_portal_check(self, monkeypatch):
         supp = _perfect_supplier()
         supp["portal_status"] = "expired"
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 70  # -30 critical
         portal_check = next(c for c in result.checks if c.name == "portal_status")
@@ -330,8 +356,7 @@ class TestValidateSupplier:
     def test_invalid_email_fails_warning(self, monkeypatch):
         supp = _perfect_supplier()
         supp["contact_email"] = "not-an-email"
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 90  # -10 warning
         email_check = next(c for c in result.checks if c.name == "valid_contact_email")
@@ -340,8 +365,7 @@ class TestValidateSupplier:
     def test_missing_email_fails(self, monkeypatch):
         supp = _perfect_supplier()
         supp["contact_email"] = ""
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         email_check = next(c for c in result.checks if c.name == "valid_contact_email")
         assert email_check.passed is False
@@ -363,9 +387,13 @@ class TestValidateSupplier:
     def test_partial_cte_coverage_fails(self, monkeypatch):
         supp = _perfect_supplier()
         # produce requires growing/receiving/shipping, only shipping submitted
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         cte_check = next(c for c in result.checks if c.name == "cte_type_coverage")
         assert cte_check.passed is False
@@ -375,10 +403,14 @@ class TestValidateSupplier:
         supp = _perfect_supplier()
         supp["products"] = []
         # Default requires receiving + shipping
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         cte_check = next(c for c in result.checks if c.name == "cte_type_coverage")
         assert cte_check.passed is True
@@ -386,22 +418,30 @@ class TestValidateSupplier:
     def test_seafood_product_requires_harvesting(self, monkeypatch):
         supp = _perfect_supplier()
         supp["products"] = ["Seafood"]
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "harvesting", "kde_completeness": 90.0, "gln": "g1"},
-            {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "harvesting", "kde_completeness": 90.0, "gln": "g1"},
+                {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         cte_check = next(c for c in result.checks if c.name == "cte_type_coverage")
         assert cte_check.passed is True
 
     def test_low_kde_fails(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": 50.0, "gln": "g1"},
-            {"cte_type": "receiving", "kde_completeness": 60.0, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": 70.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": 50.0, "gln": "g1"},
+                {"cte_type": "receiving", "kde_completeness": 60.0, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": 70.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         kde_check = next(c for c in result.checks if c.name == "kde_completeness")
         assert kde_check.passed is False
@@ -409,22 +449,30 @@ class TestValidateSupplier:
 
     def test_kde_80_exactly_passes(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": 80.0, "gln": "g1"},
-            {"cte_type": "receiving", "kde_completeness": 80.0, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": 80.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": 80.0, "gln": "g1"},
+                {"cte_type": "receiving", "kde_completeness": 80.0, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": 80.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         kde_check = next(c for c in result.checks if c.name == "kde_completeness")
         assert kde_check.passed is True
 
     def test_no_kde_data_fails(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": None, "gln": "g1"},
-            {"cte_type": "receiving", "kde_completeness": None, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": None, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": None, "gln": "g1"},
+                {"cte_type": "receiving", "kde_completeness": None, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": None, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         kde_check = next(c for c in result.checks if c.name == "kde_completeness")
         assert kde_check.passed is False
@@ -432,11 +480,15 @@ class TestValidateSupplier:
 
     def test_malformed_kde_skipped(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": "not-a-number", "gln": "g1"},
-            {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
-            {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": "not-a-number", "gln": "g1"},
+                {"cte_type": "receiving", "kde_completeness": 90.0, "gln": "g1"},
+                {"cte_type": "shipping", "kde_completeness": 90.0, "gln": "g1"},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         kde_check = next(c for c in result.checks if c.name == "kde_completeness")
         # Only two valid scores averaged -> 90
@@ -444,11 +496,15 @@ class TestValidateSupplier:
 
     def test_no_gln_info_deduction(self, monkeypatch):
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": 95.0, "gln": None},
-            {"cte_type": "receiving", "kde_completeness": 95.0, "gln": None},
-            {"cte_type": "shipping", "kde_completeness": 95.0, "gln": None},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": 95.0, "gln": None},
+                {"cte_type": "receiving", "kde_completeness": 95.0, "gln": None},
+                {"cte_type": "shipping", "kde_completeness": 95.0, "gln": None},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         gln_check = next(c for c in result.checks if c.name == "valid_gln")
         assert gln_check.passed is False
@@ -458,7 +514,8 @@ class TestValidateSupplier:
         # Every check fails -> 100 - 30 - 30 - 10 - 10 - 10 - 5 = 5
         # But also test the max(0, ...) floor with even worse
         supp = {
-            "id": "s1", "name": "Bad Co",
+            "id": "s1",
+            "name": "Bad Co",
             "contact_email": "bad",
             "portal_status": "expired",
             "last_submission": None,
@@ -475,8 +532,7 @@ class TestValidateSupplier:
         supp = _perfect_supplier()
         supp["portal_status"] = "expired"
         supp["contact_email"] = "bad"
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 60
         assert result.status == "partial"
@@ -487,8 +543,7 @@ class TestValidateSupplier:
         supp["portal_status"] = "expired"
         supp["last_submission"] = None
         supp["contact_email"] = "bad"
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         result = _validate_supplier(supp, "t1")
         assert result.score == 30
         assert result.status == "non_compliant"
@@ -496,11 +551,15 @@ class TestValidateSupplier:
     def test_compliant_status_80_and_up(self, monkeypatch):
         # Only GLN missing -> 100 - 5 = 95
         supp = _perfect_supplier()
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: [
-            {"cte_type": "growing", "kde_completeness": 95.0, "gln": None},
-            {"cte_type": "receiving", "kde_completeness": 95.0, "gln": None},
-            {"cte_type": "shipping", "kde_completeness": 95.0, "gln": None},
-        ])
+        monkeypatch.setattr(
+            sv,
+            "_fetch_supplier_submissions",
+            lambda tid, sid: [
+                {"cte_type": "growing", "kde_completeness": 95.0, "gln": None},
+                {"cte_type": "receiving", "kde_completeness": 95.0, "gln": None},
+                {"cte_type": "shipping", "kde_completeness": 95.0, "gln": None},
+            ],
+        )
         result = _validate_supplier(supp, "t1")
         assert result.score == 95
         assert result.status == "compliant"
@@ -514,8 +573,11 @@ class TestValidateSupplier:
 class TestBuildReport:
     def _result(self, status, score=80):
         return SupplierValidationResult(
-            supplier_id="s", supplier_name="n", status=status,
-            last_validated="x", score=score,
+            supplier_id="s",
+            supplier_name="n",
+            status=status,
+            last_validated="x",
+            score=score,
         )
 
     def test_empty_results_zero_pct(self):
@@ -545,6 +607,7 @@ class TestBuildReport:
     def test_write_through_exception_swallowed(self, monkeypatch):
         def boom(*args, **kwargs):
             raise RuntimeError("db-write-failed")
+
         monkeypatch.setattr(sv, "set_tenant_data", boom)
         # Should not raise
         report = _build_report("t1", [self._result("compliant")])
@@ -564,8 +627,7 @@ class TestBuildReport:
 class TestValidateAllEndpoint:
     def test_happy_path(self, client, monkeypatch):
         monkeypatch.setattr(sv, "_fetch_suppliers", lambda tid: [_perfect_supplier()])
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         resp = client.post("/api/v1/suppliers/validation/t1/validate")
         assert resp.status_code == 200
         body = resp.json()
@@ -595,8 +657,7 @@ class TestValidateAllEndpoint:
 class TestValidateSingleEndpoint:
     def test_found_supplier(self, client, monkeypatch):
         monkeypatch.setattr(sv, "_fetch_suppliers", lambda tid: [_perfect_supplier()])
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         resp = client.post("/api/v1/suppliers/validation/t1/t1-sup-001/validate")
         assert resp.status_code == 200
         body = resp.json()
@@ -633,9 +694,13 @@ class TestGetReportEndpoint:
     def test_cached_report_returned(self, client, monkeypatch):
         # Pre-populate the in-memory store
         report = TenantSupplierReport(
-            tenant_id="t1", total_suppliers=1, compliant_count=1,
-            partial_count=0, non_compliant_count=0,
-            overall_compliance_pct=100.0, generated_at="2026-04-18T00:00:00+00:00",
+            tenant_id="t1",
+            total_suppliers=1,
+            compliant_count=1,
+            partial_count=0,
+            non_compliant_count=0,
+            overall_compliance_pct=100.0,
+            generated_at="2026-04-18T00:00:00+00:00",
         )
         _reports_store["t1"] = report
         resp = client.get("/api/v1/suppliers/validation/t1/report")
@@ -645,9 +710,13 @@ class TestGetReportEndpoint:
     def test_no_cache_falls_back_to_db(self, client, monkeypatch):
         # DB returns a saved report
         db_data = TenantSupplierReport(
-            tenant_id="t1", total_suppliers=2, compliant_count=2,
-            partial_count=0, non_compliant_count=0,
-            overall_compliance_pct=100.0, generated_at="2026-04-18T00:00:00+00:00",
+            tenant_id="t1",
+            total_suppliers=2,
+            compliant_count=2,
+            partial_count=0,
+            non_compliant_count=0,
+            overall_compliance_pct=100.0,
+            generated_at="2026-04-18T00:00:00+00:00",
         ).model_dump()
         monkeypatch.setattr(sv, "get_tenant_data", lambda tid, a, b: db_data)
         resp = client.get("/api/v1/suppliers/validation/t1/report")
@@ -659,6 +728,7 @@ class TestGetReportEndpoint:
     def test_db_read_exception_swallowed_generates_fresh(self, client, monkeypatch):
         def boom(*args, **kwargs):
             raise RuntimeError("db-failed")
+
         monkeypatch.setattr(sv, "get_tenant_data", boom)
         monkeypatch.setattr(sv, "_fetch_suppliers", lambda tid: [])
         resp = client.get("/api/v1/suppliers/validation/t1/report")
@@ -668,8 +738,7 @@ class TestGetReportEndpoint:
     def test_no_cache_no_db_data_generates_fresh_from_suppliers(self, client, monkeypatch):
         monkeypatch.setattr(sv, "get_tenant_data", lambda tid, a, b: None)
         monkeypatch.setattr(sv, "_fetch_suppliers", lambda tid: [_perfect_supplier()])
-        monkeypatch.setattr(sv, "_fetch_supplier_submissions",
-                            lambda tid, sid: _passing_submissions())
+        monkeypatch.setattr(sv, "_fetch_supplier_submissions", lambda tid, sid: _passing_submissions())
         resp = client.get("/api/v1/suppliers/validation/t1/report")
         assert resp.status_code == 200
         assert resp.json()["total_suppliers"] == 1

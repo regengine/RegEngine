@@ -38,17 +38,31 @@ logger = logging.getLogger("exception-queue")
 # Data Transfer Objects
 # ---------------------------------------------------------------------------
 
+
 class ExceptionCase:
     """A persisted exception case."""
 
     __slots__ = (
-        "case_id", "tenant_id", "severity", "status",
-        "linked_event_ids", "linked_rule_evaluation_ids",
-        "owner_user_id", "due_date", "source_supplier",
-        "source_facility_reference", "rule_category",
-        "recommended_remediation", "resolution_summary",
-        "waiver_reason", "waiver_approved_by", "waiver_approved_at",
-        "request_case_id", "created_at", "updated_at", "resolved_at",
+        "case_id",
+        "tenant_id",
+        "severity",
+        "status",
+        "linked_event_ids",
+        "linked_rule_evaluation_ids",
+        "owner_user_id",
+        "due_date",
+        "source_supplier",
+        "source_facility_reference",
+        "rule_category",
+        "recommended_remediation",
+        "resolution_summary",
+        "waiver_reason",
+        "waiver_approved_by",
+        "waiver_approved_at",
+        "request_case_id",
+        "created_at",
+        "updated_at",
+        "resolved_at",
     )
 
     def __init__(self, **kwargs):
@@ -63,8 +77,13 @@ class ExceptionComment:
     """A comment on an exception case."""
 
     __slots__ = (
-        "id", "tenant_id", "case_id", "author_user_id",
-        "comment_text", "comment_type", "created_at",
+        "id",
+        "tenant_id",
+        "case_id",
+        "author_user_id",
+        "comment_text",
+        "comment_type",
+        "created_at",
     )
 
     def __init__(self, **kwargs):
@@ -79,8 +98,13 @@ class ExceptionSignoff:
     """A signoff record on an exception case."""
 
     __slots__ = (
-        "id", "tenant_id", "case_id", "signoff_type",
-        "signed_by", "signed_at", "reason",
+        "id",
+        "tenant_id",
+        "case_id",
+        "signoff_type",
+        "signed_by",
+        "signed_at",
+        "reason",
     )
 
     def __init__(self, **kwargs):
@@ -105,6 +129,7 @@ SEVERITY_DUE_DAYS = {
 # ---------------------------------------------------------------------------
 # Service Layer
 # ---------------------------------------------------------------------------
+
 
 class ExceptionQueueService:
     """
@@ -135,6 +160,7 @@ class ExceptionQueueService:
         ``get_tenant_context()::UUID`` comparison in RLS.
         """
         from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
         set_tenant_guc(self.session, tenant_id)
 
     # ------------------------------------------------------------------
@@ -657,9 +683,7 @@ class ExceptionQueueService:
 
         for category, category_failures in by_category.items():
             # Use the highest severity in the group
-            severity = self._highest_severity(
-                [f.severity for f in category_failures]
-            )
+            severity = self._highest_severity([f.severity for f in category_failures])
 
             # Build a combined remediation suggestion
             remediation_parts = []
@@ -667,13 +691,9 @@ class ExceptionQueueService:
             for f in category_failures:
                 evaluation_ids.append(f.evaluation_id)
                 if f.remediation_suggestion:
-                    remediation_parts.append(
-                        f"[{f.rule_title}] {f.remediation_suggestion}"
-                    )
+                    remediation_parts.append(f"[{f.rule_title}] {f.remediation_suggestion}")
                 elif f.why_failed:
-                    remediation_parts.append(
-                        f"[{f.rule_title}] {f.why_failed}"
-                    )
+                    remediation_parts.append(f"[{f.rule_title}] {f.why_failed}")
 
             recommended_remediation = "\n".join(remediation_parts) if remediation_parts else None
 

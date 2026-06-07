@@ -84,10 +84,7 @@ async def get_lot_timeline(
                         "get_lot_timeline tenant invariant violation: "
                         f"event tenant={event_tenant!r} != caller {tenant_id!r}"
                     )
-                if (
-                    record["facility_name"] is not None
-                    and facility_tenant not in (None, "", tenant_id)
-                ):
+                if record["facility_name"] is not None and facility_tenant not in (None, "", tenant_id):
                     logger.error(
                         "get_lot_timeline_facility_invariant_violation",
                         tlc=tlc,
@@ -236,10 +233,7 @@ async def query_events_by_range(
                         "query_events_by_range lot invariant violation: "
                         f"lot tenant={lot_tenant!r} != caller {tenant_id!r}"
                     )
-                if (
-                    record["facility_name"] is not None
-                    and facility_tenant not in (None, "", tenant_id)
-                ):
+                if record["facility_name"] is not None and facility_tenant not in (None, "", tenant_id):
                     logger.error(
                         "query_events_by_range_facility_invariant_violation",
                         expected_tenant=tenant_id,
@@ -251,21 +245,23 @@ async def query_events_by_range(
                         f"facility tenant={facility_tenant!r} != caller {tenant_id!r}"
                     )
 
-            events.append({
-                "event_id": record["event_id"],
-                "type": record["type"],
-                "event_date": record["event_date"],
-                "event_time": record["event_time"],
-                "risk_flag": record["risk_flag"],
-                "tlc": record["tlc"] or "N/A",
-                "product_description": record["product_description"] or "",
-                "quantity": record["quantity"],
-                "unit_of_measure": record["uom"],
-                "location_description": record["facility_name"] or record["facility_address"] or "Unknown",
-                "location_gln": record["facility_gln"] or "",
-                "reference_doc_type": "Invoice", # Placeholder for now
-                "reference_doc_num": record["event_id"], # Using Event ID as proxy for Ref Doc
-            })
+            events.append(
+                {
+                    "event_id": record["event_id"],
+                    "type": record["type"],
+                    "event_date": record["event_date"],
+                    "event_time": record["event_time"],
+                    "risk_flag": record["risk_flag"],
+                    "tlc": record["tlc"] or "N/A",
+                    "product_description": record["product_description"] or "",
+                    "quantity": record["quantity"],
+                    "unit_of_measure": record["uom"],
+                    "location_description": record["facility_name"] or record["facility_address"] or "Unknown",
+                    "location_gln": record["facility_gln"] or "",
+                    "reference_doc_type": "Invoice",  # Placeholder for now
+                    "reference_doc_num": record["event_id"],  # Using Event ID as proxy for Ref Doc
+                }
+            )
 
     logger.info(
         "range_query_completed",
@@ -312,10 +308,7 @@ async def _tag_event_risk_flag(
     if not tenant_id:
         # Fail closed -- an empty/None tenant_id would degrade to a
         # cross-tenant MATCH. Raise so callers notice at dev time.
-        raise ValueError(
-            "_tag_event_risk_flag requires a non-empty tenant_id to prevent "
-            "cross-tenant writes"
-        )
+        raise ValueError("_tag_event_risk_flag requires a non-empty tenant_id to prevent cross-tenant writes")
 
     query = """
     MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})

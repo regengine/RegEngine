@@ -79,9 +79,6 @@ sys.modules.setdefault("pyzbar.pyzbar", _fake_pyzbar_sub)
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
 import app.authz as authz  # noqa: E402
 import app.qr_decoder as qr_decoder  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
@@ -94,6 +91,9 @@ from app.qr_decoder import (  # noqa: E402
     _parse_yymmdd,
     router as qr_router,
 )
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
 
 # A minimal real PNG (PIL can parse it — pyzbar decode output is swapped
 # via the fake module above).
@@ -219,18 +219,14 @@ class TestParseDigitalLink:
     def test_empty_value_segment_skipped(self) -> None:
         # Line 139: unquote yields empty/whitespace → skipped, but parsing
         # of earlier fields still succeeds.
-        result = _parse_digital_link(
-            "http://id.example.com/01/09506000134352/10/%20"
-        )
+        result = _parse_digital_link("http://id.example.com/01/09506000134352/10/%20")
         assert result is not None
         assert result.gtin == "09506000134352"
         assert result.traceability_lot_code is None  # %20 was skipped
 
     def test_pack_date_ai_13_parsed(self) -> None:
         # Line 150: AI 13 → pack_date branch.
-        result = _parse_digital_link(
-            "http://id.example.com/01/09506000134352/13/260801"
-        )
+        result = _parse_digital_link("http://id.example.com/01/09506000134352/13/260801")
         assert result is not None
         assert result.pack_date == "2026-08-01"
 
@@ -277,7 +273,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 99))
     monkeypatch.setattr(
-        qr_decoder, "emit_funnel_event", lambda **_kwargs: None,
+        qr_decoder,
+        "emit_funnel_event",
+        lambda **_kwargs: None,
     )
     with TestClient(app) as test_client:
         yield test_client
@@ -327,9 +325,7 @@ class TestDecodeImageBytesViaEndpoint:
     def test_happy_path_returns_decoded_payload(self, client: TestClient) -> None:
         # Lines 237-241 success path + parse_gs1 downstream.
         _fake_pyzbar_sub._queued_result.append(  # type: ignore[attr-defined]
-            [_FakeDecoded(
-                b"https://id.example.com/01/09506000134352/10/LOT-2026-44"
-            )],
+            [_FakeDecoded(b"https://id.example.com/01/09506000134352/10/LOT-2026-44")],
         )
         response = client.post(
             "/api/v1/qr/decode",
@@ -346,9 +342,7 @@ class TestDecodeImageBytesViaEndpoint:
         # Line 238: errors="replace" path — bytes that aren't valid UTF-8
         # should be decoded lossily, not crash.
         _fake_pyzbar_sub._queued_result.append(  # type: ignore[attr-defined]
-            [_FakeDecoded(
-                b"\xff\xfehttps://id.example.com/01/09506000134352"
-            )],
+            [_FakeDecoded(b"\xff\xfehttps://id.example.com/01/09506000134352")],
         )
         response = client.post(
             "/api/v1/qr/decode",

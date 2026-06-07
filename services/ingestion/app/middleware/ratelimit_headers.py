@@ -37,7 +37,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-
 # Path prefixes whose handlers are guarded by a rate-limit dependency that
 # populates ``request.state.rate_limit_*``. Anything outside this list is
 # left untouched so unauthenticated routes (healthz, docs, openapi.json)

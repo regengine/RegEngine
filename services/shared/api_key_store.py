@@ -15,7 +15,7 @@ Usage:
 
     store = DatabaseAPIKeyStore(database_url="postgresql://...")
     raw_key, metadata = await store.create_key(name="Production Key", tenant_id="...")
-    
+
     # Validate incoming requests
     api_key = await store.validate_key(raw_key_from_header)
 """
@@ -46,8 +46,8 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    text,
     select,
+    text,
     update,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -111,7 +111,7 @@ class APIKeyModel(Base):
     key_prefix = Column(String(12), nullable=False)  # First 8 chars for identification
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    
+
     # Tenant association
     tenant_id = Column(String(36), nullable=True, index=True)  # UUID
 
@@ -128,33 +128,33 @@ class APIKeyModel(Base):
     billing_tier = Column(String(50), nullable=True)  # DEVELOPER, PROFESSIONAL, ENTERPRISE
     allowed_jurisdictions = Column(ARRAY(String), default=list)
     scopes = Column(ARRAY(String), default=list)
-    
+
     # Rate limiting
     rate_limit_per_minute = Column(Integer, default=60)
     rate_limit_per_hour = Column(Integer, default=1000)
     rate_limit_per_day = Column(Integer, default=10000)
-    
+
     # Status
     enabled = Column(Boolean, default=True, nullable=False)
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=True, onupdate=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime(timezone=True), nullable=True)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Audit
     created_by = Column(String(36), nullable=True)  # User ID who created the key
     revoked_by = Column(String(36), nullable=True)  # User ID who revoked the key
     revoke_reason = Column(Text, nullable=True)
-    
+
     # Metadata (renamed to avoid conflict with SQLAlchemy's metadata)
     extra_data = Column(JSONB, default=dict)
-    
+
     # Usage stats
     total_requests = Column(Integer, default=0)
-    
+
     __table_args__ = (
         Index("ix_api_keys_tenant_enabled", "tenant_id", "enabled"),
         Index("ix_api_keys_key_hash", "key_hash"),
@@ -233,7 +233,7 @@ class RateLimitInfo(BaseModel):
 
 class DatabaseAPIKeyStore:
     """PostgreSQL-backed API key store with async support.
-    
+
     This implementation provides:
     - Persistent storage in PostgreSQL
     - Async/await support for non-blocking operations
@@ -251,7 +251,7 @@ class DatabaseAPIKeyStore:
         max_overflow: int = 10,
     ):
         """Initialize the database-backed API key store.
-        
+
         Args:
             database_url: PostgreSQL connection URL (async driver)
                          e.g., "postgresql+asyncpg://user:pass@host/db"
@@ -262,15 +262,14 @@ class DatabaseAPIKeyStore:
         self._database_url = database_url or os.environ.get("DATABASE_URL", "")
         if not self._database_url:
             raise ValueError(
-                "DATABASE_URL environment variable is required. "
-                "Set it to your PostgreSQL connection string."
+                "DATABASE_URL environment variable is required. Set it to your PostgreSQL connection string."
             )
-        
+
         # Build engine kwargs (pool settings only for PostgreSQL, not SQLite)
         engine_kwargs: dict[str, Any] = {
             "echo": os.environ.get("SQL_ECHO", "false").lower() == "true",
         }
-        
+
         # Force async driver for PostgreSQL
         if self._database_url.startswith("postgresql://"):
             # Default to asyncpg as it's the primary async driver used in this project
@@ -282,9 +281,9 @@ class DatabaseAPIKeyStore:
             # psycopg2 removed — migrate any leftover URLs to asyncpg
             self._database_url = self._database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
         elif self._database_url.startswith("postgresql+psycopg://"):
-             # psycopg (v3) is already async-capable, so this is usually fine,
-             # but SQLAlchemy create_async_engine might still prefer explicit dialect.
-             pass
+            # psycopg (v3) is already async-capable, so this is usually fine,
+            # but SQLAlchemy create_async_engine might still prefer explicit dialect.
+            pass
 
         # Fix for asyncpg not supporting 'sslmode' query param (but psycopg2/psycopg needing it)
         if "asyncpg" in self._database_url and "sslmode=" in self._database_url:
@@ -307,28 +306,29 @@ class DatabaseAPIKeyStore:
             connect_args.setdefault("prepared_statement_cache_size", 0)
 
         self._redis_url = redis_url or os.environ.get("REDIS_URL")
-        
+
         # Only add pool settings for databases that support them (not SQLite)
         if "sqlite" not in self._database_url:
             engine_kwargs["pool_size"] = pool_size
             engine_kwargs["max_overflow"] = max_overflow
             engine_kwargs["pool_pre_ping"] = True
-        
+
         # Create async engine
         self._engine = create_async_engine(self._database_url, **engine_kwargs)
-        
+
         # Create async session factory
         self._session_factory = sessionmaker(
             self._engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        
+
         # Optional Redis client for rate limiting
         self._redis = None
         if self._redis_url:
             try:
                 import redis.asyncio as aioredis
+
                 self._redis = aioredis.from_url(self._redis_url)
             except ImportError:
                 logger.warning("redis_not_available", message="Install redis for distributed rate limiting")
@@ -355,7 +355,7 @@ class DatabaseAPIKeyStore:
     @staticmethod
     def _hash_key(raw_key: str) -> str:
         """Hash an API key using the current storage digest.
-        
+
         The raw key is never stored - only this hash.
         """
         return hash_api_key(raw_key)
@@ -375,6 +375,7 @@ class DatabaseAPIKeyStore:
         if not uuid_str:
             return
         import uuid
+
         try:
             uuid.UUID(uuid_str)
         except ValueError:
@@ -404,6 +405,7 @@ class DatabaseAPIKeyStore:
         if tenant_id:
             self._validate_uuid(tenant_id)
             from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
             result = set_tenant_guc(session, tenant_id)
             # Async session: ``execute()`` returns a coroutine; await it
             # so the GUC write actually lands before subsequent queries.
@@ -430,10 +432,10 @@ class DatabaseAPIKeyStore:
         metadata: Optional[dict[str, Any]] = None,
     ) -> APIKeyCreateResponse:
         """Create a new API key.
-        
+
         IMPORTANT: The raw key is returned ONLY at creation time.
         It is not stored and cannot be retrieved later.
-        
+
         Args:
             name: Human-readable name for the key
             description: Optional description
@@ -447,7 +449,7 @@ class DatabaseAPIKeyStore:
             expires_at: Optional expiration datetime
             created_by: User ID of creator (for audit)
             metadata: Additional metadata dict
-            
+
         Returns:
             APIKeyCreateResponse with the raw key (show only once!)
         """
@@ -481,7 +483,7 @@ class DatabaseAPIKeyStore:
         async with self._session() as session:
             if tenant_id:
                 await self._set_context(session, tenant_id)
-            
+
             session.add(api_key)
             await session.flush()
 
@@ -516,13 +518,13 @@ class DatabaseAPIKeyStore:
 
     async def validate_key(self, raw_key: str) -> Optional[APIKeyResponse]:
         """Validate an API key and return its metadata.
-        
+
         Uses constant-time comparison to prevent timing attacks.
         Updates last_used_at and total_requests on successful validation.
-        
+
         Args:
             raw_key: The raw API key from the request header
-            
+
         Returns:
             APIKeyResponse if valid, None otherwise
         """
@@ -539,9 +541,7 @@ class DatabaseAPIKeyStore:
         current_hash = key_hashes[0]
 
         async with self._session() as session:
-            result = await session.execute(
-                select(APIKeyModel).where(APIKeyModel.key_id == key_id)
-            )
+            result = await session.execute(select(APIKeyModel).where(APIKeyModel.key_id == key_id))
             api_key = result.scalar_one_or_none()
 
             if not api_key:
@@ -587,21 +587,21 @@ class DatabaseAPIKeyStore:
         window_seconds: int = 60,
     ) -> RateLimitInfo:
         """Check if a key has exceeded its rate limit.
-        
+
         Uses Redis if available for distributed rate limiting,
         otherwise falls back to a simple in-memory counter.
-        
+
         Args:
             key_id: The API key identifier
             limit: Maximum requests allowed in the window
             window_seconds: Time window in seconds (default: 60)
-            
+
         Returns:
             RateLimitInfo with allowed status and remaining quota
         """
         now = datetime.now(timezone.utc)
         window_key = f"ratelimit:{key_id}:{window_seconds}"
-        
+
         if self._redis:
             # Use Redis for distributed rate limiting
             pipe = self._redis.pipeline()
@@ -661,12 +661,12 @@ class DatabaseAPIKeyStore:
         reason: Optional[str] = None,
     ) -> bool:
         """Revoke an API key.
-        
+
         Args:
             key_id: The key identifier to revoke
             revoked_by: User ID who initiated the revocation
             reason: Reason for revocation (for audit)
-            
+
         Returns:
             True if key was found and revoked, False otherwise
         """
@@ -700,22 +700,20 @@ class DatabaseAPIKeyStore:
         reason: Optional[str] = None,
     ) -> Optional[APIKeyCreateResponse]:
         """Rotate an API key by creating a new one and revoking the old.
-        
+
         The new key inherits all settings from the old key.
-        
+
         Args:
             key_id: The key identifier to rotate
             created_by: User ID performing the rotation
             reason: Reason for rotation (for audit)
-            
+
         Returns:
             APIKeyCreateResponse with new key, or None if old key not found
         """
         async with self._session() as session:
             # Get the old key
-            result = await session.execute(
-                select(APIKeyModel).where(APIKeyModel.key_id == key_id)
-            )
+            result = await session.execute(select(APIKeyModel).where(APIKeyModel.key_id == key_id))
             old_key = result.scalar_one_or_none()
 
             if not old_key:
@@ -792,17 +790,15 @@ class DatabaseAPIKeyStore:
 
     async def get_key(self, key_id: str) -> Optional[APIKeyResponse]:
         """Get API key metadata by key_id.
-        
+
         Args:
             key_id: The key identifier
-            
+
         Returns:
             APIKeyResponse or None if not found
         """
         async with self._session() as session:
-            result = await session.execute(
-                select(APIKeyModel).where(APIKeyModel.key_id == key_id)
-            )
+            result = await session.execute(select(APIKeyModel).where(APIKeyModel.key_id == key_id))
             api_key = result.scalar_one_or_none()
 
             if not api_key:
@@ -865,10 +861,7 @@ class DatabaseAPIKeyStore:
 
         async with self._session() as session:
             result = await session.execute(
-                update(APIKeyModel)
-                .where(APIKeyModel.key_id == key_id)
-                .values(**updates)
-                .returning(APIKeyModel)
+                update(APIKeyModel).where(APIKeyModel.key_id == key_id).values(**updates).returning(APIKeyModel)
             )
             api_key = result.scalar_one_or_none()
 
@@ -912,11 +905,7 @@ class DatabaseAPIKeyStore:
             APIKeyResponse when narrowed in place. None if key not found.
         """
         async with self._session() as session:
-            result = await session.execute(
-                select(APIKeyModel)
-                .where(APIKeyModel.key_id == key_id)
-                .with_for_update()
-            )
+            result = await session.execute(select(APIKeyModel).where(APIKeyModel.key_id == key_id).with_for_update())
             existing = result.scalar_one_or_none()
             if not existing:
                 return None
@@ -937,9 +926,7 @@ class DatabaseAPIKeyStore:
                     "rotate=True (default) or remove the new scopes."
                 )
             if added and not (reason or "").strip():
-                raise ValueError(
-                    "change_scopes: reason is required when adding scopes"
-                )
+                raise ValueError("change_scopes: reason is required when adding scopes")
 
             logger.info(
                 "api_key_scopes_changing",
@@ -1001,15 +988,11 @@ class DatabaseAPIKeyStore:
                         enabled=False,
                         revoked_at=now,
                         revoked_by=changed_by,
-                        revoke_reason=(
-                            f"Scope change -> {new_key_id}: {reason_text}"
-                        ),
+                        revoke_reason=(f"Scope change -> {new_key_id}: {reason_text}"),
                     )
                 )
                 if revoke_result.rowcount != 1:
-                    raise RuntimeError(
-                        f"change_scopes: failed to revoke old key {key_id}"
-                    )
+                    raise RuntimeError(f"change_scopes: failed to revoke old key {key_id}")
                 await session.flush()
 
                 logger.info(
@@ -1042,9 +1025,7 @@ class DatabaseAPIKeyStore:
 
             # In-place narrowing path: no new raw_key, just shrink the scope set.
             await session.execute(
-                update(APIKeyModel)
-                .where(APIKeyModel.key_id == key_id)
-                .values(scopes=list(new_scopes))
+                update(APIKeyModel).where(APIKeyModel.key_id == key_id).values(scopes=list(new_scopes))
             )
             logger.info(
                 "api_key_scopes_narrowed_in_place",
@@ -1066,7 +1047,7 @@ _db_key_store: Optional[DatabaseAPIKeyStore] = None
 
 async def get_db_key_store() -> DatabaseAPIKeyStore:
     """Get the global database-backed API key store instance.
-    
+
     Initializes on first call.
     """
     global _db_key_store
@@ -1074,6 +1055,7 @@ async def get_db_key_store() -> DatabaseAPIKeyStore:
         _db_key_store = DatabaseAPIKeyStore()
         await _db_key_store.init_db()
     return _db_key_store
+
 
 async def get_api_key_store() -> DatabaseAPIKeyStore:
     """Compatibility alias for get_db_key_store()"""
@@ -1087,14 +1069,14 @@ async def migrate_from_memory_store(
     created_by: Optional[str] = None,
 ) -> dict[str, str]:
     """Migrate API keys from in-memory store to database.
-    
+
     IMPORTANT: This cannot recover the raw keys - new keys will be generated.
-    
+
     Args:
         memory_store: The in-memory APIKeyStore instance
         db_store: The database APIKeyStore to migrate to
         created_by: User ID for audit trail
-        
+
     Returns:
         Mapping of old key_id -> new raw_key
     """

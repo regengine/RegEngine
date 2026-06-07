@@ -1,25 +1,27 @@
 import re
-import httpx
-import defusedxml.ElementTree as ET
-import structlog
-from urllib.parse import urljoin
-from typing import Iterable, Optional
 from datetime import datetime, timezone
+from typing import Iterable, Optional
+from urllib.parse import urljoin
 
-from .base import StateRegistryScraper, Source, FetchedItem
+import defusedxml.ElementTree as ET
+import httpx
+import structlog
 from shared.safe_http import safe_httpx_get_sync
-from shared.url_validation import validate_url, SSRFError
+from shared.url_validation import SSRFError, validate_url
+
+from .base import FetchedItem, Source, StateRegistryScraper
 
 logger = structlog.get_logger("ingestion.scrapers.fda_enforcement")
+
 
 class FDAEnforcementScraper(StateRegistryScraper):
     """
     Scraper for FDA Enforcement Actions (Warning Letters).
     Uses the Official FDA RSS Feed to discover new warning letters.
     """
-    
+
     RSS_URL = "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/warning-letters/rss.xml"
-    
+
     def list_sources(self) -> Iterable[Source]:
         """
         Fetch RSS feed, parse items, and return Source objects for each Warning Letter.
@@ -28,10 +30,10 @@ class FDAEnforcementScraper(StateRegistryScraper):
             # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
             resp = safe_httpx_get_sync(self.RSS_URL, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
-            
+
             # Parse XML
             root = ET.fromstring(resp.content)
-            
+
             # Iterate over items
             # Structure: <rss><channel><item><link>...</link><title>...</title>...</item>...
             count = 0
@@ -39,7 +41,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
                 link = item.find("link")
                 title = item.find("title")
                 pub_date = item.find("pubDate")
-                
+
                 if link is not None and link.text:
                     url = link.text.strip()
                     # SSRF protection: validate extracted URL before yielding
@@ -60,13 +62,13 @@ class FDAEnforcementScraper(StateRegistryScraper):
                         metadata={
                             "type": "warning_letter",
                             "published_date": date_text,
-                            "discovery_date": datetime.now(timezone.utc).isoformat()
-                        }
+                            "discovery_date": datetime.now(timezone.utc).isoformat(),
+                        },
                     )
                     count += 1
-            
+
             logger.info("fda_rss_parsed", items_found=count)
-            
+
         except Exception as e:
             logger.error("fda_rss_failed", error=str(e))
             # Yield nothing if feed fails, but don't crash scheduler
@@ -110,14 +112,12 @@ class FDAEnforcementScraper(StateRegistryScraper):
                 except SSRFError as e:
                     logger.debug("ssrf_validation_failed_fda_pdf", url=pdf_url, error=str(e))
                     # Fallback to original HTML content if PDF URL fails validation
-                    return FetchedItem(
-                        source=source,
-                        content_bytes=content,
-                        content_type=content_type
-                    )
+                    return FetchedItem(source=source, content_bytes=content, content_type=content_type)
 
                 try:
-                    pdf_resp = safe_httpx_get_sync(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
+                    pdf_resp = safe_httpx_get_sync(
+                        validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"}
+                    )
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"
@@ -125,11 +125,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
                     logger.warning("fda_deep_fetch_failed", error=str(pdf_err))
                     # Fallback to original HTML content if PDF fetch fails
 
-            return FetchedItem(
-                source=source,
-                content_bytes=content,
-                content_type=content_type
-            )
+            return FetchedItem(source=source, content_bytes=content, content_type=content_type)
         except Exception as e:
             logger.error("fda_fetch_failed", url=source.url, error=str(e))
             return FetchedItem(source=source, content_bytes=b"", content_type=None)

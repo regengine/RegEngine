@@ -26,8 +26,8 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
 from unittest.mock import MagicMock
+
 import pytest
 
 service_dir = Path(__file__).resolve().parent.parent
@@ -42,7 +42,6 @@ from app.compliance_models import (  # noqa: E402
     TenantComplianceStatusModel,
     TenantProductProfileModel,
 )
-
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -133,7 +132,6 @@ def _product_profile(**kwargs) -> TenantProductProfileModel:
 
 
 class TestTenantComplianceStatusToDict:
-
     def test_to_dict_without_next_deadline(self):
         """Lines 113-124 (False branch): when next_deadline is None the
         countdown fields must be None — a countdown display of '0h 0m'
@@ -169,7 +167,6 @@ class TestTenantComplianceStatusToDict:
 
 
 class TestTenantComplianceStatusHelpers:
-
     def test_get_status_emoji_known_values(self):
         """Line 140: each ComplianceStatus maps to a known emoji; an
         unknown status falls back to ❓ so the UI never crashes."""
@@ -210,7 +207,6 @@ class TestTenantComplianceStatusHelpers:
 
 
 class TestComplianceAlertToDict:
-
     def test_to_dict_without_countdown_end(self):
         """Lines 214-216 (False branch): no countdown_end → countdown_seconds
         defaults to 0, countdown_display to 'Expired', is_expired False.
@@ -270,7 +266,6 @@ class TestComplianceAlertToDict:
 
 
 class TestComplianceAlertSeverityEmoji:
-
     def test_all_known_severities_have_emoji(self):
         """Line 257: each AlertSeverity maps to a distinct emoji."""
         expected = {
@@ -295,7 +290,6 @@ class TestComplianceAlertSeverityEmoji:
 
 
 class TestTenantProductProfileToDict:
-
     def test_to_dict_returns_all_fields(self):
         """Line 326: to_dict on TenantProductProfile must serialize all
         five JSON list columns. The tenant_id is stringified (UUID →

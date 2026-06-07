@@ -10,6 +10,7 @@ Usage:
     from app.workers.lot_tracing import trace_forward, trace_backward
     result = await trace_forward(db, tlc="LOT-001", tenant_id="...", max_depth=5)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ logger = structlog.get_logger("lot-tracing")
 @dataclass
 class TraceResult:
     """Result of a forward or backward lot trace."""
+
     lots: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
     facilities: List[Dict[str, Any]] = field(default_factory=list)
@@ -65,6 +67,7 @@ async def trace_forward(
         TraceResult with downstream facilities, events, and lots
     """
     import time as _time
+
     start = _time.time()
     max_depth = min(max_depth, 20)
 
@@ -141,11 +144,14 @@ async def trace_forward(
         LIMIT 5000
     """)
 
-    rows = db.execute(query, {
-        "tlc": tlc,
-        "tenant_id": tenant_id or "",
-        "max_depth": max_depth,
-    }).fetchall()
+    rows = db.execute(
+        query,
+        {
+            "tlc": tlc,
+            "tenant_id": tenant_id or "",
+            "max_depth": max_depth,
+        },
+    ).fetchall()
 
     return _build_result(rows, _time.time() - start)
 
@@ -171,6 +177,7 @@ async def trace_backward(
         TraceResult with upstream facilities, events, and lots
     """
     import time as _time
+
     start = _time.time()
     max_depth = min(max_depth, 20)
 
@@ -242,11 +249,14 @@ async def trace_backward(
         LIMIT 5000
     """)
 
-    rows = db.execute(query, {
-        "tlc": tlc,
-        "tenant_id": tenant_id or "",
-        "max_depth": max_depth,
-    }).fetchall()
+    rows = db.execute(
+        query,
+        {
+            "tlc": tlc,
+            "tenant_id": tenant_id or "",
+            "max_depth": max_depth,
+        },
+    ).fetchall()
 
     return _build_result(rows, _time.time() - start)
 
@@ -261,24 +271,28 @@ def _build_result(rows, elapsed: float) -> TraceResult:
         result.max_hops = max(result.max_hops, row.depth)
 
         # Collect events
-        result.events.append({
-            "event_id": str(row.event_id),
-            "type": row.event_type,
-            "event_date": row.event_timestamp.isoformat() if row.event_timestamp else None,
-            "confidence": row.confidence_score,
-        })
+        result.events.append(
+            {
+                "event_id": str(row.event_id),
+                "type": row.event_type,
+                "event_date": row.event_timestamp.isoformat() if row.event_timestamp else None,
+                "confidence": row.confidence_score,
+            }
+        )
 
         # Collect unique lots
         if row.tlc not in seen_lots:
             seen_lots.add(row.tlc)
             qty = row.quantity or 0
             result.total_quantity += qty
-            result.lots.append({
-                "tlc": row.tlc,
-                "product_description": row.product_reference,
-                "quantity": qty,
-                "unit_of_measure": row.unit_of_measure,
-            })
+            result.lots.append(
+                {
+                    "tlc": row.tlc,
+                    "product_description": row.product_reference,
+                    "quantity": qty,
+                    "unit_of_measure": row.unit_of_measure,
+                }
+            )
 
         # Collect unique facilities
         for fac_ref, fac_type in [
@@ -287,11 +301,13 @@ def _build_result(rows, elapsed: float) -> TraceResult:
         ]:
             if fac_ref and fac_ref not in seen_facilities:
                 seen_facilities.add(fac_ref)
-                result.facilities.append({
-                    "gln": fac_ref,
-                    "name": fac_ref,
-                    "facility_type": fac_type,
-                })
+                result.facilities.append(
+                    {
+                        "gln": fac_ref,
+                        "name": fac_ref,
+                        "facility_type": fac_type,
+                    }
+                )
 
     logger.info(
         "lot_trace_complete",

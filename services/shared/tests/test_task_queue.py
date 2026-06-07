@@ -36,7 +36,6 @@ from shared.task_queue import (  # noqa: E402
     replay_dead_tasks,
 )
 
-
 # ===========================================================================
 # Pure-unit tier — no DB required
 # ===========================================================================
@@ -64,6 +63,7 @@ def test_register_task_handler_adds_to_registry():
 def test_register_task_handler_allows_same_handler_twice():
     """Reloading a module registers again with the same function object —
     must not warn or error."""
+
     def handler(**kwargs):  # noqa: ARG001
         return None
 
@@ -83,9 +83,7 @@ def test_register_task_handler_warns_on_conflicting_reregistration(caplog):
     with caplog.at_level("WARNING", logger="task_queue"):
         register_task_handler("some_type", handler_b)
     assert TASK_HANDLERS["some_type"] is handler_b
-    assert any(
-        "task_handler_reregistered" in rec.message for rec in caplog.records
-    )
+    assert any("task_handler_reregistered" in rec.message for rec in caplog.records)
 
 
 def test_clear_task_handlers_empties_registry():
@@ -101,13 +99,13 @@ def test_clear_task_handlers_empties_registry():
 @pytest.mark.parametrize(
     "attempts,expected",
     [
-        (0, 30),     # 30 * 2^0
-        (1, 60),     # 30 * 2^1
-        (2, 120),    # 30 * 2^2
-        (3, 240),    # 30 * 2^3
-        (4, 480),    # 30 * 2^4
-        (5, 600),    # capped
-        (10, 600),   # capped
+        (0, 30),  # 30 * 2^0
+        (1, 60),  # 30 * 2^1
+        (2, 120),  # 30 * 2^2
+        (3, 240),  # 30 * 2^3
+        (4, 480),  # 30 * 2^4
+        (5, 600),  # capped
+        (10, 600),  # capped
     ],
 )
 def test_compute_backoff_seconds(attempts, expected):
@@ -162,12 +160,14 @@ def test_invoke_propagates_handler_exception():
 
 try:
     from testcontainers.postgres import PostgresContainer  # type: ignore[import]
+
     _HAS_TESTCONTAINERS = True
 except ImportError:
     _HAS_TESTCONTAINERS = False
 
 try:
     import psycopg  # type: ignore[import]  # noqa: F401
+
     _HAS_PSYCOPG = True
 except ImportError:
     _HAS_PSYCOPG = False
@@ -176,6 +176,7 @@ except ImportError:
 def _docker_available() -> bool:
     try:
         import docker  # type: ignore[import]
+
         client = docker.from_env()
         client.ping()
         return True
@@ -183,9 +184,7 @@ def _docker_available() -> bool:
         return False
 
 
-_INTEGRATION_SKIP_REASON = (
-    "integration tests require Docker + testcontainers[postgres] + psycopg[binary]"
-)
+_INTEGRATION_SKIP_REASON = "integration tests require Docker + testcontainers[postgres] + psycopg[binary]"
 
 integration_only = pytest.mark.skipif(
     not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG and _docker_available()),
@@ -254,6 +253,7 @@ def pg_engine():
 def clean_queue(pg_engine):
     """Truncate the task_queue between tests."""
     from sqlalchemy import text
+
     with pg_engine.begin() as conn:
         conn.execute(text("TRUNCATE fsma.task_queue"))
     yield
@@ -281,6 +281,7 @@ def test_enqueue_task_inserts_row_and_returns_id(pg_engine, clean_queue):
     assert task_id > 0
 
     from sqlalchemy import text
+
     with pg_engine.begin() as conn:
         row = conn.execute(
             text("SELECT task_type, payload, tenant_id, status FROM fsma.task_queue WHERE id = :id"),
@@ -347,7 +348,9 @@ def test_worker_claims_and_completes_task(pg_engine, clean_queue):
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:
         task_id = enqueue_task(
-            session, task_type="fixture.ok", payload={"value": 42},
+            session,
+            task_type="fixture.ok",
+            payload={"value": 42},
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
@@ -355,6 +358,7 @@ def test_worker_claims_and_completes_task(pg_engine, clean_queue):
     assert ran == {"value": 42}
 
     from sqlalchemy import text
+
     with pg_engine.begin() as conn:
         row = conn.execute(
             text("SELECT status, locked_by, completed_at FROM fsma.task_queue WHERE id = :id"),
@@ -380,7 +384,10 @@ def test_worker_retries_on_handler_exception(pg_engine, clean_queue):
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:
         task_id = enqueue_task(
-            session, task_type="fixture.fail", payload={}, max_attempts=3,
+            session,
+            task_type="fixture.fail",
+            payload={},
+            max_attempts=3,
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
@@ -415,7 +422,10 @@ def test_worker_transitions_to_dead_after_max_attempts(pg_engine, clean_queue):
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:
         task_id = enqueue_task(
-            session, task_type="fixture.dead", payload={}, max_attempts=2,
+            session,
+            task_type="fixture.dead",
+            payload={},
+            max_attempts=2,
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
@@ -504,11 +514,7 @@ def test_worker_uses_row_visibility_timeout_seconds(pg_engine, clean_queue):
             text("UPDATE fsma.task_queue SET payload = CAST(:payload AS jsonb) WHERE id = :id"),
             {
                 "id": task_id,
-                "payload": (
-                    '{"task_id": '
-                    + str(task_id)
-                    + ', "locked_until_holder": "placeholder"}'
-                ),
+                "payload": ('{"task_id": ' + str(task_id) + ', "locked_until_holder": "placeholder"}'),
             },
         )
 
@@ -542,7 +548,10 @@ def test_missing_handler_transitions_straight_to_dead(pg_engine, clean_queue):
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:
         task_id = enqueue_task(
-            session, task_type="fixture.no_handler", payload={}, max_attempts=3,
+            session,
+            task_type="fixture.no_handler",
+            payload={},
+            max_attempts=3,
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
@@ -637,7 +646,9 @@ def test_async_handler_round_trip(pg_engine, clean_queue):
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:
         task_id = enqueue_task(
-            session, task_type="fixture.async", payload={"async_v": True},
+            session,
+            task_type="fixture.async",
+            payload={"async_v": True},
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
@@ -760,10 +771,7 @@ def test_replay_dead_tasks_resets_dead_rows_and_rejects_non_dead(pg_engine, clea
 
     with pg_engine.begin() as conn:
         row = conn.execute(
-            text(
-                "SELECT status, attempts, last_error, locked_by, locked_until "
-                "FROM fsma.task_queue WHERE id = :id"
-            ),
+            text("SELECT status, attempts, last_error, locked_by, locked_until FROM fsma.task_queue WHERE id = :id"),
             {"id": dead_id},
         ).fetchone()
     assert row.status == "pending"

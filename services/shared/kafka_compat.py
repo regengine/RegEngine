@@ -67,11 +67,7 @@ class KafkaProducerCompat:
         key_serializer: Optional[Callable[[Any], bytes]] = None,
         **config: Any,
     ) -> None:
-        bootstrap = (
-            ",".join(bootstrap_servers)
-            if not isinstance(bootstrap_servers, str)
-            else bootstrap_servers
-        )
+        bootstrap = ",".join(bootstrap_servers) if not isinstance(bootstrap_servers, str) else bootstrap_servers
         producer_config: dict[str, Any] = {"bootstrap.servers": bootstrap}
         if "acks" in config:
             producer_config["acks"] = config["acks"]
@@ -135,11 +131,7 @@ class KafkaConsumerCompat:
         auto_offset_reset: str = "latest",
         **_: Any,
     ) -> None:
-        bootstrap = (
-            ",".join(bootstrap_servers)
-            if not isinstance(bootstrap_servers, str)
-            else bootstrap_servers
-        )
+        bootstrap = ",".join(bootstrap_servers) if not isinstance(bootstrap_servers, str) else bootstrap_servers
         self._consumer = Consumer(
             {
                 "bootstrap.servers": bootstrap,
@@ -179,11 +171,7 @@ class KafkaAdminClientCompat:
     """Small admin-client wrapper for legacy ``create_topics`` calls."""
 
     def __init__(self, *, bootstrap_servers: str | Iterable[str], **_: Any) -> None:
-        bootstrap = (
-            ",".join(bootstrap_servers)
-            if not isinstance(bootstrap_servers, str)
-            else bootstrap_servers
-        )
+        bootstrap = ",".join(bootstrap_servers) if not isinstance(bootstrap_servers, str) else bootstrap_servers
         self._admin = AdminClient({"bootstrap.servers": bootstrap})
 
     def create_topics(self, topics: list[NewTopic]) -> None:

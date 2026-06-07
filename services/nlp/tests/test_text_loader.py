@@ -96,8 +96,9 @@ class TestLoadArtifact:
 
     def test_validates_url_against_ssrf(self):
         """Verify SSRF validation is called."""
-        from services.nlp.app.text_loader import load_artifact
         from shared.url_validation import SSRFError
+
+        from services.nlp.app.text_loader import load_artifact
 
         with patch("services.nlp.app.text_loader.validate_url") as mock_validate:
             mock_validate.side_effect = SSRFError("Private IP blocked")
@@ -122,9 +123,7 @@ class TestLoadArtifact:
         with patch("services.nlp.app.text_loader.validate_url"):
             with patch(
                 "services.nlp.app.text_loader.httpx.stream",
-                return_value=_StreamCM(
-                    _headers("text/html", html_content), [html_content]
-                ),
+                return_value=_StreamCM(_headers("text/html", html_content), [html_content]),
             ):
                 result = load_artifact("https://example.com/page.html")
 
@@ -162,9 +161,7 @@ class TestLoadArtifact:
         with patch("services.nlp.app.text_loader.validate_url"):
             with patch(
                 "services.nlp.app.text_loader.httpx.stream",
-                return_value=_StreamCM(
-                    _headers("text/plain", binary_content), [binary_content]
-                ),
+                return_value=_StreamCM(_headers("text/plain", binary_content), [binary_content]),
             ):
                 with pytest.raises(ValueError, match="E_DOC_DECODE_FAILED"):
                     load_artifact("https://example.com/binary.bin")
@@ -182,9 +179,7 @@ class TestPdfExtraction:
         with patch("services.nlp.app.text_loader.validate_url"):
             with patch(
                 "services.nlp.app.text_loader.httpx.stream",
-                return_value=_StreamCM(
-                    _headers("application/pdf", pdf_content), [pdf_content]
-                ),
+                return_value=_StreamCM(_headers("application/pdf", pdf_content), [pdf_content]),
             ):
                 with patch("services.nlp.app.text_loader.pdfminer") as mock_pdfminer:
                     mock_pdfminer.extract_text.return_value = "Extracted PDF text"
@@ -206,9 +201,7 @@ class TestPdfExtraction:
         with patch("services.nlp.app.text_loader.validate_url"):
             with patch(
                 "services.nlp.app.text_loader.httpx.stream",
-                return_value=_StreamCM(
-                    _headers("application/pdf", pdf_content), [pdf_content]
-                ),
+                return_value=_StreamCM(_headers("application/pdf", pdf_content), [pdf_content]),
             ):
                 with patch("services.nlp.app.text_loader.pdfminer") as mock_pdfminer:
                     mock_pdfminer.extract_text.side_effect = Exception("PDF error")
@@ -224,31 +217,27 @@ class TestHttpErrors:
 
     def test_raises_on_http_error(self):
         """Verify HTTP errors are propagated."""
-        from services.nlp.app.text_loader import load_artifact
         import httpx
 
-        err = httpx.HTTPStatusError(
-            "404 Not Found", request=MagicMock(), response=MagicMock()
-        )
+        from services.nlp.app.text_loader import load_artifact
+
+        err = httpx.HTTPStatusError("404 Not Found", request=MagicMock(), response=MagicMock())
         with patch("services.nlp.app.text_loader.validate_url"):
             with patch(
                 "services.nlp.app.text_loader.httpx.stream",
-                return_value=_StreamCM(
-                    _headers("application/pdf", b""), [], raise_exc=err
-                ),
+                return_value=_StreamCM(_headers("application/pdf", b""), [], raise_exc=err),
             ):
                 with pytest.raises(httpx.HTTPStatusError):
                     load_artifact("https://example.com/missing.pdf")
 
     def test_timeout_handling(self):
         """Verify request timeout is set."""
-        from services.nlp.app.text_loader import load_artifact
         import httpx
 
+        from services.nlp.app.text_loader import load_artifact
+
         with patch("services.nlp.app.text_loader.validate_url"):
-            with patch(
-                "services.nlp.app.text_loader.httpx.stream"
-            ) as mock_stream:
+            with patch("services.nlp.app.text_loader.httpx.stream") as mock_stream:
                 mock_stream.side_effect = httpx.TimeoutException("Connection timed out")
 
                 with pytest.raises(httpx.TimeoutException):

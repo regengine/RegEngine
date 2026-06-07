@@ -21,6 +21,7 @@ These tests lock in:
    best-effort transaction_set label (``"unknown"`` is an
    acceptable value when the envelope is too malformed to peek).
 """
+
 from __future__ import annotations
 
 import sys
@@ -30,9 +31,7 @@ import pytest
 from fastapi import HTTPException
 
 # Make the edi_ingestion package importable.
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[1] / "app")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 
 def _reset_parser_module(monkeypatch):
@@ -54,10 +53,7 @@ def _build_envelope(segment_count: int, transaction_set: str = "856") -> str:
     ISA uses the standard 105-char header so the parser's hard-coded
     element_sep=* / segment_term=~ apply.
     """
-    isa = (
-        "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       "
-        "*260418*0000*U*00401*000000001*0*P*>~"
-    )
+    isa = "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *260418*0000*U*00401*000000001*0*P*>~"
     gs = f"GS*SH*SENDER*RECEIVER*20260418*0000*1*X*004010~"
     st = f"ST*{transaction_set}*0001~"
     # Padding N1 segments (name/identifier) — cheapest to emit.
@@ -77,12 +73,8 @@ def test_metrics_exist_on_parser_module():
     break SRE dashboards silently — this test fails loudly instead."""
     from edi_ingestion import parser  # type: ignore
 
-    assert hasattr(parser, "EDI_SEGMENT_COUNT"), (
-        "#1171: parser must expose EDI_SEGMENT_COUNT histogram"
-    )
-    assert hasattr(parser, "EDI_SEGMENT_CAP_REJECTED"), (
-        "#1171: parser must expose EDI_SEGMENT_CAP_REJECTED counter"
-    )
+    assert hasattr(parser, "EDI_SEGMENT_COUNT"), "#1171: parser must expose EDI_SEGMENT_COUNT histogram"
+    assert hasattr(parser, "EDI_SEGMENT_CAP_REJECTED"), "#1171: parser must expose EDI_SEGMENT_CAP_REJECTED counter"
     # Metrics might be None if prometheus_client is absent; in that
     # case _METRICS_ENABLED must be False so the parser still works.
     if parser._METRICS_ENABLED:
@@ -98,10 +90,7 @@ def _histogram_sample_count(hist, label_value: str) -> float:
     histograms as multiple samples; we pull the `_count` suffixed one."""
     for metric in hist.collect():
         for sample in metric.samples:
-            if (
-                sample.name.endswith("_count")
-                and sample.labels.get("transaction_set") == label_value
-            ):
+            if sample.name.endswith("_count") and sample.labels.get("transaction_set") == label_value:
                 return sample.value
     return 0.0
 
@@ -155,20 +144,14 @@ def test_cap_rejection_increments_counter(monkeypatch):
 
     # Capture the "856" AND "unknown" bucket — the peek might fall back.
     labels_to_check = ["856", "unknown", "unsupported"]
-    before_totals = {
-        lbl: _counter_value(parser.EDI_SEGMENT_CAP_REJECTED, lbl)
-        for lbl in labels_to_check
-    }
+    before_totals = {lbl: _counter_value(parser.EDI_SEGMENT_CAP_REJECTED, lbl) for lbl in labels_to_check}
 
     with pytest.raises(HTTPException) as excinfo:
         parser._parse_x12_segments(envelope)
     assert excinfo.value.status_code == 413
     assert excinfo.value.detail["error"] == "segment_count_exceeded"
 
-    after_totals = {
-        lbl: _counter_value(parser.EDI_SEGMENT_CAP_REJECTED, lbl)
-        for lbl in labels_to_check
-    }
+    after_totals = {lbl: _counter_value(parser.EDI_SEGMENT_CAP_REJECTED, lbl) for lbl in labels_to_check}
 
     # Exactly one of the labels must have incremented by 1 — and it
     # should be "856" (the transaction set in the envelope). We allow

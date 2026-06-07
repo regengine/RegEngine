@@ -23,7 +23,6 @@ import pytest
 
 from services.shared.rules.seeds import FSMA_RULE_SEEDS
 
-
 # Floor counts per CTE type. Each number is the **minimum** ``kde_presence``
 # seed rules the CTE must have, acting as a regression guard against
 # the original #1102 pattern where every non-RECEIVING CTE had zero.
@@ -62,9 +61,7 @@ def _count_kde_rules_for_cte(cte_type: str) -> int:
         1
         for seed in FSMA_RULE_SEEDS
         if seed.get("category") == "kde_presence"
-        and cte_type in (
-            seed.get("applicability_conditions") or {}
-        ).get("cte_types", [])
+        and cte_type in (seed.get("applicability_conditions") or {}).get("cte_types", [])
     )
 
 
@@ -101,9 +98,7 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
     for seed in FSMA_RULE_SEEDS:
         if seed.get("category") != "kde_presence":
             continue
-        cte_types = (
-            seed.get("applicability_conditions") or {}
-        ).get("cte_types", [])
+        cte_types = (seed.get("applicability_conditions") or {}).get("cte_types", [])
         if "receiving" in cte_types and len(cte_types) == 1:
             continue
         cite = seed.get("citation_reference", "")
@@ -121,7 +116,8 @@ def test_citation_references_are_21_cfr_and_not_receiving_only():
     # We expect each of the six non-receiving sections to show up at
     # least once in the seed rules.
     missing = [
-        s for s in (
+        s
+        for s in (
             "\u00a71.1325",
             "\u00a71.1327",
             "\u00a71.1335",

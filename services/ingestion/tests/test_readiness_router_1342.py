@@ -35,14 +35,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # Make services/ingestion importable as the ingestion service expects.
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import readiness_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.readiness_router import (  # noqa: E402
     CHECKLIST_ITEMS,
     MATURITY_LEVELS,
@@ -51,7 +50,6 @@ from app.readiness_router import (  # noqa: E402
     _evaluate_checklist,
 )
 from shared.database import get_db_session  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # FakeSession — regex-keyed SQLAlchemy stand-in
@@ -127,9 +125,7 @@ def _client(principal: IngestionPrincipal, session: FakeSession | None) -> TestC
 
 @pytest.fixture(autouse=True)
 def _disable_rate_limit(monkeypatch):
-    monkeypatch.setattr(
-        authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99)
-    )
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
 
 def _routes(
@@ -158,9 +154,7 @@ def _routes(
     Returning ``None`` from a route forces the default-zero path in
     the router (exercise the ``or 0`` fallbacks).
     """
-    cte_rows = (
-        [(t,) for t in (cte_types_present or [])] if cte_types_present else []
-    )
+    cte_rows = [(t,) for t in (cte_types_present or [])] if cte_types_present else []
     return {
         # event_stats — 4-tuple (total, source_count, cte_type_count, gln_events)
         r"COUNT\(DISTINCT source_system\)": lambda _p: (
@@ -229,10 +223,7 @@ class TestComputeMaturityLevel:
     """Unit-level tests for the level picker, independent of SQL."""
 
     def _make_checklist(self, passing_ids: set[str]) -> List[Dict]:
-        return [
-            {**item, "passed": item["id"] in passing_ids}
-            for item in CHECKLIST_ITEMS
-        ]
+        return [{**item, "passed": item["id"] in passing_ids} for item in CHECKLIST_ITEMS]
 
     def test_empty_pass_set_returns_level_0(self):
         """No items passing → Not Started (level 0)."""
@@ -293,8 +284,7 @@ class TestEvaluateChecklist:
         assert len(checklist) == len(CHECKLIST_ITEMS)
         passing_ids = {c["id"] for c in checklist if c["passed"]}
         assert passing_ids == {"no_critical_exceptions"}, (
-            f"Expected only no_critical_exceptions to pass on empty DB, "
-            f"got: {passing_ids}"
+            f"Expected only no_critical_exceptions to pass on empty DB, got: {passing_ids}"
         )
 
     def test_each_checklist_item_has_required_keys(self):
@@ -326,26 +316,18 @@ class TestEvaluateChecklist:
     def test_all_ctes_covered_requires_all_7(self):
         """Lock: 6 of 7 doesn't count as 'all covered'."""
         six = list(REQUIRED_CTE_TYPES)[:6]
-        session = FakeSession(
-            _routes(total_events=1, cte_types_present=six)
-        )
+        session = FakeSession(_routes(total_events=1, cte_types_present=six))
         checklist = {c["id"]: c for c in _evaluate_checklist(session, TENANT)}
         assert checklist["all_ctes_covered"]["passed"] is False
 
-        session_seven = FakeSession(
-            _routes(total_events=1, cte_types_present=list(REQUIRED_CTE_TYPES))
-        )
-        checklist_seven = {
-            c["id"]: c for c in _evaluate_checklist(session_seven, TENANT)
-        }
+        session_seven = FakeSession(_routes(total_events=1, cte_types_present=list(REQUIRED_CTE_TYPES)))
+        checklist_seven = {c["id"]: c for c in _evaluate_checklist(session_seven, TENANT)}
         assert checklist_seven["all_ctes_covered"]["passed"] is True
 
     def test_gln_facility_identifiers_threshold_is_50_percent(self):
         """50% boundary: 49/100 → fail, 50/100 → pass."""
         for gln, expected in [(49, False), (50, True)]:
-            session = FakeSession(
-                _routes(total_events=100, gln_events=gln)
-            )
+            session = FakeSession(_routes(total_events=100, gln_events=gln))
             checklist = {c["id"]: c for c in _evaluate_checklist(session, TENANT)}
             assert checklist["facility_identifiers"]["passed"] is expected
 
@@ -382,9 +364,7 @@ class TestEvaluateChecklist:
     def test_rules_evaluated_requires_50_percent_coverage(self):
         """50 events, 24 evals (48%) → fail; 50 events, 25 evals (50%) → pass."""
         for evals, expected in [(24, False), (25, True)]:
-            session = FakeSession(
-                _routes(total_events=50, total_evals=evals, passed_evals=0)
-            )
+            session = FakeSession(_routes(total_events=50, total_evals=evals, passed_evals=0))
             checklist = {c["id"]: c for c in _evaluate_checklist(session, TENANT)}
             assert checklist["rules_evaluated"]["passed"] is expected
 
@@ -392,41 +372,30 @@ class TestEvaluateChecklist:
         """Entities must exist AND no pending reviews."""
         # Has entities, no pending → pass
         s1 = FakeSession(_routes(entity_count=1, pending_reviews=0))
-        assert {c["id"]: c for c in _evaluate_checklist(s1, TENANT)}[
-            "identity_resolved"
-        ]["passed"] is True
+        assert {c["id"]: c for c in _evaluate_checklist(s1, TENANT)}["identity_resolved"]["passed"] is True
         # Has entities, but pending → fail
         s2 = FakeSession(_routes(entity_count=1, pending_reviews=1))
-        assert {c["id"]: c for c in _evaluate_checklist(s2, TENANT)}[
-            "identity_resolved"
-        ]["passed"] is False
+        assert {c["id"]: c for c in _evaluate_checklist(s2, TENANT)}["identity_resolved"]["passed"] is False
         # No entities → fail
         s3 = FakeSession(_routes(entity_count=0, pending_reviews=0))
-        assert {c["id"]: c for c in _evaluate_checklist(s3, TENANT)}[
-            "identity_resolved"
-        ]["passed"] is False
+        assert {c["id"]: c for c in _evaluate_checklist(s3, TENANT)}["identity_resolved"]["passed"] is False
 
     def test_no_critical_exceptions_inverts_correctly(self):
         """1 open critical → fail; 0 → pass. Inverted semantics can
         easily regress if someone flips the comparator."""
         for critical, expected in [(1, False), (0, True)]:
             session = FakeSession(_routes(critical_open=critical))
-            assert {c["id"]: c for c in _evaluate_checklist(session, TENANT)}[
-                "no_critical_exceptions"
-            ]["passed"] is expected
+            assert {c["id"]: c for c in _evaluate_checklist(session, TENANT)}["no_critical_exceptions"][
+                "passed"
+            ] is expected
 
     def test_distinct_cte_query_skipped_when_zero_events(self):
         """Optimization: the distinct-CTE SQL only fires when
         total_events > 0, saving a query on empty tenants."""
         session = FakeSession(_routes(total_events=0))
         _evaluate_checklist(session, TENANT)
-        distinct_calls = [
-            c for c in session.calls
-            if "SELECT DISTINCT event_type" in c[0]
-        ]
-        assert distinct_calls == [], (
-            "The distinct-CTE query should be skipped when no events exist"
-        )
+        distinct_calls = [c for c in session.calls if "SELECT DISTINCT event_type" in c[0]]
+        assert distinct_calls == [], "The distinct-CTE query should be skipped when no events exist"
 
     def test_every_query_scopes_by_tenant(self):
         """Tenant isolation at SQL layer: every execute call passes
@@ -536,12 +505,8 @@ class TestChecklistEndpoint:
         client = _client(_principal(), FakeSession())
         body = client.get("/api/v1/readiness/checklist").json()
         for level_key, block in body["checklist_by_level"].items():
-            assert block["total"] == sum(
-                1 for item in CHECKLIST_ITEMS if item["level"] == int(level_key)
-            )
-            assert block["completed"] == sum(
-                1 for item in block["items"] if item["passed"]
-            )
+            assert block["total"] == sum(1 for item in CHECKLIST_ITEMS if item["level"] == int(level_key))
+            assert block["completed"] == sum(1 for item in block["items"] if item["passed"])
             assert "level_info" in block
             assert set(block["level_info"].keys()) == {"name", "description", "color"}
 

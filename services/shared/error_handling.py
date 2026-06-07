@@ -23,6 +23,7 @@ try:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
+
     _HAS_SENTRY = True
 except ImportError:
     _HAS_SENTRY = False

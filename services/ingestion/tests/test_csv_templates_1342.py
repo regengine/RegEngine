@@ -4,6 +4,7 @@ Part of the #1342 ingestion coverage sweep. Covers CSV template
 generation, CTE-type detection, UOM/location/date normalization, lot
 code integrity checks, and the full CSV ingest endpoint.
 """
+
 from __future__ import annotations
 
 import io
@@ -11,14 +12,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import csv_templates as ct
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.csv_templates import (
-    CTE_COLUMNS,
     _CTE_TYPE_ALIASES,
     _SENTINEL_TS,
+    CTE_COLUMNS,
     _check_lot_code_integrity,
     _detect_row_cte_type,
     _generate_csv_template,
@@ -29,7 +28,6 @@ from app.csv_templates import (
     _validate_kde_completeness,
     router,
 )
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import (
     EventResult,
@@ -37,7 +35,8 @@ from app.webhook_models import (
     IngestResponse,
     WebhookCTEType,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -58,13 +57,17 @@ def _build_app(principal_tenant: Optional[str] = "t1") -> FastAPI:
 
 def _ok_ingest_response() -> IngestResponse:
     return IngestResponse(
-        accepted=1, rejected=0, total=1,
-        events=[EventResult(
-            traceability_lot_code="TLC",
-            cte_type="harvesting",
-            status="accepted",
-            event_id="evt-1",
-        )],
+        accepted=1,
+        rejected=0,
+        total=1,
+        events=[
+            EventResult(
+                traceability_lot_code="TLC",
+                cte_type="harvesting",
+                status="accepted",
+                event_id="evt-1",
+            )
+        ],
     )
 
 
@@ -296,15 +299,23 @@ class TestValidateKdeCompleteness:
 
 
 class TestNormalizeUom:
-    @pytest.mark.parametrize("raw,expected", [
-        ("lb", "lbs"), ("LB.", "lbs"), ("pounds", "lbs"),
-        ("kilogram", "kg"), ("KG", "kg"),
-        ("case", "cases"), ("CS", "cases"),
-        ("pallet", "pallets"), ("plts", "pallets"),
-        ("ea", "each"),
-        ("gallon", "gallons"),
-        ("unknown_unit", "unknown_unit"),  # falls back to lowercased input
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("lb", "lbs"),
+            ("LB.", "lbs"),
+            ("pounds", "lbs"),
+            ("kilogram", "kg"),
+            ("KG", "kg"),
+            ("case", "cases"),
+            ("CS", "cases"),
+            ("pallet", "pallets"),
+            ("plts", "pallets"),
+            ("ea", "each"),
+            ("gallon", "gallons"),
+            ("unknown_unit", "unknown_unit"),  # falls back to lowercased input
+        ],
+    )
     def test_aliases(self, raw, expected):
         assert _normalize_uom(raw) == expected
 
@@ -321,18 +332,21 @@ class TestNormalizeLocation:
     def test_collapses_whitespace(self):
         assert _normalize_location("  Farm   A ") == "Farm A"
 
-    @pytest.mark.parametrize("raw,expected_contains", [
-        ("East whse", "Warehouse"),
-        ("Dist Center", "Distribution"),
-        ("Mfg Plant", "Manufacturing"),
-        ("Fac 1", "Facility"),
-        ("Pkg Station", "Packaging"),
-        ("Recv Dock", "Receiving"),
-        ("Shpg Bay", "Shipping"),
-        ("Distribution Ctr", "Center"),
-        ("Main blvd", "Boulevard"),
-        ("Elm ave", "Avenue"),
-    ])
+    @pytest.mark.parametrize(
+        "raw,expected_contains",
+        [
+            ("East whse", "Warehouse"),
+            ("Dist Center", "Distribution"),
+            ("Mfg Plant", "Manufacturing"),
+            ("Fac 1", "Facility"),
+            ("Pkg Station", "Packaging"),
+            ("Recv Dock", "Receiving"),
+            ("Shpg Bay", "Shipping"),
+            ("Distribution Ctr", "Center"),
+            ("Main blvd", "Boulevard"),
+            ("Elm ave", "Avenue"),
+        ],
+    )
     def test_expands_abbreviations(self, raw, expected_contains):
         assert expected_contains in _normalize_location(raw)
 
@@ -440,6 +454,7 @@ class TestCheckLotCodeIntegrity:
 
 def _csv_body(rows: list[dict], fieldnames: list[str]) -> bytes:
     import csv as _csv
+
     buf = io.StringIO()
     writer = _csv.DictWriter(buf, fieldnames=fieldnames)
     writer.writeheader()
@@ -452,6 +467,7 @@ class TestIngestCsv:
     @pytest.fixture(autouse=True)
     def _stub_ingest(self, monkeypatch):
         """Default ingest_events stub returns 1 accepted event — override per-test as needed."""
+
         async def _fake(payload, **kwargs):
             # Build response with one accepted event per inbound event
             return IngestResponse(
@@ -464,9 +480,11 @@ class TestIngestCsv:
                         cte_type=e.cte_type.value,
                         status="accepted",
                         event_id=f"evt-{i}",
-                    ) for i, e in enumerate(payload.events)
+                    )
+                    for i, e in enumerate(payload.events)
                 ],
             )
+
         monkeypatch.setattr(ct, "ingest_events", _fake)
 
     def test_missing_cte_type_returns_400(self):
@@ -497,17 +515,26 @@ class TestIngestCsv:
 
     def test_happy_path_single_type(self):
         csv_bytes = _csv_body(
-            [{
-                "traceability_lot_code": "TLC1",
-                "product_description": "Kale",
-                "quantity": "10",
-                "unit_of_measure": "lbs",
-                "harvest_date": "2026-04-17",
-                "location_name": "Farm A",
-                "reference_document": "REF-1",
-            }],
-            ["traceability_lot_code", "product_description", "quantity",
-             "unit_of_measure", "harvest_date", "location_name", "reference_document"],
+            [
+                {
+                    "traceability_lot_code": "TLC1",
+                    "product_description": "Kale",
+                    "quantity": "10",
+                    "unit_of_measure": "lbs",
+                    "harvest_date": "2026-04-17",
+                    "location_name": "Farm A",
+                    "reference_document": "REF-1",
+                }
+            ],
+            [
+                "traceability_lot_code",
+                "product_description",
+                "quantity",
+                "unit_of_measure",
+                "harvest_date",
+                "location_name",
+                "reference_document",
+            ],
         )
         client = TestClient(_build_app())
         resp = client.post(
@@ -544,9 +571,19 @@ class TestIngestCsv:
                     "reference_document": "REF-2",
                 },
             ],
-            ["cte_type", "traceability_lot_code", "product_description", "quantity",
-             "unit_of_measure", "harvest_date", "ship_date", "location_name",
-             "ship_from_location", "ship_to_location", "reference_document"],
+            [
+                "cte_type",
+                "traceability_lot_code",
+                "product_description",
+                "quantity",
+                "unit_of_measure",
+                "harvest_date",
+                "ship_date",
+                "location_name",
+                "ship_from_location",
+                "ship_to_location",
+                "reference_document",
+            ],
         )
         client = TestClient(_build_app())
         resp = client.post(
@@ -573,9 +610,16 @@ class TestIngestCsv:
                     "reference_document": "REF",
                 },
             ],
-            ["cte_type", "traceability_lot_code", "product_description",
-             "quantity", "unit_of_measure", "harvest_date", "location_name",
-             "reference_document"],
+            [
+                "cte_type",
+                "traceability_lot_code",
+                "product_description",
+                "quantity",
+                "unit_of_measure",
+                "harvest_date",
+                "location_name",
+                "reference_document",
+            ],
         )
         client = TestClient(_build_app())
         resp = client.post(
@@ -669,10 +713,7 @@ class TestIngestCsv:
             "traceability_lot_code,product_description,quantity,unit_of_measure,"
             "harvest_date,location_name,reference_document\n"
         )
-        rows = "\n".join(
-            f"TLC{i},Kale,10,lbs,2026-04-17,Farm A,REF"
-            for i in range(502)
-        )
+        rows = "\n".join(f"TLC{i},Kale,10,lbs,2026-04-17,Farm A,REF" for i in range(502))
         client = TestClient(_build_app())
         resp = client.post(
             "/api/v1/ingest/csv",
@@ -684,11 +725,7 @@ class TestIngestCsv:
         # MAX_CSV_ROWS = 500 → 501 and 502 are rejected
         assert body["accepted"] == 500
         assert body["rejected"] >= 1
-        assert any(
-            "exceeds maximum row limit" in err
-            for evt in body["events"]
-            for err in evt.get("errors", [])
-        )
+        assert any("exceeds maximum row limit" in err for evt in body["events"] for err in evt.get("errors", []))
 
     def test_tenant_derived_from_principal_when_absent(self, monkeypatch):
         captured: dict = {}
@@ -765,11 +802,14 @@ class TestIngestCsv:
                 accepted=len(payload.events),
                 rejected=0,
                 total=len(payload.events),
-                events=[EventResult(
-                    traceability_lot_code=e.traceability_lot_code,
-                    cte_type=e.cte_type.value,
-                    status="accepted",
-                ) for e in payload.events],
+                events=[
+                    EventResult(
+                        traceability_lot_code=e.traceability_lot_code,
+                        cte_type=e.cte_type.value,
+                        status="accepted",
+                    )
+                    for e in payload.events
+                ],
             )
 
         monkeypatch.setattr(ct, "ingest_events", _fake)
@@ -781,8 +821,8 @@ class TestIngestCsv:
         )
         # CSV quotes needed for comma-separated cell — use manual text
         csv_text = (
-            'traceability_lot_code,product_description,quantity,unit_of_measure,'
-            'transformation_date,location_name,reference_document,input_lot_codes\n'
+            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+            "transformation_date,location_name,reference_document,input_lot_codes\n"
             'NEW1,Mix,100,bags,2026-04-17,Plant A,REF,"LOT1,LOT2"\n'
         )
         client = TestClient(_build_app())
@@ -889,8 +929,13 @@ class TestRouterSurface:
     def test_alias_coverage(self):
         # Spot-check each canonical CTE has at least one alias mapping back to it
         canonical = {
-            "harvesting", "cooling", "initial_packing", "shipping",
-            "receiving", "transformation", "first_land_based_receiving",
+            "harvesting",
+            "cooling",
+            "initial_packing",
+            "shipping",
+            "receiving",
+            "transformation",
+            "first_land_based_receiving",
         }
         for c in canonical:
             assert any(v == c for v in _CTE_TYPE_ALIASES.values()), c

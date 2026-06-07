@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from ..models import Document
-from ..utils import hash_content, generate_document_id
+from ..utils import generate_document_id, hash_content
 
 
 def _validate_path_component(value: str, label: str) -> str:
@@ -45,12 +45,7 @@ class StorageManager:
             raise ValueError(f"Path escapes base directory: {path}")
         return resolved
 
-    def store_document(
-        self,
-        content: bytes,
-        vertical: str,
-        document_id: Optional[str] = None
-    ) -> Tuple[str, str, str]:
+    def store_document(self, content: bytes, vertical: str, document_id: Optional[str] = None) -> Tuple[str, str, str]:
         """
         Store document content.
 

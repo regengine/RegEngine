@@ -8,8 +8,8 @@ Covers:
 - Auth requirements
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,7 +26,6 @@ os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-industries")
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app
 
 client = TestClient(app)

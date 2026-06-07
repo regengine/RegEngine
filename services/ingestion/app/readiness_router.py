@@ -26,17 +26,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.database import get_db_session
 from sqlalchemy import text
 
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
-from shared.database import get_db_session
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 logger = logging.getLogger("readiness-wizard")
 
 router = APIRouter(prefix="/api/v1/readiness", tags=["Readiness Wizard"])
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -44,40 +42,161 @@ router = APIRouter(prefix="/api/v1/readiness", tags=["Readiness Wizard"])
 # ---------------------------------------------------------------------------
 
 REQUIRED_CTE_TYPES = [
-    "harvesting", "cooling", "initial_packing",
-    "first_land_based_receiving", "shipping", "receiving", "transformation",
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
 ]
 
 CHECKLIST_ITEMS = [
     # Level 1: Ingesting
-    {"id": "ingest_records", "level": 1, "title": "Ingest traceability records", "description": "At least 10 canonical events ingested from any source", "category": "data"},
-    {"id": "multiple_sources", "level": 1, "title": "Multiple ingestion sources", "description": "Records from at least 2 different source systems (API, CSV, EPCIS)", "category": "data"},
-    {"id": "cte_coverage", "level": 1, "title": "CTE type coverage", "description": "At least 4 of 7 FSMA CTE types represented in records", "category": "data"},
-    {"id": "facility_identifiers", "level": 1, "title": "Facility identifiers (GLN)", "description": "At least 50% of events have GLN-based facility references", "category": "data"},
-
+    {
+        "id": "ingest_records",
+        "level": 1,
+        "title": "Ingest traceability records",
+        "description": "At least 10 canonical events ingested from any source",
+        "category": "data",
+    },
+    {
+        "id": "multiple_sources",
+        "level": 1,
+        "title": "Multiple ingestion sources",
+        "description": "Records from at least 2 different source systems (API, CSV, EPCIS)",
+        "category": "data",
+    },
+    {
+        "id": "cte_coverage",
+        "level": 1,
+        "title": "CTE type coverage",
+        "description": "At least 4 of 7 FSMA CTE types represented in records",
+        "category": "data",
+    },
+    {
+        "id": "facility_identifiers",
+        "level": 1,
+        "title": "Facility identifiers (GLN)",
+        "description": "At least 50% of events have GLN-based facility references",
+        "category": "data",
+    },
     # Level 2: Validating
-    {"id": "rules_seeded", "level": 2, "title": "Compliance rules loaded", "description": "Rule definitions seeded in the rules engine", "category": "rules"},
-    {"id": "rules_evaluated", "level": 2, "title": "Events evaluated against rules", "description": "At least 50% of canonical events have rule evaluations", "category": "rules"},
-    {"id": "pass_rate_70", "level": 2, "title": "70% rule pass rate", "description": "Overall rule evaluation pass rate above 70%", "category": "rules"},
-    {"id": "exceptions_managed", "level": 2, "title": "Exceptions being managed", "description": "At least one exception case resolved or waived", "category": "exceptions"},
-
+    {
+        "id": "rules_seeded",
+        "level": 2,
+        "title": "Compliance rules loaded",
+        "description": "Rule definitions seeded in the rules engine",
+        "category": "rules",
+    },
+    {
+        "id": "rules_evaluated",
+        "level": 2,
+        "title": "Events evaluated against rules",
+        "description": "At least 50% of canonical events have rule evaluations",
+        "category": "rules",
+    },
+    {
+        "id": "pass_rate_70",
+        "level": 2,
+        "title": "70% rule pass rate",
+        "description": "Overall rule evaluation pass rate above 70%",
+        "category": "rules",
+    },
+    {
+        "id": "exceptions_managed",
+        "level": 2,
+        "title": "Exceptions being managed",
+        "description": "At least one exception case resolved or waived",
+        "category": "exceptions",
+    },
     # Level 3: Operational
-    {"id": "request_case_created", "level": 3, "title": "Request case tested", "description": "At least one request case created (drill or real)", "category": "workflow"},
-    {"id": "package_assembled", "level": 3, "title": "Response package assembled", "description": "At least one response package generated with SHA-256 seal", "category": "workflow"},
-    {"id": "signoff_chain", "level": 3, "title": "Signoff chain tested", "description": "At least one signoff recorded on a request case", "category": "workflow"},
-    {"id": "fda_export_generated", "level": 3, "title": "FDA export generated", "description": "At least one FDA-format export in the audit log", "category": "export"},
-
+    {
+        "id": "request_case_created",
+        "level": 3,
+        "title": "Request case tested",
+        "description": "At least one request case created (drill or real)",
+        "category": "workflow",
+    },
+    {
+        "id": "package_assembled",
+        "level": 3,
+        "title": "Response package assembled",
+        "description": "At least one response package generated with SHA-256 seal",
+        "category": "workflow",
+    },
+    {
+        "id": "signoff_chain",
+        "level": 3,
+        "title": "Signoff chain tested",
+        "description": "At least one signoff recorded on a request case",
+        "category": "workflow",
+    },
+    {
+        "id": "fda_export_generated",
+        "level": 3,
+        "title": "FDA export generated",
+        "description": "At least one FDA-format export in the audit log",
+        "category": "export",
+    },
     # Level 4: Audit-Ready
-    {"id": "chain_integrity", "level": 4, "title": "Hash chain verified", "description": "Hash chain integrity verification passes with no errors", "category": "integrity"},
-    {"id": "provenance_complete", "level": 4, "title": "Full provenance chain", "description": "90%+ of events have complete provenance metadata", "category": "integrity"},
-    {"id": "pass_rate_90", "level": 4, "title": "90% rule pass rate", "description": "Overall rule evaluation pass rate above 90%", "category": "rules"},
-    {"id": "identity_resolved", "level": 4, "title": "Entity identity resolved", "description": "Canonical entities registered with no pending ambiguous reviews", "category": "identity"},
-
+    {
+        "id": "chain_integrity",
+        "level": 4,
+        "title": "Hash chain verified",
+        "description": "Hash chain integrity verification passes with no errors",
+        "category": "integrity",
+    },
+    {
+        "id": "provenance_complete",
+        "level": 4,
+        "title": "Full provenance chain",
+        "description": "90%+ of events have complete provenance metadata",
+        "category": "integrity",
+    },
+    {
+        "id": "pass_rate_90",
+        "level": 4,
+        "title": "90% rule pass rate",
+        "description": "Overall rule evaluation pass rate above 90%",
+        "category": "rules",
+    },
+    {
+        "id": "identity_resolved",
+        "level": 4,
+        "title": "Entity identity resolved",
+        "description": "Canonical entities registered with no pending ambiguous reviews",
+        "category": "identity",
+    },
     # Level 5: Compliant
-    {"id": "request_submitted", "level": 5, "title": "Request case submitted", "description": "At least one request case submitted (completed 24-hour workflow)", "category": "workflow"},
-    {"id": "all_ctes_covered", "level": 5, "title": "All 7 CTE types covered", "description": "Records exist for all 7 FSMA 204 Critical Tracking Event types", "category": "data"},
-    {"id": "no_critical_exceptions", "level": 5, "title": "No critical blocking exceptions", "description": "Zero critical-severity exceptions in open or in_review status", "category": "exceptions"},
-    {"id": "pass_rate_95", "level": 5, "title": "95% rule pass rate", "description": "Overall rule evaluation pass rate above 95%", "category": "rules"},
+    {
+        "id": "request_submitted",
+        "level": 5,
+        "title": "Request case submitted",
+        "description": "At least one request case submitted (completed 24-hour workflow)",
+        "category": "workflow",
+    },
+    {
+        "id": "all_ctes_covered",
+        "level": 5,
+        "title": "All 7 CTE types covered",
+        "description": "Records exist for all 7 FSMA 204 Critical Tracking Event types",
+        "category": "data",
+    },
+    {
+        "id": "no_critical_exceptions",
+        "level": 5,
+        "title": "No critical blocking exceptions",
+        "description": "Zero critical-severity exceptions in open or in_review status",
+        "category": "exceptions",
+    },
+    {
+        "id": "pass_rate_95",
+        "level": 5,
+        "title": "95% rule pass rate",
+        "description": "Overall rule evaluation pass rate above 95%",
+        "category": "rules",
+    },
 ]
 
 MATURITY_LEVELS = {
@@ -95,7 +214,8 @@ def _evaluate_checklist(db, tid: str) -> List[Dict[str, Any]]:
     results = []
 
     # Gather all metrics in a few queries
-    event_stats = db.execute(text("""
+    event_stats = db.execute(
+        text("""
         SELECT
             COUNT(*) AS total,
             COUNT(DISTINCT source_system) AS source_count,
@@ -103,7 +223,9 @@ def _evaluate_checklist(db, tid: str) -> List[Dict[str, Any]]:
             COUNT(*) FILTER (WHERE from_facility_reference ~ '^\\d{13}$' OR to_facility_reference ~ '^\\d{13}$') AS gln_events
         FROM fsma.traceability_events
         WHERE tenant_id = :tid AND status = 'active'
-    """), {"tid": tid}).fetchone()
+    """),
+        {"tid": tid},
+    ).fetchone()
 
     total_events = event_stats[0] if event_stats else 0
     source_count = event_stats[1] if event_stats else 0
@@ -112,19 +234,25 @@ def _evaluate_checklist(db, tid: str) -> List[Dict[str, Any]]:
 
     cte_types_present = set()
     if total_events > 0:
-        cte_rows = db.execute(text("""
+        cte_rows = db.execute(
+            text("""
             SELECT DISTINCT event_type FROM fsma.traceability_events
             WHERE tenant_id = :tid AND status = 'active'
-        """), {"tid": tid}).fetchall()
+        """),
+            {"tid": tid},
+        ).fetchall()
         cte_types_present = {r[0] for r in cte_rows}
 
-    rule_stats = db.execute(text("""
+    rule_stats = db.execute(
+        text("""
         SELECT
             COUNT(*) AS total_rules,
             (SELECT COUNT(*) FROM fsma.rule_evaluations WHERE tenant_id = :tid) AS total_evals,
             (SELECT COUNT(*) FILTER (WHERE result = 'pass') FROM fsma.rule_evaluations WHERE tenant_id = :tid) AS passed
         FROM fsma.rule_definitions WHERE retired_date IS NULL
-    """), {"tid": tid}).fetchone()
+    """),
+        {"tid": tid},
+    ).fetchone()
 
     total_rules = rule_stats[0] if rule_stats else 0
     total_evals = rule_stats[1] if rule_stats else 0
@@ -132,49 +260,65 @@ def _evaluate_checklist(db, tid: str) -> List[Dict[str, Any]]:
     eval_rate = (total_evals / total_events) if total_events > 0 else 0
     pass_rate = (passed_evals / total_evals * 100) if total_evals > 0 else 0
 
-    exception_stats = db.execute(text("""
+    exception_stats = db.execute(
+        text("""
         SELECT
             COUNT(*) FILTER (WHERE status IN ('resolved', 'waived')) AS resolved,
             COUNT(*) FILTER (WHERE severity = 'critical' AND status NOT IN ('resolved', 'waived')) AS critical_open
         FROM fsma.exception_cases WHERE tenant_id = :tid
-    """), {"tid": tid}).fetchone()
+    """),
+        {"tid": tid},
+    ).fetchone()
 
     resolved_exceptions = exception_stats[0] if exception_stats else 0
     critical_open = exception_stats[1] if exception_stats else 0
 
-    request_stats = db.execute(text("""
+    request_stats = db.execute(
+        text("""
         SELECT
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE package_status = 'submitted') AS submitted
         FROM fsma.request_cases WHERE tenant_id = :tid
-    """), {"tid": tid}).fetchone()
+    """),
+        {"tid": tid},
+    ).fetchone()
 
     total_requests = request_stats[0] if request_stats else 0
     submitted_requests = request_stats[1] if request_stats else 0
 
-    package_count = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.response_packages WHERE tenant_id = :tid"
-    ), {"tid": tid}).scalar() or 0
+    package_count = (
+        db.execute(text("SELECT COUNT(*) FROM fsma.response_packages WHERE tenant_id = :tid"), {"tid": tid}).scalar()
+        or 0
+    )
 
-    signoff_count = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.request_signoffs WHERE tenant_id = :tid"
-    ), {"tid": tid}).scalar() or 0
+    signoff_count = (
+        db.execute(text("SELECT COUNT(*) FROM fsma.request_signoffs WHERE tenant_id = :tid"), {"tid": tid}).scalar()
+        or 0
+    )
 
-    export_count = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"
-    ), {"tid": tid}).scalar() or 0
+    export_count = (
+        db.execute(text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"), {"tid": tid}).scalar() or 0
+    )
 
-    chain_length = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"
-    ), {"tid": tid}).scalar() or 0
+    chain_length = (
+        db.execute(text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tid}).scalar() or 0
+    )
 
-    entity_count = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.canonical_entities WHERE tenant_id = :tid AND is_active = TRUE"
-    ), {"tid": tid}).scalar() or 0
+    entity_count = (
+        db.execute(
+            text("SELECT COUNT(*) FROM fsma.canonical_entities WHERE tenant_id = :tid AND is_active = TRUE"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
-    pending_reviews = db.execute(text(
-        "SELECT COUNT(*) FROM fsma.identity_review_queue WHERE tenant_id = :tid AND status = 'pending'"
-    ), {"tid": tid}).scalar() or 0
+    pending_reviews = (
+        db.execute(
+            text("SELECT COUNT(*) FROM fsma.identity_review_queue WHERE tenant_id = :tid AND status = 'pending'"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Evaluate each item
     checks = {
@@ -223,6 +367,7 @@ def _compute_maturity_level(checklist_results: List[Dict]) -> int:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/assessment",

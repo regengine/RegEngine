@@ -3,12 +3,13 @@ RegEngine SDK Data Models
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Any, Dict
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class CTEType(str, Enum):
     """Critical Tracking Event types per FSMA 204."""
+
     HARVESTING = "HARVESTING"
     COOLING = "COOLING"
     INITIAL_PACKING = "INITIAL_PACKING"
@@ -21,6 +22,7 @@ class CTEType(str, Enum):
 @dataclass
 class Record:
     """A traceability record for a Critical Tracking Event."""
+
     id: str
     tlc: str
     cte_type: str
@@ -33,7 +35,7 @@ class Record:
     input_tlcs: Optional[List[str]] = None
     created_at: Optional[str] = None
     hash: Optional[str] = None
-    
+
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -43,12 +45,13 @@ class Record:
 @dataclass
 class Facility:
     """A facility in the supply chain."""
+
     id: str
     gln: str
     name: str
     address: Optional[str] = None
     facility_type: Optional[str] = None
-    
+
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -58,13 +61,14 @@ class Facility:
 @dataclass
 class TraceResult:
     """Result of a forward or backward trace."""
+
     lot_id: str
     facilities: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
     source_lots: List[str] = field(default_factory=list)
     hop_count: int = 0
     trace_duration_ms: Optional[int] = None
-    
+
     def __init__(self, **kwargs):
         self.facilities = kwargs.get("facilities", [])
         self.events = kwargs.get("events", [])
@@ -77,12 +81,13 @@ class TraceResult:
 @dataclass
 class TimelineEvent:
     """A single event in a lot's timeline."""
+
     cte: str
     date: str
     location: str
     quantity: Optional[float] = None
     description: Optional[str] = None
-    
+
     def __init__(self, **kwargs):
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -92,6 +97,7 @@ class TimelineEvent:
 @dataclass
 class FTLResult:
     """Result of FDA Food Traceability List check."""
+
     category: str
     covered: bool
     risk_level: str
@@ -99,7 +105,7 @@ class FTLResult:
     kdes: List[str] = field(default_factory=list)
     exclusions: Optional[str] = None
     examples: Optional[str] = None
-    
+
     def __init__(self, **kwargs):
         self.category = kwargs.get("category", "")
         self.covered = kwargs.get("covered", False)
@@ -113,6 +119,7 @@ class FTLResult:
 @dataclass
 class RecallDrill:
     """A mock recall drill for FSMA 204 compliance testing."""
+
     drill_id: str
     status: str
     target_tlc: str
@@ -122,7 +129,7 @@ class RecallDrill:
     completed_at: Optional[str] = None
     duration_seconds: Optional[int] = None
     facilities_affected: int = 0
-    
+
     def __init__(self, **kwargs):
         self.drill_id = kwargs.get("drill_id", kwargs.get("id", ""))
         self.status = kwargs.get("status", "")
@@ -138,12 +145,13 @@ class RecallDrill:
 @dataclass
 class ReadinessScore:
     """FSMA 204 recall readiness assessment."""
+
     readiness_score: int
     recommendations: List[str] = field(default_factory=list)
     last_drill_date: Optional[str] = None
     average_drill_seconds: Optional[int] = None
     sla_compliance_percentage: float = 0.0
-    
+
     def __init__(self, **kwargs):
         self.readiness_score = kwargs.get("readiness_score", 0)
         self.recommendations = kwargs.get("recommendations", [])

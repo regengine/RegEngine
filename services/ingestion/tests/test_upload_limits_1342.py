@@ -28,8 +28,6 @@ import zipfile
 from typing import Optional
 
 import pytest
-from fastapi import HTTPException, UploadFile
-
 from app.shared import upload_limits
 from app.shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
@@ -43,7 +41,7 @@ from app.shared.upload_limits import (
     stream_upload_to_file_with_limit,
     validate_regulation_upload_content,
 )
-
+from fastapi import HTTPException, UploadFile
 
 # ===========================================================================
 # Helpers
@@ -66,7 +64,6 @@ def _run(coro):
 
 
 class TestReadUploadUndersize:
-
     def test_small_payload_roundtrips_unchanged(self):
         payload = b"hello, world"
         f = _make_upload(payload)
@@ -107,7 +104,6 @@ class TestReadUploadUndersize:
 
 
 class TestReadUploadOversize:
-
     def test_oversize_raises_413(self):
         payload = b"x" * 2048
         f = _make_upload(payload)
@@ -180,7 +176,6 @@ class TestReadUploadOversize:
 
 
 class TestUploadLimitConstants:
-
     def test_default_file_cap_is_10mb(self):
         """Don't quietly raise the default cap without a code review."""
         assert MAX_FILE_SIZE_BYTES == 10 * 1024 * 1024
@@ -218,9 +213,9 @@ class TestUploadLimitConstants:
 
 
 class TestReadUploadSignature:
-
     def test_read_upload_with_limit_is_async(self):
         import inspect
+
         assert inspect.iscoroutinefunction(read_upload_with_limit)
 
     def test_read_upload_is_exported(self):
@@ -229,7 +224,6 @@ class TestReadUploadSignature:
 
 
 class TestStreamUploadToFileWithLimit:
-
     def test_streams_to_path_and_returns_prefix(self, tmp_path):
         payload = b"%PDF-" + b"A" * 100
         destination = tmp_path / "upload.pdf"
@@ -262,7 +256,6 @@ class TestStreamUploadToFileWithLimit:
 
 
 class TestFilenameAndDocumentValidation:
-
     def test_sanitize_upload_filename_uses_basename_and_strips_controls(self):
         assert sanitize_upload_filename("../secret\n-token.pdf") == "secret-token.pdf"
         assert sanitize_upload_filename("..") == "upload"

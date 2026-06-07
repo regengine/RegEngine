@@ -38,16 +38,16 @@ class TestCreateEngine:
     def test_uses_admin_database_url_when_set(self, monkeypatch):
         """Verify ADMIN_DATABASE_URL is used when available."""
         monkeypatch.setenv("ADMIN_DATABASE_URL", "postgresql://user:pass@localhost/admin")
-        
+
         # Need to reload the module to pick up new env var
         with patch("services.admin.app.database.create_engine") as mock_create:
             mock_create.return_value = MagicMock()
-            
+
             from services.admin.app.database import _create_engine
-            
+
             # The function should use the env var
             engine = _create_engine()
-            
+
             # Verify create_engine was called
             assert mock_create.called or engine is not None
 
@@ -57,15 +57,15 @@ class TestCreateEngine:
         monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
         monkeypatch.setenv("REGENGINE_ENV", "test")
         monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./test_admin.db")
-        
+
         with patch("services.admin.app.database.create_engine") as mock_create:
             mock_engine = MagicMock()
             mock_create.return_value = mock_engine
-            
+
             from services.admin.app.database import _create_engine
-            
+
             engine = _create_engine()
-            
+
             # Should have been called with sqlite URL
             if mock_create.called:
                 call_args = mock_create.call_args
@@ -123,7 +123,7 @@ class TestInitDb:
         with patch.object(Base.metadata, "create_all") as mock_create:
             with patch.object(database, "_engine", mock_engine):
                 database.init_db()
-            
+
             mock_create.assert_called_once()
 
     def test_init_db_serializes_postgresql_helper_function_ddl(self):
@@ -147,10 +147,7 @@ class TestInitDb:
         assert mock_conn.execute.call_args_list[0].args[1] == {
             "lock_id": database._ADMIN_DB_INIT_LOCK_ID,
         }
-        assert any(
-            "CREATE OR REPLACE FUNCTION set_tenant_context" in statement
-            for statement in executed_sql[1:]
-        )
+        assert any("CREATE OR REPLACE FUNCTION set_tenant_context" in statement for statement in executed_sql[1:])
 
 
 class TestGetSession:
@@ -159,13 +156,13 @@ class TestGetSession:
     def test_get_session_yields_session(self):
         """Verify get_session yields a usable session."""
         from services.admin.app.database import get_session
-        
+
         # get_session is a generator
         gen = get_session()
         session = next(gen)
-        
+
         assert session is not None
-        
+
         # Should close session on completion
         try:
             next(gen)
@@ -175,27 +172,27 @@ class TestGetSession:
     def test_get_session_closes_on_exception(self):
         """Verify session is closed even when exception occurs."""
         from services.admin.app.database import get_session
-        
+
         closed = False
-        
+
         with patch("services.admin.app.database.SessionLocal") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
-            
+
             def close_tracker():
                 nonlocal closed
                 closed = True
-            
+
             mock_session.close = close_tracker
-            
+
             gen = get_session()
             session = next(gen)
-            
+
             try:
                 gen.throw(RuntimeError("Test exception"))
             except RuntimeError:
                 pass
-            
+
             # Session should be closed
             assert closed
 
@@ -206,17 +203,17 @@ class TestGetTenantSession:
     def test_sets_tenant_id_in_session(self):
         """Verify tenant_id is set in session context."""
         from services.admin.app.database import get_tenant_session
-        
+
         with patch("services.admin.app.database.SessionLocal") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
-            
+
             gen = get_tenant_session("00000000-0000-0000-0000-000000000123")
             session = next(gen)
-            
+
             # Should have executed SET statement
             mock_session.execute.assert_called()
-            
+
             try:
                 next(gen)
             except StopIteration:
@@ -225,18 +222,18 @@ class TestGetTenantSession:
     def test_skips_set_when_tenant_id_null(self):
         """Verify SET is not called when tenant_id is empty."""
         from services.admin.app.database import get_tenant_session
-        
+
         with patch("services.admin.app.database.SessionLocal") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
-            
+
             gen = get_tenant_session("")
             session = next(gen)
-            
+
             # Should not have executed SET when tenant_id is empty
             # (falsy check in the code)
             mock_session.execute.assert_not_called()
-            
+
             try:
                 next(gen)
             except StopIteration:
@@ -245,19 +242,19 @@ class TestGetTenantSession:
     def test_closes_session_after_use(self):
         """Verify tenant session is closed."""
         from services.admin.app.database import get_tenant_session
-        
+
         with patch("services.admin.app.database.SessionLocal") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
-            
+
             gen = get_tenant_session("00000000-0000-0000-0000-000000000123")
             session = next(gen)
-            
+
             try:
                 next(gen)
             except StopIteration:
                 pass
-            
+
             mock_session.close.assert_called_once()
 
 
@@ -267,20 +264,20 @@ class TestSessionLocalConfiguration:
     def test_autoflush_disabled(self):
         """Verify autoflush is disabled for explicit control."""
         from services.admin.app.database import SessionLocal
-        
+
         # SessionLocal.kw contains the configuration
         assert SessionLocal.kw.get("autoflush") is False
 
     def test_autocommit_disabled(self):
         """Verify autocommit is disabled for transaction control."""
         from services.admin.app.database import SessionLocal
-        
+
         assert SessionLocal.kw.get("autocommit") is False
 
     def test_expire_on_commit_disabled(self):
         """Verify expire_on_commit is disabled for performance."""
         from services.admin.app.database import SessionLocal
-        
+
         assert SessionLocal.kw.get("expire_on_commit") is False
 
 
@@ -292,7 +289,7 @@ class TestDatabaseConnection:
         # This is a configuration test - verify the setting exists
         with patch("services.admin.app.database.create_engine") as mock_create:
             from services.admin.app.database import _create_engine
-            
+
             # The implementation should use pool_pre_ping=True
             # This is verified by code review of _create_engine
             pass
@@ -310,9 +307,9 @@ class TestDatabaseConnection:
             mock_create.return_value = mock_engine
 
             from services.admin.app.database import _create_engine
-            
+
             engine = _create_engine()
-            
+
             if mock_create.called:
                 call_kwargs = mock_create.call_args[1]
                 if "connect_args" in call_kwargs:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import io
 import re
 import zipfile
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 import structlog
 
@@ -22,9 +22,9 @@ logger = structlog.get_logger("ingestion.format_extractors")
 # HTML Extraction
 # =============================================================================
 
+
 def extract_from_html(
-    raw_bytes: bytes,
-    encoding: str = "utf-8"
+    raw_bytes: bytes, encoding: str = "utf-8"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Extract text from HTML content using BeautifulSoup."""
     try:
@@ -36,25 +36,27 @@ def extract_from_html(
     try:
         html_content = raw_bytes.decode(encoding, errors="ignore")
         soup = BeautifulSoup(html_content, "html.parser")
-        
+
         # Remove script, style, and other non-content elements
         for element in soup(["script", "style", "meta", "link", "noscript", "header", "footer", "nav"]):
             element.decompose()
-        
+
         # Extract text with some structure preservation
         text_parts = []
-        
+
         # Get title if present
         title = soup.find("title")
         if title and title.string:
             text_parts.append(f"Title: {title.string.strip()}")
-        
+
         # Get main content
         # Try to find main content areas first
         main_content = soup.find("main") or soup.find("article") or soup.find("body") or soup
-        
+
         # Extract text preserving some structure
-        for element in main_content.find_all(["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "td", "th", "pre", "blockquote"]):
+        for element in main_content.find_all(
+            ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "td", "th", "pre", "blockquote"]
+        ):
             text = element.get_text(strip=True)
             if text:
                 # Add header prefixes for structure
@@ -65,9 +67,9 @@ def extract_from_html(
                     text_parts.append(f"• {text}")
                 else:
                     text_parts.append(text)
-        
+
         final_text = "\n\n".join(text_parts) if text_parts else soup.get_text(separator="\n", strip=True)
-        
+
         position_map = [
             PositionMapEntry(
                 page=1,
@@ -77,12 +79,10 @@ def extract_from_html(
                 source_end=len(raw_bytes),
             )
         ]
-        
+
         return (
             final_text,
-            TextExtractionMetadata(
-                engine="beautifulsoup", confidence_mean=0.95, confidence_std=0.03
-            ),
+            TextExtractionMetadata(engine="beautifulsoup", confidence_mean=0.95, confidence_std=0.03),
             position_map,
         )
     except (ValueError, TypeError, UnicodeDecodeError) as exc:
@@ -94,9 +94,9 @@ def extract_from_html(
 # XML Extraction
 # =============================================================================
 
+
 def extract_from_xml(
-    raw_bytes: bytes,
-    encoding: str = "utf-8"
+    raw_bytes: bytes, encoding: str = "utf-8"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Extract text from XML content using lxml."""
     try:
@@ -117,23 +117,23 @@ def extract_from_xml(
         def extract_element_text(element, depth=0):
             """Recursively extract text from XML elements."""
             tag_name = _etree_utils.QName(element.tag).localname if isinstance(element.tag, str) else str(element.tag)
-            
+
             # Get direct text content
             if element.text and element.text.strip():
                 indent = "  " * depth
                 text_parts.append(f"{indent}[{tag_name}] {element.text.strip()}")
-            
+
             # Process children
             for child in element:
                 extract_element_text(child, depth + 1)
-            
+
             # Get tail text
             if element.tail and element.tail.strip():
                 text_parts.append(element.tail.strip())
-        
+
         extract_element_text(root)
         final_text = "\n".join(text_parts)
-        
+
         position_map = [
             PositionMapEntry(
                 page=1,
@@ -143,12 +143,10 @@ def extract_from_xml(
                 source_end=len(raw_bytes),
             )
         ]
-        
+
         return (
             final_text,
-            TextExtractionMetadata(
-                engine="lxml", confidence_mean=0.98, confidence_std=0.02
-            ),
+            TextExtractionMetadata(engine="lxml", confidence_mean=0.98, confidence_std=0.02),
             position_map,
         )
     except (_etree_utils.LxmlError, UnicodeDecodeError, ValueError, TypeError, OSError) as exc:
@@ -160,13 +158,14 @@ def extract_from_xml(
 # CSV Extraction
 # =============================================================================
 
+
 def extract_from_csv(
-    raw_bytes: bytes,
-    encoding: str = "utf-8"
+    raw_bytes: bytes, encoding: str = "utf-8"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Extract text from CSV content using pandas."""
     try:
         import pandas as pd
+
         _has_pandas = True
     except ImportError:
         _has_pandas = False
@@ -174,6 +173,7 @@ def extract_from_csv(
     if not _has_pandas:
         # Fallback: use stdlib csv module for structured extraction
         import csv as csv_mod
+
         try:
             text_content = raw_bytes.decode(encoding, errors="ignore")
             sample = text_content[:2048]
@@ -195,16 +195,17 @@ def extract_from_csv(
                 "",
             ]
             for idx, row in enumerate(rows[1:], start=1):
-                row_text = " | ".join(
-                    f"{headers[j]}: {val}" for j, val in enumerate(row) if j < len(headers) and val
-                )
+                row_text = " | ".join(f"{headers[j]}: {val}" for j, val in enumerate(row) if j < len(headers) and val)
                 text_parts.append(f"Row {idx}: {row_text}")
 
             final_text = "\n".join(text_parts)
             position_map = [
                 PositionMapEntry(
-                    page=1, char_start=0, char_end=len(final_text),
-                    source_start=0, source_end=len(raw_bytes),
+                    page=1,
+                    char_start=0,
+                    char_end=len(final_text),
+                    source_start=0,
+                    source_end=len(raw_bytes),
                 )
             ]
             return (
@@ -224,32 +225,32 @@ def extract_from_csv(
             delimiter = "\t"
         elif sample.count(";") > sample.count(","):
             delimiter = ";"
-        
+
         # Read CSV
         df = pd.read_csv(
             io.BytesIO(raw_bytes),
             delimiter=delimiter,
             encoding=encoding,
             on_bad_lines="skip",
-            nrows=10000  # Limit for safety
+            nrows=10000,  # Limit for safety
         )
-        
+
         # Build structured text output
         text_parts = []
-        
+
         # Header row
         headers = list(df.columns)
         text_parts.append(f"Columns: {', '.join(str(h) for h in headers)}")
         text_parts.append(f"Total Rows: {len(df)}")
         text_parts.append("")
-        
+
         # Convert to readable format
         for idx, row in df.iterrows():
             row_text = " | ".join(f"{col}: {val}" for col, val in row.items() if pd.notna(val))
             text_parts.append(f"Row {idx + 1}: {row_text}")
-        
+
         final_text = "\n".join(text_parts)
-        
+
         position_map = [
             PositionMapEntry(
                 page=1,
@@ -259,12 +260,10 @@ def extract_from_csv(
                 source_end=len(raw_bytes),
             )
         ]
-        
+
         return (
             final_text,
-            TextExtractionMetadata(
-                engine="pandas", confidence_mean=0.99, confidence_std=0.01
-            ),
+            TextExtractionMetadata(engine="pandas", confidence_mean=0.99, confidence_std=0.01),
             position_map,
         )
     except (pd.errors.ParserError, ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
@@ -275,6 +274,7 @@ def extract_from_csv(
 # =============================================================================
 # Excel Extraction
 # =============================================================================
+
 
 def extract_from_excel(
     raw_bytes: bytes,
@@ -297,29 +297,29 @@ def extract_from_excel(
             except ImportError:
                 logger.warning("xlrd_missing")
                 return _fallback_extraction(raw_bytes, "excel")
-        
+
         text_parts = []
         position_map = []
         char_cursor = 0
-        
+
         for sheet_idx, sheet_name in enumerate(excel_file.sheet_names, start=1):
             df = excel_file.parse(sheet_name, nrows=10000)  # Limit rows
-            
+
             sheet_header = f"\n=== Sheet: {sheet_name} ===\n"
             text_parts.append(sheet_header)
-            
+
             # Column info
             headers = list(df.columns)
             text_parts.append(f"Columns: {', '.join(str(h) for h in headers)}")
             text_parts.append(f"Rows: {len(df)}\n")
-            
+
             # Data rows
             for idx, row in df.iterrows():
                 row_text = " | ".join(f"{col}: {val}" for col, val in row.items() if pd.notna(val))
                 if row_text:
                     text_parts.append(f"Row {idx + 1}: {row_text}")
-            
-            sheet_text = "\n".join(text_parts[-len(df)-3:])
+
+            sheet_text = "\n".join(text_parts[-len(df) - 3 :])
             position_map.append(
                 PositionMapEntry(
                     page=sheet_idx,
@@ -330,15 +330,19 @@ def extract_from_excel(
                 )
             )
             char_cursor += len(sheet_text) + 1
-        
+
         final_text = "\n".join(text_parts)
-        
+
         return (
             final_text,
-            TextExtractionMetadata(
-                engine="openpyxl", confidence_mean=0.98, confidence_std=0.02
-            ),
-            position_map if position_map else [PositionMapEntry(page=1, char_start=0, char_end=len(final_text), source_start=0, source_end=len(raw_bytes))],
+            TextExtractionMetadata(engine="openpyxl", confidence_mean=0.98, confidence_std=0.02),
+            position_map
+            if position_map
+            else [
+                PositionMapEntry(
+                    page=1, char_start=0, char_end=len(final_text), source_start=0, source_end=len(raw_bytes)
+                )
+            ],
         )
     except (ValueError, TypeError, OSError, KeyError, zipfile.BadZipFile) as exc:
         logger.warning("excel_extraction_failed", exc_info=exc)
@@ -348,6 +352,7 @@ def extract_from_excel(
 # =============================================================================
 # Word DOCX Extraction
 # =============================================================================
+
 
 def extract_from_docx(
     raw_bytes: bytes,
@@ -362,7 +367,7 @@ def extract_from_docx(
     try:
         doc = Document(io.BytesIO(raw_bytes))
         text_parts = []
-        
+
         # Extract paragraphs
         for para in doc.paragraphs:
             text = para.text.strip()
@@ -377,7 +382,7 @@ def extract_from_docx(
                     text_parts.append(f"{'#' * level_num} {text}")
                 else:
                     text_parts.append(text)
-        
+
         # Extract tables
         for table_idx, table in enumerate(doc.tables, start=1):
             text_parts.append(f"\n[Table {table_idx}]")
@@ -385,9 +390,9 @@ def extract_from_docx(
                 row_text = " | ".join(cell.text.strip() for cell in row.cells)
                 if row_text.strip():
                     text_parts.append(row_text)
-        
+
         final_text = "\n\n".join(text_parts)
-        
+
         position_map = [
             PositionMapEntry(
                 page=1,
@@ -397,12 +402,10 @@ def extract_from_docx(
                 source_end=len(raw_bytes),
             )
         ]
-        
+
         return (
             final_text,
-            TextExtractionMetadata(
-                engine="python-docx", confidence_mean=0.97, confidence_std=0.02
-            ),
+            TextExtractionMetadata(engine="python-docx", confidence_mean=0.97, confidence_std=0.02),
             position_map,
         )
     except (ValueError, TypeError, OSError, KeyError, zipfile.BadZipFile) as exc:
@@ -414,18 +417,18 @@ def extract_from_docx(
 # EDI (X12/EDIFACT) Extraction
 # =============================================================================
 
+
 def extract_from_edi(
-    raw_bytes: bytes,
-    encoding: str = "utf-8"
+    raw_bytes: bytes, encoding: str = "utf-8"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Extract structured text from EDI (X12/EDIFACT) content."""
     try:
         content = raw_bytes.decode(encoding, errors="ignore")
-        
+
         # Detect EDI type and segment delimiter
         is_x12 = content.startswith("ISA") or "ISA*" in content[:100]
         is_edifact = content.startswith("UNA") or content.startswith("UNB") or "UNB+" in content[:100]
-        
+
         if is_x12:
             return _parse_x12(content, raw_bytes)
         elif is_edifact:
@@ -439,7 +442,7 @@ def extract_from_edi(
             else:
                 logger.warning("edi_format_unknown")
                 return _fallback_extraction(raw_bytes, "edi")
-                
+
     except (ValueError, UnicodeDecodeError, IndexError) as exc:
         logger.warning("edi_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "edi")
@@ -448,19 +451,19 @@ def extract_from_edi(
 def _parse_x12(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Parse X12 EDI format (commonly used in US supply chain)."""
     text_parts = ["=== X12 EDI Document ===\n"]
-    
+
     # X12 uses fixed positions for ISA delimiters
     # Element separator is at position 3, segment terminator at position 105
     element_sep = "*"
     segment_term = "~"
-    
+
     if len(content) >= 106:
         element_sep = content[3] if content[3] in "*:|^" else "*"
         segment_term = content[105] if content[105] in "~'\n" else "~"
-    
+
     # Split into segments
     segments = content.replace("\n", "").replace("\r", "").split(segment_term)
-    
+
     # Key segment descriptions for supply chain documents
     segment_names = {
         "ISA": "Interchange Control Header",
@@ -483,28 +486,28 @@ def _parse_x12(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionMetad
         "GE": "Functional Group Trailer",
         "IEA": "Interchange Control Trailer",
     }
-    
+
     for segment in segments:
         segment = segment.strip()
         if not segment:
             continue
-        
+
         elements = segment.split(element_sep)
         seg_id = elements[0] if elements else ""
         seg_name = segment_names.get(seg_id, "")
-        
+
         if seg_name:
             text_parts.append(f"\n[{seg_id}] {seg_name}")
         else:
             text_parts.append(f"\n[{seg_id}]")
-        
+
         # Format element values
         for i, elem in enumerate(elements[1:], start=1):
             if elem:
                 text_parts.append(f"  Element {i}: {elem}")
-    
+
     final_text = "\n".join(text_parts)
-    
+
     position_map = [
         PositionMapEntry(
             page=1,
@@ -514,12 +517,10 @@ def _parse_x12(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionMetad
             source_end=len(raw_bytes),
         )
     ]
-    
+
     return (
         final_text,
-        TextExtractionMetadata(
-            engine="x12-parser", confidence_mean=0.90, confidence_std=0.05
-        ),
+        TextExtractionMetadata(engine="x12-parser", confidence_mean=0.90, confidence_std=0.05),
         position_map,
     )
 
@@ -527,19 +528,19 @@ def _parse_x12(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionMetad
 def _parse_edifact(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Parse EDIFACT format (commonly used internationally)."""
     text_parts = ["=== EDIFACT Document ===\n"]
-    
+
     # Default EDIFACT delimiters
     component_sep = ":"
     element_sep = "+"
     segment_term = "'"
-    
+
     # Check for UNA service string (defines custom delimiters)
     if content.startswith("UNA"):
         component_sep = content[3]
         element_sep = content[4]
         segment_term = content[8]
         content = content[9:]  # Skip UNA segment
-    
+
     # Key EDIFACT segment descriptions
     segment_names = {
         "UNB": "Interchange Header",
@@ -558,24 +559,24 @@ def _parse_edifact(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionM
         "UNT": "Message Trailer",
         "UNZ": "Interchange Trailer",
     }
-    
+
     # Split into segments
     segments = content.replace("\n", "").replace("\r", "").split(segment_term)
-    
+
     for segment in segments:
         segment = segment.strip()
         if not segment:
             continue
-        
+
         elements = segment.split(element_sep)
         seg_id = elements[0] if elements else ""
         seg_name = segment_names.get(seg_id, "")
-        
+
         if seg_name:
             text_parts.append(f"\n[{seg_id}] {seg_name}")
         else:
             text_parts.append(f"\n[{seg_id}]")
-        
+
         # Format element values
         for i, elem in enumerate(elements[1:], start=1):
             if elem:
@@ -585,9 +586,9 @@ def _parse_edifact(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionM
                     text_parts.append(f"  Element {i}: {' / '.join(c for c in components if c)}")
                 else:
                     text_parts.append(f"  Element {i}: {elem}")
-    
+
     final_text = "\n".join(text_parts)
-    
+
     position_map = [
         PositionMapEntry(
             page=1,
@@ -597,12 +598,10 @@ def _parse_edifact(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionM
             source_end=len(raw_bytes),
         )
     ]
-    
+
     return (
         final_text,
-        TextExtractionMetadata(
-            engine="edifact-parser", confidence_mean=0.90, confidence_std=0.05
-        ),
+        TextExtractionMetadata(engine="edifact-parser", confidence_mean=0.90, confidence_std=0.05),
         position_map,
     )
 
@@ -610,6 +609,7 @@ def _parse_edifact(content: str, raw_bytes: bytes) -> Tuple[str, TextExtractionM
 # =============================================================================
 # Utility: Content Type Detection
 # =============================================================================
+
 
 def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None) -> str:
     """Detect document format from content type and optionally content."""
@@ -634,7 +634,7 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
             return "text"
         elif "edi" in ct or "x12" in ct or "edifact" in ct:
             return "edi"
-    
+
     # Try to detect from content
     if raw_bytes:
         # Check magic bytes
@@ -650,7 +650,7 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
             return "xml"
         elif raw_bytes[:15] == b"<!DOCTYPE html>" or b"<html" in raw_bytes[:1000]:
             return "html"
-        
+
         # Try text-based detection
         try:
             text_sample = raw_bytes[:1000].decode("utf-8", errors="ignore")
@@ -660,7 +660,7 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
                 return "edi"
         except (UnicodeDecodeError, ValueError) as e:
             logger.debug("format_detection_error", error=str(e))
-    
+
     return "unknown"
 
 
@@ -669,11 +669,11 @@ def is_edi_content(raw_bytes: bytes) -> bool:
     try:
         sample = raw_bytes[:500].decode("utf-8", errors="ignore")
         return (
-            sample.startswith("ISA") or 
-            sample.startswith("UNA") or 
-            sample.startswith("UNB") or
-            "ISA*" in sample or
-            "UNB+" in sample
+            sample.startswith("ISA")
+            or sample.startswith("UNA")
+            or sample.startswith("UNB")
+            or "ISA*" in sample
+            or "UNB+" in sample
         )
     except (UnicodeDecodeError, ValueError):
         return False
@@ -683,16 +683,16 @@ def is_edi_content(raw_bytes: bytes) -> bool:
 # Fallback Extraction
 # =============================================================================
 
+
 def _fallback_extraction(
-    raw_bytes: bytes,
-    format_hint: str = "unknown"
+    raw_bytes: bytes, format_hint: str = "unknown"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Fallback text extraction when specialized parsers fail."""
     try:
         text = raw_bytes.decode("utf-8", errors="ignore")
     except (UnicodeDecodeError, LookupError):
         text = raw_bytes.decode("latin-1", errors="ignore")
-    
+
     position_map = [
         PositionMapEntry(
             page=1,
@@ -702,11 +702,9 @@ def _fallback_extraction(
             source_end=len(raw_bytes),
         )
     ]
-    
+
     return (
         text,
-        TextExtractionMetadata(
-            engine=f"fallback-{format_hint}", confidence_mean=0.3, confidence_std=0.4
-        ),
+        TextExtractionMetadata(engine=f"fallback-{format_hint}", confidence_mean=0.3, confidence_std=0.4),
         position_map,
     )

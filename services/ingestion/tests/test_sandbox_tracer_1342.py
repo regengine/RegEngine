@@ -25,19 +25,18 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
 from app.sandbox import tracer
-from app.sandbox.tracer import _trace_in_memory, sandbox_trace
 from app.sandbox.models import (
     SandboxTraceRequest,
     TraceGraphResponse,
 )
-
+from app.sandbox.tracer import _trace_in_memory, sandbox_trace
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ev(
     cte_type: str,
@@ -73,8 +72,8 @@ def _request_with_ip(ip: str | None) -> Any:
 # _trace_in_memory — seed handling
 # ===========================================================================
 
-class TestTraceSeed:
 
+class TestTraceSeed:
     def test_unknown_seed_returns_empty_response(self):
         events = [_ev("harvesting", "TLC-A")]
         res = _trace_in_memory(events, seed_tlc="TLC-DOES-NOT-EXIST")
@@ -118,8 +117,8 @@ class TestTraceSeed:
 # _trace_in_memory — same-TLC chains
 # ===========================================================================
 
-class TestTraceSameLot:
 
+class TestTraceSameLot:
     def test_chain_of_events_with_same_tlc_all_visited(self):
         """harvest → cool → ship all sharing TLC gives 3 nodes + 2 same_lot edges."""
         events = [
@@ -157,14 +156,15 @@ class TestTraceSameLot:
 # _trace_in_memory — transformation linkage
 # ===========================================================================
 
-class TestTraceTransformation:
 
+class TestTraceTransformation:
     def test_transformation_input_as_list_consumes_inputs(self):
         events = [
             _ev("harvesting", "LOT-A"),
             _ev("harvesting", "LOT-B"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A", "LOT-B"],
             ),
         ]
@@ -181,7 +181,8 @@ class TestTraceTransformation:
             _ev("harvesting", "LOT-A"),
             _ev("harvesting", "LOT-B"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes="LOT-A, LOT-B",
             ),
         ]
@@ -194,7 +195,8 @@ class TestTraceTransformation:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
             _ev("shipping", "LOT-MEGA"),
@@ -203,10 +205,7 @@ class TestTraceTransformation:
         titles = {n.traceability_lot_code for n in res.nodes}
         assert {"LOT-A", "LOT-MEGA"} <= titles
         # Shipping event reached via transformation_output → same_lot
-        shipping_reached = any(
-            n.cte_type == "shipping" and n.traceability_lot_code == "LOT-MEGA"
-            for n in res.nodes
-        )
+        shipping_reached = any(n.cte_type == "shipping" and n.traceability_lot_code == "LOT-MEGA" for n in res.nodes)
         assert shipping_reached
 
     def test_upstream_from_transformation_follows_inputs(self):
@@ -215,7 +214,8 @@ class TestTraceTransformation:
             _ev("harvesting", "LOT-A"),
             _ev("harvesting", "LOT-B"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A", "LOT-B"],
             ),
         ]
@@ -228,7 +228,8 @@ class TestTraceTransformation:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
             _ev("shipping", "LOT-MEGA"),
@@ -245,7 +246,8 @@ class TestTraceTransformation:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes="LOT-A,,  ,",
             ),
         ]
@@ -264,7 +266,8 @@ class TestTraceTransformation:
             _ev("harvesting", "LOT-A"),
             _ev("harvesting", "LOT-B"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes="LOT-A, LOT-B",
             ),
         ]
@@ -290,7 +293,8 @@ class TestTraceTransformation:
             _ev("shipping", "LOT-MEGA"),
             # idx 1: transformation that PRODUCES LOT-MEGA, consumes LOT-A
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
             # idx 2: upstream LOT-A harvesting
@@ -309,15 +313,16 @@ class TestTraceTransformation:
 # _trace_in_memory — direction gating
 # ===========================================================================
 
-class TestTraceDirection:
 
+class TestTraceDirection:
     def test_downstream_skips_upstream_expansion(self):
         """``direction=downstream`` must NOT follow transformation inputs backward."""
         events = [
             _ev("harvesting", "LOT-A"),
             _ev("harvesting", "LOT-B"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A", "LOT-B"],
             ),
         ]
@@ -332,7 +337,8 @@ class TestTraceDirection:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
         ]
@@ -344,7 +350,8 @@ class TestTraceDirection:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
             _ev("shipping", "LOT-MEGA"),
@@ -368,7 +375,8 @@ class TestTraceDirection:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
         ]
@@ -382,8 +390,8 @@ class TestTraceDirection:
 # _trace_in_memory — depth, quantity, facilities
 # ===========================================================================
 
-class TestTraceDepth:
 
+class TestTraceDepth:
     def test_max_depth_limits_expansion(self):
         """max_depth=0 prevents expansion beyond what the seed brings in.
 
@@ -394,7 +402,8 @@ class TestTraceDepth:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
         ]
@@ -417,7 +426,8 @@ class TestTraceDepth:
         events = [
             _ev("harvesting", "LOT-A"),
             _ev(
-                "transformation", "LOT-MEGA",
+                "transformation",
+                "LOT-MEGA",
                 input_traceability_lot_codes=["LOT-A"],
             ),
             _ev("shipping", "LOT-MEGA"),
@@ -428,7 +438,6 @@ class TestTraceDepth:
 
 
 class TestTraceQuantity:
-
     def test_numeric_quantity_preserved_on_node(self):
         events = [_ev("harvesting", "TLC-Q", quantity=5.5)]
         res = _trace_in_memory(events, seed_tlc="TLC-Q")
@@ -470,7 +479,6 @@ class TestTraceQuantity:
 
 
 class TestTraceFacilities:
-
     def test_location_name_in_facilities(self):
         events = [_ev("harvesting", "TLC-F", location_name="Farm A")]
         res = _trace_in_memory(events, seed_tlc="TLC-F")
@@ -511,6 +519,7 @@ class TestTraceFacilities:
 # _trace_in_memory — edge deduplication on re-visit
 # ===========================================================================
 
+
 class TestTraceRevisit:
     """When BFS reaches a visited node again, we still want the edge."""
 
@@ -543,15 +552,14 @@ class TestTraceRevisit:
 # sandbox_trace — async wrapper
 # ===========================================================================
 
+
 class TestSandboxTraceValidation:
     """Input validation happens BEFORE CSV parsing."""
 
     @pytest.fixture(autouse=True)
     def _neutralize_rate_limit(self, monkeypatch):
         """Silence the rate limiter so validation paths run clean."""
-        monkeypatch.setattr(
-            tracer, "_check_sandbox_rate_limit", lambda ip: None
-        )
+        monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", lambda ip: None)
 
     async def _run(self, payload, ip="1.2.3.4"):
         return await sandbox_trace(payload, _request_with_ip(ip))
@@ -576,6 +584,7 @@ class TestSandboxTraceValidation:
     async def test_csv_parse_error_raises_400(self, monkeypatch):
         def _boom(csv):
             raise ValueError("bad CSV")
+
         monkeypatch.setattr(tracer, "_parse_csv_to_events", _boom)
         payload = SandboxTraceRequest(csv="garbage", tlc="TLC-1")
         with pytest.raises(HTTPException) as exc:
@@ -613,19 +622,21 @@ class TestSandboxTraceValidation:
 
 
 class TestSandboxTraceDirection:
-
     @pytest.fixture(autouse=True)
     def _neutralize_rate_limit(self, monkeypatch):
         monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", lambda ip: None)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("given, expected", [
-        ("upstream", "upstream"),
-        ("DOWNSTREAM", "downstream"),
-        ("Both", "both"),
-        ("sideways", "both"),      # invalid → default "both"
-        ("", "both"),              # empty → default "both"
-    ])
+    @pytest.mark.parametrize(
+        "given, expected",
+        [
+            ("upstream", "upstream"),
+            ("DOWNSTREAM", "downstream"),
+            ("Both", "both"),
+            ("sideways", "both"),  # invalid → default "both"
+            ("", "both"),  # empty → default "both"
+        ],
+    )
     async def test_direction_normalization(self, monkeypatch, given, expected):
         events = [_ev("harvesting", "TLC-1")]
         monkeypatch.setattr(tracer, "_parse_csv_to_events", lambda csv: events)
@@ -635,13 +646,10 @@ class TestSandboxTraceDirection:
 
 
 class TestSandboxTraceRateLimit:
-
     @pytest.mark.asyncio
     async def test_rate_limit_called_with_client_host(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(
-            tracer, "_check_sandbox_rate_limit", lambda ip: calls.append(ip)
-        )
+        monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", lambda ip: calls.append(ip))
         monkeypatch.setattr(tracer, "_parse_csv_to_events", lambda csv: [_ev("harvesting", "TLC-1")])
         payload = SandboxTraceRequest(csv="dummy", tlc="TLC-1")
         await sandbox_trace(payload, _request_with_ip("10.0.0.5"))
@@ -650,9 +658,7 @@ class TestSandboxTraceRateLimit:
     @pytest.mark.asyncio
     async def test_rate_limit_uses_unknown_when_client_missing(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(
-            tracer, "_check_sandbox_rate_limit", lambda ip: calls.append(ip)
-        )
+        monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", lambda ip: calls.append(ip))
         monkeypatch.setattr(tracer, "_parse_csv_to_events", lambda csv: [_ev("harvesting", "TLC-1")])
         payload = SandboxTraceRequest(csv="dummy", tlc="TLC-1")
         await sandbox_trace(payload, _request_with_ip(None))
@@ -662,6 +668,7 @@ class TestSandboxTraceRateLimit:
     async def test_rate_limit_exception_propagates(self, monkeypatch):
         def _boom(ip):
             raise HTTPException(status_code=429, detail="slow down", headers={"Retry-After": "10"})
+
         monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", _boom)
         payload = SandboxTraceRequest(csv="dummy", tlc="TLC-1")
         with pytest.raises(HTTPException) as exc:
@@ -673,12 +680,14 @@ class TestSandboxTraceRateLimit:
         """A blocked IP never reaches CSV parsing — critical for abuse resistance."""
         parser_called = []
         monkeypatch.setattr(
-            tracer, "_parse_csv_to_events",
-            lambda csv: (parser_called.append(True) or []),
+            tracer,
+            "_parse_csv_to_events",
+            lambda csv: parser_called.append(True) or [],
         )
 
         def _blocked(ip):
             raise HTTPException(status_code=429, detail="blocked")
+
         monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", _blocked)
 
         payload = SandboxTraceRequest(csv="whatever", tlc="TLC-1")
@@ -688,7 +697,6 @@ class TestSandboxTraceRateLimit:
 
 
 class TestSandboxTraceHappyPath:
-
     @pytest.fixture(autouse=True)
     def _neutralize_rate_limit(self, monkeypatch):
         monkeypatch.setattr(tracer, "_check_sandbox_rate_limit", lambda ip: None)

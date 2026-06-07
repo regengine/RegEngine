@@ -34,12 +34,11 @@ from shared.canonical_event import (
     TraceabilityEvent,
 )
 from shared.cte_persistence import compute_chain_hash
-from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import (
     evaluate_field_presence,
     evaluate_multi_field_presence,
 )
-
+from shared.rules.types import EvaluationSummary, RuleDefinition, RuleEvaluationResult
 
 # ---------------------------------------------------------------------------
 # Test Data Builders
@@ -92,6 +91,7 @@ def _make_rule(**overrides) -> RuleDefinition:
 # Invariant 1: Canonical events are immutable after finalization
 # ===================================================================
 
+
 class TestCanonicalEventImmutability:
     """Once a canonical event is finalized (status=ACTIVE), its content
     hash must not change. Amendments create NEW events with
@@ -134,6 +134,7 @@ class TestCanonicalEventImmutability:
 # ===================================================================
 # Invariant 2: Rule evaluation is reproducible
 # ===================================================================
+
 
 class TestRuleEvaluationReproducibility:
     """Same inputs + same rule version = same output. Always."""
@@ -214,6 +215,7 @@ class TestRuleEvaluationReproducibility:
 # Invariant 3: Audit chain is tamper-evident
 # ===================================================================
 
+
 class TestAuditChainTamperEvidence:
     """Hash chain integrity: tampering any event invalidates all
     downstream chain hashes."""
@@ -281,6 +283,7 @@ class TestAuditChainTamperEvidence:
 # Invariant 4: Merge preserves traceability
 # ===================================================================
 
+
 class TestMergePreservesTraceability:
     """Entity merges/splits must preserve full traceability history.
     Both source and target entities remain referenceable."""
@@ -332,6 +335,7 @@ class TestMergePreservesTraceability:
 # ===================================================================
 # Invariant 5: Tenant isolation
 # ===================================================================
+
 
 class TestTenantIsolation:
     """Tenant A's data is never visible to Tenant B.

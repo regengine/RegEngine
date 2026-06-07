@@ -18,13 +18,14 @@ Security hardening (issues #1360 / #1361 / #1367 / #1369 / #1389):
     ``tenant_id is None`` cannot list or resolve review items.
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from datetime import datetime, timezone
-
 from shared.auth import APIKey, require_api_key
 from shared.rate_limit import limiter
+
 from .text_sanitize import sanitize_source_text_for_response
 
 router = APIRouter(prefix="/v1/admin", tags=["review"])
@@ -47,8 +48,7 @@ def _require_tenant_scoped_key(api_key: APIKey) -> str:
         raise HTTPException(
             status_code=403,
             detail=(
-                "This API key is not bound to a tenant. Create a "
-                "tenant-scoped key before accessing the review queue."
+                "This API key is not bound to a tenant. Create a tenant-scoped key before accessing the review queue."
             ),
         )
     return api_key.tenant_id
@@ -63,6 +63,7 @@ class ReviewItem(BaseModel):
     aggregates -- see ``ReviewListItem`` for the lean list-row variant
     introduced in #1409.
     """
+
     review_id: str
     doc_hash: str
     confidence_score: float
@@ -82,6 +83,7 @@ class ReviewListItem(BaseModel):
     the row directly from the tracker in the admin worker or via the
     existing ``v1/admin/review/flagged-extractions`` endpoint family.
     """
+
     review_id: str
     doc_hash: str
     confidence_score: float
@@ -93,6 +95,7 @@ class ReviewListItem(BaseModel):
 
 class ReviewItemsResponse(BaseModel):
     """Response containing list of review items."""
+
     items: List[ReviewListItem]
     total: int
     offset: int
@@ -101,6 +104,7 @@ class ReviewItemsResponse(BaseModel):
 
 class ReviewActionResponse(BaseModel):
     """Response for review item action (approve/reject)."""
+
     status: str
     review_id: str
     updated: bool
@@ -109,6 +113,7 @@ class ReviewActionResponse(BaseModel):
 def _get_tracker():
     """Get the hallucination tracker for review queue operations."""
     from .metrics import get_hallucination_tracker
+
     return get_hallucination_tracker()
 
 
@@ -191,6 +196,7 @@ async def get_review_queue(
     except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
         # If tracker is not initialized or DB is unavailable, return empty
         import structlog
+
         logger = structlog.get_logger("review")
         logger.warning("review_queue_query_failed", error=str(e))
         return ReviewItemsResponse(

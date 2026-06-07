@@ -30,6 +30,7 @@ Manual verification if Docker is unavailable:
 Run via:
     pytest tests/migrations/test_migration_fresh_db.py -v
 """
+
 from __future__ import annotations
 
 import os
@@ -48,19 +49,17 @@ from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _provision_app_roles(database_url: str) -> None:
     """Create roles referenced by RLS policies in the migration chain."""
-    sa_url = database_url.replace(
-        "postgresql://", "postgresql+psycopg://"
-    )
+    sa_url = database_url.replace("postgresql://", "postgresql+psycopg://")
     engine = create_engine(sa_url, future=True)
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -74,8 +73,10 @@ def _provision_app_roles(database_url: str) -> None:
                         CREATE ROLE regengine_sysadmin NOLOGIN;
                     END IF;
                 END$$;
-            """))
-            conn.execute(text("""
+            """)
+            )
+            conn.execute(
+                text("""
                 CREATE OR REPLACE FUNCTION get_tenant_context()
                 RETURNS uuid
                 LANGUAGE plpgsql
@@ -93,7 +94,8 @@ def _provision_app_roles(database_url: str) -> None:
                     RETURN tid::uuid;
                 END;
                 $$;
-            """))
+            """)
+            )
     finally:
         engine.dispose()
 
@@ -140,9 +142,7 @@ def pg_container() -> Iterator[PostgresContainer]:
 @pytest.fixture(scope="module")
 def database_url(pg_container: PostgresContainer) -> str:
     """The fixture's Postgres DSN, normalized for alembic's psycopg driver."""
-    return pg_container.get_connection_url().replace(
-        "postgresql+psycopg2://", "postgresql://"
-    )
+    return pg_container.get_connection_url().replace("postgresql+psycopg2://", "postgresql://")
 
 
 @pytest.fixture(scope="module")
@@ -155,9 +155,7 @@ def pg_engine(database_url: str) -> Iterator[Engine]:
     # Convert the plain postgres:// DSN to one psycopg accepts from
     # SQLAlchemy. create_engine wants postgresql+psycopg:// for
     # psycopg 3.
-    sa_url = database_url.replace(
-        "postgresql://", "postgresql+psycopg://"
-    )
+    sa_url = database_url.replace("postgresql://", "postgresql+psycopg://")
     engine = create_engine(sa_url, future=True)
     try:
         yield engine
@@ -204,15 +202,12 @@ def test_alembic_upgrade_head_succeeds(database_url: str) -> None:
     the post-upgrade head state.
     """
     result = _run_alembic(["current"], database_url)
-    assert result.returncode == 0, (
-        f"alembic current failed:\n{result.stdout}\n\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"alembic current failed:\n{result.stdout}\n\n{result.stderr}"
     # Exactly one head revision should be stamped.
     # Output format: "<rev> (head)\n" or similar.
     non_blank = [line for line in result.stdout.splitlines() if line.strip()]
     assert len(non_blank) == 1, (
-        "Expected exactly one head revision after upgrade; "
-        f"alembic current reported:\n{result.stdout}"
+        f"Expected exactly one head revision after upgrade; alembic current reported:\n{result.stdout}"
     )
 
 
@@ -249,10 +244,7 @@ def test_core_tables_exist(pg_engine: Engine) -> None:
     }
     with pg_engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT schemaname, tablename FROM pg_tables "
-                "WHERE schemaname IN ('fsma', 'public')"
-            )
+            text("SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('fsma', 'public')")
         ).fetchall()
     present = {(r.schemaname, r.tablename) for r in rows}
     missing = expected_tables - present
@@ -268,10 +260,7 @@ def test_task_queue_policy_fail_closed(pg_engine: Engine) -> None:
     original OR-empty-string bypass."""
     with pg_engine.connect() as conn:
         rows = conn.execute(
-            text(
-                "SELECT policyname, qual FROM pg_policies "
-                "WHERE schemaname = 'fsma' AND tablename = 'task_queue'"
-            )
+            text("SELECT policyname, qual FROM pg_policies WHERE schemaname = 'fsma' AND tablename = 'task_queue'")
         ).fetchall()
     assert rows, "task_queue has no RLS policies after v061"
     for row in rows:
@@ -281,10 +270,7 @@ def test_task_queue_policy_fail_closed(pg_engine: Engine) -> None:
         )
         # Either get_tenant_context() (preferred) or a direct GUC
         # comparison without the empty-string escape hatch.
-        assert (
-            "get_tenant_context" in qual
-            or "nullif" in qual.lower()
-        ), (
+        assert "get_tenant_context" in qual or "nullif" in qual.lower(), (
             f"Policy {row.policyname} doesn't use a fail-hard resolver: {qual}"
         )
 
@@ -302,9 +288,7 @@ def test_task_queue_has_force_rls(pg_engine: Engine) -> None:
         ).fetchone()
     assert row is not None, "fsma.task_queue not found"
     assert row.relrowsecurity, "ENABLE ROW LEVEL SECURITY missing"
-    assert row.relforcerowsecurity, (
-        "FORCE ROW LEVEL SECURITY missing (#1281 regression)"
-    )
+    assert row.relforcerowsecurity, "FORCE ROW LEVEL SECURITY missing (#1281 regression)"
 
 
 def test_tenant_id_not_null_on_audit_and_tasks(pg_engine: Engine) -> None:
@@ -320,9 +304,7 @@ def test_tenant_id_not_null_on_audit_and_tasks(pg_engine: Engine) -> None:
                 {"t": table},
             ).fetchone()
         assert row is not None, f"tenant_id column missing on fsma.{table}"
-        assert row.is_nullable == "NO", (
-            f"fsma.{table}.tenant_id is nullable (#1287 regression)"
-        )
+        assert row.is_nullable == "NO", f"fsma.{table}.tenant_id is nullable (#1287 regression)"
 
 
 def test_task_queue_hardening_columns_and_idempotency_index(pg_engine: Engine) -> None:
@@ -433,6 +415,5 @@ def test_baseline_downgrade_is_blocked(database_url: str) -> None:
     # The guard's message should appear in the error output.
     combined = result.stdout + result.stderr
     assert "Baseline downgrade blocked" in combined, (
-        "Downgrade failed but not via the #1264 guard. "
-        f"Output:\n{combined}"
+        f"Downgrade failed but not via the #1264 guard. Output:\n{combined}"
     )

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import List, Optional
 import uuid
+from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from shared.auth import require_api_key
+from shared.middleware import get_current_tenant_id
+from shared.rate_limit import limiter
 
 from ...fsma_recall import (
     MockRecallEngine,
@@ -16,10 +19,6 @@ from ...fsma_recall import (
 )
 from ...fsma_utils import trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
-from shared.auth import require_api_key
-from shared.middleware import get_current_tenant_id
-
-from shared.rate_limit import limiter
 
 router = APIRouter(tags=["Recall"])
 logger = structlog.get_logger("fsma-recall")
@@ -32,6 +31,7 @@ logger = structlog.get_logger("fsma-recall")
 
 # Singleton instance
 _recall_engine = None
+
 
 def get_recall_engine():
     """Factory to get configured mock recall engine (Singleton)."""
@@ -48,7 +48,7 @@ def get_recall_engine():
                 db_name = Neo4jClient.get_tenant_database_name(tid)
             except (ValueError, TypeError):
                 pass
-        
+
         client = Neo4jClient(database=db_name)
         try:
             res = await trace_forward(client, tlc, tenant_id=str(tenant_id) if tenant_id else None)
@@ -65,7 +65,7 @@ def get_recall_engine():
                 db_name = Neo4jClient.get_tenant_database_name(tid)
             except (ValueError, TypeError):
                 pass
-        
+
         client = Neo4jClient(database=db_name)
         try:
             res = await trace_backward(client, tlc, tenant_id=str(tenant_id) if tenant_id else None)
@@ -164,7 +164,8 @@ async def create_recall_drill(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("drill_creation_failed", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/drill/{drill_id}")
@@ -385,7 +386,7 @@ def create_recall_schedule(
             drill_type=RecallType(request.drill_type),
             frequency_days=request.frequency_days,
             severity=RecallSeverity(request.severity),
-            target_strategy=request.target_strategy
+            target_strategy=request.target_strategy,
         )
         return schedule.to_dict()
     except ValueError as e:

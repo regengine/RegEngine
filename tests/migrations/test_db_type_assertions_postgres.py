@@ -11,14 +11,14 @@ import pytest
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
 pytest.importorskip("testcontainers.postgres")
 
-from sqlalchemy import create_engine, text  # noqa: E402
-from testcontainers.postgres import PostgresContainer  # noqa: E402
-
-from services.admin.app.sqlalchemy_models import Base  # noqa: E402
 from shared.db_type_assertions import (  # noqa: E402
     CriticalSchemaDriftError,
     verify_orm_db_type_alignment,
 )
+from sqlalchemy import create_engine, text  # noqa: E402
+from testcontainers.postgres import PostgresContainer  # noqa: E402
+
+from services.admin.app.sqlalchemy_models import Base  # noqa: E402
 
 
 class _SilentLogger:

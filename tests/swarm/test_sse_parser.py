@@ -1,7 +1,6 @@
-import json
 import importlib.util
+import json
 from pathlib import Path
-
 
 _SSE_PATH = Path(__file__).resolve().parents[2] / "regengine" / "swarm" / "sse.py"
 _SSE_SPEC = importlib.util.spec_from_file_location("swarm_sse", _SSE_PATH)
@@ -17,9 +16,9 @@ parse_openai_response_events = _SSE_MODULE.parse_openai_response_events
 def test_iter_sse_payloads_handles_chunk_boundaries() -> None:
     chunks = [
         "event: message\n",
-        "data: {\"type\":\"response.created\"}\n\n",
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hel",
-        "lo\"}\n\n",
+        'data: {"type":"response.created"}\n\n',
+        'data: {"type":"response.output_text.delta","delta":"Hel',
+        'lo"}\n\n',
         "data: [DONE]\n\n",
     ]
 
@@ -31,9 +30,9 @@ def test_iter_sse_payloads_handles_chunk_boundaries() -> None:
 
 def test_parse_openai_response_events_skips_bad_json() -> None:
     chunks = [
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi\"}\n\n",
+        'data: {"type":"response.output_text.delta","delta":"Hi"}\n\n',
         "data: {not-valid-json}\n\n",
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\" there\"}\n\n",
+        'data: {"type":"response.output_text.delta","delta":" there"}\n\n',
         "data: [DONE]\n\n",
     ]
 
@@ -45,8 +44,8 @@ def test_parse_openai_response_events_skips_bad_json() -> None:
 
 def test_collect_openai_stream_text_prefers_deltas() -> None:
     chunks = [
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n",
-        "data: {\"type\":\"response.output_text.delta\",\"delta\":\" world\"}\n\n",
+        'data: {"type":"response.output_text.delta","delta":"Hello"}\n\n',
+        'data: {"type":"response.output_text.delta","delta":" world"}\n\n',
         "data: [DONE]\n\n",
     ]
 

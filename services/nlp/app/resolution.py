@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Dict, List, Optional, Tuple
+
 import structlog
-from typing import Optional, Dict, List, Tuple
 
 logger = structlog.get_logger("nlp.resolution")
 
@@ -14,7 +15,6 @@ MASTER_DATA = {
     "COSTCO WHOLESALE": {"id": "duns:009289230", "name": "Costco Wholesale Corp.", "type": "RETAILER"},
     "RALPHS": {"id": "duns:009289555", "name": "Ralphs Grocery Company", "type": "RETAILER"},
     "KROGER": {"id": "duns:006999528", "name": "The Kroger Co.", "type": "RETAILER"},
-
     # Common Suppliers (Stubbed)
     "TYSON FOODS": {"id": "duns:006903702", "name": "Tyson Foods, Inc.", "type": "SUPPLIER"},
     "DOLE": {"id": "duns:006903111", "name": "Dole Food Company", "type": "SUPPLIER"},
@@ -104,9 +104,7 @@ class EntityResolver:
     def __init__(self) -> None:
         # Pre-normalize master keys for exact lookup.
         self._records = MASTER_DATA
-        self._normalized_keys: Dict[str, str] = {
-            _normalize(key): key for key in MASTER_DATA.keys()
-        }
+        self._normalized_keys: Dict[str, str] = {_normalize(key): key for key in MASTER_DATA.keys()}
 
     def resolve_organization(self, raw_name: Optional[str]) -> Optional[Dict]:
         """Resolve an organization name to a canonical entity.
@@ -153,9 +151,7 @@ class EntityResolver:
             if all(len(t) <= 2 for t in key_tokens):
                 continue
             # Require token containment in one direction.
-            if not key_tokens.issubset(supplied_tokens) and not supplied_tokens.issubset(
-                key_tokens
-            ):
+            if not key_tokens.issubset(supplied_tokens) and not supplied_tokens.issubset(key_tokens):
                 continue
             # Extra-token cap (#1269). "KROGER FAKE BRAND" has 2 extra tokens
             # vs the "KROGER" key; values above the cap are rejected even if

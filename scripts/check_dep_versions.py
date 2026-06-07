@@ -14,6 +14,7 @@ Exit code 0 = clean.  Non-zero = drift detected.
 Usage:
     python scripts/check_dep_versions.py
 """
+
 from __future__ import annotations
 
 import re
@@ -49,8 +50,8 @@ _VER_RE = re.compile(r"(>=|==|~=)\s*([\d]+(?:\.[\d]+)*)")
 # Requirement-line parser: "package-name[extras] spec  # comment"
 _REQ_RE = re.compile(
     r"^\s*(?P<pkg>[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)"  # package name
-    r"(?:\[.*?\])?"                                              # optional extras
-    r"(?P<spec>[^#\n]*)",                                        # version spec
+    r"(?:\[.*?\])?"  # optional extras
+    r"(?P<spec>[^#\n]*)",  # version spec
 )
 
 

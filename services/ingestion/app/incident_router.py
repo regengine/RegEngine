@@ -37,12 +37,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from shared.database import get_db_session
+from shared.pagination import PaginationParams
 from sqlalchemy import text
 
-from shared.pagination import PaginationParams
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
-from shared.database import get_db_session
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 logger = logging.getLogger("incident-command")
 
@@ -51,17 +51,18 @@ router = APIRouter(prefix="/api/v1/incidents", tags=["Incident Command"])
 # Defense-in-depth: whitelist of columns allowed in dynamic WHERE clauses.
 # All filter columns are hardcoded in endpoint logic below — this assertion
 # catches regressions if a future change introduces an unsafe column reference.
-_ALLOWED_WHERE_FRAGMENTS = frozenset({
-    "tenant_id = :tid",
-    "data->>'status' = :status",
-})
-
-
+_ALLOWED_WHERE_FRAGMENTS = frozenset(
+    {
+        "tenant_id = :tid",
+        "data->>'status' = :status",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
+
 
 class OpenIncidentRequest(BaseModel):
     title: str
@@ -101,6 +102,7 @@ class PostUpdateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "",
@@ -148,8 +150,7 @@ async def list_incidents(
         text(
             "SELECT id, data, created_at, updated_at"
             " FROM fsma.incidents"
-            " WHERE " + where +
-            " ORDER BY created_at DESC"
+            " WHERE " + where + " ORDER BY created_at DESC"
             " LIMIT :lim OFFSET :off"
         ),
         params,
@@ -163,7 +164,13 @@ async def list_incidents(
         data["updated_at"] = r[3].isoformat() if r[3] else None
         incidents.append(data)
 
-    return {"tenant_id": tid, "incidents": incidents, "total": total, "skip": pagination.skip, "limit": pagination.limit}
+    return {
+        "tenant_id": tid,
+        "incidents": incidents,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.post(
@@ -271,13 +278,15 @@ async def update_status(
     data = _get_incident_data(db_session, incident_id, tid)
 
     data["status"] = body.status
-    data["updates"].append({
-        "id": str(uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "author": "system",
-        "message": f"Status changed to: {body.status}",
-        "update_type": "progress",
-    })
+    data["updates"].append(
+        {
+            "id": str(uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "author": "system",
+            "message": f"Status changed to: {body.status}",
+            "update_type": "progress",
+        }
+    )
 
     _save_incident_data(db_session, incident_id, tid, data)
     return {"incident_id": incident_id, "status": body.status}
@@ -317,13 +326,15 @@ async def add_action(
     }
 
     data["actions"].append(action)
-    data["updates"].append({
-        "id": str(uuid4()),
-        "timestamp": now.isoformat(),
-        "author": "system",
-        "message": f"Action added: {body.title} (assigned to {body.assigned_to})",
-        "update_type": "progress",
-    })
+    data["updates"].append(
+        {
+            "id": str(uuid4()),
+            "timestamp": now.isoformat(),
+            "author": "system",
+            "message": f"Action added: {body.title} (assigned to {body.assigned_to})",
+            "update_type": "progress",
+        }
+    )
 
     _save_incident_data(db_session, incident_id, tid, data)
     return {"action_id": action_id, "status": "pending"}
@@ -354,10 +365,12 @@ async def update_action(
     if body.status:
         action["status"] = body.status
     if body.notes:
-        action.setdefault("notes", []).append({
-            "text": body.notes,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        action.setdefault("notes", []).append(
+            {
+                "text": body.notes,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     _save_incident_data(db_session, incident_id, tid, data)
     return {"action_id": action_id, "status": action["status"]}
@@ -382,13 +395,15 @@ async def post_update(
     data = _get_incident_data(db_session, incident_id, tid)
 
     update_id = str(uuid4())
-    data["updates"].append({
-        "id": update_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "author": body.author,
-        "message": body.message,
-        "update_type": body.update_type,
-    })
+    data["updates"].append(
+        {
+            "id": update_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "author": body.author,
+            "message": body.message,
+            "update_type": body.update_type,
+        }
+    )
 
     _save_incident_data(db_session, incident_id, tid, data)
     return {"update_id": update_id}
@@ -423,24 +438,30 @@ async def impact_assessment(
         params = {f"lot_{i}": lot for i, lot in enumerate(affected_lots)}
         params["tid"] = tid
         # placeholders are ":lot_0, :lot_1, ..." — parameterized, not user input
-        record_count = db_session.execute(
-            text(
-                "SELECT COUNT(*) FROM fsma.traceability_events"
-                " WHERE tenant_id = :tid AND traceability_lot_code IN (" + placeholders + ")"
-            ),
-            params,
-        ).scalar() or 0
+        record_count = (
+            db_session.execute(
+                text(
+                    "SELECT COUNT(*) FROM fsma.traceability_events"
+                    " WHERE tenant_id = :tid AND traceability_lot_code IN (" + placeholders + ")"
+                ),
+                params,
+            ).scalar()
+            or 0
+        )
 
     # Count affected exceptions
     exception_count = 0
     if affected_lots:
-        exception_count = db_session.execute(
-            text("""
+        exception_count = (
+            db_session.execute(
+                text("""
                 SELECT COUNT(*) FROM fsma.exception_cases
                 WHERE tenant_id = :tid AND status NOT IN ('resolved', 'waived')
             """),
-            {"tid": tid},
-        ).scalar() or 0
+                {"tid": tid},
+            ).scalar()
+            or 0
+        )
 
     actions = data.get("actions", [])
     completed_actions = sum(1 for a in actions if a.get("status") == "completed")
@@ -488,13 +509,15 @@ async def close_incident(
     data["closed_at"] = now
     data["closed_by"] = closed_by
     data["closure_notes"] = closure_notes
-    data["updates"].append({
-        "id": str(uuid4()),
-        "timestamp": now,
-        "author": closed_by,
-        "message": f"Incident closed. {closure_notes or ''}".strip(),
-        "update_type": "resolution",
-    })
+    data["updates"].append(
+        {
+            "id": str(uuid4()),
+            "timestamp": now,
+            "author": closed_by,
+            "message": f"Incident closed. {closure_notes or ''}".strip(),
+            "update_type": "resolution",
+        }
+    )
 
     _save_incident_data(db_session, incident_id, tid, data)
     return {"incident_id": incident_id, "status": "closed"}
@@ -504,9 +527,11 @@ async def close_incident(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ensure_incidents_table(db_session) -> None:
     """Create the incidents table if it doesn't exist (lightweight, JSONB-based)."""
-    db_session.execute(text("""
+    db_session.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS fsma.incidents (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             tenant_id UUID NOT NULL,
@@ -514,11 +539,14 @@ def _ensure_incidents_table(db_session) -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
-    """))
-    db_session.execute(text("""
+    """)
+    )
+    db_session.execute(
+        text("""
         CREATE INDEX IF NOT EXISTS idx_incidents_tenant
             ON fsma.incidents (tenant_id)
-    """))
+    """)
+    )
 
 
 def _get_incident_data(db_session, incident_id: str, tenant_id: str) -> dict:

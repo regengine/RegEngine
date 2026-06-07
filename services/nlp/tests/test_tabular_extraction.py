@@ -91,17 +91,15 @@ class TestTabularLineItemExtraction:
 
     def test_multi_line_bol_extracts_distinct_items(self):
         """Verify each product gets its correct lot code from BOL."""
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            MULTI_LINE_BOL, "test-bol-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.document_type == DocumentType.BILL_OF_LADING
         assert len(result.line_items) >= 2, "Should extract at least 2 line items"
 
         # Build lookup by description substring
-        items_by_desc = {
-            item.description.lower(): item
-            for item in result.line_items
-            if item.description
-        }
+        items_by_desc = {item.description.lower(): item for item in result.line_items if item.description}
 
         # Find romaine and spinach items
         romaine_item = None
@@ -114,17 +112,11 @@ class TestTabularLineItemExtraction:
 
         # CRITICAL TEST: Lot A should NOT be associated with Spinach
         if romaine_item and spinach_item:
-            assert (
-                romaine_item.lot_code != spinach_item.lot_code
-            ), "Romaine and Spinach must have different lot codes"
+            assert romaine_item.lot_code != spinach_item.lot_code, "Romaine and Spinach must have different lot codes"
 
             # Verify correct associations
-            assert "A" in (
-                romaine_item.lot_code or ""
-            ), f"Romaine should have Lot A, got {romaine_item.lot_code}"
-            assert "B" in (
-                spinach_item.lot_code or ""
-            ), f"Spinach should have Lot B, got {spinach_item.lot_code}"
+            assert "A" in (romaine_item.lot_code or ""), f"Romaine should have Lot A, got {romaine_item.lot_code}"
+            assert "B" in (spinach_item.lot_code or ""), f"Spinach should have Lot B, got {spinach_item.lot_code}"
 
     def test_lot_a_not_associated_with_spinach(self):
         """
@@ -132,32 +124,34 @@ class TestTabularLineItemExtraction:
 
         This is the key regression test for the tabular extraction upgrade.
         """
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-002", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            MULTI_LINE_BOL, "test-bol-002", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         for item in result.line_items:
             if item.lot_code and "A" in item.lot_code:
                 # Any item with Lot A must NOT contain "spinach" in description
-                assert (
-                    "spinach" not in (item.description or "").lower()
-                ), f"LOT-A incorrectly associated with Spinach: {item}"
+                assert "spinach" not in (item.description or "").lower(), (
+                    f"LOT-A incorrectly associated with Spinach: {item}"
+                )
 
     def test_quantities_associated_with_correct_items(self):
         """Verify quantities are matched to correct line items."""
-        result = self.extractor.extract(MULTI_LINE_BOL, "test-bol-003", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            MULTI_LINE_BOL, "test-bol-003", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         for item in result.line_items:
             if item.description and "romaine" in item.description.lower():
-                assert (
-                    item.quantity == 50
-                ), f"Romaine should have qty 50, got {item.quantity}"
+                assert item.quantity == 50, f"Romaine should have qty 50, got {item.quantity}"
             elif item.description and "spinach" in item.description.lower():
-                assert (
-                    item.quantity == 75
-                ), f"Spinach should have qty 75, got {item.quantity}"
+                assert item.quantity == 75, f"Spinach should have qty 75, got {item.quantity}"
 
     def test_invoice_format_extraction(self):
         """Test extraction from invoice-style format with inline lots."""
-        result = self.extractor.extract(MULTI_LINE_INVOICE, "test-inv-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            MULTI_LINE_INVOICE, "test-inv-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.document_type == DocumentType.INVOICE
 
@@ -170,7 +164,9 @@ class TestTabularLineItemExtraction:
 
     def test_production_log_input_output_separation(self):
         """Test that input and output lots are correctly separated."""
-        result = self.extractor.extract(PRODUCTION_LOG_TABULAR, "test-prod-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            PRODUCTION_LOG_TABULAR, "test-prod-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert result.document_type == DocumentType.PRODUCTION_LOG
 
@@ -187,21 +183,19 @@ class TestTabularLineItemExtraction:
 
     def test_similar_product_names_distinct_lots(self):
         """Test products with similar names get distinct lot codes."""
-        result = self.extractor.extract(SIMILAR_PRODUCTS_BOL, "test-similar-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = self.extractor.extract(
+            SIMILAR_PRODUCTS_BOL, "test-similar-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         # All three Romaine variants should have different lots
         romaine_items = [
-            item
-            for item in result.line_items
-            if item.description and "romaine" in item.description.lower()
+            item for item in result.line_items if item.description and "romaine" in item.description.lower()
         ]
 
         if len(romaine_items) >= 2:
             lot_codes = [item.lot_code for item in romaine_items if item.lot_code]
             unique_lots = set(lot_codes)
-            assert len(unique_lots) == len(
-                lot_codes
-            ), f"Similar products should have unique lots: {lot_codes}"
+            assert len(unique_lots) == len(lot_codes), f"Similar products should have unique lots: {lot_codes}"
 
 
 class TestLineItemDataclass:
@@ -281,7 +275,9 @@ class TestHeuristicFallback:
         extractor = FSMAExtractor()
         extractor._table_extractor = False  # Simulate unavailable
 
-        result = extractor.extract(MULTI_LINE_BOL, "test-heuristic-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            MULTI_LINE_BOL, "test-heuristic-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         # Should still extract something via heuristic
         assert result.document_type == DocumentType.BILL_OF_LADING
@@ -337,7 +333,9 @@ class TestTableExtractorIntegration:
         extractor = FSMAExtractor()
 
         # Should not raise, should fall back to heuristic
-        result = extractor.extract(MULTI_LINE_BOL, "test-no-table-001", tenant_id="11111111-1111-1111-1111-111111111111")
+        result = extractor.extract(
+            MULTI_LINE_BOL, "test-no-table-001", tenant_id="11111111-1111-1111-1111-111111111111"
+        )
 
         assert isinstance(result, FSMAExtractionResult)
 
@@ -424,9 +422,7 @@ class TestCriticalRequirement:
         result = extractor.extract(bol_text, "critical-test-001", tenant_id="11111111-1111-1111-1111-111111111111")
 
         # Verify line items exist
-        assert (
-            len(result.line_items) >= 2
-        ), f"Expected at least 2 line items, got {len(result.line_items)}"
+        assert len(result.line_items) >= 2, f"Expected at least 2 line items, got {len(result.line_items)}"
 
         # Build associations
         lot_to_products = {}
@@ -438,19 +434,13 @@ class TestCriticalRequirement:
 
         # Verify no cross-contamination
         for lot_code, products in lot_to_products.items():
-            assert (
-                len(products) == 1
-            ), f"Lot {lot_code} associated with multiple products: {products}"
+            assert len(products) == 1, f"Lot {lot_code} associated with multiple products: {products}"
 
             # Specific checks
             if "A" in lot_code:
-                assert all(
-                    "spinach" not in p.lower() for p in products
-                ), f"LOT-A incorrectly associated with Spinach"
+                assert all("spinach" not in p.lower() for p in products), f"LOT-A incorrectly associated with Spinach"
             if "B" in lot_code:
-                assert all(
-                    "romaine" not in p.lower() for p in products
-                ), f"LOT-B incorrectly associated with Romaine"
+                assert all("romaine" not in p.lower() for p in products), f"LOT-B incorrectly associated with Romaine"
 
 
 class TestTableExtractorSizeCaps:

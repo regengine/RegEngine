@@ -7,6 +7,7 @@ files that are known to contain the host today; the parallel cleanup PR
 
 Exit 1 (with file:line) on any non-allowlisted match. Stdlib only.
 """
+
 from __future__ import annotations
 
 import sys

@@ -48,6 +48,7 @@ USAGE
     python scripts/generate_openapi.py                 # write + exit 0
     python scripts/generate_openapi.py --check         # exit 1 if stale
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,9 +76,7 @@ INTERNAL_PREFIXES: tuple[str, ...] = (
 
 # Operations carrying any of these tags are treated as internal and the whole
 # path is dropped.
-INTERNAL_TAGS: frozenset[str] = frozenset(
-    {"internal", "admin", "debug", "kernel", "control"}
-)
+INTERNAL_TAGS: frozenset[str] = frozenset({"internal", "admin", "debug", "kernel", "control"})
 
 # Opt-in allowlist of public prefixes. Any path under one of these is
 # eligible (subject to the deny filter above). New customer-facing routes
@@ -110,9 +109,7 @@ PUBLIC_TAG: str = "public"
 PUBLIC_TITLE: str = "RegEngine Public API"
 PUBLIC_VERSION: str = "1.0.0"
 PUBLIC_SERVER_URL: str = "https://regengine.co/api/ingestion"
-PUBLIC_SERVER_DESCRIPTION: str = (
-    "Production ingestion API (Vercel proxy → Railway backend)"
-)
+PUBLIC_SERVER_DESCRIPTION: str = "Production ingestion API (Vercel proxy → Railway backend)"
 
 
 def _bootstrap_imports() -> None:
@@ -123,9 +120,7 @@ def _bootstrap_imports() -> None:
 
     # Provide minimal env so `require_env` and friends don't blow up during
     # import. We never connect to anything — we only call `app.openapi()`.
-    os.environ.setdefault(
-        "DATABASE_URL", "postgresql://openapi:openapi@localhost:5432/openapi"
-    )
+    os.environ.setdefault("DATABASE_URL", "postgresql://openapi:openapi@localhost:5432/openapi")
     os.environ.setdefault("JWT_SECRET", "openapi-generator-dummy-secret")
     os.environ.setdefault("ENVIRONMENT", "development")
     os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -208,9 +203,7 @@ def _used_schema_refs(node: Any, found: set[str]) -> None:
     """Walk a JSON-like tree and collect every `#/components/schemas/X` ref."""
     if isinstance(node, dict):
         for k, v in node.items():
-            if k == "$ref" and isinstance(v, str) and v.startswith(
-                "#/components/schemas/"
-            ):
+            if k == "$ref" and isinstance(v, str) and v.startswith("#/components/schemas/"):
                 found.add(v.rsplit("/", 1)[-1])
             else:
                 _used_schema_refs(v, found)
@@ -242,9 +235,7 @@ def _prune_components(spec: dict[str, Any]) -> None:
             if len(used) != before:
                 changed = True
 
-    spec["components"]["schemas"] = {
-        name: schema for name, schema in schemas.items() if name in used
-    }
+    spec["components"]["schemas"] = {name: schema for name, schema in schemas.items() if name in used}
 
 
 def build_public_spec() -> dict[str, Any]:
@@ -269,9 +260,7 @@ def build_public_spec() -> dict[str, Any]:
         },
         "license": {"name": "Proprietary"},
     }
-    spec["servers"] = [
-        {"url": PUBLIC_SERVER_URL, "description": PUBLIC_SERVER_DESCRIPTION}
-    ]
+    spec["servers"] = [{"url": PUBLIC_SERVER_URL, "description": PUBLIC_SERVER_DESCRIPTION}]
 
     spec["paths"] = _filter_paths(spec.get("paths", {}))
     _prune_components(spec)

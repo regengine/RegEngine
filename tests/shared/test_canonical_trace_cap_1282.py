@@ -14,6 +14,7 @@ completeness is required for compliance).
 These tests drive the writer with a mocked session so we assert the
 cap semantics without touching Postgres.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
@@ -21,9 +22,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from shared.canonical_persistence.writer import CanonicalEventStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mimic a transformation graph via a scripted session.
@@ -48,8 +47,7 @@ class _GraphSession:
     ``"bwd"`` for ``output_tlc=`` queries.
     """
 
-    def __init__(self, forward: Dict[str, List[str]] | None = None,
-                 backward: Dict[str, List[str]] | None = None):
+    def __init__(self, forward: Dict[str, List[str]] | None = None, backward: Dict[str, List[str]] | None = None):
         self.forward = forward or {}
         self.backward = backward or {}
         self.call_count = 0
@@ -61,16 +59,10 @@ class _GraphSession:
         tlc = params.get("tlc")
         if "input_tlc = :tlc" in sql:
             children = self.forward.get(tlc, [])
-            rows = [
-                (c, str(uuid4()), "commingling", 1.0, "CS", 1.0)
-                for c in children
-            ]
+            rows = [(c, str(uuid4()), "commingling", 1.0, "CS", 1.0) for c in children]
         elif "output_tlc = :tlc" in sql:
             children = self.backward.get(tlc, [])
-            rows = [
-                (c, str(uuid4()), "commingling", 1.0, "CS", 1.0)
-                for c in children
-            ]
+            rows = [(c, str(uuid4()), "commingling", 1.0, "CS", 1.0) for c in children]
         else:
             rows = []
         return _ScriptedRows(rows)
@@ -211,13 +203,14 @@ class TestMaxDepthUnchanged_Issue1282:
         documented contract (see #1282 "Document and test the
         max_depth default")."""
         import inspect
+
         sig = inspect.signature(CanonicalEventStore.trace_forward)
         assert sig.parameters["max_depth"].default == 5
 
     def test_max_depth_stops_before_max_results(self):
         """A deep chain with fan-out of 1 per level, capped at depth 3:
         should return exactly 3 links regardless of max_results."""
-        chain = {f"L{i}": [f"L{i+1}"] for i in range(20)}
+        chain = {f"L{i}": [f"L{i + 1}"] for i in range(20)}
         chain["L20"] = []
         session = _GraphSession(forward=chain)
         store = CanonicalEventStore(session=session, dual_write=False, skip_chain_write=True)

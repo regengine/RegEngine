@@ -3,6 +3,7 @@
 RegEngine Full Audit — GitHub Issue Creator
 Run: GITHUB_TOKEN=ghp_xxx python audit-issues.py
 """
+
 import os
 import sys
 import time
@@ -20,15 +21,28 @@ if not TOKEN:
     sys.exit(1)
 
 from github import Auth
+
 g = Github(auth=Auth.Token(TOKEN))
 repo = g.get_repo(REPO)
 
 # Try to create labels, skip if no permission
-LABEL_COLORS = {"P0": "b60205", "P1": "d93f0b", "P2": "fbca04",
-                "security": "e11d48", "frontend": "1d76db", "backend": "0e8a16",
-                "marketing": "c5def5", "infra": "bfd4f2", "onboarding": "7057ff",
-                "auth": "f9d0c4", "ux": "d4c5f9", "compliance": "006b75",
-                "tech-debt": "ededed", "seo": "b4a7d6", "legal": "fef2c0"}
+LABEL_COLORS = {
+    "P0": "b60205",
+    "P1": "d93f0b",
+    "P2": "fbca04",
+    "security": "e11d48",
+    "frontend": "1d76db",
+    "backend": "0e8a16",
+    "marketing": "c5def5",
+    "infra": "bfd4f2",
+    "onboarding": "7057ff",
+    "auth": "f9d0c4",
+    "ux": "d4c5f9",
+    "compliance": "006b75",
+    "tech-debt": "ededed",
+    "seo": "b4a7d6",
+    "legal": "fef2c0",
+}
 
 existing = {l.name for l in repo.get_labels()}
 for name, color in LABEL_COLORS.items():

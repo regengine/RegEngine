@@ -25,7 +25,6 @@ from services.shared.cte_persistence.hashing import (
     compute_idempotency_key,
 )
 
-
 # ── #1313: no TypeError on datetime / Decimal KDEs ──────────────────────────
 
 
@@ -146,39 +145,23 @@ class TestComputeIdempotencyKeyDeterministic_Issue1313:
         assert k1 == k2
 
     def test_different_event_type_yields_different_key(self):
-        k1 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC", timestamp="t", source="s", kdes={}
-        )
-        k2 = compute_idempotency_key(
-            event_type="shipping", tlc="TLC", timestamp="t", source="s", kdes={}
-        )
+        k1 = compute_idempotency_key(event_type="receiving", tlc="TLC", timestamp="t", source="s", kdes={})
+        k2 = compute_idempotency_key(event_type="shipping", tlc="TLC", timestamp="t", source="s", kdes={})
         assert k1 != k2
 
     def test_different_tlc_yields_different_key(self):
-        k1 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC-A", timestamp="t", source="s", kdes={}
-        )
-        k2 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC-B", timestamp="t", source="s", kdes={}
-        )
+        k1 = compute_idempotency_key(event_type="receiving", tlc="TLC-A", timestamp="t", source="s", kdes={})
+        k2 = compute_idempotency_key(event_type="receiving", tlc="TLC-B", timestamp="t", source="s", kdes={})
         assert k1 != k2
 
     def test_different_timestamp_yields_different_key(self):
-        k1 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC", timestamp="2026-04-18", source="s", kdes={}
-        )
-        k2 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC", timestamp="2026-04-19", source="s", kdes={}
-        )
+        k1 = compute_idempotency_key(event_type="receiving", tlc="TLC", timestamp="2026-04-18", source="s", kdes={})
+        k2 = compute_idempotency_key(event_type="receiving", tlc="TLC", timestamp="2026-04-19", source="s", kdes={})
         assert k1 != k2
 
     def test_different_source_yields_different_key(self):
-        k1 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC", timestamp="t", source="epcis", kdes={}
-        )
-        k2 = compute_idempotency_key(
-            event_type="receiving", tlc="TLC", timestamp="t", source="webhook", kdes={}
-        )
+        k1 = compute_idempotency_key(event_type="receiving", tlc="TLC", timestamp="t", source="epcis", kdes={})
+        k2 = compute_idempotency_key(event_type="receiving", tlc="TLC", timestamp="t", source="webhook", kdes={})
         assert k1 != k2
 
     def test_different_location_gln_yields_different_key(self):
@@ -205,10 +188,18 @@ class TestComputeIdempotencyKeyDeterministic_Issue1313:
 
     def test_different_kde_value_yields_different_key(self):
         k1 = compute_idempotency_key(
-            event_type="r", tlc="T", timestamp="t", source="s", kdes={"x": 1},
+            event_type="r",
+            tlc="T",
+            timestamp="t",
+            source="s",
+            kdes={"x": 1},
         )
         k2 = compute_idempotency_key(
-            event_type="r", tlc="T", timestamp="t", source="s", kdes={"x": 2},
+            event_type="r",
+            tlc="T",
+            timestamp="t",
+            source="s",
+            kdes={"x": 2},
         )
         assert k1 != k2
 

@@ -44,14 +44,12 @@ from app.text_sanitize import (  # noqa: E402
     sanitize_source_text_for_store,
 )
 
-
 # ---------------------------------------------------------------------------
 # Line 63 — None passthrough in store-side sanitizer
 # ---------------------------------------------------------------------------
 
 
 class TestStoreNonePassthrough:
-
     def test_none_returns_empty_string(self):
         """Line 63: store-time sanitizer must null-safely return "" so
         pydantic Optional[str] fields don't TypeError on None."""
@@ -64,13 +62,15 @@ class TestStoreNonePassthrough:
 
 
 class TestStoreNonStringCoercion:
-
-    @pytest.mark.parametrize("value,expected_contains", [
-        (42, "42"),
-        (3.14, "3.14"),
-        (True, "True"),
-        (["a", "b"], "a"),  # str([...]) == "['a', 'b']", escape turns ' into &#x27;
-    ])
+    @pytest.mark.parametrize(
+        "value,expected_contains",
+        [
+            (42, "42"),
+            (3.14, "3.14"),
+            (True, "True"),
+            (["a", "b"], "a"),  # str([...]) == "['a', 'b']", escape turns ' into &#x27;
+        ],
+    )
     def test_non_string_inputs_are_stringified(self, value, expected_contains):
         """Line 65: callers that forget to stringify must not crash
         the sanitizer. We str()-coerce and proceed through the
@@ -87,16 +87,13 @@ class TestStoreNonStringCoercion:
 
 
 class TestStoreBleachBranch:
-
     def test_bleach_branch_fires_when_available(self, monkeypatch):
         """Line 78: when _BLEACH_AVAILABLE is True, we pass the already-
         escaped text through bleach.clean(tags=[], attributes={}, strip=True)
         for attribute-level scrubbing. Monkey-patches the module so
         the test is robust to whether bleach is actually installed."""
         fake_bleach = types.SimpleNamespace()
-        fake_bleach.clean = MagicMock(
-            side_effect=lambda s, tags, attributes, strip: f"<bleached>{s}</bleached>"
-        )
+        fake_bleach.clean = MagicMock(side_effect=lambda s, tags, attributes, strip: f"<bleached>{s}</bleached>")
 
         monkeypatch.setattr(text_sanitize, "_bleach", fake_bleach)
         monkeypatch.setattr(text_sanitize, "_BLEACH_AVAILABLE", True)
@@ -131,7 +128,6 @@ class TestStoreBleachBranch:
 
 
 class TestResponseNonePassthrough:
-
     def test_none_returns_empty_string(self):
         """Line 91: response-time sanitizer mirrors the store-time
         null-safety. The two must agree so a DB row that stored a real
@@ -155,7 +151,6 @@ class TestResponseNonePassthrough:
 
 
 class TestSanitizationSmoke:
-
     def test_script_tag_fully_stripped(self):
         """Core regression: <script> must disappear completely."""
         assert "<script>" not in sanitize_source_text_for_store("<script>x</script>")
@@ -166,8 +161,9 @@ class TestSanitizationSmoke:
         flags it."""
         for tag in ("style", "iframe", "object", "embed"):
             src = f"<{tag}>danger</{tag}>"
-            assert tag not in sanitize_source_text_for_store(src).lower() or \
-                f"<{tag}>" not in sanitize_source_text_for_store(src)
+            assert tag not in sanitize_source_text_for_store(
+                src
+            ).lower() or f"<{tag}>" not in sanitize_source_text_for_store(src)
 
     def test_javascript_uri_neutralized(self):
         """#1390 explicitly calls out javascript: URIs as a pattern we

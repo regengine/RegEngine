@@ -1,6 +1,6 @@
 """Utility modules for ingestion framework."""
 
-from .crypto import hash_content, hash_text, verify_hash, generate_document_id
+from .crypto import generate_document_id, hash_content, hash_text, verify_hash
 from .rate_limiter import RateLimiter
 from .robots import RobotsChecker
 

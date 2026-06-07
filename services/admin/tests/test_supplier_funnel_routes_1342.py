@@ -17,12 +17,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -32,6 +26,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -62,12 +61,12 @@ def db_session() -> Session:
     ]
     for t in tables:
         t.create(bind=engine)
-    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False,
-                      expire_on_commit=False, future=True)
+    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=TEST_USER_ID, email="u@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
+    session.add(
+        UserModel(id=TEST_USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False)
+    )
     session.commit()
     try:
         yield session
@@ -97,12 +96,9 @@ def _build_client(db_session, monkeypatch, *, tenant=TEST_TENANT_ID):
     # Override PermissionChecker so all permission checks pass
     app.dependency_overrides[PermissionChecker("supplier.demo.reset")] = lambda: None
 
-    monkeypatch.setattr(funnel_routes.TenantContext, "get_tenant_context",
-                        lambda _db: tenant)
-    monkeypatch.setattr(funnel_routes.supplier_graph_sync, "record_facility_ftl_scoping",
-                        lambda **_kw: None)
-    monkeypatch.setattr(funnel_routes.supplier_graph_sync, "record_cte_event",
-                        lambda **_kw: None)
+    monkeypatch.setattr(funnel_routes.TenantContext, "get_tenant_context", lambda _db: tenant)
+    monkeypatch.setattr(funnel_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kw: None)
+    monkeypatch.setattr(funnel_routes.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
 
     return TestClient(app)
 
@@ -125,7 +121,6 @@ def client_no_tenant(db_session, monkeypatch):
 
 
 class TestCreateFunnelEvent:
-
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 490: missing tenant → 400."""
         resp = client_no_tenant.post(
@@ -144,16 +139,14 @@ class TestCreateFunnelEvent:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_valid_facility_uuid_calls_facility_lookup(
-        self, client: TestClient, db_session: Session
-    ):
+    def test_valid_facility_uuid_calls_facility_lookup(self, client: TestClient, db_session: Session):
         """Line 498: valid facility UUID → _get_supplier_facility_or_404 called.
         Unknown (non-existent) facility → 404."""
         import uuid
+
         resp = client.post(
             "/v1/supplier/funnel-events",
-            json={"event_name": "demo_started",
-                  "facility_id": str(uuid.uuid4())},
+            json={"event_name": "demo_started", "facility_id": str(uuid.uuid4())},
         )
         # Unknown facility → 404 from _get_supplier_facility_or_404
         assert resp.status_code == 404
@@ -165,7 +158,6 @@ class TestCreateFunnelEvent:
 
 
 class TestGetSocialProof:
-
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 532: missing tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/social-proof")
@@ -179,7 +171,6 @@ class TestGetSocialProof:
 
 
 class TestGetFunnelSummary:
-
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 545: missing tenant → 400."""
         resp = client_no_tenant.get("/v1/supplier/funnel-summary")

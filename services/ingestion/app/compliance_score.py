@@ -19,13 +19,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from .config import get_settings
-from .webhook_compat import require_tenant_context
 from .tenant_validation import validate_tenant_id
-from shared.tenant_context import TenantContext
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("compliance-score")
 
@@ -36,14 +36,17 @@ router = APIRouter(prefix="/api/v1/compliance", tags=["Compliance Score"])
 # Response Models
 # ---------------------------------------------------------------------------
 
+
 class ScoreBreakdown(BaseModel):
     """Individual score category."""
+
     score: int = Field(..., ge=0, le=100)
     detail: str
 
 
 class NextAction(BaseModel):
     """Recommended next action to improve compliance."""
+
     priority: str  # "HIGH" | "MEDIUM" | "LOW"
     action: str
     impact: str
@@ -51,6 +54,7 @@ class NextAction(BaseModel):
 
 class ComplianceScoreResponse(BaseModel):
     """Full compliance score response."""
+
     tenant_id: str
     overall_score: int = Field(..., ge=0, le=100)
     grade: str  # A, B, C, D, F
@@ -106,8 +110,13 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     # All 7 CTE types defined in FSMA 204
     all_cte_types = {
-        "harvesting", "cooling", "initial_packing",
-        "first_land_based_receiving", "shipping", "receiving", "transformation",
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        "transformation",
     }
     result["missing_cte_types"] = list(all_cte_types - set(result["cte_types_present"] or []))
 
@@ -290,6 +299,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     # 6) Chain integrity — full cryptographic verification (last 50 entries)
     try:
         from shared.cte_persistence import CTEPersistence
+
         persistence = CTEPersistence(db_session)
         chain_result = persistence.verify_chain(tenant_id)
         result["chain_verified"] = chain_result.valid
@@ -319,7 +329,8 @@ def _compute_scores(data: dict) -> dict:
             100,
             f"All {data['chain_length']} entries cryptographically verified — "
             f"chain hash: {data['last_chain_hash'][:16]}..."
-            if data["last_chain_hash"] else "All entries verified",
+            if data["last_chain_hash"]
+            else "All entries verified",
         )
     elif data.get("chain_verified") is False:
         errors = data.get("chain_verification_errors", [])
@@ -387,8 +398,7 @@ def _compute_scores(data: dict) -> dict:
             missing_str = ", ".join(sorted(data["missing_cte_types"]))
             scores["cte_completeness"] = (
                 cte_score,
-                f"{data['distinct_cte_types']}/{total_cte_types} CTE types tracked — "
-                f"missing: {missing_str}",
+                f"{data['distinct_cte_types']}/{total_cte_types} CTE types tracked — missing: {missing_str}",
             )
         else:
             scores["cte_completeness"] = (
@@ -434,9 +444,7 @@ def _compute_scores(data: dict) -> dict:
         else:
             obl_score = min(100, obl_score + 20)  # Bonus for zero alerts
 
-        detail = (
-            f"{applicable_rules}/{total_rules} obligation rules covered by active CTE types"
-        )
+        detail = f"{applicable_rules}/{total_rules} obligation rules covered by active CTE types"
         if open_alerts > 0:
             detail += f" — {open_alerts} open compliance alert(s)"
         scores["obligation_coverage"] = (obl_score, detail)
@@ -473,8 +481,10 @@ def _compute_scores(data: dict) -> dict:
         else:
             issues.append("no CTE types")
 
-        detail = "FDA export ready" if export_score >= 80 else (
-            f"Export score {export_score}/100 — address: {', '.join(issues)}"
+        detail = (
+            "FDA export ready"
+            if export_score >= 80
+            else (f"Export score {export_score}/100 — address: {', '.join(issues)}")
         )
         scores["export_readiness"] = (min(100, export_score), detail)
 
@@ -493,75 +503,95 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
     export_score = scores["export_readiness"][0]
 
     if data["event_count"] == 0:
-        actions.append(NextAction(
-            priority="HIGH",
-            action="Ingest your first traceability event via CSV upload or API",
-            impact="Activates your compliance baseline",
-        ))
-        actions.append(NextAction(
-            priority="HIGH",
-            action="Use the FTL Checker to identify which products are covered",
-            impact="Establishes product coverage score",
-        ))
+        actions.append(
+            NextAction(
+                priority="HIGH",
+                action="Ingest your first traceability event via CSV upload or API",
+                impact="Activates your compliance baseline",
+            )
+        )
+        actions.append(
+            NextAction(
+                priority="HIGH",
+                action="Use the FTL Checker to identify which products are covered",
+                impact="Establishes product coverage score",
+            )
+        )
         return actions
 
     if chain_score < 100:
         if data.get("chain_verified") is False:
-            actions.append(NextAction(
-                priority="HIGH",
-                action="URGENT: Chain tampering detected — investigate immediately",
-                impact="Chain integrity is 10% of overall score; tampering = audit failure",
-            ))
+            actions.append(
+                NextAction(
+                    priority="HIGH",
+                    action="URGENT: Chain tampering detected — investigate immediately",
+                    impact="Chain integrity is 10% of overall score; tampering = audit failure",
+                )
+            )
         else:
-            actions.append(NextAction(
-                priority="HIGH",
-                action="Investigate chain integrity issues — possible data loss",
-                impact="Chain integrity is 10% of overall score",
-            ))
+            actions.append(
+                NextAction(
+                    priority="HIGH",
+                    action="Investigate chain integrity issues — possible data loss",
+                    impact="Chain integrity is 10% of overall score",
+                )
+            )
 
     if obligation_score < 80:
         open_alerts = data.get("open_obligation_alerts", 0)
         if open_alerts > 0:
-            actions.append(NextAction(
-                priority="HIGH",
-                action=f"Resolve {open_alerts} open obligation gap(s) flagged during ingestion",
-                impact=f"+{min(open_alerts * 3, 30)} points on obligation coverage",
-            ))
+            actions.append(
+                NextAction(
+                    priority="HIGH",
+                    action=f"Resolve {open_alerts} open obligation gap(s) flagged during ingestion",
+                    impact=f"+{min(open_alerts * 3, 30)} points on obligation coverage",
+                )
+            )
         else:
-            actions.append(NextAction(
-                priority="HIGH",
-                action="Expand CTE type coverage to satisfy more FSMA 204 obligations",
-                impact="Each new CTE type unlocks 7-15 obligation checks",
-            ))
+            actions.append(
+                NextAction(
+                    priority="HIGH",
+                    action="Expand CTE type coverage to satisfy more FSMA 204 obligations",
+                    impact="Each new CTE type unlocks 7-15 obligation checks",
+                )
+            )
 
     if kde_score < 80:
-        actions.append(NextAction(
-            priority="HIGH",
-            action="Complete all required KDEs per event — add GLN, reference documents, dates",
-            impact=f"+{100 - kde_score} points possible on KDE completeness",
-        ))
+        actions.append(
+            NextAction(
+                priority="HIGH",
+                action="Complete all required KDEs per event — add GLN, reference documents, dates",
+                impact=f"+{100 - kde_score} points possible on KDE completeness",
+            )
+        )
 
     if cte_score < 100 and data["missing_cte_types"]:
         top_missing = sorted(data["missing_cte_types"])[0]
-        actions.append(NextAction(
-            priority="MEDIUM",
-            action=f"Add {top_missing.replace('_', ' ')} CTE tracking to your supply chain",
-            impact=f"+{int(100/7)} points on CTE completeness per type added",
-        ))
+        actions.append(
+            NextAction(
+                priority="MEDIUM",
+                action=f"Add {top_missing.replace('_', ' ')} CTE tracking to your supply chain",
+                impact=f"+{int(100 / 7)} points on CTE completeness per type added",
+            )
+        )
 
     if product_score < 80:
-        actions.append(NextAction(
-            priority="MEDIUM",
-            action="Run FTL Checker against all products and confirm category assignments",
-            impact="+10-25 points on product coverage",
-        ))
+        actions.append(
+            NextAction(
+                priority="MEDIUM",
+                action="Run FTL Checker against all products and confirm category assignments",
+                impact="+10-25 points on product coverage",
+            )
+        )
 
     if export_score < 80:
-        actions.append(NextAction(
-            priority="MEDIUM",
-            action="Run a 24-hour mock recall drill to test export readiness",
-            impact="Validates real-world compliance under time pressure",
-        ))
+        actions.append(
+            NextAction(
+                priority="MEDIUM",
+                action="Run a 24-hour mock recall drill to test export readiness",
+                impact="Validates real-world compliance under time pressure",
+            )
+        )
 
     return actions[:5]  # Cap at 5
 
@@ -569,6 +599,7 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/score/{tenant_id}",
@@ -592,6 +623,7 @@ async def get_compliance_score(
     db_session = None
     try:
         from shared.database import SessionLocal
+
         db_session = SessionLocal()
     except (ImportError, OSError, OperationalError) as exc:
         logger.warning("compliance_score: DB unavailable (%s)", exc)
@@ -692,22 +724,28 @@ async def get_compliance_score(
             grade=_compute_grade(overall),
             breakdown={
                 "chain_integrity": ScoreBreakdown(
-                    score=chain_score, detail=scores["chain_integrity"][1],
+                    score=chain_score,
+                    detail=scores["chain_integrity"][1],
                 ),
                 "kde_completeness": ScoreBreakdown(
-                    score=kde_score, detail=scores["kde_completeness"][1],
+                    score=kde_score,
+                    detail=scores["kde_completeness"][1],
                 ),
                 "cte_completeness": ScoreBreakdown(
-                    score=cte_score, detail=scores["cte_completeness"][1],
+                    score=cte_score,
+                    detail=scores["cte_completeness"][1],
                 ),
                 "obligation_coverage": ScoreBreakdown(
-                    score=obligation_score, detail=scores["obligation_coverage"][1],
+                    score=obligation_score,
+                    detail=scores["obligation_coverage"][1],
                 ),
                 "product_coverage": ScoreBreakdown(
-                    score=product_score, detail=scores["product_coverage"][1],
+                    score=product_score,
+                    detail=scores["product_coverage"][1],
                 ),
                 "export_readiness": ScoreBreakdown(
-                    score=export_score, detail=scores["export_readiness"][1],
+                    score=export_score,
+                    detail=scores["export_readiness"][1],
                 ),
             },
             next_actions=next_actions,
@@ -726,6 +764,7 @@ async def get_compliance_score(
 # ---------------------------------------------------------------------------
 # Pending Reviews Endpoint (M11)
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/pending-reviews/{tenant_id}",
@@ -747,6 +786,7 @@ async def get_pending_reviews(
     db_session = None
     try:
         from shared.database import SessionLocal
+
         db_session = SessionLocal()
     except (ImportError, OSError, OperationalError) as exc:
         logger.warning("pending_reviews: DB unavailable (%s)", exc)
@@ -759,41 +799,51 @@ async def get_pending_reviews(
 
     try:
         # 1. Unresolved exception cases
-        exc_count = db_session.execute(
-            text("""
+        exc_count = (
+            db_session.execute(
+                text("""
                 SELECT COUNT(*) FROM fsma.exception_cases
                 WHERE tenant_id = :tid
                   AND status NOT IN ('resolved', 'waived')
             """),
-            {"tid": tenant_id},
-        ).scalar() or 0
+                {"tid": tenant_id},
+            ).scalar()
+            or 0
+        )
 
         # 2. Pending identity reviews
         identity_count = 0
         try:
-            identity_count = db_session.execute(
-                text("""
+            identity_count = (
+                db_session.execute(
+                    text("""
                     SELECT COUNT(*) FROM fsma.identity_review_queue
                     WHERE tenant_id = :tid AND status = 'pending'
                 """),
-                {"tid": tenant_id},
-            ).scalar() or 0
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
         except (OperationalError, ProgrammingError):
             pass  # table may not exist
 
         # 3. Active request cases not yet submitted
-        request_count = db_session.execute(
-            text("""
+        request_count = (
+            db_session.execute(
+                text("""
                 SELECT COUNT(*) FROM fsma.request_cases
                 WHERE tenant_id = :tid
                   AND package_status NOT IN ('submitted', 'amended')
             """),
-            {"tid": tenant_id},
-        ).scalar() or 0
+                {"tid": tenant_id},
+            ).scalar()
+            or 0
+        )
 
         # 4. Events with failed critical rule evaluations (unresolved)
-        critical_failures = db_session.execute(
-            text("""
+        critical_failures = (
+            db_session.execute(
+                text("""
                 SELECT COUNT(DISTINCT re.event_id)
                 FROM fsma.rule_evaluations re
                 JOIN fsma.rule_definitions rd
@@ -808,8 +858,10 @@ async def get_pending_reviews(
                         AND ec.status IN ('resolved', 'waived')
                   )
             """),
-            {"tid": tenant_id},
-        ).scalar() or 0
+                {"tid": tenant_id},
+            ).scalar()
+            or 0
+        )
 
         total = exc_count + identity_count + request_count + critical_failures
 

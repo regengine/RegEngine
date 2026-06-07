@@ -88,7 +88,8 @@ class TestAdvisoryLockOrdering_Issue1235:
         # Short-circuit register so we don't pollute the SQL list with
         # the full insert pipeline.
         svc.register_entity = lambda **kw: {  # type: ignore[assignment]
-            "entity_id": "eid", "canonical_name": kw["canonical_name"],
+            "entity_id": "eid",
+            "canonical_name": kw["canonical_name"],
             "resolution": "new",
         }
         svc._insert_alias = lambda **kw: "alias-id"  # type: ignore[assignment]
@@ -102,13 +103,10 @@ class TestAdvisoryLockOrdering_Issue1235:
         )
 
         # First SQL statement must be the advisory-lock acquisition.
-        assert any(
-            "pg_advisory_xact_lock" in s for s in executed_sql
-        ), f"Advisory lock was never acquired, executed: {executed_sql}"
-        lock_idx = next(
-            i for i, s in enumerate(executed_sql)
-            if "pg_advisory_xact_lock" in s
+        assert any("pg_advisory_xact_lock" in s for s in executed_sql), (
+            f"Advisory lock was never acquired, executed: {executed_sql}"
         )
+        lock_idx = next(i for i, s in enumerate(executed_sql) if "pg_advisory_xact_lock" in s)
         alias_idx = next(
             (i for i, s in enumerate(executed_sql) if "entity_aliases" in s),
             None,
@@ -140,12 +138,12 @@ class TestAdvisoryLockOrdering_Issue1235:
         svc._acquire_resolve_lock(TENANT, "gtin", "00012345678901")
 
         assert len(captured_keys) == 2
-        assert captured_keys[0] == captured_keys[1], (
-            "Lock key must be deterministic for identical input"
-        )
+        assert captured_keys[0] == captured_keys[1], "Lock key must be deterministic for identical input"
 
     def test_lock_key_differs_for_different_tenants(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """Two distinct tenants resolving the same reference must not
         contend on the same lock -- that would be a cross-tenant
@@ -165,12 +163,12 @@ class TestAdvisoryLockOrdering_Issue1235:
         svc._acquire_resolve_lock("tenant-B", "gtin", "00012345678901")
 
         assert len(captured_keys) == 2
-        assert captured_keys[0] != captured_keys[1], (
-            "Different tenants must hash to different advisory-lock keys"
-        )
+        assert captured_keys[0] != captured_keys[1], "Different tenants must hash to different advisory-lock keys"
 
     def test_lock_key_differs_for_different_alias_types(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """'gtin' vs 'gln' vs 'tlc' must each have their own lock keyspace
         even for identical reference strings."""
@@ -189,12 +187,12 @@ class TestAdvisoryLockOrdering_Issue1235:
         svc._acquire_resolve_lock(TENANT, "gln", "0614141000012")
 
         assert len(captured_keys) == 2
-        assert captured_keys[0] != captured_keys[1], (
-            "Different alias_types must hash to different lock keys"
-        )
+        assert captured_keys[0] != captured_keys[1], "Different alias_types must hash to different lock keys"
 
     def test_lock_key_differs_for_different_references(
-        self, svc, mock_session,
+        self,
+        svc,
+        mock_session,
     ):
         """Different references must hash to different lock keys."""
         captured_keys: list[int] = []
@@ -212,9 +210,7 @@ class TestAdvisoryLockOrdering_Issue1235:
         svc._acquire_resolve_lock(TENANT, "gtin", "00012345678902")
 
         assert len(captured_keys) == 2
-        assert captured_keys[0] != captured_keys[1], (
-            "Different reference values must hash to different lock keys"
-        )
+        assert captured_keys[0] != captured_keys[1], "Different reference values must hash to different lock keys"
 
 
 # ---------------------------------------------------------------------------
@@ -245,21 +241,25 @@ class TestRaceReplayYieldsSingleEntity_Issue1235:
             calls["n"] += 1
             if calls["n"] == 1:
                 return []
-            return [{
-                "entity_id": "eid-first-thread",
-                "canonical_name": alias_value,
-                "is_active": True,
-                "entity_type": "product",
-                "gln": None,
-                "gtin": alias_value,
-                "verification_status": "unverified",
-                "confidence_score": 0.8,
-                "matched_alias": {
-                    "alias_id": "alias-A", "alias_type": alias_type,
-                    "alias_value": alias_value, "source_system": "test",
-                    "confidence": 1.0,
-                },
-            }]
+            return [
+                {
+                    "entity_id": "eid-first-thread",
+                    "canonical_name": alias_value,
+                    "is_active": True,
+                    "entity_type": "product",
+                    "gln": None,
+                    "gtin": alias_value,
+                    "verification_status": "unverified",
+                    "confidence_score": 0.8,
+                    "matched_alias": {
+                        "alias_id": "alias-A",
+                        "alias_type": alias_type,
+                        "alias_value": alias_value,
+                        "source_system": "test",
+                        "confidence": 1.0,
+                    },
+                }
+            ]
 
         svc.find_entity_by_alias = (  # type: ignore[assignment]
             _first_empty_then_existing
@@ -278,13 +278,19 @@ class TestRaceReplayYieldsSingleEntity_Issue1235:
         reference = "LOT-ABC-001"
         # Thread 1: no existing entity -> registers new.
         result1 = svc._resolve_or_register(
-            tenant_id=TENANT, reference=reference,
-            entity_type="lot", source_system="test", alias_type="tlc",
+            tenant_id=TENANT,
+            reference=reference,
+            entity_type="lot",
+            source_system="test",
+            alias_type="tlc",
         )
         # Thread 2: thread 1's row now visible -> returns existing.
         result2 = svc._resolve_or_register(
-            tenant_id=TENANT, reference=reference,
-            entity_type="lot", source_system="test", alias_type="tlc",
+            tenant_id=TENANT,
+            reference=reference,
+            entity_type="lot",
+            source_system="test",
+            alias_type="tlc",
         )
 
         assert result1["resolution"] == "new"
@@ -318,9 +324,7 @@ class TestUniqueConstraintFallback_Issue1235:
         # Find an INSERT call to entity_aliases.
         sqls = [str(c.args[0]) for c in mock_session.execute.call_args_list]
         alias_inserts = [s for s in sqls if "entity_aliases" in s and "INSERT" in s.upper()]
-        assert alias_inserts, (
-            f"Expected at least one INSERT into entity_aliases, saw: {sqls}"
-        )
+        assert alias_inserts, f"Expected at least one INSERT into entity_aliases, saw: {sqls}"
         insert_sql = alias_inserts[0].replace("\n", " ").upper()
         assert "ON CONFLICT" in insert_sql, (
             "_insert_alias must use ON CONFLICT DO NOTHING to leverage the "
@@ -332,6 +336,7 @@ class TestUniqueConstraintFallback_Issue1235:
         _resolve_or_register must still proceed -- the UNIQUE constraint
         is the true dedup barrier. A regression that lets the exception
         bubble out would break every non-Postgres test harness."""
+
         def _raise_on_lock(sql, params=None, *a, **kw):
             if "pg_advisory_xact_lock" in str(sql):
                 raise RuntimeError("not a postgres backend")
@@ -342,14 +347,18 @@ class TestUniqueConstraintFallback_Issue1235:
 
         mock_session.execute.side_effect = _raise_on_lock
         svc.register_entity = lambda **kw: {  # type: ignore[assignment]
-            "entity_id": "eid", "canonical_name": kw["canonical_name"],
+            "entity_id": "eid",
+            "canonical_name": kw["canonical_name"],
             "resolution": "new",
         }
         svc._insert_alias = lambda **kw: "alias-id"  # type: ignore[assignment]
 
         # Must not raise -- advisory-lock unavailability is logged+swallowed.
         result = svc._resolve_or_register(
-            tenant_id=TENANT, reference="00012345678901",
-            entity_type="product", source_system="test", alias_type="gtin",
+            tenant_id=TENANT,
+            reference="00012345678901",
+            entity_type="product",
+            source_system="test",
+            alias_type="gtin",
         )
         assert result["resolution"] == "new"

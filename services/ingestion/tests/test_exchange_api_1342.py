@@ -30,8 +30,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.exchange_api as exchange_api
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.exchange_api import (
     ExchangeSendRequest,
     _allow_in_memory_fallback,
@@ -47,7 +47,6 @@ from app.exchange_api import (
     _store_package_fallback,
     router as exchange_router,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fake SQLAlchemy session
@@ -153,11 +152,13 @@ def _make_row(**overrides: Any) -> SimpleNamespace:
 class TestIsProduction:
     def test_delegates_to_shared_env_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: True)
         assert _is_production() is True
 
     def test_delegates_to_shared_env_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: False)
         assert _is_production() is False
 
@@ -166,6 +167,7 @@ class TestAllowInMemoryFallback:
     def test_explicit_env_var_true_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "TRUE")
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: True)
         assert _allow_in_memory_fallback() is True
 
@@ -176,24 +178,28 @@ class TestAllowInMemoryFallback:
     def test_explicit_env_var_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "false")
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: False)
         assert _allow_in_memory_fallback() is False
 
     def test_env_var_unknown_string_is_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "maybe")
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: False)
         assert _allow_in_memory_fallback() is False
 
     def test_no_env_var_non_prod(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", raising=False)
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: False)
         assert _allow_in_memory_fallback() is True
 
     def test_no_env_var_prod(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", raising=False)
         import shared.env as env_mod
+
         monkeypatch.setattr(env_mod, "is_production", lambda: True)
         assert _allow_in_memory_fallback() is False
 
@@ -391,9 +397,7 @@ class TestBuildPackage:
             traceability_lot_code="LOT-A",
             receiver_email="to@example.com",
         )
-        package_id, package_hash, package = _build_package(
-            "tenant-send", req, [row_a, row_b]
-        )
+        package_id, package_hash, package = _build_package("tenant-send", req, [row_a, row_b])
         # UUID format.
         assert len(package_id) == 36 and package_id.count("-") == 4
         assert len(package_hash) == 64
@@ -448,9 +452,7 @@ class TestStorePackageDb:
             "sender_tenant_id": "tenant-send",
             "receiver_tenant_id": "tenant-recv",
         }
-        _store_package_db(
-            "tenant-send", req, "pkg-1", "deadbeef", package
-        )
+        _store_package_db("tenant-send", req, "pkg-1", "deadbeef", package)
         assert session.committed is True
         assert session.rolled_back is False
         assert session.closed is True
@@ -643,9 +645,7 @@ class TestLoadPackagesDb:
         assert len([c for c in session.calls if c[0] == "execute"]) == 2
         assert session.committed is False
 
-    def test_mark_received_runs_update_and_refetch(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_mark_received_runs_update_and_refetch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         row_before = _db_row(package_id="pkg-mark", status="pending")
         row_after = _db_row(
             package_id="pkg-mark",
@@ -671,9 +671,7 @@ class TestLoadPackagesDb:
         assert "UPDATE fsma.exchange_packages" in update_stmt
         assert "SET status = 'received'" in update_stmt
 
-    def test_mark_received_with_empty_result_skips_update(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_mark_received_with_empty_result_skips_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # DDL, initial SELECT returns no rows.
         session = _FakeSession(execute_queue=[None, []])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
@@ -689,9 +687,7 @@ class TestLoadPackagesDb:
         # Exactly 2 execute calls (DDL + SELECT), not the UPDATE path.
         assert len([c for c in session.calls if c[0] == "execute"]) == 2
 
-    def test_close_always_runs_on_exception(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_close_always_runs_on_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
         boom = RuntimeError("db down")
         # DDL ok, SELECT blows up.
         session = _FakeSession(execute_queue=[None, boom])
@@ -873,9 +869,7 @@ def app_with_scopes() -> FastAPI:
 
 
 class TestSendEndpointDbSuccessPath:
-    def test_send_exercises_full_db_pipeline(
-        self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_send_exercises_full_db_pipeline(self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
         # First session: _query_shipping_rows -> returns a single row.
         row = _make_row(traceability_lot_code="LOT-HAPPY")
         query_session = _FakeSession(execute_queue=[[row]])
@@ -910,9 +904,7 @@ class TestSendEndpointDbSuccessPath:
         assert store_session.committed is True
         assert store_session.closed is True
 
-    def test_send_503_when_fallback_disabled(
-        self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_send_503_when_fallback_disabled(self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
         # Query session raises a non-HTTP exception.
         failing_session = _FakeSession(execute_queue=[RuntimeError("db exploded")])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: failing_session)
@@ -954,9 +946,7 @@ class TestSendEndpointDbSuccessPath:
 
 
 class TestReceiveEndpointDbSuccessPath:
-    def test_receive_uses_db_when_healthy(
-        self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_receive_uses_db_when_healthy(self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
         row = _db_row(package_id="pkg-db", status="pending")
         session = _FakeSession(execute_queue=[None, [row]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)

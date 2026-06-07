@@ -40,6 +40,7 @@ Operational runbook
   the buffer table, inspect ``payload`` + ``primary_error``, and either
   manually replay or document the loss.
 """
+
 from __future__ import annotations
 
 import os
@@ -110,21 +111,12 @@ def _default_primary_writer(
     )
 
     target_type = str(payload.get("target_type") or event_type)
-    target_id = str(
-        payload.get("target_id")
-        or payload.get("resource_id")
-        or payload.get("kde_id")
-        or "unknown"
-    )
+    target_id = str(payload.get("target_id") or payload.get("resource_id") or payload.get("kde_id") or "unknown")
     correlation_id = payload.get("correlation_id")
 
     # Map our generic event_type onto the closest FSMAAuditAction. KDE_READ
     # is the dominant case; anything else falls back to ACCESSED.
-    action = (
-        FSMAAuditAction.ACCESSED
-        if hasattr(FSMAAuditAction, "ACCESSED")
-        else FSMAAuditAction.EXTRACTED
-    )
+    action = FSMAAuditAction.ACCESSED if hasattr(FSMAAuditAction, "ACCESSED") else FSMAAuditAction.EXTRACTED
 
     get_audit_log().log(
         action=action,
@@ -212,14 +204,9 @@ def reconcile_audit_buffer(
         # Probe the unreplayed gauge while we're here — useful for
         # operators even when the batch doesn't drain it fully.
         unreplayed_total_row = session.execute(
-            text(
-                "SELECT COUNT(*) FROM audit_log_buffer "
-                "WHERE replayed_at IS NULL"
-            )
+            text("SELECT COUNT(*) FROM audit_log_buffer WHERE replayed_at IS NULL")
         ).fetchone()
-        unreplayed_total = (
-            int(unreplayed_total_row[0]) if unreplayed_total_row else 0
-        )
+        unreplayed_total = int(unreplayed_total_row[0]) if unreplayed_total_row else 0
 
         for row in rows:
             (
@@ -254,9 +241,7 @@ def reconcile_audit_buffer(
                     row_id=str(row_id),
                     tenant_id=tenant_id,
                     event_type=event_type,
-                    age_hours=round(
-                        (now - ofa).total_seconds() / 3600.0, 2
-                    ),
+                    age_hours=round((now - ofa).total_seconds() / 3600.0, 2),
                     replay_attempts=replay_attempts,
                 )
 
@@ -297,11 +282,7 @@ def reconcile_audit_buffer(
                         primary_error=primary_error,
                         replay_error=str(exc),
                         replay_error_type=type(exc).__name__,
-                        originally_failed_at=(
-                            ofa.isoformat()
-                            if isinstance(ofa, datetime)
-                            else str(ofa)
-                        ),
+                        originally_failed_at=(ofa.isoformat() if isinstance(ofa, datetime) else str(ofa)),
                         operator_action=(
                             "Inspect audit_log_buffer row by id; manually "
                             "replay or document loss. Row is retained for "
@@ -331,9 +312,7 @@ def reconcile_audit_buffer(
             )
 
         # Emit the final unreplayed gauge AFTER the batch's effects.
-        post_unreplayed = max(
-            0, unreplayed_total - result.replayed
-        )
+        post_unreplayed = max(0, unreplayed_total - result.replayed)
 
         logger.info(
             "audit_buffer_reconcile_finished",

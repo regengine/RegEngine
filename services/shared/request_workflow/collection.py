@@ -27,8 +27,7 @@ class CollectionMixin:
         case = self._get_case(tenant_id, request_case_id)
         if case["package_status"] not in ("scoping", "collecting"):
             raise ValueError(
-                f"Cannot collect in status '{case['package_status']}'. "
-                "Case must be in 'scoping' or 'collecting'."
+                f"Cannot collect in status '{case['package_status']}'. Case must be in 'scoping' or 'collecting'."
             )
 
         # Build dynamic scope filter
@@ -43,14 +42,11 @@ class CollectionMixin:
             conditions.append("te.product_reference = ANY(:products)")
             params["products"] = products
         if lots:
-            conditions.append(
-                "(te.lot_reference = ANY(:lots) OR te.traceability_lot_code = ANY(:lots))"
-            )
+            conditions.append("(te.lot_reference = ANY(:lots) OR te.traceability_lot_code = ANY(:lots))")
             params["lots"] = lots
         if facilities:
             conditions.append(
-                "(te.from_facility_reference = ANY(:facilities) "
-                "OR te.to_facility_reference = ANY(:facilities))"
+                "(te.from_facility_reference = ANY(:facilities) OR te.to_facility_reference = ANY(:facilities))"
             )
             params["facilities"] = facilities
 
@@ -166,9 +162,7 @@ class CollectionMixin:
                 "event_ids": event_ids or [],
             },
         )
-        unresolved_exceptions = [
-            dict(r) for r in exceptions_result.mappings().fetchall()
-        ]
+        unresolved_exceptions = [dict(r) for r in exceptions_result.mappings().fetchall()]
 
         # Build gap owners map: group gaps by supplier/facility
         gap_owners: Dict[str, List[str]] = {}
@@ -189,10 +183,7 @@ class CollectionMixin:
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
             evaluated_ids = {str(r[0]) for r in evaluated_result.fetchall()}
-            missing_evaluations = [
-                eid for eid in [str(e) for e in event_ids]
-                if eid not in evaluated_ids
-            ]
+            missing_evaluations = [eid for eid in [str(e) for e in event_ids] if eid not in evaluated_ids]
 
         gap_analysis = {
             "missing_events": missing_evaluations,
@@ -201,11 +192,7 @@ class CollectionMixin:
             "gap_owners": gap_owners,
         }
 
-        gap_count = (
-            len(missing_evaluations)
-            + len(failed_rules)
-            + len(unresolved_exceptions)
-        )
+        gap_count = len(missing_evaluations) + len(failed_rules) + len(unresolved_exceptions)
 
         # Update case
         now = datetime.now(timezone.utc)

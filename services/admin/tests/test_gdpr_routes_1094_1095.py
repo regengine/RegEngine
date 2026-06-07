@@ -4,6 +4,7 @@ Tests for GDPR data-rights endpoints (issues #1094, #1095).
   #1094 — GET  /gdpr/export       Art. 15/20 data portability
   #1095 — POST /gdpr/request-erasure + POST /gdpr/confirm-erasure  Art. 17
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -13,14 +14,15 @@ import time
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Token helpers (mirroring gdpr_routes internals so we can test round-trips)
 # ---------------------------------------------------------------------------
 
+
 def _make_token(email: str, secret: str, offset: int = 0) -> str:
     """Re-implement token generation for test assertions."""
     import secrets as _secrets
+
     nonce = "testnonce"
     ts = str(int(time.time()) + offset)
     message = f"{email}:{ts}:{nonce}"
@@ -31,6 +33,7 @@ def _make_token(email: str, secret: str, offset: int = 0) -> str:
 # ---------------------------------------------------------------------------
 # Unit tests — token helpers
 # ---------------------------------------------------------------------------
+
 
 class TestErasureTokenHelpers:
     """Direct unit tests for the token generate/verify helpers."""
@@ -60,7 +63,7 @@ class TestErasureTokenHelpers:
 
     def test_expired_token_fails(self, monkeypatch):
         monkeypatch.setenv("GDPR_ERASURE_SECRET", "test-secret-key")
-        from app.gdpr_routes import _verify_erasure_token, _ERASURE_TOKEN_TTL
+        from app.gdpr_routes import _ERASURE_TOKEN_TTL, _verify_erasure_token
 
         # Build a token with a timestamp far in the past
         secret = "test-secret-key"
@@ -83,15 +86,16 @@ class TestErasureTokenHelpers:
 # HTTP integration tests via TestClient
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def gdpr_client(monkeypatch):
     """Return a TestClient wired to the gdpr_routes router only."""
     monkeypatch.setenv("GDPR_ERASURE_SECRET", "integration-test-secret")
     monkeypatch.setenv("ENV", "test")  # expose token in response
 
+    from app.gdpr_routes import router
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from app.gdpr_routes import router
 
     mini_app = FastAPI()
     mini_app.include_router(router)
@@ -129,6 +133,7 @@ class TestConfirmErasure:
         monkeypatch.setenv("ENV", "test")
 
         from app.gdpr_routes import _make_erasure_token
+
         email = "charlie@example.com"
         token = _make_erasure_token(email)
 
@@ -150,10 +155,10 @@ class TestConfirmErasure:
             def rollback(self):
                 pass
 
+        from app.database import get_session
+        from app.gdpr_routes import router
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.gdpr_routes import router
-        from app.database import get_session
 
         mini_app = FastAPI()
         mini_app.include_router(router)

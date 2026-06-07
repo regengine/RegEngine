@@ -24,12 +24,10 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import routes_status as rs
 from app.routes_status import router
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -39,6 +37,7 @@ from app.routes_status import router
 def _stub_api_key():
     """Stand-in APIKey dependency override — no real auth."""
     from shared.auth import APIKey
+
     return APIKey(
         key_id="k1",
         key_hash="h",
@@ -51,6 +50,7 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from shared.auth import require_api_key
+
     app.dependency_overrides[require_api_key] = _stub_api_key
     return app
 
@@ -62,6 +62,7 @@ def client():
 
 class _FakeRedis:
     """Minimal Redis stub — pre-seed a dict of {key: bytes-or-None}."""
+
     def __init__(self, data=None):
         self.data = data or {}
 
@@ -72,11 +73,14 @@ class _FakeRedis:
 @pytest.fixture
 def patch_redis(monkeypatch):
     """Returns a callable that installs a fake redis for the test."""
+
     def _install(data):
         fake = _FakeRedis(data)
         import redis
+
         monkeypatch.setattr(redis, "from_url", lambda _url: fake)
         return fake
+
     return _install
 
 
@@ -102,10 +106,12 @@ class TestGetIngestionStatus:
         assert body["result"] is None
 
     def test_completed_with_result(self, client, patch_redis):
-        patch_redis({
-            "ingest:status:j1": b"completed",
-            "ingest:result:j1": json.dumps({"sections": 12}).encode(),
-        })
+        patch_redis(
+            {
+                "ingest:status:j1": b"completed",
+                "ingest:result:j1": json.dumps({"sections": 12}).encode(),
+            }
+        )
         r = client.get("/v1/ingest/status/j1")
         assert r.status_code == 200
         body = r.json()
@@ -133,10 +139,12 @@ class TestGetDocumentAnalysis:
         assert r.json()["detail"] == "Document not found"
 
     def test_analysis_with_result_fills_obligations_count(self, client, patch_redis):
-        patch_redis({
-            "ingest:status:d1": b"completed",
-            "ingest:result:d1": json.dumps({"sections": 42}).encode(),
-        })
+        patch_redis(
+            {
+                "ingest:status:d1": b"completed",
+                "ingest:result:d1": json.dumps({"sections": 42}).encode(),
+            }
+        )
         r = client.get("/v1/ingest/documents/d1/analysis")
         assert r.status_code == 200
         body = r.json()
@@ -245,7 +253,8 @@ class TestListDocuments:
     def test_happy_path_with_filters(self, client, monkeypatch):
         db = MagicMock()
         db.search_documents.return_value = [
-            {"id": "d1", "vertical": "food"}, {"id": "d2", "vertical": "food"},
+            {"id": "d1", "vertical": "food"},
+            {"id": "d2", "vertical": "food"},
         ]
         monkeypatch.setattr(rs, "get_db_manager", lambda: db)
 

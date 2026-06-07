@@ -1,20 +1,22 @@
-import httpx
-import structlog
-from typing import Iterable, Optional
 from datetime import datetime, timezone
+from typing import Iterable, Optional
 from urllib.parse import urlencode
 
+import httpx
+import structlog
 from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import validate_url
+
 from ...config import get_settings
-from .base import StateRegistryScraper, Source, FetchedItem
+from .base import FetchedItem, Source, StateRegistryScraper
 
 logger = structlog.get_logger("ingestion.scrapers.google_discovery")
+
 
 class GoogleDiscoveryScraper(StateRegistryScraper):
     """
     Active scraper that discovers documents using Google Custom Search API.
-    
+
     It searches for high-value regulatory documents (PDFs) from government domains.
     """
 
@@ -34,26 +36,20 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
             return []
 
         logger.info("google_discovery_started", query=query)
-        
+
         try:
             # Fetch up to 20 results (2 pages)
             results = []
             for start_index in [1, 11]:
-                params = {
-                    "key": self.api_key,
-                    "cx": self.cx,
-                    "q": query,
-                    "fileType": "pdf",
-                    "start": start_index
-                }
-                
+                params = {"key": self.api_key, "cx": self.cx, "q": query, "fileType": "pdf", "start": start_index}
+
                 # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
                 # safe_httpx_get_sync does not accept params directly; encode into URL.
                 full_url = f"{self.base_url}?{urlencode(params)}"
                 resp = safe_httpx_get_sync(full_url, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
-                
+
                 if "items" in data:
                     results.extend(data["items"])
                 else:
@@ -64,7 +60,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                 url = item.get("link")
                 title = item.get("title")
                 snippet = item.get("snippet")
-                
+
                 if not url:
                     continue
 
@@ -76,13 +72,18 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                     jurisdiction = "US-CA"
                 elif ".tx.gov" in url:
                     jurisdiction = "US-TX"
-                
-                sources.append(Source(
-                    url=url,
-                    title=title,
-                    jurisdiction_code=jurisdiction,
-                    metadata={"discovery_snippet": snippet, "discovery_date": datetime.now(timezone.utc).isoformat()}
-                ))
+
+                sources.append(
+                    Source(
+                        url=url,
+                        title=title,
+                        jurisdiction_code=jurisdiction,
+                        metadata={
+                            "discovery_snippet": snippet,
+                            "discovery_date": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                )
 
             logger.info("google_discovery_complete", found=len(sources))
             return sources
@@ -99,13 +100,9 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
             # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
             resp = safe_httpx_get_sync(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
-            
+
             content_type = resp.headers.get("Content-Type", "application/pdf")
-            return FetchedItem(
-                source=source,
-                content_bytes=resp.content,
-                content_type=content_type
-            )
+            return FetchedItem(source=source, content_bytes=resp.content, content_type=content_type)
         except Exception as e:
             logger.error("google_fetch_failed", url=source.url, error=str(e))
             # Return empty item on failure

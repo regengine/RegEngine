@@ -19,6 +19,7 @@ Coverage:
     (preserves best-effort semantics for tenants without seeded rules)
   - Helper returns (True, reason) in ``all`` mode on warning-only fails
 """
+
 from __future__ import annotations
 
 import sys
@@ -31,28 +32,38 @@ from services.ingestion.app import webhook_router_v2 as wrv2
 from services.ingestion.app.authz import IngestionPrincipal
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-
 # ---------------------------------------------------------------------------
 # Summary factories
 # ---------------------------------------------------------------------------
 
+
 def _critical_summary() -> EvaluationSummary:
     crit = RuleEvaluationResult(
-        rule_id="CTE_REQ_HARVEST_DATE", severity="critical",
-        result="fail", why_failed="harvest_date missing",
+        rule_id="CTE_REQ_HARVEST_DATE",
+        severity="critical",
+        result="fail",
+        why_failed="harvest_date missing",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[crit], critical_failures=[crit],
+        total_rules=1,
+        failed=1,
+        results=[crit],
+        critical_failures=[crit],
     )
 
 
 def _warning_only_summary() -> EvaluationSummary:
     warn = RuleEvaluationResult(
-        rule_id="R_WARN", severity="warning",
-        result="fail", why_failed="non-critical warning",
+        rule_id="R_WARN",
+        severity="warning",
+        result="fail",
+        why_failed="non-critical warning",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[warn], critical_failures=[],
+        total_rules=1,
+        failed=1,
+        results=[warn],
+        critical_failures=[],
     )
 
 
@@ -62,7 +73,8 @@ def _no_verdict_summary() -> EvaluationSummary:
 
 def _compliant_summary() -> EvaluationSummary:
     return EvaluationSummary(
-        total_rules=1, passed=1,
+        total_rules=1,
+        passed=1,
         results=[RuleEvaluationResult(rule_id="R_OK", severity="info", result="pass")],
     )
 
@@ -70,6 +82,7 @@ def _compliant_summary() -> EvaluationSummary:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def _make_event():
@@ -88,6 +101,7 @@ def _make_event():
 
 def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     """Stub normalize_webhook_event + RulesEngine to return the given summary."""
+
     def _normalize(event, tenant_id, **_kwargs):
         if canonical_raises is not None:
             raise canonical_raises
@@ -104,11 +118,13 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
             to_entity_reference=None,
             kdes=event.kdes,
         )
+
     monkeypatch.setattr(wrv2, "normalize_webhook_event", _normalize)
 
     class _FakeEngine:
         def __init__(self, db_session):
             pass
+
         def evaluate_event(self, event_data, persist, tenant_id):
             # Pre-eval path MUST pass persist=False
             assert persist is False, "preeval should not persist eval rows"
@@ -130,10 +146,18 @@ def _principal(tenant_id: str | None, scopes: list[str] | None = None) -> Ingest
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
-        def debug(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
+
+        def debug(self, *a, **k):
+            pass
+
     monkeypatch.setattr(wrv2, "logger", _Silent())
 
 
@@ -141,8 +165,8 @@ def _silence_logger(monkeypatch):
 # OFF mode
 # ---------------------------------------------------------------------------
 
-class TestPreEvalOff:
 
+class TestPreEvalOff:
     @pytest.fixture(autouse=True)
     def _off(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
@@ -170,16 +194,20 @@ class TestPreEvalOff:
                 event_id="cev-1",
                 event_type=SimpleNamespace(value=event.cte_type.value),
                 traceability_lot_code=event.traceability_lot_code,
-                product_reference=None, quantity=event.quantity,
+                product_reference=None,
+                quantity=event.quantity,
                 unit_of_measure=event.unit_of_measure,
-                from_facility_reference=None, to_facility_reference=None,
-                from_entity_reference=None, to_entity_reference=None,
+                from_facility_reference=None,
+                to_facility_reference=None,
+                from_entity_reference=None,
+                to_entity_reference=None,
                 kdes=event.kdes,
             )
 
         class _SpyEngine:
             def __init__(self, db_session):
                 pass
+
             def evaluate_event(self, event_data, persist, tenant_id):
                 calls["evaluate"] += 1
                 return _critical_summary()
@@ -201,8 +229,8 @@ class TestPreEvalOff:
 # Tenant binding (#2069)
 # ---------------------------------------------------------------------------
 
-class TestIngestTenantBinding:
 
+class TestIngestTenantBinding:
     def test_scoped_key_rejects_payload_tenant_mismatch(self):
         with pytest.raises(HTTPException) as exc:
             wrv2._resolve_ingest_tenant_id(
@@ -252,8 +280,8 @@ class TestIngestTenantBinding:
 # CTE_ONLY mode
 # ---------------------------------------------------------------------------
 
-class TestPreEvalCteOnly:
 
+class TestPreEvalCteOnly:
     @pytest.fixture(autouse=True)
     def _cte_only(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
@@ -306,8 +334,8 @@ class TestPreEvalCteOnly:
 # ALL mode
 # ---------------------------------------------------------------------------
 
-class TestPreEvalAll:
 
+class TestPreEvalAll:
     @pytest.fixture(autouse=True)
     def _all(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "all")
@@ -337,6 +365,7 @@ class TestPreEvalAll:
 # threaded block. Closes the double-eval regression.
 # ---------------------------------------------------------------------------
 
+
 class TestPreEvalReturnsSummary:
     """The helper returns ``(reject, reason, summary)`` so the threaded
     post-commit canonical block can persist the pre-computed evaluation
@@ -351,9 +380,7 @@ class TestPreEvalReturnsSummary:
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         crit = _critical_summary()
         _install(monkeypatch, summary=crit)
-        reject, reason, summary = wrv2._rules_preeval_reject(
-            _make_event, db_session=None, tenant_id="t"
-        )
+        reject, reason, summary = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         # Even though this case rejects, the summary is still returned —
         # callers might log or audit it before short-circuiting.
         assert reject is True
@@ -365,9 +392,7 @@ class TestPreEvalReturnsSummary:
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         compliant = _compliant_summary()
         _install(monkeypatch, summary=compliant)
-        reject, reason, summary = wrv2._rules_preeval_reject(
-            _make_event, db_session=None, tenant_id="t"
-        )
+        reject, reason, summary = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
         assert summary is compliant
@@ -380,9 +405,7 @@ class TestPreEvalReturnsSummary:
         accepts both shapes during the migration window."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
         _install(monkeypatch, summary=_critical_summary())
-        reject, reason, summary = wrv2._rules_preeval_reject(
-            _make_event, db_session=None, tenant_id="t"
-        )
+        reject, reason, summary = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
         # Summary may be None (post-short-circuit) or the critical summary
@@ -402,9 +425,7 @@ class TestPreEvalReturnsSummary:
             canonical_raises=RuntimeError("canonical broken"),
         )
         with pytest.raises(HTTPException) as exc:
-            wrv2._rules_preeval_reject(
-                _make_event, db_session=None, tenant_id="t"
-            )
+            wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert exc.value.status_code == 500
 
     def test_canonical_errors_swallowed_under_off(self, monkeypatch, _make_event):
@@ -420,9 +441,7 @@ class TestPreEvalReturnsSummary:
         )
         # OFF short-circuits before normalize, so canonical_raises won't
         # actually be hit. The contract under OFF is "no 5xx, no reject".
-        reject, reason, summary = wrv2._rules_preeval_reject(
-            _make_event, db_session=None, tenant_id="t"
-        )
+        reject, reason, summary = wrv2._rules_preeval_reject(_make_event, db_session=None, tenant_id="t")
         assert reject is False
         assert reason is None
         assert summary is None

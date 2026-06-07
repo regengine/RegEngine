@@ -31,7 +31,6 @@ from enum import Enum
 from typing import Any, Callable, Optional, TypeVar
 
 import structlog
-
 from shared.circuit_breaker_store import CircuitStore, get_store
 
 logger = structlog.get_logger("circuit_breaker")
@@ -41,8 +40,9 @@ T = TypeVar("T")
 
 class CircuitState(str, Enum):
     """Circuit breaker states."""
-    CLOSED = "CLOSED"      # Normal operation, requests flow through
-    OPEN = "OPEN"          # Failing fast, no requests allowed
+
+    CLOSED = "CLOSED"  # Normal operation, requests flow through
+    OPEN = "OPEN"  # Failing fast, no requests allowed
     HALF_OPEN = "HALF_OPEN"  # Testing if service recovered
 
 
@@ -69,6 +69,7 @@ class CircuitBreaker:
         half_open_max_calls: Max calls to attempt in half-open state
         exceptions: Exception types that trigger failure count
     """
+
     name: str
     failure_threshold: int = 5
     recovery_timeout: float = 30.0
@@ -173,6 +174,7 @@ class CircuitBreaker:
     def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorator for protecting a function with circuit breaker."""
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> T:
                 self._total_calls += 1
@@ -184,8 +186,10 @@ class CircuitBreaker:
                 except self.exceptions as exc:
                     self._record_failure(exc)
                     raise
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> T:
                 self._total_calls += 1
@@ -197,6 +201,7 @@ class CircuitBreaker:
                 except self.exceptions as exc:
                     self._record_failure(exc)
                     raise
+
             return sync_wrapper
 
     async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

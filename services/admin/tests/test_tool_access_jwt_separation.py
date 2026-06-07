@@ -29,9 +29,8 @@ import os
 import sys
 from pathlib import Path
 
-import pytest
 import jwt as pyjwt
-
+import pytest
 
 # Make services/admin importable (mirrors other test files in this dir)
 _REPO_ADMIN = Path(__file__).resolve().parents[1]
@@ -208,13 +207,13 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "different-tool-secret")
     _reload_tool_verification_routes()
 
+    from app import tool_verification_routes as tvr
     from app.auth_utils import (
         ALGORITHM,
         SESSION_AUDIENCE,
         SESSION_ISSUER,
         create_access_token,
     )
-    from app import tool_verification_routes as tvr
 
     session_token = create_access_token({"sub": "legit-user"})
 
@@ -225,7 +224,9 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     # STILL must be rejected because its aud is SESSION_AUDIENCE.
     session_claims = pyjwt.decode(  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         session_token,
-        options={"verify_signature": False},  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        options={
+            "verify_signature": False
+        },  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     )
     assert session_claims["aud"] == SESSION_AUDIENCE
     assert session_claims["iss"] == SESSION_ISSUER
@@ -246,8 +247,8 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
 def test_tool_access_token_roundtrip(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "roundtrip-secret")
     _reload_tool_verification_routes()
-    from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
     from app import tool_verification_routes as tvr
+    from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
 
     tok = pyjwt.encode(
         {
@@ -326,13 +327,13 @@ def test_tool_access_secret_empty_string_fails_in_production(monkeypatch):
 def test_session_decode_rejects_tool_access_key_signature(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "tool-secret-xyz")
     _reload_tool_verification_routes()
+    from app import tool_verification_routes as tvr
     from app.auth_utils import (
         ALGORITHM,
         SESSION_AUDIENCE,
         SESSION_ISSUER,
         decode_access_token,
     )
-    from app import tool_verification_routes as tvr
 
     # Mint a token with the SESSION audience/issuer but signed using the
     # TOOL key. decode_access_token uses SESSION secret → signature fails.

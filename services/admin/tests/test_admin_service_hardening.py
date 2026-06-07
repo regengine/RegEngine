@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # =========================================================================
 # #1381 -- pool checkout clears app.tenant_id
 # =========================================================================
@@ -39,13 +38,10 @@ def test_reset_tenant_guc_listener_is_attached_on_postgres_engine():
     # (the common test fallback) the listener is intentionally NOT
     # attached -- SQLite does not use RLS.
     engine = db_mod._engine
-    listeners = event.contains(
-        engine, "checkout", db_mod._reset_tenant_guc_on_checkout
-    )
+    listeners = event.contains(engine, "checkout", db_mod._reset_tenant_guc_on_checkout)
     if engine.dialect.name == "sqlite":
         assert listeners is False, (
-            "SQLite engine should not have the tenant GUC reset "
-            "listener attached (no RLS; nothing to reset)"
+            "SQLite engine should not have the tenant GUC reset listener attached (no RLS; nothing to reset)"
         )
     else:
         assert listeners is True, (
@@ -158,16 +154,12 @@ def test_audit_export_honors_per_user_anonymization_marker():
         anonymized_at=None,
     )
 
-    anonymized_actor_ids = _collect_anonymized_actor_ids(
-        [historical_row, marker], tenant_id
-    )
+    anonymized_actor_ids = _collect_anonymized_actor_ids([historical_row, marker], tenant_id)
 
     assert str(erased_user_id) in anonymized_actor_ids
     assert _row_is_anonymized(historical_row, anonymized_actor_ids) is True
     assert _export_actor_id(historical_row, True).startswith("masked:")
-    assert _export_resource_id(historical_row, anonymized_actor_ids).startswith(
-        "masked:"
-    )
+    assert _export_resource_id(historical_row, anonymized_actor_ids).startswith("masked:")
 
 
 def test_audit_export_ignores_anonymization_marker_for_other_tenant():
@@ -344,9 +336,7 @@ async def test_system_metrics_forwards_service_credentials_with_tenant(monkeypat
         async def get(self, url, **kwargs):
             client_calls.append((url, kwargs))
             if url.endswith(f"/api/v1/compliance/score/{tenant_id}"):
-                return FakeResponse(
-                    {"overall_score": 97, "grade": "A", "events_analyzed": 12}
-                )
+                return FakeResponse({"overall_score": 97, "grade": "A", "events_analyzed": 12})
             return FakeResponse({"chain_length": 12, "chain_valid": True})
 
     class FakeResilientClient:
@@ -493,9 +483,7 @@ def test_brute_force_limiter_fallback_counts_in_memory(monkeypatch):
 
     from shared.rate_limit import BruteForceLimiter
 
-    bfl = BruteForceLimiter(
-        namespace="test_ns", max_failures=3, window_seconds=60
-    )
+    bfl = BruteForceLimiter(namespace="test_ns", max_failures=3, window_seconds=60)
     assert bfl.is_redis_backed is False
     assert bfl.is_limited("ip-a") is False
 
@@ -635,12 +623,10 @@ def test_get_tenant_scoped_session_default_uses_verify_path_tenant_matches():
     default = tenant_param.default
     # FastAPI Depends instances expose the wrapped callable as `.dependency`.
     assert isinstance(default, type(Depends(verify_path_tenant_matches))), (
-        "tenant_id default must be a Depends(...) so FastAPI runs the "
-        "path/auth cross-check before binding the GUC"
+        "tenant_id default must be a Depends(...) so FastAPI runs the path/auth cross-check before binding the GUC"
     )
     assert default.dependency is verify_path_tenant_matches, (
-        f"tenant_id default must wrap verify_path_tenant_matches; got "
-        f"{getattr(default, 'dependency', None)}"
+        f"tenant_id default must wrap verify_path_tenant_matches; got {getattr(default, 'dependency', None)}"
     )
 
 
@@ -668,8 +654,7 @@ async def test_get_auth_scoped_session_delegates_with_resolved_tenant_id():
     def fake_get_tenant_session(tenant_id):
         # Mirror the real generator: assert input, yield, observe cleanup.
         assert tenant_id == tenant_id_str, (
-            "wrapper must pass the resolved tenant_id through unchanged "
-            "so set_tenant_guc binds the right GUC value"
+            "wrapper must pass the resolved tenant_id through unchanged so set_tenant_guc binds the right GUC value"
         )
         try:
             yield fake_session
@@ -715,10 +700,8 @@ def test_get_auth_scoped_session_default_uses_resolve_tenant_context():
     default = ctx_param.default
 
     assert isinstance(default, type(Depends(resolve_tenant_context))), (
-        "ctx default must be a Depends(...) so FastAPI runs the "
-        "EPIC-A authoritative resolver before binding the GUC"
+        "ctx default must be a Depends(...) so FastAPI runs the EPIC-A authoritative resolver before binding the GUC"
     )
     assert default.dependency is resolve_tenant_context, (
-        f"ctx default must wrap resolve_tenant_context; got "
-        f"{getattr(default, 'dependency', None)}"
+        f"ctx default must wrap resolve_tenant_context; got {getattr(default, 'dependency', None)}"
     )

@@ -30,10 +30,8 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app import label_vision as lv
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Helpers / fakes
@@ -70,9 +68,7 @@ def _padded_png(size: int) -> bytes:
 
 def _choice(content):
     """Builds a response object shaped like openai chat.completions result."""
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-    )
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
 class _FakeCompletions:
@@ -124,10 +120,18 @@ def _install_openai(monkeypatch, *, response=None, raises: Exception | None = No
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
-        def debug(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
+
+        def debug(self, *a, **k):
+            pass
+
     monkeypatch.setattr(lv, "logger", _Silent())
 
 
@@ -142,7 +146,6 @@ def set_api_key(monkeypatch):
 
 
 class TestInputValidation:
-
     def test_missing_content_type_rejected(self):
         up = _FakeUpload(content_type=None, content=b"x")
         with pytest.raises(HTTPException) as exc_info:
@@ -197,7 +200,6 @@ class TestInputValidation:
 
 
 class TestUnavailableFallback:
-
     def test_missing_api_key_returns_unavailable(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         up = _FakeUpload(content_type="image/png", content=VALID_PNG)
@@ -219,7 +221,6 @@ class TestUnavailableFallback:
 
 
 class TestHappyPath:
-
     def test_model_response_maps_into_response_model(self, set_api_key, monkeypatch):
         parsed = {
             "product_name": "Organic Apples",
@@ -353,7 +354,6 @@ class TestHappyPath:
 
 
 class TestFailureModes:
-
     def test_empty_model_content_raises_502(self, set_api_key, monkeypatch):
         _install_openai(monkeypatch, response=_choice(None))
         up = _FakeUpload(content_type="image/png", content=VALID_PNG)
@@ -378,14 +378,17 @@ class TestFailureModes:
         assert exc_info.value.status_code == 502
         assert "unparseable" in exc_info.value.detail
 
-    @pytest.mark.parametrize("exc", [
-        AttributeError("no attr"),
-        TypeError("bad type"),
-        ValueError("bad value"),
-        KeyError("missing key"),
-        OSError("socket"),
-        IOError("io"),
-    ])
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            AttributeError("no attr"),
+            TypeError("bad type"),
+            ValueError("bad value"),
+            KeyError("missing key"),
+            OSError("socket"),
+            IOError("io"),
+        ],
+    )
     def test_client_exceptions_become_502(self, set_api_key, monkeypatch, exc):
         _install_openai(monkeypatch, raises=exc)
         up = _FakeUpload(content_type="image/png", content=VALID_PNG)
@@ -428,7 +431,6 @@ class TestFailureModes:
 
 
 class TestResponseModels:
-
     def test_extracted_kde_confidence_bounds(self):
         """ExtractedKDE.confidence is clamped to [0,1] by pydantic."""
         lv.ExtractedKDE(field="x", value="y", confidence=0.5)

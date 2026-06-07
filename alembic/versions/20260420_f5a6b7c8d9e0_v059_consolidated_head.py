@@ -37,8 +37,8 @@ This migration is a NO-OP: it exists only so the revision graph has a
 single head matching prod's stamp. `alembic upgrade head` on prod is
 therefore a no-op and deploys become green again.
 """
-from typing import Sequence, Union
 
+from typing import Sequence, Union
 
 # revision identifiers, used by Alembic.
 revision: str = "f5a6b7c8d9e0"

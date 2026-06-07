@@ -56,16 +56,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # Make services/ingestion importable.
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import incident_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # FakeSession — regex-keyed SQLAlchemy stand-in
@@ -190,11 +188,8 @@ def _incident_store_routes(
         )
         off = params.get("off", 0)
         lim = params.get("lim", 50)
-        rows = rows[off: off + lim]
-        return [
-            (iid, data, session.created_at.get(iid), session.updated_at.get(iid))
-            for iid, data in rows
-        ]
+        rows = rows[off : off + lim]
+        return [(iid, data, session.created_at.get(iid), session.updated_at.get(iid)) for iid, data in rows]
 
     routes: Dict[str, Callable[..., Any]] = {
         r"CREATE TABLE": _noop,
@@ -249,9 +244,7 @@ def _build_client(
 
 @pytest.fixture(autouse=True)
 def _disable_rate_limit(monkeypatch):
-    monkeypatch.setattr(
-        authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99)
-    )
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
 
 @pytest.fixture
@@ -267,6 +260,7 @@ def client(session):
 @pytest.fixture
 def open_incident(client):
     """Open an incident and return the id for downstream tests."""
+
     def _open(
         title: str = "Widget recall",
         severity: str = "critical",
@@ -288,6 +282,7 @@ def open_incident(client):
         )
         assert resp.status_code == 201, resp.text
         return resp.json()["incident_id"]
+
     return _open
 
 
@@ -305,11 +300,9 @@ READ_ENDPOINTS = [
 WRITE_ENDPOINTS = [
     ("POST", "/api/v1/incidents", {"title": "x", "commander": "y"}),
     ("PATCH", "/api/v1/incidents/some-id/status", {"status": "resolved"}),
-    ("POST", "/api/v1/incidents/some-id/actions",
-     {"title": "t", "assigned_to": "u"}),
+    ("POST", "/api/v1/incidents/some-id/actions", {"title": "t", "assigned_to": "u"}),
     ("PATCH", "/api/v1/incidents/some-id/actions/a1", {"status": "done"}),
-    ("POST", "/api/v1/incidents/some-id/updates",
-     {"author": "me", "message": "m"}),
+    ("POST", "/api/v1/incidents/some-id/updates", {"author": "me", "message": "m"}),
     ("POST", "/api/v1/incidents/some-id/close?closed_by=me", None),
 ]
 
@@ -324,9 +317,7 @@ class TestAuthGate:
         assert "incidents.read" in resp.json()["detail"]
 
     @pytest.mark.parametrize("method,url,body", WRITE_ENDPOINTS)
-    def test_write_endpoint_requires_incidents_write(
-        self, method, url, body, session
-    ):
+    def test_write_endpoint_requires_incidents_write(self, method, url, body, session):
         # Read scope is NOT enough for write endpoints.
         principal = _make_principal(scopes=["incidents.read"])
         c = _build_client(principal, session)
@@ -345,9 +336,7 @@ class TestAuthGate:
         """A tenant-bound principal with ``*`` scope MUST still be denied
         cross-tenant queries. Wildcard grants action breadth, not tenant
         breadth. Regression for 2026-05 audit fix (authz.py:385)."""
-        principal = _make_principal(
-            tenant_id="admin", scopes=["incidents.read", "*"]
-        )
+        principal = _make_principal(tenant_id="admin", scopes=["incidents.read", "*"])
         c = _build_client(principal, session)
         resp = c.get(f"/api/v1/incidents?tenant_id={OTHER_TENANT}")
         assert resp.status_code == 403
@@ -363,18 +352,20 @@ class TestDbUnavailable:
     """Every endpoint must translate ``db_session is None`` to HTTP
     503 so operators can distinguish outages from bugs."""
 
-    @pytest.mark.parametrize("method,url,body", [
-        ("GET", "/api/v1/incidents", None),
-        ("POST", "/api/v1/incidents", {"title": "x", "commander": "y"}),
-        ("GET", "/api/v1/incidents/x", None),
-        ("PATCH", "/api/v1/incidents/x/status", {"status": "resolved"}),
-        ("POST", "/api/v1/incidents/x/actions",
-         {"title": "t", "assigned_to": "u"}),
-        ("PATCH", "/api/v1/incidents/x/actions/a", {"status": "done"}),
-        ("POST", "/api/v1/incidents/x/updates", {"author": "me", "message": "m"}),
-        ("GET", "/api/v1/incidents/x/impact", None),
-        ("POST", "/api/v1/incidents/x/close?closed_by=me", None),
-    ])
+    @pytest.mark.parametrize(
+        "method,url,body",
+        [
+            ("GET", "/api/v1/incidents", None),
+            ("POST", "/api/v1/incidents", {"title": "x", "commander": "y"}),
+            ("GET", "/api/v1/incidents/x", None),
+            ("PATCH", "/api/v1/incidents/x/status", {"status": "resolved"}),
+            ("POST", "/api/v1/incidents/x/actions", {"title": "t", "assigned_to": "u"}),
+            ("PATCH", "/api/v1/incidents/x/actions/a", {"status": "done"}),
+            ("POST", "/api/v1/incidents/x/updates", {"author": "me", "message": "m"}),
+            ("GET", "/api/v1/incidents/x/impact", None),
+            ("POST", "/api/v1/incidents/x/close?closed_by=me", None),
+        ],
+    )
     def test_db_none_returns_503(self, method, url, body):
         principal = _make_principal()
         c = _build_client(principal, session=None)
@@ -409,9 +400,7 @@ class TestTenantResolution:
         # path (400) runs before the cross-tenant check (403). The 2026-05
         # audit fix means wildcard scope no longer waives the cross-tenant
         # check, so this test must isolate format validation explicitly.
-        principal = _make_principal(
-            tenant_id=None, scopes=["incidents.read", "*"]
-        )
+        principal = _make_principal(tenant_id=None, scopes=["incidents.read", "*"])
         c = _build_client(principal, session)
         resp = c.get("/api/v1/incidents?tenant_id=bad;tenant")
         assert resp.status_code == 400
@@ -464,9 +453,7 @@ class TestListIncidents:
             "limit": 50,
         }
 
-    def test_populated_list_returns_most_recent_first(
-        self, client, session, open_incident
-    ):
+    def test_populated_list_returns_most_recent_first(self, client, session, open_incident):
         iid_a = open_incident(title="A")
         iid_b = open_incident(title="B")
         resp = client.get("/api/v1/incidents")
@@ -534,9 +521,7 @@ class TestGetIncident:
 
 
 class TestUpdateStatus:
-    def test_happy_path_writes_new_status_and_logs_update(
-        self, client, session, open_incident
-    ):
+    def test_happy_path_writes_new_status_and_logs_update(self, client, session, open_incident):
         iid = open_incident()
         resp = client.patch(
             f"/api/v1/incidents/{iid}/status",
@@ -592,7 +577,8 @@ class TestAddAction:
         resp = client.post(
             f"/api/v1/incidents/{iid}/actions",
             json={
-                "title": "Triage", "assigned_to": "B",
+                "title": "Triage",
+                "assigned_to": "B",
                 "due_hours": 1,
             },
         )
@@ -701,7 +687,8 @@ class TestUpdateAction:
         ).json()["action_id"]
 
         resp = client.patch(
-            f"/api/v1/incidents/{iid}/actions/{aid}", json={},
+            f"/api/v1/incidents/{iid}/actions/{aid}",
+            json={},
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "pending"
@@ -713,9 +700,7 @@ class TestUpdateAction:
 
 
 class TestPostUpdate:
-    def test_appends_update_with_author_and_message(
-        self, client, open_incident
-    ):
+    def test_appends_update_with_author_and_message(self, client, open_incident):
         iid = open_incident()
         resp = client.post(
             f"/api/v1/incidents/{iid}/updates",
@@ -772,16 +757,10 @@ class TestImpactAssessment:
         assert body["impact"]["affected_records"] == 0
         assert body["impact"]["open_exceptions"] == 0
 
-    def test_affected_lots_run_count_queries(
-        self, client, session, open_incident
-    ):
+    def test_affected_lots_run_count_queries(self, client, session, open_incident):
         # Pre-arm the FakeSession with counts for this affected-lots query
-        session.routes[r"FROM fsma\.traceability_events"] = (
-            lambda _p, _s: (12,)
-        )
-        session.routes[r"FROM fsma\.exception_cases"] = (
-            lambda _p, _s: (3,)
-        )
+        session.routes[r"FROM fsma\.traceability_events"] = lambda _p, _s: (12,)
+        session.routes[r"FROM fsma\.exception_cases"] = lambda _p, _s: (3,)
         iid = open_incident(affected_lots=["LOT-1", "LOT-2"])
         resp = client.get(f"/api/v1/incidents/{iid}/impact")
         assert resp.status_code == 200
@@ -789,9 +768,7 @@ class TestImpactAssessment:
         assert body["impact"]["affected_records"] == 12
         assert body["impact"]["open_exceptions"] == 3
 
-    def test_counts_actions_by_status(
-        self, client, session, open_incident
-    ):
+    def test_counts_actions_by_status(self, client, session, open_incident):
         iid = open_incident()
         # Add three actions
         a1 = client.post(
@@ -820,9 +797,7 @@ class TestImpactAssessment:
         assert body["response"]["completed_actions"] == 2
         assert body["response"]["pending_actions"] == 1
 
-    def test_too_many_affected_lots_rejected_with_400(
-        self, client, session, open_incident
-    ):
+    def test_too_many_affected_lots_rejected_with_400(self, client, session, open_incident):
         """A runaway impact query must 400 before building a 1000+
         parameterized IN clause."""
         iid = open_incident(affected_lots=[f"LOT-{i}" for i in range(1001)])
@@ -830,17 +805,11 @@ class TestImpactAssessment:
         assert resp.status_code == 400
         assert "Too many affected lots" in resp.json()["detail"]
 
-    def test_none_scalar_treated_as_zero(
-        self, client, session, open_incident
-    ):
+    def test_none_scalar_treated_as_zero(self, client, session, open_incident):
         """If the COUNT aggregate returns None, router must default
         to 0 (not crash)."""
-        session.routes[r"FROM fsma\.traceability_events"] = (
-            lambda _p, _s: None
-        )
-        session.routes[r"FROM fsma\.exception_cases"] = (
-            lambda _p, _s: None
-        )
+        session.routes[r"FROM fsma\.traceability_events"] = lambda _p, _s: None
+        session.routes[r"FROM fsma\.exception_cases"] = lambda _p, _s: None
         iid = open_incident(affected_lots=["LOT-1"])
         body = client.get(f"/api/v1/incidents/{iid}/impact").json()
         assert body["impact"]["affected_records"] == 0
@@ -866,9 +835,7 @@ class TestImpactAssessment:
 
 
 class TestCloseIncident:
-    def test_sets_closed_status_and_metadata(
-        self, client, open_incident
-    ):
+    def test_sets_closed_status_and_metadata(self, client, open_incident):
         iid = open_incident()
         resp = client.post(
             f"/api/v1/incidents/{iid}/close",
@@ -924,9 +891,7 @@ class TestTenantScoping:
             if "tid" in params:
                 assert params["tid"] == TENANT
 
-    def test_update_status_scoped_to_tenant(
-        self, client, session, open_incident
-    ):
+    def test_update_status_scoped_to_tenant(self, client, session, open_incident):
         iid = open_incident()
         client.patch(
             f"/api/v1/incidents/{iid}/status",

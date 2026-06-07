@@ -11,6 +11,7 @@ SQL UPDATEs against the same connection that owns the SELECT, so a pure
 mock would leave the most likely-to-break code path (the WHERE
 predicate, the per-row commit) untested.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,7 +31,6 @@ sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "services"))
 
 from services.graph.app import audit_buffer_reconciler as r  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -112,9 +112,7 @@ def _seed(session, *, count=1, replay_attempts=0, age_hours=1):
                 "tenant_id": f"tenant_{i % 3}",
                 "actor": "user@example.com",
                 "event_type": "kde_read",
-                "payload": json.dumps(
-                    {"target_type": "Lot", "target_id": f"lot_{i}"}
-                ),
+                "payload": json.dumps({"target_type": "Lot", "target_id": f"lot_{i}"}),
                 "ofa": ofa,
                 "attempts": replay_attempts,
             },
@@ -125,10 +123,7 @@ def _seed(session, *, count=1, replay_attempts=0, age_hours=1):
 
 def _row(session, row_id):
     return session.execute(
-        text(
-            "SELECT replayed_at, replay_attempts FROM audit_log_buffer "
-            "WHERE id = :id"
-        ),
+        text("SELECT replayed_at, replay_attempts FROM audit_log_buffer WHERE id = :id"),
         {"id": row_id},
     ).fetchone()
 
@@ -166,9 +161,7 @@ def test_reconciler_replays_unreplayed_events(Session, session_factory):
     s.close()
 
 
-def test_reconciler_increments_attempts_on_primary_failure(
-    Session, session_factory
-):
+def test_reconciler_increments_attempts_on_primary_failure(Session, session_factory):
     s = Session()
     ids = _seed(s, count=1)
     s.close()
@@ -192,9 +185,7 @@ def test_reconciler_increments_attempts_on_primary_failure(
     s.close()
 
 
-def test_reconciler_dead_letters_after_max_attempts(
-    Session, session_factory, monkeypatch
-):
+def test_reconciler_dead_letters_after_max_attempts(Session, session_factory, monkeypatch):
     s = Session()
     # Seed with replay_attempts=4; max=5 means the next failure becomes
     # the 5th attempt and trips the dead-letter threshold.
@@ -213,6 +204,7 @@ def test_reconciler_dead_letters_after_max_attempts(
         def __getattr__(self, name):
             def _emit(event=None, **kwargs):
                 captured.append((name, event, kwargs))
+
             return _emit
 
     monkeypatch.setattr(r, "logger", _SpyLogger())
@@ -306,12 +298,8 @@ def test_reconciler_is_idempotent(Session, session_factory):
     def writer(**kwargs):
         calls.append(kwargs)
 
-    r1 = r.reconcile_audit_buffer(
-        primary_writer=writer, session_factory=session_factory
-    )
-    r2 = r.reconcile_audit_buffer(
-        primary_writer=writer, session_factory=session_factory
-    )
+    r1 = r.reconcile_audit_buffer(primary_writer=writer, session_factory=session_factory)
+    r2 = r.reconcile_audit_buffer(primary_writer=writer, session_factory=session_factory)
     assert r1.replayed == 3
     assert r2.scanned == 0  # all rows now have replayed_at set
     assert r2.replayed == 0

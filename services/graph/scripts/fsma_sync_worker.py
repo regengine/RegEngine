@@ -42,10 +42,7 @@ class FSMASyncWorker:
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD")
         if not neo4j_password:
-            raise ValueError(
-                "NEO4J_PASSWORD must be set. "
-                "Refusing to start with missing credentials."
-            )
+            raise ValueError("NEO4J_PASSWORD must be set. Refusing to start with missing credentials.")
 
         self.redis = redis.from_url(redis_url)
         self.driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
@@ -85,7 +82,9 @@ class FSMASyncWorker:
         elif event == "location.created":
             self._sync_location(data.get("location", {}))
         else:
-            logger.warning("sync_worker_skipped_unknown_event", event=event, tenant_id="system", request_id="worker-dispatch")
+            logger.warning(
+                "sync_worker_skipped_unknown_event", event=event, tenant_id="system", request_id="worker-dispatch"
+            )
 
     def _sync_cte(self, cte: dict[str, Any]) -> None:
         cte_id = cte.get("id")
@@ -237,6 +236,7 @@ class FSMASyncWorker:
             KNOWN_VERSIONS,
             TraceabilityEvent,
         )
+
         raw_version = event.get("schema_version", 1)
         try:
             peeked_version = TraceabilityEvent._coerce_schema_version(raw_version)
@@ -263,7 +263,8 @@ class FSMASyncWorker:
         # Validate database name to prevent injection via crafted tenant_id
         if db_name:
             import re
-            if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]{0,62}$', db_name):
+
+            if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]{0,62}$", db_name):
                 logger.warning("fsma_sync_invalid_db_name", db_name=db_name, tenant_id=tenant_id)
                 return
 

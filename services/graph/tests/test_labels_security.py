@@ -95,6 +95,7 @@ class TestTenantIDMandatory:
     def test_missing_tenant_id_raises_error(self):
         """Test that missing tenant ID (no auth) results in error."""
         from fastapi import FastAPI
+
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
@@ -125,6 +126,7 @@ class TestTenantIDMandatory:
     def test_empty_tenant_id_raises_error(self):
         """Test that empty X-Tenant-ID header is rejected."""
         from fastapi import FastAPI
+
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
@@ -185,12 +187,8 @@ class TestAtomicSerialGeneration:
         # Create request
         request = LabelBatchInitRequest(
             packer_gln="0614141000001",
-            product=ProductInfo(
-                gtin="00000012345678", description="Test Product", expected_units=1
-            ),
-            traceability=TraceabilityInfo(
-                lot_number="LOT-TEST-001", pack_date="2024-01-01"
-            ),
+            product=ProductInfo(gtin="00000012345678", description="Test Product", expected_units=1),
+            traceability=TraceabilityInfo(lot_number="LOT-TEST-001", pack_date="2024-01-01"),
             quantity=100,
             unit_of_measure=UnitOfMeasure.EA,
             packaging_level=PackagingLevel.ITEM,
@@ -229,6 +227,7 @@ class TestHealthEndpoint:
     def test_health_endpoint_returns_status(self):
         """Health endpoint should return service status information."""
         from fastapi import FastAPI
+
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
@@ -266,12 +265,8 @@ class TestErrorHandling:
 
         request = LabelBatchInitRequest(
             packer_gln="0614141000001",
-            product=ProductInfo(
-                gtin="00000012345678", description="Test Product", expected_units=1
-            ),
-            traceability=TraceabilityInfo(
-                lot_number="LOT-TEST-001", pack_date="2024-01-01"
-            ),
+            product=ProductInfo(gtin="00000012345678", description="Test Product", expected_units=1),
+            traceability=TraceabilityInfo(lot_number="LOT-TEST-001", pack_date="2024-01-01"),
             quantity=10,
             unit_of_measure=UnitOfMeasure.EA,
             packaging_level=PackagingLevel.ITEM,

@@ -69,9 +69,7 @@ class TestTextLoaderLimits1120:
 
         # Declare tiny Content-Length, then stream far more than MAX_DOC_BYTES.
         chunk_size = 1024 * 1024  # 1 MiB
-        over_cap_chunks = [b"\x00" * chunk_size] * (
-            (text_loader.MAX_DOC_BYTES // chunk_size) + 5
-        )
+        over_cap_chunks = [b"\x00" * chunk_size] * ((text_loader.MAX_DOC_BYTES // chunk_size) + 5)
         headers = {
             "Content-Type": "application/pdf",
             "Content-Length": "100",  # lie
@@ -136,9 +134,7 @@ class TestTextLoaderLimits1120:
                 "services.nlp.app.text_loader.httpx.stream",
                 return_value=_StreamCM(headers, [body]),
             ):
-                with patch(
-                    "services.nlp.app.text_loader.pdfminer"
-                ) as mock_pdfminer:
+                with patch("services.nlp.app.text_loader.pdfminer") as mock_pdfminer:
                     mock_pdfminer.extract_text.return_value = "Extracted PDF text"
 
                     result = load_artifact("https://example.com/doc.pdf")

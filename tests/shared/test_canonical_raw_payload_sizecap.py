@@ -51,16 +51,15 @@ service_dir = Path(__file__).resolve().parents[2] / "services"
 sys.path.insert(0, str(service_dir))
 
 from shared.canonical_event import (  # noqa: E402
-    CTEType,
-    IngestionSource,
     RAW_PAYLOAD_DEFAULT_MAX_BYTES,
     RAW_PAYLOAD_HARD_CEILING_BYTES,
+    CTEType,
+    IngestionSource,
     RawPayloadTooLargeError,
     TraceabilityEvent,
     _raw_payload_max_bytes,
 )
 from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: E402
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -157,12 +156,14 @@ def test_empty_raw_payload_passes():
 
 def test_small_raw_payload_passes():
     """A typical supplier record (a few hundred bytes) passes."""
-    event = _make_event(raw_payload={
-        "supplier": "Acme Foods",
-        "lot": "ABC-123",
-        "quantity": 100.0,
-        "notes": "harvested 2026-04-15",
-    })
+    event = _make_event(
+        raw_payload={
+            "supplier": "Acme Foods",
+            "lot": "ABC-123",
+            "quantity": 100.0,
+            "notes": "harvested 2026-04-15",
+        }
+    )
     event.prepare_for_persistence()
     assert event.sha256_hash is not None
 

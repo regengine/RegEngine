@@ -23,7 +23,6 @@ from typing import Optional, Tuple
 
 import structlog
 
-
 logger = structlog.get_logger("drain_webhook_outbox")
 
 
@@ -36,11 +35,11 @@ def _build_secret_lookup():
     own tenant_id in the HMAC header.
     """
     from app.database import SessionLocal
-    from app.sqlalchemy_models import TenantModel
     from app.metrics import (
-        _TENANT_SETTINGS_WEBHOOK_URL_KEY,
         _TENANT_SETTINGS_WEBHOOK_SECRET_KEY,
+        _TENANT_SETTINGS_WEBHOOK_URL_KEY,
     )
+    from app.sqlalchemy_models import TenantModel
 
     def lookup(tenant_id: str) -> Tuple[Optional[str], Optional[str]]:
         session = SessionLocal()
@@ -64,10 +63,7 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--once",
         action="store_true",
-        help=(
-            "Drain a single batch and exit (default). If absent the "
-            "caller is expected to re-invoke via cron."
-        ),
+        help=("Drain a single batch and exit (default). If absent the caller is expected to re-invoke via cron."),
     )
     args = parser.parse_args(argv)
 

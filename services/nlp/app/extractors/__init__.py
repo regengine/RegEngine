@@ -2,9 +2,16 @@
 
 from .fsma_extractor import FSMAExtractor
 from .fsma_types import (  # noqa: F401 — backward compat re-exports
-    CTEType, DocumentType, ExtractionConfidence,
-    LineItem, KDE, CTE, FSMAExtractionResult,
-    TOPIC_GRAPH_UPDATE, TOPIC_NEEDS_REVIEW, HITL_CONFIDENCE_THRESHOLD,
+    CTE,
+    HITL_CONFIDENCE_THRESHOLD,
+    KDE,
+    TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW,
+    CTEType,
+    DocumentType,
+    ExtractionConfidence,
+    FSMAExtractionResult,
+    LineItem,
 )
 from .llm_extractor import LLMGenerativeExtractor
 

@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import event as sa_event, inspect as sa_inspect, text
 from sqlalchemy.orm import Session
@@ -192,7 +192,9 @@ def dual_write_legacy(session: Session, event: "TraceabilityEvent") -> str:
             "product_description": event.product_reference or "",
             "quantity": event.quantity,
             "unit_of_measure": event.unit_of_measure,
-            "location_gln": event.from_facility_reference if event.from_facility_reference and len(event.from_facility_reference) == 13 else None,
+            "location_gln": event.from_facility_reference
+            if event.from_facility_reference and len(event.from_facility_reference) == 13
+            else None,
             "location_name": event.from_facility_reference or event.to_facility_reference,
             "event_timestamp": event.event_timestamp.isoformat(),
             "source": event.source_system.value,
@@ -278,6 +280,7 @@ def publish_graph_sync(event: "TraceabilityEvent") -> None:
 
     try:
         import redis as redis_lib
+
         client = redis_lib.from_url(redis_url)
         message = {
             "event": "canonical.created",
@@ -312,9 +315,13 @@ def publish_graph_sync(event: "TraceabilityEvent") -> None:
         max_queue = _neo4j_sync_max_queue()
         client.ltrim(_NEO4J_SYNC_QUEUE_KEY, -max_queue, -1)
     except Exception as exc:
-        logger.warning("canonical_graph_sync_failed", extra={
-            "event_id": str(event.event_id), "error": str(exc),
-        })
+        logger.warning(
+            "canonical_graph_sync_failed",
+            extra={
+                "event_id": str(event.event_id),
+                "error": str(exc),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -156,9 +156,7 @@ class TenantScopedNeo4jSession:
 
 
 @contextlib.contextmanager
-def session_with_tenant(
-    driver: Any, tenant_id: str
-) -> Iterator[TenantScopedNeo4jSession]:
+def session_with_tenant(driver: Any, tenant_id: str) -> Iterator[TenantScopedNeo4jSession]:
     """Open a Neo4j session bound to ``tenant_id``.
 
     Usage::

@@ -21,6 +21,10 @@ import uuid
 from typing import Optional, Union
 
 from fastapi import Depends, Header, Request
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, require_api_key
+from shared.database import get_db_session as _get_db_session
+from shared.tenant_context import TenantContext, resolve_tenant_context
 
 from .webhook_models import EventResult, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
@@ -30,19 +34,13 @@ from .webhook_router_v2 import (
     _validate_event_kdes,
     _verify_api_key as _verify_api_key_sync,
 )
-from shared.database import get_db_session as _get_db_session
-from shared.api_key_store import APIKeyResponse
-from shared.auth import APIKey, require_api_key
-from shared.tenant_context import TenantContext, resolve_tenant_context
 
 logger = logging.getLogger("webhook-compat")
 
 
 async def _verify_api_key(
     request: Request,
-    x_regengine_api_key: Optional[str] = Header(
-        default=None, alias="X-RegEngine-API-Key"
-    ),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> Union[APIKey, APIKeyResponse]:
     """Auth gate — delegates to shared.auth.require_api_key.
 
@@ -93,25 +91,20 @@ async def ingest_events(
     cannot forge cross-tenant writes even by accident.
     """
     if not principal_tenant_id:
-        raise PermissionError(
-            "ingest_events requires principal_tenant_id from authenticated context"
-        )
+        raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
 
     _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
 
     payload_tenant_id = payload.tenant_id
     if not payload_tenant_id:
-        raise ValueError(
-            "payload.tenant_id is required for symmetric verification with principal_tenant_id"
-        )
+        raise ValueError("payload.tenant_id is required for symmetric verification with principal_tenant_id")
     if payload_tenant_id != principal_tenant_id:
-        raise PermissionError(
-            "payload.tenant_id does not match authenticated principal"
-        )
+        raise PermissionError("payload.tenant_id does not match authenticated principal")
 
     tenant_id = principal_tenant_id
 
     from app.tenant_validation import validate_tenant_id
+
     validate_tenant_id(tenant_id)
 
     _check_rate_limit(tenant_id)
@@ -125,6 +118,7 @@ async def ingest_events(
 
     try:
         from shared.cte_persistence import CTEPersistence
+
         persistence = CTEPersistence(db_session)
     except (ImportError, RuntimeError, ConnectionError) as exc:
         # Exhaust the generator so cleanup runs
@@ -143,24 +137,28 @@ async def ingest_events(
                 f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
             )
             if dedup_key in seen_in_batch:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=["Duplicate event in batch"],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=["Duplicate event in batch"],
+                    )
+                )
                 rejected += 1
                 continue
             seen_in_batch.add(dedup_key)
 
             errors = _validate_event_kdes(event)
             if errors:
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=errors,
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=errors,
+                    )
+                )
                 rejected += 1
                 continue
 
@@ -198,10 +196,12 @@ async def ingest_events(
                 try:
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
+
                     canonical = normalize_webhook_event(event, tenant_id)
                     canonical_store = CanonicalEventStore(db_session, dual_write=False)
                     canonical_store.persist_event(canonical)
                     from shared.rules_engine import RulesEngine
+
                     engine = RulesEngine(db_session)
                     event_data = {
                         "event_id": str(canonical.event_id),
@@ -227,6 +227,7 @@ async def ingest_events(
                     # in those modes; under OFF it warns and returns
                     # so the legacy best-effort accept path remains.
                     from shared.rules.enforcement import handle_preeval_exception  # noqa: PLC0415
+
                     handle_preeval_exception(canon_err, where="webhook_compat")
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
 
@@ -239,7 +240,8 @@ async def ingest_events(
                 # flag is off or the rules path fails best-effort.
                 reject_reason: Optional[str] = None
                 if summary is not None:
-                    from shared.rules.enforcement import should_reject, current_mode
+                    from shared.rules.enforcement import current_mode, should_reject
+
                     should, reject_reason = should_reject(summary)
                     if should:
                         # Finding B — durable rejection audit row,
@@ -249,12 +251,11 @@ async def ingest_events(
                         # rejection trace lived in stdout only.
                         try:
                             from shared.rules.rejection_audit import (
-                                record_rejection,
                                 reasons_from_summary,
+                                record_rejection,
                             )
-                            _first_crit = (
-                                (summary.critical_failures or [None])[0]
-                            )
+
+                            _first_crit = (summary.critical_failures or [None])[0]
                             # ``summary is not None`` implies the try block
                             # above committed, so ``canonical`` is bound.
                             _canon_event_id = None
@@ -275,25 +276,29 @@ async def ingest_events(
                             logger.error("compat_rejection_audit_inline_error")
 
                         savepoint.rollback()
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="rejected",
-                            errors=[f"rule_violation: {reject_reason}"],
-                        ))
+                        results.append(
+                            EventResult(
+                                traceability_lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                status="rejected",
+                                errors=[f"rule_violation: {reject_reason}"],
+                            )
+                        )
                         rejected += 1
                         continue
 
                 # Accepted path. Savepoint commits the primary CTE write.
                 savepoint.commit()
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="accepted",
-                    event_id=store_result.event_id,
-                    sha256_hash=store_result.sha256_hash,
-                    chain_hash=store_result.chain_hash,
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="accepted",
+                        event_id=store_result.event_id,
+                        sha256_hash=store_result.sha256_hash,
+                        chain_hash=store_result.chain_hash,
+                    )
+                )
                 accepted += 1
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
@@ -304,6 +309,7 @@ async def ingest_events(
                     exc_sp = db_session.begin_nested()
                     try:
                         from shared.exception_queue import ExceptionQueueService
+
                         exc_svc = ExceptionQueueService(db_session)
                         exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
                         exc_sp.commit()
@@ -322,12 +328,14 @@ async def ingest_events(
                     type(exc).__name__,
                     str(exc),
                 )
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=[f"Internal storage error (correlation: {correlation_id})"],
-                ))
+                results.append(
+                    EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="rejected",
+                        errors=[f"Internal storage error (correlation: {correlation_id})"],
+                    )
+                )
                 rejected += 1
 
         if db_session:

@@ -7,24 +7,23 @@ including both current and superseded versions.
 
 from __future__ import annotations
 
+import sys
 import time
 import uuid
-import sys
 from pathlib import Path
 from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-
-from ..neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
+
 from ..audit_failure_policy import handle_audit_failure
 from ..fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log  # #1033 KDE_READ
+from ..neo4j_utils import Neo4jClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
-
 from shared.rate_limit import limiter
 
 router = APIRouter(tags=["Lineage"])
@@ -36,6 +35,7 @@ logger = structlog.get_logger("fact-lineage")
 
 class FactVersion(BaseModel):
     """A single version of a regulatory fact."""
+
     version: int
     record_hash: Optional[str] = None
     prev_hash: Optional[str] = None
@@ -50,6 +50,7 @@ class FactVersion(BaseModel):
 
 class FactLineageResponse(BaseModel):
     """Full version history for a fact."""
+
     tlc: str
     total_versions: int
     current_version: int
@@ -158,10 +159,7 @@ async def get_fact_lineage(
                     records = [dict(record) async for record in result]
 
         if not records:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No regulatory fact found for TLC '{tlc}'"
-            )
+            raise HTTPException(status_code=404, detail=f"No regulatory fact found for TLC '{tlc}'")
 
         # Build version list
         versions = []
@@ -189,30 +187,42 @@ async def get_fact_lineage(
 
             # Remove internal properties from the properties dict
             display_props = {
-                k: v for k, v in props.items()
-                if k not in {
-                    "tlc", "version", "record_hash", "prev_hash",
-                    "created_at", "superseded_at", "tenant_id",
-                    "source_document", "fact_type", "is_current",
-                    "identifier", "lot_number",
+                k: v
+                for k, v in props.items()
+                if k
+                not in {
+                    "tlc",
+                    "version",
+                    "record_hash",
+                    "prev_hash",
+                    "created_at",
+                    "superseded_at",
+                    "tenant_id",
+                    "source_document",
+                    "fact_type",
+                    "is_current",
+                    "identifier",
+                    "lot_number",
                 }
             }
 
             ver = record.get("version", 1) or 1
             max_version = max(max_version, ver)
 
-            versions.append(FactVersion(
-                version=ver,
-                record_hash=record.get("record_hash"),
-                prev_hash=record.get("prev_hash"),
-                created_at=str(record["created_at"]) if record.get("created_at") else None,
-                superseded_at=str(record["superseded_at"]) if record.get("superseded_at") else None,
-                superseded_by=record.get("superseded_by"),
-                is_current=bool(record.get("is_current", False)),
-                source_document=record.get("source_document"),
-                fact_type=record.get("fact_type"),
-                properties=display_props,
-            ))
+            versions.append(
+                FactVersion(
+                    version=ver,
+                    record_hash=record.get("record_hash"),
+                    prev_hash=record.get("prev_hash"),
+                    created_at=str(record["created_at"]) if record.get("created_at") else None,
+                    superseded_at=str(record["superseded_at"]) if record.get("superseded_at") else None,
+                    superseded_by=record.get("superseded_by"),
+                    is_current=bool(record.get("is_current", False)),
+                    source_document=record.get("source_document"),
+                    fact_type=record.get("fact_type"),
+                    properties=display_props,
+                )
+            )
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -253,7 +263,4 @@ async def get_fact_lineage(
         raise
     except Exception as e:
         logger.exception("lineage_query_error", tlc=tlc, error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")

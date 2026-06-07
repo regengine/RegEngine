@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -44,6 +45,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -71,6 +73,7 @@ def tenant_id():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -78,6 +81,7 @@ def workflow(db_session):
 def rules_engine(db_session):
     """Create a RulesEngine instance."""
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
 
 
@@ -85,6 +89,7 @@ def rules_engine(db_session):
 def canonical_store(db_session):
     """Create a CanonicalEventStore instance."""
     from shared.canonical_persistence import CanonicalEventStore
+
     return CanonicalEventStore(db_session)
 
 
@@ -152,6 +157,7 @@ def _make_events(tenant_id: str) -> List[Dict]:
 # The Test: Stale Evaluation Detection
 # ---------------------------------------------------------------------------
 
+
 class TestStaleEvaluationDetection:
     """Prove stale evaluation detection blocks submission correctly."""
 
@@ -160,13 +166,14 @@ class TestStaleEvaluationDetection:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
 
     def test_01_ingest_events(self, db_session, tenant_id, canonical_store):
         """Step 1: Ingest events into canonical store."""
-        from shared.canonical_event import TraceabilityEvent, IngestionSource
+        from shared.canonical_event import IngestionSource, TraceabilityEvent
 
         events = _make_events(tenant_id)
         persisted = []
@@ -187,9 +194,7 @@ class TestStaleEvaluationDetection:
                 to_facility_reference=event_data.get("to_facility_reference"),
                 kdes=event_data.get("kdes", {}),
                 confidence_score=event_data.get("confidence_score"),
-                source_system=IngestionSource(
-                    event_data.get("source_system", "csv_upload")
-                ),
+                source_system=IngestionSource(event_data.get("source_system", "csv_upload")),
                 status="active",
             )
             result = canonical_store.persist_event(te)
@@ -214,19 +219,22 @@ class TestStaleEvaluationDetection:
         assert len(events) >= 2, f"Expected >=2 events, got {len(events)}"
 
         for event in events:
-            full = db_session.execute(
-                text(
-                    "SELECT * FROM fsma.traceability_events "
-                    "WHERE event_id = :eid AND tenant_id = :tid"
-                ),
-                {"eid": str(event["event_id"]), "tid": tenant_id},
-            ).mappings().fetchone()
+            full = (
+                db_session.execute(
+                    text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
+                    {"eid": str(event["event_id"]), "tid": tenant_id},
+                )
+                .mappings()
+                .fetchone()
+            )
             if full:
                 event_dict = dict(full)
                 if event_dict.get("kdes") and isinstance(event_dict["kdes"], str):
                     event_dict["kdes"] = json.loads(event_dict["kdes"])
                 rules_engine.evaluate_event(
-                    event_dict, persist=True, tenant_id=tenant_id,
+                    event_dict,
+                    persist=True,
+                    tenant_id=tenant_id,
                 )
 
         # Verify evaluations were persisted
@@ -262,14 +270,13 @@ class TestStaleEvaluationDetection:
         case_id = self.__class__._case_id
 
         workflow.update_scope(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             scope_description="All stale eval test lots",
         )
 
         result = workflow.collect_records(tenant_id, case_id)
-        assert result["total_records"] >= 1, (
-            f"Expected >=1 records in scope, got {result['total_records']}"
-        )
+        assert result["total_records"] >= 1, f"Expected >=1 records in scope, got {result['total_records']}"
 
     def test_05_no_stale_evaluations_initially(self, db_session, tenant_id, workflow):
         """Step 5: Verify no stale_evaluations blocker when everything is fresh."""
@@ -277,14 +284,11 @@ class TestStaleEvaluationDetection:
         check = workflow.check_blocking_defects(tenant_id, case_id)
 
         stale_blockers = [
-            b for b in check["blockers"]
-            if b.get("category") == "stale_evaluations"
-            or b.get("type") == "stale_evaluations"
+            b
+            for b in check["blockers"]
+            if b.get("category") == "stale_evaluations" or b.get("type") == "stale_evaluations"
         ]
-        assert len(stale_blockers) == 0, (
-            f"Expected no stale evaluation blockers initially, "
-            f"got {stale_blockers}"
-        )
+        assert len(stale_blockers) == 0, f"Expected no stale evaluation blockers initially, got {stale_blockers}"
 
     def test_06_simulate_event_amendment(self, db_session, tenant_id):
         """Step 6: Simulate event amendment by setting amended_at in the future."""
@@ -326,29 +330,24 @@ class TestStaleEvaluationDetection:
         check = workflow.check_blocking_defects(tenant_id, case_id)
 
         stale_blockers = [
-            b for b in check["blockers"]
-            if b.get("category") == "stale_evaluations"
-            or b.get("type") == "stale_evaluations"
+            b
+            for b in check["blockers"]
+            if b.get("category") == "stale_evaluations" or b.get("type") == "stale_evaluations"
         ]
         assert len(stale_blockers) > 0, (
-            "Expected stale_evaluations blocker after event amendment, "
-            f"but got none. All blockers: {check['blockers']}"
+            f"Expected stale_evaluations blocker after event amendment, but got none. All blockers: {check['blockers']}"
         )
 
         blocker = stale_blockers[0]
         assert blocker["count"] >= 1
-        assert any(
-            d["reason"] == "event_modified" for d in blocker["details"]
-        ), f"Expected 'event_modified' reason in details: {blocker['details']}"
-
-        # Verify overall can_submit is False
-        assert not check["can_submit"], (
-            "Expected can_submit=False with stale evaluations"
+        assert any(d["reason"] == "event_modified" for d in blocker["details"]), (
+            f"Expected 'event_modified' reason in details: {blocker['details']}"
         )
 
-    def test_08_re_evaluate_clears_stale_event(
-        self, db_session, tenant_id, rules_engine
-    ):
+        # Verify overall can_submit is False
+        assert not check["can_submit"], "Expected can_submit=False with stale evaluations"
+
+    def test_08_re_evaluate_clears_stale_event(self, db_session, tenant_id, rules_engine):
         """Step 8: Re-evaluate the amended event to clear the stale blocker."""
         from sqlalchemy import text
 
@@ -365,13 +364,14 @@ class TestStaleEvaluationDetection:
         db_session.flush()
 
         # Re-evaluate
-        full = db_session.execute(
-            text(
-                "SELECT * FROM fsma.traceability_events "
-                "WHERE event_id = :eid AND tenant_id = :tid"
-            ),
-            {"eid": amended_event_id, "tid": tenant_id},
-        ).mappings().fetchone()
+        full = (
+            db_session.execute(
+                text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
+                {"eid": amended_event_id, "tid": tenant_id},
+            )
+            .mappings()
+            .fetchone()
+        )
 
         assert full, f"Event {amended_event_id} not found"
         event_dict = dict(full)
@@ -380,21 +380,18 @@ class TestStaleEvaluationDetection:
 
         rules_engine.evaluate_event(event_dict, persist=True, tenant_id=tenant_id)
 
-    def test_09_stale_blocker_cleared_after_re_evaluation(
-        self, db_session, tenant_id, workflow
-    ):
+    def test_09_stale_blocker_cleared_after_re_evaluation(self, db_session, tenant_id, workflow):
         """Step 9: After re-evaluation, stale_evaluations blocker should be gone."""
         case_id = self.__class__._case_id
         check = workflow.check_blocking_defects(tenant_id, case_id)
 
         stale_blockers = [
-            b for b in check["blockers"]
-            if b.get("category") == "stale_evaluations"
-            or b.get("type") == "stale_evaluations"
+            b
+            for b in check["blockers"]
+            if b.get("category") == "stale_evaluations" or b.get("type") == "stale_evaluations"
         ]
         assert len(stale_blockers) == 0, (
-            f"Expected no stale evaluation blockers after re-evaluation, "
-            f"got {stale_blockers}"
+            f"Expected no stale evaluation blockers after re-evaluation, got {stale_blockers}"
         )
 
     def test_10_simulate_rule_version_change(self, db_session, tenant_id):
@@ -430,17 +427,15 @@ class TestStaleEvaluationDetection:
         )
         db_session.flush()
 
-    def test_11_stale_evaluation_from_rule_version_change(
-        self, db_session, tenant_id, workflow
-    ):
+    def test_11_stale_evaluation_from_rule_version_change(self, db_session, tenant_id, workflow):
         """Step 11: After rule version bump, stale_evaluations blocker should appear."""
         case_id = self.__class__._case_id
         check = workflow.check_blocking_defects(tenant_id, case_id)
 
         stale_blockers = [
-            b for b in check["blockers"]
-            if b.get("category") == "stale_evaluations"
-            or b.get("type") == "stale_evaluations"
+            b
+            for b in check["blockers"]
+            if b.get("category") == "stale_evaluations" or b.get("type") == "stale_evaluations"
         ]
         assert len(stale_blockers) > 0, (
             "Expected stale_evaluations blocker after rule version change, "
@@ -448,14 +443,12 @@ class TestStaleEvaluationDetection:
         )
 
         blocker = stale_blockers[0]
-        assert any(
-            d["reason"] == "rule_version_changed" for d in blocker["details"]
-        ), f"Expected 'rule_version_changed' reason in details: {blocker['details']}"
+        assert any(d["reason"] == "rule_version_changed" for d in blocker["details"]), (
+            f"Expected 'rule_version_changed' reason in details: {blocker['details']}"
+        )
 
         # Verify can_submit is False
-        assert not check["can_submit"], (
-            "Expected can_submit=False with stale evaluations from rule change"
-        )
+        assert not check["can_submit"], "Expected can_submit=False with stale evaluations from rule change"
 
     def test_12_cleanup_rule_version(self, db_session, tenant_id):
         """Step 12: Restore rule version to avoid polluting other tests."""

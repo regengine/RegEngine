@@ -27,10 +27,10 @@ backwards-compatible. Every DDL statement is guarded with
 state (dev DBs that already have the ORM-created table, fresh DBs
 that don't, and partially-applied states).
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 # revision identifiers, used by Alembic.
 revision: str = "eaba6af7ae2c"

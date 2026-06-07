@@ -42,16 +42,13 @@ from app.sensitech_parser import router as sensitech_router
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse
 
-
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000001342"
 
 
 def _csv_with_timestamp(ts: str) -> bytes:
     """Build a minimal 2-row Sensitech CSV using the provided timestamp."""
     return (
-        "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
-        f"{ts}, 2.1, OK, ST-12345\n"
-        f"{ts}, 2.3, OK, ST-12345\n"
+        f"Timestamp, Temperature (°C), Alarm Status, Serial Number\n{ts}, 2.1, OK, ST-12345\n{ts}, 2.3, OK, ST-12345\n"
     ).encode("utf-8")
 
 
@@ -65,6 +62,7 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
     app = FastAPI()
     app.include_router(sensitech_router)
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app, default_tenant="tenant-sensitech-1")
 
@@ -131,9 +129,7 @@ def test_timestamp_without_dashes_fallback_is_currently_broken(
     assert "ISO 8601" in detail or "YYYYMMDD" in detail
 
 
-def test_compact_yyyymmdd_timestamp_still_accepted(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_compact_yyyymmdd_timestamp_still_accepted(client: TestClient, captured_payload: dict) -> None:
     """Compact ``YYYYMMDD`` dates must still work — that's why the fallback existed."""
     response = _post_sensitech(client, _csv_with_timestamp("20260226"))
 
@@ -144,9 +140,7 @@ def test_compact_yyyymmdd_timestamp_still_accepted(
     assert event.kdes["cooling_date"] == "2026-02-26"
 
 
-def test_standard_iso_timestamp_round_trips_unchanged(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_standard_iso_timestamp_round_trips_unchanged(client: TestClient, captured_payload: dict) -> None:
     """Baseline: dashed ISO 8601 timestamps pass through without modification.
 
     Note: we use an explicit-timezone form here. A separate, pre-existing bug
@@ -167,10 +161,7 @@ def test_empty_timestamp_produces_400(client: TestClient) -> None:
     """Whitespace-only timestamps are also rejected with 400."""
     # The parser skips rows whose first cell is empty, so this CSV has one
     # whitespace-only timestamp that survives as a valid reading.
-    csv_bytes = (
-        "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
-        "   , 2.1, OK, ST-12345\n"
-    ).encode("utf-8")
+    csv_bytes = ("Timestamp, Temperature (°C), Alarm Status, Serial Number\n   , 2.1, OK, ST-12345\n").encode("utf-8")
     response = _post_sensitech(client, csv_bytes)
 
     # Rows with empty first-cell are filtered out before reaching the
@@ -198,12 +189,7 @@ class TestParseSensitechCsvEdges:
         # Line 80: ``if not row: continue`` while hunting for the header
         # row. csv.reader emits ``[]`` for bare ``\n`` lines — the loop
         # must tolerate them and find the real header below.
-        csv_text = (
-            "\n"
-            "\n"
-            "Timestamp, Temperature (°C), Alarm Status, Serial Number\n"
-            "2026-02-26T08:00:00Z, 3.1, OK, ST-1\n"
-        )
+        csv_text = "\n\nTimestamp, Temperature (°C), Alarm Status, Serial Number\n2026-02-26T08:00:00Z, 3.1, OK, ST-1\n"
         readings = _parse_sensitech_csv(csv_text)
         assert len(readings) == 1
         assert readings[0].temperature_celsius == 3.1
@@ -211,10 +197,7 @@ class TestParseSensitechCsvEdges:
     def test_missing_header_defaults_to_assumed_schema(self) -> None:
         # Lines 90-91: no ``Timestamp``/``Time``/``Date`` keyword in any
         # row — parser falls through to the default column order.
-        csv_text = (
-            "2026-02-26T08:00:00Z,4.0,OK,ST-X\n"
-            "2026-02-26T08:15:00Z,4.5,OK,ST-X\n"
-        )
+        csv_text = "2026-02-26T08:00:00Z,4.0,OK,ST-X\n2026-02-26T08:15:00Z,4.5,OK,ST-X\n"
         readings = _parse_sensitech_csv(csv_text)
         assert len(readings) == 2
         assert readings[0].temperature_celsius == 4.0
@@ -352,9 +335,7 @@ class TestCteTypeValidation:
         assert response.status_code == 400
         assert "cte_type" in response.json()["detail"]
 
-    def test_receiving_cte_type_accepted(
-        self, client: TestClient, captured_payload: dict
-    ) -> None:
+    def test_receiving_cte_type_accepted(self, client: TestClient, captured_payload: dict) -> None:
         # Baseline: "receiving" is the other allowed cte_type.
         response = client.post(
             "/api/v1/ingest/iot/sensitech",

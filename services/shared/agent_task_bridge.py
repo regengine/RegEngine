@@ -15,8 +15,6 @@ from typing import Any, Literal, Mapping, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import text
-
 from shared.agent_artifacts import (
     AGENT_ARTIFACT_VERSION,
     AgentArtifact,
@@ -25,7 +23,7 @@ from shared.agent_artifacts import (
 )
 from shared.task_queue import enqueue_task, register_task_handler
 from shared.tenant_context import set_tenant_guc
-
+from sqlalchemy import text
 
 logger = logging.getLogger("agent_task_bridge")
 
@@ -120,8 +118,7 @@ class AgentArtifactTaskPayload(StrictAgentTaskModel):
 
         if mismatches:
             raise ValueError(
-                "agent artifact task payload does not match embedded artifact: "
-                + ", ".join(sorted(mismatches))
+                "agent artifact task payload does not match embedded artifact: " + ", ".join(sorted(mismatches))
             )
 
         return self
@@ -170,10 +167,7 @@ def build_agent_artifact_task_payload(
 def agent_artifact_idempotency_key(artifact: AgentArtifact | AgentArtifactTaskPayload) -> str:
     """Return the tenant-scoped queue idempotency key for an artifact task."""
 
-    return (
-        f"{AGENT_ARTIFACT_TASK_TYPE}:{artifact.tenant_id}:"
-        f"{artifact.artifact_id}:{AGENT_ARTIFACT_VERSION}"
-    )
+    return f"{AGENT_ARTIFACT_TASK_TYPE}:{artifact.tenant_id}:{artifact.artifact_id}:{AGENT_ARTIFACT_VERSION}"
 
 
 def enqueue_agent_artifact_task(
@@ -191,9 +185,7 @@ def enqueue_agent_artifact_task(
         priority
         if priority is not None
         else (
-            AGENT_ARTIFACT_HUMAN_REVIEW_PRIORITY
-            if payload.requires_human_review
-            else AGENT_ARTIFACT_DEFAULT_PRIORITY
+            AGENT_ARTIFACT_HUMAN_REVIEW_PRIORITY if payload.requires_human_review else AGENT_ARTIFACT_DEFAULT_PRIORITY
         )
     )
     return enqueue_task(
@@ -215,9 +207,7 @@ def persist_agent_artifact(
     """Persist the validated advisory artifact for operator review."""
 
     parsed = (
-        payload
-        if isinstance(payload, AgentArtifactTaskPayload)
-        else AgentArtifactTaskPayload.model_validate(payload)
+        payload if isinstance(payload, AgentArtifactTaskPayload) else AgentArtifactTaskPayload.model_validate(payload)
     )
     artifact = parsed.artifact
     db_session.execute(
@@ -277,9 +267,7 @@ def append_agent_artifact_receipt(
     """Append an advisory receipt to the ingestion-run ledger when possible."""
 
     parsed = (
-        payload
-        if isinstance(payload, AgentArtifactTaskPayload)
-        else AgentArtifactTaskPayload.model_validate(payload)
+        payload if isinstance(payload, AgentArtifactTaskPayload) else AgentArtifactTaskPayload.model_validate(payload)
     )
     if parsed.ingestion_run_id is None:
         return AgentLedgerBridgeResult(
@@ -383,9 +371,7 @@ def _receipt_metadata(payload: AgentArtifactTaskPayload) -> dict[str, Any]:
         "traceability": {
             "evidence_ids": [str(value) for value in payload.evidence_ids],
             "canonical_event_ids": [str(value) for value in payload.canonical_event_ids],
-            "ingestion_run_id": (
-                str(payload.ingestion_run_id) if payload.ingestion_run_id else None
-            ),
+            "ingestion_run_id": (str(payload.ingestion_run_id) if payload.ingestion_run_id else None),
             "source_hashes": list(payload.source_hashes),
             "rule_id": payload.rule_id,
             "rule_version": payload.rule_version,

@@ -12,15 +12,18 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
-
 from app.csv_templates import CTE_COLUMNS, _validate_kde_completeness
 from app.webhook_models import IngestEvent, WebhookCTEType
 
-
 EXPECTED_CTE_TYPES = {
-    "growing", "harvesting", "cooling", "initial_packing",
-    "first_land_based_receiving", "shipping",
-    "receiving", "transformation",
+    "growing",
+    "harvesting",
+    "cooling",
+    "initial_packing",
+    "first_land_based_receiving",
+    "shipping",
+    "receiving",
+    "transformation",
 }
 
 
@@ -58,6 +61,7 @@ class TestValidateKdeCompleteness:
     def _make_event(self, cte_type_str, **kdes_extra):
         """Build a minimal IngestEvent for a given CTE type."""
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc)
 
         # Pick a location field that satisfies the model validator

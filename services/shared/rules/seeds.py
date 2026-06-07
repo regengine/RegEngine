@@ -37,7 +37,9 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_entity_reference",
-            "params": {"fields": ["from_entity_reference", "kdes.immediate_previous_source", "kdes.ship_from_location"]},
+            "params": {
+                "fields": ["from_entity_reference", "kdes.immediate_previous_source", "kdes.ship_from_location"]
+            },
         },
         "failure_reason_template": "Receiving event missing {field_name} \u2014 cannot identify immediate previous source ({citation})",
         "remediation_suggestion": "Record the business name and location of the entity that shipped this food to you",
@@ -418,7 +420,14 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "from_facility_reference",
-            "params": {"fields": ["from_facility_reference", "to_facility_reference", "kdes.location_name", "kdes.location_gln"]},
+            "params": {
+                "fields": [
+                    "from_facility_reference",
+                    "to_facility_reference",
+                    "kdes.location_name",
+                    "kdes.location_gln",
+                ]
+            },
         },
         "failure_reason_template": "Event missing facility location identifier ({citation})",
         "remediation_suggestion": "Provide at least one location identifier: GLN (preferred) or location description",
@@ -568,7 +577,14 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "severity": "warning",
         "category": "lot_linkage",
         "applicability_conditions": {
-            "cte_types": ["harvesting", "cooling", "initial_packing", "first_land_based_receiving", "shipping", "receiving"],
+            "cte_types": [
+                "harvesting",
+                "cooling",
+                "initial_packing",
+                "first_land_based_receiving",
+                "shipping",
+                "receiving",
+            ],
             "ftl_scope": ["ALL"],
         },
         "citation_reference": "21 CFR \u00a71.1310(a)",
@@ -608,7 +624,15 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         "evaluation_logic": {
             "type": "multi_field_presence",
             "field": "ftl_covered",
-            "params": {"fields": ["ftl_covered", "kdes.ftl_covered", "kdes.ftl_category", "product.category", "product_category"]},
+            "params": {
+                "fields": [
+                    "ftl_covered",
+                    "kdes.ftl_covered",
+                    "kdes.ftl_category",
+                    "product.category",
+                    "product_category",
+                ]
+            },
         },
         "failure_reason_template": (
             "Event missing FTL classification \u2014 cannot determine whether "

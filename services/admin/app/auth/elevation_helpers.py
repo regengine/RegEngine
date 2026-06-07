@@ -8,6 +8,7 @@ without a circular dependency on auth_routes.
 callers/tests that reference ``ar._revoke_all_elevation_tokens_for_user``
 continue to work unchanged.
 """
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -22,9 +23,7 @@ _ELEVATION_JTI_KEY_PREFIX = "elevation_jti:"
 _ELEVATION_TOKEN_TTL_SECONDS = 300  # 5 minutes — matches token exp_delta
 
 
-async def _revoke_all_elevation_tokens_for_user(
-    session_store: RedisSessionStore, user_id: UUID
-) -> int:
+async def _revoke_all_elevation_tokens_for_user(session_store: RedisSessionStore, user_id: UUID) -> int:
     """Scan the elevation-jti keyspace and delete entries belonging to this user.
 
     Called from password change / reset paths so that a 5-minute elevation token

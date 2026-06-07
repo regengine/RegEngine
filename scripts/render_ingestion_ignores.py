@@ -12,6 +12,7 @@ Output is a single line of space-separated flags, e.g.
 Exits non-zero if any listed file is missing on disk — keeps the allowlist
 honest after deletes/renames.
 """
+
 from __future__ import annotations
 
 import sys
@@ -58,8 +59,7 @@ def main() -> int:
         flags.append(f"--ignore={path.relative_to(REPO_ROOT)}")
     if missing:
         print(
-            "ERROR: suite-runs.toml lists files that no longer exist: "
-            + ", ".join(missing),
+            "ERROR: suite-runs.toml lists files that no longer exist: " + ", ".join(missing),
             file=sys.stderr,
         )
         return 2

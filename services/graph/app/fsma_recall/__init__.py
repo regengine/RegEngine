@@ -23,35 +23,35 @@ This module provides:
 - RecallResult: Captures drill outcomes with SLA metrics
 - RecallSchedule: Manages periodic recall drill scheduling
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-# --- Re-exports: models ------------------------------------------------
-from .models import (  # noqa: F401
-    RecallStatus,
-    RecallType,
-    RecallSeverity,
-    SLAStatus,
-    AffectedFacility,
-    RecallDrill,
-    RecallResult,
-    ScheduledDrill,
-)
-
 # --- Re-exports: engine -------------------------------------------------
 from .engine import MockRecallEngine  # noqa: F401
 
-# --- Re-exports: persistence (internal helpers, but previously importable)
-from .persistence import (  # noqa: F401
-    _get_db_engine,
-    _upsert_drill_row,
-    _update_drill_row,
-    _load_drills_from_db,
-    _load_drill_by_id_from_db,
-    _dict_to_recall_drill,
+# --- Re-exports: models ------------------------------------------------
+from .models import (  # noqa: F401
+    AffectedFacility,
+    RecallDrill,
+    RecallResult,
+    RecallSeverity,
+    RecallStatus,
+    RecallType,
+    ScheduledDrill,
+    SLAStatus,
 )
 
+# --- Re-exports: persistence (internal helpers, but previously importable)
+from .persistence import (  # noqa: F401
+    _dict_to_recall_drill,
+    _get_db_engine,
+    _load_drill_by_id_from_db,
+    _load_drills_from_db,
+    _update_drill_row,
+    _upsert_drill_row,
+)
 
 # ============================================================================
 # GLOBAL INSTANCE & CONVENIENCE FUNCTIONS

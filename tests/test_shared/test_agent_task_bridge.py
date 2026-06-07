@@ -8,15 +8,14 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import shared.agent_task_bridge as bridge
 from jsonschema import Draft202012Validator, ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
-
 from shared.agent_artifacts import (
     AgentArtifact,
     AgentArtifactContext,
     FieldMappingSuggestionPayload,
 )
-import shared.agent_task_bridge as bridge
 from shared.agent_task_bridge import (
     AGENT_ARTIFACT_TASK_TYPE,
     AGENT_ARTIFACT_TASK_VERSION,
@@ -28,7 +27,6 @@ from shared.agent_task_bridge import (
     persist_agent_artifact,
     register_agent_bridge_handlers,
 )
-
 
 SCHEMA_PATH = Path("data-schemas/events/agent.task.schema.json")
 SHA256 = "b" * 64
@@ -130,8 +128,7 @@ def test_enqueue_agent_artifact_task_uses_idempotent_tenant_scoped_queue_key(mon
                 "tenant_id": str(artifact.tenant_id),
                 "priority": 50,
                 "idempotency_key": (
-                    f"{AGENT_ARTIFACT_TASK_TYPE}:{artifact.tenant_id}:"
-                    f"{artifact.artifact_id}:agent-artifact.v1"
+                    f"{AGENT_ARTIFACT_TASK_TYPE}:{artifact.tenant_id}:{artifact.artifact_id}:agent-artifact.v1"
                 ),
                 "scheduled_at": None,
                 "visibility_timeout_seconds": 120,
@@ -200,9 +197,7 @@ def test_append_agent_artifact_receipt_records_advisory_metadata():
     metadata = json.loads(params["metadata"])
     assert metadata["agent_artifact"]["artifact_id"] == str(artifact.artifact_id)
     assert metadata["agent_artifact"]["artifact_type"] == artifact.artifact_type
-    assert metadata["traceability"]["evidence_ids"] == [
-        str(value) for value in artifact.context.evidence_ids
-    ]
+    assert metadata["traceability"]["evidence_ids"] == [str(value) for value in artifact.context.evidence_ids]
     assert metadata["traceability"]["source_hashes"] == [SHA256]
     assert metadata["advisory_contract"] == "propose_never_decide"
 
@@ -222,9 +217,7 @@ def test_persist_agent_artifact_inserts_flattened_operator_fields():
     assert params["artifact_type"] == artifact.artifact_type
     assert params["ingestion_run_id"] == str(artifact.context.ingestion_run_id)
     assert params["evidence_ids"] == [str(value) for value in artifact.context.evidence_ids]
-    assert params["canonical_event_ids"] == [
-        str(value) for value in artifact.context.canonical_event_ids
-    ]
+    assert params["canonical_event_ids"] == [str(value) for value in artifact.context.canonical_event_ids]
     assert params["source_hashes"] == [SHA256]
 
 

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 import app.authz as authz
 import app.inflow_workbench as workbench
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.inflow_workbench import router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def _principal(

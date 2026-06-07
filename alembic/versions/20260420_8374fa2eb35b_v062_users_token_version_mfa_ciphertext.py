@@ -36,10 +36,10 @@ this migration is safe on a live database without blocking writes.
 Uses ``ADD COLUMN IF NOT EXISTS`` for idempotence (local dev / CI
 fixtures where Flyway may have run).
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "8374fa2eb35b"
 down_revision: Union[str, Sequence[str], None] = "57e83b393ff6"

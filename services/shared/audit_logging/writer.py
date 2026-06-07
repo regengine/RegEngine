@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from shared.audit_logging.integrity import AuditIntegrity
 from shared.audit_logging.schema import (
     AuditActor,
     AuditContext,
@@ -21,7 +22,6 @@ from shared.audit_logging.schema import (
     AuditResource,
     AuditSeverity,
 )
-from shared.audit_logging.integrity import AuditIntegrity
 from shared.audit_logging.storage import AuditStorageBackend, InMemoryAuditStorage
 
 logger = logging.getLogger(__name__)
@@ -196,8 +196,12 @@ class AuditLogger:
     # =========================================================================
 
     async def log_login_success(
-        self, user_id: str, username: str, ip_address: str,
-        user_agent: Optional[str] = None, tenant_id: Optional[str] = None,
+        self,
+        user_id: str,
+        username: str,
+        ip_address: str,
+        user_agent: Optional[str] = None,
+        tenant_id: Optional[str] = None,
         mfa_used: bool = False,
     ) -> AuditEvent:
         """Log successful login."""
@@ -206,17 +210,27 @@ class AuditLogger:
             category=AuditEventCategory.AUTHENTICATION,
             severity=AuditSeverity.INFO,
             actor=AuditActor(
-                actor_id=user_id, actor_type="user", username=username,
-                ip_address=ip_address, user_agent=user_agent, tenant_id=tenant_id,
+                actor_id=user_id,
+                actor_type="user",
+                username=username,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                tenant_id=tenant_id,
             ),
-            action="login", outcome="success",
+            action="login",
+            outcome="success",
             message=f"User {username} logged in successfully",
-            details={"mfa_used": mfa_used}, tags=["authentication"],
+            details={"mfa_used": mfa_used},
+            tags=["authentication"],
         )
 
     async def log_login_failure(
-        self, username: str, ip_address: str, reason: str,
-        user_agent: Optional[str] = None, tenant_id: Optional[str] = None,
+        self,
+        username: str,
+        ip_address: str,
+        reason: str,
+        user_agent: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> AuditEvent:
         """Log failed login attempt."""
         return await self.log(
@@ -224,33 +238,48 @@ class AuditLogger:
             category=AuditEventCategory.AUTHENTICATION,
             severity=AuditSeverity.WARNING,
             actor=AuditActor(
-                actor_id=f"unknown:{username}", actor_type="user", username=username,
-                ip_address=ip_address, user_agent=user_agent, tenant_id=tenant_id,
+                actor_id=f"unknown:{username}",
+                actor_type="user",
+                username=username,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                tenant_id=tenant_id,
             ),
-            action="login", outcome="failure",
+            action="login",
+            outcome="failure",
             message=f"Login failed for {username}: {reason}",
-            details={"reason": reason}, tags=["authentication", "security"],
+            details={"reason": reason},
+            tags=["authentication", "security"],
         )
 
     async def log_access_denied(
-        self, actor: AuditActor, resource: AuditResource,
-        required_permission: str, context: Optional[AuditContext] = None,
+        self,
+        actor: AuditActor,
+        resource: AuditResource,
+        required_permission: str,
+        context: Optional[AuditContext] = None,
     ) -> AuditEvent:
         """Log access denied event."""
         return await self.log(
             event_type=AuditEventType.ACCESS_DENIED,
             category=AuditEventCategory.AUTHORIZATION,
             severity=AuditSeverity.WARNING,
-            actor=actor, action="access", outcome="denied",
-            resource=resource, context=context,
+            actor=actor,
+            action="access",
+            outcome="denied",
+            resource=resource,
+            context=context,
             message=f"Access denied: {required_permission} on {resource.resource_type}/{resource.resource_id}",
             details={"required_permission": required_permission},
             tags=["authorization", "security"],
         )
 
     async def log_data_access(
-        self, actor: AuditActor, resource: AuditResource,
-        access_type: str = "read", fields_accessed: Optional[List[str]] = None,
+        self,
+        actor: AuditActor,
+        resource: AuditResource,
+        access_type: str = "read",
+        fields_accessed: Optional[List[str]] = None,
         context: Optional[AuditContext] = None,
     ) -> AuditEvent:
         """Log data access event."""
@@ -258,16 +287,22 @@ class AuditLogger:
             event_type=AuditEventType.DATA_READ,
             category=AuditEventCategory.DATA_ACCESS,
             severity=AuditSeverity.INFO,
-            actor=actor, action=access_type, outcome="success",
-            resource=resource, context=context,
+            actor=actor,
+            action=access_type,
+            outcome="success",
+            resource=resource,
+            context=context,
             message=f"Data accessed: {resource.resource_type}/{resource.resource_id}",
             details={"fields_accessed": fields_accessed or []},
             tags=["data_access"],
         )
 
     async def log_data_modification(
-        self, actor: AuditActor, resource: AuditResource,
-        operation: str, changes: Optional[Dict[str, Any]] = None,
+        self,
+        actor: AuditActor,
+        resource: AuditResource,
+        operation: str,
+        changes: Optional[Dict[str, Any]] = None,
         context: Optional[AuditContext] = None,
     ) -> AuditEvent:
         """Log data modification event."""
@@ -280,16 +315,22 @@ class AuditLogger:
             event_type=event_type_map.get(operation, AuditEventType.DATA_UPDATE),
             category=AuditEventCategory.DATA_MODIFICATION,
             severity=AuditSeverity.INFO,
-            actor=actor, action=operation, outcome="success",
-            resource=resource, context=context,
+            actor=actor,
+            action=operation,
+            outcome="success",
+            resource=resource,
+            context=context,
             message=f"Data {operation}: {resource.resource_type}/{resource.resource_id}",
             details={"changes": changes or {}},
             tags=["data_modification"],
         )
 
     async def log_security_event(
-        self, event_type: AuditEventType, actor: AuditActor,
-        description: str, severity: AuditSeverity = AuditSeverity.WARNING,
+        self,
+        event_type: AuditEventType,
+        actor: AuditActor,
+        description: str,
+        severity: AuditSeverity = AuditSeverity.WARNING,
         details: Optional[Dict[str, Any]] = None,
         context: Optional[AuditContext] = None,
     ) -> AuditEvent:
@@ -298,14 +339,21 @@ class AuditLogger:
             event_type=event_type,
             category=AuditEventCategory.SECURITY,
             severity=severity,
-            actor=actor, action="security_event", outcome="detected",
-            context=context, message=description,
-            details=details or {}, tags=["security", "alert"],
+            actor=actor,
+            action="security_event",
+            outcome="detected",
+            context=context,
+            message=description,
+            details=details or {},
+            tags=["security", "alert"],
         )
 
     async def log_sensitive_data_access(
-        self, actor: AuditActor, resource: AuditResource,
-        data_classification: str, reason: str,
+        self,
+        actor: AuditActor,
+        resource: AuditResource,
+        data_classification: str,
+        reason: str,
         context: Optional[AuditContext] = None,
     ) -> AuditEvent:
         """Log access to sensitive/PII data."""
@@ -313,8 +361,11 @@ class AuditLogger:
             event_type=AuditEventType.SENSITIVE_DATA_ACCESS,
             category=AuditEventCategory.DATA_ACCESS,
             severity=AuditSeverity.INFO,
-            actor=actor, action="sensitive_access", outcome="success",
-            resource=resource, context=context,
+            actor=actor,
+            action="sensitive_access",
+            outcome="success",
+            resource=resource,
+            context=context,
             message=f"Sensitive data accessed: {resource.resource_type}/{resource.resource_id}",
             details={
                 "data_classification": data_classification,
@@ -328,6 +379,7 @@ class AuditLogger:
 # Audit Decorator
 # =============================================================================
 
+
 def audit_action(
     event_type: AuditEventType,
     category: AuditEventCategory,
@@ -335,6 +387,7 @@ def audit_action(
     resource_type: Optional[str] = None,
 ):
     """Decorator to automatically audit a function call."""
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
@@ -388,12 +441,14 @@ def audit_action(
             return result
 
         return wrapper
+
     return decorator
 
 
 # =============================================================================
 # Convenience Functions
 # =============================================================================
+
 
 def get_audit_logger() -> AuditLogger:
     """Get the global audit logger instance."""

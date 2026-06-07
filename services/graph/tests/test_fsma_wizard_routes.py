@@ -84,9 +84,7 @@ def _restore_sys_modules_on_teardown():
 # graph dependency chain).
 # ---------------------------------------------------------------------------
 _engine_path = _repo_root / "services" / "graph" / "app" / "fsma_engine.py"
-_espec = importlib.util.spec_from_file_location(
-    "services.graph.app.fsma_engine", _engine_path
-)
+_espec = importlib.util.spec_from_file_location("services.graph.app.fsma_engine", _engine_path)
 _engine_mod = importlib.util.module_from_spec(_espec)
 sys.modules["services.graph.app.fsma_engine"] = _engine_mod
 sys.modules["fsma_engine_module"] = _engine_mod
@@ -188,7 +186,9 @@ class TestApplicabilityEndpoint:
         assert data["is_applicable"] is False
 
     def test_multiple_categories(self, client):
-        data = client.post("/v1/fsma/wizard/applicability", json={"selections": ["eggs", "tomatoes", "crustaceans"]}).json()
+        data = client.post(
+            "/v1/fsma/wizard/applicability", json={"selections": ["eggs", "tomatoes", "crustaceans"]}
+        ).json()
         assert data["is_applicable"] is True
         assert len(data["covered_categories"]) == 3
 
@@ -261,8 +261,12 @@ class TestExemptionsEndpoint:
 
     def test_all_no_not_exempt(self, client):
         answers = {
-            "small-producer": False, "kill-step": False, "direct-to-consumer": False,
-            "small-retail": False, "rarely-consumed-raw": False, "usda-jurisdiction": False,
+            "small-producer": False,
+            "kill-step": False,
+            "direct-to-consumer": False,
+            "small-retail": False,
+            "rarely-consumed-raw": False,
+            "usda-jurisdiction": False,
         }
         data = client.post("/v1/fsma/wizard/exemptions", json={"answers": answers}).json()
         assert data["status"] == "NOT_EXEMPT"

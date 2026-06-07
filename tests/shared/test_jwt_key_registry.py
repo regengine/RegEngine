@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import jwt
 import pytest
-
 from shared.jwt_key_registry import (
     DEFAULT_GRACE_PERIOD_SECONDS,
     REDIS_KEY,
@@ -28,7 +27,6 @@ from shared.jwt_key_registry import (
     generate_kid,
     generate_signing_secret,
 )
-
 
 # ── Utilities ────────────────────────────────────────────────────────
 
@@ -59,7 +57,9 @@ class TestGenerateSigningSecret:
 
 class TestSigningKey:
     def test_round_trip(self):
-        key = SigningKey(kid="re-test-0001", secret="s3cret", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        key = SigningKey(
+            kid="re-test-0001", secret="s3cret", algorithm="HS256"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         d = key.to_dict()
         restored = SigningKey.from_dict(d)
         assert restored.kid == key.kid
@@ -101,7 +101,9 @@ class TestRegistryInitialize:
         keys = await registry.get_all_keys()
         assert len(keys) == 1
         assert keys[0].kid == "re-legacy-0001"
-        assert keys[0].secret == "test-legacy-secret-key-1234"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        assert (
+            keys[0].secret == "test-legacy-secret-key-1234"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         assert keys[0].is_active is True
         assert keys[0].is_valid is True
 
@@ -135,7 +137,9 @@ class TestRegistryInitialize:
         monkeypatch.setenv("AUTH_SECRET_KEY", "should-not-be-used")
         redis = FakeAsyncRedis()
 
-        existing = SigningKey(kid="re-existing-0001", secret="pre-existing")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        existing = SigningKey(
+            kid="re-existing-0001", secret="pre-existing"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
         redis.store[REDIS_KEY] = json.dumps([existing.to_dict()])
 
         registry = JWTKeyRegistry(redis_client=redis)
@@ -166,7 +170,9 @@ class TestGetSigningKey:
 
         key = registry._env_fallback_key()
         assert key.kid == "re-legacy-0001"
-        assert key.secret == "env-fallback-secret"  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        assert (
+            key.secret == "env-fallback-secret"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
 
 class TestGetVerificationKeys:

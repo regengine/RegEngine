@@ -33,7 +33,6 @@ import contextlib
 from typing import Any, Iterable, Iterator, List, Optional, Tuple
 
 import structlog
-
 from shared.observability.correlation import (
     CORRELATION_ID_HEADER,
     correlation_id_ctx,

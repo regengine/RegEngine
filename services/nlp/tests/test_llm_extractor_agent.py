@@ -1,10 +1,12 @@
-import pytest
 import json
 from unittest.mock import Mock, patch
+
+import pytest
+
 from services.nlp.app.extractors.llm_extractor import (
-    LLMGenerativeExtractor,
-    LLMExtraction,
     LLMClientFactory,
+    LLMExtraction,
+    LLMGenerativeExtractor,
     OllamaClient,
 )
 
@@ -22,11 +24,9 @@ class TestLLMAgent:
 
     def test_happy_path(self, mock_client):
         """Ensure valid JSON parses correctly on first try."""
-        mock_client.generate.return_value = json.dumps({
-            "results": [
-                {"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": 0.9}
-            ]
-        })
+        mock_client.generate.return_value = json.dumps(
+            {"results": [{"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": 0.9}]}
+        )
 
         extractor = LLMGenerativeExtractor()
         results = extractor.extract("Must report data within 24 hours.", "US-NY")
@@ -39,10 +39,7 @@ class TestLLMAgent:
     def test_self_correction_json_error(self, mock_client):
         """Agent should retry if JSON is malformed."""
         # First attempt returns garbage, second returns valid JSON
-        mock_client.generate.side_effect = [
-            "I am a chat bot not JSON",
-            json.dumps({"results": []})
-        ]
+        mock_client.generate.side_effect = ["I am a chat bot not JSON", json.dumps({"results": []})]
 
         extractor = LLMGenerativeExtractor()
         extractor.extract("some text", "US-NY")
@@ -58,12 +55,16 @@ class TestLLMAgent:
     def test_self_correction_schema_error(self, mock_client):
         """Agent should retry if Schema validation fails."""
         # Invalid type for 'confidence' - provision_text must be at least 5 chars per schema
-        invalid_json = json.dumps({
-            "results": [{"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": "HIGH"}]
-        })
-        valid_json = json.dumps({
-            "results": [{"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": 0.9}]
-        })
+        invalid_json = json.dumps(
+            {
+                "results": [
+                    {"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": "HIGH"}
+                ]
+            }
+        )
+        valid_json = json.dumps(
+            {"results": [{"provision_text": "Must report data", "obligation_type": "REQUIREMENT", "confidence": 0.9}]}
+        )
 
         mock_client.generate.side_effect = [invalid_json, valid_json]
 
@@ -92,11 +93,13 @@ class TestLLMAgent:
 
     def test_hallucination_drops_fabricated_item(self, mock_client):
         """Hallucinated provisions are DROPPED, not kept at 0.5 (#1117)."""
-        mock_client.generate.return_value = json.dumps({
-            "results": [
-                {"provision_text": "hallucinated quote", "obligation_type": "REQUIREMENT", "confidence": 0.95}
-            ]
-        })
+        mock_client.generate.return_value = json.dumps(
+            {
+                "results": [
+                    {"provision_text": "hallucinated quote", "obligation_type": "REQUIREMENT", "confidence": 0.95}
+                ]
+            }
+        )
 
         extractor = LLMGenerativeExtractor()
         results = extractor.extract("actual source text with different content", "US-NY")
@@ -107,11 +110,17 @@ class TestLLMAgent:
 
     def test_provision_text_present_keeps_confidence(self, mock_client):
         """Provision text in source should keep original confidence."""
-        mock_client.generate.return_value = json.dumps({
-            "results": [
-                {"provision_text": "must file reports quarterly", "obligation_type": "REPORTING", "confidence": 0.95}
-            ]
-        })
+        mock_client.generate.return_value = json.dumps(
+            {
+                "results": [
+                    {
+                        "provision_text": "must file reports quarterly",
+                        "obligation_type": "REPORTING",
+                        "confidence": 0.95,
+                    }
+                ]
+            }
+        )
 
         extractor = LLMGenerativeExtractor()
         results = extractor.extract("Entities must file reports quarterly as per section 5.", "US-NY")
@@ -131,13 +140,15 @@ class TestLLMAgent:
 
     def test_multiple_results_extracted(self, mock_client):
         """Should handle multiple extractions."""
-        mock_client.generate.return_value = json.dumps({
-            "results": [
-                {"provision_text": "must report", "obligation_type": "REPORTING", "confidence": 0.9},
-                {"provision_text": "shall not disclose", "obligation_type": "PROHIBITION", "confidence": 0.85},
-                {"provision_text": "required to maintain", "obligation_type": "REQUIREMENT", "confidence": 0.88},
-            ]
-        })
+        mock_client.generate.return_value = json.dumps(
+            {
+                "results": [
+                    {"provision_text": "must report", "obligation_type": "REPORTING", "confidence": 0.9},
+                    {"provision_text": "shall not disclose", "obligation_type": "PROHIBITION", "confidence": 0.85},
+                    {"provision_text": "required to maintain", "obligation_type": "REQUIREMENT", "confidence": 0.88},
+                ]
+            }
+        )
 
         extractor = LLMGenerativeExtractor()
         results = extractor.extract("must report and shall not disclose and required to maintain", "US-NY")
@@ -161,6 +172,7 @@ class TestLLMClientFactory:
     def test_factory_creates_openai_with_gpt_model(self):
         """Should create OpenAI client when model contains 'gpt'."""
         import sys
+
         mock_openai_module = Mock()
         mock_openai_module.OpenAI = Mock()
         with patch.dict("os.environ", {"LLM_MODEL": "gpt-4", "OPENAI_API_KEY": "sk-test"}):
@@ -171,17 +183,14 @@ class TestLLMClientFactory:
     def test_factory_creates_vertex_with_gemini_model(self):
         """Should create Vertex AI client when model contains 'gemini'."""
         import sys
+
         mock_vertexai = Mock()
         mock_generative_models = Mock()
         mock_generative_models.GenerativeModel = Mock()
-        with patch.dict("os.environ", {
-            "LLM_MODEL": "gemini-1.5-pro",
-            "GOOGLE_CLOUD_PROJECT": "test-project"
-        }):
-            with patch.dict(sys.modules, {
-                "vertexai": mock_vertexai,
-                "vertexai.generative_models": mock_generative_models
-            }):
+        with patch.dict("os.environ", {"LLM_MODEL": "gemini-1.5-pro", "GOOGLE_CLOUD_PROJECT": "test-project"}):
+            with patch.dict(
+                sys.modules, {"vertexai": mock_vertexai, "vertexai.generative_models": mock_generative_models}
+            ):
                 client = LLMClientFactory.create()
                 assert client.model == "gemini-1.5-pro"
 
@@ -197,11 +206,7 @@ class TestLLMExtraction:
 
     def test_valid_extraction(self):
         """Should create valid extraction."""
-        extraction = LLMExtraction(
-            provision_text="must comply",
-            obligation_type="REQUIREMENT",
-            confidence=0.9
-        )
+        extraction = LLMExtraction(provision_text="must comply", obligation_type="REQUIREMENT", confidence=0.9)
         assert extraction.provision_text == "must comply"
         assert extraction.obligation_type == "REQUIREMENT"
         assert extraction.confidence == 0.9
@@ -209,11 +214,7 @@ class TestLLMExtraction:
     def test_confidence_bounds(self):
         """Confidence must be between 0 and 1."""
         with pytest.raises(ValueError):
-            LLMExtraction(
-                provision_text="test",
-                obligation_type="REQUIREMENT",
-                confidence=1.5
-            )
+            LLMExtraction(provision_text="test", obligation_type="REQUIREMENT", confidence=1.5)
 
     def test_extra_fields_forbidden(self):
         """Extra fields must be REJECTED (#1280).

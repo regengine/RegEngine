@@ -18,6 +18,7 @@ is exercised end-to-end, and inject a ``FakeRedis`` via ``sys.modules``
 (the same pattern used by ``test_canonical_persistence_neo4j_sync.py``)
 to observe publish calls.
 """
+
 from __future__ import annotations
 
 import sys
@@ -147,7 +148,10 @@ class TestRollbackDoesNotPublish_Issue1276:
     ``after_commit``, so rollback is silent."""
 
     def test_stage_then_rollback_publishes_nothing(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         from shared.canonical_persistence.legacy_dual_write import stage_graph_sync
 
@@ -167,7 +171,10 @@ class TestRollbackDoesNotPublish_Issue1276:
         assert fake_redis.ltrim_calls == []
 
     def test_many_staged_events_all_dropped_on_rollback(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """A batch of N events staged in one transaction, then rolled
         back, must produce zero publishes — not even one."""
@@ -181,7 +188,10 @@ class TestRollbackDoesNotPublish_Issue1276:
         assert fake_redis.rpush_calls == []
 
     def test_rollback_clears_pending_so_later_commit_is_noop(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """After rollback, pending events are gone. A subsequent commit
         on the same session must not republish the dropped events —
@@ -197,9 +207,7 @@ class TestRollbackDoesNotPublish_Issue1276:
         # A second transaction with no new stages commits cleanly.
         _begin_real_transaction(sqlite_session)
         sqlite_session.commit()
-        assert fake_redis.rpush_calls == [], (
-            "post-rollback commit must not leak previously-staged events"
-        )
+        assert fake_redis.rpush_calls == [], "post-rollback commit must not leak previously-staged events"
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +217,10 @@ class TestRollbackDoesNotPublish_Issue1276:
 
 class TestCommitPublishes_Issue1276:
     def test_single_stage_then_commit_publishes_once(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         from shared.canonical_persistence.legacy_dual_write import stage_graph_sync
 
@@ -225,7 +236,10 @@ class TestCommitPublishes_Issue1276:
         assert "evt-committed" in payload
 
     def test_batch_of_stages_then_commit_publishes_each_once(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """N events staged → N publishes after commit. Not 0 (dropped),
         not N² (double-install of listeners), exactly N."""
@@ -246,13 +260,13 @@ class TestCommitPublishes_Issue1276:
                 if eid in payload:
                     published_ids.append(eid)
                     break
-        assert published_ids == ids, (
-            "each staged event must be published exactly once, in "
-            "staging order"
-        )
+        assert published_ids == ids, "each staged event must be published exactly once, in staging order"
 
     def test_second_commit_on_same_session_does_not_republish(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """Session listeners persist for the session's lifetime, so a
         committed pending list must be cleared (popped) to avoid
@@ -269,12 +283,14 @@ class TestCommitPublishes_Issue1276:
         _begin_real_transaction(sqlite_session)
         sqlite_session.commit()
         assert len(fake_redis.rpush_calls) == 1, (
-            "after_commit must drain, not replay — second commit "
-            "must not republish previously-committed events"
+            "after_commit must drain, not replay — second commit must not republish previously-committed events"
         )
 
     def test_second_transaction_publishes_its_own_events(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """Commit T1 → stage in T2 → commit T2. Redis should see T1's
         events on commit T1 and T2's events on commit T2, never
@@ -301,7 +317,10 @@ class TestCommitPublishes_Issue1276:
 
 class TestStagingRespectsGating_Issue1276:
     def test_staging_is_noop_when_sync_disabled(
-        self, fake_redis, sqlite_session, monkeypatch,
+        self,
+        fake_redis,
+        sqlite_session,
+        monkeypatch,
     ):
         """When the producer is off (the production default), staging
         must be a zero-cost no-op — not even the session.info dict
@@ -322,7 +341,10 @@ class TestStagingRespectsGating_Issue1276:
         assert fake_redis.rpush_calls == []
 
     def test_staging_honours_runtime_env_toggle(
-        self, fake_redis, sqlite_session, monkeypatch,
+        self,
+        fake_redis,
+        sqlite_session,
+        monkeypatch,
     ):
         """If the operator flips ``ENABLE_NEO4J_SYNC`` true mid-process
         a subsequent stage call must start staging; the feature is
@@ -351,7 +373,10 @@ class TestStagingRespectsGating_Issue1276:
 
 class TestListenerInstallation_Issue1276:
     def test_listeners_installed_at_most_once_per_session(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         """A batch of 100 stage_graph_sync calls must not register 100
         after_commit listeners — that would fire the drain callback
@@ -380,7 +405,10 @@ class TestPersistEventIntegrationShape_Issue1276:
     returning, then the caller commits or rolls back."""
 
     def test_caller_rollback_does_not_publish(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         from shared.canonical_persistence.legacy_dual_write import stage_graph_sync
 
@@ -395,12 +423,14 @@ class TestPersistEventIntegrationShape_Issue1276:
         sqlite_session.rollback()
 
         assert fake_redis.rpush_calls == [], (
-            "caller rollback after persist-like call must not leak a "
-            "graph-sync message (#1276)"
+            "caller rollback after persist-like call must not leak a graph-sync message (#1276)"
         )
 
     def test_caller_commit_does_publish(
-        self, fake_redis, sqlite_session, enable_sync,
+        self,
+        fake_redis,
+        sqlite_session,
+        enable_sync,
     ):
         from shared.canonical_persistence.legacy_dual_write import stage_graph_sync
 

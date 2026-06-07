@@ -28,21 +28,20 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
-from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
-from shared.rules.evaluators.stateless import EVALUATORS
 from shared.rules.evaluators.relational import (
     RELATIONAL_EVALUATORS,
     fetch_related_events,
 )
+from shared.rules.evaluators.stateless import EVALUATORS
 from shared.rules.ftl import (
-    is_ftl_food,
     event_has_ftl_hint,
     get_ftl_category,
+    is_ftl_food,
     rule_applies_to_ftl_category,
 )
+from shared.rules.types import EvaluationSummary, RuleDefinition, RuleEvaluationResult
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("rules-engine")
 
@@ -73,9 +72,7 @@ class RulesEngine:
     ):
         self.session = session
         self._cache_ttl_seconds: int = (
-            cache_ttl_seconds
-            if cache_ttl_seconds is not None
-            else self.DEFAULT_CACHE_TTL_SECONDS
+            cache_ttl_seconds if cache_ttl_seconds is not None else self.DEFAULT_CACHE_TTL_SECONDS
         )
         self._rules_cache: Optional[List[RuleDefinition]] = None
         # Monotonic timestamp (seconds) of the most recent
@@ -93,6 +90,7 @@ class RulesEngine:
             # TTL disabled → always treat as stale so every call reloads.
             return False
         import time as _time
+
         age = _time.monotonic() - self._rules_cache_loaded_at
         return age < self._cache_ttl_seconds
 
@@ -130,24 +128,27 @@ class RulesEngine:
 
         rules = []
         for r in rows:
-            rules.append(RuleDefinition(
-                rule_id=str(r[0]),
-                rule_version=r[1],
-                title=r[2],
-                description=r[3],
-                severity=r[4],
-                category=r[5],
-                applicability_conditions=r[6] if isinstance(r[6], dict) else json.loads(r[6] or "{}"),
-                citation_reference=r[7],
-                effective_date=r[8],
-                retired_date=r[9],
-                evaluation_logic=r[10] if isinstance(r[10], dict) else json.loads(r[10] or "{}"),
-                failure_reason_template=r[11],
-                remediation_suggestion=r[12],
-            ))
+            rules.append(
+                RuleDefinition(
+                    rule_id=str(r[0]),
+                    rule_version=r[1],
+                    title=r[2],
+                    description=r[3],
+                    severity=r[4],
+                    category=r[5],
+                    applicability_conditions=r[6] if isinstance(r[6], dict) else json.loads(r[6] or "{}"),
+                    citation_reference=r[7],
+                    effective_date=r[8],
+                    retired_date=r[9],
+                    evaluation_logic=r[10] if isinstance(r[10], dict) else json.loads(r[10] or "{}"),
+                    failure_reason_template=r[11],
+                    remediation_suggestion=r[12],
+                )
+            )
 
         self._rules_cache = rules
         import time as _time
+
         self._rules_cache_loaded_at = _time.monotonic()
         logger.info(
             "rules_engine_cache_loaded",
@@ -189,20 +190,12 @@ class RulesEngine:
             conditions = rule.applicability_conditions or {}
             cte_types = conditions.get("cte_types", [])
 
-            cte_match = (
-                not cte_types
-                or event_type in cte_types
-                or "all" in cte_types
-            )
+            cte_match = not cte_types or event_type in cte_types or "all" in cte_types
             if not cte_match:
                 continue
 
             ftl_scope = conditions.get("ftl_scope") or []
-            scope_tokens = {
-                s.strip().upper()
-                for s in ftl_scope
-                if isinstance(s, str) and s.strip()
-            }
+            scope_tokens = {s.strip().upper() for s in ftl_scope if isinstance(s, str) and s.strip()}
 
             # "ANY" scope — rule fires regardless of FTL status.
             if "ANY" in scope_tokens:
@@ -295,21 +288,16 @@ class RulesEngine:
         # rule will run. Previously each relational evaluator hit the database
         # with the same (tlc, tenant_id, event_id) triple, producing N copies
         # of an identical SELECT per event (N = number of relational rules).
-        related_events_cache = self._prefetch_related_events(
-            event_data, applicable_rules, tenant_id
-        )
+        related_events_cache = self._prefetch_related_events(event_data, applicable_rules, tenant_id)
 
         for rule in applicable_rules:
             result = self._evaluate_single_rule(
-                event_data, rule,
+                event_data,
+                rule,
                 tenant_id=tenant_id,
                 related_events=related_events_cache,
             )
-            if (
-                result.result == "fail"
-                and result.severity == "warning"
-                and result.category == "operational_quality"
-            ):
+            if result.result == "fail" and result.severity == "warning" and result.category == "operational_quality":
                 result.result = "warn"
             summary.results.append(result)
             self._tally_result(summary, result)
@@ -370,10 +358,7 @@ class RulesEngine:
             # No event_id available — refuse rather than write rows with an
             # empty FK that the rules-eval queries can't join back. Better
             # to surface the misuse than silently lose results.
-            raise ValueError(
-                "persist_summary requires an event_id (either as kwarg or on "
-                "summary.event_id)"
-            )
+            raise ValueError("persist_summary requires an event_id (either as kwarg or on summary.event_id)")
         self._persist_evaluations(tenant_id, resolved_event_id, summary.results)
 
     def evaluate_events_batch(
@@ -425,13 +410,12 @@ class RulesEngine:
                 continue
 
             # #1365 — pre-fetch once per event (not per rule).
-            related_events_cache = self._prefetch_related_events(
-                event_data, applicable, tenant_id
-            )
+            related_events_cache = self._prefetch_related_events(event_data, applicable, tenant_id)
 
             for rule in applicable:
                 result = self._evaluate_single_rule(
-                    event_data, rule,
+                    event_data,
+                    rule,
                     tenant_id=tenant_id,
                     related_events=related_events_cache,
                 )
@@ -513,16 +497,11 @@ class RulesEngine:
         tlc = event_data.get("traceability_lot_code", "")
         if not tlc:
             return None
-        if not any(
-            (rule.evaluation_logic or {}).get("type") in RELATIONAL_EVALUATORS
-            for rule in applicable_rules
-        ):
+        if not any((rule.evaluation_logic or {}).get("type") in RELATIONAL_EVALUATORS for rule in applicable_rules):
             return None
         event_id = event_data.get("event_id", "")
         try:
-            return fetch_related_events(
-                self.session, tlc, tenant_id, str(event_id) if event_id else None
-            )
+            return fetch_related_events(self.session, tlc, tenant_id, str(event_id) if event_id else None)
         except Exception as e:
             # A failed pre-fetch must not kill the evaluation — the
             # per-evaluator fallback will re-attempt and be caught by
@@ -624,14 +603,16 @@ class RulesEngine:
                     severity=rule.severity,
                     result="error",
                     why_failed=(
-                        f"Relational rule '{eval_type}' requires an authenticated "
-                        "tenant_id from request context"
+                        f"Relational rule '{eval_type}' requires an authenticated tenant_id from request context"
                     ),
                     category=rule.category,
                 )
             try:
                 return relational_evaluator(
-                    event_data, logic, rule, self.session,
+                    event_data,
+                    logic,
+                    rule,
+                    self.session,
                     tenant_id=tenant_id,
                     related_events=related_events,
                 )

@@ -20,12 +20,12 @@ from .models import (
     SLAStatus,
 )
 from .persistence import (
-    _get_db_engine,
-    _upsert_drill_row,
-    _update_drill_row,
-    _load_drills_from_db,
-    _load_drill_by_id_from_db,
     _dict_to_recall_drill,
+    _get_db_engine,
+    _load_drill_by_id_from_db,
+    _load_drills_from_db,
+    _update_drill_row,
+    _upsert_drill_row,
 )
 
 
@@ -172,9 +172,7 @@ class MockRecallEngine:
                     if result:
                         lots_traced += result.get("lots_count", 0)
                         max_forward = result.get("max_depth", 0)
-                        facilities.extend(
-                            self._extract_facilities(result, "downstream")
-                        )
+                        facilities.extend(self._extract_facilities(result, "downstream"))
                 else:
                     # Simulate trace for testing
                     lots_traced += 5
@@ -227,9 +225,7 @@ class MockRecallEngine:
                             gln=drill.target_facility_gln,
                             name="Targeted Facility",
                             facility_type="unknown",
-                            lots_affected=(
-                                [drill.target_lot] if drill.target_lot else []
-                            ),
+                            lots_affected=([drill.target_lot] if drill.target_lot else []),
                             quantity_affected=0.0,
                         )
                     )
@@ -254,6 +250,7 @@ class MockRecallEngine:
                     contact_path = export_result.get("contact_path")
                 except Exception as e:
                     import logging
+
                     logging.getLogger("fsma_recall").warning(f"Export warning during recall drill: {e}", exc_info=True)
                     warnings.append(f"Export warning: {str(e)}")
                 export_time = time.time() - export_start
@@ -267,11 +264,7 @@ class MockRecallEngine:
             # Calculate data completeness
             total_quantity = sum(f.quantity_affected for f in facilities)
             gaps = len([f for f in facilities if not f.lots_affected])
-            completeness = (
-                100.0
-                if not facilities
-                else (((len(facilities) - gaps) / len(facilities)) * 100)
-            )
+            completeness = 100.0 if not facilities else (((len(facilities) - gaps) / len(facilities)) * 100)
 
             # Create result
             result = RecallResult(
@@ -302,6 +295,7 @@ class MockRecallEngine:
         except Exception as e:
             # Handle execution failure
             import logging
+
             logging.getLogger("fsma_recall").error(f"Recall drill execution failed: {e}", exc_info=True)
             errors.append(str(e))
             result = RecallResult(
@@ -371,16 +365,12 @@ class MockRecallEngine:
             metrics["sla_compliant_drills"] += 1
 
         metrics["total_trace_time"] += result.trace_time_seconds
-        metrics["avg_trace_time"] = (
-            metrics["total_trace_time"] / metrics["total_drills"]
-        )
+        metrics["avg_trace_time"] = metrics["total_trace_time"] / metrics["total_drills"]
         metrics["last_drill_at"] = datetime.now(timezone.utc).isoformat()
 
         # Calculate compliance rate
         metrics["sla_compliance_rate"] = (
-            (metrics["sla_compliant_drills"] / metrics["total_drills"]) * 100
-            if metrics["total_drills"] > 0
-            else 100.0
+            (metrics["sla_compliant_drills"] / metrics["total_drills"]) * 100 if metrics["total_drills"] > 0 else 100.0
         )
 
     def get_drill_history(
@@ -405,9 +395,7 @@ class MockRecallEngine:
         Returns:
             List of RecallDrill instances
         """
-        drills_by_id = {
-            drill.drill_id: drill for drill in self._drills.get(tenant_id, [])
-        }
+        drills_by_id = {drill.drill_id: drill for drill in self._drills.get(tenant_id, [])}
 
         engine = self._get_engine()
         if engine is not None:
@@ -618,8 +606,7 @@ class MockRecallEngine:
         recent_drills = [
             d
             for d in completed_drills
-            if d.completed_at
-            and d.completed_at > datetime.now(timezone.utc) - timedelta(days=365)
+            if d.completed_at and d.completed_at > datetime.now(timezone.utc) - timedelta(days=365)
         ]
 
         # Drill frequency analysis
@@ -627,39 +614,24 @@ class MockRecallEngine:
             [
                 d
                 for d in recent_drills
-                if d.completed_at
-                and d.completed_at > datetime.now(timezone.utc) - timedelta(days=90)
+                if d.completed_at and d.completed_at > datetime.now(timezone.utc) - timedelta(days=90)
             ]
         )
 
         # Data quality from results
         avg_completeness = 0.0
         if recent_drills:
-            completeness_values = [
-                d.result.data_completeness_pct for d in recent_drills if d.result
-            ]
-            avg_completeness = (
-                sum(completeness_values) / len(completeness_values)
-                if completeness_values
-                else 0.0
-            )
+            completeness_values = [d.result.data_completeness_pct for d in recent_drills if d.result]
+            avg_completeness = sum(completeness_values) / len(completeness_values) if completeness_values else 0.0
 
         return {
             "tenant_id": tenant_id,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "overall_readiness": (
-                "ready"
-                if sla_metrics.get("sla_compliance_rate", 0) >= 95
-                else "needs_improvement"
-            ),
+            "overall_readiness": ("ready" if sla_metrics.get("sla_compliance_rate", 0) >= 95 else "needs_improvement"),
             "sla_compliance": {
                 "rate_pct": sla_metrics.get("sla_compliance_rate", 100.0),
                 "target_pct": 100.0,
-                "status": (
-                    "compliant"
-                    if sla_metrics.get("sla_compliance_rate", 100) >= 95
-                    else "at_risk"
-                ),
+                "status": ("compliant" if sla_metrics.get("sla_compliance_rate", 100) >= 95 else "at_risk"),
             },
             "drill_metrics": {
                 "total_drills": len(drills),
@@ -693,23 +665,15 @@ class MockRecallEngine:
         recommendations = []
 
         if quarterly_drills < 1:
-            recommendations.append(
-                "Schedule quarterly mock recalls to maintain FDA readiness"
-            )
+            recommendations.append("Schedule quarterly mock recalls to maintain FDA readiness")
 
         if sla_metrics.get("sla_compliance_rate", 100) < 95:
-            recommendations.append(
-                "Improve trace query performance to meet 24-hour SLA consistently"
-            )
+            recommendations.append("Improve trace query performance to meet 24-hour SLA consistently")
 
         if avg_completeness < 95:
-            recommendations.append(
-                "Address data gaps to improve traceability completeness"
-            )
+            recommendations.append("Address data gaps to improve traceability completeness")
 
         if not recommendations:
-            recommendations.append(
-                "Recall readiness is excellent - maintain current drill schedule"
-            )
+            recommendations.append("Recall readiness is excellent - maintain current drill schedule")
 
         return recommendations

@@ -15,10 +15,10 @@ All public names are re-exported here for backward compatibility:
     from shared.rules import RulesEngine, FSMA_RULE_SEEDS, seed_rule_definitions
 """
 
-from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.engine import RulesEngine
 from shared.rules.seeds import FSMA_RULE_SEEDS, seed_rule_definitions
-from shared.rules.uom import normalize_to_lbs, CTE_LIFECYCLE_ORDER
+from shared.rules.types import EvaluationSummary, RuleDefinition, RuleEvaluationResult
+from shared.rules.uom import CTE_LIFECYCLE_ORDER, normalize_to_lbs
 
 __all__ = [
     "RuleDefinition",

@@ -11,24 +11,24 @@ Provides REST endpoints for:
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
-from .webhook_compat import require_tenant_context
 from .shared.upload_limits import (
     MAX_CSV_FILE_SIZE_BYTES,
     read_upload_with_limit,
     sanitize_upload_filename,
 )
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("integration-router")
 
@@ -37,8 +37,10 @@ router = APIRouter(prefix="/api/v1/integrations", tags=["Integrations"])
 
 # ── Models ────────────────────────────────────────────────────
 
+
 class ConnectorConfigRequest(BaseModel):
     """Request to configure a connector."""
+
     connector_id: str
     api_key: Optional[str] = None
     api_secret: Optional[str] = None
@@ -51,6 +53,7 @@ class ConnectorConfigRequest(BaseModel):
 
 class SyncRequest(BaseModel):
     """Request to trigger a manual sync."""
+
     connector_id: str
     since: Optional[str] = None  # ISO 8601
     limit: int = 100
@@ -76,6 +79,7 @@ DEFAULT_PROFILE_MAPPING: Dict[str, str] = {
 
 class IntegrationProfile(BaseModel):
     """Reusable supplier/source mapping profile."""
+
     profile_id: str
     tenant_id: str
     display_name: str
@@ -94,6 +98,7 @@ class IntegrationProfile(BaseModel):
 
 class CreateIntegrationProfileRequest(BaseModel):
     """Create a saved mapping profile for a supplier or source system."""
+
     display_name: str = Field(..., min_length=2, max_length=120)
     source_type: ProfileSourceType = "csv"
     field_mapping: Dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_PROFILE_MAPPING))
@@ -107,6 +112,7 @@ class CreateIntegrationProfileRequest(BaseModel):
 
 class UpdateIntegrationProfileRequest(BaseModel):
     """Patch mutable fields on a saved integration profile."""
+
     display_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
     source_type: Optional[ProfileSourceType] = None
     field_mapping: Optional[Dict[str, str]] = None
@@ -175,9 +181,10 @@ def _db_list_profiles(tenant_id: str) -> Optional[list[IntegrationProfile]]:
         return None
     try:
         _set_tenant_context(db, tenant_id)
-        rows = db.execute(
-            text(
-                """
+        rows = (
+            db.execute(
+                text(
+                    """
                 SELECT profile_id, tenant_id::text AS tenant_id, display_name, source_type,
                        field_mapping, default_cte_type, status, confidence, supplier_id,
                        supplier_name, notes, created_at, updated_at, last_used_at
@@ -185,9 +192,12 @@ def _db_list_profiles(tenant_id: str) -> Optional[list[IntegrationProfile]]:
                 WHERE tenant_id = CAST(:tenant_id AS uuid)
                 ORDER BY updated_at DESC
                 """
-            ),
-            {"tenant_id": tenant_id},
-        ).mappings().all()
+                ),
+                {"tenant_id": tenant_id},
+            )
+            .mappings()
+            .all()
+        )
         return [_profile_from_row(row) for row in rows]
     except Exception as exc:
         logger.warning("integration_profiles_db_list_failed tenant=%s error=%s", tenant_id, str(exc))
@@ -204,9 +214,10 @@ def _db_get_profile(tenant_id: str, profile_id: str) -> Optional[IntegrationProf
         return None
     try:
         _set_tenant_context(db, tenant_id)
-        row = db.execute(
-            text(
-                """
+        row = (
+            db.execute(
+                text(
+                    """
                 SELECT profile_id, tenant_id::text AS tenant_id, display_name, source_type,
                        field_mapping, default_cte_type, status, confidence, supplier_id,
                        supplier_name, notes, created_at, updated_at, last_used_at
@@ -214,12 +225,17 @@ def _db_get_profile(tenant_id: str, profile_id: str) -> Optional[IntegrationProf
                 WHERE tenant_id = CAST(:tenant_id AS uuid)
                   AND profile_id = :profile_id
                 """
-            ),
-            {"tenant_id": tenant_id, "profile_id": profile_id},
-        ).mappings().first()
+                ),
+                {"tenant_id": tenant_id, "profile_id": profile_id},
+            )
+            .mappings()
+            .first()
+        )
         return _profile_from_row(row) if row else None
     except Exception as exc:
-        logger.warning("integration_profiles_db_get_failed tenant=%s profile=%s error=%s", tenant_id, profile_id, str(exc))
+        logger.warning(
+            "integration_profiles_db_get_failed tenant=%s profile=%s error=%s", tenant_id, profile_id, str(exc)
+        )
         return None
     finally:
         db.close()
@@ -269,7 +285,12 @@ def _db_upsert_profile(profile: IntegrationProfile) -> bool:
         db.commit()
         return True
     except Exception as exc:
-        logger.warning("integration_profiles_db_upsert_failed tenant=%s profile=%s error=%s", profile.tenant_id, profile.profile_id, str(exc))
+        logger.warning(
+            "integration_profiles_db_upsert_failed tenant=%s profile=%s error=%s",
+            profile.tenant_id,
+            profile.profile_id,
+            str(exc),
+        )
         db.rollback()
         return False
     finally:
@@ -325,6 +346,7 @@ def _apply_profile_mapping(event: Dict[str, Any], profile: IntegrationProfile) -
 
 
 # ── Endpoints ─────────────────────────────────────────────────
+
 
 @router.get(
     "/profiles/{tenant_id}",
@@ -430,6 +452,7 @@ async def preview_integration_profile_mapping(
         events=mapped_events,
     )
 
+
 @router.get(
     "/available",
     summary="List all available integrations",
@@ -438,6 +461,7 @@ async def preview_integration_profile_mapping(
 async def list_available_integrations():
     """List all registered integration connectors with their metadata."""
     from shared.external_connectors.registry import list_available_connectors
+
     return {"integrations": list_available_connectors()}
 
 
@@ -452,6 +476,7 @@ async def get_integration_statuses(
     """Get connection status of all integrations for a tenant."""
     tenant_id = ctx.tenant_id
     from shared.external_connectors.registry import get_all_integration_statuses
+
     return {"integrations": get_all_integration_statuses(tenant_id)}
 
 
@@ -700,7 +725,9 @@ async def receive_webhook(
         ingest_events = [e.to_ingest_dict() for e in events]
         logger.info(
             "webhook_received connector=%s tenant=%s events=%d",
-            connector_id, tenant_id, len(events),
+            connector_id,
+            tenant_id,
+            len(events),
         )
         return {
             "accepted": len(events),
@@ -729,6 +756,7 @@ async def disconnect_connector(
         remove_connector,
         resolve_connector_id,
     )
+
     tenant_id = ctx.tenant_id
     connector_id = resolve_connector_id(connector_id)
     remove_connector(tenant_id, connector_id)

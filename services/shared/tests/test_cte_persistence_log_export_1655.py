@@ -17,6 +17,7 @@ resolves to a single canonical row. These tests cover:
   the v071 migration), ``log_export`` falls back to the pre-EPIC-L
   shape and still returns the freshly minted id.
 """
+
 from __future__ import annotations
 
 import sys
@@ -30,7 +31,6 @@ if str(_SERVICES) not in sys.path:
     sys.path.insert(0, str(_SERVICES))
 
 from shared.cte_persistence.core import CTEPersistence
-
 
 # ---------------------------------------------------------------------------
 # _compute_export_fingerprint
@@ -82,10 +82,7 @@ class TestFingerprint:
         base["query_tlc"] = None
         alt = dict(self._BASE)
         alt["query_tlc"] = ""
-        assert (
-            CTEPersistence._compute_export_fingerprint(**base)
-            == CTEPersistence._compute_export_fingerprint(**alt)
-        )
+        assert CTEPersistence._compute_export_fingerprint(**base) == CTEPersistence._compute_export_fingerprint(**alt)
 
 
 # ---------------------------------------------------------------------------

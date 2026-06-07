@@ -42,14 +42,14 @@ class CTEType(str, Enum):
     and packing slips, breaking "one step back to the farm".
     """
 
-    HARVESTING = "HARVESTING"                        # §1.1325 origin
-    COOLING = "COOLING"                              # §1.1330
-    INITIAL_PACKING = "INITIAL_PACKING"              # §1.1335
+    HARVESTING = "HARVESTING"  # §1.1325 origin
+    COOLING = "COOLING"  # §1.1330
+    INITIAL_PACKING = "INITIAL_PACKING"  # §1.1335
     FIRST_LAND_BASED_RECEIVER = "FIRST_LAND_BASED_RECEIVER"  # §1.1325(c)
-    SHIPPING = "SHIPPING"                            # §1.1340
-    RECEIVING = "RECEIVING"                          # §1.1345
-    TRANSFORMATION = "TRANSFORMATION"                # §1.1350
-    CREATION = "CREATION"                            # internal origin
+    SHIPPING = "SHIPPING"  # §1.1340
+    RECEIVING = "RECEIVING"  # §1.1345
+    TRANSFORMATION = "TRANSFORMATION"  # §1.1350
+    CREATION = "CREATION"  # internal origin
 
 
 class DocumentType(str, Enum):
@@ -73,9 +73,10 @@ class ExtractionConfidence(str, Enum):
 
     Used to gate automated acceptance of extracted data.
     """
-    HIGH = "HIGH"      # >= 0.95: Auto-accept
+
+    HIGH = "HIGH"  # >= 0.95: Auto-accept
     MEDIUM = "MEDIUM"  # 0.85 - 0.95: Manual review required
-    LOW = "LOW"        # < 0.85: Reject/Queue for deep review
+    LOW = "LOW"  # < 0.85: Reject/Queue for deep review
 
 
 @dataclass
@@ -187,8 +188,6 @@ class FSMAExtractionResult:
     extraction_timestamp: str
     raw_text: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
-    line_items: List[LineItem] = field(
-        default_factory=list
-    )  # Tabular extraction results
+    line_items: List[LineItem] = field(default_factory=list)  # Tabular extraction results
     confidence_level: ExtractionConfidence = ExtractionConfidence.LOW
     review_required: bool = True

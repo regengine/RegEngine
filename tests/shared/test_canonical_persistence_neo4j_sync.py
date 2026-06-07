@@ -17,6 +17,7 @@ consumer cannot exhaust memory.
 These tests exercise the gate and the trim semantics without
 touching a real Redis.
 """
+
 from __future__ import annotations
 
 import os
@@ -24,7 +25,6 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fakes — we inject ``redis.from_url`` to return a FakeRedis instance.
@@ -53,7 +53,8 @@ def _make_event():
     event.event_id = "evt-1"
     event.tenant_id = "tenant-1"
 
-    event_type = MagicMock(); event_type.value = "shipping"
+    event_type = MagicMock()
+    event_type.value = "shipping"
     event.event_type = event_type
 
     event.traceability_lot_code = "TLC-1"
@@ -61,7 +62,8 @@ def _make_event():
     event.quantity = 10.0
     event.unit_of_measure = "kg"
 
-    ts = MagicMock(); ts.isoformat = MagicMock(return_value="2026-04-15T12:00:00+00:00")
+    ts = MagicMock()
+    ts.isoformat = MagicMock(return_value="2026-04-15T12:00:00+00:00")
     event.event_timestamp = ts
 
     event.from_facility_reference = "F1"
@@ -69,7 +71,8 @@ def _make_event():
     event.from_entity_reference = None
     event.to_entity_reference = None
 
-    ss = MagicMock(); ss.value = "webhook"
+    ss = MagicMock()
+    ss.value = "webhook"
     event.source_system = ss
 
     event.confidence_score = 1.0
@@ -96,6 +99,7 @@ def fake_redis(monkeypatch):
     # Replace the ``redis`` module in sys.modules so the local
     # import inside publish_graph_sync picks up our stub.
     import sys
+
     monkeypatch.setitem(sys.modules, "redis", _RedisModuleStub)
     return fake
 
@@ -141,7 +145,9 @@ class TestGating_Issue1378:
         assert fake_redis.rpush_calls == []
 
     def test_producer_publishes_when_explicitly_enabled(
-        self, fake_redis, monkeypatch,
+        self,
+        fake_redis,
+        monkeypatch,
     ):
         """With both the flag and REDIS_URL, the producer publishes
         one rpush per canonical event."""
@@ -158,7 +164,10 @@ class TestGating_Issue1378:
 
     @pytest.mark.parametrize("truthy", ["1", "true", "True", "YES", "on"])
     def test_truthy_values_enable_producer(
-        self, fake_redis, monkeypatch, truthy,
+        self,
+        fake_redis,
+        monkeypatch,
+        truthy,
     ):
         monkeypatch.setenv("ENABLE_NEO4J_SYNC", truthy)
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
@@ -175,7 +184,9 @@ class TestGating_Issue1378:
 
 class TestQueueBounding_Issue1378:
     def test_producer_trims_queue_to_default_max(
-        self, fake_redis, monkeypatch,
+        self,
+        fake_redis,
+        monkeypatch,
     ):
         """When publish succeeds the producer must LTRIM the list
         so that a stalled consumer cannot grow it without bound."""
@@ -195,7 +206,9 @@ class TestQueueBounding_Issue1378:
         assert stop == -1
 
     def test_producer_honors_max_queue_override(
-        self, fake_redis, monkeypatch,
+        self,
+        fake_redis,
+        monkeypatch,
     ):
         """Operators can tune NEO4J_SYNC_MAX_QUEUE down (e.g. for a
         small Redis instance) without touching code."""
@@ -212,7 +225,9 @@ class TestQueueBounding_Issue1378:
         assert stop == -1
 
     def test_invalid_max_queue_env_falls_back_to_default(
-        self, fake_redis, monkeypatch,
+        self,
+        fake_redis,
+        monkeypatch,
     ):
         """Garbage in NEO4J_SYNC_MAX_QUEUE must not crash the
         producer — fall back to the 100k default."""

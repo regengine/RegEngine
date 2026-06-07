@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy.dialects import postgresql
-
 from shared.agent_operator_models import (
     AdvisoryReceiptModel,
     AgentArtifactModel,
     AgentArtifactReviewModel,
     IngestionRunModel,
 )
+from sqlalchemy.dialects import postgresql
 
 
 def test_operator_models_map_core_tables_to_fsma_schema():
@@ -83,9 +82,7 @@ def test_agent_artifact_review_model_exposes_decision_fields():
 
 def test_agent_review_model_declares_tenant_safe_foreign_keys():
     constraints = {
-        constraint.name: constraint
-        for constraint in AgentArtifactReviewModel.__table__.constraints
-        if constraint.name
+        constraint.name: constraint for constraint in AgentArtifactReviewModel.__table__.constraints if constraint.name
     }
 
     assert "fk_agent_reviews_artifact_tenant" in constraints

@@ -10,9 +10,9 @@ Covers:
 
 import os
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -25,11 +25,12 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 
-import pytest
 from unittest.mock import ANY
 
+import pytest
 from app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 
@@ -79,6 +80,7 @@ def mock_kafka():
 def producer(mock_kafka):
     """Create a KafkaEventProducer with mocked Kafka."""
     from app.kafka_producer import KafkaEventProducer
+
     p = KafkaEventProducer(bootstrap_servers="localhost:9092")
     return p
 
@@ -103,12 +105,19 @@ class TestEmitEnforcementChange:
         item = _make_item(source_id="recall-xyz")
         producer.emit_enforcement_change(item)
         call_args = mock_instance.send.call_args
-        key = call_args[1].get("key") if "key" in (call_args[1] or {}) else call_args[0][1] if len(call_args[0]) > 1 else None
+        key = (
+            call_args[1].get("key")
+            if "key" in (call_args[1] or {})
+            else call_args[0][1]
+            if len(call_args[0]) > 1
+            else None
+        )
         assert key == "recall-xyz"
 
     def test_returns_false_on_kafka_error(self, producer, mock_kafka):
         mock_instance, _ = mock_kafka
         from shared.kafka_compat import KafkaError
+
         mock_instance.send.side_effect = KafkaError("Broker down")
         result = producer.emit_enforcement_change(_make_item())
         assert result is False
@@ -128,12 +137,11 @@ class TestEmitEnforcementChange:
         assert sent_headers["x-producer-service"] == b"scheduler-service"
         assert sent_headers.get("x-evt-sig-v") is not None
 
-    def test_emit_enforcement_change_returns_false_when_signing_key_unset(
-        self, mock_kafka, monkeypatch
-    ):
+    def test_emit_enforcement_change_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
         from app.kafka_producer import KafkaEventProducer
+
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka
 
@@ -180,18 +188,15 @@ class TestEmitHighPriorityAlert:
         assert sent_headers["x-producer-service"] == b"scheduler-service"
         assert sent_headers.get("x-evt-sig-v") is not None
 
-    def test_emit_high_priority_alert_returns_false_when_signing_key_unset(
-        self, mock_kafka, monkeypatch
-    ):
+    def test_emit_high_priority_alert_returns_false_when_signing_key_unset(self, mock_kafka, monkeypatch):
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
         from app.kafka_producer import KafkaEventProducer
+
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka
 
-        result = p.emit_high_priority_alert(
-            _make_item(severity=EnforcementSeverity.CRITICAL)
-        )
+        result = p.emit_high_priority_alert(_make_item(severity=EnforcementSeverity.CRITICAL))
         assert result is False
         mock_instance.send.assert_not_called()
 
@@ -290,6 +295,7 @@ class TestEmitFSMAEvent:
         """Strict-mode posture: fail closed, do not publish unsigned."""
         monkeypatch.delenv("KAFKA_EVENT_SIGNING_KEY", raising=False)
         from app.kafka_producer import KafkaEventProducer
+
         p = KafkaEventProducer(bootstrap_servers="localhost:9092")
         mock_instance, _ = mock_kafka
 

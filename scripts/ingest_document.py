@@ -33,21 +33,22 @@ Usage:
 """
 
 import argparse
-import sys
-import os
 import hashlib
-import requests
+import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4, UUID
 from typing import Optional
+from uuid import UUID, uuid4
+
+import requests
 from tqdm import tqdm
 
 # Calculate project root relative to this script
 _PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from services.nlp.app.extractors import NYDFSExtractor, DORAExtractor, SECSCIExtractor
+from services.nlp.app.extractors import DORAExtractor, NYDFSExtractor, SECSCIExtractor
 
 
 class DocumentIngestion:
@@ -111,7 +112,7 @@ class DocumentIngestion:
                 "document_id": "dry-run-id",
                 "content_hash": "dry-run-hash",
                 "extractions_count": 0,
-                "extractions": []
+                "extractions": [],
             }
 
         print(f"📄 Ingesting document: {title}")
@@ -133,10 +134,10 @@ class DocumentIngestion:
         print(f"   Content hash: {content_hash[:16]}...")
 
         # Step 3: Extract text (if PDF)
-        if source.lower().endswith('.pdf'):
+        if source.lower().endswith(".pdf"):
             text = self._extract_pdf_text(content)
         else:
-            text = content.decode('utf-8') if isinstance(content, bytes) else content
+            text = content.decode("utf-8") if isinstance(content, bytes) else content
 
         print(f"   Extracted {len(text)} characters")
 
@@ -160,9 +161,7 @@ class DocumentIngestion:
         extractions = []
         if extract and extractor_name:
             print(f"\n🔍 Running {extractor_name.upper()} extraction...")
-            extractions = self._run_extraction(
-                text, document_id, extractor_name
-            )
+            extractions = self._run_extraction(text, document_id, extractor_name)
             print(f"   Extracted {len(extractions)} obligations")
 
             # Show sample extractions
@@ -170,8 +169,7 @@ class DocumentIngestion:
                 print(f"\n   Sample extractions:")
                 for i, ext in enumerate(extractions[:3], 1):
                     print(f"   {i}. {ext.provision_text[:80]}...")
-                    print(f"      Type: {ext.obligation_type.value}, "
-                          f"Confidence: {ext.confidence_score:.2f}")
+                    print(f"      Type: {ext.obligation_type.value}, Confidence: {ext.confidence_score:.2f}")
 
         return {
             "document_id": str(document_id),
@@ -185,7 +183,7 @@ class DocumentIngestion:
                     "confidence": ext.confidence_score,
                 }
                 for ext in extractions
-            ]
+            ],
         }
 
     def _read_file(self, file_path: str) -> bytes:
@@ -194,7 +192,7 @@ class DocumentIngestion:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             return f.read()
 
     def _download_file(self, url: str) -> bytes:
@@ -219,6 +217,7 @@ class DocumentIngestion:
         # Try pypdf first (fast, lightweight)
         try:
             import pypdf
+
             reader = pypdf.PdfReader(io.BytesIO(content))
             pages_text = []
             for page in reader.pages:
@@ -238,6 +237,7 @@ class DocumentIngestion:
         # Try pdfplumber as fallback (more robust for complex PDFs)
         try:
             import pdfplumber
+
             with pdfplumber.open(io.BytesIO(content)) as pdf:
                 pages_text = []
                 for page in pdf.pages:
@@ -259,12 +259,7 @@ class DocumentIngestion:
         print("   Install with: pip install pypdf pdfplumber")
         return f"[PDF content - {len(content)} bytes - extraction libraries not available]\n\nTo enable PDF text extraction, install pypdf or pdfplumber."
 
-    def _run_extraction(
-        self,
-        text: str,
-        document_id: UUID,
-        extractor_name: str
-    ):
+    def _run_extraction(self, text: str, document_id: UUID, extractor_name: str):
         """
         Run NLP extraction using specified extractor.
 
@@ -277,10 +272,7 @@ class DocumentIngestion:
             List of ExtractionPayload objects
         """
         if extractor_name not in self.EXTRACTORS:
-            raise ValueError(
-                f"Unknown extractor: {extractor_name}. "
-                f"Available: {list(self.EXTRACTORS.keys())}"
-            )
+            raise ValueError(f"Unknown extractor: {extractor_name}. Available: {list(self.EXTRACTORS.keys())}")
 
         extractor_class = self.EXTRACTORS[extractor_name]
         extractor = extractor_class()
@@ -304,77 +296,40 @@ def main():
 
     # Document source
     source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument("--file", type=str, help="Path to local document file (PDF)")
+    source_group.add_argument("--url", type=str, help="URL to download document from")
     source_group.add_argument(
-        "--file",
-        type=str,
-        help="Path to local document file (PDF)"
-    )
-    source_group.add_argument(
-        "--url",
-        type=str,
-        help="URL to download document from"
-    )
-    source_group.add_argument(
-        "--directory",
-        type=str,
-        help="Path to directory containing PDF files for batch ingestion"
+        "--directory", type=str, help="Path to directory containing PDF files for batch ingestion"
     )
 
     # Document metadata
     parser.add_argument(
-        "--jurisdiction",
-        type=str,
-        required=True,
-        help="Regulatory jurisdiction (e.g., US-NY, EU, US-SEC)"
+        "--jurisdiction", type=str, required=True, help="Regulatory jurisdiction (e.g., US-NY, EU, US-SEC)"
     )
     parser.add_argument(
-        "--title",
-        type=str,
-        help="Document title (required for single file/url, ignored for directory)"
+        "--title", type=str, help="Document title (required for single file/url, ignored for directory)"
     )
     parser.add_argument(
-        "--document-type",
-        type=str,
-        default="REGULATION",
-        help="Document type (REGULATION, GUIDANCE, etc.)"
+        "--document-type", type=str, default="REGULATION", help="Document type (REGULATION, GUIDANCE, etc.)"
     )
-    parser.add_argument(
-        "--effective-date",
-        type=str,
-        help="Effective date (YYYY-MM-DD)"
-    )
+    parser.add_argument("--effective-date", type=str, help="Effective date (YYYY-MM-DD)")
 
     # Extraction options
+    parser.add_argument("--extract", action="store_true", help="Run NLP extraction immediately")
     parser.add_argument(
-        "--extract",
-        action="store_true",
-        help="Run NLP extraction immediately"
+        "--extractor", type=str, choices=["nydfs", "dora", "sec_sci"], help="Extractor to use for NLP extraction"
     )
-    parser.add_argument(
-        "--extractor",
-        type=str,
-        choices=["nydfs", "dora", "sec_sci"],
-        help="Extractor to use for NLP extraction"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Simulate ingestion without processing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Simulate ingestion without processing")
 
     # Tenant context
-    parser.add_argument(
-        "--tenant-id",
-        type=str,
-        help="Tenant UUID (default: global tenant)"
-    )
+    parser.add_argument("--tenant-id", type=str, help="Tenant UUID (default: global tenant)")
 
     args = parser.parse_args()
 
     # Validate arguments
     if not args.directory and not args.title:
         parser.error("--title is required when using --file or --url")
-    
+
     if args.extract and not args.extractor:
         parser.error("--extractor is required when --extract is specified")
 
@@ -390,26 +345,26 @@ def main():
     # Run ingestion
     try:
         ingestion = DocumentIngestion(tenant_id=tenant_id)
-        
+
         if args.directory:
             dir_path = Path(args.directory)
             if not dir_path.exists() or not dir_path.is_dir():
                 print(f"❌ Error: Directory not found: {args.directory}")
                 sys.exit(1)
-            
+
             files = list(dir_path.glob("*.pdf"))
             if not files:
                 print(f"⚠️ No PDF files found in {args.directory}")
                 sys.exit(0)
-                
+
             print(f"🚀 Starting batch ingestion of {len(files)} files from {args.directory}")
-            
+
             success_count = 0
             for file_path in tqdm(files, desc="Ingesting documents"):
                 try:
                     # Use filename as title for batch ingestion
                     doc_title = file_path.stem.replace("_", " ").title()
-                    
+
                     ingestion.ingest_document(
                         file_path=str(file_path),
                         jurisdiction=args.jurisdiction,
@@ -418,14 +373,14 @@ def main():
                         effective_date=args.effective_date,
                         extract=args.extract,
                         extractor_name=args.extractor,
-                        dry_run=args.dry_run
+                        dry_run=args.dry_run,
                     )
                     success_count += 1
                 except Exception as e:
                     print(f"\n❌ Failed to ingest {file_path.name}: {e}")
-            
+
             print(f"\n✅ Batch ingestion complete! ({success_count}/{len(files)} successful)")
-            
+
         else:
             # Single file/URL ingestion
             result = ingestion.ingest_document(
@@ -437,7 +392,7 @@ def main():
                 effective_date=args.effective_date,
                 extract=args.extract,
                 extractor_name=args.extractor,
-                dry_run=args.dry_run
+                dry_run=args.dry_run,
             )
 
             if args.dry_run:
@@ -446,12 +401,13 @@ def main():
                 print(f"\n✅ Document ingested successfully!")
                 print(f"   Document ID: {result['document_id']}")
                 print(f"   Content Hash: {result['content_hash']}")
-                if result['extractions_count'] > 0:
+                if result["extractions_count"] > 0:
                     print(f"   Extractions: {result['extractions_count']}")
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

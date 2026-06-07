@@ -25,15 +25,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
-
-from shared.rules.types import RuleDefinition
 from shared.rules.engine import RulesEngine
 from shared.rules.evaluators.relational import (
     evaluate_identity_consistency,
     evaluate_mass_balance,
     evaluate_temporal_order,
 )
-
+from shared.rules.types import RuleDefinition
 
 # ---------------------------------------------------------------------------
 # Session / engine fixtures
@@ -143,15 +141,12 @@ class TestPrefetchOncePerEvent_Issue1365:
         session = _CountingSession(rows=[])  # no related events
         engine = _engine(session, rules)
 
-        summary = engine.evaluate_event(
-            _make_event(), persist=False, tenant_id="tenant-a"
-        )
+        summary = engine.evaluate_event(_make_event(), persist=False, tenant_id="tenant-a")
 
         assert summary.total_rules == 3
         # The critical assertion — one SELECT, not three.
         assert session.execute_count == 1, (
-            f"expected 1 fetch for 3 relational rules, got "
-            f"{session.execute_count} — #1365 pre-fetch not applied"
+            f"expected 1 fetch for 3 relational rules, got {session.execute_count} — #1365 pre-fetch not applied"
         )
 
     def test_two_relational_rules_trigger_one_fetch(self):
@@ -162,9 +157,7 @@ class TestPrefetchOncePerEvent_Issue1365:
         session = _CountingSession(rows=[])
         engine = _engine(session, rules)
 
-        engine.evaluate_event(
-            _make_event(), persist=False, tenant_id="tenant-a"
-        )
+        engine.evaluate_event(_make_event(), persist=False, tenant_id="tenant-a")
 
         assert session.execute_count == 1
 
@@ -201,11 +194,11 @@ class TestPrefetchOncePerEvent_Issue1365:
         """
         related_row = (
             "22222222-2222-2222-2222-222222222222",  # event_id
-            "shipping",                              # event_type (earlier stage)
+            "shipping",  # event_type (earlier stage)
             datetime(2026, 4, 10, 8, 0, tzinfo=timezone.utc),  # LATER ts
-            "Romaine",                               # product_reference
-            100.0,                                   # quantity
-            "lbs",                                   # uom
+            "Romaine",  # product_reference
+            100.0,  # quantity
+            "lbs",  # uom
         )
         session = _CountingSession(rows=[related_row])
         engine = _engine(
@@ -220,16 +213,12 @@ class TestPrefetchOncePerEvent_Issue1365:
         evt = _make_event(
             event_timestamp=datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc),
         )
-        summary = engine.evaluate_event(
-            evt, persist=False, tenant_id="tenant-a"
-        )
+        summary = engine.evaluate_event(evt, persist=False, tenant_id="tenant-a")
 
         # One pre-fetch, not two.
         assert session.execute_count == 1
         # Temporal_order must have seen the cached row and failed.
-        temporal_result = next(
-            r for r in summary.results if r.rule_id == "r-temp"
-        )
+        temporal_result = next(r for r in summary.results if r.rule_id == "r-temp")
         assert temporal_result.result == "fail", (
             "temporal_order evaluator must consume the pre-fetched list "
             "and still detect the chronology violation "
@@ -252,9 +241,7 @@ class TestPrefetchSkipConditions_Issue1365:
         session = _CountingSession(rows=[])
         engine = _engine(session, rules)
 
-        engine.evaluate_event(
-            _make_event(), persist=False, tenant_id="tenant-a"
-        )
+        engine.evaluate_event(_make_event(), persist=False, tenant_id="tenant-a")
 
         assert session.execute_count == 0
 
@@ -266,9 +253,7 @@ class TestPrefetchSkipConditions_Issue1365:
         engine = _engine(session, rules)
 
         # No tenant_id — relational rule errors, no pre-fetch.
-        summary = engine.evaluate_event(
-            _make_event(), persist=False, tenant_id=None
-        )
+        summary = engine.evaluate_event(_make_event(), persist=False, tenant_id=None)
         assert session.execute_count == 0
         assert summary.errored == 1
         assert summary.results[0].result == "error"
@@ -296,34 +281,40 @@ class TestPrefetchSkipConditions_Issue1365:
         relational_rule = _make_rule("r", "temporal_order")
 
         # No tenant_id
-        assert engine._prefetch_related_events(
-            _make_event(), [relational_rule], tenant_id=None
-        ) is None
+        assert engine._prefetch_related_events(_make_event(), [relational_rule], tenant_id=None) is None
         # No TLC
-        assert engine._prefetch_related_events(
-            _make_event(traceability_lot_code=""),
-            [relational_rule], tenant_id="t1",
-        ) is None
+        assert (
+            engine._prefetch_related_events(
+                _make_event(traceability_lot_code=""),
+                [relational_rule],
+                tenant_id="t1",
+            )
+            is None
+        )
         # No relational rule
-        assert engine._prefetch_related_events(
-            _make_event(),
-            [_make_rule("r-fp", "field_presence")],
-            tenant_id="t1",
-        ) is None
+        assert (
+            engine._prefetch_related_events(
+                _make_event(),
+                [_make_rule("r-fp", "field_presence")],
+                tenant_id="t1",
+            )
+            is None
+        )
         # Empty applicable list
-        assert engine._prefetch_related_events(
-            _make_event(), [], tenant_id="t1"
-        ) is None
+        assert engine._prefetch_related_events(_make_event(), [], tenant_id="t1") is None
 
         assert session.execute_count == 0
 
     def test_prefetch_helper_returns_none_when_session_absent(self):
         engine = _engine(None, [])
-        assert engine._prefetch_related_events(
-            _make_event(),
-            [_make_rule("r", "temporal_order")],
-            tenant_id="t1",
-        ) is None
+        assert (
+            engine._prefetch_related_events(
+                _make_event(),
+                [_make_rule("r", "temporal_order")],
+                tenant_id="t1",
+            )
+            is None
+        )
 
 
 # ===========================================================================
@@ -336,6 +327,7 @@ class TestPrefetchFailureFallback_Issue1365:
         """If the pre-fetch raises, the engine must log and fall back
         to per-evaluator fetch so one DB hiccup doesn't lose the whole
         evaluation."""
+
         class _BoomThenOK:
             def __init__(self):
                 self.calls = 0
@@ -350,9 +342,7 @@ class TestPrefetchFailureFallback_Issue1365:
         engine = _engine(session, [_make_rule("r-temp", "temporal_order")])
 
         # Must NOT raise — eval proceeds, evaluator falls back to self-fetch.
-        summary = engine.evaluate_event(
-            _make_event(), persist=False, tenant_id="t1"
-        )
+        summary = engine.evaluate_event(_make_event(), persist=False, tenant_id="t1")
         # Pre-fetch attempt (1) + evaluator self-fetch (2).
         assert session.calls == 2
         # No crash — temporal_order returned pass (no related events).
@@ -390,10 +380,18 @@ class TestBatchPrefetch_Issue1365:
         # Seed rule-definition load rows so load_active_rules works.
         rule_rows = [
             (
-                r.rule_id, r.rule_version, r.title, r.description,
-                r.severity, r.category, r.applicability_conditions,
-                r.citation_reference, r.effective_date, r.retired_date,
-                r.evaluation_logic, r.failure_reason_template,
+                r.rule_id,
+                r.rule_version,
+                r.title,
+                r.description,
+                r.severity,
+                r.category,
+                r.applicability_conditions,
+                r.citation_reference,
+                r.effective_date,
+                r.retired_date,
+                r.evaluation_logic,
+                r.failure_reason_template,
                 r.remediation_suggestion,
             )
             for r in rules
@@ -413,8 +411,7 @@ class TestBatchPrefetch_Issue1365:
         related_fetches = [c for c in session.calls if c[0] == "related"]
         # One fetch per event, not 3 per event.
         assert len(related_fetches) == 5, (
-            f"expected 5 fetches (one per event), got "
-            f"{len(related_fetches)} — #1365 not applied in batch path"
+            f"expected 5 fetches (one per event), got {len(related_fetches)} — #1365 not applied in batch path"
         )
 
         # Each fetch's TLC must match its event (no bleed between events).
@@ -436,7 +433,10 @@ class TestEvaluatorBackwardCompat_Issue1365:
         session = _CountingSession(rows=[])
         rule = _make_rule("r", "temporal_order")
         evaluate_temporal_order(
-            _make_event(), rule.evaluation_logic, rule, session,
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="t1",
         )
         assert session.execute_count == 1
@@ -447,7 +447,10 @@ class TestEvaluatorBackwardCompat_Issue1365:
         session = _CountingSession(rows=[])  # would raise if used
         rule = _make_rule("r", "temporal_order")
         evaluate_temporal_order(
-            _make_event(), rule.evaluation_logic, rule, session,
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="t1",
             related_events=[],  # explicit empty cache
         )
@@ -457,7 +460,10 @@ class TestEvaluatorBackwardCompat_Issue1365:
         session = _CountingSession(rows=[])
         rule = _make_rule("r", "identity_consistency")
         evaluate_identity_consistency(
-            _make_event(), rule.evaluation_logic, rule, session,
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="t1",
             related_events=[],
         )
@@ -467,7 +473,10 @@ class TestEvaluatorBackwardCompat_Issue1365:
         session = _CountingSession(rows=[])
         rule = _make_rule("r", "mass_balance")
         evaluate_mass_balance(
-            _make_event(), rule.evaluation_logic, rule, session,
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="t1",
             related_events=[],
         )
@@ -479,16 +488,16 @@ class TestEvaluatorBackwardCompat_Issue1365:
         — result=pass with a "no related events" evidence note."""
         rule = _make_rule("r", "temporal_order")
         result = evaluate_temporal_order(
-            _make_event(), rule.evaluation_logic, rule, MagicMock(),
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            MagicMock(),
             tenant_id="t1",
             related_events=[],
         )
         assert result.result == "pass"
         # Sanity-check: the evidence note matches the existing copy.
-        assert any(
-            "No related events" in str(e.get("note", ""))
-            for e in (result.evidence_fields_inspected or [])
-        )
+        assert any("No related events" in str(e.get("note", "")) for e in (result.evidence_fields_inspected or []))
 
 
 # ===========================================================================
@@ -512,17 +521,16 @@ class TestSemanticsUnchanged_Issue1365:
 
         # Case A: via engine (pre-fetches).
         session_a = _CountingSession(rows=[row])
-        engine_a = _engine(
-            session_a, [_make_rule("r-temp", "temporal_order")]
-        )
-        summary_a = engine_a.evaluate_event(
-            _make_event(), persist=False, tenant_id="t1"
-        )
+        engine_a = _engine(session_a, [_make_rule("r-temp", "temporal_order")])
+        summary_a = engine_a.evaluate_event(_make_event(), persist=False, tenant_id="t1")
         # Case B: direct evaluator (self-fetches).
         session_b = _CountingSession(rows=[row])
         rule = _make_rule("r-temp", "temporal_order")
         result_b = evaluate_temporal_order(
-            _make_event(), rule.evaluation_logic, rule, session_b,
+            _make_event(),
+            rule.evaluation_logic,
+            rule,
+            session_b,
             tenant_id="t1",
         )
 

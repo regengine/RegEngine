@@ -21,17 +21,19 @@ logger = structlog.get_logger("audit_middleware")
 # These are unauthenticated / metadata endpoints — running them through
 # audit builds pressure on the audit chain with no forensic value and
 # exposes actor_ip spoofing via XFF on paths that don't require auth.
-_AUDIT_SKIP_PATHS: frozenset[str] = frozenset({
-    "/health",
-    "/healthz",
-    "/ready",
-    "/readyz",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
-    "/metrics",
-    "/favicon.ico",
-})
+_AUDIT_SKIP_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/healthz",
+        "/ready",
+        "/readyz",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/metrics",
+        "/favicon.ico",
+    }
+)
 
 # Prefix matches — any subpath under these is also skipped. Covers FastAPI's
 # Swagger static assets (/docs/oauth2-redirect, etc.) and future health

@@ -3,10 +3,11 @@ Integration Test Configuration
 Manages test fixtures, authentication, and service setup
 """
 
-import pytest
-import httpx
 import os
 from typing import AsyncGenerator
+
+import httpx
+import pytest
 
 # Service URLs from environment or defaults
 ADMIN_URL = os.getenv("TEST_ADMIN_URL", "http://localhost:8400")
@@ -39,18 +40,14 @@ async def auth_token():
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"{ADMIN_URL}/auth/login",
-                json={
-                    "email": TEST_USER_EMAIL,
-                    "password": TEST_USER_PASSWORD
-                }
+                f"{ADMIN_URL}/auth/login", json={"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD}
             )
-            
+
             if response.status_code == 200:
                 return response.json()["access_token"]
             else:
                 pytest.skip(f"Authentication failed: {response.status_code}")
-                
+
         except httpx.ConnectError:
             pytest.skip("Admin service not available for integration tests")
 
@@ -60,17 +57,14 @@ async def tenant_id(auth_token):
     """Get tenant ID for current user"""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(
-                f"{ADMIN_URL}/v1/users/me",
-                headers={"Authorization": f"Bearer {auth_token}"}
-            )
-            
+            response = await client.get(f"{ADMIN_URL}/v1/users/me", headers={"Authorization": f"Bearer {auth_token}"})
+
             if response.status_code == 200:
                 user_data = response.json()
                 return user_data["tenant_id"]
             else:
                 return "default-tenant"
-                
+
         except Exception:
             return "default-tenant"
 
@@ -80,11 +74,7 @@ async def tenant_a_token():
     """Authentication token for tenant A"""
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{ADMIN_URL}/auth/login",
-            json={
-                "email": TEST_TENANT_A_EMAIL,
-                "password": TEST_TENANT_A_PASSWORD
-            }
+            f"{ADMIN_URL}/auth/login", json={"email": TEST_TENANT_A_EMAIL, "password": TEST_TENANT_A_PASSWORD}
         )
         if response.status_code == 200:
             return response.json()["access_token"]
@@ -96,11 +86,7 @@ async def tenant_b_token():
     """Authentication token for tenant B"""
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{ADMIN_URL}/auth/login",
-            json={
-                "email": TEST_TENANT_B_EMAIL,
-                "password": TEST_TENANT_B_PASSWORD
-            }
+            f"{ADMIN_URL}/auth/login", json={"email": TEST_TENANT_B_EMAIL, "password": TEST_TENANT_B_PASSWORD}
         )
         if response.status_code == 200:
             return response.json()["access_token"]
@@ -110,10 +96,7 @@ async def tenant_b_token():
 @pytest.fixture
 def auth_headers(auth_token, tenant_id):
     """Standard authentication headers"""
-    return {
-        "Authorization": f"Bearer {auth_token}",
-        "X-Tenant-ID": tenant_id
-    }
+    return {"Authorization": f"Bearer {auth_token}", "X-Tenant-ID": tenant_id}
 
 
 @pytest.fixture(autouse=True)
@@ -124,7 +107,7 @@ async def check_services_health():
         "Energy": ENERGY_URL,
         "Opportunity": OPPORTUNITY_URL,
     }
-    
+
     async with httpx.AsyncClient(timeout=5.0) as client:
         for name, url in services.items():
             try:
@@ -139,19 +122,13 @@ async def check_services_health():
 def pytest_addoption(parser):
     """Add custom pytest command line options"""
     parser.addoption(
-        "--integration",
-        action="store_true",
-        default=False,
-        help="run integration tests (requires services running)"
+        "--integration", action="store_true", default=False, help="run integration tests (requires services running)"
     )
 
 
 def pytest_configure(config):
     """Configure pytest markers"""
-    config.addinivalue_line(
-        "markers",
-        "integration: mark test as integration test (requires services)"
-    )
+    config.addinivalue_line("markers", "integration: mark test as integration test (requires services)")
 
 
 def pytest_collection_modifyitems(config, items):

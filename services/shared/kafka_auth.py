@@ -84,7 +84,6 @@ from typing import Any, Callable, Iterable, Mapping
 
 import structlog
 
-
 logger = structlog.get_logger("shared.kafka_auth")
 
 
@@ -417,9 +416,7 @@ def sign_event(
     if not producer_service:
         raise KafkaAuthError("producer_service_empty")
 
-    key = _resolve_producer_signing_key(
-        producer_service, signing_key, required=True
-    )
+    key = _resolve_producer_signing_key(producer_service, signing_key, required=True)
     assert key is not None  # for mypy — required=True guarantees this
 
     enriched: dict[str, Any] = dict(payload)
@@ -440,9 +437,7 @@ def sign_event(
     # would pick the first match; duplicates are a confusion vector.
     auth_keys = {HEADER_SIGNATURE, HEADER_PRODUCER_SERVICE, HEADER_SIG_VERSION}
     merged: list[tuple[str, bytes]] = [
-        (name, value)
-        for (name, value) in (existing_headers or [])
-        if name not in auth_keys
+        (name, value) for (name, value) in (existing_headers or []) if name not in auth_keys
     ]
     merged.extend(auth_headers)
 
@@ -574,10 +569,7 @@ def verify_event(
         logger.warning(
             "kafka_auth_bypass_no_key",
             topic=topic,
-            advice=(
-                "set KAFKA_SIGNING_KEY_<SERVICE> (or legacy "
-                "KAFKA_EVENT_SIGNING_KEY) to enable HMAC verification"
-            ),
+            advice=("set KAFKA_SIGNING_KEY_<SERVICE> (or legacy KAFKA_EVENT_SIGNING_KEY) to enable HMAC verification"),
         )
         producer_claim = evt.get(BODY_FIELD_PRODUCER_SERVICE) or "unsigned"
         # RE-SEC-005: even on the bypass branch, enforce the per-topic
@@ -698,9 +690,7 @@ def verify_event(
         return evt, body_producer
 
     try:
-        signed_at = datetime.fromisoformat(
-            str(signed_at_raw).replace("Z", "+00:00")
-        )
+        signed_at = datetime.fromisoformat(str(signed_at_raw).replace("Z", "+00:00"))
     except (ValueError, AttributeError) as exc:
         if strict_mode:
             raise KafkaAuthError(

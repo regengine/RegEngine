@@ -3,10 +3,10 @@
 Verifies that tenant data cannot be accessed across tenant boundaries.
 """
 
-import pytest
-import httpx
 from uuid import uuid4
 
+import httpx
+import pytest
 
 # Service URLs
 ADMIN_URL = "http://localhost:8400"
@@ -45,32 +45,21 @@ class TestAPIKeyIsolation:
     def test_missing_api_key_rejected(self, admin_client):
         """Requests without API key should be rejected."""
         response = admin_client.get("/v1/admin/keys")
-        assert response.status_code in [401, 403], (
-            f"Expected 401/403 without API key, got {response.status_code}"
-        )
+        assert response.status_code in [401, 403], f"Expected 401/403 without API key, got {response.status_code}"
 
     def test_invalid_api_key_rejected(self, admin_client):
         """Invalid API keys should be rejected."""
-        response = admin_client.get(
-            "/v1/admin/keys",
-            headers={"X-Admin-Key": "invalid-key-12345"}
-        )
+        response = admin_client.get("/v1/admin/keys", headers={"X-Admin-Key": "invalid-key-12345"})
         assert response.status_code in [401, 403]
 
     def test_malformed_api_key_rejected(self, admin_client):
         """Malformed API keys should be rejected."""
         # Try SQL injection in API key
-        response = admin_client.get(
-            "/v1/admin/keys",
-            headers={"X-Admin-Key": "'; DROP TABLE api_keys; --"}
-        )
+        response = admin_client.get("/v1/admin/keys", headers={"X-Admin-Key": "'; DROP TABLE api_keys; --"})
         assert response.status_code in [401, 403]
 
         # Try very long key
-        response = admin_client.get(
-            "/v1/admin/keys",
-            headers={"X-Admin-Key": "a" * 10000}
-        )
+        response = admin_client.get("/v1/admin/keys", headers={"X-Admin-Key": "a" * 10000})
         assert response.status_code in [401, 403, 400]
 
 
@@ -81,11 +70,7 @@ class TestTenantHeaderValidation:
         """Invalid UUID format should be rejected."""
         try:
             response = graph_client.get(
-                "/v1/labels/health",
-                headers={
-                    "X-RegEngine-API-Key": "test-key",
-                    "X-Tenant-ID": "not-a-valid-uuid"
-                }
+                "/v1/labels/health", headers={"X-RegEngine-API-Key": "test-key", "X-Tenant-ID": "not-a-valid-uuid"}
             )
             # Health may not require tenant, but if it does, should reject
             # Main point is it shouldn't crash (500)
@@ -98,10 +83,7 @@ class TestTenantHeaderValidation:
         try:
             response = graph_client.get(
                 "/v1/labels/health",
-                headers={
-                    "X-RegEngine-API-Key": "test-key",
-                    "X-Tenant-ID": "'; DROP TABLE tenants; --"
-                }
+                headers={"X-RegEngine-API-Key": "test-key", "X-Tenant-ID": "'; DROP TABLE tenants; --"},
             )
             # SQL injection payloads must be rejected, never accepted as valid input
             assert response.status_code in [400, 401, 403, 422], (
@@ -121,11 +103,7 @@ class TestCrossTenantAccess:
 
         # Try to access tenant B's keys with tenant A header
         response = admin_client.get(
-            "/v1/admin/keys",
-            headers={
-                "X-Admin-Key": "admin-master-key-dev",
-                "X-Tenant-ID": tenant_a
-            }
+            "/v1/admin/keys", headers={"X-Admin-Key": "admin-master-key-dev", "X-Tenant-ID": tenant_a}
         )
 
         # Should return empty list or tenant-specific data only
@@ -144,10 +122,7 @@ class TestCrossTenantAccess:
         requesting_tenant_id = str(uuid4())
         response = admin_client.get(
             "/v1/admin/review/flagged-extractions",
-            headers={
-                "X-Admin-Key": "admin-master-key-dev",
-                "X-Tenant-ID": requesting_tenant_id
-            }
+            headers={"X-Admin-Key": "admin-master-key-dev", "X-Tenant-ID": requesting_tenant_id},
         )
 
         if response.status_code == 200:
@@ -172,9 +147,7 @@ class TestInputValidation:
         response = admin_client.post(
             "/v1/admin/tenants",
             headers={"X-Admin-Key": "admin-master-key-dev"},
-            json={
-                "name": "<script>alert('xss')</script>"
-            }
+            json={"name": "<script>alert('xss')</script>"},
         )
 
         # Should either reject or sanitize, not execute
@@ -184,8 +157,7 @@ class TestInputValidation:
             data = response.json()
             # Name should be sanitized or escaped
             if "name" in data:
-                assert "<script>" not in data["name"] or \
-                       "&lt;script&gt;" in data["name"]
+                assert "<script>" not in data["name"] or "&lt;script&gt;" in data["name"]
 
     def test_oversized_request_rejected(self, admin_client):
         """Very large request bodies should be rejected."""
@@ -194,9 +166,7 @@ class TestInputValidation:
             large_data = {"name": "x" * (10 * 1024 * 1024)}
 
             response = admin_client.post(
-                "/v1/admin/tenants",
-                headers={"X-Admin-Key": "admin-master-key-dev"},
-                json=large_data
+                "/v1/admin/tenants", headers={"X-Admin-Key": "admin-master-key-dev"}, json=large_data
             )
 
             # Should reject large requests
@@ -215,11 +185,7 @@ class TestRateLimitEnforcement:
         response = admin_client.get("/health")
 
         # Rate limit headers should be present
-        rate_limit_headers = [
-            "X-RateLimit-Limit",
-            "X-RateLimit-Remaining",
-            "X-RateLimit-Reset"
-        ]
+        rate_limit_headers = ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
 
         # At least one should be present if rate limiting is enabled
         has_rate_limit = any(h in response.headers for h in rate_limit_headers)
@@ -240,7 +206,7 @@ class TestErrorHandling:
             # Should not contain internal paths or stack traces
             assert "/users/" not in body
             assert "traceback" not in body
-            assert "file \"" not in body
+            assert 'file "' not in body
 
     def test_500_does_not_leak_stack_trace(self, admin_client):
         """500 errors should not reveal stack traces in production."""
@@ -248,12 +214,12 @@ class TestErrorHandling:
         response = admin_client.post(
             "/v1/admin/keys",
             headers={"X-Admin-Key": "admin-master-key-dev"},
-            json={"invalid": "data"}  # Missing required fields
+            json={"invalid": "data"},  # Missing required fields
         )
 
         if response.status_code == 500:
             body = response.text.lower()
             # Should not contain stack traces
             assert "traceback" not in body
-            assert "file \"" not in body
+            assert 'file "' not in body
             assert "line " not in body

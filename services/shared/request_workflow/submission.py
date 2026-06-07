@@ -55,12 +55,9 @@ class SubmissionMixin:
         defect_check = self.check_blocking_defects(tenant_id, request_case_id)
         if not defect_check["can_submit"]:
             if not force:
-                blocker_summary = "; ".join(
-                    b["message"] for b in defect_check["blockers"][:5]
-                )
+                blocker_summary = "; ".join(b["message"] for b in defect_check["blockers"][:5])
                 raise ValueError(
-                    f"Cannot submit: {defect_check['blocker_count']} blocking "
-                    f"defect(s). {blocker_summary}"
+                    f"Cannot submit: {defect_check['blocker_count']} blocking defect(s). {blocker_summary}"
                 )
             else:
                 logger.warning(
@@ -90,9 +87,7 @@ class SubmissionMixin:
         )
         pkg = pkg_result.mappings().fetchone()
         if not pkg:
-            raise ValueError(
-                f"Package {package_id} not found for case {request_case_id}."
-            )
+            raise ValueError(f"Package {package_id} not found for case {request_case_id}.")
 
         package_hash = pkg["package_hash"]
         contents = pkg["package_contents"]
@@ -223,9 +218,7 @@ class SubmissionMixin:
         self._safe_commit()
 
         try:
-            package = self.assemble_response_package(
-                tenant_id, request_case_id, generated_by=generated_by
-            )
+            package = self.assemble_response_package(tenant_id, request_case_id, generated_by=generated_by)
         except Exception:
             # Revert to prior status so the case isn't stuck in 'assembling'
             self.db.execute(

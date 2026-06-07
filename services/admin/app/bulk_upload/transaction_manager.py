@@ -11,13 +11,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..graph_outbox import enqueue_graph_write
-from ..supplier_cte_service import _persist_supplier_cte_event
-from ..supplier_graph_sync import (
-    CTE_EVENT_QUERY,
-    FACILITY_FTL_SCOPING_QUERY,
-    supplier_graph_sync,
-)
-from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
 from ..sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
@@ -25,7 +18,13 @@ from ..sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
-
+from ..supplier_cte_service import _persist_supplier_cte_event
+from ..supplier_graph_sync import (
+    CTE_EVENT_QUERY,
+    FACILITY_FTL_SCOPING_QUERY,
+    supplier_graph_sync,
+)
+from ..supplier_onboarding_routes import FTL_CATEGORY_LOOKUP
 
 logger = structlog.get_logger("bulk_upload.transaction_manager")
 
@@ -75,17 +74,19 @@ def build_validation_preview(
     tlcs = normalized_payload.get("tlcs") or []
     events = normalized_payload.get("events") or []
 
-    existing_facilities = db.execute(
-        select(SupplierFacilityModel).where(
-            SupplierFacilityModel.tenant_id == tenant_id,
-            SupplierFacilityModel.supplier_user_id == supplier_user_id,
+    existing_facilities = (
+        db.execute(
+            select(SupplierFacilityModel).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == supplier_user_id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     existing_keys = {_facility_identity_key(row.__dict__) for row in existing_facilities}
     known_facility_names = {
-        _normalize_text(facility.name).lower()
-        for facility in existing_facilities
-        if _normalize_text(facility.name)
+        _normalize_text(facility.name).lower() for facility in existing_facilities if _normalize_text(facility.name)
     }
     for row in facilities:
         name = _normalize_text(row.get("name")).lower()
@@ -129,7 +130,9 @@ def build_validation_preview(
                     SupplierTraceabilityLotModel.supplier_user_id == supplier_user_id,
                     SupplierTraceabilityLotModel.tlc_code.in_(tlc_codes),
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
     else:
         existing_tlc_codes = set()
@@ -159,10 +162,7 @@ def build_validation_preview(
         "events_to_chain": len(events),
         "errors": preview_errors,
         # Allow commit when only warnings remain — hard errors still block
-        "can_commit": all(
-            e.get("severity") == "warning"
-            for e in preview_errors
-        ) if preview_errors else True,
+        "can_commit": all(e.get("severity") == "warning" for e in preview_errors) if preview_errors else True,
     }
 
 
@@ -187,12 +187,16 @@ def execute_bulk_commit(
     categories_by_facility: dict[uuid_module.UUID, list[dict[str, Any]]] = defaultdict(list)
     emitted_event_rows: list[tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, SupplierFacilityModel]] = []
 
-    existing_facilities = db.execute(
-        select(SupplierFacilityModel).where(
-            SupplierFacilityModel.tenant_id == tenant_id,
-            SupplierFacilityModel.supplier_user_id == current_user.id,
+    existing_facilities = (
+        db.execute(
+            select(SupplierFacilityModel).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == current_user.id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     facilities_by_key = {
         _facility_identity_key(
@@ -239,9 +243,7 @@ def execute_bulk_commit(
                     city=_normalize_text(row.get("city")),
                     state=_normalize_text(row.get("state")),
                     postal_code=_normalize_text(row.get("postal_code")),
-                    fda_registration_number=(
-                        _normalize_text(row.get("fda_registration_number")) or None
-                    ),
+                    fda_registration_number=(_normalize_text(row.get("fda_registration_number")) or None),
                     roles=row.get("roles") or [],
                 )
                 db.add(facility)
@@ -313,9 +315,7 @@ def execute_bulk_commit(
                     supplier_user_id=current_user.id,
                     facility_id=facility.id,
                     tlc_code=tlc_code,
-                    product_description=(
-                        _normalize_text(row.get("product_description")) or None
-                    ),
+                    product_description=(_normalize_text(row.get("product_description")) or None),
                     status=_normalize_text(row.get("status")) or "active",
                 )
                 db.add(lot)
@@ -346,7 +346,7 @@ def execute_bulk_commit(
         # Each batch is flushed to the DB but the full commit happens at the end.
         BATCH_SIZE = 500
         for batch_start in range(0, len(sorted_events), BATCH_SIZE):
-            batch = sorted_events[batch_start:batch_start + BATCH_SIZE]
+            batch = sorted_events[batch_start : batch_start + BATCH_SIZE]
             for row in batch:
                 facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
                 event, lot = _persist_supplier_cte_event(
@@ -550,9 +550,7 @@ def execute_bulk_commit(
     # path; ops only need to know about the overflow that will lag.
     deferred_count = max(0, len(emitted_event_rows) - MAX_SYNC_EVENTS)
     if deferred_count > 0:
-        sync_warnings.append(
-            f"graph_sync_deferred:{deferred_count} events enqueued to graph_outbox for async replay"
-        )
+        sync_warnings.append(f"graph_sync_deferred:{deferred_count} events enqueued to graph_outbox for async replay")
 
     summary = {
         "facilities_created": facilities_created,

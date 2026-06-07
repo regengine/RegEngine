@@ -33,7 +33,6 @@ from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.subscription_gate import require_active_subscription  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
 
-
 TENANT_A = "00000000-0000-0000-0000-0000000000aa"
 TENANT_B = "00000000-0000-0000-0000-0000000000bb"
 

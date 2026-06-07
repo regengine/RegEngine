@@ -15,19 +15,18 @@ These tests exercise ``fetch_with_retry``:
 5. ``Retry-After`` header is honored — we don't sleep less than the server asked.
 6. 4xx / 5xx distinction: a 500 → 200 sequence is exactly 2 requests.
 """
+
 from __future__ import annotations
 
 from typing import List, Optional
 
 import httpx
 import pytest
-
 from app.scrapers.base import (
     _compute_backoff,
     _parse_retry_after,
     fetch_with_retry,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test transport: scripted responses + observable attempt count.
@@ -120,14 +119,17 @@ class TestRetryAfterParser_Issue1138:
 
 class Test5xxRetry_Issue1138:
     def test_500_then_200_succeeds_after_one_retry(self):
-        client, transport = _client([
-            (500, {}),
-            (200, {}),
-        ])
+        client, transport = _client(
+            [
+                (500, {}),
+                (200, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=0.01,
         )
@@ -137,15 +139,18 @@ class Test5xxRetry_Issue1138:
         assert len(sleeper.calls) == 1
 
     def test_503_twice_then_200_succeeds_after_two_retries(self):
-        client, transport = _client([
-            (503, {}),
-            (503, {}),
-            (200, {}),
-        ])
+        client, transport = _client(
+            [
+                (503, {}),
+                (503, {}),
+                (200, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=0.01,
         )
@@ -155,16 +160,19 @@ class Test5xxRetry_Issue1138:
         assert len(sleeper.calls) == 2
 
     def test_502_502_502_exhausts_and_raises(self):
-        client, transport = _client([
-            (502, {}),
-            (502, {}),
-            (502, {}),
-        ])
+        client, transport = _client(
+            [
+                (502, {}),
+                (502, {}),
+                (502, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         with pytest.raises(httpx.HTTPStatusError) as exc_info:
             fetch_with_retry(
-                client, "/test",
+                client,
+                "/test",
                 sleep=sleeper,
                 base_delay_seconds=0.01,
             )
@@ -183,14 +191,17 @@ class Test5xxRetry_Issue1138:
 class TestTransportErrorRetry_Issue1138:
     def test_read_timeout_then_200_retries_and_succeeds(self):
         req = httpx.Request("GET", "https://example.test/test")
-        client, transport = _client([
-            httpx.ReadTimeout("read timed out", request=req),
-            (200, {}),
-        ])
+        client, transport = _client(
+            [
+                httpx.ReadTimeout("read timed out", request=req),
+                (200, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=0.01,
         )
@@ -200,16 +211,19 @@ class TestTransportErrorRetry_Issue1138:
 
     def test_connect_error_exhausts_and_raises(self):
         req = httpx.Request("GET", "https://example.test/test")
-        client, transport = _client([
-            httpx.ConnectError("boom", request=req),
-            httpx.ConnectError("boom", request=req),
-            httpx.ConnectError("boom", request=req),
-        ])
+        client, transport = _client(
+            [
+                httpx.ConnectError("boom", request=req),
+                httpx.ConnectError("boom", request=req),
+                httpx.ConnectError("boom", request=req),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         with pytest.raises(httpx.ConnectError):
             fetch_with_retry(
-                client, "/test",
+                client,
+                "/test",
                 sleep=sleeper,
                 base_delay_seconds=0.01,
             )
@@ -229,7 +243,8 @@ class Test4xxNotRetried_Issue1138:
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=0.01,
         )
@@ -243,7 +258,8 @@ class Test4xxNotRetried_Issue1138:
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             allow_404_passthrough=True,
             base_delay_seconds=0.01,
@@ -258,7 +274,8 @@ class Test4xxNotRetried_Issue1138:
 
         with pytest.raises(httpx.HTTPStatusError):
             fetch_with_retry(
-                client, "/test",
+                client,
+                "/test",
                 sleep=sleeper,
                 allow_404_passthrough=False,
                 base_delay_seconds=0.01,
@@ -276,14 +293,17 @@ class TestRetryAfterHonored_Issue1138:
     def test_retry_after_larger_than_backoff_wins(self):
         # Server says "wait 5s" — we must sleep >= 5s even though our
         # computed backoff at attempt 1 is up to 1s.
-        client, transport = _client([
-            (503, {"Retry-After": "5"}),
-            (200, {}),
-        ])
+        client, transport = _client(
+            [
+                (503, {"Retry-After": "5"}),
+                (200, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         resp = fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=1.0,
             max_delay_seconds=1.0,
@@ -294,14 +314,17 @@ class TestRetryAfterHonored_Issue1138:
         assert sleeper.calls[0] >= 5.0
 
     def test_retry_after_ignored_if_missing(self):
-        client, transport = _client([
-            (503, {}),
-            (200, {}),
-        ])
+        client, transport = _client(
+            [
+                (503, {}),
+                (200, {}),
+            ]
+        )
         sleeper = _SleepRecorder()
 
         fetch_with_retry(
-            client, "/test",
+            client,
+            "/test",
             sleep=sleeper,
             base_delay_seconds=0.01,
             max_delay_seconds=0.01,
@@ -321,6 +344,7 @@ class TestBackoffMath_Issue1138:
     def test_attempt_1_caps_at_base(self):
         # Seed RNG for determinism — _compute_backoff uses random.uniform.
         import random
+
         random.seed(42)
         # attempt=1 → cap = min(max_delay, base * 2^0) = min(10, 1) = 1.
         delay = _compute_backoff(1, base=1.0, max_delay=10.0)
@@ -351,16 +375,20 @@ class TestFDARecallsScraperE2E_Issue1138:
 
         scraper = FDARecallsScraper(limit=5)
         # Replace the httpx client with a scripted one.
-        transport = _ScriptedTransport([
-            (503, {"Retry-After": "0"}),  # server says don't wait, just retry
-            (200, {}),
-        ])
+        transport = _ScriptedTransport(
+            [
+                (503, {"Retry-After": "0"}),  # server says don't wait, just retry
+                (200, {}),
+            ]
+        )
         scraper.session.close()
         scraper.session = httpx.Client(transport=transport)
-        scraper.session.headers.update({
-            "User-Agent": "RegEngine/1.0",
-            "Accept": "application/json",
-        })
+        scraper.session.headers.update(
+            {
+                "User-Agent": "RegEngine/1.0",
+                "Accept": "application/json",
+            }
+        )
 
         # Monkeypatch sleep inside base module so the test doesn't
         # actually wait. The scraper calls fetch_with_retry without an

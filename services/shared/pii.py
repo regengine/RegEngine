@@ -14,14 +14,17 @@ import re
 
 # PII patterns for redaction before external API calls (#981)
 _PII_PATTERNS = [
-    (re.compile(r'\b\d{3}-\d{2}-\d{4}\b'), '[SSN_REDACTED]'),
-    (re.compile(r'\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b'), '[PHONE_REDACTED]'),
-    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), '[EMAIL_REDACTED]'),
-    (re.compile(
-        r'\b\d{1,5}\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|'
-        r'Drive|Dr|Lane|Ln|Court|Ct|Way|Place|Pl)\b',
-        re.IGNORECASE,
-    ), '[ADDRESS_REDACTED]'),
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN_REDACTED]"),
+    (re.compile(r"\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b"), "[PHONE_REDACTED]"),
+    (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "[EMAIL_REDACTED]"),
+    (
+        re.compile(
+            r"\b\d{1,5}\s+[\w\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|"
+            r"Drive|Dr|Lane|Ln|Court|Ct|Way|Place|Pl)\b",
+            re.IGNORECASE,
+        ),
+        "[ADDRESS_REDACTED]",
+    ),
 ]
 
 
@@ -135,16 +138,18 @@ def mask_name(value: str | None) -> str:
 # Alias types that must NEVER have their value logged in the clear.
 # This is the authoritative closed set — downstream services
 # should import from here rather than hard-coding.
-SENSITIVE_ALIAS_TYPES: frozenset[str] = frozenset({
-    "duns",
-    "fda_registration",
-    "internal_code",
-    "ein",
-    "ssn",
-    "tin",
-    "passport",
-    "drivers_license",
-})
+SENSITIVE_ALIAS_TYPES: frozenset[str] = frozenset(
+    {
+        "duns",
+        "fda_registration",
+        "internal_code",
+        "ein",
+        "ssn",
+        "tin",
+        "passport",
+        "drivers_license",
+    }
+)
 
 
 def mask_alias_value(alias_type: str | None, alias_value: str | None) -> str:

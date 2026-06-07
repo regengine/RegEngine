@@ -1,6 +1,7 @@
 """Conftest for security tests — ensures shared modules are importable."""
-import sys
+
 import os
+import sys
 from pathlib import Path
 
 # Project root
@@ -13,6 +14,7 @@ for p in (str(_PROJECT_ROOT), str(_SERVICES_DIR)):
         sys.path.insert(0, p)
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 
 # Env defaults are applied by tests/conftest.py via tests/env_defaults.py

@@ -15,20 +15,20 @@ Coverage:
   - Internal savepoint rollback path is reached on DB failure (mirrors
     the existing ``_persist_evaluations`` contract)
 """
+
 from __future__ import annotations
 
 from typing import Any, List
 from unittest.mock import MagicMock
 
 import pytest
-
 from shared.rules.engine import RulesEngine
 from shared.rules.types import EvaluationSummary, RuleEvaluationResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _result(**overrides: Any) -> RuleEvaluationResult:
     defaults = dict(
@@ -101,8 +101,8 @@ def _make_engine_with_recording_session():
 # Empty / no-verdict short-circuit
 # ---------------------------------------------------------------------------
 
-class TestEmptySummary:
 
+class TestEmptySummary:
     def test_empty_results_is_noop(self):
         engine, session, executes, savepoints = _make_engine_with_recording_session()
         summary = _empty_summary(event_id="evt-empty")
@@ -133,8 +133,8 @@ class TestEmptySummary:
 # Populated summary writes rows
 # ---------------------------------------------------------------------------
 
-class TestPopulatedSummary:
 
+class TestPopulatedSummary:
     def test_single_result_writes_one_insert(self):
         engine, session, executes, savepoints = _make_engine_with_recording_session()
         summary = _populated_summary()
@@ -142,8 +142,7 @@ class TestPopulatedSummary:
         engine.persist_summary(summary, tenant_id="t-1")
 
         # Exactly one INSERT statement was executed.
-        inserts = [(stmt, params) for stmt, params in executes
-                   if "INSERT INTO fsma.rule_evaluations" in str(stmt)]
+        inserts = [(stmt, params) for stmt, params in executes if "INSERT INTO fsma.rule_evaluations" in str(stmt)]
         assert len(inserts) == 1
         # Parameter list has one row, the rule's evaluation_id.
         _, params = inserts[0]
@@ -157,16 +156,17 @@ class TestPopulatedSummary:
         """``_persist_evaluations`` uses an executemany-style INSERT — every
         row in the summary lands in one statement, not N statements."""
         engine, session, executes, _ = _make_engine_with_recording_session()
-        summary = _populated_summary(results=[
-            _result(rule_id="R1"),
-            _result(rule_id="R2", result="pass", severity="info"),
-            _result(rule_id="R3", result="warn", severity="warning"),
-        ])
+        summary = _populated_summary(
+            results=[
+                _result(rule_id="R1"),
+                _result(rule_id="R2", result="pass", severity="info"),
+                _result(rule_id="R3", result="warn", severity="warning"),
+            ]
+        )
 
         engine.persist_summary(summary, tenant_id="t-1")
 
-        inserts = [(stmt, params) for stmt, params in executes
-                   if "INSERT INTO fsma.rule_evaluations" in str(stmt)]
+        inserts = [(stmt, params) for stmt, params in executes if "INSERT INTO fsma.rule_evaluations" in str(stmt)]
         assert len(inserts) == 1
         rule_ids = [p["rule_id"] for p in inserts[0][1]]
         assert rule_ids == ["R1", "R2", "R3"]
@@ -187,16 +187,15 @@ class TestPopulatedSummary:
 # event_id resolution
 # ---------------------------------------------------------------------------
 
-class TestEventIdResolution:
 
+class TestEventIdResolution:
     def test_defaults_to_summary_event_id(self):
         engine, session, executes, _ = _make_engine_with_recording_session()
         summary = _populated_summary(event_id="from-summary")
 
         engine.persist_summary(summary, tenant_id="t-1")
 
-        inserts = [(stmt, params) for stmt, params in executes
-                   if "INSERT" in str(stmt)]
+        inserts = [(stmt, params) for stmt, params in executes if "INSERT" in str(stmt)]
         assert inserts[0][1][0]["event_id"] == "from-summary"
 
     def test_kwarg_overrides_summary_event_id(self):
@@ -208,8 +207,7 @@ class TestEventIdResolution:
 
         engine.persist_summary(summary, tenant_id="t-1", event_id="explicit-override")
 
-        inserts = [(stmt, params) for stmt, params in executes
-                   if "INSERT" in str(stmt)]
+        inserts = [(stmt, params) for stmt, params in executes if "INSERT" in str(stmt)]
         assert inserts[0][1][0]["event_id"] == "explicit-override"
 
     def test_missing_event_id_raises_value_error(self):
@@ -226,8 +224,8 @@ class TestEventIdResolution:
 # Failure path mirrors _persist_evaluations contract
 # ---------------------------------------------------------------------------
 
-class TestFailurePath:
 
+class TestFailurePath:
     def test_db_failure_rolls_savepoint_and_marks_event(self):
         """On INSERT failure: savepoint rolled back, traceability_events
         marked with ``evaluation_error`` so operators can see the event
@@ -243,8 +241,7 @@ class TestFailurePath:
         assert savepoints[0].rolled_back is True
 
         # Two execute() calls: the failed INSERT and the marker UPDATE.
-        update_calls = [(stmt, params) for stmt, params in executes
-                        if "UPDATE fsma.traceability_events" in str(stmt)]
+        update_calls = [(stmt, params) for stmt, params in executes if "UPDATE fsma.traceability_events" in str(stmt)]
         assert len(update_calls) == 1
         assert update_calls[0][1]["tenant_id"] == "t-1"
         assert update_calls[0][1]["event_id"] == "evt-1"

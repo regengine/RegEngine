@@ -1,7 +1,8 @@
-import os
-import requests
-import sys
 import datetime
+import os
+import sys
+
+import requests
 
 ADMIN_API_URL = "http://localhost:8400"
 API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
@@ -14,20 +15,21 @@ HEADERS = {
     "X-Tenant-ID": TENANT_ID,
 }
 
+
 def verify_export():
     print("Verifying FDA Request Mode Export...")
 
     start_date = "2025-01-01"
     end_date = "2029-01-01"
-    
+
     # Path Candidates based on code inspection (double prefix)
     paths = [
-        "/fsma/v1/fsma/export/fda-request", # Direct double prefix
-        "/v1/fsma/export/fda-request",      # Single prefix (if one invalid)
-        "/fsma/export/fda-request",         # Short prefix
-        "/fsma/compliance/export/fda-request" # Explicit router structure
+        "/fsma/v1/fsma/export/fda-request",  # Direct double prefix
+        "/v1/fsma/export/fda-request",  # Single prefix (if one invalid)
+        "/fsma/export/fda-request",  # Short prefix
+        "/fsma/compliance/export/fda-request",  # Explicit router structure
     ]
-    
+
     # Service Hosts
     hosts = [
         ("Graph Direct", "http://localhost:8200"),
@@ -50,6 +52,7 @@ def verify_export():
                 print(f"   Connection Failed: {e}")
 
     print("❌ All attempts failed.")
+
 
 if __name__ == "__main__":
     verify_export()

@@ -1,17 +1,17 @@
 """Tests for circuit breaker module."""
 
-import pytest
 import asyncio
 import uuid
 from unittest.mock import MagicMock
 
+import pytest
 from shared.circuit_breaker import (
     CircuitBreaker,
-    CircuitState,
     CircuitOpenError,
+    CircuitState,
+    get_all_circuit_metrics,
     neo4j_circuit,
     redis_circuit,
-    get_all_circuit_metrics,
 )
 from shared.circuit_breaker_store import reset_store
 
@@ -40,35 +40,35 @@ class TestCircuitBreaker:
     def test_opens_after_failure_threshold(self):
         """Circuit should open after reaching failure threshold."""
         breaker = CircuitBreaker(name=_unique_name(), failure_threshold=3)
-        
+
         @breaker
         def failing_func():
             raise ValueError("Test error")
-        
+
         # Fail 3 times
         for _ in range(3):
             with pytest.raises(ValueError):
                 failing_func()
-        
+
         # Should now be open
         assert breaker.state == CircuitState.OPEN
 
     def test_rejects_when_open(self):
         """Circuit should reject calls when open."""
         breaker = CircuitBreaker(name=_unique_name(), failure_threshold=1, recovery_timeout=60)
-        
+
         @breaker
         def failing_func():
             raise ValueError("Test error")
-        
+
         # Trigger open state
         with pytest.raises(ValueError):
             failing_func()
-        
+
         # Should reject with CircuitOpenError
         with pytest.raises(CircuitOpenError) as exc_info:
             failing_func()
-        
+
         assert exc_info.value.name == breaker.name
         assert exc_info.value.retry_after > 0
 
@@ -76,7 +76,7 @@ class TestCircuitBreaker:
         """Successful calls should reset failure count."""
         breaker = CircuitBreaker(name=_unique_name(), failure_threshold=3)
         call_count = 0
-        
+
         @breaker
         def sometimes_fails():
             nonlocal call_count
@@ -84,11 +84,11 @@ class TestCircuitBreaker:
             if call_count == 1:
                 raise ValueError("First call fails")
             return "success"
-        
+
         # First call fails
         with pytest.raises(ValueError):
             sometimes_fails()
-        
+
         # Second call succeeds - should reset
         result = sometimes_fails()
         assert result == "success"
@@ -98,7 +98,7 @@ class TestCircuitBreaker:
         """Should return metrics dict."""
         breaker = CircuitBreaker(name=_unique_name("metrics"), failure_threshold=5)
         metrics = breaker.get_metrics()
-        
+
         assert metrics["name"] == breaker.name
         assert metrics["state"] == "CLOSED"
         assert metrics["failure_threshold"] == 5
@@ -107,17 +107,17 @@ class TestCircuitBreaker:
     def test_reset(self):
         """Manual reset should close circuit."""
         breaker = CircuitBreaker(name=_unique_name(), failure_threshold=1)
-        
+
         @breaker
         def failing_func():
             raise ValueError("Error")
-        
+
         # Open the circuit
         with pytest.raises(ValueError):
             failing_func()
-        
+
         assert breaker.state == CircuitState.OPEN
-        
+
         # Reset
         breaker.reset()
         assert breaker.state == CircuitState.CLOSED
@@ -130,11 +130,11 @@ class TestAsyncCircuitBreaker:
     async def test_async_function_works(self):
         """Circuit breaker should work with async functions."""
         breaker = CircuitBreaker(name=_unique_name("async"), failure_threshold=3)
-        
+
         @breaker
         async def async_func():
             return "async success"
-        
+
         result = await async_func()
         assert result == "async success"
 
@@ -142,15 +142,15 @@ class TestAsyncCircuitBreaker:
     async def test_async_opens_after_failures(self):
         """Async circuit should open after failures."""
         breaker = CircuitBreaker(name=_unique_name("async-fail"), failure_threshold=2)
-        
+
         @breaker
         async def async_failing():
             raise RuntimeError("Async error")
-        
+
         for _ in range(2):
             with pytest.raises(RuntimeError):
                 await async_failing()
-        
+
         assert breaker.state == CircuitState.OPEN
 
 
@@ -170,7 +170,7 @@ class TestPreConfiguredCircuits:
     def test_get_all_metrics(self):
         """Should return metrics for all pre-configured circuits."""
         metrics = get_all_circuit_metrics()
-        
+
         assert len(metrics) == 4
         names = [m["name"] for m in metrics]
         assert "neo4j" in names

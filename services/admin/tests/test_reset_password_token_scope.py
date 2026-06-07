@@ -51,7 +51,6 @@ sys.path.insert(0, str(repo_root / "services" / "admin"))
 from services.admin.app import auth_routes as ar  # noqa: E402
 from services.admin.app.auth import reset_password_router as _rpr  # noqa: E402
 
-
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 
@@ -79,7 +78,9 @@ def _mint_unsigned_supabase_token(
     if session_id is not None:
         payload["session_id"] = session_id
     # HS256 with any key — we only decode unverified.
-    return _jwt.encode(payload, "irrelevant-test-key", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+    return _jwt.encode(
+        payload, "irrelevant-test-key", algorithm="HS256"
+    )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
 
 # ── 1. _enforce_recovery_token_scope: amr check ─────────────────────────────
@@ -209,7 +210,9 @@ def test_enforce_rejects_missing_iat():
         "amr": [{"method": "otp"}],
         "jti": "no-iat-1",
     }
-    token = _jwt.encode(payload, "key", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+    token = _jwt.encode(
+        payload, "key", algorithm="HS256"
+    )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
     with pytest.raises(HTTPException):
         ar._enforce_recovery_token_scope(token)
 
@@ -246,13 +249,9 @@ async def test_claim_single_use_first_call_allows():
     client.set = AsyncMock(return_value=True)
     session_store._get_client = AsyncMock(return_value=client)
 
-    token = _mint_unsigned_supabase_token(
-        amr_methods=["otp"], jti="fresh-jti-42"
-    )
+    token = _mint_unsigned_supabase_token(amr_methods=["otp"], jti="fresh-jti-42")
     # Should not raise.
-    await ar._claim_recovery_token_single_use(
-        session_store, token, user_id="u1"
-    )
+    await ar._claim_recovery_token_single_use(session_store, token, user_id="u1")
     # Verified: set was called with SET NX EX semantics.
     args, kwargs = client.set.call_args
     assert args[0] == "auth:recovery:used:fresh-jti-42"
@@ -269,9 +268,7 @@ async def test_claim_single_use_replay_rejected():
     client.set = AsyncMock(return_value=None)
     session_store._get_client = AsyncMock(return_value=client)
 
-    token = _mint_unsigned_supabase_token(
-        amr_methods=["otp"], jti="replay-jti-1"
-    )
+    token = _mint_unsigned_supabase_token(amr_methods=["otp"], jti="replay-jti-1")
     with pytest.raises(HTTPException) as exc:
         await ar._claim_recovery_token_single_use(session_store, token)
     assert exc.value.status_code == 401
@@ -286,9 +283,7 @@ async def test_claim_single_use_fails_open_on_redis_error():
     client.set = AsyncMock(side_effect=RuntimeError("redis down"))
     session_store._get_client = AsyncMock(return_value=client)
 
-    token = _mint_unsigned_supabase_token(
-        amr_methods=["otp"], jti="outage-jti"
-    )
+    token = _mint_unsigned_supabase_token(amr_methods=["otp"], jti="outage-jti")
     # Should not raise — fail open.
     await ar._claim_recovery_token_single_use(session_store, token)
 
@@ -301,9 +296,7 @@ async def test_claim_single_use_falls_back_to_session_id():
     client.set = AsyncMock(return_value=True)
     session_store._get_client = AsyncMock(return_value=client)
 
-    token = _mint_unsigned_supabase_token(
-        amr_methods=["otp"], jti=None, session_id="sess-1"
-    )
+    token = _mint_unsigned_supabase_token(amr_methods=["otp"], jti=None, session_id="sess-1")
     await ar._claim_recovery_token_single_use(session_store, token)
     args, _ = client.set.call_args
     assert args[0] == "auth:recovery:used:sess-1"
@@ -324,7 +317,9 @@ async def test_claim_single_use_no_dedup_id_fails_open():
         "iat": int(time.time()),
         "amr": [{"method": "otp"}],
     }
-    token = _jwt.encode(payload, "k", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+    token = _jwt.encode(
+        payload, "k", algorithm="HS256"
+    )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
     # Should not raise — nothing to dedup on.
     await ar._claim_recovery_token_single_use(session_store, token)
     # Redis never called.
@@ -344,9 +339,7 @@ async def test_reset_password_rejects_password_session_token(monkeypatch):
     # Supabase returns a valid user for this token (signature OK).
     fake_user = SimpleNamespace(id="sb-user-1", email="victim@example.com")
     fake_user_response = SimpleNamespace(user=fake_user)
-    fake_sb = SimpleNamespace(
-        auth=SimpleNamespace(get_user=lambda _t: fake_user_response)
-    )
+    fake_sb = SimpleNamespace(auth=SimpleNamespace(get_user=lambda _t: fake_user_response))
     monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     password_token = _mint_unsigned_supabase_token(amr_methods=["password"])
@@ -445,11 +438,7 @@ async def test_reset_password_rejects_stale_otp_token(monkeypatch):
     from services.admin.app.auth_routes import ResetPasswordRequest
 
     fake_user = SimpleNamespace(id="sb-user-1", email="u@e.com")
-    fake_sb = SimpleNamespace(
-        auth=SimpleNamespace(
-            get_user=lambda _t: SimpleNamespace(user=fake_user)
-        )
-    )
+    fake_sb = SimpleNamespace(auth=SimpleNamespace(get_user=lambda _t: SimpleNamespace(user=fake_user)))
     monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
     stale_token = _mint_unsigned_supabase_token(
@@ -481,16 +470,10 @@ async def test_reset_password_rejects_replayed_otp_token(monkeypatch):
     from services.admin.app.auth_routes import ResetPasswordRequest
 
     fake_user = SimpleNamespace(id="sb-user-1", email="u@e.com")
-    fake_sb = SimpleNamespace(
-        auth=SimpleNamespace(
-            get_user=lambda _t: SimpleNamespace(user=fake_user)
-        )
-    )
+    fake_sb = SimpleNamespace(auth=SimpleNamespace(get_user=lambda _t: SimpleNamespace(user=fake_user)))
     monkeypatch.setattr(_rpr, "get_supabase", lambda: fake_sb)
 
-    recovery_token = _mint_unsigned_supabase_token(
-        amr_methods=["otp"], jti="single-use-test-jti"
-    )
+    recovery_token = _mint_unsigned_supabase_token(amr_methods=["otp"], jti="single-use-test-jti")
 
     db = MagicMock()
     session_store = MagicMock()
@@ -556,9 +539,7 @@ def test_generic_401_detail_does_not_leak_failure_mode():
     real."""
     cases = [
         _mint_unsigned_supabase_token(amr_methods=["password"]),  # wrong scope
-        _mint_unsigned_supabase_token(
-            amr_methods=["otp"], iat_offset_seconds=-30 * 60
-        ),  # stale
+        _mint_unsigned_supabase_token(amr_methods=["otp"], iat_offset_seconds=-30 * 60),  # stale
         "not-a-jwt",  # malformed
     ]
     details = set()

@@ -172,7 +172,7 @@ def test_record_hallucinations_batch(tracker_fixture):
     """Test batch insert of multiple hallucinations."""
     tracker, storage, _ = tracker_fixture
     tenant_id = "550e8400-e29b-41d4-a716-446655440000"
-    
+
     items = [
         {
             "tenant_id": tenant_id,
@@ -184,9 +184,9 @@ def test_record_hallucinations_batch(tracker_fixture):
         }
         for i in range(3)
     ]
-    
+
     result = tracker.record_hallucinations_batch(items)
-    
+
     # New return format: {successful, failed, results}
     assert "successful" in result
     assert "failed" in result
@@ -199,7 +199,7 @@ def test_record_hallucinations_batch(tracker_fixture):
 def test_list_hallucinations_pagination_format(tracker_fixture):
     """Test that list_hallucinations returns paginated format."""
     tracker, storage, _ = tracker_fixture
-    
+
     # Create a fake query method on FakeSession
     class QueryableFakeSession(FakeSession):
         def execute(self, stmt, params=None):
@@ -208,35 +208,35 @@ def test_list_hallucinations_pagination_format(tracker_fixture):
 
         def query(self, model):
             return FakeQuery(self.storage)
-    
+
     class FakeQuery:
         def __init__(self, storage):
             self._storage = storage
             self._filters = []
-        
+
         def filter(self, *args):
             return self
-        
+
         def order_by(self, *args):
             return self
-        
+
         def limit(self, n):
             self._limit = n
             return self
-        
+
         def all(self):
             items = list(self._storage.values())
-            return items[:getattr(self, "_limit", 50)]
-    
+            return items[: getattr(self, "_limit", 50)]
+
     storage.clear()
     queryable_storage = {}
-    
+
     def session_factory():
         return QueryableFakeSession(queryable_storage)
-    
+
     tracker_paginated = HallucinationTracker(session_factory, None)
-    
-    # Record one item first  
+
+    # Record one item first
     record = tracker_paginated.record_hallucination(
         tenant_id="550e8400-e29b-41d4-a716-446655440000",
         document_id="doc-test",
@@ -245,9 +245,9 @@ def test_list_hallucinations_pagination_format(tracker_fixture):
         confidence_score=0.5,
         extraction=_example_extraction(),
     )
-    
+
     result = tracker_paginated.list_hallucinations()
-    
+
     assert "items" in result
     assert "next_cursor" in result
     assert "has_more" in result

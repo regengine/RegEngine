@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import sys
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
+from shared.auth import require_api_key
+from shared.metrics_auth import require_metrics_key
+
+# Add shared utilities (portable path resolution)
+from shared.middleware import get_current_tenant_id
 
 from ...fsma_metrics import (
     get_health_status,
@@ -17,14 +24,6 @@ from ...fsma_metrics import (
 )
 from ...fsma_utils import analyze_kde_completeness, find_gaps, find_orphaned_lots
 from ...neo4j_utils import Neo4jClient
-from shared.auth import require_api_key
-
-import uuid
-import sys
-from pathlib import Path
-
-# Add shared utilities (portable path resolution)
-from shared.middleware import get_current_tenant_id
 
 router = APIRouter(tags=["Metrics"])
 logger = structlog.get_logger("fsma-metrics")
@@ -54,16 +53,12 @@ def fsma_metrics_endpoint():
 
     Returns: Prometheus text format metrics.
     """
-    return PlainTextResponse(
-        content=get_metrics_text(), media_type="text/plain; charset=utf-8"
-    )
+    return PlainTextResponse(content=get_metrics_text(), media_type="text/plain; charset=utf-8")
 
 
 @router.get("/metrics/quality")
 async def get_data_quality_metrics(
-    confidence_threshold: float = Query(
-        0.85, ge=0.0, le=1.0, description="Low confidence threshold"
-    ),
+    confidence_threshold: float = Query(0.85, ge=0.0, le=1.0, description="Low confidence threshold"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -110,14 +105,12 @@ async def get_data_quality_metrics(
         }
     except Exception as e:
         logger.exception("quality_metrics_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dashboard")
-async def fsma_dashboard(
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
-    api_key=Depends(require_api_key)
-):
+async def fsma_dashboard(tenant_id: uuid.UUID = Depends(get_current_tenant_id), api_key=Depends(require_api_key)):
     """
     FSMA compliance dashboard with aggregated health metrics.
 
@@ -155,9 +148,7 @@ async def fsma_dashboard(
             "data_quality": {
                 "gaps_total": len(gaps),
                 "orphans_total": len(orphans),
-                "kde_completeness_rate": (
-                    completeness.overall_completeness_rate if completeness else 0.0
-                ),
+                "kde_completeness_rate": (completeness.overall_completeness_rate if completeness else 0.0),
             },
             "alerts": [
                 (

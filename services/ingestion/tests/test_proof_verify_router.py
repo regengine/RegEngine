@@ -13,6 +13,7 @@ Public hash-chain verifier. Coverage:
 - Happy path: round-trip a manufactured bundle and confirm
   ``verified == True`` and ``merkle_root_recomputed`` matches.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -23,16 +24,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app.proof_verify_router import (
     MAX_BUNDLE_BYTES,
     router as proof_verify_router,
 )
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from shared.merkle_tree import MerkleTree
 from shared.rate_limit import limiter
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -55,9 +54,7 @@ def client() -> TestClient:
     try:
         limiter.reset()
     except Exception:  # pragma: no cover — defensive fallback
-        storage = getattr(limiter, "_storage", None) or getattr(
-            getattr(limiter, "limiter", None), "storage", None
-        )
+        storage = getattr(limiter, "_storage", None) or getattr(getattr(limiter, "limiter", None), "storage", None)
         if storage is not None and hasattr(storage, "reset"):
             storage.reset()
     return TestClient(_build_app())
@@ -78,9 +75,7 @@ def _make_zip_bundle(
     bad_path: str | None = None,
     extra_files: dict[str, bytes] | None = None,
 ) -> bytes:
-    csv_content = "Event ID,Hash\n" + "\n".join(
-        f"{i},{h}" for i, h in enumerate(event_hashes)
-    )
+    csv_content = "Event ID,Hash\n" + "\n".join(f"{i},{h}" for i, h in enumerate(event_hashes))
     csv_bytes = csv_content.encode("utf-8")
     csv_name = "fda_spreadsheet_test.csv"
 
@@ -145,10 +140,7 @@ class TestTenantIsolation:
 
         src = open(mod.__file__).read()
         # Only inspect lines that are real imports.
-        import_lines = [
-            ln for ln in src.splitlines()
-            if ln.lstrip().startswith(("import ", "from "))
-        ]
+        import_lines = [ln for ln in src.splitlines() if ln.lstrip().startswith(("import ", "from "))]
         forbidden = [
             "shared.database",
             "shared.cte_persistence",
@@ -160,10 +152,7 @@ class TestTenantIsolation:
         ]
         joined = "\n".join(import_lines)
         offenders = [tok for tok in forbidden if tok in joined]
-        assert not offenders, (
-            f"proof_verify_router imports tenant-scoped symbols: {offenders}\n"
-            f"Import lines:\n{joined}"
-        )
+        assert not offenders, f"proof_verify_router imports tenant-scoped symbols: {offenders}\nImport lines:\n{joined}"
 
     def test_tenant_id_in_payload_is_ignored(self, client: TestClient):
         """A caller-supplied ``tenant_id`` field in the manifest must not
@@ -290,9 +279,7 @@ class TestFailureModes:
     def test_zip_with_path_traversal_entry_rejected(self, client: TestClient):
         hashes = _make_event_hashes(2)
         root = MerkleTree(hashes).root
-        bundle = _make_zip_bundle(
-            hashes, declared_root=root, bad_path="../../etc/passwd"
-        )
+        bundle = _make_zip_bundle(hashes, declared_root=root, bad_path="../../etc/passwd")
         resp = client.post(
             "/api/v1/proof/verify",
             files={"bundle": ("bad.zip", bundle, "application/zip")},
@@ -303,9 +290,7 @@ class TestFailureModes:
     def test_zip_with_absolute_path_entry_rejected(self, client: TestClient):
         hashes = _make_event_hashes(2)
         root = MerkleTree(hashes).root
-        bundle = _make_zip_bundle(
-            hashes, declared_root=root, bad_path="/etc/passwd"
-        )
+        bundle = _make_zip_bundle(hashes, declared_root=root, bad_path="/etc/passwd")
         resp = client.post(
             "/api/v1/proof/verify",
             files={"bundle": ("bad.zip", bundle, "application/zip")},
@@ -345,13 +330,9 @@ class TestZipRoundTrip:
         assert names["merkle_root_matches_declared"]["passed"] is True
         assert len(data["merkle_root_recomputed"]) == 64
 
-    def test_checked_in_tampered_public_audit_bundle_fails(
-        self, client: TestClient
-    ):
+    def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient):
         """The tampered ZIP linked from /proof must fail verification."""
-        bundle = (
-            REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip"
-        ).read_bytes()
+        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip").read_bytes()
 
         resp = client.post(
             "/api/v1/proof/verify",

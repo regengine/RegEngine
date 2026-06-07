@@ -57,8 +57,10 @@ def _get_redis():
     if _redis_client is not None:
         return _redis_client
     try:
-        from ..config import get_settings
         import redis as redis_lib
+
+        from ..config import get_settings
+
         settings = get_settings()
         _redis_client = redis_lib.from_url(
             settings.redis_url,
@@ -107,6 +109,7 @@ def _check_redis(client_ip: str, now: float) -> int:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def _check_sandbox_rate_limit(client_ip: str) -> None:
     """Check rate limit. Raises HTTPException with Retry-After header on 429."""

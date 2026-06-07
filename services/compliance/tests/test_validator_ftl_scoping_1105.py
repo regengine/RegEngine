@@ -47,9 +47,7 @@ if str(_SERVICE_DIR) not in sys.path:
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app  # noqa: E402 — path must be set first
-
 
 client = TestClient(app)
 
@@ -83,10 +81,7 @@ class TestValidateFTLScoping:
         body = resp.json()
         # Support both the wrapped ("error":{"message":...}) and raw
         # ("detail":"...") shapes so a handler refactor doesn't flake this.
-        message = (
-            body.get("detail")
-            or (body.get("error") or {}).get("message")
-        )
+        message = body.get("detail") or (body.get("error") or {}).get("message")
         assert message == "E_NON_FTL_FOOD", body
 
     def test_ftl_commodity_required(self) -> None:
@@ -106,15 +101,10 @@ class TestValidateFTLScoping:
         # The shared exception handler reshapes the Pydantic error envelope
         # to ``{"error": {"type": "validation_error", "details": [...]}}``;
         # raw FastAPI would return ``{"detail": [...]}``. Accept either.
-        details = (
-            body.get("detail")
-            or (body.get("error") or {}).get("details")
-        )
+        details = body.get("detail") or (body.get("error") or {}).get("details")
         assert details, body
         if isinstance(details, list):
-            assert any(
-                "ftl_commodity" in str(err.get("loc", [])) for err in details
-            ), details
+            assert any("ftl_commodity" in str(err.get("loc", [])) for err in details), details
 
     def test_valid_ftl_commodity_passes_basic_validation(self) -> None:
         """A real FTL commodity clears the gate and returns 200.

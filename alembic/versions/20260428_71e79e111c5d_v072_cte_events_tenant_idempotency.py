@@ -10,10 +10,10 @@ Revision ID: 71e79e111c5d
 Revises: 9d60e8724725
 Create Date: 2026-04-28
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "71e79e111c5d"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "9d60e8724725"

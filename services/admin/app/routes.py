@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import sys
 import time
 from collections import defaultdict
@@ -11,30 +12,30 @@ from threading import Lock
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
-from shared.pagination import PaginationParams, PaginatedResponse
-from shared.metrics_auth import require_metrics_key
-from shared.rate_limit import BruteForceLimiter, limiter
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
-import html
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from shared.metrics_auth import require_metrics_key
+from shared.pagination import PaginatedResponse, PaginationParams
 
 # Centralised path resolution
 from shared.paths import ensure_shared_importable
+from shared.rate_limit import BruteForceLimiter, limiter
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
 ensure_shared_importable()
 
-from shared.auth import get_key_store
 from shared.api_key_store import DatabaseAPIKeyStore
+from shared.auth import get_key_store
 from shared.funnel_events import get_funnel_stage_metrics
 
+from .auth.signup_helpers import _ensure_unique_tenant_slug
 from .config import get_settings
 from .database import get_session
 from .dependencies import PermissionChecker
 from .review_consumer import get_consumer_health
-from .auth.signup_helpers import _ensure_unique_tenant_slug
 from .sqlalchemy_models import TenantModel
 
 # Health/metrics router at root level (operational endpoints)
@@ -216,7 +217,7 @@ def verify_admin_key(
     Exceeded limit → HTTP 429 with Retry-After header.
     All failures are logged with IP and key prefix for audit purposes.
     """
-    ip: str = (request.client.host if request.client else "unknown")
+    ip: str = request.client.host if request.client else "unknown"
 
     # Check rate limit BEFORE evaluating the key — don't give timing hints
     if _admin_key_rate_limited(ip):
@@ -258,7 +259,6 @@ def verify_admin_key(
     return True
 
 
-
 def require_funnel_read(
     _: bool = Depends(PermissionChecker("admin.funnel.read")),
 ) -> None:
@@ -271,6 +271,7 @@ async def health():
     """Health check endpoint with dependency verification."""
     import asyncio
     import os
+
     from fastapi.responses import JSONResponse
     from shared.observability.health import HealthCheck
 
@@ -279,12 +280,14 @@ async def health():
     # PostgreSQL check
     admin_db_url = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
     if admin_db_url:
+
         async def check_postgres():
             try:
                 if admin_db_url.startswith("sqlite"):
                     return {"status": "healthy"}
                 # Basic connection check
                 import psycopg
+
                 # Robustly strip SQLAlchemy-style dialect prefixes for direct psycopg connection
                 conn_info = admin_db_url
                 for prefix in ["postgresql+psycopg://", "postgresql+asyncpg://", "postgresql+psycopg2://"]:
@@ -308,6 +311,7 @@ async def health():
     neo4j_user = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password = os.getenv("NEO4J_PASSWORD")
     if neo4j_uri:
+
         async def check_neo4j():
             try:
                 if not neo4j_password:
@@ -334,10 +338,12 @@ async def health():
     # Redis check
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
+
         async def check_redis():
             try:
                 import redis.asyncio as redis
                 from redis.exceptions import RedisError
+
                 r = redis.from_url(redis_url)
                 await r.ping()
                 return {"status": "healthy"}
@@ -362,6 +368,7 @@ async def readiness():
 def consumer_health():
     """Health check endpoint for the Kafka review consumer."""
     from fastapi.responses import JSONResponse
+
     health_info = get_consumer_health()
     status_code = 200 if health_info.get("healthy") else 503
     return JSONResponse(content=health_info, status_code=status_code)
@@ -443,7 +450,6 @@ async def create_api_key(
             rate_limit_per_minute=api_key.rate_limit_per_minute,
             scopes=api_key.scopes,
         )
-
 
 
 @v1_router.get("/admin/keys", response_model=PaginatedResponse[APIKeyInfo])

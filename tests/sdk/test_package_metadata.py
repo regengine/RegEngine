@@ -13,9 +13,7 @@ def _setup_kwargs() -> dict[str, ast.AST]:
     setup_path = Path(__file__).resolve().parents[2] / "regengine" / "setup.py"
     module = ast.parse(setup_path.read_text(encoding="utf-8"))
     setup_call = next(
-        node
-        for node in ast.walk(module)
-        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "setup"
+        node for node in ast.walk(module) if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "setup"
     )
     return {kw.arg: kw.value for kw in setup_call.keywords}
 

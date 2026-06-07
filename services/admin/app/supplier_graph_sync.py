@@ -25,10 +25,9 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
-
 from shared.circuit_breaker import CircuitOpenError, neo4j_circuit
 from shared.secrets_manager import get_secrets_manager
 
@@ -329,9 +328,7 @@ class SupplierGraphSync:
                 operation=operation,
             )
 
-    def _query_required_ctes(
-        self, facility_id: str, tenant_id: str
-    ) -> Optional[dict[str, Any]]:
+    def _query_required_ctes(self, facility_id: str, tenant_id: str) -> Optional[dict[str, Any]]:
         if not self.enabled:
             return None
 
@@ -503,9 +500,7 @@ class SupplierGraphSync:
         """
         return self._get_driver()
 
-    def get_required_ctes_for_facility(
-        self, facility_id: str, tenant_id: str
-    ) -> Optional[dict[str, Any]]:
+    def get_required_ctes_for_facility(self, facility_id: str, tenant_id: str) -> Optional[dict[str, Any]]:
         """Read-side tenant-scoped lookup of a facility's FTL/CTE mapping.
 
         ``tenant_id`` MUST be passed — omitting it would make the Neo4j read

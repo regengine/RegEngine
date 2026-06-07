@@ -12,6 +12,7 @@ All of the EPIC-L exporters must build their filenames through
 
 Related issues: #1283, EPIC-L (#1655).
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -25,12 +26,7 @@ MAX_FILENAME_TOKEN = 64
 # Whitelist for filename tokens: alphanumerics, dot, underscore, hyphen.
 # Anything else is replaced with ``_``. No whitespace, no CRLF, no
 # quote, no path separator — all of which are the actual attack surface.
-_SAFE_CHARS = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789"
-    "._-"
-)
+_SAFE_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
 def safe_filename_token(raw: object, *, max_len: int = MAX_FILENAME_TOKEN) -> str:

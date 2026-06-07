@@ -38,11 +38,11 @@ import httpx
 # Config
 # ---------------------------------------------------------------------------
 
-INGESTION_URL  = os.getenv("INGESTION_URL",  "http://localhost:8002")
-GRAPH_URL      = os.getenv("GRAPH_URL",      "http://localhost:8200")
+INGESTION_URL = os.getenv("INGESTION_URL", "http://localhost:8002")
+GRAPH_URL = os.getenv("GRAPH_URL", "http://localhost:8200")
 COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", "http://localhost:8500")
-API_KEY        = os.getenv("REGENGINE_API_KEY", "test-key")
-TENANT_ID      = os.getenv("REGENGINE_TENANT",  "00000000-0000-0000-0000-000000000001")
+API_KEY = os.getenv("REGENGINE_API_KEY", "test-key")
+TENANT_ID = os.getenv("REGENGINE_TENANT", "00000000-0000-0000-0000-000000000001")
 
 CSV_PATH = Path(__file__).parents[2] / "test_data" / "regengine_test_traceability.csv"
 
@@ -50,22 +50,22 @@ TLC = "TLC1001"
 
 # Map CSV event_type → FSMA 204 CTEType
 _CTE_MAP: dict[str, str] = {
-    "harvest":      "CREATION",
-    "cooling":      "RECEIVING",   # cold-storage is a receiving point for temp compliance
-    "packing":      "INITIAL_PACKING",
-    "shipping":     "SHIPPING",
-    "receiving":    "RECEIVING",
-    "recall_alert": None,          # handled separately as a recall drill trigger
+    "harvest": "CREATION",
+    "cooling": "RECEIVING",  # cold-storage is a receiving point for temp compliance
+    "packing": "INITIAL_PACKING",
+    "shipping": "SHIPPING",
+    "receiving": "RECEIVING",
+    "recall_alert": None,  # handled separately as a recall drill trigger
 }
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-PASS  = "\033[92m✓\033[0m"
-FAIL  = "\033[91m✗\033[0m"
-WARN  = "\033[93m⚠\033[0m"
-SKIP  = "\033[90m–\033[0m"
+PASS = "\033[92m✓\033[0m"
+FAIL = "\033[91m✗\033[0m"
+WARN = "\033[93m⚠\033[0m"
+SKIP = "\033[90m–\033[0m"
 RESET = "\033[0m"
 
 
@@ -84,8 +84,8 @@ class SimResult:
         print(f"  {icon}  {label}" + (f"  — {detail}" if detail else ""))
 
     def summary(self) -> None:
-        passed  = sum(1 for _, s, _ in self.steps if s == PASS)
-        failed  = sum(1 for _, s, _ in self.steps if s == FAIL)
+        passed = sum(1 for _, s, _ in self.steps if s == PASS)
+        failed = sum(1 for _, s, _ in self.steps if s == FAIL)
         skipped = sum(1 for _, s, _ in self.steps if s == SKIP)
         print()
         print("=" * 58)
@@ -114,6 +114,7 @@ def load_csv() -> list[dict]:
 # Step 1: Ingestion
 # ---------------------------------------------------------------------------
 
+
 def step_ingest(result: SimResult, client: httpx.Client) -> str | None:
     print("\n[1] Ingestion — upload CSV to /v1/ingest/file")
     try:
@@ -132,7 +133,9 @@ def step_ingest(result: SimResult, client: httpx.Client) -> str | None:
             doc_id = body.get("job_id") or body.get("id") or body.get("task_id")
             result.record("CSV uploaded to ingestion service", True, f"status={resp.status_code} doc_id={doc_id}")
         else:
-            result.record("CSV uploaded to ingestion service", False, f"status={resp.status_code} body={resp.text[:120]}")
+            result.record(
+                "CSV uploaded to ingestion service", False, f"status={resp.status_code} body={resp.text[:120]}"
+            )
         return doc_id
     except httpx.ConnectError:
         result.record("CSV uploaded to ingestion service", None, "ingestion service unreachable — skipped")
@@ -142,6 +145,7 @@ def step_ingest(result: SimResult, client: httpx.Client) -> str | None:
 # ---------------------------------------------------------------------------
 # Step 2: Graph — POST CTE events
 # ---------------------------------------------------------------------------
+
 
 def step_graph_events(result: SimResult, client: httpx.Client, rows: list[dict]) -> int:
     print("\n[2] Graph — POST CTE events to /api/v1/fsma/traceability/event")
@@ -157,12 +161,12 @@ def step_graph_events(result: SimResult, client: httpx.Client, rows: list[dict])
 
         quantity = row["quantity"].strip()
         payload = {
-            "event_type":          cte_type,
-            "event_date":          row["cte_date"],
-            "tlc":                 row["traceability_lot_code"],
+            "event_type": cte_type,
+            "event_date": row["cte_date"],
+            "tlc": row["traceability_lot_code"],
             "location_identifier": f"{row['location_name']}, {row['location_city']}, {row['location_state']}",
             "product_description": row["product_name"],
-            "gtin":                row["product_gtin"],
+            "gtin": row["product_gtin"],
         }
         if quantity:
             try:
@@ -200,6 +204,7 @@ def step_graph_events(result: SimResult, client: httpx.Client, rows: list[dict])
 # Step 3: Trace forward + backward
 # ---------------------------------------------------------------------------
 
+
 def step_trace(result: SimResult, client: httpx.Client) -> None:
     print(f"\n[3] Trace — forward + backward for TLC={TLC}")
 
@@ -217,7 +222,9 @@ def step_trace(result: SimResult, client: httpx.Client) -> None:
             elif resp.status_code in (401, 403):
                 result.record(f"Trace {direction} for {TLC}", None, "auth required — check API key / tenant")
             elif resp.status_code == 404:
-                result.record(f"Trace {direction} for {TLC}", None, "TLC not yet in graph (events may not be indexed yet)")
+                result.record(
+                    f"Trace {direction} for {TLC}", None, "TLC not yet in graph (events may not be indexed yet)"
+                )
             else:
                 result.record(f"Trace {direction} for {TLC}", False, f"status={resp.status_code}")
         except httpx.ConnectError:
@@ -228,13 +235,14 @@ def step_trace(result: SimResult, client: httpx.Client) -> None:
 # Step 4: Recall drill
 # ---------------------------------------------------------------------------
 
+
 def step_recall(result: SimResult, client: httpx.Client) -> None:
     print(f"\n[4] Recall — Class-II drill targeting {TLC}")
     payload = {
-        "type":       "forward_trace",
+        "type": "forward_trace",
         "target_tlc": TLC,
-        "severity":   "class_ii",
-        "reason":     "RECALLSIM-001 — synthetic FDA simulation",
+        "severity": "class_ii",
+        "reason": "RECALLSIM-001 — synthetic FDA simulation",
     }
     try:
         resp = client.post(
@@ -246,12 +254,14 @@ def step_recall(result: SimResult, client: httpx.Client) -> None:
         if resp.status_code in (200, 201):
             body = resp.json()
             drill_id = body.get("drill_id") or body.get("id", "?")
-            status   = body.get("status", "?")
+            status = body.get("status", "?")
             result.record("Recall drill created and executed", True, f"drill_id={drill_id} status={status}")
         elif resp.status_code in (401, 403):
             result.record("Recall drill created and executed", None, "auth required")
         else:
-            result.record("Recall drill created and executed", False, f"status={resp.status_code} body={resp.text[:120]}")
+            result.record(
+                "Recall drill created and executed", False, f"status={resp.status_code} body={resp.text[:120]}"
+            )
     except httpx.ConnectError:
         result.record("Recall drill created and executed", None, "graph service unreachable — skipped")
 
@@ -260,19 +270,20 @@ def step_recall(result: SimResult, client: httpx.Client) -> None:
 # Step 5: Compliance validation
 # ---------------------------------------------------------------------------
 
+
 def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -> None:
     print(f"\n[5] Compliance — validate KDEs for {TLC}")
 
     # Build a config dict from the first complete row (harvest/creation event)
     first_row = next((r for r in rows if r["event_type"] == "harvest"), rows[0])
     config: dict[str, Any] = {
-        "tlc":                 first_row["traceability_lot_code"],
-        "cte_type":            "CREATION",
-        "event_date":          first_row["cte_date"],
-        "location":            f"{first_row['location_city']}, {first_row['location_state']}",
+        "tlc": first_row["traceability_lot_code"],
+        "cte_type": "CREATION",
+        "event_date": first_row["cte_date"],
+        "location": f"{first_row['location_city']}, {first_row['location_state']}",
         "product_description": first_row["product_name"],
-        "lot_size_unit":       first_row["unit"],
-        "supplier_reference":  first_row["reference_doc"],
+        "lot_size_unit": first_row["unit"],
+        "supplier_reference": first_row["reference_doc"],
     }
 
     # Test 1: all required fields present → should be valid
@@ -285,9 +296,9 @@ def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -
         )
         if resp.status_code == 200:
             body = resp.json()
-            valid    = body.get("valid", False)
+            valid = body.get("valid", False)
             n_errors = len(body.get("errors", []))
-            n_warns  = len(body.get("warnings", []))
+            n_warns = len(body.get("warnings", []))
             result.record(
                 "Compliance validate — complete KDE record",
                 valid,
@@ -310,7 +321,7 @@ def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -
         )
         if resp.status_code == 200:
             body = resp.json()
-            valid    = body.get("valid", True)
+            valid = body.get("valid", True)
             n_errors = len(body.get("errors", []))
             detected = not valid and n_errors > 0
             result.record(
@@ -321,16 +332,18 @@ def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -
         else:
             result.record("Compliance validate — missing KDE fields detected", False, f"status={resp.status_code}")
     except httpx.ConnectError:
-        result.record("Compliance validate — missing KDE fields detected", None, "compliance service unreachable — skipped")
+        result.record(
+            "Compliance validate — missing KDE fields detected", None, "compliance service unreachable — skipped"
+        )
 
     # Test 3: cooling row has empty quantity → strict mode should catch it
     cooling_row = next((r for r in rows if r["event_type"] == "cooling"), None)
     if cooling_row:
         strict_config = {
-            "tlc":       cooling_row["traceability_lot_code"],
-            "cte_type":  "RECEIVING",
+            "tlc": cooling_row["traceability_lot_code"],
+            "cte_type": "RECEIVING",
             "event_date": cooling_row["cte_date"],
-            "location":   f"{cooling_row['location_city']}, {cooling_row['location_state']}",
+            "location": f"{cooling_row['location_city']}, {cooling_row['location_state']}",
             # quantity deliberately absent — mirrors the real CSV gap
         }
         try:
@@ -341,8 +354,8 @@ def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -
                 timeout=10,
             )
             if resp.status_code == 200:
-                body     = resp.json()
-                valid    = body.get("valid", True)
+                body = resp.json()
+                valid = body.get("valid", True)
                 n_errors = len(body.get("errors", []))
                 # In strict mode missing recommended fields (lot_size_unit, supplier_reference,
                 # product_description) should surface as errors
@@ -354,12 +367,15 @@ def step_compliance(result: SimResult, client: httpx.Client, rows: list[dict]) -
             else:
                 result.record("Compliance validate — cooling row strict mode", False, f"status={resp.status_code}")
         except httpx.ConnectError:
-            result.record("Compliance validate — cooling row strict mode", None, "compliance service unreachable — skipped")
+            result.record(
+                "Compliance validate — cooling row strict mode", None, "compliance service unreachable — skipped"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Step 6: Checklist lookup
 # ---------------------------------------------------------------------------
+
 
 def step_checklist(result: SimResult, client: httpx.Client) -> None:
     print("\n[6] Compliance — fetch Fresh Produce checklist")
@@ -370,12 +386,14 @@ def step_checklist(result: SimResult, client: httpx.Client) -> None:
             timeout=10,
         )
         if resp.status_code == 200:
-            body  = resp.json()
-            name  = body.get("name", "?")
+            body = resp.json()
+            name = body.get("name", "?")
             count = len(body.get("requirements") or body.get("items") or [])
             result.record("Fresh Produce checklist retrieved", True, f"{count} requirements — {name}")
         elif resp.status_code == 404:
-            result.record("Fresh Produce checklist retrieved", False, "checklist not found (compliance service may need restart)")
+            result.record(
+                "Fresh Produce checklist retrieved", False, "checklist not found (compliance service may need restart)"
+            )
         else:
             result.record("Fresh Produce checklist retrieved", False, f"status={resp.status_code}")
     except httpx.ConnectError:
@@ -386,9 +404,10 @@ def step_checklist(result: SimResult, client: httpx.Client) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RegEngine FSMA 204 simulation runner")
-    p.add_argument("--api-key",   default=None, help="Override REGENGINE_API_KEY")
+    p.add_argument("--api-key", default=None, help="Override REGENGINE_API_KEY")
     p.add_argument("--tenant-id", default=None, help="Override REGENGINE_TENANT (UUID)")
     return p.parse_args()
 
@@ -401,15 +420,17 @@ def main() -> None:
     if args.tenant_id:
         TENANT_ID = args.tenant_id
 
-    print(textwrap.dedent(f"""
+    print(
+        textwrap.dedent(f"""
     ╔══════════════════════════════════════════════════════╗
     ║   RegEngine FSMA 204 Traceability Simulation         ║
     ║   TLC: {TLC:<47}║
     ║   Rows: {str(sum(1 for _ in open(CSV_PATH))):<46}║
     ╚══════════════════════════════════════════════════════╝
-    """))
+    """)
+    )
 
-    rows   = load_csv()
+    rows = load_csv()
     result = SimResult()
 
     with httpx.Client(timeout=30) as client:

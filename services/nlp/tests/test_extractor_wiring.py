@@ -40,6 +40,7 @@ def _env_setup(monkeypatch):
 def _reload_consumer():
     """Import or reimport services.nlp.app.consumer so env changes stick."""
     from services.nlp.app import consumer as consumer_mod
+
     return importlib.reload(consumer_mod)
 
 
@@ -105,9 +106,7 @@ class TestFSMAExtractorIsWired:
                 kafka_headers=[],
             )
 
-        mock_extractor.extract.assert_called_once_with(
-            "sample document text", "doc-1", tenant_id="tenant-a"
-        )
+        mock_extractor.extract.assert_called_once_with("sample document text", "doc-1", tenant_id="tenant-a")
         mock_extractor.route_extraction.assert_called_once_with(result)
         mock_producer.send.assert_called_once()
         send_kwargs = mock_producer.send.call_args

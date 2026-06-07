@@ -1,6 +1,7 @@
 """Centralized environment detection for all RegEngine services."""
-import os
+
 import logging
+import os
 
 _logger = logging.getLogger("regengine.env")
 
@@ -37,11 +38,7 @@ def is_production() -> bool:
 
 def get_environment() -> str:
     """Get the current environment name."""
-    return (
-        os.getenv("REGENGINE_ENV", "").lower()
-        or os.getenv("ENV", "").lower()
-        or "development"
-    )
+    return os.getenv("REGENGINE_ENV", "").lower() or os.getenv("ENV", "").lower() or "development"
 
 
 def validate_cloud_environment() -> None:
@@ -60,14 +57,11 @@ def validate_cloud_environment() -> None:
         return
 
     railway_environment_name = (
-        os.getenv("RAILWAY_ENVIRONMENT_NAME")
-        or os.getenv("RAILWAY_ENVIRONMENT")
-        or ""
-    ).strip().lower()
+        (os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_ENVIRONMENT") or "").strip().lower()
+    )
     if railway_environment_name in _PRODUCTION_ENVIRONMENT_NAMES:
         _logger.critical(
-            "Railway production environment detected with REGENGINE_ENV=%s. "
-            "Forcing REGENGINE_ENV=production.",
+            "Railway production environment detected with REGENGINE_ENV=%s. Forcing REGENGINE_ENV=production.",
             regengine_env or "<unset>",
         )
         os.environ["REGENGINE_ENV"] = "production"

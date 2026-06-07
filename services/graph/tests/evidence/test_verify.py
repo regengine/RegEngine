@@ -5,11 +5,13 @@ Covers: verify_envelope (payload hash, current hash, chain continuity, Merkle pr
 Uses EvidenceEnvelopeV3 directly to construct valid and tampered envelopes.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
+
+from services.graph.app.evidence.envelope import EvidenceEnvelopeV3, EvidenceType
 from services.graph.app.evidence.hashing import compute_envelope_hash, compute_payload_hash
 from services.graph.app.evidence.verify import EvidenceVerifier
-from services.graph.app.evidence.envelope import EvidenceEnvelopeV3, EvidenceType
 
 
 def _make_envelope(
@@ -59,7 +61,6 @@ def _make_envelope(
 
 
 class TestVerifyEnvelopeValid:
-
     def test_valid_envelope_passes_all_checks(self):
         """A freshly constructed envelope passes full verification."""
         envelope = _make_envelope()
@@ -80,7 +81,6 @@ class TestVerifyEnvelopeValid:
 
 
 class TestVerifyEnvelopeTampered:
-
     def test_tampered_payload_detected(self):
         """Modifying evidence_payload while keeping evidence_payload_hash fails payload check."""
         envelope = _make_envelope()
@@ -111,7 +111,6 @@ class TestVerifyEnvelopeTampered:
 
 
 class TestChainContinuity:
-
     def _build_chain_envelopes(self, n: int = 3):
         """Build a chain of n linked envelopes and return (chain_list, store_dict)."""
         envelopes = []

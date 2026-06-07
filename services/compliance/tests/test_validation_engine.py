@@ -8,8 +8,8 @@ Covers:
 - Warning generation for recommended fields
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -27,7 +27,6 @@ os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-validation-engine")
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app
 
 client = TestClient(app)
@@ -98,8 +97,12 @@ class TestValidationHappyPath:
 
     def test_all_allowed_cte_types_pass(self):
         allowed = [
-            "HARVESTING", "COOLING", "INITIAL_PACKING",
-            "FIRST_LAND_BASED_RECEIVING", "SHIPPING", "RECEIVING",
+            "HARVESTING",
+            "COOLING",
+            "INITIAL_PACKING",
+            "FIRST_LAND_BASED_RECEIVING",
+            "SHIPPING",
+            "RECEIVING",
             "TRANSFORMATION",
         ]
         for cte in allowed:
@@ -205,10 +208,7 @@ class TestRequiredFieldValidation:
         )
         body = resp.json()
         # Empty string is not None, so no NULL_REQUIRED_FIELD error for tlc
-        tlc_null_errors = [
-            e for e in body["errors"]
-            if e["path"] == "tlc" and e["code"] == "NULL_REQUIRED_FIELD"
-        ]
+        tlc_null_errors = [e for e in body["errors"] if e["path"] == "tlc" and e["code"] == "NULL_REQUIRED_FIELD"]
         assert len(tlc_null_errors) == 0
 
 

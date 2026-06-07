@@ -12,9 +12,7 @@ from starlette.types import ASGIApp
 # Context variable for correlation ID — shared across sync/async boundaries so
 # structlog processors, Sentry scope hooks, and Kafka producers can read the
 # trace ID of the originating HTTP request.
-correlation_id_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "correlation_id", default=None
-)
+correlation_id_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("correlation_id", default=None)
 
 # Header name used end-to-end. External callers that already carry a trace ID
 # (gateway, upstream service) should send this header; otherwise one is minted.

@@ -6,7 +6,6 @@ from typing import Iterable
 
 import requests
 import structlog
-
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper

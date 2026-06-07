@@ -1,11 +1,13 @@
 """Unit tests for the Advanced Ingestion Framework parsers."""
 
 import pytest
-from regengine_ingestion.parsers import create_default_registry, HTMLParser, XMLParser, TextParser, PDFParser
+from regengine_ingestion.parsers import HTMLParser, PDFParser, TextParser, XMLParser, create_default_registry
+
 
 @pytest.fixture
 def parser_registry():
     return create_default_registry()
+
 
 class TestParserRegistry:
     def test_registry_initialization(self, parser_registry):
@@ -34,6 +36,7 @@ class TestParserRegistry:
         assert "Plain text" in text
         assert name == "text_parser"
 
+
 class TestHTMLParser:
     def test_html_extraction(self):
         parser = HTMLParser()
@@ -41,6 +44,7 @@ class TestHTMLParser:
         text = parser.parse(html)
         assert "Title" in text
         assert "Paragraph" in text
+
 
 class TestXMLParser:
     def test_xml_extraction(self):
@@ -50,6 +54,7 @@ class TestXMLParser:
         assert "XML Title" in text
         assert "Some content" in text
 
+
 class TestTextParser:
     def test_text_extraction(self):
         parser = TextParser()
@@ -57,27 +62,33 @@ class TestTextParser:
         text = parser.parse(content)
         assert text == "Simple text"
 
+
 class TestSECParser:
     def test_sec_extraction(self):
         from regengine_ingestion.parsers import SECParser
+
         parser = SECParser()
         html = b"<html><body><h1>SEC FILING</h1><p>FORM 10-K</p><p>Item 1A. Risk Factors</p></body></html>"
         text = parser.parse(html)
         assert "Form 10-K" in text
         assert "RISK FACTORS FOUND" in text
 
+
 class TestFDAParser:
     def test_fda_extraction(self):
         from regengine_ingestion.parsers import FDAParser
+
         parser = FDAParser()
         html = b"<html><body><h1>FDA Warning Letter</h1><p>Violations found.</p></body></html>"
         text = parser.parse(html)
         assert "FDA Warning Letter" in text
         assert "Violations found" in text
 
+
 class TestEDIParser:
     def test_x12_856_validation(self):
         from regengine_ingestion.parsers import EDIParser
+
         parser = EDIParser()
         # Mock X12 856 with all required segments
         x12 = b"ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *210101*1200*U*00401*000000001*0*P*>~GS*SH*SENDER*RECEIVER*20210101*1200*1*X*004010~ST*856*0001~BSN*00*SHIP001*20210101*1200~HL*1**S~SE*3*0001~GE*1*1~IEA*1*000000001~"
@@ -87,6 +98,7 @@ class TestEDIParser:
 
     def test_x12_invalid_validation(self):
         from regengine_ingestion.parsers import EDIParser
+
         parser = EDIParser()
         # Missing HL segment for 856
         x12 = b"ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *210101*1200*U*00401*000000001*0*P*>~GS*SH*SENDER*RECEIVER*20210101*1200*1*X*004010~ST*856*0001~BSN*00*SHIP001*20210101*1200~SE*3*0001~GE*1*1~IEA*1*000000001~"

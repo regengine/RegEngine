@@ -1,9 +1,10 @@
 import asyncio
 import time
 import uuid
+from typing import Any, Callable, Dict, Optional
+
 import httpx
 import pytest
-from typing import Dict, Any, Callable, Optional
 
 
 def poll_until(
@@ -34,44 +35,50 @@ def poll_until(
         time.sleep(min(interval, remaining))
     return None
 
+
 # Service URLs (configurable via env vars in real run)
 # Assuming running via docker-compose
 INGESTION_URL = "http://localhost:8002"
 GRAPH_URL = "http://localhost:8200"
 ADMIN_URL = "http://localhost:8400"
 
+
 @pytest.fixture
 def http_client(request):
     """
-    Returns an HTTP client. 
-    If --mock-services is passed or if services are unreachable, 
+    Returns an HTTP client.
+    If --mock-services is passed or if services are unreachable,
     it returns a Mock client for testing the test logic itself.
     """
     try:
         # Check if services are reachable
         with httpx.Client(timeout=2.0) as client:
             client.get(f"{INGESTION_URL}/health")
-            
+
         with httpx.Client(timeout=30.0) as client:
             yield client
     except Exception:
         print("\n⚠️  Services unreachable. Using MOCK client for verification.")
         yield MockClient()
 
+
 class MockClient:
     def post(self, url, json=None, **kwargs):
         class Response:
             status_code = 200
             text = "Mock Success"
+
             def json(self):
                 if "ingest" in url:
                     return {"task_id": "mock-task-123", "id": "mock-task-123"}
                 return {}
+
         return Response()
-        
+
     def get(self, url, **kwargs):
         class Response:
             status_code = 200
+
             def json(self):
                 if "/trace/lot/" in url:
                     return {
@@ -79,24 +86,26 @@ class MockClient:
                             {
                                 "lot_code": url.split("/")[-1],
                                 "location_gln": "0012345678901",
-                                "event_date": "2025-10-15"
+                                "event_date": "2025-10-15",
                             }
                         ]
                     }
                 return {}
+
         return Response()
+
 
 def test_full_recall_flow(http_client):
     """
     End-to-End Test for FSMA 204 Recall Flow.
-    
+
     Scenario:
     1. Ingest a mock Bill of Lading (BOL).
     2. Wait for async processing (NLP extraction -> Graph ingestion).
     3. Query the Graph Service for the specific Traceability Lot Code (TLC).
     4. Verify the trace events and facility controls.
     """
-    
+
     # 1. Prepare Mock Document
     doc_id = str(uuid.uuid4())
     lot_code = f"LOT-E2E-{doc_id[:8]}"
@@ -110,25 +119,25 @@ def test_full_recall_flow(http_client):
     -------------------------------------------
     Romaine Lettuce  | {lot_code} | 500 cases
     """
-    
+
     print(f"Starting E2E Test for Lot: {lot_code}")
-    
+
     # 2. Ingest Document
     ingest_payload = {
         "text": text_content,
         "source_url": "https://e2e-test.internal/manual",
-        "source_system": "E2E_TEST_RUNNER"
+        "source_system": "E2E_TEST_RUNNER",
     }
-    
+
     headers = {"X-RegEngine-API-Key": "admin"}
     response = http_client.post(f"{INGESTION_URL}/v1/ingest", json=ingest_payload, headers=headers)
     if response.status_code != 200:
         pytest.fail(f"Ingestion failed: {response.text}")
-        
+
     data = response.json()
     task_id = data.get("task_id") or data.get("id")
     print(f"Ingestion successful. Task ID: {task_id}")
-    
+
     # 3. Poll for Graph Availability (up to 30 s, 1 s interval).
     # Uses poll_until helper so the fail mode on a stalled pipeline is a
     # clean timeout, not a flaky sleep-based retry loop (GH #1350).
@@ -151,8 +160,9 @@ def test_full_recall_flow(http_client):
         assert len(events) >= 1
         first_event = events[0]
         assert first_event["lot_code"] == lot_code
-        assert "0012345678901" in str(first_event["location_gln"]) or \
-               "0098765432109" in str(first_event["location_gln"])
+        assert "0012345678901" in str(first_event["location_gln"]) or "0098765432109" in str(
+            first_event["location_gln"]
+        )
 
     if not found:
         # When running standalone (__main__), raise a descriptive RuntimeError
@@ -164,15 +174,17 @@ def test_full_recall_flow(http_client):
 
     print("E2E Recall Flow Verification Passed!")
 
+
 if __name__ == "__main__":
-    import sys
     import os
+    import sys
+
     use_mock = "--mock" in sys.argv
-    
+
     # Allow overriding service URLs via env vars
     INGESTION_URL = os.getenv("INGESTION_URL", INGESTION_URL)
     GRAPH_URL = os.getenv("GRAPH_URL", GRAPH_URL)
-    
+
     if use_mock:
         print("Using Mock Client (Explicit flag)")
         test_full_recall_flow(MockClient())
@@ -180,14 +192,14 @@ if __name__ == "__main__":
         # Check which services are available
         ingestion_ok = False
         graph_ok = False
-        
+
         try:
             with httpx.Client(timeout=2.0) as client:
                 client.get(f"{INGESTION_URL}/health")
                 ingestion_ok = True
         except Exception:
             pass
-        
+
         try:
             with httpx.Client(timeout=2.0) as client:
                 resp = client.get(f"{GRAPH_URL}/health")
@@ -195,7 +207,7 @@ if __name__ == "__main__":
                     graph_ok = True
         except Exception:
             pass
-        
+
         if ingestion_ok and graph_ok:
             print("Services reachable. Using real HTTP client.")
             try:
@@ -217,4 +229,3 @@ if __name__ == "__main__":
         else:
             print("Services unreachable. Switching to Mock Client for verification.")
             test_full_recall_flow(MockClient())
-

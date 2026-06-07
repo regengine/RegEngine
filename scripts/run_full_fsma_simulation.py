@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any, Iterable
 from uuid import UUID
 
-
 ROOT = Path(__file__).resolve().parents[1]
 for path in (ROOT / "services" / "ingestion", ROOT / "services"):
     path_str = str(path)
@@ -37,7 +36,6 @@ from shared.rules.evaluators.stateless import (  # noqa: E402
 )
 from shared.rules.seeds import FSMA_RULE_SEEDS  # noqa: E402
 from shared.rules.types import EvaluationSummary, RuleDefinition  # noqa: E402
-
 
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000204")
 RUN_STARTED_AT = datetime(2026, 4, 15, 17, 0, 0, tzinfo=timezone.utc)
@@ -340,9 +338,7 @@ def run_simulation(output_dir: Path) -> dict[str, Any]:
         if not event.persist_after_preflight and summary.critical_failures
     ]
     export_candidates = [
-        model
-        for event, model, summary in evaluations
-        if event.persist_after_preflight and summary.compliant is True
+        model for event, model, summary in evaluations if event.persist_after_preflight and summary.compliant is True
     ]
     exportable_events = finalize_evidence(export_candidates)
     export_records = [_event_to_export_record(event) for event in exportable_events]

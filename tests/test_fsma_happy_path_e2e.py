@@ -59,20 +59,19 @@ for p in [str(_SERVICES_DIR), str(_INGESTION_DIR)]:
 
 try:
     from testcontainers.postgres import PostgresContainer
+
     _HAS_TESTCONTAINERS = True
 except ImportError:
     _HAS_TESTCONTAINERS = False
 
 try:
     import psycopg  # noqa: F401
+
     _HAS_PSYCOPG = True
 except ImportError:
     _HAS_PSYCOPG = False
 
-_SKIP_REASON = (
-    "testcontainers[postgres] and psycopg required "
-    "(pip install testcontainers[postgres] psycopg[binary])"
-)
+_SKIP_REASON = "testcontainers[postgres] and psycopg required (pip install testcontainers[postgres] psycopg[binary])"
 
 pytestmark = [
     pytest.mark.e2e,
@@ -112,10 +111,7 @@ _PREAMBLE_STMTS = [
 
 def _split_sql_statements(sql_text: str) -> list[str]:
     """Split a SQL file into executable statements, stripping comments."""
-    lines = [
-        line for line in sql_text.splitlines()
-        if not line.strip().startswith("--")
-    ]
+    lines = [line for line in sql_text.splitlines() if not line.strip().startswith("--")]
     stmts = []
     for stmt in "\n".join(lines).split(";"):
         stmt = stmt.strip()
@@ -127,6 +123,7 @@ def _split_sql_statements(sql_text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def postgres_url():
@@ -186,6 +183,7 @@ def test_client(postgres_url):
         del sys.modules["main"]
 
     from main import app
+
     with TestClient(app) as client:
         yield client
 
@@ -209,6 +207,7 @@ def auth_headers(tenant_id):
 # ---------------------------------------------------------------------------
 # Test Data: 4 CTEs covering the FSMA 204 supply chain
 # ---------------------------------------------------------------------------
+
 
 def _build_ingest_payload(tenant_id: str) -> dict:
     """Build a webhook payload with 4 diverse CTE types."""
@@ -300,6 +299,7 @@ def _build_ingest_payload(tenant_id: str) -> dict:
 # The Test
 # ---------------------------------------------------------------------------
 
+
 class TestFSMA204HappyPath:
     """
     FSMA 204 happy-path end-to-end test.
@@ -308,9 +308,7 @@ class TestFSMA204HappyPath:
     This is the test an acquirer's engineering team needs to see pass.
     """
 
-    def test_fsma_204_cte_ingest_and_export(
-        self, test_client, tenant_id, auth_headers
-    ):
+    def test_fsma_204_cte_ingest_and_export(self, test_client, tenant_id, auth_headers):
         """
         Full happy-path:
         1. Ingest 4 CTEs (shipping, receiving, transformation, harvesting)
@@ -331,9 +329,7 @@ class TestFSMA204HappyPath:
             headers=auth_headers,
         )
 
-        assert resp.status_code == 200, (
-            f"Ingest failed with {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 200, f"Ingest failed with {resp.status_code}: {resp.text}"
 
         body = resp.json()
 
@@ -356,15 +352,10 @@ class TestFSMA204HappyPath:
                 f"({event_result['cte_type']}) was rejected: "
                 f"{event_result.get('errors', [])}"
             )
-            assert event_result["event_id"] is not None, (
-                f"Missing event_id for {event_result['cte_type']}"
-            )
-            assert event_result["sha256_hash"] is not None, (
-                f"Missing sha256_hash for {event_result['cte_type']}"
-            )
+            assert event_result["event_id"] is not None, f"Missing event_id for {event_result['cte_type']}"
+            assert event_result["sha256_hash"] is not None, f"Missing sha256_hash for {event_result['cte_type']}"
             assert len(event_result["sha256_hash"]) == 64, (
-                f"sha256_hash should be 64 hex chars, got "
-                f"{len(event_result['sha256_hash'])}"
+                f"sha256_hash should be 64 hex chars, got {len(event_result['sha256_hash'])}"
             )
 
         # Verify we got all 4 CTE types
@@ -388,9 +379,7 @@ class TestFSMA204HappyPath:
             headers=auth_headers,
         )
 
-        assert csv_resp.status_code == 200, (
-            f"FDA CSV export failed with {csv_resp.status_code}: {csv_resp.text}"
-        )
+        assert csv_resp.status_code == 200, f"FDA CSV export failed with {csv_resp.status_code}: {csv_resp.text}"
         assert "text/csv" in csv_resp.headers.get("content-type", ""), (
             f"Expected CSV content-type, got {csv_resp.headers.get('content-type')}"
         )
@@ -400,10 +389,7 @@ class TestFSMA204HappyPath:
         reader = csv.DictReader(io.StringIO(csv_content))
         csv_rows = list(reader)
 
-        assert len(csv_rows) >= 2, (
-            f"Expected at least 2 CSV rows for TLC E2E-TOMATO-2026-001, "
-            f"got {len(csv_rows)}"
-        )
+        assert len(csv_rows) >= 2, f"Expected at least 2 CSV rows for TLC E2E-TOMATO-2026-001, got {len(csv_rows)}"
 
         # Verify FDA-required columns are present
         fda_required_columns = [
@@ -441,9 +427,7 @@ class TestFSMA204HappyPath:
             headers=auth_headers,
         )
 
-        assert pkg_resp.status_code == 200, (
-            f"FDA package export failed with {pkg_resp.status_code}: {pkg_resp.text}"
-        )
+        assert pkg_resp.status_code == 200, f"FDA package export failed with {pkg_resp.status_code}: {pkg_resp.text}"
         assert "application/zip" in pkg_resp.headers.get("content-type", ""), (
             f"Expected ZIP content-type, got {pkg_resp.headers.get('content-type')}"
         )
@@ -456,9 +440,7 @@ class TestFSMA204HappyPath:
             names = zf.namelist()
             # Package should contain at least a CSV file
             csv_files = [n for n in names if n.endswith(".csv")]
-            assert len(csv_files) >= 1, (
-                f"ZIP package should contain at least one CSV file. Contents: {names}"
-            )
+            assert len(csv_files) >= 1, f"ZIP package should contain at least one CSV file. Contents: {names}"
 
         # Verify package integrity headers
         assert pkg_resp.headers.get("X-Export-Hash"), "Missing X-Export-Hash on package"
@@ -478,17 +460,13 @@ class TestFSMA204HappyPath:
             headers=auth_headers,
         )
 
-        assert all_resp.status_code == 200, (
-            f"FDA export/all failed with {all_resp.status_code}: {all_resp.text}"
-        )
+        assert all_resp.status_code == 200, f"FDA export/all failed with {all_resp.status_code}: {all_resp.text}"
 
         all_csv = all_resp.text
         all_rows = list(csv.DictReader(io.StringIO(all_csv)))
 
         # Should contain all 4 ingested events
-        assert len(all_rows) >= 4, (
-            f"Expected at least 4 rows in full export, got {len(all_rows)}"
-        )
+        assert len(all_rows) >= 4, f"Expected at least 4 rows in full export, got {len(all_rows)}"
 
         # Verify all TLCs appear
         all_tlcs = {row.get("Traceability Lot Code (TLC)", "") for row in all_rows}

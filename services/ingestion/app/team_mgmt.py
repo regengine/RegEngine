@@ -7,18 +7,18 @@ access to the compliance platform.
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 import json
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
 from .webhook_compat import require_tenant_context
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("team")
 
@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/v1/team", tags=["Team Management"])
 
 class TeamMember(BaseModel):
     """A team member."""
+
     id: str
     name: str
     email: str
@@ -44,6 +45,7 @@ class TeamMember(BaseModel):
 
 class InviteRequest(BaseModel):
     """Request to invite a team member."""
+
     email: str
     name: str
     role: str = "viewer"
@@ -51,6 +53,7 @@ class InviteRequest(BaseModel):
 
 class TeamResponse(BaseModel):
     """Team dashboard response."""
+
     tenant_id: str
     total_members: int
     active_members: int
@@ -94,24 +97,28 @@ def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
         return None
     try:
         rows = db.execute(
-            text("SELECT id, name, email, role, status, last_active, invited_at FROM fsma.tenant_team_members WHERE tenant_id = :tid"),
-            {"tid": tenant_id}
+            text(
+                "SELECT id, name, email, role, status, last_active, invited_at FROM fsma.tenant_team_members WHERE tenant_id = :tid"
+            ),
+            {"tid": tenant_id},
         ).fetchall()
         members = []
         for row in rows:
             name = row[1]
             initials = "".join(w[0].upper() for w in name.split()[:2]) if name else ""
-            members.append(TeamMember(
-                id=row[0],
-                name=name,
-                email=row[2],
-                role=row[3],
-                status=row[4],
-                last_active=row[5],
-                invited_at=row[6],
-                avatar_initials=initials,
-                is_sample=False,
-            ))
+            members.append(
+                TeamMember(
+                    id=row[0],
+                    name=name,
+                    email=row[2],
+                    role=row[3],
+                    status=row[4],
+                    last_active=row[5],
+                    invited_at=row[6],
+                    avatar_initials=initials,
+                    is_sample=False,
+                )
+            )
         return members
     except Exception as exc:
         logger.warning("db_read_failed error=%s", str(exc))
@@ -144,7 +151,7 @@ def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
                 "status": member.status,
                 "active": member.last_active,
                 "invited": member.invited_at,
-            }
+            },
         )
         db.commit()
         return True
@@ -246,11 +253,11 @@ async def update_role(
     members = _db_get_team(tenant_id)
     if members is None:
         members = _team_store.get(tenant_id, [])
-    
+
     for member in members:
         if member.id == member_id:
             member.role = role
-            
+
             # Update in DB or memory
             db_success = _db_add_team_member(tenant_id, member)
             if not db_success:
@@ -258,7 +265,7 @@ async def update_role(
                     for mem in _team_store[tenant_id]:
                         if mem.id == member_id:
                             mem.role = role
-            
+
             return {"updated": True, "member_id": member_id, "new_role": role}
 
     return {"error": "Member not found"}

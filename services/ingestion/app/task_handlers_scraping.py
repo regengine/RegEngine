@@ -15,7 +15,7 @@ from typing import Any
 
 from shared.task_queue import register_task_handler
 
-from .scraper_job import run_state_scrape_job, run_generic_scrape_job
+from .scraper_job import run_generic_scrape_job, run_state_scrape_job
 
 
 def _handle_state_scrape(
@@ -27,6 +27,7 @@ def _handle_state_scrape(
     **_: Any,
 ) -> None:
     from .routes_scraping import ADAPTORS
+
     adaptor_instance = ADAPTORS.get(adaptor_name)
     if adaptor_instance is None:
         raise ValueError(f"Unknown adaptor: {adaptor_name!r}")

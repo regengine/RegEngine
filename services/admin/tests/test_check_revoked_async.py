@@ -21,6 +21,7 @@ These tests pin the new contract:
        if the jti is in Redis even when the in-memory set is empty
        (the cross-worker case — the whole point of #1071).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -30,7 +31,6 @@ from unittest.mock import AsyncMock, MagicMock
 import jwt as pyjwt
 import pytest
 from fastapi import HTTPException
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Unit — _check_revoked is in-memory only
@@ -54,8 +54,7 @@ def test_check_revoked_does_not_touch_redis(monkeypatch):
     redis_mock = MagicMock()
     redis_mock.sismember = MagicMock(
         side_effect=AssertionError(
-            "_check_revoked must not call Redis — the sync path silently "
-            "no-ops under a running event loop (#1071)"
+            "_check_revoked must not call Redis — the sync path silently no-ops under a running event loop (#1071)"
         )
     )
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
@@ -212,7 +211,9 @@ async def test_get_current_user_rejects_redis_revoked_jti(monkeypatch):
         }
     )
     # Decode to grab the auto-generated jti for the Redis mock.
-    decoded = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+    decoded = pyjwt.decode(
+        tok, options={"verify_signature": False}
+    )  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     jti = decoded["jti"]
 
     # Worker B: in-memory set does NOT yet contain the jti.
@@ -251,9 +252,7 @@ async def test_get_current_user_accepts_non_revoked_jti(monkeypatch):
     tenant_id = uuid.uuid4()
     monkeypatch.setattr(dependencies, "get_supabase", lambda: None)
 
-    tok = create_access_token(
-        {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 3}
-    )
+    tok = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 3})
 
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
     redis_mock = MagicMock()
@@ -291,10 +290,10 @@ async def test_get_current_user_rejects_in_memory_revoked_jti(monkeypatch):
     tenant_id = uuid.uuid4()
     monkeypatch.setattr(dependencies, "get_supabase", lambda: None)
 
-    tok = create_access_token(
-        {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0}
-    )
-    decoded = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+    tok = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0})
+    decoded = pyjwt.decode(
+        tok, options={"verify_signature": False}
+    )  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     jti = decoded["jti"]
 
     # In-memory set already carries the revocation (this worker did it).

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import sys
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -41,11 +41,6 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("fastapi")
-
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.bulk_upload.transaction_manager import (  # noqa: E402
     _iso_utc,
@@ -61,6 +56,10 @@ from app.sqlalchemy_models import (  # noqa: E402
     TenantModel,
     UserModel,
 )
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
@@ -96,8 +95,10 @@ def db() -> Session:
     # tests/test_bulk_upload_graph_sync_wiring.py and
     # tests/test_graph_outbox.py — keep all three in sync.
     from sqlalchemy import text as _text
+
     with engine.begin() as _conn:
-        _conn.execute(_text("""
+        _conn.execute(
+            _text("""
             CREATE TABLE IF NOT EXISTS graph_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NULL,
@@ -113,20 +114,35 @@ def db() -> Session:
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 dedupe_key      TEXT NULL
             )
-        """))
+        """)
+        )
 
     Session_ = sessionmaker(
-        bind=engine, autoflush=False, autocommit=False,
-        expire_on_commit=False, future=True,
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        future=True,
     )
     session = Session_()
-    session.add(TenantModel(
-        id=TENANT_ID, name="T", slug="t", status="active", settings={},
-    ))
-    session.add(UserModel(
-        id=USER_ID, email="sup@example.com", password_hash="x",
-        status="active", is_sysadmin=False,
-    ))
+    session.add(
+        TenantModel(
+            id=TENANT_ID,
+            name="T",
+            slug="t",
+            status="active",
+            settings={},
+        )
+    )
+    session.add(
+        UserModel(
+            id=USER_ID,
+            email="sup@example.com",
+            password_hash="x",
+            status="active",
+            is_sysadmin=False,
+        )
+    )
     session.commit()
     try:
         yield session
@@ -179,7 +195,6 @@ def _add_tlc(db: Session, facility: SupplierFacilityModel, code: str = "TLC-001"
 
 
 class TestIsoUtc:
-
     def test_naive_datetime_gets_utc_attached(self):
         """Line 44-45: naive datetime (no tzinfo) must have UTC attached
         via replace(), not astimezone() — the latter would use the local
@@ -190,8 +205,7 @@ class TestIsoUtc:
 
     def test_aware_datetime_converted_to_utc(self):
         """Line 46 (else): aware datetime is astimezone'd to UTC."""
-        aware_est = datetime(2026, 1, 15, 12, 0, 0,
-                            tzinfo=timezone(timedelta(hours=-5)))
+        aware_est = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone(timedelta(hours=-5)))
         result = _iso_utc(aware_est)
         assert result == "2026-01-15T17:00:00+00:00"
 
@@ -202,7 +216,6 @@ class TestIsoUtc:
 
 
 class TestParseOptionalDatetime:
-
     def test_none_returns_none(self):
         """Line 51: None input → None output. Guards callers that pass
         an optional event_time field directly from row.get()."""
@@ -243,13 +256,11 @@ class TestParseOptionalDatetime:
 
 
 class TestBuildValidationPreview:
-
     def test_facility_update_counted_when_identity_key_matches(self, db):
         """Line 95: when the incoming facility row matches an existing
         one by (name, street, city, state, postal_code), it increments
         facilities_to_update, not facilities_to_create."""
-        _add_facility(db, name="Farm A", street="123 Main",
-                      city="Salinas", state="CA", postal_code="93901")
+        _add_facility(db, name="Farm A", street="123 Main", city="Salinas", state="CA", postal_code="93901")
         db.commit()
 
         result = build_validation_preview(
@@ -257,9 +268,9 @@ class TestBuildValidationPreview:
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
             normalized_payload={
-                "facilities": [{"name": "Farm A", "street": "123 Main",
-                                "city": "Salinas", "state": "CA",
-                                "postal_code": "93901"}],
+                "facilities": [
+                    {"name": "Farm A", "street": "123 Main", "city": "Salinas", "state": "CA", "postal_code": "93901"}
+                ],
             },
             validation_errors=[],
         )
@@ -280,8 +291,7 @@ class TestBuildValidationPreview:
             validation_errors=[],
         )
         # No unknown-facility error because we skip empty refs
-        unknown_errors = [e for e in result["errors"]
-                          if "Unknown facility_name" in e.get("message", "")]
+        unknown_errors = [e for e in result["errors"] if "Unknown facility_name" in e.get("message", "")]
         assert len(unknown_errors) == 0
 
     def test_unknown_facility_name_appends_error(self, db):
@@ -292,13 +302,11 @@ class TestBuildValidationPreview:
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
             normalized_payload={
-                "ftl_scopes": [{"facility_name": "Ghost Farm",
-                                "category_id": "2"}],
+                "ftl_scopes": [{"facility_name": "Ghost Farm", "category_id": "2"}],
             },
             validation_errors=[],
         )
-        unknown = [e for e in result["errors"]
-                   if "Unknown facility_name" in e.get("message", "")]
+        unknown = [e for e in result["errors"] if "Unknown facility_name" in e.get("message", "")]
         assert len(unknown) == 1
         assert unknown[0]["section"] == "ftl_scope"
         assert unknown[0]["row"] == 1
@@ -315,8 +323,7 @@ class TestBuildValidationPreview:
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
             normalized_payload={
-                "tlcs": [{"tlc_code": "TLC-EXISTING",
-                           "facility_name": "Farm A"}],
+                "tlcs": [{"tlc_code": "TLC-EXISTING", "facility_name": "Farm A"}],
             },
             validation_errors=[],
         )
@@ -331,7 +338,6 @@ class TestBuildValidationPreview:
 
 
 class TestExecuteBulkCommit:
-
     def _patch_graph(self):
         """Return a context-manager that stubs out all graph sync calls
         so tests don't need a live Neo4j or graph service."""
@@ -343,8 +349,7 @@ class TestExecuteBulkCommit:
     def test_facility_update_branch(self, db, user):
         """Lines 249-256: existing facility — fda_registration_number and
         roles are updated in-place. facilities_updated counter incremented."""
-        _add_facility(db, name="Farm B", street="1 Oak",
-                      city="Fresno", state="CA", postal_code="93720")
+        _add_facility(db, name="Farm B", street="1 Oak", city="Fresno", state="CA", postal_code="93720")
         db.commit()
 
         with self._patch_graph():
@@ -353,11 +358,17 @@ class TestExecuteBulkCommit:
                 tenant_id=TENANT_ID,
                 current_user=user,
                 normalized_payload={
-                    "facilities": [{"name": "Farm B", "street": "1 Oak",
-                                    "city": "Fresno", "state": "CA",
-                                    "postal_code": "93720",
-                                    "fda_registration_number": "REG-001",
-                                    "roles": ["shipper"]}],
+                    "facilities": [
+                        {
+                            "name": "Farm B",
+                            "street": "1 Oak",
+                            "city": "Fresno",
+                            "state": "CA",
+                            "postal_code": "93720",
+                            "fda_registration_number": "REG-001",
+                            "roles": ["shipper"],
+                        }
+                    ],
                 },
             )
 
@@ -377,11 +388,16 @@ class TestExecuteBulkCommit:
                     tenant_id=TENANT_ID,
                     current_user=user,
                     normalized_payload={
-                        "facilities": [{"name": "Farm A", "street": "123 Main",
-                                        "city": "Salinas", "state": "CA",
-                                        "postal_code": "93901"}],
-                        "ftl_scopes": [{"facility_name": "Farm A",
-                                        "category_id": "INVALID_XYZ"}],
+                        "facilities": [
+                            {
+                                "name": "Farm A",
+                                "street": "123 Main",
+                                "city": "Salinas",
+                                "state": "CA",
+                                "postal_code": "93901",
+                            }
+                        ],
+                        "ftl_scopes": [{"facility_name": "Farm A", "category_id": "INVALID_XYZ"}],
                     },
                 )
 
@@ -406,22 +422,30 @@ class TestExecuteBulkCommit:
                 tenant_id=TENANT_ID,
                 current_user=user,
                 normalized_payload={
-                    "facilities": [{"name": "Farm A", "street": "123 Main",
-                                    "city": "Salinas", "state": "CA",
-                                    "postal_code": "93901"}],
-                    "ftl_scopes": [{"facility_name": "Farm A",
-                                    "category_id": "2"}],
+                    "facilities": [
+                        {
+                            "name": "Farm A",
+                            "street": "123 Main",
+                            "city": "Salinas",
+                            "state": "CA",
+                            "postal_code": "93901",
+                        }
+                    ],
+                    "ftl_scopes": [{"facility_name": "Farm A", "category_id": "2"}],
                 },
             )
 
         assert result["ftl_scopes_upserted"] == 1
         # Verify the existing row was updated, not duplicated
         from sqlalchemy import select as sa_select
-        scopes = db.execute(
-            sa_select(SupplierFacilityFTLCategoryModel).where(
-                SupplierFacilityFTLCategoryModel.facility_id == f.id
+
+        scopes = (
+            db.execute(
+                sa_select(SupplierFacilityFTLCategoryModel).where(SupplierFacilityFTLCategoryModel.facility_id == f.id)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(scopes) == 1
 
     def test_empty_tlc_code_raises(self, db, user):
@@ -437,9 +461,15 @@ class TestExecuteBulkCommit:
                     tenant_id=TENANT_ID,
                     current_user=user,
                     normalized_payload={
-                        "facilities": [{"name": "Farm A", "street": "123 Main",
-                                        "city": "Salinas", "state": "CA",
-                                        "postal_code": "93901"}],
+                        "facilities": [
+                            {
+                                "name": "Farm A",
+                                "street": "123 Main",
+                                "city": "Salinas",
+                                "state": "CA",
+                                "postal_code": "93901",
+                            }
+                        ],
                         "tlcs": [{"facility_name": "Farm A", "tlc_code": ""}],
                     },
                 )
@@ -457,13 +487,23 @@ class TestExecuteBulkCommit:
                 tenant_id=TENANT_ID,
                 current_user=user,
                 normalized_payload={
-                    "facilities": [{"name": "Farm A", "street": "123 Main",
-                                    "city": "Salinas", "state": "CA",
-                                    "postal_code": "93901"}],
-                    "tlcs": [{"facility_name": "Farm A",
-                               "tlc_code": "TLC-UPDATE",
-                               "product_description": "Iceberg Lettuce",
-                               "status": "inactive"}],
+                    "facilities": [
+                        {
+                            "name": "Farm A",
+                            "street": "123 Main",
+                            "city": "Salinas",
+                            "state": "CA",
+                            "postal_code": "93901",
+                        }
+                    ],
+                    "tlcs": [
+                        {
+                            "facility_name": "Farm A",
+                            "tlc_code": "TLC-UPDATE",
+                            "product_description": "Iceberg Lettuce",
+                            "status": "inactive",
+                        }
+                    ],
                 },
             )
 
@@ -496,12 +536,22 @@ class TestExecuteBulkCommit:
                     tenant_id=TENANT_ID,
                     current_user=user,
                     normalized_payload={
-                        "facilities": [{"name": "Farm A", "street": "123 Main",
-                                        "city": "Salinas", "state": "CA",
-                                        "postal_code": "93901"},
-                                       {"name": "Farm X", "street": "2 Pine",
-                                        "city": "Fresno", "state": "CA",
-                                        "postal_code": "93720"}],
+                        "facilities": [
+                            {
+                                "name": "Farm A",
+                                "street": "123 Main",
+                                "city": "Salinas",
+                                "state": "CA",
+                                "postal_code": "93901",
+                            },
+                            {
+                                "name": "Farm X",
+                                "street": "2 Pine",
+                                "city": "Fresno",
+                                "state": "CA",
+                                "postal_code": "93720",
+                            },
+                        ],
                     },
                 )
 
@@ -515,9 +565,7 @@ class TestExecuteBulkCommit:
         facility not in the 'facilities' payload section but already
         in the DB from a prior upload."""
         # Pre-insert facility but don't include it in facilities payload
-        _add_facility(db, name="Pre-existing Farm",
-                      street="9 Oak", city="Modesto",
-                      state="CA", postal_code="95350")
+        _add_facility(db, name="Pre-existing Farm", street="9 Oak", city="Modesto", state="CA", postal_code="95350")
         db.commit()
 
         with self._patch_graph():
@@ -527,10 +575,14 @@ class TestExecuteBulkCommit:
                 current_user=user,
                 normalized_payload={
                     # No facilities section — only a TLC referencing existing
-                    "tlcs": [{"facility_name": "Pre-existing Farm",
-                               "tlc_code": "TLC-DB-FALLBACK",
-                               "product_description": "Spinach",
-                               "status": "active"}],
+                    "tlcs": [
+                        {
+                            "facility_name": "Pre-existing Farm",
+                            "tlc_code": "TLC-DB-FALLBACK",
+                            "product_description": "Spinach",
+                            "status": "active",
+                        }
+                    ],
                 },
             )
 
@@ -547,8 +599,7 @@ class TestExecuteBulkCommit:
                     tenant_id=TENANT_ID,
                     current_user=user,
                     normalized_payload={
-                        "tlcs": [{"facility_name": "Ghost Farm",
-                                   "tlc_code": "TLC-GHOST"}],
+                        "tlcs": [{"facility_name": "Ghost Farm", "tlc_code": "TLC-GHOST"}],
                     },
                 )
 
@@ -559,7 +610,6 @@ class TestExecuteBulkCommit:
 
 
 class TestBuildValidationPreviewAdditional:
-
     def test_new_facility_counted_as_create(self, db):
         """Line 97: facility row with no existing identity-key match →
         facilities_to_create incremented."""
@@ -568,9 +618,15 @@ class TestBuildValidationPreviewAdditional:
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
             normalized_payload={
-                "facilities": [{"name": "Brand New Farm", "street": "9 New",
-                                "city": "Tulare", "state": "CA",
-                                "postal_code": "93274"}],
+                "facilities": [
+                    {
+                        "name": "Brand New Farm",
+                        "street": "9 New",
+                        "city": "Tulare",
+                        "state": "CA",
+                        "postal_code": "93274",
+                    }
+                ],
             },
             validation_errors=[],
         )
@@ -585,8 +641,7 @@ class TestBuildValidationPreviewAdditional:
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
             normalized_payload={
-                "tlcs": [{"tlc_code": "BRAND-NEW-TLC",
-                           "facility_name": "Anywhere"}],
+                "tlcs": [{"tlc_code": "BRAND-NEW-TLC", "facility_name": "Anywhere"}],
             },
             validation_errors=[],
         )
@@ -595,7 +650,6 @@ class TestBuildValidationPreviewAdditional:
 
 
 class TestExecuteBulkCommitAdditional:
-
     def _patch_graph(self):
         return patch(
             "app.bulk_upload.transaction_manager.supplier_graph_sync",
@@ -615,11 +669,16 @@ class TestExecuteBulkCommitAdditional:
                 tenant_id=TENANT_ID,
                 current_user=user,
                 normalized_payload={
-                    "facilities": [{"name": "Farm A", "street": "123 Main",
-                                    "city": "Salinas", "state": "CA",
-                                    "postal_code": "93901"}],
-                    "ftl_scopes": [{"facility_name": "Farm A",
-                                    "category_id": "1"}],
+                    "facilities": [
+                        {
+                            "name": "Farm A",
+                            "street": "123 Main",
+                            "city": "Salinas",
+                            "state": "CA",
+                            "postal_code": "93901",
+                        }
+                    ],
+                    "ftl_scopes": [{"facility_name": "Farm A", "category_id": "1"}],
                 },
             )
 
@@ -640,17 +699,25 @@ class TestExecuteBulkCommitAdditional:
                 tenant_id=TENANT_ID,
                 current_user=user,
                 normalized_payload={
-                    "facilities": [{"name": "Farm A", "street": "123 Main",
-                                    "city": "Salinas", "state": "CA",
-                                    "postal_code": "93901"}],
-                    "events": [{
-                        "facility_name": "Farm A",
-                        "cte_type": "shipping",
-                        "tlc_code": "TLC-EVT",
-                        "event_time": "2026-01-15T08:00:00Z",
-                        "kde_data": {"destination": "Warehouse A"},
-                        "obligation_ids": [],
-                    }],
+                    "facilities": [
+                        {
+                            "name": "Farm A",
+                            "street": "123 Main",
+                            "city": "Salinas",
+                            "state": "CA",
+                            "postal_code": "93901",
+                        }
+                    ],
+                    "events": [
+                        {
+                            "facility_name": "Farm A",
+                            "cte_type": "shipping",
+                            "tlc_code": "TLC-EVT",
+                            "event_time": "2026-01-15T08:00:00Z",
+                            "kde_data": {"destination": "Warehouse A"},
+                            "obligation_ids": [],
+                        }
+                    ],
                 },
             )
 

@@ -28,10 +28,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
+
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 # Backwards-compat alias used by tests:
 # ``app.dependency_overrides[_get_db_session]`` in the test harness must
@@ -48,14 +48,14 @@ def _get_service(db_session):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
-
-
 
 
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
+
 
 class CreateRequestCase(BaseModel):
     requesting_party: str = "FDA"
@@ -100,6 +100,7 @@ class AmendRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "",

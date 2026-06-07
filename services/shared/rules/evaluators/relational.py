@@ -19,11 +19,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
 from shared.rules.uom import CTE_LIFECYCLE_ORDER, normalize_to_lbs
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("rules-engine.relational")
 
@@ -50,10 +49,7 @@ def _resolve_tenant(
                 "rule_id": rule.rule_id,
                 "session_tenant_id": str(session_tenant_id),
                 "payload_tenant_id": str(payload_tid),
-                "note": (
-                    "event_data.tenant_id differs from authenticated "
-                    "tenant — payload value ignored (#1344)"
-                ),
+                "note": ("event_data.tenant_id differs from authenticated tenant — payload value ignored (#1344)"),
             },
         )
     return str(session_tenant_id)
@@ -80,11 +76,14 @@ def fetch_related_events(
           AND (:exclude_id IS NULL OR event_id != CAST(:exclude_id AS uuid))
         ORDER BY event_timestamp ASC
     """)
-    rows = session.execute(query, {
-        "tlc": traceability_lot_code,
-        "tenant_id": tenant_id,
-        "exclude_id": exclude_event_id,
-    }).fetchall()
+    rows = session.execute(
+        query,
+        {
+            "tlc": traceability_lot_code,
+            "tenant_id": tenant_id,
+            "exclude_id": exclude_event_id,
+        },
+    ).fetchall()
 
     return [
         {
@@ -125,25 +124,26 @@ def evaluate_temporal_order(
 
     if not tlc or not auth_tid:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
             result="skip",
-            why_failed=(
-                "Missing TLC or authenticated tenant context for temporal check"
-            ),
+            why_failed=("Missing TLC or authenticated tenant context for temporal check"),
             category=rule.category,
         )
 
     related = (
-        related_events
-        if related_events is not None
-        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+        related_events if related_events is not None else fetch_related_events(session, tlc, auth_tid, str(event_id))
     )
     if not related:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", category=rule.category,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            category=rule.category,
             evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
         )
 
@@ -155,9 +155,12 @@ def evaluate_temporal_order(
     current_stage = CTE_LIFECYCLE_ORDER.get(current_type)
     if current_stage is None:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="skip", why_failed=f"Unknown CTE type: {current_type}",
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="skip",
+            why_failed=f"Unknown CTE type: {current_type}",
             category=rule.category,
         )
 
@@ -173,21 +176,25 @@ def evaluate_temporal_order(
             other_ts = datetime.fromisoformat(other_ts.replace("Z", "+00:00"))
 
         if other_stage < current_stage and other_ts > current_ts:
-            violations.append({
-                "earlier_stage": other_type,
-                "earlier_timestamp": str(other_ts),
-                "later_stage": current_type,
-                "later_timestamp": str(current_ts),
-                "event_id": evt["event_id"],
-            })
+            violations.append(
+                {
+                    "earlier_stage": other_type,
+                    "earlier_timestamp": str(other_ts),
+                    "later_stage": current_type,
+                    "later_timestamp": str(current_ts),
+                    "event_id": evt["event_id"],
+                }
+            )
         elif other_stage > current_stage and other_ts < current_ts:
-            violations.append({
-                "earlier_stage": current_type,
-                "earlier_timestamp": str(current_ts),
-                "later_stage": other_type,
-                "later_timestamp": str(other_ts),
-                "event_id": evt["event_id"],
-            })
+            violations.append(
+                {
+                    "earlier_stage": current_type,
+                    "earlier_timestamp": str(current_ts),
+                    "later_stage": other_type,
+                    "later_timestamp": str(other_ts),
+                    "event_id": evt["event_id"],
+                }
+            )
 
     if violations:
         v = violations[0]
@@ -199,9 +206,12 @@ def evaluate_temporal_order(
             f"({rule.citation_reference or '21 CFR §1.1310'})."
         )
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="fail", why_failed=why,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="fail",
+            why_failed=why,
             evidence_fields_inspected=violations,
             citation_reference=rule.citation_reference,
             remediation_suggestion=rule.remediation_suggestion,
@@ -209,13 +219,19 @@ def evaluate_temporal_order(
         )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
-        result="pass", category=rule.category,
-        evidence_fields_inspected=[{
-            "tlc": tlc, "events_checked": len(related),
-            "current_stage": current_type,
-        }],
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="pass",
+        category=rule.category,
+        evidence_fields_inspected=[
+            {
+                "tlc": tlc,
+                "events_checked": len(related),
+                "current_stage": current_type,
+            }
+        ],
     )
 
 
@@ -241,26 +257,26 @@ def evaluate_identity_consistency(
 
     if not current_product or not tlc or not auth_tid:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
             result="skip",
-            why_failed=(
-                "Missing product_reference, TLC, or authenticated tenant "
-                "context for identity check"
-            ),
+            why_failed=("Missing product_reference, TLC, or authenticated tenant context for identity check"),
             category=rule.category,
         )
 
     related = (
-        related_events
-        if related_events is not None
-        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+        related_events if related_events is not None else fetch_related_events(session, tlc, auth_tid, str(event_id))
     )
     if not related:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", category=rule.category,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            category=rule.category,
             evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
         )
 
@@ -273,12 +289,14 @@ def evaluate_identity_consistency(
             continue
         normalized_other = " ".join(other_product.strip().lower().split())
         if normalized_other != normalized_current:
-            mismatches.append({
-                "event_id": evt["event_id"],
-                "event_type": evt["event_type"],
-                "product_reference": other_product,
-                "current_product": current_product,
-            })
+            mismatches.append(
+                {
+                    "event_id": evt["event_id"],
+                    "event_type": evt["event_type"],
+                    "product_reference": other_product,
+                    "current_product": current_product,
+                }
+            )
 
     if mismatches:
         m = mismatches[0]
@@ -290,9 +308,12 @@ def evaluate_identity_consistency(
             f"({rule.citation_reference or '21 CFR §1.1310(a)'})."
         )
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="fail", why_failed=why,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="fail",
+            why_failed=why,
             evidence_fields_inspected=mismatches,
             citation_reference=rule.citation_reference,
             remediation_suggestion=rule.remediation_suggestion,
@@ -300,13 +321,19 @@ def evaluate_identity_consistency(
         )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
-        result="pass", category=rule.category,
-        evidence_fields_inspected=[{
-            "tlc": tlc, "events_checked": len(related),
-            "product": current_product,
-        }],
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="pass",
+        category=rule.category,
+        evidence_fields_inspected=[
+            {
+                "tlc": tlc,
+                "events_checked": len(related),
+                "product": current_product,
+            }
+        ],
     )
 
 
@@ -334,26 +361,26 @@ def evaluate_mass_balance(
 
     if not tlc or not auth_tid or current_quantity is None:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
             result="skip",
-            why_failed=(
-                "Missing TLC, authenticated tenant context, or quantity for "
-                "mass balance check"
-            ),
+            why_failed=("Missing TLC, authenticated tenant context, or quantity for mass balance check"),
             category=rule.category,
         )
 
     related = (
-        related_events
-        if related_events is not None
-        else fetch_related_events(session, tlc, auth_tid, str(event_id))
+        related_events if related_events is not None else fetch_related_events(session, tlc, auth_tid, str(event_id))
     )
     if not related:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="pass", category=rule.category,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="pass",
+            category=rule.category,
             evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
         )
 
@@ -405,20 +432,24 @@ def evaluate_mass_balance(
             elif etype in output_types:
                 total_output += qty
 
-    evidence = [{
-        "tlc": tlc,
-        "total_input": total_input,
-        "total_output": total_output,
-        "tolerance_percent": tolerance_percent,
-        "units_seen": list(units_seen),
-        "events_checked": len(related) + 1,
-        "uom_converted": use_converted,
-    }]
+    evidence = [
+        {
+            "tlc": tlc,
+            "total_input": total_input,
+            "total_output": total_output,
+            "tolerance_percent": tolerance_percent,
+            "units_seen": list(units_seen),
+            "events_checked": len(related) + 1,
+            "uom_converted": use_converted,
+        }
+    ]
 
     if len(units_seen) > 1 and not use_converted:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
             result="warn",
             why_failed=(
                 f"Mass balance check inconclusive for TLC '{tlc}': "
@@ -433,8 +464,10 @@ def evaluate_mass_balance(
 
     if total_input == 0 and total_output > 0:
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
             result="warn",
             why_failed=(
                 f"Mass balance check for TLC '{tlc}': "
@@ -456,9 +489,12 @@ def evaluate_mass_balance(
             f"({rule.citation_reference or '21 CFR §1.1310'})."
         )
         return RuleEvaluationResult(
-            rule_id=rule.rule_id, rule_version=rule.rule_version,
-            rule_title=rule.title, severity=rule.severity,
-            result="fail", why_failed=why,
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="fail",
+            why_failed=why,
             evidence_fields_inspected=evidence,
             citation_reference=rule.citation_reference,
             remediation_suggestion=rule.remediation_suggestion,
@@ -466,9 +502,12 @@ def evaluate_mass_balance(
         )
 
     return RuleEvaluationResult(
-        rule_id=rule.rule_id, rule_version=rule.rule_version,
-        rule_title=rule.title, severity=rule.severity,
-        result="pass", category=rule.category,
+        rule_id=rule.rule_id,
+        rule_version=rule.rule_version,
+        rule_title=rule.title,
+        severity=rule.severity,
+        result="pass",
+        category=rule.category,
         evidence_fields_inspected=evidence,
     )
 

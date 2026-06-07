@@ -28,8 +28,7 @@ def require_env(*var_names: str) -> None:
     missing = [v for v in var_names if not os.getenv(v)]
     if missing:
         logger.critical(
-            "Missing required environment variables: %s — "
-            "service may fail at runtime",
+            "Missing required environment variables: %s — service may fail at runtime",
             ", ".join(missing),
         )
 

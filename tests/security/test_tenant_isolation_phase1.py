@@ -1,15 +1,14 @@
-
 import os
 import uuid
+
 import pytest
 from psycopg.rows import dict_row
+
 from tests.integration_requirements import psycopg_connect_or_skip
 
 # Get DB URL from env or use default (matching conftest.py)
-DB_URL = os.environ.get(
-    "ADMIN_DATABASE_URL",
-    "postgresql://regengine:regengine@localhost:5433/regengine_admin"
-)
+DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
+
 
 @pytest.fixture(scope="module")
 def db_connection():
@@ -24,9 +23,11 @@ def db_connection():
     finally:
         conn.close()
 
+
 def set_tenant_context(cursor, tenant_id):
     """Set the RLS context for the current transaction."""
     cursor.execute(f"SET app.tenant_id = '{tenant_id}';")
+
 
 class TestPhase1TenantIsolation:
     """
@@ -64,17 +65,23 @@ class TestPhase1TenantIsolation:
 
             # Context A
             set_tenant_context(cur, tenant_a)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO audit_logs (id, tenant_id, action, resource_type, resource_id, actor_id, created_at)
                 VALUES (%s, %s, 'LOGIN', 'USER', %s, %s, NOW())
-            """, (str(uuid.uuid4()), tenant_a, str(uuid.uuid4()), str(uuid.uuid4())))
+            """,
+                (str(uuid.uuid4()), tenant_a, str(uuid.uuid4()), str(uuid.uuid4())),
+            )
 
             # Context B
             set_tenant_context(cur, tenant_b)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO audit_logs (id, tenant_id, action, resource_type, resource_id, actor_id, created_at)
                 VALUES (%s, %s, 'LOGIN', 'USER', %s, %s, NOW())
-            """, (str(uuid.uuid4()), tenant_b, str(uuid.uuid4()), str(uuid.uuid4())))
+            """,
+                (str(uuid.uuid4()), tenant_b, str(uuid.uuid4()), str(uuid.uuid4())),
+            )
 
             # 2. Verify A cannot see B
             # Switch to 'authenticated' role to enforce RLS (postgres superuser bypasses RLS)
@@ -89,7 +96,7 @@ class TestPhase1TenantIsolation:
             results = cur.fetchall()
 
             # Should only see Tenant A's record
-            tenant_ids = {r['tenant_id'] for r in results}
+            tenant_ids = {r["tenant_id"] for r in results}
             assert tenant_b not in tenant_ids, "Security Breach: Tenant B data leaked into Tenant A view"
             assert tenant_a in tenant_ids, "Functional Error: Tenant A cannot see their own data"
 
@@ -98,7 +105,7 @@ class TestPhase1TenantIsolation:
             cur.execute("SELECT * FROM audit_logs")
             results = cur.fetchall()
 
-            tenant_ids = {r['tenant_id'] for r in results}
+            tenant_ids = {r["tenant_id"] for r in results}
             assert tenant_a not in tenant_ids, "Security Breach: Tenant A data leaked into Tenant B view"
             assert tenant_b in tenant_ids, "Functional Error: Tenant B cannot see their own data"
 
@@ -106,7 +113,7 @@ class TestPhase1TenantIsolation:
             cur.execute("RESET ROLE;")
 
         finally:
-            db_connection.rollback() # Clean up
+            db_connection.rollback()  # Clean up
 
     def test_public_access_denied(self, db_connection):
         """Verify that without a tenant_id set, no data is visible."""
@@ -118,10 +125,13 @@ class TestPhase1TenantIsolation:
             # Insert some data first to be sure (using a context)
             tenant_x = str(uuid.uuid4())
             set_tenant_context(cur, tenant_x)
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO audit_logs (id, tenant_id, action, resource_type, resource_id, actor_id, created_at)
                 VALUES (%s, %s, 'LOGIN', 'USER', %s, %s, NOW())
-            """, (str(uuid.uuid4()), tenant_x, str(uuid.uuid4()), str(uuid.uuid4())))
+            """,
+                (str(uuid.uuid4()), tenant_x, str(uuid.uuid4()), str(uuid.uuid4())),
+            )
 
             # Now Check Public/Null Context
             cur.execute("SET ROLE authenticated;")

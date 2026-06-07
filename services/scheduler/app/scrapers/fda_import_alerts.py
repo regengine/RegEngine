@@ -224,16 +224,8 @@ class FDAImportAlertsScraper(BaseScraper):
                 EnforcementItem(
                     source_type=self.source_type,
                     source_id=source_id,
-                    title=(
-                        f"Import Alert {alert_number}: {title}"
-                        if title
-                        else f"Import Alert {alert_number}"
-                    ),
-                    summary=(
-                        f"FDA Import Alert regarding: {title}"
-                        if title
-                        else f"FDA Import Alert {alert_number}"
-                    ),
+                    title=(f"Import Alert {alert_number}: {title}" if title else f"Import Alert {alert_number}"),
+                    summary=(f"FDA Import Alert regarding: {title}" if title else f"FDA Import Alert {alert_number}"),
                     url=absolute_url,
                     published_date=datetime.now(timezone.utc),  # Page has no per-row date
                     severity=EnforcementSeverity.HIGH,
@@ -251,9 +243,7 @@ class FDAImportAlertsScraper(BaseScraper):
         # looks like the Import Alert listing, FDA changed the markup —
         # emit a warning so the scheduler alerter fires.
         if not items and self._looks_plausible(html):
-            page_fingerprint = hashlib.sha256(
-                html[:4096].encode("utf-8", errors="ignore")
-            ).hexdigest()[:16]
+            page_fingerprint = hashlib.sha256(html[:4096].encode("utf-8", errors="ignore")).hexdigest()[:16]
             warning_msg = (
                 "parser_mismatch_suspected: page looks like Import Alert listing "
                 f"but zero alerts parsed (body_bytes={len(html)}, "
@@ -265,10 +255,7 @@ class FDAImportAlertsScraper(BaseScraper):
                 body_bytes=len(html),
                 fingerprint=page_fingerprint,
                 anchor_count=len(soup.find_all("a")),
-                note=(
-                    "HTML looks plausible but zero alerts parsed — "
-                    "FDA may have changed the page structure"
-                ),
+                note=("HTML looks plausible but zero alerts parsed — FDA may have changed the page structure"),
             )
 
         return items, warnings
@@ -295,7 +282,7 @@ class FDAImportAlertsScraper(BaseScraper):
         if not match:
             return None
         alert_number = match.group(1)
-        remainder = text[match.end():]
+        remainder = text[match.end() :]
 
         # Split on the separator if present; otherwise the anchor text is
         # just the number and we return an empty title.

@@ -12,8 +12,8 @@ Covers:
 
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 # Bootstrap imports
 os.environ.setdefault("DATABASE_URL", "sqlite:///test_state.db")
@@ -25,13 +25,13 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 
 import pytest
+from app.state import Base, SeenItem, StateManager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-from app.state import StateManager, SeenItem, Base
 
 
 @pytest.fixture
@@ -99,9 +99,7 @@ class TestIsNew:
 
 class TestMarkSeen:
     def test_creates_new_record(self, state_manager):
-        state_manager.mark_seen(
-            "src-001", "fda_recall", "content", title="Test", url="https://example.com"
-        )
+        state_manager.mark_seen("src-001", "fda_recall", "content", title="Test", url="https://example.com")
         ids = state_manager.get_seen_ids("fda_recall")
         assert "src-001" in ids
 

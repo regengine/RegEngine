@@ -15,6 +15,7 @@ Coverage:
   - Calling twice in the same transaction is fine (the underlying
     ``SET LOCAL`` is idempotent at the DB layer; we just re-execute)
 """
+
 from __future__ import annotations
 
 import sys
@@ -34,10 +35,10 @@ from services.shared.tenant_context import (  # noqa: E402
     set_tenant_guc,
 )
 
-
 # ---------------------------------------------------------------------------
 # Recording fake session
 # ---------------------------------------------------------------------------
+
 
 class _RecordingSession:
     """Minimal SQLAlchemy-session-like object that records every
@@ -59,8 +60,8 @@ class _RecordingSession:
 # set_tenant_guc — happy path
 # ---------------------------------------------------------------------------
 
-class TestSetTenantGucHappy:
 
+class TestSetTenantGucHappy:
     def test_issues_set_config_with_correct_binding(self):
         session = _RecordingSession()
         tid = "11111111-1111-1111-1111-111111111111"
@@ -101,10 +102,7 @@ class TestSetTenantGucHappy:
         assert "'app.tenant_id'" in sql
         assert "true" in sql
         # Must NOT use the dangerous session-scoped form.
-        assert "false" not in sql.lower(), (
-            f"helper must use set_config(..., true) for transaction scope; "
-            f"got: {sql!r}"
-        )
+        assert "false" not in sql.lower(), f"helper must use set_config(..., true) for transaction scope; got: {sql!r}"
 
     def test_calling_twice_in_same_transaction_is_fine(self):
         """Idempotent at the call site — handlers that re-resolve
@@ -121,6 +119,7 @@ class TestSetTenantGucHappy:
 # ---------------------------------------------------------------------------
 # set_tenant_guc — validation
 # ---------------------------------------------------------------------------
+
 
 class TestSetTenantGucValidation:
     """Bad input must raise ``ValueError`` BEFORE issuing any SQL.
@@ -149,13 +148,16 @@ class TestSetTenantGucValidation:
             set_tenant_guc(session, 12345)  # type: ignore[arg-type]
         assert session.calls == []
 
-    @pytest.mark.parametrize("bad", [
-        "not-a-uuid",
-        "11111111-1111-1111-1111-",  # truncated
-        "1111111111111111111111111111111111",  # no dashes, wrong length
-        "0xdeadbeef",
-        "00000000-0000-0000-0000-00000000000g",  # non-hex char
-    ])
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "not-a-uuid",
+            "11111111-1111-1111-1111-",  # truncated
+            "1111111111111111111111111111111111",  # no dashes, wrong length
+            "0xdeadbeef",
+            "00000000-0000-0000-0000-00000000000g",  # non-hex char
+        ],
+    )
     def test_non_uuid_rejected(self, bad: str):
         session = _RecordingSession()
         with pytest.raises(ValueError, match="not a valid UUID"):
@@ -177,8 +179,8 @@ class TestSetTenantGucValidation:
 # apply_tenant_context — convenience wrapper
 # ---------------------------------------------------------------------------
 
-class TestApplyTenantContext:
 
+class TestApplyTenantContext:
     def test_forwards_tenant_id_from_context(self):
         session = _RecordingSession()
         ctx = TenantContext(

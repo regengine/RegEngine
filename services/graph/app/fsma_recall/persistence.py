@@ -31,12 +31,9 @@ from .models import (
     RecallType,
 )
 
-
 # task_queue CHECK constraint values. See
 # alembic/versions/20260329_task_queue_v050.py
-_TASK_QUEUE_ALLOWED_STATUSES = {
-    "pending", "processing", "completed", "failed", "dead"
-}
+_TASK_QUEUE_ALLOWED_STATUSES = {"pending", "processing", "completed", "failed", "dead"}
 
 # All recall_drill rows use this as their task_queue.status so the
 # generic task_processor never claims them.  The drill's real status
@@ -47,15 +44,22 @@ _RECALL_DRILL_TASK_QUEUE_STATUS = "completed"
 def _get_db_engine():
     """Return a SQLAlchemy engine for the shared PostgreSQL DB, or None if unconfigured."""
     import os
+
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         return None
     try:
         from sqlalchemy import create_engine
-        url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1) if db_url.startswith("postgresql://") else db_url
+
+        url = (
+            db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            if db_url.startswith("postgresql://")
+            else db_url
+        )
         return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
     except Exception:
         import logging
+
         logging.getLogger("fsma_recall").warning("Recall DB engine creation failed", exc_info=True)
         return None
 
@@ -68,8 +72,10 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
     drill status lives in payload->>'status'.
     """
     import json as _json
+
     try:
         from sqlalchemy import text as _text
+
         payload = _json.dumps(drill.to_dict())
         with engine.connect() as conn:
             conn.execute(
@@ -98,6 +104,7 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
             conn.commit()
     except Exception as exc:  # pragma: no cover
         import logging
+
         logging.getLogger("fsma_recall").warning("Failed to persist recall drill: %s", exc)
 
 
@@ -107,8 +114,10 @@ def _update_drill_row(engine, drill: "RecallDrill") -> None:
     #1199: task_queue.status stays 'completed' regardless of drill status.
     """
     import json as _json
+
     try:
         from sqlalchemy import text as _text
+
         payload = _json.dumps(drill.to_dict())
         with engine.connect() as conn:
             conn.execute(
@@ -134,6 +143,7 @@ def _update_drill_row(engine, drill: "RecallDrill") -> None:
             conn.commit()
     except Exception as exc:  # pragma: no cover
         import logging
+
         logging.getLogger("fsma_recall").warning("Failed to update recall drill: %s", exc)
 
 
@@ -141,6 +151,7 @@ def _load_drills_from_db(engine, tenant_id: str, limit: int = 50) -> List[Dict[s
     """Query drill rows for a tenant from fsma.task_queue."""
     try:
         from sqlalchemy import text as _text
+
         with engine.connect() as conn:
             rows = conn.execute(
                 _text("""
@@ -156,6 +167,7 @@ def _load_drills_from_db(engine, tenant_id: str, limit: int = 50) -> List[Dict[s
         return [row[0] for row in rows]
     except Exception as exc:  # pragma: no cover
         import logging
+
         logging.getLogger("fsma_recall").warning("Failed to load recall drills: %s", exc)
         return []
 
@@ -164,6 +176,7 @@ def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional
     """Query a single drill row by drill_id from fsma.task_queue."""
     try:
         from sqlalchemy import text as _text
+
         with engine.connect() as conn:
             row = conn.execute(
                 _text("""
@@ -179,6 +192,7 @@ def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional
         return row[0] if row else None
     except Exception as exc:  # pragma: no cover
         import logging
+
         logging.getLogger("fsma_recall").warning("Failed to load recall drill by id: %s", exc)
         return None
 

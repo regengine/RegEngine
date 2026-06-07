@@ -10,6 +10,7 @@ Tests exercise the route handlers directly (bypassing middleware) so
 they can assert on the handler signatures and the post-query tenant
 filtering logic.  Neo4j and SQLAlchemy sessions are mocked.
 """
+
 from __future__ import annotations
 
 import sys
@@ -23,13 +24,11 @@ from fastapi import HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from services.graph.app.routers.fsma import audit as audit_router
-from services.graph.app.routers.fsma import recall as recall_router
 from services.graph.app.fsma_audit import (
     FSMAAuditAction,
     FSMAAuditEntry,
-    reset_audit_log,
     get_audit_log,
+    reset_audit_log,
 )
 from services.graph.app.fsma_drift import (
     AlertSeverity,
@@ -38,7 +37,7 @@ from services.graph.app.fsma_drift import (
     get_drift_detector,
     reset_drift_detector,
 )
-
+from services.graph.app.routers.fsma import audit as audit_router, recall as recall_router
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -63,17 +62,17 @@ class TestAuditTenantScope:
     def test_get_full_audit_log_signature_rejects_query_tenant_id(self):
         """The endpoint signature must not accept `tenant_id` as a query param."""
         import inspect
+
         sig = inspect.signature(audit_router.get_full_audit_log)
         tenant_param = sig.parameters.get("tenant_id")
         assert tenant_param is not None
         default = tenant_param.default
-        assert hasattr(default, "dependency"), (
-            "tenant_id must be Depends(get_current_tenant_id), not Query(...)"
-        )
+        assert hasattr(default, "dependency"), "tenant_id must be Depends(get_current_tenant_id), not Query(...)"
         assert default.dependency.__name__ == "get_current_tenant_id"
 
     def test_get_audit_trail_signature_has_tenant_dependency(self):
         import inspect
+
         sig = inspect.signature(audit_router.get_audit_trail)
         assert "tenant_id" in sig.parameters
         default = sig.parameters["tenant_id"].default
@@ -82,6 +81,7 @@ class TestAuditTenantScope:
 
     def test_get_audit_verify_signature_has_tenant_dependency(self):
         import inspect
+
         sig = inspect.signature(audit_router.verify_audit_integrity)
         assert "tenant_id" in sig.parameters
         default = sig.parameters["tenant_id"].default
@@ -105,13 +105,9 @@ class TestAuditTenantScope:
             tenant_id=str(TENANT_B),
         )
 
-        resp = audit_router.get_full_audit_log(
-            action=None, tenant_id=TENANT_A, api_key="test-key"
-        )
+        resp = audit_router.get_full_audit_log(action=None, tenant_id=TENANT_A, api_key="test-key")
         for entry in resp["audit_trail"]:
-            assert entry["tenant_id"] in (None, "", str(TENANT_A)), (
-                f"cross-tenant entry leaked: {entry}"
-            )
+            assert entry["tenant_id"] in (None, "", str(TENANT_A)), f"cross-tenant entry leaked: {entry}"
 
     def test_get_audit_trail_raises_on_cross_tenant_leak(self):
         """If the store returns a cross-tenant entry, raise 500 (invariant)."""
@@ -127,9 +123,7 @@ class TestAuditTenantScope:
 
         with patch.object(audit_router, "get_audit_log", return_value=fake_log):
             with pytest.raises(HTTPException) as exc_info:
-                audit_router.get_audit_trail(
-                    target_id="LOT-X", tenant_id=TENANT_A, api_key="test-key"
-                )
+                audit_router.get_audit_trail(target_id="LOT-X", tenant_id=TENANT_A, api_key="test-key")
             assert exc_info.value.status_code == 500
             assert "invariant violation" in exc_info.value.detail
 
@@ -142,6 +136,7 @@ class TestDriftTenantScope:
 
     def test_drift_status_signature_has_tenant_dependency(self):
         import inspect
+
         for fn_name in (
             "drift_monitoring_status",
             "analyze_drift",
@@ -154,9 +149,7 @@ class TestDriftTenantScope:
             sig = inspect.signature(fn)
             assert "tenant_id" in sig.parameters, f"{fn_name} missing tenant_id"
             default = sig.parameters["tenant_id"].default
-            assert hasattr(default, "dependency"), (
-                f"{fn_name}: tenant_id must be Depends(...), got {default!r}"
-            )
+            assert hasattr(default, "dependency"), f"{fn_name}: tenant_id must be Depends(...), got {default!r}"
 
     def test_get_drift_alerts_filters_by_tenant(self):
         detector = get_drift_detector()
@@ -235,6 +228,7 @@ class TestRecallHistoryTenantScope:
 
     def test_recall_history_signature_rejects_query_tenant_id(self):
         import inspect
+
         sig = inspect.signature(recall_router.get_recall_history)
         assert "tenant_id" in sig.parameters
         default = sig.parameters["tenant_id"].default
@@ -242,10 +236,13 @@ class TestRecallHistoryTenantScope:
         assert default.dependency.__name__ == "get_current_tenant_id"
 
     def test_recall_history_only_returns_caller_tenant(self):
-        from services.graph.app.fsma_recall import (
-            RecallDrill, RecallType, RecallSeverity,
-        )
         from datetime import datetime, timezone
+
+        from services.graph.app.fsma_recall import (
+            RecallDrill,
+            RecallSeverity,
+            RecallType,
+        )
 
         drill_a = RecallDrill(
             drill_id="drill_a_0000000001",
@@ -258,17 +255,18 @@ class TestRecallHistoryTenantScope:
         fake_engine.get_drill_history.return_value = [drill_a]
 
         with patch.object(recall_router, "get_recall_engine", return_value=fake_engine):
-            resp = recall_router.get_recall_history(
-                limit=20, tenant_id=TENANT_A, api_key={"tenant_id": "irrelevant"}
-            )
+            resp = recall_router.get_recall_history(limit=20, tenant_id=TENANT_A, api_key={"tenant_id": "irrelevant"})
         fake_engine.get_drill_history.assert_called_once_with(str(TENANT_A), limit=20)
         assert resp["drills"][0]["tenant_id"] == str(TENANT_A)
 
     def test_recall_history_raises_on_cross_tenant_leak(self):
-        from services.graph.app.fsma_recall import (
-            RecallDrill, RecallType, RecallSeverity,
-        )
         from datetime import datetime, timezone
+
+        from services.graph.app.fsma_recall import (
+            RecallDrill,
+            RecallSeverity,
+            RecallType,
+        )
 
         leaky = RecallDrill(
             drill_id="drill_leak_00000001",
@@ -282,17 +280,18 @@ class TestRecallHistoryTenantScope:
 
         with patch.object(recall_router, "get_recall_engine", return_value=fake_engine):
             with pytest.raises(HTTPException) as exc_info:
-                recall_router.get_recall_history(
-                    limit=20, tenant_id=TENANT_A, api_key={"tenant_id": str(TENANT_A)}
-                )
+                recall_router.get_recall_history(limit=20, tenant_id=TENANT_A, api_key={"tenant_id": str(TENANT_A)})
             assert exc_info.value.status_code == 500
             assert "invariant violation" in exc_info.value.detail
 
     def test_drill_detail_blocks_cross_tenant_access(self):
-        from services.graph.app.fsma_recall import (
-            RecallDrill, RecallType, RecallSeverity,
-        )
         from datetime import datetime, timezone
+
+        from services.graph.app.fsma_recall import (
+            RecallDrill,
+            RecallSeverity,
+            RecallType,
+        )
 
         other_tenant_drill = RecallDrill(
             drill_id="drill_other_tenant01",
@@ -314,10 +313,13 @@ class TestRecallHistoryTenantScope:
             assert exc_info.value.status_code == 404
 
     def test_drill_cancel_blocks_cross_tenant_access(self):
-        from services.graph.app.fsma_recall import (
-            RecallDrill, RecallType, RecallSeverity,
-        )
         from datetime import datetime, timezone
+
+        from services.graph.app.fsma_recall import (
+            RecallDrill,
+            RecallSeverity,
+            RecallType,
+        )
 
         other_tenant_drill = RecallDrill(
             drill_id="drill_other_cancel01",
@@ -345,6 +347,7 @@ class TestRecallSchedulesTenantScope:
 
     def test_schedules_signature_has_tenant_dependency(self):
         import inspect
+
         sig = inspect.signature(recall_router.get_recall_schedules)
         default = sig.parameters["tenant_id"].default
         assert hasattr(default, "dependency")

@@ -1,33 +1,38 @@
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
-import httpx
-import structlog
 import asyncio
 import os
 import uuid as uuid_module
-from sqlalchemy import text, select
-from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import httpx
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from shared.resilient_http import resilient_client
 from shared.task_queue import get_task_queue_summary, replay_dead_tasks
+from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
 from .dependencies import get_current_user, get_session
+from .models import TenantContext
 from .qa_health import QAHealthResponse, load_qa_health_summary
 from .sqlalchemy_models import UserModel
-from .models import TenantContext
-from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/system", tags=["system"])
 logger = structlog.get_logger("admin.system")
+
 
 class ServiceHealth(BaseModel):
     name: str
     status: str
     details: Dict[str, Any]
 
+
 class SystemStatusResponse(BaseModel):
     overall_status: str
     services: List[ServiceHealth]
+
 
 class SystemMetricsResponse(BaseModel):
     total_tenants: int
@@ -41,12 +46,14 @@ class SystemMetricsResponse(BaseModel):
     chain_valid: Optional[bool] = None
     open_alerts: Optional[int] = None
 
+
 class TaskQueueSummaryResponse(BaseModel):
     counts_by_status: Dict[str, int]
     retrying_count: int
     stale_processing_count: int
     oldest_pending_age_seconds: Optional[float] = None
     oldest_dead_age_seconds: Optional[float] = None
+
 
 class TaskQueueReplayRequest(BaseModel):
     ids: List[str] = Field(
@@ -55,47 +62,55 @@ class TaskQueueReplayRequest(BaseModel):
     )
     limit: int = Field(default=10, ge=1, le=1000)
 
+
 class TaskQueueReplayResult(BaseModel):
     id: str
     success: bool
     error: Optional[str] = None
+
 
 class TaskQueueReplayResponse(BaseModel):
     replayed: int
     failed: int
     results: List[TaskQueueReplayResult]
 
+
 class JWTRotateResponse(BaseModel):
     """Response for JWT key rotation."""
+
     status: str
     new_kid: str
     grace_period_days: int
     message: str
 
+
 class JWTKeysResponse(BaseModel):
     """Response for listing JWT keys."""
+
     keys: List[Dict[str, Any]]
+
 
 class JWTRevokeResponse(BaseModel):
     """Response for JWT token/key revocation."""
+
     status: str
     jti: Optional[str] = None
     kid: Optional[str] = None
 
+
 class JWTRevokeAllResponse(BaseModel):
     """Response for emergency JWT revocation."""
+
     status: str
     keys_revoked: int
 
+
 def _detect_default(docker_name: str, railway_url: str) -> str:
     """Use Railway URL when running on Railway, Docker hostname otherwise."""
-    if (
-        os.getenv("RAILWAY_ENVIRONMENT")
-        or os.getenv("RAILWAY_ENVIRONMENT_NAME")
-        or os.getenv("RAILWAY_PROJECT_ID")
-    ):
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_PROJECT_ID"):
         return railway_url
     return docker_name
+
 
 def _get_service_urls() -> Dict[str, str]:
     """Build service health-check URLs from env vars or fallback to Docker/Railway defaults."""
@@ -117,11 +132,13 @@ def _get_service_urls() -> Dict[str, str]:
         urls["graph"] = f"{graph.rstrip('/')}/v1/labels/health"
     return urls
 
+
 def _get_ingestion_base() -> str:
     return os.getenv(
         "INGESTION_SERVICE_URL",
         _detect_default("http://ingestion-api:8002", "https://believable-respect-production-2fb3.up.railway.app"),
     ).rstrip("/")
+
 
 @router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):
@@ -142,6 +159,7 @@ async def get_system_status(current_user: UserModel = Depends(get_current_user))
             overall = "degraded"
 
     return SystemStatusResponse(overall_status=overall, services=results)
+
 
 async def check_service_health(client, name: str, url: str) -> ServiceHealth:
     """Check service health with one retry on failure."""
@@ -249,7 +267,9 @@ async def get_system_metrics(
             headers=ingestion_headers or None,
         )
         score_resp, chain_resp = await asyncio.gather(
-            score_task, chain_task, return_exceptions=True,
+            score_task,
+            chain_task,
+            return_exceptions=True,
         )
 
         if isinstance(score_resp, Exception):
@@ -273,21 +293,34 @@ async def get_system_metrics(
         from sqlalchemy import func as sql_func
 
         tenant_uuid = uuid_module.UUID(tenant)
-        supplier_event_count = db.execute(
-            select(sql_func.count()).select_from(SupplierCTEEventModel).where(
-                SupplierCTEEventModel.tenant_id == tenant_uuid,
-            )
-        ).scalar() or 0
-        supplier_facility_count = db.execute(
-            select(sql_func.count()).select_from(SupplierFacilityModel).where(
-                SupplierFacilityModel.tenant_id == tenant_uuid,
-            )
-        ).scalar() or 0
-        supplier_chain_length = db.execute(
-            select(sql_func.max(SupplierCTEEventModel.sequence_number)).where(
-                SupplierCTEEventModel.tenant_id == tenant_uuid,
-            )
-        ).scalar() or 0
+        supplier_event_count = (
+            db.execute(
+                select(sql_func.count())
+                .select_from(SupplierCTEEventModel)
+                .where(
+                    SupplierCTEEventModel.tenant_id == tenant_uuid,
+                )
+            ).scalar()
+            or 0
+        )
+        supplier_facility_count = (
+            db.execute(
+                select(sql_func.count())
+                .select_from(SupplierFacilityModel)
+                .where(
+                    SupplierFacilityModel.tenant_id == tenant_uuid,
+                )
+            ).scalar()
+            or 0
+        )
+        supplier_chain_length = (
+            db.execute(
+                select(sql_func.max(SupplierCTEEventModel.sequence_number)).where(
+                    SupplierCTEEventModel.tenant_id == tenant_uuid,
+                )
+            ).scalar()
+            or 0
+        )
     except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("supplier_metrics_query_failed", error=str(exc))
 
@@ -326,6 +359,7 @@ async def get_system_metrics(
 
 
 # ── JWT Key Rotation (sysadmin only) ────────────────────────────────
+
 
 def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
     """Dependency that requires the authenticated user to be a sysadmin."""
@@ -406,8 +440,8 @@ async def replay_task_queue_rows(
 )
 async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
     """Rotate the JWT signing key (sysadmin only)."""
-    from shared.jwt_key_registry import get_key_registry
     from app.auth_utils import _sync_keys_from_registry
+    from shared.jwt_key_registry import get_key_registry
 
     try:
         registry = await get_key_registry()
@@ -494,8 +528,8 @@ async def revoke_jwt_key(
 ):
     """Revoke an entire signing key (sysadmin only)."""
     from app.auth_utils import revoke_all_for_kid
-
     from shared.jwt_key_registry import get_key_registry
+
     registry = await get_key_registry()
     key = await registry.get_key_by_kid(kid)
     if not key:
@@ -533,8 +567,7 @@ class DLQReplayRequest(BaseModel):
 
     ids: List[str] = Field(
         default=[],
-        description="Specific DLQ record IDs to replay. "
-                    "If empty, replays up to `limit` dead records.",
+        description="Specific DLQ record IDs to replay. If empty, replays up to `limit` dead records.",
     )
     limit: int = Field(
         default=10,

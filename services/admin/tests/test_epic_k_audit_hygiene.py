@@ -24,13 +24,12 @@ pytest.importorskip("starlette")
 from app import audit  # noqa: E402
 from app.audit_integrity import verify_chain  # noqa: E402
 from app.audit_middleware import (  # noqa: E402
+    AuditContextMiddleware,
+    _is_trusted_proxy,
     _should_skip,
     _should_skip_request,
     _trusted_proxy_cidrs,
-    _is_trusted_proxy,
-    AuditContextMiddleware,
 )
-
 
 # ---------------------------------------------------------------------------
 # #1414 — audit middleware skip list
@@ -127,7 +126,8 @@ def test_trusted_proxy_single_cidr(monkeypatch):
 
 def test_trusted_proxy_multiple_cidrs(monkeypatch):
     monkeypatch.setenv(
-        "AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32",
+        "AUDIT_TRUSTED_PROXY_CIDRS",
+        "10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32",
     )
     assert _is_trusted_proxy("10.0.0.1") is True
     assert _is_trusted_proxy("172.17.0.1") is True
@@ -139,7 +139,8 @@ def test_trusted_proxy_multiple_cidrs(monkeypatch):
 def test_trusted_proxy_bad_cidr_skipped(monkeypatch):
     """Malformed CIDR entries don't crash; they just don't match."""
     monkeypatch.setenv(
-        "AUDIT_TRUSTED_PROXY_CIDRS", "not-a-cidr, 10.0.0.0/8",
+        "AUDIT_TRUSTED_PROXY_CIDRS",
+        "not-a-cidr, 10.0.0.0/8",
     )
     assert _is_trusted_proxy("10.0.0.1") is True
 
@@ -367,11 +368,17 @@ def test_hash_v2_changes_when_actor_id_changes():
     """SQL-rewriting actor_id MUST break the chain (#1415)."""
     h1 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="actor-1", actor_email="a@x.com", severity="info", endpoint="PATCH /admin/users/1/role",
+        actor_id="actor-1",
+        actor_email="a@x.com",
+        severity="info",
+        endpoint="PATCH /admin/users/1/role",
     )
     h2 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="actor-2", actor_email="a@x.com", severity="info", endpoint="PATCH /admin/users/1/role",
+        actor_id="actor-2",
+        actor_email="a@x.com",
+        severity="info",
+        endpoint="PATCH /admin/users/1/role",
     )
     assert h1 != h2
 
@@ -379,11 +386,17 @@ def test_hash_v2_changes_when_actor_id_changes():
 def test_hash_v2_changes_when_actor_email_changes():
     h1 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="actor-1", actor_email="alice@x.com", severity="info", endpoint="PATCH /x",
+        actor_id="actor-1",
+        actor_email="alice@x.com",
+        severity="info",
+        endpoint="PATCH /x",
     )
     h2 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="actor-1", actor_email="bob@x.com", severity="info", endpoint="PATCH /x",
+        actor_id="actor-1",
+        actor_email="bob@x.com",
+        severity="info",
+        endpoint="PATCH /x",
     )
     assert h1 != h2
 
@@ -391,11 +404,17 @@ def test_hash_v2_changes_when_actor_email_changes():
 def test_hash_v2_changes_when_severity_changes():
     h1 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="a", actor_email=None, severity="info", endpoint="/x",
+        actor_id="a",
+        actor_email=None,
+        severity="info",
+        endpoint="/x",
     )
     h2 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="a", actor_email=None, severity="warning", endpoint="/x",
+        actor_id="a",
+        actor_email=None,
+        severity="warning",
+        endpoint="/x",
     )
     assert h1 != h2
 
@@ -403,11 +422,17 @@ def test_hash_v2_changes_when_severity_changes():
 def test_hash_v2_changes_when_endpoint_changes():
     h1 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="a", actor_email=None, severity="info", endpoint="/x",
+        actor_id="a",
+        actor_email=None,
+        severity="info",
+        endpoint="/x",
     )
     h2 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id="a", actor_email=None, severity="info", endpoint="/y",
+        actor_id="a",
+        actor_email=None,
+        severity="info",
+        endpoint="/y",
     )
     assert h1 != h2
 
@@ -418,7 +443,10 @@ def test_hash_v2_differs_from_v1_for_same_core_fields():
     v1 = audit.compute_integrity_hash(**_base_hash_kwargs(), version=1)
     v2 = audit.compute_integrity_hash(
         **_base_hash_kwargs(),
-        actor_id=None, actor_email=None, severity=None, endpoint=None,
+        actor_id=None,
+        actor_email=None,
+        severity=None,
+        endpoint=None,
     )
     assert v1 != v2
 

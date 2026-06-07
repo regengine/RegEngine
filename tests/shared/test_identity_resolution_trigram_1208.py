@@ -29,7 +29,6 @@ import pytest
 
 from services.shared.identity_resolution import IdentityResolutionService
 
-
 TENANT = "tenant-1208"
 
 
@@ -113,9 +112,7 @@ class TestTrigramFastPath_Issue1208:
         session = _CapturingSession(
             trigram_rows=[_row("e1", "Acme Foods Inc")],
         )
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods"
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods")
         # Exactly one query — the trigram one.
         assert len(session.calls) == 1
         assert session.calls[0]["kind"] == "trigram"
@@ -128,15 +125,11 @@ class TestTrigramFastPath_Issue1208:
     def test_candidate_pool_scales_with_limit(self):
         """candidate_pool = max(limit * 20, 100)."""
         session = _CapturingSession(trigram_rows=[])
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme", limit=10
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme", limit=10)
         assert session.calls[0]["params"]["cand_limit"] == 200
 
         session2 = _CapturingSession(trigram_rows=[])
-        _svc(session2).find_potential_matches(
-            tenant_id=TENANT, search_name="acme", limit=3
-        )
+        _svc(session2).find_potential_matches(tenant_id=TENANT, search_name="acme", limit=3)
         # max(3*20=60, 100) = 100
         assert session2.calls[0]["params"]["cand_limit"] == 100
 
@@ -144,9 +137,7 @@ class TestTrigramFastPath_Issue1208:
         """sim_floor must be strictly less than the caller's threshold
         so we don't under-recall."""
         session = _CapturingSession(trigram_rows=[])
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme", threshold=0.9
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme", threshold=0.9)
         params = session.calls[0]["params"]
         assert params["sim_floor"] < 0.9
         assert params["sim_floor"] >= 0.2  # absolute floor
@@ -155,9 +146,7 @@ class TestTrigramFastPath_Issue1208:
         """The ``:q`` param must already be lowered (matches the
         index on ``lower(alias_value)``)."""
         session = _CapturingSession(trigram_rows=[])
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="  ACME Foods  "
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="  ACME Foods  ")
         assert session.calls[0]["params"]["q"] == "acme foods"
 
 
@@ -179,9 +168,7 @@ class TestPythonRescoreSemantics_Issue1208:
                 _row("e-bad", "Totally Unrelated Widget Co"),
             ]
         )
-        results = _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods", threshold=0.6
-        )
+        results = _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods", threshold=0.6)
         entity_ids = [r["entity_id"] for r in results]
         assert "e-good" in entity_ids
         assert "e-bad" not in entity_ids
@@ -196,9 +183,7 @@ class TestPythonRescoreSemantics_Issue1208:
                 _row("e-same", "ACM"),
             ]
         )
-        results = _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods", threshold=0.4
-        )
+        results = _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods", threshold=0.4)
         assert len(results) == 1
         assert results[0]["entity_id"] == "e-same"
         # Best-scoring alias is the exact "Acme Foods".
@@ -213,18 +198,14 @@ class TestPythonRescoreSemantics_Issue1208:
                 _row("e3", "Acme Foods"),
             ]
         )
-        results = _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods", threshold=0.3
-        )
+        results = _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods", threshold=0.3)
         confs = [r["confidence"] for r in results]
         assert confs == sorted(confs, reverse=True)
 
     def test_limit_trims_final_list(self):
         """``limit`` must trim the AFTER-rescore list, not just the
         trigram candidate pool."""
-        session = _CapturingSession(
-            trigram_rows=[_row(f"e{i}", f"Acme Foods {i}") for i in range(50)]
-        )
+        session = _CapturingSession(trigram_rows=[_row(f"e{i}", f"Acme Foods {i}") for i in range(50)])
         results = _svc(session).find_potential_matches(
             tenant_id=TENANT, search_name="acme foods", limit=5, threshold=0.3
         )
@@ -246,13 +227,9 @@ class TestFallbackOnTrigramFailure_Issue1208:
             fallback_rows=[_row("e1", "Acme Foods")],
             trigram_raises=True,
         )
-        results = _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods"
-        )
+        results = _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods")
         kinds = [c["kind"] for c in session.calls]
-        assert kinds == ["trigram", "fallback"], (
-            f"expected trigram->fallback, got {kinds}"
-        )
+        assert kinds == ["trigram", "fallback"], f"expected trigram->fallback, got {kinds}"
         assert len(results) == 1
         assert results[0]["entity_id"] == "e1"
 
@@ -269,9 +246,7 @@ class TestFallbackOnTrigramFailure_Issue1208:
             case_sensitive=True,
         )
         kinds = [c["kind"] for c in session.calls]
-        assert kinds == ["fallback"], (
-            f"case_sensitive should skip trigram; got {kinds}"
-        )
+        assert kinds == ["fallback"], f"case_sensitive should skip trigram; got {kinds}"
         assert len(results) == 1
 
     def test_empty_search_string_uses_fallback(self):
@@ -279,9 +254,7 @@ class TestFallbackOnTrigramFailure_Issue1208:
         match; the service must not issue a similarity() query with
         an empty :q parameter."""
         session = _CapturingSession(fallback_rows=[])
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="   "
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="   ")
         kinds = [c["kind"] for c in session.calls]
         assert kinds == ["fallback"]
 
@@ -308,9 +281,7 @@ class TestExistingContractsPreserved_Issue1208:
         """Both trigram and fallback paths must bind ``tenant_id`` as a
         parameter — never string-interpolated."""
         session = _CapturingSession(trigram_rows=[])
-        _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme"
-        )
+        _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme")
         assert session.calls[0]["params"]["tenant_id"] == TENANT
         assert ":tenant_id" in session.calls[0]["sql"]
         # And the tenant string itself should NOT appear literally in
@@ -331,9 +302,7 @@ class TestExistingContractsPreserved_Issue1208:
         assert ":entity_type" in session.calls[0]["sql"]
 
         session2 = _CapturingSession(trigram_rows=[])
-        _svc(session2).find_potential_matches(
-            tenant_id=TENANT, search_name="acme"
-        )
+        _svc(session2).find_potential_matches(tenant_id=TENANT, search_name="acme")
         assert session2.calls[0]["params"]["entity_type"] is None
 
     def test_return_shape_unchanged(self):
@@ -353,9 +322,7 @@ class TestExistingContractsPreserved_Issue1208:
                 )
             ]
         )
-        results = _svc(session).find_potential_matches(
-            tenant_id=TENANT, search_name="acme foods"
-        )
+        results = _svc(session).find_potential_matches(tenant_id=TENANT, search_name="acme foods")
         assert len(results) == 1
         r = results[0]
         assert set(r) >= {

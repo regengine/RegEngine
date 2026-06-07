@@ -53,47 +53,47 @@ def create_mock_db_session(should_fail=False):
 
 class TestAerospaceHealthEndpoints:
     """Tests for aerospace service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for aerospace service."""
         return _create_client("aerospace")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "aerospace"
         assert data["version"] == "1.0.0"
-    
+
     def test_ready_endpoint_with_db_connected(self, client):
         """Verify /ready endpoint returns 200 when DB is reachable."""
         # Mock the database session at the module level
         with patch("services.aerospace.app.db_session.SessionLocal") as mock_session_local:
             mock_db = create_mock_db_session(should_fail=False)
             mock_session_local.return_value = mock_db
-            
+
             response = client.get("/ready")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "ready"
             assert data["service"] == "aerospace"
             assert data["version"] == "1.0.0"
             assert data["database"] == "connected"
-    
+
     def test_ready_endpoint_with_db_disconnected(self, client):
         """Verify /ready endpoint returns 503 when DB is unreachable."""
         # Mock the database session to fail
         with patch("services.aerospace.app.db_session.SessionLocal") as mock_session_local:
             mock_db = create_mock_db_session(should_fail=True)
             mock_session_local.return_value = mock_db
-            
+
             response = client.get("/ready")
-            
+
             assert response.status_code == 503
             data = response.json()
             assert data["status"] == "not_ready"
@@ -102,30 +102,30 @@ class TestAerospaceHealthEndpoints:
 
 class TestConstructionHealthEndpoints:
     """Tests for construction service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for construction service."""
         return _create_client("construction")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "construction"
         assert data["version"] == "1.0.0"
-    
+
     def test_ready_endpoint_with_db_connected(self, client):
         """Verify /ready endpoint returns 200 when DB is reachable."""
         with patch("services.construction.app.db_session.SessionLocal") as mock_session_local:
             mock_db = create_mock_db_session(should_fail=False)
             mock_session_local.return_value = mock_db
-            
+
             response = client.get("/ready")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "ready"
@@ -134,30 +134,30 @@ class TestConstructionHealthEndpoints:
 
 class TestGamingHealthEndpoints:
     """Tests for gaming service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for gaming service."""
         return _create_client("gaming")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "gaming"
         assert data["version"] == "1.0.0"
-    
+
     def test_ready_endpoint_with_db_connected(self, client):
         """Verify /ready endpoint returns 200 when DB is reachable."""
         with patch("services.gaming.app.db_session.SessionLocal") as mock_session_local:
             mock_db = create_mock_db_session(should_fail=False)
             mock_session_local.return_value = mock_db
-            
+
             response = client.get("/ready")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "ready"
@@ -165,30 +165,30 @@ class TestGamingHealthEndpoints:
 
 class TestManufacturingHealthEndpoints:
     """Tests for manufacturing service health endpoints."""
-    
+
     @pytest.fixture
     def client(self):
         """Create test client for manufacturing service."""
         return _create_client("manufacturing")
-    
+
     def test_health_endpoint_returns_200(self, client):
         """Verify /health endpoint returns 200 with correct structure."""
         response = client.get("/health")
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "manufacturing"
         assert data["version"] == "1.0.0"
-    
+
     def test_ready_endpoint_with_db_connected(self, client):
         """Verify /ready endpoint returns 200 when DB is reachable."""
         with patch("services.manufacturing.app.db_session.SessionLocal") as mock_session_local:
             mock_db = create_mock_db_session(should_fail=False)
             mock_session_local.return_value = mock_db
-            
+
             response = client.get("/ready")
-            
+
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "ready"
@@ -196,35 +196,35 @@ class TestManufacturingHealthEndpoints:
 
 class TestHealthEndpointsNoAuth:
     """Verify health endpoints don't require authentication."""
-    
+
     def test_aerospace_health_accessible_without_auth(self):
         """Aerospace health endpoint should be accessible without API keys."""
         client = _create_client("aerospace")
         response = client.get("/health")
-        
+
         # Should succeed without authentication
         assert response.status_code == 200
-    
+
     def test_construction_health_accessible_without_auth(self):
         """Construction health endpoint should be accessible without API keys."""
         client = _create_client("construction")
         response = client.get("/health")
-        
+
         # Should succeed without authentication
         assert response.status_code == 200
-    
+
     def test_gaming_health_accessible_without_auth(self):
         """Gaming health endpoint should be accessible without API keys."""
         client = _create_client("gaming")
         response = client.get("/health")
-        
+
         # Should succeed without authentication
         assert response.status_code == 200
-    
+
     def test_manufacturing_health_accessible_without_auth(self):
         """Manufacturing health endpoint should be accessible without API keys."""
         client = _create_client("manufacturing")
         response = client.get("/health")
-        
+
         # Should succeed without authentication
         assert response.status_code == 200

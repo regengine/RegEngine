@@ -9,9 +9,9 @@ required environment variables to avoid Settings initialization failures.
 
 import os
 import sys
+from ipaddress import ip_address, ip_network
 from pathlib import Path
-from ipaddress import ip_network, ip_address
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Set required env vars BEFORE any app module imports
 os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
@@ -34,23 +34,28 @@ sys.path.insert(0, str(service_dir))
 # These are not needed for boundary tests but are required for module load
 _mock_kafka = MagicMock()
 for _ck in [
-    "confluent_kafka", "confluent_kafka.admin", "confluent_kafka.schema_registry",
-    "confluent_kafka.schema_registry.avro", "confluent_kafka.serialization",
+    "confluent_kafka",
+    "confluent_kafka.admin",
+    "confluent_kafka.schema_registry",
+    "confluent_kafka.schema_registry.avro",
+    "confluent_kafka.serialization",
 ]:
     sys.modules.setdefault(_ck, _mock_kafka)
 
 for _mod in [
     "feedparser",
-    "kafka", "kafka.errors",
-    "opentelemetry", "opentelemetry.trace",
-    "opentelemetry.sdk", "opentelemetry.sdk.resources",
-    "opentelemetry.sdk.trace", "opentelemetry.sdk.trace.export",
+    "kafka",
+    "kafka.errors",
+    "opentelemetry",
+    "opentelemetry.trace",
+    "opentelemetry.sdk",
+    "opentelemetry.sdk.resources",
+    "opentelemetry.sdk.trace",
+    "opentelemetry.sdk.trace.export",
     "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
     "opentelemetry.instrumentation.fastapi",
 ]:
     sys.modules.setdefault(_mod, MagicMock())
-
-
 
 
 import pytest
@@ -59,10 +64,10 @@ pytest.importorskip("fastapi")
 
 from fastapi import HTTPException
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Lazy import helpers — defer app.routes import to test time
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def routes():
@@ -85,6 +90,7 @@ def routes():
     with patch.object(cfg, "get_settings", return_value=_cached):
         cfg.get_settings.cache_clear()
         import app.routes_ingest as r
+
         yield r
 
 
@@ -193,63 +199,58 @@ class TestResolveAndValidate:
     """Tests for _resolve_and_validate: private IP blocking."""
 
     def test_private_10_x_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("10.0.0.1", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.0.0.1", 0))]):
             with pytest.raises(HTTPException) as exc_info:
                 routes._resolve_and_validate("evil.com")
             assert exc_info.value.status_code == 400
             assert "private" in exc_info.value.detail.lower()
 
     def test_private_172_16_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("172.16.5.1", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("172.16.5.1", 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("evil.com")
 
     def test_private_192_168_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("192.168.1.1", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("192.168.1.1", 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("evil.com")
 
     def test_loopback_127_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("127.0.0.1", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("evil.com")
 
     def test_link_local_169_254_blocked(self, routes):
         """Metadata IP 169.254.169.254 must be blocked."""
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("169.254.169.254", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("169.254.169.254", 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("metadata.evil.com")
 
     def test_ipv6_loopback_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(10, 1, 6, "", ("::1", 0, 0, 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(10, 1, 6, "", ("::1", 0, 0, 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("evil.com")
 
     def test_ipv6_ula_fc00_blocked(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(10, 1, 6, "", ("fd12:3456::1", 0, 0, 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(10, 1, 6, "", ("fd12:3456::1", 0, 0, 0))]):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("evil.com")
 
     def test_public_ip_allowed(self, routes):
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]):
+        with patch.object(routes.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]):
             addresses = routes._resolve_and_validate("example.com")
             assert "93.184.216.34" in addresses
 
     def test_mixed_private_public_blocked(self, routes):
         """If ANY resolved IP is private, entire resolution should fail."""
-        with patch.object(routes.socket, "getaddrinfo",
-                          return_value=[
-                              (2, 1, 6, "", ("93.184.216.34", 0)),
-                              (2, 1, 6, "", ("10.0.0.1", 0)),
-                          ]):
+        with patch.object(
+            routes.socket,
+            "getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+                (2, 1, 6, "", ("10.0.0.1", 0)),
+            ],
+        ):
             with pytest.raises(HTTPException):
                 routes._resolve_and_validate("dual-record.com")
 
@@ -287,8 +288,9 @@ class TestRateLimiter:
     """Tests for the RateLimiter utility used by source adapters."""
 
     def test_rate_limiter_enforces_minimum_interval(self):
-        from regengine_ingestion.utils.rate_limiter import RateLimiter
         import time
+
+        from regengine_ingestion.utils.rate_limiter import RateLimiter
 
         limiter = RateLimiter(requests_per_minute=6000)  # 10ms interval
         limiter.wait_if_needed("test.com")
@@ -343,8 +345,7 @@ class TestSecurityConstants:
             ip_network("192.168.0.0/16"),
         ]
         for net in rfc1918:
-            assert any(n == net for n in routes.PROHIBITED_NETWORKS), \
-                f"{net} missing from PROHIBITED_NETWORKS"
+            assert any(n == net for n in routes.PROHIBITED_NETWORKS), f"{net} missing from PROHIBITED_NETWORKS"
 
     def test_prohibited_networks_include_link_local(self, routes):
         assert any(n == ip_network("169.254.0.0/16") for n in routes.PROHIBITED_NETWORKS)
@@ -360,5 +361,6 @@ class TestSecurityConstants:
 
     def test_dangerous_ports_excluded(self, routes):
         dangerous = {22, 25, 3306, 5432, 6379, 9092, 27017}
-        assert not (dangerous & routes.ALLOWED_PORTS), \
+        assert not (dangerous & routes.ALLOWED_PORTS), (
             f"Dangerous ports found in ALLOWED_PORTS: {dangerous & routes.ALLOWED_PORTS}"
+        )

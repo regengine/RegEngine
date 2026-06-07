@@ -29,11 +29,9 @@ from types import SimpleNamespace
 from typing import Any, List
 
 import pytest
-from fastapi import HTTPException
-
 from app import kafka_utils as ku
+from fastapi import HTTPException
 from shared.kafka_auth import KafkaAuthError
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -43,10 +41,18 @@ from shared.kafka_auth import KafkaAuthError
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
-        def debug(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
+
+        def debug(self, *a, **k):
+            pass
+
     monkeypatch.setattr(ku, "logger", _Silent())
 
 
@@ -79,7 +85,6 @@ class _FakeProducer:
 
 
 class TestKeySerializer:
-
     def test_none_returns_none(self):
         assert ku.KeySerializer()(None) is None
 
@@ -103,7 +108,6 @@ class TestKeySerializer:
 
 
 class TestGetProducer:
-
     def test_raises_when_library_missing(self, monkeypatch):
         monkeypatch.setattr(ku, "SerializingProducer", None)
         with pytest.raises(RuntimeError, match="not installed"):
@@ -111,9 +115,13 @@ class TestGetProducer:
 
     def test_builds_with_expected_config(self, monkeypatch):
         monkeypatch.setattr(ku, "SerializingProducer", _FakeProducer)
-        monkeypatch.setattr(ku, "get_settings", lambda: SimpleNamespace(
-            kafka_bootstrap_servers="broker:9092",
-        ))
+        monkeypatch.setattr(
+            ku,
+            "get_settings",
+            lambda: SimpleNamespace(
+                kafka_bootstrap_servers="broker:9092",
+            ),
+        )
         p = ku.get_producer()
         assert p.cfg["bootstrap.servers"] == "broker:9092"
         assert isinstance(p.cfg["key.serializer"], ku.KeySerializer)
@@ -123,9 +131,13 @@ class TestGetProducer:
 
     def test_lru_cache_returns_same_instance(self, monkeypatch):
         monkeypatch.setattr(ku, "SerializingProducer", _FakeProducer)
-        monkeypatch.setattr(ku, "get_settings", lambda: SimpleNamespace(
-            kafka_bootstrap_servers="b",
-        ))
+        monkeypatch.setattr(
+            ku,
+            "get_settings",
+            lambda: SimpleNamespace(
+                kafka_bootstrap_servers="b",
+            ),
+        )
         p1 = ku.get_producer()
         p2 = ku.get_producer()
         assert p1 is p2
@@ -154,9 +166,11 @@ def _install_fake(
         fake.produce_raises = produce_raises
 
     if get_producer_raises is not None:
+
         def _gp():
             raise get_producer_raises
     else:
+
         def _gp():
             return fake
 
@@ -165,6 +179,7 @@ def _install_fake(
     # Correlation helper: append a fixed correlation header to existing list
     def _inject(existing):
         return list(existing) + [("x-corr-id", b"corr-123")]
+
     monkeypatch.setattr(ku, "inject_correlation_headers_tuples", _inject)
 
     # sign_event: enrich payload and signed headers. Captures call args on fake.
@@ -187,7 +202,6 @@ def _install_fake(
 
 
 class TestSend:
-
     def test_happy_path_sends_and_flushes(self, monkeypatch):
         fake = _install_fake(monkeypatch)
         ku.send("events", {"hello": "world"}, key="k1")
@@ -251,13 +265,16 @@ class TestSend:
         assert exc_info.value.status_code == 503
         assert "Kafka client unavailable" in exc_info.value.detail
 
-    @pytest.mark.parametrize("exc", [
-        OSError("network down"),
-        IOError("socket closed"),
-        TypeError("bad payload"),
-        ValueError("bad value"),
-        AttributeError("no attr"),
-    ])
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            OSError("network down"),
+            IOError("socket closed"),
+            TypeError("bad payload"),
+            ValueError("bad value"),
+            AttributeError("no attr"),
+        ],
+    )
     def test_produce_errors_become_500(self, monkeypatch, exc):
         _install_fake(monkeypatch, produce_raises=exc)
         with pytest.raises(HTTPException) as exc_info:

@@ -27,12 +27,6 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.bulk_upload.session_store import BulkUploadSessionStore
 from app.sqlalchemy_models import (
     SupplierCTEEventModel,
@@ -42,7 +36,11 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -65,9 +63,7 @@ def store() -> BulkUploadSessionStore:
 
 @pytest.mark.asyncio
 async def test_try_claim_commit_succeeds_when_status_matches(store):
-    session_id = await store.create_session(
-        "t1", "u1", {"status": "validated", "normalized_data": {"x": 1}}
-    )
+    session_id = await store.create_session("t1", "u1", {"status": "validated", "normalized_data": {"x": 1}})
     result = await store.try_claim_commit("t1", "u1", session_id)
     assert result is not None
     assert result["status"] == "processing"
@@ -81,9 +77,7 @@ async def test_try_claim_commit_succeeds_when_status_matches(store):
 
 @pytest.mark.asyncio
 async def test_try_claim_commit_applies_mutations(store):
-    session_id = await store.create_session(
-        "t1", "u1", {"status": "validated", "error": "stale-error"}
-    )
+    session_id = await store.create_session("t1", "u1", {"status": "validated", "error": "stale-error"})
     result = await store.try_claim_commit(
         "t1", "u1", session_id, mutations={"error": None, "updated_at": "2026-04-18T00:00:00+00:00"}
     )
@@ -95,9 +89,7 @@ async def test_try_claim_commit_applies_mutations(store):
 
 @pytest.mark.asyncio
 async def test_try_claim_commit_returns_none_when_already_processing(store):
-    session_id = await store.create_session(
-        "t1", "u1", {"status": "processing"}
-    )
+    session_id = await store.create_session("t1", "u1", {"status": "processing"})
     result = await store.try_claim_commit("t1", "u1", session_id)
     assert result is None
 
@@ -114,9 +106,7 @@ async def test_try_claim_commit_returns_none_when_completed(store):
 @pytest.mark.asyncio
 async def test_try_claim_commit_returns_none_when_parsed(store):
     """A session that hasn't been validated yet should not be claimable."""
-    session_id = await store.create_session(
-        "t1", "u1", {"status": "parsed"}
-    )
+    session_id = await store.create_session("t1", "u1", {"status": "parsed"})
     result = await store.try_claim_commit("t1", "u1", session_id)
     assert result is None
 
@@ -136,9 +126,7 @@ async def test_try_claim_commit_is_mutually_exclusive_under_concurrency(store):
     because every claimant could observe ``status=validated`` between
     the first check and the first write.
     """
-    session_id = await store.create_session(
-        "t1", "u1", {"status": "validated", "normalized_data": {"x": 1}}
-    )
+    session_id = await store.create_session("t1", "u1", {"status": "validated", "normalized_data": {"x": 1}})
 
     async def _claim() -> dict[str, Any] | None:
         return await store.try_claim_commit("t1", "u1", session_id)
@@ -148,10 +136,7 @@ async def test_try_claim_commit_is_mutually_exclusive_under_concurrency(store):
     winners = [r for r in results if r is not None]
     losers = [r for r in results if r is None]
 
-    assert len(winners) == 1, (
-        f"Exactly one claim must win; got {len(winners)} winners "
-        f"(all others must return None)"
-    )
+    assert len(winners) == 1, f"Exactly one claim must win; got {len(winners)} winners (all others must return None)"
     assert len(losers) == 24
     assert winners[0]["status"] == "processing"
 
@@ -180,6 +165,7 @@ async def test_try_claim_commit_rejects_corrupt_payload(store):
     # guarantee dicts, but the defensive path matters for Redis where
     # the blob comes from JSON deserialization.
     import time as _time
+
     key = store._session_key("t1", "u1", "corrupt-session")
     store._memory_store[key] = (_time.time() + 3600, "not-a-dict")  # type: ignore[assignment]
     result = await store.try_claim_commit("t1", "u1", "corrupt-session")
@@ -274,6 +260,7 @@ def test_concurrent_commits_route_level_only_one_succeeds(
         call_count["n"] += 1
         # Mimic a slow commit so the other request has time to arrive.
         import time as _time
+
         _time.sleep(0.05)
         return {
             "facilities_created": 0,
@@ -303,9 +290,7 @@ def test_concurrent_commits_route_level_only_one_succeeds(
 
     test_app.dependency_overrides[bulk_routes.get_session] = override_get_session
     test_app.dependency_overrides[bulk_routes.get_current_user] = override_get_current_user
-    monkeypatch.setattr(
-        bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID
-    )
+    monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
 
     # Seed a validated session directly in the real store so we don't
     # depend on parse/validate to make it testable.
@@ -414,9 +399,7 @@ def test_commit_after_completed_is_idempotent_not_409(
 
     test_app.dependency_overrides[bulk_routes.get_session] = override_get_session
     test_app.dependency_overrides[bulk_routes.get_current_user] = override_get_current_user
-    monkeypatch.setattr(
-        bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID
-    )
+    monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
 
     with TestClient(test_app) as client:
         resp = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")
@@ -460,9 +443,7 @@ def test_commit_when_session_is_parsed_returns_400(
 
     test_app.dependency_overrides[bulk_routes.get_session] = override_get_session
     test_app.dependency_overrides[bulk_routes.get_current_user] = override_get_current_user
-    monkeypatch.setattr(
-        bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID
-    )
+    monkeypatch.setattr(bulk_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
 
     with TestClient(test_app) as client:
         resp = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")

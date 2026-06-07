@@ -48,9 +48,7 @@ async def test_tag_event_risk_flag_requires_tenant_id(mock_neo4j_client):
     """Calling without tenant_id must raise -- fail-closed behavior."""
     with pytest.raises(TypeError):
         # missing tenant_id kwarg entirely (keyword-only arg)
-        await _tag_event_risk_flag(
-            mock_neo4j_client, "evt-001", "BROKEN_CHAIN"
-        )  # type: ignore[call-arg]
+        await _tag_event_risk_flag(mock_neo4j_client, "evt-001", "BROKEN_CHAIN")  # type: ignore[call-arg]
 
 
 @pytest.mark.asyncio
@@ -67,9 +65,7 @@ async def test_tag_event_risk_flag_rejects_empty_tenant_id(mock_neo4j_client):
 
 
 @pytest.mark.asyncio
-async def test_tag_event_risk_flag_query_includes_tenant_predicate(
-    mock_neo4j_client, mock_neo4j_session
-):
+async def test_tag_event_risk_flag_query_includes_tenant_predicate(mock_neo4j_client, mock_neo4j_session):
     """The Cypher MATCH must include both event_id AND tenant_id."""
     mock_result = MagicMock()
     mock_result.single = AsyncMock(return_value={"tagged_id": "evt-001"})
@@ -94,9 +90,7 @@ async def test_tag_event_risk_flag_query_includes_tenant_predicate(
 
 
 @pytest.mark.asyncio
-async def test_tag_event_risk_flag_returns_false_when_wrong_tenant(
-    mock_neo4j_client, mock_neo4j_session
-):
+async def test_tag_event_risk_flag_returns_false_when_wrong_tenant(mock_neo4j_client, mock_neo4j_session):
     """If two tenants have colliding event_ids, a call from tenant B
     against an event_id that exists only in tenant A must return False
     (empty MATCH) rather than mutating tenant A's row.
@@ -120,9 +114,7 @@ async def test_tag_event_risk_flag_returns_false_when_wrong_tenant(
 
 
 @pytest.mark.asyncio
-async def test_tag_event_risk_flag_passes_tenant_id_into_run(
-    mock_neo4j_client, mock_neo4j_session
-):
+async def test_tag_event_risk_flag_passes_tenant_id_into_run(mock_neo4j_client, mock_neo4j_session):
     """Regression: ensure the tenant_id kwarg is threaded into
     session.run as a parameter binding (not interpolated as a string)."""
     mock_result = MagicMock()

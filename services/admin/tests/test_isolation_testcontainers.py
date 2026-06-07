@@ -1,4 +1,3 @@
-
 import pytest
 
 # Skip if testcontainers is not installed (requires Docker, not available in standard CI)
@@ -14,6 +13,7 @@ def _docker_available() -> bool:
     """
     try:
         import docker  # type: ignore[import-untyped]
+
         client = docker.from_env()
         client.ping()
         return True
@@ -29,17 +29,20 @@ pytestmark = [
     ),
 ]
 
-from testcontainers.postgres import PostgresContainer
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 import uuid
 from pathlib import Path
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from testcontainers.postgres import PostgresContainer
+
 
 @pytest.fixture(scope="session")
 def postgres_container():
     """Start a real Postgres container for integration testing."""
     with PostgresContainer("postgres:16", driver="psycopg") as postgres:
         yield postgres
+
 
 @pytest.fixture(scope="session")
 def db_engine(postgres_container):
@@ -50,27 +53,33 @@ def db_engine(postgres_container):
     engine = create_engine(url)
     return engine
 
+
 @pytest.fixture(scope="session")
 def apply_migrations(db_engine):
     """Apply core migrations to the test container database."""
     migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
-    
+
     # List of critical migrations to apply for RLS testing
     # In a full migration, we would run ALL migrations using a tool like alembic or a loop
     core_migrations = [
-        "V1__init_schema.sql",       # Base tables
+        "V1__init_schema.sql",  # Base tables
         "V3__tenant_isolation.sql",  # Basic RLS
-        "V12__production_compliance_init.sql", # PCOS tables
+        "V12__production_compliance_init.sql",  # PCOS tables
         "V27__rls_core_security_tables.sql",
         "V28__rls_pcos_vertical_tables.sql",
-        "V29__jwt_rls_integration.sql"
+        "V29__jwt_rls_integration.sql",
     ]
-    
+
     with db_engine.connect() as conn:
         # Create 'auth' schema and 'uid()' function to mock Supabase environment
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth;"))
-        conn.execute(text("CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS 'SELECT ''00000000-0000-0000-0000-000000000000''::UUID' LANGUAGE SQL;"))
-        conn.execute(text("""
+        conn.execute(
+            text(
+                "CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS 'SELECT ''00000000-0000-0000-0000-000000000000''::UUID' LANGUAGE SQL;"
+            )
+        )
+        conn.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
@@ -78,24 +87,27 @@ def apply_migrations(db_engine):
                 END IF;
             END
             $$;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS users (
                 id UUID PRIMARY KEY,
                 email TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             INSERT INTO users (id, email)
             VALUES ('00000000-0000-0000-0000-000000000000', 'ci-test-user@regengine.local')
             ON CONFLICT (id) DO NOTHING;
-        """))
+        """)
+        )
         conn.commit()
-        
-        missing_migrations = [
-            migration for migration in core_migrations if not (migrations_dir / migration).exists()
-        ]
+
+        missing_migrations = [migration for migration in core_migrations if not (migrations_dir / migration).exists()]
         if missing_migrations:
             pytest.skip(
                 "Legacy service migrations are not available for the Testcontainers "
@@ -115,6 +127,7 @@ def apply_migrations(db_engine):
                 conn.rollback()
     return True
 
+
 def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
     """
     Verify that RLS isolation works as expected in a real Postgres environment.
@@ -125,7 +138,7 @@ def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
     tenant_b = uuid.uuid4()
     slug_a = f"tenant-a-{tenant_a.hex[:8]}"
     slug_b = f"tenant-b-{tenant_b.hex[:8]}"
-    
+
     with Session() as session:
         # 1. Insert data as a superuser (bypass RLS)
         # We need a table that has RLS enabled. pcos_projects is a good candidate.
@@ -197,36 +210,36 @@ def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
                 "name": "Project B",
             },
         )
-        
+
         session.commit()
-        
+
         # 2. Test Tenant A context
         session.execute(text(f"SELECT set_config('app.tenant_id', :tid, FALSE)"), {"tid": str(tenant_a)})
-        
+
         # Use get_tenant_context() if it exists to verify setup
         ctx = session.execute(text("SELECT get_tenant_context()")).scalar()
         assert ctx == tenant_a
-        
+
         # Query projects - should ONLY see Project A
         # Note: We must ensure RLS is ENABLED for this to work
         session.execute(text("ALTER TABLE pcos_projects ENABLE ROW LEVEL SECURITY"))
         session.execute(text("ALTER TABLE pcos_projects FORCE ROW LEVEL SECURITY"))
-        
+
         # Note: Policies must be created. V28 should have done this.
         # If V28 didn't create the perfect policy for Testcontainers (which is a superuser),
         # we might need to test as a different role.
-        
+
         results = session.execute(text("SELECT name FROM pcos_projects")).all()
         # If running as superuser, RLS might be bypassed unless FORCE RLS is on.
         # Even with FORCE RLS, the table owner might bypass it.
         # A better test is to create a 'regengine_user' role.
-        
+
         # For simplicity in this pilot, we just show the setup.
         print(f"Projects visible to Tenant A: {[r[0] for r in results]}")
-        
+
         # 3. Test Tenant B context
         session.execute(text(f"SELECT set_config('app.tenant_id', :tid, FALSE)"), {"tid": str(tenant_b)})
         results = session.execute(text("SELECT name FROM pcos_projects")).all()
         print(f"Projects visible to Tenant B: {[r[0] for r in results]}")
 
-    assert True # Pilot successfully demonstrated
+    assert True  # Pilot successfully demonstrated

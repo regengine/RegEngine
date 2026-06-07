@@ -61,15 +61,20 @@ class _RecorderLogger:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, tuple[Any, ...], dict[str, Any]]] = []
 
-    def _record(
-        self, level: str, msg: str, *args: Any, **kwargs: Any
-    ) -> None:
+    def _record(self, level: str, msg: str, *args: Any, **kwargs: Any) -> None:
         self.calls.append((level, msg, args, kwargs))
 
-    def error(self, msg: str, *a: Any, **k: Any) -> None: self._record("error", msg, *a, **k)
-    def warning(self, msg: str, *a: Any, **k: Any) -> None: self._record("warning", msg, *a, **k)
-    def info(self, msg: str, *a: Any, **k: Any) -> None: self._record("info", msg, *a, **k)
-    def debug(self, msg: str, *a: Any, **k: Any) -> None: self._record("debug", msg, *a, **k)
+    def error(self, msg: str, *a: Any, **k: Any) -> None:
+        self._record("error", msg, *a, **k)
+
+    def warning(self, msg: str, *a: Any, **k: Any) -> None:
+        self._record("warning", msg, *a, **k)
+
+    def info(self, msg: str, *a: Any, **k: Any) -> None:
+        self._record("info", msg, *a, **k)
+
+    def debug(self, msg: str, *a: Any, **k: Any) -> None:
+        self._record("debug", msg, *a, **k)
 
 
 @pytest.fixture(autouse=True)
@@ -87,6 +92,7 @@ def _stub_configure_stripe(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture(autouse=True)
 def _stub_emit_funnel(monkeypatch: pytest.MonkeyPatch) -> None:
     import shared.funnel_events as funnel_events
+
     monkeypatch.setattr(funnel_events, "emit_funnel_event", lambda **_: True)
 
 
@@ -100,7 +106,9 @@ class _FakeRedis:
         self.values: dict[str, str] = {}
         self.hashes: dict[str, dict[str, str]] = {}
 
-    def get(self, key: str) -> Optional[str]: return self.values.get(key)
+    def get(self, key: str) -> Optional[str]:
+        return self.values.get(key)
+
     def set(self, key: str, value: str, **_: Any) -> Any:
         self.values[key] = value
         return True
@@ -148,9 +156,7 @@ class TestHandleCheckoutCompleted:
             created_tenants.append(tenant_name)
             return "tenant-autogen-1"
 
-        monkeypatch.setattr(
-            customers_mod, "_create_tenant_via_admin", _fake_create_tenant
-        )
+        monkeypatch.setattr(customers_mod, "_create_tenant_via_admin", _fake_create_tenant)
 
         session = {
             "id": "cs_new_1",
@@ -179,9 +185,7 @@ class TestHandleCheckoutCompleted:
             created_tenants.append(tenant_name)
             return "tenant-autogen-2"
 
-        monkeypatch.setattr(
-            customers_mod, "_create_tenant_via_admin", _fake_create_tenant
-        )
+        monkeypatch.setattr(customers_mod, "_create_tenant_via_admin", _fake_create_tenant)
 
         session = {
             "id": "cs_new_2",
@@ -211,9 +215,7 @@ class TestHandleCheckoutCompleted:
             "metadata": {"plan_id": "growth"},
         }
 
-        await webhooks_mod._handle_checkout_completed(
-            session, event_created=1_700_000_000
-        )
+        await webhooks_mod._handle_checkout_completed(session, event_created=1_700_000_000)
 
         mapping = fake_redis.hashes["billing:tenant:tenant-existing"]
         assert mapping["last_event_created"] == "1700000000"
@@ -229,6 +231,7 @@ class TestHandleCheckoutCompleted:
 
         # Pre-seed a pending update with a newer timestamp.
         import json as _json
+
         fake_redis.values["billing:pending_sub_update:sub_drain"] = _json.dumps(
             {
                 "event_created": 1_700_000_500,
@@ -252,9 +255,7 @@ class TestHandleCheckoutCompleted:
             "subscription": "sub_drain",
             "metadata": {"plan_id": "growth"},
         }
-        await webhooks_mod._handle_checkout_completed(
-            session, event_created=1_700_000_000
-        )
+        await webhooks_mod._handle_checkout_completed(session, event_created=1_700_000_000)
 
         mapping = fake_redis.hashes["billing:tenant:tenant-drain"]
         # Pending update's status overrode the checkout status.
@@ -273,6 +274,7 @@ class TestHandleCheckoutCompleted:
         fake_redis.values["billing:session:cs_super"] = "tenant-super"
 
         import json as _json
+
         fake_redis.values["billing:pending_sub_update:sub_super"] = _json.dumps(
             {"event_created": 500, "status": "past_due"}
         )
@@ -289,9 +291,7 @@ class TestHandleCheckoutCompleted:
             "subscription": "sub_super",
             "metadata": {"plan_id": "growth"},
         }
-        await webhooks_mod._handle_checkout_completed(
-            session, event_created=1_000_000
-        )
+        await webhooks_mod._handle_checkout_completed(session, event_created=1_000_000)
 
         mapping = fake_redis.hashes["billing:tenant:tenant-super"]
         # Checkout's status wins — the older pending update was NOT applied.
@@ -300,9 +300,7 @@ class TestHandleCheckoutCompleted:
         assert "billing:pending_sub_update:sub_super" not in fake_redis.values
 
     @pytest.mark.asyncio
-    async def test_customer_bound_tenant_resolves_via_customer_lookup(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    async def test_customer_bound_tenant_resolves_via_customer_lookup(self, fake_redis: _FakeRedis) -> None:
         """Path where the server-side session key is missing but the
         customer was previously bound to a tenant (repeat checkout
         from an existing Stripe customer)."""
@@ -320,9 +318,7 @@ class TestHandleCheckoutCompleted:
         assert mapping["customer_id"] == "cus_repeat"
 
     @pytest.mark.asyncio
-    async def test_metadata_tenant_mismatch_is_rejected(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    async def test_metadata_tenant_mismatch_is_rejected(self, fake_redis: _FakeRedis) -> None:
         """Attacker defense: server-side binding says tenant-A, metadata
         claims tenant-B — raise 400."""
         fake_redis.values["billing:session:cs_attack"] = "tenant-real"
@@ -334,9 +330,7 @@ class TestHandleCheckoutCompleted:
             "metadata": {"tenant_id": "tenant-forged"},
         }
         with pytest.raises(HTTPException) as excinfo:
-            await webhooks_mod._handle_checkout_completed(
-                session, event_created=1
-            )
+            await webhooks_mod._handle_checkout_completed(session, event_created=1)
         assert excinfo.value.status_code == 400
 
 
@@ -365,10 +359,7 @@ class TestUpdateSubscriptionStatus:
         # Buffer written.
         assert "billing:pending_sub_update:sub_early" in fake_redis.values
         # Log emitted.
-        assert any(
-            call[1].startswith("billing_mapping_not_found_update_buffered")
-            for call in _stub_logger.calls
-        )
+        assert any(call[1].startswith("billing_mapping_not_found_update_buffered") for call in _stub_logger.calls)
 
     def test_no_mapping_no_subscription_id_logs_only(
         self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
@@ -382,18 +373,11 @@ class TestUpdateSubscriptionStatus:
             event_created=1,
         )
         # No buffer key written.
-        assert not any(
-            k.startswith("billing:pending_sub_update:") for k in fake_redis.values
-        )
+        assert not any(k.startswith("billing:pending_sub_update:") for k in fake_redis.values)
         # Log emitted (structlog event with kwargs).
-        assert any(
-            call[0] == "warning" and call[1] == "billing_mapping_not_found"
-            for call in _stub_logger.calls
-        )
+        assert any(call[0] == "warning" and call[1] == "billing_mapping_not_found" for call in _stub_logger.calls)
 
-    def test_reorder_guard_skips_stale_event(
-        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
-    ) -> None:
+    def test_reorder_guard_skips_stale_event(self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger) -> None:
         """#1196 reorder guard: an event older than ``last_event_created``
         on the mapping must be skipped entirely."""
         # Seed mapping + lookup index.
@@ -413,14 +397,9 @@ class TestUpdateSubscriptionStatus:
         # Status was NOT overwritten — mapping still shows 'active'.
         assert fake_redis.hashes["billing:tenant:tenant-guard"]["status"] == "active"
         # The out-of-order log fired.
-        assert any(
-            "stripe_webhook_event_out_of_order_ignored" in call[1]
-            for call in _stub_logger.calls
-        )
+        assert any("stripe_webhook_event_out_of_order_ignored" in call[1] for call in _stub_logger.calls)
 
-    def test_reorder_guard_handles_corrupt_last_event_created(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_reorder_guard_handles_corrupt_last_event_created(self, fake_redis: _FakeRedis) -> None:
         """Lines 247-248: malformed ``last_event_created`` defaults to 0
         so the update is accepted (not dropped)."""
         fake_redis.hashes["billing:tenant:tenant-corrupt"] = {
@@ -438,9 +417,7 @@ class TestUpdateSubscriptionStatus:
         )
         assert fake_redis.hashes["billing:tenant:tenant-corrupt"]["status"] == "past_due"
 
-    def test_happy_path_updates_all_fields(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_happy_path_updates_all_fields(self, fake_redis: _FakeRedis) -> None:
         """Lines 258-275: the full update path, exercising every
         conditional field (current_period_end, last_invoice_id,
         last_payment_at, last_payment_failure_at, last_event_created)."""
@@ -477,9 +454,7 @@ class TestHandleStripeEventDispatcher:
     539 (unknown event)."""
 
     @pytest.mark.asyncio
-    async def test_checkout_session_completed_delegates(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_checkout_session_completed_delegates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 458-459: ``checkout.session.completed`` calls
         ``_handle_checkout_completed`` with the data object + event_created."""
         spy = AsyncMock()
@@ -561,9 +536,7 @@ class TestHandleStripeEventDispatcher:
         assert fake_redis.hashes["billing:tenant:tenant-del"]["status"] == "canceled"
 
     @pytest.mark.asyncio
-    async def test_subscription_updated_period_end_blocked_by_reorder_guard(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    async def test_subscription_updated_period_end_blocked_by_reorder_guard(self, fake_redis: _FakeRedis) -> None:
         """Lines 513-521 with the inner ``event_created < last_seen``
         branch: even though the reorder guard in ``_update_subscription_status``
         rejected the whole update, the dispatcher re-checks the watermark
@@ -595,10 +568,7 @@ class TestHandleStripeEventDispatcher:
 
         # Nothing changed — stale update was ignored by both guards.
         assert fake_redis.hashes["billing:tenant:tenant-stale"]["status"] == "active"
-        assert (
-            fake_redis.hashes["billing:tenant:tenant-stale"]["current_period_end"]
-            == "2030-01-01T00:00:00+00:00"
-        )
+        assert fake_redis.hashes["billing:tenant:tenant-stale"]["current_period_end"] == "2030-01-01T00:00:00+00:00"
 
     @pytest.mark.asyncio
     async def test_invoice_paid_emits_funnel_event(
@@ -615,6 +585,7 @@ class TestHandleStripeEventDispatcher:
 
         captured: list[dict[str, Any]] = []
         import shared.funnel_events as funnel_events
+
         monkeypatch.setattr(
             funnel_events,
             "emit_funnel_event",
@@ -643,9 +614,7 @@ class TestHandleStripeEventDispatcher:
         assert captured[0]["tenant_id"] == "tenant-paid"
 
     @pytest.mark.asyncio
-    async def test_invoice_payment_failed_sets_past_due(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    async def test_invoice_payment_failed_sets_past_due(self, fake_redis: _FakeRedis) -> None:
         fake_redis.hashes["billing:tenant:tenant-fail"] = {
             "tenant_id": "tenant-fail",
             "status": "active",
@@ -672,9 +641,7 @@ class TestHandleStripeEventDispatcher:
         assert mapping["last_invoice_id"] == "in_fail"
 
     @pytest.mark.asyncio
-    async def test_unknown_event_type_is_logged_and_skipped(
-        self, _stub_logger: _RecorderLogger
-    ) -> None:
+    async def test_unknown_event_type_is_logged_and_skipped(self, _stub_logger: _RecorderLogger) -> None:
         """Line 539: unrecognized event types fall through to a
         debug/info log. No handler side-effect."""
         event = {
@@ -685,9 +652,7 @@ class TestHandleStripeEventDispatcher:
         }
         await webhooks_mod._handle_stripe_event(event)
 
-        assert any(
-            call[1] == "stripe_webhook_ignored" for call in _stub_logger.calls
-        )
+        assert any(call[1] == "stripe_webhook_ignored" for call in _stub_logger.calls)
 
 
 # ── _process_stripe_webhook ────────────────────────────────────────────────
@@ -697,39 +662,29 @@ class TestProcessStripeWebhook:
     """Gap lines: 550 (missing secret), 564 (bad payload)."""
 
     @pytest.mark.asyncio
-    async def test_missing_webhook_secret_returns_500(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_missing_webhook_secret_returns_500(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)
         request = MagicMock()
         request.body = AsyncMock(return_value=b"{}")
 
         with pytest.raises(HTTPException) as excinfo:
-            await webhooks_mod._process_stripe_webhook(
-                request, stripe_signature="t=1,v1=fake"
-            )
+            await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=fake")
         assert excinfo.value.status_code == 500
         assert "STRIPE_WEBHOOK_SECRET" in excinfo.value.detail
 
     @pytest.mark.asyncio
-    async def test_missing_signature_header_returns_400(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_missing_signature_header_returns_400(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
         request = MagicMock()
         request.body = AsyncMock(return_value=b"{}")
 
         with pytest.raises(HTTPException) as excinfo:
-            await webhooks_mod._process_stripe_webhook(
-                request, stripe_signature=None
-            )
+            await webhooks_mod._process_stripe_webhook(request, stripe_signature=None)
         assert excinfo.value.status_code == 400
         assert "Stripe-Signature" in excinfo.value.detail
 
     @pytest.mark.asyncio
-    async def test_non_json_payload_raises_400(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_non_json_payload_raises_400(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 564: ``stripe.Webhook.construct_event`` raises ValueError
         on malformed payloads — translate to 400."""
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
@@ -737,32 +692,24 @@ class TestProcessStripeWebhook:
         def _raise_value_error(**_kwargs: Any) -> Any:
             raise ValueError("not json")
 
-        monkeypatch.setattr(
-            stripe.Webhook, "construct_event", _raise_value_error
-        )
+        monkeypatch.setattr(stripe.Webhook, "construct_event", _raise_value_error)
 
         request = MagicMock()
         request.body = AsyncMock(return_value=b"not-json")
 
         with pytest.raises(HTTPException) as excinfo:
-            await webhooks_mod._process_stripe_webhook(
-                request, stripe_signature="t=1,v1=fake"
-            )
+            await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=fake")
         assert excinfo.value.status_code == 400
         assert "Invalid webhook payload" in excinfo.value.detail
 
     @pytest.mark.asyncio
-    async def test_invalid_signature_returns_401_no_handler_run(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_invalid_signature_returns_401_no_handler_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
         fake = _FakeRedis()
         monkeypatch.setattr(state_mod, "_redis_client", lambda: fake)
 
         def _raise_sig_err(**_kwargs: Any) -> Any:
-            raise stripe.error.SignatureVerificationError(
-                "bad sig", sig_header=_kwargs.get("sig_header", "")
-            )
+            raise stripe.error.SignatureVerificationError("bad sig", sig_header=_kwargs.get("sig_header", ""))
 
         monkeypatch.setattr(stripe.Webhook, "construct_event", _raise_sig_err)
 
@@ -773,21 +720,15 @@ class TestProcessStripeWebhook:
         request.body = AsyncMock(return_value=b"{}")
 
         with pytest.raises(HTTPException) as excinfo:
-            await webhooks_mod._process_stripe_webhook(
-                request, stripe_signature="t=1,v1=bad"
-            )
+            await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=bad")
         assert excinfo.value.status_code == 401
         # Handler did NOT run.
         handler.assert_not_awaited()
         # No dedup slot consumed.
-        assert not any(
-            k.startswith("billing:stripe:event:seen:") for k in fake.values
-        )
+        assert not any(k.startswith("billing:stripe:event:seen:") for k in fake.values)
 
     @pytest.mark.asyncio
-    async def test_happy_path_ack_and_handler_awaited(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_happy_path_ack_and_handler_awaited(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exercises the full success path: secret set, signature ok,
         dedup slot fresh, handler dispatched, 200-shaped response."""
         monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
@@ -806,9 +747,7 @@ class TestProcessStripeWebhook:
         request = MagicMock()
         request.body = AsyncMock(return_value=b'{"id":"evt_ok"}')
 
-        response = await webhooks_mod._process_stripe_webhook(
-            request, stripe_signature="t=1,v1=ok"
-        )
+        response = await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=ok")
         assert response == {"received": True, "event_type": "invoice.paid"}
         handler.assert_awaited_once()
 
@@ -840,9 +779,7 @@ class TestProcessStripeWebhook:
         request = MagicMock()
         request.body = AsyncMock(return_value=b'{"id":"evt_dup"}')
 
-        response = await webhooks_mod._process_stripe_webhook(
-            request, stripe_signature="t=1,v1=ok"
-        )
+        response = await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=ok")
 
         assert response == {
             "received": True,
@@ -851,10 +788,7 @@ class TestProcessStripeWebhook:
         }
         handler.assert_not_awaited()
         # Duplicate-ignored log emitted.
-        assert any(
-            "stripe_webhook_duplicate_ignored" in call[1]
-            for call in _stub_logger.calls
-        )
+        assert any("stripe_webhook_duplicate_ignored" in call[1] for call in _stub_logger.calls)
 
 
 # ── _handle_checkout_completed client-metadata-tenant warning ──────────────
@@ -878,9 +812,7 @@ class TestHandleCheckoutCompletedClientMetadataWarning:
             created.append(tenant_name)
             return "tenant-auto-warn"
 
-        monkeypatch.setattr(
-            customers_mod, "_create_tenant_via_admin", _fake_create
-        )
+        monkeypatch.setattr(customers_mod, "_create_tenant_via_admin", _fake_create)
 
         # No server-side binding at all.
         session = {
@@ -895,10 +827,7 @@ class TestHandleCheckoutCompletedClientMetadataWarning:
         assert created == ["New Customer Team"]
         # Warning fired with the ignored-client-metadata marker.
         assert any(
-            call[1].startswith(
-                "stripe_webhook_ignored_client_metadata_tenant_id"
-            )
-            for call in _stub_logger.calls
+            call[1].startswith("stripe_webhook_ignored_client_metadata_tenant_id") for call in _stub_logger.calls
         )
 
 
@@ -925,10 +854,7 @@ class TestHandleTrialWillEnd:
         # No mapping written.
         assert not fake_redis.hashes
         # Warning emitted.
-        assert any(
-            call[1].startswith("stripe_trial_will_end_tenant_not_found")
-            for call in _stub_logger.calls
-        )
+        assert any(call[1].startswith("stripe_trial_will_end_tenant_not_found") for call in _stub_logger.calls)
 
     def test_happy_path_stamps_trial_end_and_notification(
         self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
@@ -955,16 +881,12 @@ class TestHandleTrialWillEnd:
         assert mapping["trial_will_end_notified_at"]  # non-empty ISO
         assert mapping["status"] == "trialing"
         assert any(
-            call[0] == "warning"
-            and call[1] == "stripe_trial_will_end"
-            and call[3].get("tenant_id") == "tenant-trial"
+            call[0] == "warning" and call[1] == "stripe_trial_will_end" and call[3].get("tenant_id") == "tenant-trial"
             for call in _stub_logger.calls
         )
 
     @pytest.mark.asyncio
-    async def test_dispatcher_routes_to_trial_will_end(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_dispatcher_routes_to_trial_will_end(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 526-527: ``customer.subscription.trial_will_end`` dispatch."""
         spy = MagicMock()
         monkeypatch.setattr(webhooks_mod, "_handle_trial_will_end", spy)
@@ -1005,9 +927,7 @@ class TestHandleDisputeCreated:
 
         assert not fake_redis.hashes
         assert any(
-            call[0] == "error"
-            and call[1].startswith("stripe_dispute_tenant_not_found")
-            for call in _stub_logger.calls
+            call[0] == "error" and call[1].startswith("stripe_dispute_tenant_not_found") for call in _stub_logger.calls
         )
 
     def test_happy_path_persists_dispute_and_pages_on_error(
@@ -1043,15 +963,11 @@ class TestHandleDisputeCreated:
 
         # ERROR log fires (page on-call).
         assert any(
-            call[0] == "error"
-            and call[1] == "stripe_dispute_opened"
-            and call[3].get("tenant_id") == "tenant-disp"
+            call[0] == "error" and call[1] == "stripe_dispute_opened" and call[3].get("tenant_id") == "tenant-disp"
             for call in _stub_logger.calls
         )
 
-    def test_missing_created_falls_back_to_now(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_missing_created_falls_back_to_now(self, fake_redis: _FakeRedis) -> None:
         """Line 377: when ``created`` is missing we substitute a UTC now
         ISO string so ``last_dispute_opened_at`` is never empty."""
         fake_redis.hashes["billing:tenant:tenant-disp2"] = {
@@ -1076,9 +992,7 @@ class TestHandleDisputeCreated:
         assert mapping["last_dispute_opened_at"]  # non-empty
 
     @pytest.mark.asyncio
-    async def test_dispatcher_routes_to_dispute_created(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_dispatcher_routes_to_dispute_created(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 531-532: ``charge.dispute.created`` dispatch."""
         spy = MagicMock()
         monkeypatch.setattr(webhooks_mod, "_handle_dispute_created", spy)
@@ -1100,21 +1014,14 @@ class TestHandleDisputeCreated:
 class TestHandleCustomerDeleted:
     """Gap lines 412-445: handler + dispatcher at 536-537."""
 
-    def test_missing_customer_id_logs_and_returns(
-        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
-    ) -> None:
+    def test_missing_customer_id_logs_and_returns(self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger) -> None:
         """Lines 413-415: no ``id`` on the customer → warn & return."""
         webhooks_mod._handle_customer_deleted({})
 
         assert not fake_redis.hashes
-        assert any(
-            call[1] == "stripe_customer_deleted_missing_id"
-            for call in _stub_logger.calls
-        )
+        assert any(call[1] == "stripe_customer_deleted_missing_id" for call in _stub_logger.calls)
 
-    def test_no_tenant_still_clears_stale_lookup(
-        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
-    ) -> None:
+    def test_no_tenant_still_clears_stale_lookup(self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger) -> None:
         """Lines 418-426: unknown customer still triggers the defensive
         lookup cleanup so stale pointers don't linger."""
         # Pre-seed a dangling lookup that points nowhere.
@@ -1131,10 +1038,7 @@ class TestHandleCustomerDeleted:
 
         # Lookup cleared even though no tenant was bound.
         assert "billing:customer:cus_dangle" not in fake_redis.values
-        assert any(
-            call[1].startswith("stripe_customer_deleted_tenant_not_found")
-            for call in _stub_logger.calls
-        )
+        assert any(call[1].startswith("stripe_customer_deleted_tenant_not_found") for call in _stub_logger.calls)
 
     def test_happy_path_marks_deleted_and_clears_both_lookups(
         self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
@@ -1160,15 +1064,11 @@ class TestHandleCustomerDeleted:
         assert "billing:subscription:sub_ghost" not in fake_redis.values
         # WARN fired (structlog event with tenant_id kwarg).
         assert any(
-            call[0] == "warning"
-            and call[1] == "stripe_customer_deleted"
-            and call[3].get("tenant_id") == "tenant-ghost"
+            call[0] == "warning" and call[1] == "stripe_customer_deleted" and call[3].get("tenant_id") == "tenant-ghost"
             for call in _stub_logger.calls
         )
 
-    def test_happy_path_without_subscription_skips_subscription_clear(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_happy_path_without_subscription_skips_subscription_clear(self, fake_redis: _FakeRedis) -> None:
         """Line 439-440: when no prior subscription_id was on the mapping
         we skip ``_clear_subscription_lookup`` (nothing to clear)."""
         fake_redis.hashes["billing:tenant:tenant-no-sub"] = {
@@ -1180,16 +1080,11 @@ class TestHandleCustomerDeleted:
 
         webhooks_mod._handle_customer_deleted({"id": "cus_nosub"})
 
-        assert (
-            fake_redis.hashes["billing:tenant:tenant-no-sub"]["status"]
-            == "customer_deleted"
-        )
+        assert fake_redis.hashes["billing:tenant:tenant-no-sub"]["status"] == "customer_deleted"
         # No subscription lookup to remove — nothing crashed.
 
     @pytest.mark.asyncio
-    async def test_dispatcher_routes_to_customer_deleted(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_dispatcher_routes_to_customer_deleted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Lines 536-537: ``customer.deleted`` dispatch."""
         spy = MagicMock()
         monkeypatch.setattr(webhooks_mod, "_handle_customer_deleted", spy)
@@ -1213,9 +1108,7 @@ class TestSubscriptionUpdatedCorruptWatermark:
     against corrupt ``last_event_created`` values by defaulting to 0."""
 
     @pytest.mark.asyncio
-    async def test_corrupt_watermark_allows_period_end_update(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    async def test_corrupt_watermark_allows_period_end_update(self, fake_redis: _FakeRedis) -> None:
         """Corrupt ``last_event_created`` + ``event.created`` missing →
         the inner try/except at lines 515-518 falls through to
         ``last_seen = 0`` and we still persist ``current_period_end``.

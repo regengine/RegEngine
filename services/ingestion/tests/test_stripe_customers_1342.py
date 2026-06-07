@@ -45,10 +45,8 @@ pytest.importorskip("fastapi")
 pytest.importorskip("stripe")
 
 import structlog  # noqa: E402
-from fastapi import HTTPException  # noqa: E402
-
 from app.stripe_billing import customers as mod  # noqa: E402
-
+from fastapi import HTTPException  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # customers.py now uses structlog.get_logger(...). Stripe/StripeError paths
@@ -95,9 +93,7 @@ class _FakeClient:
         return self._response
 
 
-def _install_fake_resilient_client(
-    monkeypatch, *, payload: dict, status_code: int = 200
-) -> dict:
+def _install_fake_resilient_client(monkeypatch, *, payload: dict, status_code: int = 200) -> dict:
     """Replace ``resilient_client`` in mod with a fake that captures
     the outbound request. Returns the captured dict so tests can assert.
     """
@@ -134,9 +130,7 @@ class TestCreateTenantViaAdmin:
     def test_happy_path_posts_and_returns_tenant_id(self, monkeypatch):
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc/")
         monkeypatch.setenv("ADMIN_MASTER_KEY", "secret-key")
-        captured = _install_fake_resilient_client(
-            monkeypatch, payload={"tenant_id": "tenant-42"}
-        )
+        captured = _install_fake_resilient_client(monkeypatch, payload={"tenant_id": "tenant-42"})
 
         result = asyncio.run(mod._create_tenant_via_admin("Acme Inc."))
 
@@ -154,9 +148,7 @@ class TestCreateTenantViaAdmin:
         # the outer Stripe webhook handler retries on that.
         monkeypatch.setenv("ADMIN_SERVICE_URL", "http://admin.svc")
         monkeypatch.setenv("ADMIN_MASTER_KEY", "secret")
-        _install_fake_resilient_client(
-            monkeypatch, payload={}, status_code=500
-        )
+        _install_fake_resilient_client(monkeypatch, payload={}, status_code=500)
         with pytest.raises(RuntimeError):
             asyncio.run(mod._create_tenant_via_admin("Acme"))
 
@@ -203,9 +195,7 @@ class TestCreatePortalSession:
         result = mod._create_portal_session("cus_123", "https://return.example")
 
         assert result == {"id": "cs_test"}
-        assert sessions.calls == [
-            {"customer": "cus_123", "return_url": "https://return.example"}
-        ]
+        assert sessions.calls == [{"customer": "cus_123", "return_url": "https://return.example"}]
 
     def test_legacy_session_api_used_when_modern_missing(self, monkeypatch):
         # Legacy ``billing_portal.Session.create`` — kept working for
@@ -307,9 +297,7 @@ class TestCreateCustomerForTenant:
 
         assert captured["name"] == "Tenant tenant-42"
 
-    def test_stripe_error_raises_http_502_with_user_message(
-        self, monkeypatch
-    ):
+    def test_stripe_error_raises_http_502_with_user_message(self, monkeypatch):
         # The user-safe message is exposed; raw internals stay in the
         # logs. Regression guard against accidentally echoing stripe's
         # internal stack trace to the API consumer.
@@ -336,15 +324,9 @@ class TestCreateCustomerForTenant:
         assert ei.value.status_code == 502
         assert "Your card was declined." in ei.value.detail
         # Raw internals stayed in the logger event, not the HTTP body.
-        assert any(
-            e["log_level"] == "error"
-            and e["event"] == "stripe_customer_create_failed"
-            for e in cap_logs
-        )
+        assert any(e["log_level"] == "error" and e["event"] == "stripe_customer_create_failed" for e in cap_logs)
 
-    def test_stripe_error_falls_back_to_str_when_no_user_message(
-        self, monkeypatch
-    ):
+    def test_stripe_error_falls_back_to_str_when_no_user_message(self, monkeypatch):
         # ``exc.user_message or str(exc)`` — empty/None user_message
         # means show the technical message rather than an empty body.
         class _Err(mod.stripe.error.StripeError):
@@ -388,9 +370,7 @@ class TestEnsureCustomerMapping:
     def test_existing_customer_id_short_circuits(self, monkeypatch):
         # Already-mapped tenant — MUST NOT call stripe.Customer.create
         # again or we orphan a second Stripe customer per webhook retry.
-        monkeypatch.setattr(
-            mod, "_get_subscription_mapping", lambda tid: {"customer_id": "cus_exist"}
-        )
+        monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: {"customer_id": "cus_exist"})
 
         def _boom(**kw):  # pragma: no cover — guards against regression
             raise AssertionError("Should not be called when mapping exists")
@@ -404,12 +384,8 @@ class TestEnsureCustomerMapping:
         # ``.strip()`` + truthy check — whitespace counts as missing and
         # we go through the creation path. Guards against a Redis hash
         # containing "  " as a placeholder.
-        monkeypatch.setattr(
-            mod, "_get_subscription_mapping", lambda tid: {"customer_id": "   "}
-        )
-        monkeypatch.setattr(
-            mod, "_create_customer_for_tenant", lambda **kw: "cus_new"
-        )
+        monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: {"customer_id": "   "})
+        monkeypatch.setattr(mod, "_create_customer_for_tenant", lambda **kw: "cus_new")
         stored: dict = {}
         monkeypatch.setattr(
             mod,
@@ -437,9 +413,7 @@ class TestEnsureCustomerMapping:
             "current_period_end": "2025-12-01",
         }
         monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: existing)
-        monkeypatch.setattr(
-            mod, "_create_customer_for_tenant", lambda **kw: "cus_new"
-        )
+        monkeypatch.setattr(mod, "_create_customer_for_tenant", lambda **kw: "cus_new")
         stored: list = []
         monkeypatch.setattr(
             mod,
@@ -463,9 +437,7 @@ class TestEnsureCustomerMapping:
         # No existing mapping → sensible defaults for every field
         # (plan_id=none, billing_period=monthly, status=none).
         monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: {})
-        monkeypatch.setattr(
-            mod, "_create_customer_for_tenant", lambda **kw: "cus_new"
-        )
+        monkeypatch.setattr(mod, "_create_customer_for_tenant", lambda **kw: "cus_new")
         stored: list = []
         monkeypatch.setattr(
             mod,
@@ -507,17 +479,13 @@ class TestGetExistingCustomerId:
         assert mod._get_existing_customer_id("") is None
 
     def test_populated_mapping_returns_customer_id(self, monkeypatch):
-        monkeypatch.setattr(
-            mod, "_get_subscription_mapping", lambda tid: {"customer_id": "cus_42"}
-        )
+        monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: {"customer_id": "cus_42"})
         assert mod._get_existing_customer_id("t") == "cus_42"
 
     def test_whitespace_customer_id_returns_none(self, monkeypatch):
         # Whitespace-only value is normalized to None so callers can
         # rely on ``is None`` rather than a ``.strip()`` check.
-        monkeypatch.setattr(
-            mod, "_get_subscription_mapping", lambda tid: {"customer_id": "  "}
-        )
+        monkeypatch.setattr(mod, "_get_subscription_mapping", lambda tid: {"customer_id": "  "})
         assert mod._get_existing_customer_id("t") is None
 
     def test_missing_customer_id_returns_none(self, monkeypatch):

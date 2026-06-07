@@ -51,8 +51,12 @@ class BillingPortalRequest(BaseModel):
     """Request payload for creating a Stripe customer portal session."""
 
     tenant_id: Optional[str] = Field(default=None, description="Tenant ID override for legacy/master keys")
-    tenant_name: Optional[str] = Field(default=None, description="Tenant display name for first-time Stripe customer creation")
-    customer_email: Optional[str] = Field(default=None, description="Billing contact email for first-time Stripe customer creation")
+    tenant_name: Optional[str] = Field(
+        default=None, description="Tenant display name for first-time Stripe customer creation"
+    )
+    customer_email: Optional[str] = Field(
+        default=None, description="Billing contact email for first-time Stripe customer creation"
+    )
     return_url: Optional[str] = Field(default=None, description="Optional Stripe portal return URL override")
 
 

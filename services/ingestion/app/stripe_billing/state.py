@@ -157,6 +157,7 @@ def _find_tenant_id(subscription_id: Optional[str], customer_id: Optional[str]) 
 
 # ── #1196: out-of-order subscription update buffer ────────────────────────
 
+
 def _pending_sub_update_key(subscription_id: str) -> str:
     return f"billing:pending_sub_update:{subscription_id}"
 
@@ -292,7 +293,8 @@ def _clear_customer_lookup(customer_id: str) -> None:
     except redis.RedisError as exc:  # pragma: no cover - logged for ops
         logger.warning(
             "stripe_customer_lookup_clear_redis_error customer_id=%s error=%s",
-            customer_id, exc,
+            customer_id,
+            exc,
         )
 
 
@@ -312,5 +314,6 @@ def _clear_subscription_lookup(subscription_id: str) -> None:
     except redis.RedisError as exc:  # pragma: no cover - logged for ops
         logger.warning(
             "stripe_subscription_lookup_clear_redis_error subscription_id=%s error=%s",
-            subscription_id, exc,
+            subscription_id,
+            exc,
         )
