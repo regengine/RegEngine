@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import importlib
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 import app.authz as authz
 import app.inflow_workbench as workbench
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.inflow_workbench import router
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from app.sandbox.router import router as sandbox_router
+
+sandbox_router_module = importlib.import_module("app.sandbox.router")
 
 
 def _principal(

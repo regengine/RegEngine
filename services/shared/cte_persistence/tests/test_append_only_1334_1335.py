@@ -369,14 +369,14 @@ class TestCallersDualWriteToCanonical_Issue1335:
 
 
 class TestMigrationTriggerSQL_Issue1334:
-    """The v073 migration file must contain the expected trigger DDL."""
+    """The forward-port migration file must contain the expected trigger DDL."""
 
     def _get_migration_source(self) -> str:
         import os
 
         path = os.path.join(
             os.path.dirname(__file__),
-            "../../../../alembic/versions/20260420_v073_cte_events_append_only_trigger_1334.py",
+            "../../../../alembic/versions/20260505_5ac9e7b1d402_v078_orphan_migration_forward_ports.py",
         )
         path = os.path.normpath(path)
         with open(path) as f:
@@ -385,20 +385,20 @@ class TestMigrationTriggerSQL_Issue1334:
     def test_migration_contains_before_update_or_delete_trigger(self):
         source = self._get_migration_source()
         assert "BEFORE UPDATE OR DELETE" in source, (
-            "Migration v073 must create a BEFORE UPDATE OR DELETE trigger on fsma.cte_events"
+            "Migration v078 must create a BEFORE UPDATE OR DELETE trigger on fsma.cte_events"
         )
 
     def test_migration_contains_trigger_name(self):
         source = self._get_migration_source()
-        assert "cte_events_no_update_delete" in source
+        assert "cte_events_append_only" in source
 
     def test_migration_contains_raise_exception(self):
         source = self._get_migration_source()
         assert "RAISE EXCEPTION" in source
 
-    def test_migration_references_issue_1334(self):
+    def test_migration_references_append_only_control(self):
         source = self._get_migration_source()
-        assert "1334" in source
+        assert "CTE records are append-only" in source
 
     def test_migration_has_upgrade_and_downgrade(self):
         source = self._get_migration_source()

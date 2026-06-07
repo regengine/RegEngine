@@ -16,10 +16,9 @@ logger = structlog.get_logger("nlp-consumer")
 
 def _load_schema() -> Draft7Validator:
     """Load JSON schema using standardized project path discovery."""
-    from shared.paths import project_root
+    from shared.paths import data_schemas_dir
 
-    repo_root = project_root()
-    schema_path = repo_root / "schemas" / "events" / "nlp.extracted.schema.json"
+    schema_path = data_schemas_dir() / "events" / "nlp.extracted.schema.json"
 
     if not schema_path.exists():
         logger.error("schema_not_found", path=str(schema_path))
@@ -34,10 +33,9 @@ def _load_inbound_schema() -> Draft7Validator:
 
     Addresses OWASP API10:2023 — Unsafe Consumption of APIs.
     """
-    from shared.paths import project_root
+    from shared.paths import data_schemas_dir
 
-    repo_root = project_root()
-    schema_path = repo_root / "schemas" / "events" / "ingest.normalized.schema.json"
+    schema_path = data_schemas_dir() / "events" / "ingest.normalized.schema.json"
 
     if not schema_path.exists():
         logger.error("inbound_schema_not_found", path=str(schema_path))
