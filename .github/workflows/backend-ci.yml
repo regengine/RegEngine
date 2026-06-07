@@ -268,11 +268,11 @@ jobs:
         # ``main.py`` / ``api.py`` / ``conftest.py`` at service root are
         # also covered, plus this job now gates merges (see ci-status).
         run: |
-          pip install flake8
+          pip install ruff==0.15.5
           cd services/${{ matrix.service }}
-          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
-            --exclude=__pycache__,.venv,venv,build,dist \
-            --count --statistics
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
 
   # ── Lint shared/ ─────────────────────────────────────────
   # ``services/shared/`` isn't in the service matrix but is imported by
@@ -290,11 +290,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Run linting
         run: |
-          pip install flake8
+          pip install ruff==0.15.5
           cd services/shared
-          flake8 . --max-line-length=120 --select=E9,F63,F7,F82 \
-            --exclude=__pycache__,.venv,venv,build,dist \
-            --count --statistics
+          ruff check . --select E9,F63,F7,F82 --line-length 120 \
+            --extend-exclude __pycache__,.venv,venv,build,dist \
+            --statistics
 
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
@@ -626,7 +626,7 @@ jobs:
           echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
           echo "tenant_id UUID:    ${{ needs.tenant-id-uuid-check.result }}"
           echo "Public samples:    ${{ needs.regenerate-public-samples.result }}"
-          # Lint is now blocking — flake8 F821 (undefined name) would
+          # Lint is now blocking — ruff F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
