@@ -16,9 +16,8 @@ class TestSchedulerConfig:
 
     def test_default_settings_load(self, monkeypatch):
         """Config class should instantiate with sensible defaults."""
-        monkeypatch.setenv(
-            "DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine"
-        )  # pragma: allowlist secret
+        database_url = "postgresql://regengine:regengine@localhost:5432/regengine"  # pragma: allowlist secret
+        monkeypatch.setenv("DATABASE_URL", database_url)
         monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
         from app.config import SchedulerSettings
 

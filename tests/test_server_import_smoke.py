@@ -71,12 +71,11 @@ print("DOCS_RESULT_JSON=" + json.dumps({
                 "REGENGINE_ENV",
             }
         }
+        database_url = "postgresql://regengine_cloud_test:regengine_cloud_test@localhost:5432/regengine_cloud_test"  # pragma: allowlist secret
         env.update(
             {
                 "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
-                "DATABASE_URL": (
-                    "postgresql://regengine_cloud_test:regengine_cloud_test@localhost:5432/regengine_cloud_test"
-                ),
+                "DATABASE_URL": database_url,
                 "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
                 "RAILWAY_ENVIRONMENT_NAME": "production",
                 "TOOL_ACCESS_SECRET": "tool-access-secret-for-railway-docs-lockdown",  # pragma: allowlist secret
