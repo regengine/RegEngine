@@ -17,7 +17,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import httpx
 import structlog
-
 from shared.url_validation import SSRFError, validate_url
 
 from .config import get_settings
@@ -49,8 +48,8 @@ logger = structlog.get_logger("notifications")
 #      operators see which endpoints are flaky.
 _IN_THREAD_BACKOFF_SCHEDULE_SECONDS: Tuple[float, ...] = (1.0, 5.0, 30.0)
 _OUTBOX_BACKOFF_SCHEDULE_SECONDS: Tuple[float, ...] = (
-    60.0,       # 1 min
-    5 * 60.0,   # 5 min
+    60.0,  # 1 min
+    5 * 60.0,  # 5 min
     30 * 60.0,  # 30 min
     60 * 60.0,  # 1h
     6 * 60 * 60.0,  # 6h
@@ -208,10 +207,7 @@ class WebhookNotifier:
         # Deliver to all webhooks in parallel
         results = []
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {
-                executor.submit(self._deliver_with_retry, url, payload): url
-                for url in self.urls
-            }
+            futures = {executor.submit(self._deliver_with_retry, url, payload): url for url in self.urls}
 
             for future in as_completed(futures):
                 url = futures[future]
@@ -250,9 +246,7 @@ class WebhookNotifier:
 
         return results
 
-    def _deliver_with_retry(
-        self, url: str, payload: WebhookPayload
-    ) -> DeliveryResult:
+    def _deliver_with_retry(self, url: str, payload: WebhookPayload) -> DeliveryResult:
         """Deliver to a single webhook with retry logic.
 
         Honors ``Retry-After`` on 429/503 responses (#1150). Retries on
@@ -619,10 +613,7 @@ class WebhookNotifier:
 
         for dl in dead_letters:
             # Reconstruct payload
-            items = [
-                EnforcementItem(**item_data)
-                for item_data in dl["payload"].get("items", [])
-            ]
+            items = [EnforcementItem(**item_data) for item_data in dl["payload"].get("items", [])]
             if items:
                 result = self.notify(items)
                 results.extend(result)

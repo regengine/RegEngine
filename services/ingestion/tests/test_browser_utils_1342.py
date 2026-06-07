@@ -37,11 +37,10 @@ sys.modules.setdefault("playwright.async_api", _fake_async_api)
 
 # Now safe to import the module under test
 import asyncio  # noqa: E402
-import pytest  # noqa: E402
 
+import pytest  # noqa: E402
 from app import browser_utils as bu  # noqa: E402
 from shared.url_validation import SSRFError  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Silence the logger across all tests.
@@ -142,6 +141,7 @@ class _FakePlaywrightSession:
 
 class _FakeAsyncPlaywright:
     """Async context manager yielding a _FakePlaywrightSession."""
+
     def __init__(self, session):
         self._session = session
 
@@ -253,7 +253,8 @@ class TestFailurePaths:
     def test_goto_raises_oserror_reraises_and_closes(self, monkeypatch):
         monkeypatch.setattr(bu, "validate_url", lambda url: url)
         browser = _install_fake_browser(
-            monkeypatch, goto_exc=OSError("network unreachable"),
+            monkeypatch,
+            goto_exc=OSError("network unreachable"),
         )
 
         with pytest.raises(OSError, match="network unreachable"):
@@ -264,7 +265,8 @@ class TestFailurePaths:
     def test_goto_raises_timeout_reraises(self, monkeypatch):
         monkeypatch.setattr(bu, "validate_url", lambda url: url)
         browser = _install_fake_browser(
-            monkeypatch, goto_exc=TimeoutError("load timeout"),
+            monkeypatch,
+            goto_exc=TimeoutError("load timeout"),
         )
 
         with pytest.raises(TimeoutError):
@@ -280,6 +282,7 @@ class TestFailurePaths:
 class TestRunBrowserFetch:
     def test_wraps_async_via_asyncio_run(self, monkeypatch):
         """Sync wrapper returns the async function's result via asyncio.run."""
+
         async def _stub(url, timeout=30000):
             return {"stub": True, "url": url, "timeout": timeout}
 

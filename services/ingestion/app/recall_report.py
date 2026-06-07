@@ -14,10 +14,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .disclaimers import DEMO_DATA_DISCLAIMER
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("recall-report")
 
@@ -27,43 +27,67 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
+
         db = SessionLocal()
         try:
             # Count CTE events
-            cte_count = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            cte_count = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
 
             # Count distinct TLCs
-            tlc_count = db.execute(text(
-                "SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            tlc_count = (
+                db.execute(
+                    text("SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
 
             # Count CTE types covered
-            cte_types = db.execute(text(
-                "SELECT COUNT(DISTINCT event_type) FROM fsma.cte_events WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            cte_types = (
+                db.execute(
+                    text("SELECT COUNT(DISTINCT event_type) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
 
             # Check FDA export capability
-            has_export = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            has_export = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
 
             # Count suppliers
-            supplier_count = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            supplier_count = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
 
             # Chain integrity: count chain entries and detect sequence gaps
-            chain_length = db.execute(text(
-                "SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"
-            ), {"tid": tenant_id}).scalar() or 0
+            chain_length = (
+                db.execute(
+                    text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
+                ).scalar()
+                or 0
+            )
 
             chain_gap_count = 0
             if chain_length > 0:
-                max_seq = db.execute(text(
-                    "SELECT MAX(sequence_num) FROM fsma.hash_chain WHERE tenant_id = :tid"
-                ), {"tid": tenant_id}).scalar() or 0
+                max_seq = (
+                    db.execute(
+                        text("SELECT MAX(sequence_num) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
+                    ).scalar()
+                    or 0
+                )
                 # Gaps = expected entries minus actual entries
                 chain_gap_count = max(0, max_seq - chain_length)
 
@@ -82,11 +106,13 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
         logger.warning("recall_scoring_query_failed error=%s", str(exc))
         return None
 
+
 router = APIRouter(prefix="/api/v1/recall", tags=["Recall Readiness"])
 
 
 class RecallDimension(BaseModel):
     """A single dimension of recall readiness."""
+
     id: str
     name: str
     score: int  # 0-100
@@ -99,6 +125,7 @@ class RecallDimension(BaseModel):
 
 class RecallReport(BaseModel):
     """Complete recall readiness report."""
+
     tenant_id: str
     generated_at: str
     report_title: str
@@ -121,17 +148,24 @@ class RecallReport(BaseModel):
 
 
 def _grade(score: int) -> str:
-    if score >= 90: return "A"
-    if score >= 80: return "B"
-    if score >= 70: return "C"
-    if score >= 60: return "D"
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
     return "F"
 
 
 def _status(score: int) -> str:
-    if score >= 90: return "excellent"
-    if score >= 80: return "good"
-    if score >= 70: return "needs_improvement"
+    if score >= 90:
+        return "excellent"
+    if score >= 80:
+        return "good"
+    if score >= 70:
+        return "needs_improvement"
     return "critical"
 
 
@@ -203,7 +237,9 @@ async def generate_report(
                 recommendations=[
                     "Enable FDA export if not already active",
                     "Reduce CTE entry delay with real-time API integration",
-                ] if not has_export else ["Maintain current export practices"],
+                ]
+                if not has_export
+                else ["Maintain current export practices"],
             ),
             RecallDimension(
                 id="data_completeness",
@@ -219,7 +255,9 @@ async def generate_report(
                 recommendations=[
                     "Onboard additional suppliers to improve traceability visibility",
                     "Ensure all CTE event types are represented",
-                ] if supplier_count < 5 else ["Continue current data collection practices"],
+                ]
+                if supplier_count < 5
+                else ["Continue current data collection practices"],
             ),
             RecallDimension(
                 id="chain_integrity",
@@ -229,16 +267,22 @@ async def generate_report(
                 status=_status(chain_integrity_score),
                 findings=[
                     f"SHA-256 hash chain length: {chain_length} entries",
-                    f"Sequence gaps detected: {chain_gap_count}" if chain_gap_count > 0 else "No gaps in event sequence",
+                    f"Sequence gaps detected: {chain_gap_count}"
+                    if chain_gap_count > 0
+                    else "No gaps in event sequence",
                     "All immutability triggers active",
-                ] if chain_length > 0 else [
+                ]
+                if chain_length > 0
+                else [
                     "No hash chain entries recorded yet",
                     "Chain verification will activate after first event ingestion",
                 ],
                 recommendations=[
                     "Maintain current integrity practices",
                     "Consider adding independent third-party verification",
-                ] if chain_gap_count == 0 else [
+                ]
+                if chain_gap_count == 0
+                else [
                     f"Investigate {chain_gap_count} sequence gap(s) in the hash chain",
                     "Run chain verification via /api/v1/fda/export/verify",
                     "Consider re-ingesting events to fill gaps",
@@ -258,7 +302,9 @@ async def generate_report(
                 recommendations=[
                     "Expand supplier network to key trading partners",
                     "Send portal activation reminders to inactive suppliers",
-                ] if supplier_count < 10 else ["Supply chain coverage is strong"],
+                ]
+                if supplier_count < 10
+                else ["Supply chain coverage is strong"],
             ),
             RecallDimension(
                 id="export_readiness",
@@ -274,7 +320,9 @@ async def generate_report(
                 recommendations=[
                     "Enable FDA export capability",
                     "Test with retailer portals",
-                ] if not has_export else ["Test with additional retailer portals"],
+                ]
+                if not has_export
+                else ["Test with additional retailer portals"],
             ),
             RecallDimension(
                 id="team_readiness",
@@ -297,107 +345,107 @@ async def generate_report(
     else:
         # Use hardcoded demo scenarios
         dimensions = [
-        RecallDimension(
-            id="trace_speed",
-            name="Trace Speed",
-            score=78,
-            grade="C",
-            status="needs_improvement",
-            findings=[
-                "Average trace-back time: 4.2 hours",
-                "3 lots required manual lookups (non-electronic records)",
-                "Receiving CTEs averaged 3.1 hour entry delay",
-            ],
-            recommendations=[
-                "Reduce CTE entry delay to under 2 hours",
-                "Digitize remaining manual records via CSV upload or API",
-                "Run monthly mock audit drills to improve response time",
-            ],
-        ),
-        RecallDimension(
-            id="data_completeness",
-            name="Data Completeness",
-            score=85,
-            grade="B",
-            status="good",
-            findings=[
-                "92% of CTEs have all required KDEs",
-                "GLN coverage: 78% (missing for 3 supplier locations)",
-                "TLC format consistency: 95%",
-            ],
-            recommendations=[
-                "Collect missing GLNs from 3 supplier locations",
-                "Standardize TLC format across all facilities",
-                "Enable automated KDE validation rules",
-            ],
-        ),
-        RecallDimension(
-            id="chain_integrity",
-            name="Chain Integrity",
-            score=95,
-            grade="A",
-            status="excellent",
-            findings=[
-                "SHA-256 hash chain: 100% verified",
-                "No gaps in event sequence",
-                "All immutability triggers active",
-            ],
-            recommendations=[
-                "Maintain current integrity practices",
-                "Consider adding independent third-party verification",
-            ],
-        ),
-        RecallDimension(
-            id="supplier_coverage",
-            name="Supplier Coverage",
-            score=65,
-            grade="D",
-            status="critical",
-            findings=[
-                "Only 60% of suppliers actively using portal",
-                "2 suppliers have not submitted in 30+ days",
-                "1 supplier still using paper-based records",
-            ],
-            recommendations=[
-                "Send portal link reminders to inactive suppliers",
-                "Offer supplier training sessions",
-                "Consider switching non-compliant suppliers",
-            ],
-        ),
-        RecallDimension(
-            id="export_readiness",
-            name="Export Readiness",
-            score=88,
-            grade="B",
-            status="good",
-            findings=[
-                "FDA sortable spreadsheet export: functional",
-                "EPCIS 2.0 JSON-LD export: functional",
-                "Export includes SHA-256 verification hashes",
-            ],
-            recommendations=[
-                "Test export with target retailer portals (Walmart, Kroger)",
-                "Validate EPCIS schema compliance with GS1 validator",
-            ],
-        ),
-        RecallDimension(
-            id="team_readiness",
-            name="Team Readiness",
-            score=72,
-            grade="C",
-            status="needs_improvement",
-            findings=[
-                "Last mock drill: 2 weeks ago (score: C)",
-                "2 of 5 team members completed FSMA training",
-                "No documented recall SOP on file",
-            ],
-            recommendations=[
-                "Generate SOP via /api/v1/sop/generate",
-                "Schedule monthly mock audit drills",
-                "Complete FSMA 204 training for remaining 3 team members",
-            ],
-        ),
-    ]
+            RecallDimension(
+                id="trace_speed",
+                name="Trace Speed",
+                score=78,
+                grade="C",
+                status="needs_improvement",
+                findings=[
+                    "Average trace-back time: 4.2 hours",
+                    "3 lots required manual lookups (non-electronic records)",
+                    "Receiving CTEs averaged 3.1 hour entry delay",
+                ],
+                recommendations=[
+                    "Reduce CTE entry delay to under 2 hours",
+                    "Digitize remaining manual records via CSV upload or API",
+                    "Run monthly mock audit drills to improve response time",
+                ],
+            ),
+            RecallDimension(
+                id="data_completeness",
+                name="Data Completeness",
+                score=85,
+                grade="B",
+                status="good",
+                findings=[
+                    "92% of CTEs have all required KDEs",
+                    "GLN coverage: 78% (missing for 3 supplier locations)",
+                    "TLC format consistency: 95%",
+                ],
+                recommendations=[
+                    "Collect missing GLNs from 3 supplier locations",
+                    "Standardize TLC format across all facilities",
+                    "Enable automated KDE validation rules",
+                ],
+            ),
+            RecallDimension(
+                id="chain_integrity",
+                name="Chain Integrity",
+                score=95,
+                grade="A",
+                status="excellent",
+                findings=[
+                    "SHA-256 hash chain: 100% verified",
+                    "No gaps in event sequence",
+                    "All immutability triggers active",
+                ],
+                recommendations=[
+                    "Maintain current integrity practices",
+                    "Consider adding independent third-party verification",
+                ],
+            ),
+            RecallDimension(
+                id="supplier_coverage",
+                name="Supplier Coverage",
+                score=65,
+                grade="D",
+                status="critical",
+                findings=[
+                    "Only 60% of suppliers actively using portal",
+                    "2 suppliers have not submitted in 30+ days",
+                    "1 supplier still using paper-based records",
+                ],
+                recommendations=[
+                    "Send portal link reminders to inactive suppliers",
+                    "Offer supplier training sessions",
+                    "Consider switching non-compliant suppliers",
+                ],
+            ),
+            RecallDimension(
+                id="export_readiness",
+                name="Export Readiness",
+                score=88,
+                grade="B",
+                status="good",
+                findings=[
+                    "FDA sortable spreadsheet export: functional",
+                    "EPCIS 2.0 JSON-LD export: functional",
+                    "Export includes SHA-256 verification hashes",
+                ],
+                recommendations=[
+                    "Test export with target retailer portals (Walmart, Kroger)",
+                    "Validate EPCIS schema compliance with GS1 validator",
+                ],
+            ),
+            RecallDimension(
+                id="team_readiness",
+                name="Team Readiness",
+                score=72,
+                grade="C",
+                status="needs_improvement",
+                findings=[
+                    "Last mock drill: 2 weeks ago (score: C)",
+                    "2 of 5 team members completed FSMA training",
+                    "No documented recall SOP on file",
+                ],
+                recommendations=[
+                    "Generate SOP via /api/v1/sop/generate",
+                    "Schedule monthly mock audit drills",
+                    "Complete FSMA 204 training for remaining 3 team members",
+                ],
+            ),
+        ]
 
     overall = int(sum(d.score for d in dimensions) / len(dimensions))
 
@@ -417,12 +465,42 @@ async def generate_report(
     )
 
     action_items = [
-        {"priority": "HIGH", "action": "Collect missing GLNs from 3 supplier locations", "impact": "+5 to Data Completeness", "effort": "Low"},
-        {"priority": "HIGH", "action": "Re-engage 2 inactive suppliers via portal reminders", "impact": "+10 to Supplier Coverage", "effort": "Low"},
-        {"priority": "MEDIUM", "action": "Generate and distribute FSMA 204 SOP", "impact": "+8 to Team Readiness", "effort": "Low"},
-        {"priority": "MEDIUM", "action": "Complete FSMA training for 3 remaining team members", "impact": "+10 to Team Readiness", "effort": "Medium"},
-        {"priority": "MEDIUM", "action": "Reduce CTE entry delay to under 2 hours", "impact": "+7 to Trace Speed", "effort": "Medium"},
-        {"priority": "LOW", "action": "Test EPCIS exports with retailer portals", "impact": "+5 to Export Readiness", "effort": "Low"},
+        {
+            "priority": "HIGH",
+            "action": "Collect missing GLNs from 3 supplier locations",
+            "impact": "+5 to Data Completeness",
+            "effort": "Low",
+        },
+        {
+            "priority": "HIGH",
+            "action": "Re-engage 2 inactive suppliers via portal reminders",
+            "impact": "+10 to Supplier Coverage",
+            "effort": "Low",
+        },
+        {
+            "priority": "MEDIUM",
+            "action": "Generate and distribute FSMA 204 SOP",
+            "impact": "+8 to Team Readiness",
+            "effort": "Low",
+        },
+        {
+            "priority": "MEDIUM",
+            "action": "Complete FSMA training for 3 remaining team members",
+            "impact": "+10 to Team Readiness",
+            "effort": "Medium",
+        },
+        {
+            "priority": "MEDIUM",
+            "action": "Reduce CTE entry delay to under 2 hours",
+            "impact": "+7 to Trace Speed",
+            "effort": "Medium",
+        },
+        {
+            "priority": "LOW",
+            "action": "Test EPCIS exports with retailer portals",
+            "impact": "+5 to Export Readiness",
+            "effort": "Low",
+        },
     ]
 
     return RecallReport(
@@ -432,7 +510,9 @@ async def generate_report(
         overall_score=overall,
         overall_grade=_grade(overall),
         overall_status=_status(overall),
-        time_to_respond_estimate="4.2 hours (target: < 24 hours)" if use_demo_mode else f"{int(overall / 100 * 24)} hour(s) estimated",
+        time_to_respond_estimate="4.2 hours (target: < 24 hours)"
+        if use_demo_mode
+        else f"{int(overall / 100 * 24)} hour(s) estimated",
         dimensions=dimensions,
         executive_summary=executive_summary,
         action_items=action_items,

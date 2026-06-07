@@ -9,6 +9,7 @@ behave as if the alert does not exist — no row returned, no row mutated.
 Defense-in-depth: the route layer (#1328) is the primary gate; this
 service-layer filter is the second wall. These tests lock that wall in.
 """
+
 from __future__ import annotations
 
 # Admin-test sys.path bootstrap — mirrors test_compliance_routes_idor.py so
@@ -29,7 +30,6 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
-
 
 TENANT_A = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 TENANT_B = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -174,7 +174,10 @@ def test_resolve_alert_refuses_cross_tenant(session):
     service = ComplianceServiceSync(session)
 
     out = service.resolve_alert(
-        alert_id, TENANT_B, user_id="attacker", notes="mass-resolve attempt",
+        alert_id,
+        TENANT_B,
+        user_id="attacker",
+        notes="mass-resolve attempt",
     )
 
     assert out is None
@@ -197,7 +200,10 @@ def test_resolve_alert_succeeds_for_owning_tenant(session):
     service = ComplianceServiceSync(session)
 
     out = service.resolve_alert(
-        alert_id, TENANT_A, user_id="owner", notes="fixed it",
+        alert_id,
+        TENANT_A,
+        user_id="owner",
+        notes="fixed it",
     )
 
     assert out is not None
@@ -223,10 +229,7 @@ def test_cross_tenant_id_does_not_leak_via_wrong_tenant_resolve(session):
 
     assert service.get_alert(alert_id, TENANT_B) is None
     assert service.acknowledge_alert(alert_id, TENANT_B, user_id="attacker") is None
-    assert (
-        service.resolve_alert(alert_id, TENANT_B, user_id="attacker", notes="x")
-        is None
-    )
+    assert service.resolve_alert(alert_id, TENANT_B, user_id="attacker", notes="x") is None
 
     session.expire_all()
     row = session.get(ComplianceAlertModel, alert_id)

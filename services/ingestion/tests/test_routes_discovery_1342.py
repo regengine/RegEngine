@@ -29,8 +29,8 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from shared.auth import APIKey, require_api_key
 from app.routes_discovery import router as discovery_router
+from shared.auth import APIKey, require_api_key
 
 
 def _api_key(tenant_id: str = "tenant-disco") -> APIKey:
@@ -42,9 +42,7 @@ def _api_key(tenant_id: str = "tenant-disco") -> APIKey:
 
 def _build(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, MagicMock]:
     fake_redis = MagicMock()
-    monkeypatch.setattr(
-        "app.routes_discovery.redis.from_url", lambda *a, **kw: fake_redis
-    )
+    monkeypatch.setattr("app.routes_discovery.redis.from_url", lambda *a, **kw: fake_redis)
     app = FastAPI()
     app.include_router(discovery_router)
     app.dependency_overrides[require_api_key] = lambda: _api_key()
@@ -77,9 +75,7 @@ class TestGetDiscoveryQueue:
         assert items[1]["url"] == "https://fda.gov/rec/2"
         fake_redis.lrange.assert_called_once_with("manual_upload_queue", 0, -1)
 
-    def test_skips_items_without_colon_separator(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_skips_items_without_colon_separator(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
         fake_redis.lrange.return_value = [
             b"no-colon-item",
@@ -94,9 +90,7 @@ class TestGetDiscoveryQueue:
         assert items[0]["index"] == 1
         assert items[0]["body"] == "good"
 
-    def test_catches_decode_errors_and_continues(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_catches_decode_errors_and_continues(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
 
         bad = MagicMock()
@@ -112,9 +106,7 @@ class TestGetDiscoveryQueue:
         assert items[0]["index"] == 1
         assert items[0]["url"] == "https://ok.test"
 
-    def test_empty_queue_returns_empty_list(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_queue_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
         fake_redis.lrange.return_value = []
         response = client.get(self.ENDPOINT)
@@ -130,9 +122,7 @@ class TestGetDiscoveryQueue:
 class TestGetManualQueue:
     ENDPOINT = "/v1/ingest/manual-queue"
 
-    def test_returns_scoped_queue_with_default_pagination(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_scoped_queue_with_default_pagination(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
         fake_redis.llen.return_value = 2
         fake_redis.lrange.return_value = [
@@ -149,13 +139,9 @@ class TestGetManualQueue:
         assert [it["body"] for it in body["items"]] == ["Body A", "Body B"]
         # Queue key is tenant-scoped.
         fake_redis.llen.assert_called_once_with("manual_upload_queue:tenant-disco")
-        fake_redis.lrange.assert_called_once_with(
-            "manual_upload_queue:tenant-disco", 0, 99
-        )
+        fake_redis.lrange.assert_called_once_with("manual_upload_queue:tenant-disco", 0, 99)
 
-    def test_url_is_none_when_no_colon(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_url_is_none_when_no_colon(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
         fake_redis.llen.return_value = 1
         fake_redis.lrange.return_value = [b"body-only-no-colon"]
@@ -174,13 +160,9 @@ class TestGetManualQueue:
         assert body["skip"] == 5
         assert body["limit"] == 1
         assert body["items"][0]["index"] == 5
-        fake_redis.lrange.assert_called_once_with(
-            "manual_upload_queue:tenant-disco", 5, 5
-        )
+        fake_redis.lrange.assert_called_once_with("manual_upload_queue:tenant-disco", 5, 5)
 
-    def test_decode_error_is_swallowed(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_decode_error_is_swallowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)
         fake_redis.llen.return_value = 2
         bad = MagicMock()
@@ -194,9 +176,7 @@ class TestGetManualQueue:
         assert body["items"][0]["index"] == 1
         assert body["items"][0]["url"] == "https://ok.test"
 
-    def test_rejects_invalid_skip_and_limit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_rejects_invalid_skip_and_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, _ = _build(monkeypatch)
         # skip cannot be negative.
         response = client.get(self.ENDPOINT, params={"skip": -1})

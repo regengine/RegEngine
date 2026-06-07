@@ -5,6 +5,7 @@ Exposes:
   refresh_session — the handler function (re-exported from auth_routes for compat)
   RefreshRequest  — request schema (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -14,9 +15,11 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from shared.rate_limit import limiter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import auth_utils
 from ..audit import AuditLogger
 from ..auth_utils import (
     REFRESH_TOKEN_EXPIRE_DAYS,
@@ -26,14 +29,12 @@ from ..auth_utils import (
     decode_access_token,
     hash_token,
 )
-from .. import auth_utils
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 from .lockout import _maybe_await
 from .schemas import TokenResponse
-from shared.rate_limit import limiter
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -66,17 +67,11 @@ async def refresh_session(
         # token reuse — either a theft replay or a double-spend. Revoke the
         # entire session family so the thief (and victim) are forced to
         # re-authenticate, and emit a high-severity audit signal.
-        reused_session_id = await _maybe_await(
-            session_store.check_token_reuse(input_hash)
-        )
+        reused_session_id = await _maybe_await(session_store.check_token_reuse(input_hash))
         if reused_session_id is not None:
-            reused_session = await _maybe_await(
-                session_store.get_session(reused_session_id)
-            )
+            reused_session = await _maybe_await(session_store.get_session(reused_session_id))
             if reused_session is not None:
-                await _maybe_await(
-                    session_store.revoke_all_for_family(reused_session.family_id)
-                )
+                await _maybe_await(session_store.revoke_all_for_family(reused_session.family_id))
                 try:
                     audit_tenant_id = db.execute(
                         select(MembershipModel.tenant_id)
@@ -202,16 +197,17 @@ async def refresh_session(
     # old_token_hash already deleted by claim_session_by_token (GETDEL).
     await _maybe_await(
         session_store.update_session(
-        session.id,
-        {
-            "refresh_token_hash": new_hash,
-            "token_version": str(user_token_version),
-            "last_used_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
-        },
-        new_token_hash=new_hash,
-        old_token_hash=input_hash,
-    ))
+            session.id,
+            {
+                "refresh_token_hash": new_hash,
+                "token_version": str(user_token_version),
+                "last_used_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat(),
+            },
+            new_token_hash=new_hash,
+            old_token_hash=input_hash,
+        )
+    )
 
     # SECURITY (#1859): tombstone the consumed hash so a replay can be
     # detected as reuse (not just "unknown token"). TTL matches refresh
@@ -330,7 +326,9 @@ async def refresh_session(
             "status": user.status,
             "role_id": str(active_role.id) if active_role else None,
             "role_name": active_role.name if active_role else None,
-            "permissions": list(active_role.permissions or []) if active_role and isinstance(active_role.permissions, list) else [],
+            "permissions": list(active_role.permissions or [])
+            if active_role and isinstance(active_role.permissions, list)
+            else [],
         },
-        available_tenants=[]  # Don't need full list on refresh
+        available_tenants=[],  # Don't need full list on refresh
     )

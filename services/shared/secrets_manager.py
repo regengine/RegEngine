@@ -161,6 +161,7 @@ class SecretsManager:
                 )
             # Non-production: generate a random key so dev/test can proceed
             import secrets as _secrets
+
             key = f"dev-{_secrets.token_hex(16)}"
             logger.warning(
                 "admin_master_key_not_set_using_random",
@@ -255,7 +256,15 @@ def get_admin_master_key(environment: Optional[str] = None) -> str:
 
 INSECURE_DEFAULTS = {
     "NEO4J_PASSWORD": ["change-me", "password", "secret", "test", "demo", "default", "neo4j"],
-    "ADMIN_MASTER_KEY": ["dev-admin-key", "change-in-production", "test", "demo", "default", "admin", "dev_master_key_change_in_production"],
+    "ADMIN_MASTER_KEY": [
+        "dev-admin-key",
+        "change-in-production",
+        "test",
+        "demo",
+        "default",
+        "admin",
+        "dev_master_key_change_in_production",
+    ],
     "OBJECT_STORAGE_ACCESS_KEY_ID": ["test"],
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": ["test"],
 }

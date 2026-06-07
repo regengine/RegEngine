@@ -55,7 +55,6 @@ class Jurisdiction(BaseModel):
     scope: JurisdictionScope = Field(..., description="Jurisdiction scope: federal/state/municipal")
 
 
-
 class Threshold(BaseModel):
     """Normalized threshold representation for regulatory limits."""
 
@@ -88,7 +87,9 @@ class ExtractionPayload(BaseModel):
     obligation_type: ObligationType = Field(..., description="Type of regulatory obligation")
     thresholds: List[Threshold] = Field(default_factory=list, description="Associated thresholds")
     effective_date: Optional[str] = Field(None, description="When obligation becomes effective")
-    jurisdiction: Optional[str] = Field(None, description="Regulatory jurisdiction (deprecated; use jurisdiction_codes)")
+    jurisdiction: Optional[str] = Field(
+        None, description="Regulatory jurisdiction (deprecated; use jurisdiction_codes)"
+    )
     jurisdiction_codes: List[str] = Field(
         default_factory=list,
         description="One or more jurisdiction codes the provision applies to (e.g., ['US', 'US-NY'])",
@@ -137,9 +138,7 @@ class GraphEvent(BaseModel):
         default_factory=dict,
         description="Provenance metadata (source URL, page, offset, request_id)",
     )
-    embedding: Optional[List[float]] = Field(
-        None, description="768-dimensional sentence-transformer embedding"
-    )
+    embedding: Optional[List[float]] = Field(None, description="768-dimensional sentence-transformer embedding")
     status: Literal["APPROVED", "APPROVED_BY_HUMAN", "PENDING_REVIEW"] = Field(
         default="PENDING_REVIEW", description="Approval status"
     )
@@ -193,13 +192,9 @@ class LegacyGraphEvent(BaseModel):
     """
 
     document_id: str = Field(..., min_length=1, description="Document identifier")
-    entities: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Extracted entities to upsert"
-    )
+    entities: List[Dict[str, Any]] = Field(default_factory=list, description="Extracted entities to upsert")
     source_url: Optional[str] = Field(None, description="Origin URL for the document")
-    tenant_id: Optional[str] = Field(
-        None, description="Tenant UUID (validated downstream before DB routing)"
-    )
+    tenant_id: Optional[str] = Field(None, description="Tenant UUID (validated downstream before DB routing)")
 
     @field_validator("entities")
     @classmethod
@@ -219,9 +214,7 @@ class ReviewItem(BaseModel):
     tenant_id: Optional[UUID] = Field(None, description="Tenant identifier")
     document_id: str = Field(..., description="Source document ID")
     extraction: ExtractionPayload = Field(..., description="Extracted provision awaiting review")
-    status: Literal["pending", "approved", "rejected"] = Field(
-        default="pending", description="Review status"
-    )
+    status: Literal["pending", "approved", "rejected"] = Field(default="pending", description="Review status")
     reviewer_id: Optional[str] = Field(None, description="Reviewer user ID")
     reviewed_at: Optional[datetime] = Field(None, description="Review timestamp")
     notes: Optional[str] = Field(None, description="Reviewer notes")
@@ -256,9 +249,10 @@ class ReviewItem(BaseModel):
 
 class CTEType(str, Enum):
     """Critical Tracking Event Types per FSMA 204.
-    
+
     Used across services to ensure consistent event type handling.
     """
+
     SHIPPING = "SHIPPING"
     RECEIVING = "RECEIVING"
     TRANSFORMATION = "TRANSFORMATION"
@@ -268,17 +262,17 @@ class CTEType(str, Enum):
 
 class Location(BaseModel):
     """Location identifier for FSMA traceability (simplified model)."""
-    
+
     gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     name: Optional[str] = Field(None, description="Human-readable location name")
     address: Optional[str] = Field(None, description="Physical address")
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
                 "gln": "1234567890123",
                 "name": "Fresh Farms Distribution Center",
-                "address": "123 Produce Way, Fresno, CA 93706"
+                "address": "123 Produce Way, Fresno, CA 93706",
             }
         }
     }
@@ -286,42 +280,35 @@ class Location(BaseModel):
 
 class ProductDescription(BaseModel):
     """Product description for FSMA traceability."""
-    
+
     text: str = Field(..., description="Product description text")
     sku: Optional[str] = Field(None, description="Stock Keeping Unit")
     gtin: Optional[str] = Field(None, description="GS1 Global Trade Item Number (14 digits)")
-    
+
     model_config = {
         "json_schema_extra": {
-            "example": {
-                "text": "Romaine Lettuce Hearts 12ct",
-                "sku": "ROM-12CT",
-                "gtin": "00012345678901"
-            }
+            "example": {"text": "Romaine Lettuce Hearts 12ct", "sku": "ROM-12CT", "gtin": "00012345678901"}
         }
     }
 
 
 class KDE(BaseModel):
     """Key Data Element extracted from a document."""
-    
+
     name: str = Field(..., description="KDE field name")
     value: str = Field(..., description="KDE value as string")
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Extraction confidence")
-    
+
     model_config = {
         "json_schema_extra": {
-            "example": {
-                "name": "traceability_lot_code",
-                "value": "00012345678901-L2025-1105-A",
-                "confidence": 0.92
-            }
+            "example": {"name": "traceability_lot_code", "value": "00012345678901-L2025-1105-A", "confidence": 0.92}
         }
     }
 
 
 class FSMAEventType(str, Enum):
     """FSMA event type enum for validated FSMAEvent payloads."""
+
     CREATION = "CREATION"
     TRANSFORMATION = "TRANSFORMATION"
     SHIPPING = "SHIPPING"
@@ -362,55 +349,29 @@ class FSMAEvent(BaseModel):
         description="Human-readable product description",
     )
     quantity: Optional[float] = Field(None, description="Numeric quantity", ge=0)
-    unit_of_measure: Optional[str] = Field(
-        None, description="Unit of measure (cases, lbs, kg, etc.)"
-    )
-    location_gln: Optional[str] = Field(
-        None, description="Primary location GLN (13-digit GS1)"
-    )
-    event_time: str = Field(
-        ..., description="ISO 8601 timestamp of the event", min_length=1
-    )
+    unit_of_measure: Optional[str] = Field(None, description="Unit of measure (cases, lbs, kg, etc.)")
+    location_gln: Optional[str] = Field(None, description="Primary location GLN (13-digit GS1)")
+    event_time: str = Field(..., description="ISO 8601 timestamp of the event", min_length=1)
     source_gln: Optional[str] = Field(None, description="Source/ship-from GLN")
-    destination_gln: Optional[str] = Field(
-        None, description="Destination/ship-to GLN"
-    )
+    destination_gln: Optional[str] = Field(None, description="Destination/ship-to GLN")
     reference_document_type: Optional[str] = Field(
         None,
         description="Source document type (EPCIS, EDI_856, EDI_850, etc.)",
     )
-    reference_document_number: Optional[str] = Field(
-        None, description="Source document reference number"
-    )
-    tenant_id: Optional[str] = Field(
-        None, description="Tenant identifier for multi-tenancy"
-    )
+    reference_document_number: Optional[str] = Field(None, description="Source document reference number")
+    tenant_id: Optional[str] = Field(None, description="Tenant identifier for multi-tenancy")
 
     # Legacy fields retained for backward compatibility with document extraction
     date: Optional[str] = Field(None, description="Event date in YYYY-MM-DD format")
-    cte_type: Optional[CTEType] = Field(
-        None, description="Legacy CTE type (use event_type instead)"
-    )
-    unit: Optional[str] = Field(
-        None, description="Legacy unit field (use unit_of_measure instead)"
-    )
-    product: Optional[ProductDescription] = Field(
-        None, description="Product information"
-    )
+    cte_type: Optional[CTEType] = Field(None, description="Legacy CTE type (use event_type instead)")
+    unit: Optional[str] = Field(None, description="Legacy unit field (use unit_of_measure instead)")
+    product: Optional[ProductDescription] = Field(None, description="Product information")
     ship_from: Optional[Location] = Field(None, description="Ship from location")
     ship_to: Optional[Location] = Field(None, description="Ship to location")
-    document_source: Optional[str] = Field(
-        None, description="Source document identifier"
-    )
-    document_hash: Optional[str] = Field(
-        None, description="Source document hash"
-    )
-    raw_row_index: Optional[int] = Field(
-        None, description="Row index in source table (for tabular docs)"
-    )
-    kdes: List[KDE] = Field(
-        default_factory=list, description="All extracted Key Data Elements"
-    )
+    document_source: Optional[str] = Field(None, description="Source document identifier")
+    document_hash: Optional[str] = Field(None, description="Source document hash")
+    raw_row_index: Optional[int] = Field(None, description="Row index in source table (for tabular docs)")
+    kdes: List[KDE] = Field(default_factory=list, description="All extracted Key Data Elements")
 
     @field_validator("tlc")
     @classmethod
@@ -430,9 +391,7 @@ class FSMAEvent(BaseModel):
         """Reject empty or whitespace-only event_time."""
         stripped = v.strip()
         if not stripped:
-            raise ValueError(
-                "event_time is a required KDE and must not be blank"
-            )
+            raise ValueError("event_time is a required KDE and must not be blank")
         return stripped
 
     model_config = {
@@ -458,19 +417,19 @@ class FSMAEvent(BaseModel):
 
 class FSMALocation(BaseModel):
     """Location identifier for FSMA traceability."""
-    
+
     gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     fda_registration: Optional[str] = Field(None, description="FDA Facility Registration Number")
     name: Optional[str] = Field(None, description="Human-readable location name")
     address: Optional[str] = Field(None, description="Physical address")
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
                 "gln": "1234567890123",
                 "fda_registration": "12345678901",
                 "name": "Fresh Farms Distribution Center",
-                "address": "123 Produce Way, Fresno, CA 93706"
+                "address": "123 Produce Way, Fresno, CA 93706",
             }
         }
     }
@@ -478,7 +437,7 @@ class FSMALocation(BaseModel):
 
 class FSMAKeyDataElements(BaseModel):
     """Key Data Elements (KDEs) per FSMA 204 requirements."""
-    
+
     traceability_lot_code: Optional[str] = Field(None, description="GTIN + Lot identifier")
     product_description: Optional[str] = Field(None, description="Product name/description")
     quantity: Optional[float] = Field(None, description="Numeric quantity")
@@ -491,7 +450,7 @@ class FSMAKeyDataElements(BaseModel):
     # TLC Source fields - required for TRANSFORMATION/INITIAL_PACKING/CREATION events
     tlc_source_gln: Optional[str] = Field(None, description="GLN of facility that assigned the TLC")
     tlc_source_fda_reg: Optional[str] = Field(None, description="FDA Registration of TLC source facility")
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -502,7 +461,7 @@ class FSMAKeyDataElements(BaseModel):
                 "location_identifier": "urn:gln:1234567890123",
                 "event_date": "2025-11-05",
                 "event_time": "14:30:00Z",
-                "tlc_source_gln": "1234567890123"
+                "tlc_source_gln": "1234567890123",
             }
         }
     }
@@ -510,13 +469,13 @@ class FSMAKeyDataElements(BaseModel):
 
 class FSMACriticalTrackingEvent(BaseModel):
     """Critical Tracking Event (CTE) per FSMA 204."""
-    
+
     type: str = Field(..., description="SHIPPING, RECEIVING, TRANSFORMATION, or CREATION")
     kdes: FSMAKeyDataElements
     confidence: float = Field(..., ge=0.0, le=1.0, description="Extraction confidence score")
     source_document_id: Optional[str] = None
     extraction_timestamp: Optional[str] = None
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -527,9 +486,9 @@ class FSMACriticalTrackingEvent(BaseModel):
                     "quantity": 50,
                     "unit_of_measure": "cases",
                     "location_identifier": "urn:gln:1234567890123",
-                    "event_date": "2025-11-05"
+                    "event_date": "2025-11-05",
                 },
-                "confidence": 0.89
+                "confidence": 0.89,
             }
         }
     }
@@ -537,30 +496,32 @@ class FSMACriticalTrackingEvent(BaseModel):
 
 class FSMAExtractionPayload(BaseModel):
     """Payload for FSMA extraction results."""
-    
+
     document_id: str
     document_type: str = Field(..., description="BOL, INVOICE, PRODUCTION_LOG, or UNKNOWN")
     ctes: List[FSMACriticalTrackingEvent]
     extraction_timestamp: str
     warnings: List[str] = Field(default_factory=list)
     tenant_id: Optional[str] = None
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
                 "document_id": "doc-fsma-001",
                 "document_type": "BOL",
-                "ctes": [{
-                    "type": "SHIPPING",
-                    "kdes": {
-                        "traceability_lot_code": "00012345678901-L2025-1105-A",
-                        "quantity": 50,
-                        "unit_of_measure": "cases"
-                    },
-                    "confidence": 0.89
-                }],
+                "ctes": [
+                    {
+                        "type": "SHIPPING",
+                        "kdes": {
+                            "traceability_lot_code": "00012345678901-L2025-1105-A",
+                            "quantity": 50,
+                            "unit_of_measure": "cases",
+                        },
+                        "confidence": 0.89,
+                    }
+                ],
                 "extraction_timestamp": "2025-12-02T10:30:00Z",
-                "warnings": []
+                "warnings": [],
             }
         }
     }
@@ -568,32 +529,28 @@ class FSMAExtractionPayload(BaseModel):
 
 class FSMATraceRequest(BaseModel):
     """Request for traceability query."""
-    
+
     lot_id: str = Field(..., description="Traceability Lot Code to trace")
     direction: str = Field("forward", description="forward or backward")
     max_depth: int = Field(10, ge=1, le=100, description="Maximum hops in trace")
-    
+
     model_config = {
         "json_schema_extra": {
-            "example": {
-                "lot_id": "00012345678901-L2025-1105-A",
-                "direction": "forward",
-                "max_depth": 10
-            }
+            "example": {"lot_id": "00012345678901-L2025-1105-A", "direction": "forward", "max_depth": 10}
         }
     }
 
 
 class FSMATraceResult(BaseModel):
     """Result of traceability query."""
-    
+
     lot_id: str
     direction: str
     facilities: List[FSMALocation]
     events: List[FSMACriticalTrackingEvent]
     total_quantity: Optional[float] = None
     query_time_ms: float
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -601,11 +558,11 @@ class FSMATraceResult(BaseModel):
                 "direction": "forward",
                 "facilities": [
                     {"gln": "1234567890123", "name": "Fresh Farms"},
-                    {"gln": "9876543210987", "name": "Metro Distribution"}
+                    {"gln": "9876543210987", "name": "Metro Distribution"},
                 ],
                 "events": [],
                 "total_quantity": 500,
-                "query_time_ms": 45.2
+                "query_time_ms": 45.2,
             }
         }
     }

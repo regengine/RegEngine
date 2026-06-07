@@ -29,6 +29,7 @@ logger = structlog.get_logger("circuit_breaker_store")
 # Protocol (interface)
 # ---------------------------------------------------------------------------
 
+
 class CircuitStore(Protocol):
     """Backend for persisting circuit breaker state."""
 
@@ -44,6 +45,7 @@ class CircuitStore(Protocol):
 # ---------------------------------------------------------------------------
 # In-memory backend (default, single-process)
 # ---------------------------------------------------------------------------
+
 
 class MemoryCircuitStore:
     """In-memory store — same behaviour as the original dataclass fields."""
@@ -79,6 +81,7 @@ class MemoryCircuitStore:
 # ---------------------------------------------------------------------------
 # Redis backend (distributed, survives restarts)
 # ---------------------------------------------------------------------------
+
 
 class RedisCircuitStore:
     """Redis-backed store for multi-instance deployments.
@@ -148,6 +151,7 @@ def get_store() -> CircuitStore:
         except Exception as exc:
             logger.warning("redis_store_fallback_to_memory", error=str(exc))
             from shared.redis_health import report_redis_fallback
+
             report_redis_fallback("circuit_breaker", str(exc))
             _global_store = MemoryCircuitStore()
     else:

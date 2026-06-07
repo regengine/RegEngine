@@ -2,6 +2,7 @@
 
 Automatically loads test environment variables before any test imports.
 """
+
 import os
 
 # Set test environment variables BEFORE pydantic tries to validate
@@ -12,9 +13,11 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 # --- Standardized Bootstrap ---
 import sys
 from pathlib import Path
+
 import pytest
-_SERVICE_DIR = Path(__file__).resolve().parent           # services/scheduler/
-_SERVICES_DIR = _SERVICE_DIR.parent                      # services/
+
+_SERVICE_DIR = Path(__file__).resolve().parent  # services/scheduler/
+_SERVICES_DIR = _SERVICE_DIR.parent  # services/
 # The service dir goes in first so `from app.X import ...` resolves against
 # this service's app/. The services dir stays in path for shared/cross-
 # service imports.
@@ -54,5 +57,6 @@ def _evict_cross_service_aliases() -> None:
 
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 # ------------------------------

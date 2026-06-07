@@ -5,6 +5,8 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.auth import require_api_key
+from shared.middleware import get_current_tenant_id
 
 from ...fsma_audit import FSMAAuditAction, get_audit_log
 from ...fsma_drift import (
@@ -14,8 +16,6 @@ from ...fsma_drift import (
     get_drift_detector,
     get_drift_status,
 )
-from shared.auth import require_api_key
-from shared.middleware import get_current_tenant_id
 
 router = APIRouter(tags=["Audit & Drift"])
 logger = structlog.get_logger("fsma-audit")
@@ -39,10 +39,7 @@ def _require_tenant_match(entries, tenant_id: str, context: str):
     (e.g. the underlying query ignored tenant), log loudly and surface
     an invariant violation instead of leaking data.
     """
-    clean = [
-        e for e in entries
-        if (getattr(e, "tenant_id", None) in (None, "", tenant_id))
-    ]
+    clean = [e for e in entries if (getattr(e, "tenant_id", None) in (None, "", tenant_id))]
     leaked = len(entries) - len(clean)
     if leaked:
         logger.error(
@@ -229,13 +226,15 @@ def drift_monitoring_status(
         status = "HEALTHY"
 
     base = get_drift_status()
-    base.update({
-        "status": status,
-        "active_alerts": len(alerts),
-        "critical_alerts": critical,
-        "warning_alerts": warning,
-        "tenant_id": tenant_str,
-    })
+    base.update(
+        {
+            "status": status,
+            "active_alerts": len(alerts),
+            "critical_alerts": critical,
+            "warning_alerts": warning,
+            "tenant_id": tenant_str,
+        }
+    )
     return base
 
 
@@ -263,10 +262,7 @@ def analyze_drift(
     )
     response = result.to_dict()
     tenant_str = str(tenant_id)
-    filtered_alerts = [
-        a for a in result.alerts
-        if getattr(a, "tenant_id", None) in (None, "", tenant_str)
-    ]
+    filtered_alerts = [a for a in result.alerts if getattr(a, "tenant_id", None) in (None, "", tenant_str)]
     response["alerts"] = [a.to_dict() for a in filtered_alerts]
     response["tenant_id"] = tenant_str
     return response
@@ -274,12 +270,8 @@ def analyze_drift(
 
 @router.get("/drift/alerts")
 def get_drift_alerts(
-    status: Optional[str] = Query(
-        None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"
-    ),
-    severity: Optional[str] = Query(
-        None, description="Filter by severity: INFO, WARNING, CRITICAL"
-    ),
+    status: Optional[str] = Query(None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"),
+    severity: Optional[str] = Query(None, description="Filter by severity: INFO, WARNING, CRITICAL"),
     supplier_gln: Optional[str] = Query(None, description="Filter by supplier GLN"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum alerts to return"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -360,9 +352,7 @@ def get_supplier_health(
     scoped = []
     for row in all_suppliers:
         scoped_row = dict(row)
-        scoped_row["active_alerts"] = alerts_by_supplier.get(
-            row.get("supplier_gln"), 0
-        )
+        scoped_row["active_alerts"] = alerts_by_supplier.get(row.get("supplier_gln"), 0)
         scoped.append(scoped_row)
 
     scoped.sort(key=lambda r: r["active_alerts"], reverse=True)
@@ -390,9 +380,9 @@ def acknowledge_drift_alert(
 
     target = next(
         (
-            a for a in detector.get_alerts(limit=10000)
-            if a.alert_id == alert_id
-            and getattr(a, "tenant_id", None) in (None, "", tenant_str)
+            a
+            for a in detector.get_alerts(limit=10000)
+            if a.alert_id == alert_id and getattr(a, "tenant_id", None) in (None, "", tenant_str)
         ),
         None,
     )
@@ -420,9 +410,9 @@ def resolve_drift_alert(
 
     target = next(
         (
-            a for a in detector.get_alerts(limit=10000)
-            if a.alert_id == alert_id
-            and getattr(a, "tenant_id", None) in (None, "", tenant_str)
+            a
+            for a in detector.get_alerts(limit=10000)
+            if a.alert_id == alert_id and getattr(a, "tenant_id", None) in (None, "", tenant_str)
         ),
         None,
     )

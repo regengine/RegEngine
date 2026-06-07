@@ -1,48 +1,45 @@
+import asyncio
 import base64
 import json
-import asyncio
-from typing import Optional, Dict, Any, List
-from .base import DocumentParser
+from typing import Any, Dict, List, Optional
+
 from ..llm.client import LLMClient
+from .base import DocumentParser
+
 
 class ImageParser(DocumentParser):
     """
     Parser for image documents (JPEG, PNG, WEBP).
-    
+
     Uses Multimodal LLM (stubbed for now) to extract structured data
     from visual evidence.
     """
-    
-    SUPPORTED_TYPES = [
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/jpg"
-    ]
-    
+
+    SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
+
     def can_parse(self, content_type: str, content: bytes) -> bool:
         """Check if content is an image."""
         if any(t in content_type.lower() for t in self.SUPPORTED_TYPES):
             return True
-            
+
         # Magic bytes check could be added here
         return False
-    
+
     def parse(self, content: bytes, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Extract structured data from image using Multimodal LLM.
-        
+
         Args:
             content: Image bytes
             metadata: Optional metadata
-            
+
         Returns:
             Extracted text description (JSON string)
         """
-        
+
         # Convert to base64
         image_b64 = base64.b64encode(content).decode("utf-8")
-        
+
         # Prepare prompt
         prompt = """
         You are an expert supply chain inspector. Analyze this image for regulatory compliance and logistics data.
@@ -56,7 +53,7 @@ class ImageParser(DocumentParser):
         
         Return ONLY valid JSON.
         """
-        
+
         client = LLMClient()
 
         # Run async LLM call in sync context (since parse is sync).
@@ -64,18 +61,18 @@ class ImageParser(DocumentParser):
         # asyncio.get_event_loop() pattern which fails in Python 3.12+.
         try:
             result = asyncio.run(client.analyze_image_structured(image_b64, prompt))
-            
+
             # Augment with metadata
             result["_metadata"] = {
-                "captured_at": metadata.get('captured_at', 'Unknown'),
-                "user_id": metadata.get('user_id', 'Unknown'),
-                "size_kb": len(content) / 1024
+                "captured_at": metadata.get("captured_at", "Unknown"),
+                "user_id": metadata.get("user_id", "Unknown"),
+                "size_kb": len(content) / 1024,
             }
-            
+
             return json.dumps(result, indent=2)
-            
+
         except Exception as e:
             return f"Error analyzing image: {str(e)}"
-    
+
     def get_parser_name(self) -> str:
         return "image_llm_parser"

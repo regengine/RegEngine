@@ -8,10 +8,10 @@ Revision ID: c9d0e1f2a3b4
 Revises: b8c9d0e1f2a3
 Create Date: 2026-04-30
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "c9d0e1f2a3b4"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "b8c9d0e1f2a3"
@@ -100,12 +100,11 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tenant_portal_links_tid "
-        "ON fsma.tenant_portal_links (tenant_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_tenant_portal_links_tid ON fsma.tenant_portal_links (tenant_id)")
     op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS supplier_email TEXT")
-    op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS allowed_cte_types TEXT[] NOT NULL DEFAULT ARRAY['shipping']::TEXT[]")
+    op.execute(
+        "ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS allowed_cte_types TEXT[] NOT NULL DEFAULT ARRAY['shipping']::TEXT[]"
+    )
     op.execute("ALTER TABLE fsma.tenant_portal_links ADD COLUMN IF NOT EXISTS integration_profile_id TEXT")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_tenant_portal_links_profile "
@@ -126,7 +125,9 @@ def upgrade() -> None:
 
     op.execute("ALTER TABLE fsma.supplier_integration_profiles ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE fsma.supplier_integration_profiles FORCE ROW LEVEL SECURITY")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_supplier_integration_profiles ON fsma.supplier_integration_profiles")
+    op.execute(
+        "DROP POLICY IF EXISTS tenant_isolation_supplier_integration_profiles ON fsma.supplier_integration_profiles"
+    )
     op.execute(
         f"""
         CREATE POLICY tenant_isolation_supplier_integration_profiles
@@ -152,9 +153,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER IF EXISTS trg_inflow_commit_decisions_no_truncate ON fsma.inflow_workbench_commit_decisions")
+    op.execute(
+        "DROP TRIGGER IF EXISTS trg_inflow_commit_decisions_no_truncate ON fsma.inflow_workbench_commit_decisions"
+    )
     op.execute("DROP TRIGGER IF EXISTS trg_inflow_runs_no_truncate ON fsma.inflow_workbench_runs")
-    op.execute("DROP POLICY IF EXISTS tenant_isolation_supplier_integration_profiles ON fsma.supplier_integration_profiles")
+    op.execute(
+        "DROP POLICY IF EXISTS tenant_isolation_supplier_integration_profiles ON fsma.supplier_integration_profiles"
+    )
     op.execute("DROP TABLE IF EXISTS fsma.supplier_integration_profiles")
     op.execute("DROP INDEX IF EXISTS fsma.idx_tenant_portal_links_profile")
     op.execute("ALTER TABLE fsma.tenant_portal_links DROP COLUMN IF EXISTS integration_profile_id")

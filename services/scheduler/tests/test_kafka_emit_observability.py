@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 
@@ -35,15 +34,17 @@ def _item(source_id: str = "fda_recall:x") -> EnforcementItem:
 def _svc():
     import main as scheduler_main
 
-    with patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()), \
-         patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()), \
-         patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()), \
-         patch.object(scheduler_main, "StateManager", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()), \
-         patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()):
+    with (
+        patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
+        patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
+        patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
+        patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
+        patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+    ):
         svc = scheduler_main.SchedulerService()
     return svc
 
@@ -57,9 +58,7 @@ class TestKafkaEmitFailureMetric:
         svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(
-            scheduler_main.metrics, "record_kafka_emit_failure"
-        ) as record:
+        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
             svc._process_new_items([_item("a"), _item("b")], SourceType.FDA_RECALL)
 
         record.assert_called()
@@ -76,9 +75,7 @@ class TestKafkaEmitFailureMetric:
         svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(
-            scheduler_main.metrics, "record_kafka_emit_failure"
-        ) as record:
+        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
             items = [_item(f"r-{i}") for i in range(10)]
             svc._process_new_items(items, SourceType.FDA_RECALL)
 
@@ -95,9 +92,7 @@ class TestKafkaEmitFailureMetric:
         svc.kafka_producer.emit_fsma_batch.return_value = (2, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(
-            scheduler_main.metrics, "record_kafka_emit_failure"
-        ) as record:
+        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
             svc._process_new_items([_item("a"), _item("b")], SourceType.FDA_RECALL)
 
         assert record.call_count == 0
@@ -118,7 +113,6 @@ class TestKafkaProducerRetryConfig:
 
         call_kwargs = KP.call_args.kwargs
         assert call_kwargs["retries"] >= 10, (
-            "#1147: producer retries default was 3 — transient 5xx dropped "
-            "recalls; must be at least 10"
+            "#1147: producer retries default was 3 — transient 5xx dropped recalls; must be at least 10"
         )
         assert call_kwargs["acks"] == "all"

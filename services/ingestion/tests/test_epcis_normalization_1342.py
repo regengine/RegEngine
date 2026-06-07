@@ -59,7 +59,6 @@ from app.epcis.normalization import (  # noqa: E402
     _normalize_epcis_to_cte,
 )
 
-
 # ---------------------------------------------------------------------------
 # _event_idempotency_key
 # ---------------------------------------------------------------------------
@@ -78,9 +77,7 @@ class TestEventIdempotencyKey:
 
     def test_missing_event_id_falls_back_to_sha256(self):
         ev = {"bizStep": "urn:epcglobal:cbv:bizstep:shipping"}
-        expected = hashlib.sha256(
-            json.dumps(ev, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
+        expected = hashlib.sha256(json.dumps(ev, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         assert _event_idempotency_key(ev) == expected
         # Shape check: lowercase hex, 64 chars.
         assert len(_event_idempotency_key(ev)) == 64
@@ -374,9 +371,7 @@ class TestComplianceAlerts:
             "source_location_id": "SRC",
             "dest_location_id": "DST",
         }
-        kdes = [
-            {"kde_type": "traceabilityLotCode", "kde_value": "TLC-1", "required": True}
-        ]
+        kdes = [{"kde_type": "traceabilityLotCode", "kde_value": "TLC-1", "required": True}]
         assert _compliance_alerts(normalized, kdes) == []
 
     def test_missing_tlc_fires_critical(self):
@@ -388,10 +383,7 @@ class TestComplianceAlerts:
         }
         kdes = [{"kde_type": "x", "kde_value": "y", "required": False}]
         alerts = _compliance_alerts(normalized, kdes)
-        assert any(
-            a["severity"] == "critical" and a["alert_type"] == "missing_kde"
-            for a in alerts
-        )
+        assert any(a["severity"] == "critical" and a["alert_type"] == "missing_kde" for a in alerts)
 
     def test_incomplete_shipping_route_warning(self):
         # shipping event without source OR dest fires a warning.
@@ -433,10 +425,7 @@ class TestComplianceAlerts:
         normalized = {"tlc": "TLC-1", "event_type": "harvesting"}
         alerts = _compliance_alerts(normalized, [])
         assert any(
-            a["severity"] == "warning"
-            and a["alert_type"] == "missing_kde"
-            and "ILMD" in a["message"]
-            for a in alerts
+            a["severity"] == "warning" and a["alert_type"] == "missing_kde" and "ILMD" in a["message"] for a in alerts
         )
 
     def test_multiple_alerts_accumulate(self):

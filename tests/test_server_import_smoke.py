@@ -6,7 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -76,8 +75,7 @@ print("DOCS_RESULT_JSON=" + json.dumps({
             {
                 "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
                 "DATABASE_URL": (
-                    "postgresql://regengine_cloud_test:regengine_cloud_test"
-                    "@localhost:5432/regengine_cloud_test"
+                    "postgresql://regengine_cloud_test:regengine_cloud_test@localhost:5432/regengine_cloud_test"
                 ),
                 "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
                 "RAILWAY_ENVIRONMENT_NAME": "production",
@@ -104,9 +102,7 @@ print("DOCS_RESULT_JSON=" + json.dumps({
         )
         marker = "DOCS_RESULT_JSON="
         payload = next(
-            json.loads(line.removeprefix(marker))
-            for line in result.stdout.splitlines()
-            if line.startswith(marker)
+            json.loads(line.removeprefix(marker)) for line in result.stdout.splitlines() if line.startswith(marker)
         )
         assert payload == {
             "docs_url": None,

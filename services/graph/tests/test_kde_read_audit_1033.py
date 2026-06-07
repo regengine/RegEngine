@@ -9,6 +9,7 @@ Verifies:
   2. Traceability endpoints call get_audit_log().log() with action=KDE_READ.
   3. The audit entry captures target_type="KDE" and the correct tenant_id.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -24,9 +25,7 @@ class TestKDEReadActionEnum:
     def test_kde_read_action_exists(self):
         from services.graph.app.fsma_audit import FSMAAuditAction
 
-        assert hasattr(FSMAAuditAction, "KDE_READ"), (
-            "FSMAAuditAction.KDE_READ is missing — #1033 not patched"
-        )
+        assert hasattr(FSMAAuditAction, "KDE_READ"), "FSMAAuditAction.KDE_READ is missing — #1033 not patched"
 
     def test_kde_read_value(self):
         from services.graph.app.fsma_audit import FSMAAuditAction
@@ -68,9 +67,7 @@ class TestKDEReadAuditLog:
         )
 
         entries = audit.get_by_target("LOT-2024-001")
-        kde_reads = [
-            entry for entry in entries if entry.action == FSMAAuditAction.KDE_READ
-        ]
+        kde_reads = [entry for entry in entries if entry.action == FSMAAuditAction.KDE_READ]
         assert len(kde_reads) == 1
         entry = kde_reads[0]
         assert entry.action == FSMAAuditAction.KDE_READ
@@ -118,34 +115,29 @@ class TestTraceabilityEndpointAuditActionIsKDERead:
     def _make_traceability_module(self):
         """Import the traceability module directly to inspect its constants."""
         import importlib
+
         import services.graph.app.routers.fsma.traceability as mod
+
         return mod
 
     def test_traceability_module_uses_kde_read_action(self):
         """The traceability router must reference KDE_READ for read audits."""
         import ast
-        router_path = (
-            Path(__file__).parent.parent
-            / "app" / "routers" / "fsma" / "traceability.py"
-        )
+
+        router_path = Path(__file__).parent.parent / "app" / "routers" / "fsma" / "traceability.py"
         source = router_path.read_text()
 
         # Confirm KDE_READ is referenced in audit log calls
         assert "KDE_READ" in source, (
-            "traceability.py does not reference FSMAAuditAction.KDE_READ — "
-            "read-access auditing for #1033 is missing"
+            "traceability.py does not reference FSMAAuditAction.KDE_READ — read-access auditing for #1033 is missing"
         )
 
         # Confirm the target_type is set to KDE
-        assert 'target_type="KDE"' in source, (
-            "traceability.py audit calls must set target_type='KDE'"
-        )
+        assert 'target_type="KDE"' in source, "traceability.py audit calls must set target_type='KDE'"
 
         # Confirm the audit pattern appears multiple times (forward, backward, timeline, search)
         kde_read_count = source.count("FSMAAuditAction.KDE_READ")
-        assert kde_read_count >= 3, (
-            f"Expected at least 3 KDE_READ audit calls, found {kde_read_count}"
-        )
+        assert kde_read_count >= 3, f"Expected at least 3 KDE_READ audit calls, found {kde_read_count}"
 
 
 class TestKDEReadAuditFailurePolicyWiring:
@@ -154,10 +146,7 @@ class TestKDEReadAuditFailurePolicyWiring:
     'log error and continue' pattern."""
 
     def test_traceability_wires_handle_audit_failure(self):
-        router_path = (
-            Path(__file__).parent.parent
-            / "app" / "routers" / "fsma" / "traceability.py"
-        )
+        router_path = Path(__file__).parent.parent / "app" / "routers" / "fsma" / "traceability.py"
         source = router_path.read_text()
 
         assert "handle_audit_failure" in source, (
@@ -171,15 +160,11 @@ class TestKDEReadAuditFailurePolicyWiring:
         )
 
     def test_lineage_traversal_wires_handle_audit_failure(self):
-        router_path = (
-            Path(__file__).parent.parent
-            / "app" / "routers" / "lineage_traversal.py"
-        )
+        router_path = Path(__file__).parent.parent / "app" / "routers" / "lineage_traversal.py"
         source = router_path.read_text()
 
         assert "handle_audit_failure" in source, (
-            "lineage_traversal.py must call handle_audit_failure on KDE_READ "
-            "audit-log failure (RE-SEC-006)"
+            "lineage_traversal.py must call handle_audit_failure on KDE_READ audit-log failure (RE-SEC-006)"
         )
 
     def test_default_policy_does_not_break_caller(self, monkeypatch):

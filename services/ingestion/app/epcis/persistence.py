@@ -15,9 +15,8 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import text
-
 from shared.database import get_db_safe
+from sqlalchemy import text
 
 from .extraction import _extract_lot_data
 from .normalization import (
@@ -46,9 +45,7 @@ logger = logging.getLogger("epcis-ingestion")
 _epcis_store: dict[str, "OrderedDict[str, dict]"] = {}
 _epcis_idempotency_index: dict[str, "OrderedDict[str, str]"] = {}
 
-_EPCIS_FALLBACK_CAP_PER_TENANT = int(
-    os.getenv("EPCIS_FALLBACK_CAP_PER_TENANT", "10000")
-)
+_EPCIS_FALLBACK_CAP_PER_TENANT = int(os.getenv("EPCIS_FALLBACK_CAP_PER_TENANT", "10000"))
 
 
 def _fallback_store_for(tenant_id: str) -> "OrderedDict[str, dict]":
@@ -75,6 +72,7 @@ def _fallback_idempotency_put(tenant_id: str, idem_key: str, event_id: str) -> N
 
 def _is_production() -> bool:
     from shared.env import is_production
+
     return is_production()
 
 
@@ -201,24 +199,12 @@ def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
     if not columns:
         return []
 
-    tenant_col = (
-        "tenant_id"
-        if "tenant_id" in columns
-        else ("org_id" if "org_id" in columns else None)
-    )
-    event_col = (
-        "cte_event_id"
-        if "cte_event_id" in columns
-        else ("event_id" if "event_id" in columns else None)
-    )
+    tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
+    event_col = "cte_event_id" if "cte_event_id" in columns else ("event_id" if "event_id" in columns else None)
     if tenant_col is None or event_col is None:
         return []
 
-    message_expr = (
-        "message"
-        if "message" in columns
-        else ("description" if "description" in columns else "alert_type")
-    )
+    message_expr = "message" if "message" in columns else ("description" if "description" in columns else "alert_type")
     # All interpolated identifiers are guaranteed members of _ALLOWED_COLS
     rows = db_session.execute(
         text(
@@ -232,10 +218,7 @@ def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
         ),
         {"tenant_id": tenant_id, "event_id": event_id},
     ).fetchall()
-    return [
-        {"severity": row.severity, "alert_type": row.alert_type, "message": row.message}
-        for row in rows
-    ]
+    return [{"severity": row.severity, "alert_type": row.alert_type, "message": row.message} for row in rows]
 
 
 def _parse_epcis_document(kdes: dict[str, Any], normalized: dict[str, Any]) -> dict:
@@ -316,8 +299,7 @@ def _fetch_event_from_db(tenant_id: str, event_id: str) -> Optional[dict]:
         ).fetchall()
 
         kdes = [
-            {"kde_type": kde.kde_key, "kde_value": kde.kde_value, "required": bool(kde.is_required)}
-            for kde in kde_rows
+            {"kde_type": kde.kde_key, "kde_value": kde.kde_value, "required": bool(kde.is_required)} for kde in kde_rows
         ]
         kde_map = {kde["kde_type"]: kde["kde_value"] for kde in kdes}
 
@@ -388,7 +370,7 @@ def _list_events_from_db(
                     quantity,
                     unit_of_measure
                 FROM fsma.cte_events
-                WHERE {' AND '.join(where)}
+                WHERE {" AND ".join(where)}
                 ORDER BY event_timestamp DESC
                 LIMIT 2000
                 """
@@ -504,14 +486,15 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
                 },
             )
         normalized["fsma_validation_status"] = "failed"
-        alerts.append({
-            "severity": "error",
-            "alert_type": "fsma_validation",
-            "message": (
-                "Event did not pass FSMAEvent schema validation. Excluded "
-                "from FSMA compliance exports by default."
-            ),
-        })
+        alerts.append(
+            {
+                "severity": "error",
+                "alert_type": "fsma_validation",
+                "message": (
+                    "Event did not pass FSMAEvent schema validation. Excluded from FSMA compliance exports by default."
+                ),
+            }
+        )
 
     stored = {
         "id": event_id,
@@ -574,7 +557,8 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
         if _fsma_strict_mode():
             logger.warning(
                 "epcis_fsma_validation_rejected_db tenant=%s tlc=%s",
-                tenant_id, normalized.get("tlc"),
+                tenant_id,
+                normalized.get("tlc"),
             )
             raise HTTPException(
                 status_code=422,
@@ -588,14 +572,15 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
                 },
             )
         kde_map["fsma_validation_status"] = "failed"
-        alerts.append({
-            "severity": "error",
-            "alert_type": "fsma_validation",
-            "message": (
-                "Event did not pass FSMAEvent schema validation. Excluded "
-                "from FSMA compliance exports by default."
-            ),
-        })
+        alerts.append(
+            {
+                "severity": "error",
+                "alert_type": "fsma_validation",
+                "message": (
+                    "Event did not pass FSMAEvent schema validation. Excluded from FSMA compliance exports by default."
+                ),
+            }
+        )
 
     # #1249: quantity must be explicit. We no longer synthesize 1.0 for
     # missing / non-numeric / non-positive values — that falsified FDA
@@ -644,9 +629,7 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
     }
 
 
-def _persist_prepared_event_in_session(
-    db_session, tenant_id: str, prepared: dict
-) -> tuple[dict, int]:
+def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dict) -> tuple[dict, int]:
     """Persist a prepared event using a caller-managed DB session.
 
     Does NOT commit or close the session — the caller is responsible
@@ -681,15 +664,17 @@ def _persist_prepared_event_in_session(
     # — eliminates the double-eval that lands when the flag flips on.
     _preeval_summary = None
     from shared.rules.enforcement import (  # noqa: PLC0415
-        current_mode,
-        should_reject,
         EnforcementMode,
+        current_mode,
         handle_preeval_exception,
+        should_reject,
     )
+
     if current_mode() != EnforcementMode.OFF:
         try:
             from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
             from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
             _pre_canonical = normalize_epcis_event(event, tenant_id)
             _pre_engine = RulesEngine(db_session)
             _pre_event_data = {
@@ -706,10 +691,11 @@ def _persist_prepared_event_in_session(
                 "kdes": _pre_canonical.kdes,
             }
             _preeval_summary = _pre_engine.evaluate_event(
-                _pre_event_data, persist=False, tenant_id=tenant_id,
+                _pre_event_data,
+                persist=False,
+                tenant_id=tenant_id,
             )
-        except (ImportError, ValueError, TypeError, RuntimeError,
-                AttributeError, KeyError) as _pre_err:
+        except (ImportError, ValueError, TypeError, RuntimeError, AttributeError, KeyError) as _pre_err:
             # Finding A — under enforcement modes a pre-eval crash must
             # become a 5xx, NOT a silent accept. ``handle_preeval_exception``
             # logs+Sentry+raises HTTPException(500) under cte_only/all
@@ -724,12 +710,11 @@ def _persist_prepared_event_in_session(
                 # Uses its own session so commit is independent.
                 try:
                     from shared.rules.rejection_audit import (  # noqa: PLC0415
-                        record_rejection,
                         reasons_from_summary,
+                        record_rejection,
                     )
-                    _first_crit = (
-                        (_preeval_summary.critical_failures or [None])[0]
-                    )
+
+                    _first_crit = (_preeval_summary.critical_failures or [None])[0]
                     record_rejection(
                         tenant_id=tenant_id,
                         rule_id=getattr(_first_crit, "rule_id", None),
@@ -787,6 +772,7 @@ def _persist_prepared_event_in_session(
     if not result.idempotent:
         import os  # noqa: PLC0415
         import threading as _threading  # noqa: PLC0415
+
         _timeout_s = float(os.environ.get("CANONICAL_DUAL_WRITE_TIMEOUT_S", "5"))
 
         # Capture ``_preeval_summary`` via default-kwarg trick so the
@@ -799,6 +785,7 @@ def _persist_prepared_event_in_session(
             from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
             from shared.canonical_persistence import CanonicalEventStore  # noqa: PLC0415
             from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
             _canonical = normalize_epcis_event(event, tenant_id)
             _store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
             _store.set_tenant_context(tenant_id)
@@ -838,6 +825,7 @@ def _persist_prepared_event_in_session(
                 _engine.evaluate_event(_event_data, persist=True, tenant_id=tenant_id)
 
         import threading  # noqa: PLC0415
+
         _epcis_exc: list[BaseException] = []
 
         def _guarded_epcis_canonical_write() -> None:
@@ -892,14 +880,8 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
         prepared = _prepare_event_for_persistence(tenant_id, event)
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
-        if (
-            exc.status_code == 422
-            and detail.get("error") == "fsma_validation_failed"
-            and _fsma_strict_mode()
-        ):
-            logger.warning(
-                "epcis_single_event_refused_unvalidated tenant=%s", tenant_id
-            )
+        if exc.status_code == 422 and detail.get("error") == "fsma_validation_failed" and _fsma_strict_mode():
+            logger.warning("epcis_single_event_refused_unvalidated tenant=%s", tenant_id)
             raise ValueError("E_EPCIS_UNVALIDATED") from exc
         raise
 
@@ -920,9 +902,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
 
     db_session = get_db_safe()
     try:
-        payload, status_code = _persist_prepared_event_in_session(
-            db_session, tenant_id, prepared
-        )
+        payload, status_code = _persist_prepared_event_in_session(db_session, tenant_id, prepared)
         db_session.commit()
         return payload, status_code
     except Exception:
@@ -932,9 +912,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
         db_session.close()
 
 
-def _ingest_batch_events_db_atomic(
-    tenant_id: str, events: list[dict]
-) -> list[tuple[dict, int]]:
+def _ingest_batch_events_db_atomic(tenant_id: str, events: list[dict]) -> list[tuple[dict, int]]:
     """Atomic batch ingest: validate all events first, then persist under a
     single DB transaction. Any per-event failure rolls back the whole batch.
 
@@ -975,9 +953,7 @@ def _ingest_batch_events_db_atomic(
     try:
         for idx, prepared in enumerate(prepared_events):
             failing_index = idx
-            payload, status_code = _persist_prepared_event_in_session(
-                db_session, tenant_id, prepared
-            )
+            payload, status_code = _persist_prepared_event_in_session(db_session, tenant_id, prepared)
             results.append((payload, status_code))
         failing_index = None
         db_session.commit()
@@ -1022,9 +998,7 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # instead of silently falling back to in-memory (that's what
         # let malformed events into the graph pre-fix).
         if str(exc) == "E_EPCIS_UNVALIDATED":
-            logger.warning(
-                "epcis_ingest_refused_unvalidated tenant=%s", tenant_id
-            )
+            logger.warning("epcis_ingest_refused_unvalidated tenant=%s", tenant_id)
             raise HTTPException(
                 status_code=422,
                 detail={

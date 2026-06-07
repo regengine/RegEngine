@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 SERVICES_DIR = Path(__file__).resolve().parents[2]
 VALIDATE_SCRIPT = (
     "import os, sys; "
@@ -23,7 +22,8 @@ def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
     env = {
         k: v
         for k, v in os.environ.items()
-        if k not in (
+        if k
+        not in (
             "RAILWAY_ENVIRONMENT",
             "RAILWAY_ENVIRONMENT_NAME",
             "RAILWAY_ENVIRONMENT_ID",
@@ -71,10 +71,12 @@ class TestAuthConfigValidation:
         Supabase credential validation was removed after it caused production
         outages. SupabaseManager.get_client() handles missing creds gracefully.
         """
-        result = _run_validate({
-            "RAILWAY_ENVIRONMENT": "production",
-            "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
-        })
+        result = _run_validate(
+            {
+                "RAILWAY_ENVIRONMENT": "production",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+            }
+        )
         assert result.returncode == 0
         assert "STARTED_OK" in result.stdout
 
@@ -85,12 +87,14 @@ class TestAuthConfigValidation:
         production. The shared CI shard runs with CI/GITHUB_ACTIONS set, so we
         assert the validation signal rather than a subprocess exit.
         """
-        result = _run_validate({
-            "CI": "true",
-            "GITHUB_ACTIONS": "true",
-            "REGENGINE_ENV": "production",
-            "AUTH_SECRET_KEY": "short",
-        })
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "short",
+            }
+        )
         assert result.returncode == 0
         assert "auth_config_validation_failed" in result.stdout
         assert "AUTH_SECRET_KEY is too short" in result.stdout
@@ -98,12 +102,14 @@ class TestAuthConfigValidation:
 
     def test_rejects_default_jwt_secret_in_production(self):
         """Production with a known-default JWT secret logs the issue."""
-        result = _run_validate({
-            "CI": "true",
-            "GITHUB_ACTIONS": "true",
-            "REGENGINE_ENV": "production",
-            "AUTH_SECRET_KEY": "changeme",
-        })
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "changeme",
+            }
+        )
         assert result.returncode == 0
         assert "auth_config_validation_failed" in result.stdout
         assert "AUTH_SECRET_KEY is too short" in result.stdout
@@ -111,13 +117,15 @@ class TestAuthConfigValidation:
 
     def test_rejects_bypass_token_in_production(self):
         """Production with AUTH_TEST_BYPASS_TOKEN logs the issue."""
-        result = _run_validate({
-            "CI": "true",
-            "GITHUB_ACTIONS": "true",
-            "REGENGINE_ENV": "production",
-            "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
-            "AUTH_TEST_BYPASS_TOKEN": "some-bypass-token",
-        })
+        result = _run_validate(
+            {
+                "CI": "true",
+                "GITHUB_ACTIONS": "true",
+                "REGENGINE_ENV": "production",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "AUTH_TEST_BYPASS_TOKEN": "some-bypass-token",
+            }
+        )
         assert result.returncode == 0
         assert "auth_config_validation_failed" in result.stdout
         assert "AUTH_TEST_BYPASS_TOKEN is set in production" in result.stdout

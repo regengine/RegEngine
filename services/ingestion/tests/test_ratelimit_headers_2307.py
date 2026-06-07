@@ -25,10 +25,9 @@ if str(service_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
+from app.middleware import RateLimitHeadersMiddleware
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-
-from app.middleware import RateLimitHeadersMiddleware
 
 
 def _build_app() -> FastAPI:
@@ -88,6 +87,7 @@ def client() -> TestClient:
 # Headers present on 2xx for each rate-limited prefix
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "path, expected_scope, expected_limit",
     [
@@ -118,6 +118,7 @@ def test_rate_limit_headers_on_2xx(
 # Negative cases — middleware must NOT leak misleading state.
 # ---------------------------------------------------------------------------
 
+
 def test_unauthenticated_route_has_no_ratelimit_headers(client: TestClient) -> None:
     resp = client.get("/healthz")
     assert resp.status_code == 200
@@ -136,6 +137,7 @@ def test_no_state_means_no_headers(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 # Read-only contract: middleware does NOT call consume_tenant_rate_limit.
 # ---------------------------------------------------------------------------
+
 
 def test_middleware_does_not_consume_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
     """Re-emitting headers must not double-count against the tenant bucket."""

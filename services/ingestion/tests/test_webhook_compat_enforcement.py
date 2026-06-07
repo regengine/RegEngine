@@ -11,6 +11,7 @@ OFF-mode / current behavior) — the stubs in that file return
 ``EvaluationSummary`` so the enforcement helper has something to
 decide on.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,13 +22,12 @@ import pytest
 
 # Test-path boilerplate mirrors test_webhook_compat_1342.py.
 from services.ingestion.app import webhook_compat as wc
-
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
-
 
 # ---------------------------------------------------------------------------
 # Minimal fakes (copy of the bits we need from test_webhook_compat_1342)
 # ---------------------------------------------------------------------------
+
 
 class _FakeSavepoint:
     def __init__(self, recorder, name):
@@ -71,9 +71,7 @@ class _FakePersistence:
     def __init__(self, db_session):
         self.db_session = db_session
         self.store_calls: list[dict] = []
-        self.store_result = SimpleNamespace(
-            event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1"
-        )
+        self.store_result = SimpleNamespace(event_id="ev-1", sha256_hash="sha-1", chain_hash="chain-1")
 
     def store_event(self, **kwargs):
         self.store_calls.append(kwargs)
@@ -112,14 +110,17 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     monkeypatch.setattr(wc, "_validate_event_kdes", lambda e: [])
     monkeypatch.setattr(wc, "_generate_alerts", lambda e: [])
     monkeypatch.setattr(
-        wc, "_publish_graph_sync",
+        wc,
+        "_publish_graph_sync",
         lambda eid, e, t: cap["publish_graph_calls"].append((eid, t)),
     )
 
     def _db_gen_factory():
         def _gen():
             yield sess
+
         return _gen()
+
     monkeypatch.setattr(wc, "_get_db_session", _db_gen_factory)
 
     tv_mod = ModuleType("app.tenant_validation")
@@ -131,6 +132,7 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
     monkeypatch.setitem(sys.modules, "shared.cte_persistence", cp_mod)
 
     ce_mod = ModuleType("shared.canonical_event")
+
     def _normalize(event, tenant_id):
         if canonical_raises is not None:
             raise canonical_raises
@@ -147,34 +149,44 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
             to_entity_reference=None,
             kdes=event.kdes,
         )
+
     ce_mod.normalize_webhook_event = _normalize
     monkeypatch.setitem(sys.modules, "shared.canonical_event", ce_mod)
 
     cps_mod = ModuleType("shared.canonical_persistence")
+
     class _FakeCanonicalStore:
         def __init__(self, db_session, dual_write):
             pass
+
         def persist_event(self, canonical):
             pass
+
     cps_mod.CanonicalEventStore = _FakeCanonicalStore
     monkeypatch.setitem(sys.modules, "shared.canonical_persistence", cps_mod)
 
     re_mod = ModuleType("shared.rules_engine")
+
     class _FakeEngine:
         def __init__(self, db_session):
             pass
+
         def evaluate_event(self, event_data, persist, tenant_id):
             cap["rules_evaluate_calls"].append(tenant_id)
             return summary
+
     re_mod.RulesEngine = _FakeEngine
     monkeypatch.setitem(sys.modules, "shared.rules_engine", re_mod)
 
     eq_mod = ModuleType("shared.exception_queue")
+
     class _FakeExceptionQueue:
         def __init__(self, db_session):
             pass
+
         def create_exceptions_from_evaluation(self, tenant_id, summary):
             cap["exc_queue_calls"].append(tenant_id)
+
     eq_mod.ExceptionQueueService = _FakeExceptionQueue
     monkeypatch.setitem(sys.modules, "shared.exception_queue", eq_mod)
 
@@ -184,10 +196,18 @@ def _install(monkeypatch, *, summary: EvaluationSummary, canonical_raises=None):
 @pytest.fixture(autouse=True)
 def _silence_logger(monkeypatch):
     class _Silent:
-        def info(self, *a, **k): pass
-        def warning(self, *a, **k): pass
-        def error(self, *a, **k): pass
-        def debug(self, *a, **k): pass
+        def info(self, *a, **k):
+            pass
+
+        def warning(self, *a, **k):
+            pass
+
+        def error(self, *a, **k):
+            pass
+
+        def debug(self, *a, **k):
+            pass
+
     monkeypatch.setattr(wc, "logger", _Silent())
 
 
@@ -195,23 +215,34 @@ def _silence_logger(monkeypatch):
 # Summary factories
 # ---------------------------------------------------------------------------
 
+
 def _critical_summary() -> EvaluationSummary:
     crit = RuleEvaluationResult(
-        rule_id="CTE_REQ_HARVEST_DATE", severity="critical",
-        result="fail", why_failed="harvest_date missing",
+        rule_id="CTE_REQ_HARVEST_DATE",
+        severity="critical",
+        result="fail",
+        why_failed="harvest_date missing",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[crit], critical_failures=[crit],
+        total_rules=1,
+        failed=1,
+        results=[crit],
+        critical_failures=[crit],
     )
 
 
 def _warning_only_summary() -> EvaluationSummary:
     warn = RuleEvaluationResult(
-        rule_id="R_WARN", severity="warning",
-        result="fail", why_failed="non-critical warning",
+        rule_id="R_WARN",
+        severity="warning",
+        result="fail",
+        why_failed="non-critical warning",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[warn], critical_failures=[],
+        total_rules=1,
+        failed=1,
+        results=[warn],
+        critical_failures=[],
     )
 
 
@@ -221,7 +252,8 @@ def _no_verdict_summary() -> EvaluationSummary:
 
 def _compliant_summary() -> EvaluationSummary:
     return EvaluationSummary(
-        total_rules=1, passed=1,
+        total_rules=1,
+        passed=1,
         results=[RuleEvaluationResult(rule_id="R_OK", severity="info", result="pass")],
     )
 
@@ -230,19 +262,21 @@ def _compliant_summary() -> EvaluationSummary:
 # OFF mode — no behavior change
 # ---------------------------------------------------------------------------
 
-class TestEnforceOff:
 
+class TestEnforceOff:
     @pytest.fixture(autouse=True)
     def _off(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
 
     def test_critical_failure_does_not_reject(self, monkeypatch):
         sess, persist, cap = _install(monkeypatch, summary=_critical_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 1 and resp.rejected == 0
         assert resp.events[0].status == "accepted"
         # Primary savepoint committed; canonical savepoint committed
@@ -255,19 +289,21 @@ class TestEnforceOff:
 # CTE_ONLY mode — rejects on critical_failures
 # ---------------------------------------------------------------------------
 
-class TestEnforceCteOnly:
 
+class TestEnforceCteOnly:
     @pytest.fixture(autouse=True)
     def _cte_only(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
 
     def test_critical_failure_rejects_event_and_rolls_back(self, monkeypatch):
         sess, persist, cap = _install(monkeypatch, summary=_critical_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 0 and resp.rejected == 1
         assert resp.events[0].status == "rejected"
         assert "rule_violation" in resp.events[0].errors[0]
@@ -288,11 +324,13 @@ class TestEnforceCteOnly:
         """Warnings are non-critical: the event accepts, but a row lands
         in the exception queue for tenant visibility."""
         sess, persist, cap = _install(monkeypatch, summary=_warning_only_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 1 and resp.rejected == 0
         assert resp.events[0].status == "accepted"
         assert ("commit", "sp-0") in sess.actions
@@ -301,21 +339,25 @@ class TestEnforceCteOnly:
     def test_no_verdict_never_rejects(self, monkeypatch):
         """Non-FTL / no_rules_loaded → compliant=None → must accept."""
         sess, persist, cap = _install(monkeypatch, summary=_no_verdict_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 1 and resp.rejected == 0
         assert resp.events[0].status == "accepted"
 
     def test_compliant_accepts_without_exception_queue(self, monkeypatch):
         sess, persist, cap = _install(monkeypatch, summary=_compliant_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 1
         assert cap["exc_queue_calls"] == []
 
@@ -334,11 +376,13 @@ class TestEnforceCteOnly:
             canonical_raises=RuntimeError("canonical broken"),
         )
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(wc.ingest_events(
-                payload=_make_payload([_make_event()]),
-                principal_tenant_id="t-enforce",
-                x_regengine_api_key="k",
-            ))
+            asyncio.run(
+                wc.ingest_events(
+                    payload=_make_payload([_make_event()]),
+                    principal_tenant_id="t-enforce",
+                    x_regengine_api_key="k",
+                )
+            )
         assert exc.value.status_code == 500
         detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
         assert detail.get("error") == "RULES_ENGINE_EVAL_FAILED"
@@ -348,8 +392,8 @@ class TestEnforceCteOnly:
 # ALL mode — rejects on any compliant=False
 # ---------------------------------------------------------------------------
 
-class TestEnforceAll:
 
+class TestEnforceAll:
     @pytest.fixture(autouse=True)
     def _all(self, monkeypatch):
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "all")
@@ -358,11 +402,13 @@ class TestEnforceAll:
         """ALL mode is stricter than CTE_ONLY: warning-severity failures
         ALSO reject."""
         sess, persist, cap = _install(monkeypatch, summary=_warning_only_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 0 and resp.rejected == 1
         assert resp.events[0].status == "rejected"
         assert "R_WARN" in resp.events[0].errors[0]
@@ -370,10 +416,12 @@ class TestEnforceAll:
 
     def test_compliant_still_accepts_in_all_mode(self, monkeypatch):
         sess, _, _ = _install(monkeypatch, summary=_compliant_summary())
-        resp = asyncio.run(wc.ingest_events(
-            payload=_make_payload([_make_event()]),
-            principal_tenant_id="t-enforce",
-            x_regengine_api_key="k",
-        ))
+        resp = asyncio.run(
+            wc.ingest_events(
+                payload=_make_payload([_make_event()]),
+                principal_tenant_id="t-enforce",
+                x_regengine_api_key="k",
+            )
+        )
         assert resp.accepted == 1
         assert ("commit", "sp-0") in sess.actions

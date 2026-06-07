@@ -29,6 +29,7 @@ module skips cleanly.
 Run via:
     pytest tests/migrations/test_rls_coverage.py -v
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -44,7 +45,6 @@ pytest.importorskip("testcontainers.postgres")
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.engine import Engine  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -65,7 +65,8 @@ def _provision_app_roles(database_url: str) -> None:
     engine = create_engine(database_url, future=True)
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -79,8 +80,10 @@ def _provision_app_roles(database_url: str) -> None:
                         CREATE ROLE regengine_sysadmin NOLOGIN;
                     END IF;
                 END$$;
-            """))
-            conn.execute(text("""
+            """)
+            )
+            conn.execute(
+                text("""
                 CREATE OR REPLACE FUNCTION get_tenant_context()
                 RETURNS uuid
                 LANGUAGE plpgsql
@@ -98,7 +101,8 @@ def _provision_app_roles(database_url: str) -> None:
                     RETURN tid::uuid;
                 END;
                 $$;
-            """))
+            """)
+            )
     finally:
         engine.dispose()
 
@@ -113,9 +117,7 @@ def upgraded_engine() -> Iterator[Engine]:
         pytest.skip(f"PostgresContainer unavailable: {exc}")
 
     try:
-        url = container.get_connection_url().replace(
-            "postgresql+psycopg2://", "postgresql+psycopg://"
-        )
+        url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
         env = {
             "DATABASE_URL": url.replace("postgresql+psycopg", "postgresql"),
             "PATH": subprocess.os.environ["PATH"],
@@ -257,9 +259,7 @@ class TestRLSCoverage_EPIC_B:
             f"{failures}"
         )
 
-    def test_every_fsma_table_has_tenant_isolation_policy(
-        self, upgraded_engine: Engine
-    ):
+    def test_every_fsma_table_has_tenant_isolation_policy(self, upgraded_engine: Engine):
         tables = _fsma_tables(upgraded_engine)
         failures = []
         for t in tables:

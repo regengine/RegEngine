@@ -19,14 +19,15 @@ Revises:
 Create Date: 2026-03-24 18:06:50.080590
 
 """
+
 import os
-from typing import Sequence, Union
 from pathlib import Path
+from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '97588ba8edf3'
+revision: str = "97588ba8edf3"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

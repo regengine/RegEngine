@@ -12,13 +12,13 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import text
-
-from .webhook_compat import require_tenant_context
-from .tenant_validation import validate_tenant_id
 from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 from shared.tenant_context import TenantContext
+from sqlalchemy import text
+
+from .tenant_validation import validate_tenant_id
+from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("alerts")
 
@@ -142,7 +142,6 @@ DEFAULT_RULES: list[AlertRule] = [
         description="Triggered when an FDA food recall matches a supplier, lot code, or product category in your supply chain",
     ),
 ]
-
 
 
 def _load_alert_columns(db_session) -> set[str]:
@@ -345,8 +344,12 @@ def _fetch_alerts_from_db(db_session, tenant_id: str) -> list[Alert]:
     message_col = "message" if "message" in columns else ("description" if "description" in columns else None)
     title_col = "title" if "title" in columns else None
     resolved_col = "resolved" if "resolved" in columns else ("acknowledged" if "acknowledged" in columns else None)
-    resolved_at_col = "resolved_at" if "resolved_at" in columns else ("acknowledged_at" if "acknowledged_at" in columns else None)
-    resolved_by_col = "resolved_by" if "resolved_by" in columns else ("acknowledged_by" if "acknowledged_by" in columns else None)
+    resolved_at_col = (
+        "resolved_at" if "resolved_at" in columns else ("acknowledged_at" if "acknowledged_at" in columns else None)
+    )
+    resolved_by_col = (
+        "resolved_by" if "resolved_by" in columns else ("acknowledged_by" if "acknowledged_by" in columns else None)
+    )
     details_col = "details" if "details" in columns else ("metadata" if "metadata" in columns else None)
     event_ref_col = next(
         (name for name in ("cte_event_id", "event_id", "entity_id") if name in columns),

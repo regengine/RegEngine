@@ -26,14 +26,8 @@ from sqlalchemy.engine import Engine  # noqa: E402
 from sqlalchemy.exc import DBAPIError  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260513_c1d2e3f4a5b6_v079_ingestion_run_receipts.py"
-)
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260513_c1d2e3f4a5b6_v079_ingestion_run_receipts.py"
 
 
 def _load_v079_module():
@@ -68,7 +62,8 @@ def receipt_schema(pg_engine: Engine):
         conn.execute(text("DROP SCHEMA IF EXISTS fsma CASCADE"))
         conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
         conn.execute(text("CREATE SCHEMA fsma"))
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (
@@ -77,8 +72,10 @@ def receipt_schema(pg_engine: Engine):
                     CREATE ROLE regengine NOLOGIN;
                 END IF;
             END$$;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION get_tenant_context()
             RETURNS uuid
             LANGUAGE plpgsql
@@ -96,8 +93,10 @@ def receipt_schema(pg_engine: Engine):
                 RETURN tid::uuid;
             END;
             $$;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE fsma.ingestion_runs (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 tenant_id uuid NOT NULL,
@@ -120,7 +119,8 @@ def receipt_schema(pg_engine: Engine):
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 tenant_id uuid NOT NULL
             );
-        """))
+        """)
+        )
         conn.execute(text(v079._INGESTION_RUN_RECEIPTS_SQL))
     yield
 
@@ -169,8 +169,9 @@ def test_receipts_auto_hash_and_chain_to_previous_receipt(pg_engine: Engine, rec
     tenant_id = uuid4()
     with pg_engine.begin() as conn:
         ids = _seed_run(conn, tenant_id)
-        first = conn.execute(
-            text("""
+        first = (
+            conn.execute(
+                text("""
                 INSERT INTO fsma.ingestion_run_receipts (
                     tenant_id, ingestion_run_id, state, actor, request_id, metadata
                 )
@@ -180,10 +181,14 @@ def test_receipts_auto_hash_and_chain_to_previous_receipt(pg_engine: Engine, rec
                 )
                 RETURNING sequence_num, previous_receipt_hash, payload_hash, receipt_hash
             """),
-            {"tid": tenant_id, **ids},
-        ).mappings().one()
-        second = conn.execute(
-            text("""
+                {"tid": tenant_id, **ids},
+            )
+            .mappings()
+            .one()
+        )
+        second = (
+            conn.execute(
+                text("""
                 INSERT INTO fsma.ingestion_run_receipts (
                     tenant_id, ingestion_run_id, state, actor, request_id,
                     canonical_event_id, evidence_attachment_id, rule_evaluation_id,
@@ -196,8 +201,11 @@ def test_receipts_auto_hash_and_chain_to_previous_receipt(pg_engine: Engine, rec
                 )
                 RETURNING sequence_num, previous_receipt_hash, payload_hash, receipt_hash
             """),
-            {"tid": tenant_id, **ids},
-        ).mappings().one()
+                {"tid": tenant_id, **ids},
+            )
+            .mappings()
+            .one()
+        )
 
         recomputed = conn.execute(
             text("""
@@ -329,7 +337,4 @@ def test_receipts_force_rls_with_tenant_policy(pg_engine: Engine, receipt_schema
 
     assert rls.relrowsecurity is True
     assert rls.relforcerowsecurity is True
-    assert any(
-        "get_tenant_context" in " ".join(part for part in row if part)
-        for row in policies
-    )
+    assert any("get_tenant_context" in " ".join(part for part in row if part) for row in policies)

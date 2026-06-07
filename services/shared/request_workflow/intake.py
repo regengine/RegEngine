@@ -114,8 +114,7 @@ class IntakeMixin:
         case = self._get_case(tenant_id, request_case_id)
         if case["package_status"] not in ("intake", "scoping"):
             raise ValueError(
-                f"Cannot update scope in status '{case['package_status']}'. "
-                "Case must be in 'intake' or 'scoping'."
+                f"Cannot update scope in status '{case['package_status']}'. Case must be in 'intake' or 'scoping'."
             )
 
         sets = ["package_status = 'scoping'", "updated_at = :now"]
@@ -144,7 +143,7 @@ class IntakeMixin:
         result = self.db.execute(
             text(f"""
                 UPDATE fsma.request_cases
-                SET {', '.join(sets)}
+                SET {", ".join(sets)}
                 WHERE request_case_id = :case_id
                   AND tenant_id = :tenant_id
                 RETURNING *

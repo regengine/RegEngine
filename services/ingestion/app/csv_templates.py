@@ -17,22 +17,21 @@ from typing import Optional
 
 from dateutil import parser as _dateutil_parser
 from dateutil.parser import ParserError as _DateParserError
-
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from .authz import IngestionPrincipal, require_permission
 from .config import get_settings
 from .shared.tenant_resolution import resolve_principal_tenant_id
-from .shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
+from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
+from .webhook_compat import ingest_events
 from .webhook_models import (
+    REQUIRED_KDES_BY_CTE,
     IngestEvent,
     IngestResponse,
-    REQUIRED_KDES_BY_CTE,
     WebhookCTEType,
     WebhookPayload,
 )
-from .webhook_compat import ingest_events
 
 logger = logging.getLogger("csv-templates")
 
@@ -170,19 +169,14 @@ async def download_template(cte_type: str):
     cte_type = cte_type.lower()
     if cte_type not in CTE_COLUMNS:
         valid = ", ".join(CTE_COLUMNS.keys())
-        raise HTTPException(
-            status_code=404,
-            detail=f"Unknown CTE type '{cte_type}'. Valid types: {valid}"
-        )
+        raise HTTPException(status_code=404, detail=f"Unknown CTE type '{cte_type}'. Valid types: {valid}")
 
     csv_content = _generate_csv_template(cte_type)
 
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename=regengine_{cte_type}_template.csv"
-        },
+        headers={"Content-Disposition": f"attachment; filename=regengine_{cte_type}_template.csv"},
     )
 
 
@@ -213,18 +207,30 @@ async def list_templates():
 # "growing" and "creation" are accepted for backwards compatibility
 # and normalize to "harvesting".
 _CTE_TYPE_ALIASES: dict[str, str] = {
-    "harvesting": "harvesting", "harvest": "harvesting",
-    "creation": "harvesting", "growing": "harvesting",
+    "harvesting": "harvesting",
+    "harvest": "harvesting",
+    "creation": "harvesting",
+    "growing": "harvesting",
     "h": "harvesting",
-    "cooling": "cooling", "cold_storage": "cooling", "c": "cooling",
-    "initial_packing": "initial_packing", "packing": "initial_packing",
-    "ip": "initial_packing", "p": "initial_packing",
-    "shipping": "shipping", "ship": "shipping", "distribute": "shipping",
+    "cooling": "cooling",
+    "cold_storage": "cooling",
+    "c": "cooling",
+    "initial_packing": "initial_packing",
+    "packing": "initial_packing",
+    "ip": "initial_packing",
+    "p": "initial_packing",
+    "shipping": "shipping",
+    "ship": "shipping",
+    "distribute": "shipping",
     "s": "shipping",
-    "receiving": "receiving", "receive": "receiving", "receipt": "receiving",
+    "receiving": "receiving",
+    "receive": "receiving",
+    "receipt": "receiving",
     "r": "receiving",
-    "transformation": "transformation", "transform": "transformation",
-    "transforming": "transformation", "process": "transformation",
+    "transformation": "transformation",
+    "transform": "transformation",
+    "transforming": "transformation",
+    "process": "transformation",
     "t": "transformation",
     "first_land_based_receiving": "first_land_based_receiving",
     "flbr": "first_land_based_receiving",
@@ -232,9 +238,15 @@ _CTE_TYPE_ALIASES: dict[str, str] = {
 
 # Date column names per CTE type, used for timestamp detection
 _DATE_FIELDS = [
-    "event_date", "date", "timestamp",
-    "harvest_date", "cooling_date", "packing_date",
-    "ship_date", "receive_date", "transformation_date",
+    "event_date",
+    "date",
+    "timestamp",
+    "harvest_date",
+    "cooling_date",
+    "packing_date",
+    "ship_date",
+    "receive_date",
+    "transformation_date",
     "landing_date",
 ]
 
@@ -296,9 +308,7 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
                     break
 
 
-def _validate_kde_completeness(
-    cte_type: str, event: IngestEvent, kdes: dict
-) -> list[str]:
+def _validate_kde_completeness(cte_type: str, event: IngestEvent, kdes: dict) -> list[str]:
     """Check required KDEs for a CTE type. Returns list of missing field names."""
     try:
         cte_enum = WebhookCTEType(cte_type)
@@ -325,27 +335,58 @@ def _validate_kde_completeness(
 # ── UOM normalisation ────────────────────────────────────────────────────────
 # Maps common abbreviations / typos → canonical FSMA 204 unit strings.
 _UOM_ALIASES: dict[str, str] = {
-    "lb": "lbs", "pound": "lbs", "pounds": "lbs", "lb.": "lbs",
-    "kilogram": "kg", "kilograms": "kg", "kgs": "kg",
-    "ounce": "oz", "ounces": "oz",
-    "gram": "g", "grams": "g",
-    "ton": "tons", "tonne": "mt", "tonnes": "mt", "metric_ton": "mt", "metric ton": "mt",
-    "case": "cases", "cs": "cases",
-    "carton": "cartons", "ctn": "cartons", "ctns": "cartons",
-    "box": "boxes", "bx": "boxes", "bxs": "boxes",
-    "crate": "crates", "crt": "crates",
+    "lb": "lbs",
+    "pound": "lbs",
+    "pounds": "lbs",
+    "lb.": "lbs",
+    "kilogram": "kg",
+    "kilograms": "kg",
+    "kgs": "kg",
+    "ounce": "oz",
+    "ounces": "oz",
+    "gram": "g",
+    "grams": "g",
+    "ton": "tons",
+    "tonne": "mt",
+    "tonnes": "mt",
+    "metric_ton": "mt",
+    "metric ton": "mt",
+    "case": "cases",
+    "cs": "cases",
+    "carton": "cartons",
+    "ctn": "cartons",
+    "ctns": "cartons",
+    "box": "boxes",
+    "bx": "boxes",
+    "bxs": "boxes",
+    "crate": "crates",
+    "crt": "crates",
     "bin": "bins",
-    "pallet": "pallets", "plt": "pallets", "plts": "pallets", "skid": "pallets",
+    "pallet": "pallets",
+    "plt": "pallets",
+    "plts": "pallets",
+    "skid": "pallets",
     "tote": "totes",
-    "bag": "bags", "bg": "bags",
-    "sack": "sacks", "sk": "sacks",
-    "ea": "each", "pc": "pieces", "piece": "pieces",
-    "unit": "units", "un": "units",
+    "bag": "bags",
+    "bg": "bags",
+    "sack": "sacks",
+    "sk": "sacks",
+    "ea": "each",
+    "pc": "pieces",
+    "piece": "pieces",
+    "unit": "units",
+    "un": "units",
     "ct": "count",
-    "gallon": "gallons", "gal": "gallons", "gals": "gallons",
-    "liter": "liters", "litre": "liters", "litres": "liters",
-    "barrel": "barrels", "bbl": "barrels",
-    "bushel": "bushels", "bu": "bushels",
+    "gallon": "gallons",
+    "gal": "gallons",
+    "gals": "gallons",
+    "liter": "liters",
+    "litre": "liters",
+    "litres": "liters",
+    "barrel": "barrels",
+    "bbl": "barrels",
+    "bushel": "bushels",
+    "bu": "bushels",
 }
 
 
@@ -361,18 +402,18 @@ def _normalize_uom(raw: str) -> str:
 
 # ── Location / string normalisation ─────────────────────────────────────────
 _LOCATION_ABBREV_PATTERNS: list[tuple[str, str]] = [
-    (r"\bwhse\b",   "Warehouse"),
-    (r"\bwhs\b",    "Warehouse"),
-    (r"\bdist\.?\b","Distribution"),
+    (r"\bwhse\b", "Warehouse"),
+    (r"\bwhs\b", "Warehouse"),
+    (r"\bdist\.?\b", "Distribution"),
     (r"\bmfg\.?\b", "Manufacturing"),
     (r"\bfac\.?\b", "Facility"),
     (r"\bpkg\.?\b", "Packaging"),
-    (r"\brecv\.?\b","Receiving"),
-    (r"\bshpg\.?\b","Shipping"),
+    (r"\brecv\.?\b", "Receiving"),
+    (r"\bshpg\.?\b", "Shipping"),
     (r"\bctr\.?\b", "Center"),
-    (r"\bcntr\.?\b","Center"),
-    (r"\bhdqtrs?\b","Headquarters"),
-    (r"\bblvd\.?\b","Boulevard"),
+    (r"\bcntr\.?\b", "Center"),
+    (r"\bhdqtrs?\b", "Headquarters"),
+    (r"\bblvd\.?\b", "Boulevard"),
     (r"\bave\.?\b", "Avenue"),
 ]
 
@@ -449,14 +490,11 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
     if suspicious:
         chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
         warnings.append(
-            f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — "
-            f"verify O vs 0 or I vs 1)"
+            f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — verify O vs 0 or I vs 1)"
         )
     # All-alpha codes longer than 3 chars have no digits — flag for review
     if lot_code.isalpha() and len(lot_code) > 3:
-        warnings.append(
-            f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error"
-        )
+        warnings.append(f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error")
     return warnings
 
 
@@ -520,38 +558,55 @@ async def ingest_csv(
 
             # ── Phase 1: Ingestion — flexible, never crashes on bad data ──────
             # Date: accept any human format; sentinel + warning on total failure
-            raw_date = next(
-                (row[f] for f in _DATE_FIELDS if row.get(f)),
-                ""
-            )
+            raw_date = next((row[f] for f in _DATE_FIELDS if row.get(f)), "")
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
             if date_warning:
                 kde_warnings.append(f"Row {row_num}: {date_warning}")
 
             # Location: strip whitespace and expand abbreviations
-            loc_gln = (row.get("location_gln") or row.get("ship_from_gln")
-                or row.get("receiving_gln") or row.get("gln") or None)
-            _loc_raw = (row.get("location_name") or row.get("ship_from_location")
-                or row.get("receiving_location") or row.get("location_identifier")
-                or row.get("facility_name") or row.get("location") or "")
+            loc_gln = (
+                row.get("location_gln")
+                or row.get("ship_from_gln")
+                or row.get("receiving_gln")
+                or row.get("gln")
+                or None
+            )
+            _loc_raw = (
+                row.get("location_name")
+                or row.get("ship_from_location")
+                or row.get("receiving_location")
+                or row.get("location_identifier")
+                or row.get("facility_name")
+                or row.get("location")
+                or ""
+            )
             loc_name = _normalize_location(_loc_raw) if _loc_raw else None
 
             # Unit of measure: map abbreviations before Pydantic sees them
-            uom_raw = (row.get("unit_of_measure") or row.get("uom") or "units")
+            uom_raw = row.get("unit_of_measure") or row.get("uom") or "units"
             uom = _normalize_uom(uom_raw)
 
             # Lot code: extract and run integrity checks
-            lot_code = (row.get("traceability_lot_code") or row.get("tlc")
-                or row.get("lot_code") or "")
+            lot_code = row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or ""
             for integrity_warn in _check_lot_code_integrity(lot_code):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
             kdes: dict = {}
-            skip_fields = {"traceability_lot_code", "product_description",
-                "quantity", "unit_of_measure", "location_gln", "location_name",
-                "cte_type", "event_type", "type", "cte", "input_lot_codes",
-                "event_time"}
+            skip_fields = {
+                "traceability_lot_code",
+                "product_description",
+                "quantity",
+                "unit_of_measure",
+                "location_gln",
+                "location_name",
+                "cte_type",
+                "event_type",
+                "type",
+                "cte",
+                "input_lot_codes",
+                "event_time",
+            }
             for key, val in row.items():
                 if key and val and key not in skip_fields:
                     kdes[key] = val
@@ -574,8 +629,9 @@ async def ingest_csv(
             event = IngestEvent(
                 cte_type=WebhookCTEType(row_cte),
                 traceability_lot_code=lot_code,
-                product_description=(row.get("product_description") or row.get("product")
-                    or row.get("description") or ""),
+                product_description=(
+                    row.get("product_description") or row.get("product") or row.get("description") or ""
+                ),
                 quantity=float(row.get("quantity") or row.get("qty") or 0),
                 unit_of_measure=uom,
                 location_gln=loc_gln,
@@ -588,9 +644,7 @@ async def ingest_csv(
             # KDE completeness validation (warn, don't reject)
             missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
             if missing_kdes:
-                kde_warnings.append(
-                    f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}"
-                )
+                kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")
         except Exception as e:
             parse_errors.append(f"Row {row_num}: {str(e)}")
 
@@ -608,23 +662,33 @@ async def ingest_csv(
 
     if parse_errors:
         from .webhook_models import EventResult
+
         for err in parse_errors:
-            response.events.append(EventResult(
-                traceability_lot_code="", cte_type=fallback_cte or "unknown",
-                status="rejected", errors=[err]))
+            response.events.append(
+                EventResult(
+                    traceability_lot_code="", cte_type=fallback_cte or "unknown", status="rejected", errors=[err]
+                )
+            )
             response.rejected += 1
             response.total += 1
 
     if kde_warnings:
-        logger.warning("csv_ingest_kde_warnings: %d events with missing KDEs: %s",
-            len(kde_warnings), "; ".join(kde_warnings[:5]))
+        logger.warning(
+            "csv_ingest_kde_warnings: %d events with missing KDEs: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
+        )
 
-    logger.info("csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
-        response.total, response.accepted, response.rejected, len(kde_warnings))
+    logger.info(
+        "csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
+        response.total,
+        response.accepted,
+        response.rejected,
+        len(kde_warnings),
+    )
 
     # Attach KDE warnings as extra response metadata via JSONResponse
     # so callers can see which events are missing required fields
     from fastapi.responses import JSONResponse
+
     response_data = response.model_dump()
     if kde_warnings:
         response_data["kde_warnings"] = kde_warnings

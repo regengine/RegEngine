@@ -28,7 +28,6 @@ from typing import Any
 
 import redis
 import structlog
-
 from shared.task_queue import register_task_handler
 
 logger = structlog.get_logger("ingestion.regulation")

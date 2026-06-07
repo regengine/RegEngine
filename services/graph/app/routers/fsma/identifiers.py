@@ -4,7 +4,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-
 from shared.auth import require_api_key
 from shared.fsma_validation import (
     IdentifierType,
@@ -134,8 +133,7 @@ def validate_identifier_endpoint(
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid identifier_type: {identifier_type}. "
-                f"Valid types: TLC, GTIN, GLN, SSCC",
+                detail=f"Invalid identifier_type: {identifier_type}. Valid types: TLC, GTIN, GLN, SSCC",
             )
 
     result = validate_identifier(value, expected_type=expected_type, strict=strict)

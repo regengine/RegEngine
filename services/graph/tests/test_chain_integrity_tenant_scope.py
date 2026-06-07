@@ -18,6 +18,7 @@ crypto_gap) previously scoped only ``l.tenant_id`` — the joined
 Tests mock the Neo4j client and assert on the Cypher strings the
 function sends. Same inspection pattern as the prior tenant-scoping PRs.
 """
+
 from __future__ import annotations
 
 import re
@@ -31,7 +32,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.fsma.chain_integrity import find_broken_chains
-
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
 
@@ -83,13 +83,10 @@ async def test_missing_origin_query_scopes_shipping_and_origin():
         f"#1301: missing_origin_query must scope shipping event. Cypher:\n{cypher}"
     )
     assert "origin.tenant_id = $tenant_id" in cypher, (
-        f"#1301: missing_origin_query must scope origin event inside NOT EXISTS. "
-        f"Cypher:\n{cypher}"
+        f"#1301: missing_origin_query must scope origin event inside NOT EXISTS. Cypher:\n{cypher}"
     )
     # Defense in depth: the "$tenant_id IS NULL OR" shim must be gone.
-    assert "$tenant_id IS NULL" not in cypher, (
-        "#1301: null-tenant shim must be removed — caller must pass tenant_id"
-    )
+    assert "$tenant_id IS NULL" not in cypher, "#1301: null-tenant shim must be removed — caller must pass tenant_id"
 
 
 @pytest.mark.asyncio
@@ -147,9 +144,7 @@ async def test_every_query_binds_tenant_id_parameter():
     assert session.run.call_count == 3
     for i, call in enumerate(session.run.call_args_list):
         kwargs = call.kwargs
-        assert kwargs.get("tenant_id") == TENANT_A, (
-            f"Query #{i} missing $tenant_id binding; kwargs={kwargs!r}"
-        )
+        assert kwargs.get("tenant_id") == TENANT_A, f"Query #{i} missing $tenant_id binding; kwargs={kwargs!r}"
 
 
 # ── Fail-fast on null-tenant callers ───────────────────────────────────────

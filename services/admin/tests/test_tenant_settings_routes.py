@@ -72,8 +72,10 @@ def _fake_tenant(settings=None):
 
 def _fake_membership(user_id=USER_ID, role_id=OWNER_ROLE_ID, is_active=True):
     return SimpleNamespace(
-        user_id=user_id, tenant_id=TENANT_ID,
-        role_id=role_id, is_active=is_active,
+        user_id=user_id,
+        tenant_id=TENANT_ID,
+        role_id=role_id,
+        is_active=is_active,
     )
 
 
@@ -192,9 +194,7 @@ class TestRoleGate_Issue1386:
         response = asyncio.run(
             mod.update_tenant_settings(
                 tenant_id=TENANT_ID,
-                payload=mod.SettingsUpdate(
-                    workspace_profile={"company_name": "Acme Farms"}
-                ),
+                payload=mod.SettingsUpdate(workspace_profile={"company_name": "Acme Farms"}),
                 user=_fake_user(),
                 db=db,
             )
@@ -264,7 +264,10 @@ class TestBlockedKeyStripping_Issue1386:
         ],
     )
     def test_blocked_key_is_stripped_from_workspace_profile(
-        self, monkeypatch, blocked_key, malicious_value,
+        self,
+        monkeypatch,
+        blocked_key,
+        malicious_value,
     ) -> None:
         mod = _load_routes(monkeypatch)
         tenant = _fake_tenant(settings={})
@@ -386,7 +389,8 @@ class TestOnboardingStatus_Issue1341:
         assert exc.value.status_code == 403
 
     def test_is_complete_true_when_all_three_flags_set(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         """``is_complete`` requires ALL THREE of workspace_setup_completed,
         facility_created, ftl_check_completed. A regression that uses
@@ -407,7 +411,9 @@ class TestOnboardingStatus_Issue1341:
 
         response = asyncio.run(
             mod.get_onboarding_status(
-                tenant_id=TENANT_ID, user=_fake_user(), db=db,
+                tenant_id=TENANT_ID,
+                user=_fake_user(),
+                db=db,
             )
         )
         assert response.is_complete is True
@@ -428,7 +434,9 @@ class TestOnboardingStatus_Issue1341:
 
         response = asyncio.run(
             mod.get_onboarding_status(
-                tenant_id=TENANT_ID, user=_fake_user(), db=db,
+                tenant_id=TENANT_ID,
+                user=_fake_user(),
+                db=db,
             )
         )
         assert response.is_complete is False
@@ -447,7 +455,9 @@ class TestOnboardingStatus_Issue1341:
 
         response = asyncio.run(
             mod.get_onboarding_status(
-                tenant_id=TENANT_ID, user=_fake_user(), db=db,
+                tenant_id=TENANT_ID,
+                user=_fake_user(),
+                db=db,
             )
         )
         assert response.partner_tier == "founding"

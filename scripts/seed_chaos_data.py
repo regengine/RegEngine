@@ -20,22 +20,18 @@ Environment variables:
     POSTGRES_URL       (default: postgresql://regengine:regengine@localhost:5433/regengine_admin)
 """
 
-
-import os
-import sys
+import argparse
 import json
 import logging
-import argparse
+import os
+import sys
 from datetime import datetime, timezone
 from uuid import uuid4
 
 # APScheduler imports moved to seed_scheduler_jobs()
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("chaos-seeder")
 
 
@@ -54,12 +50,10 @@ CHAOS_SEED_TAG = "chaos_test_seed"
 
 # How much data to seed
 NEO4J_REGULATION_COUNT = 25
-NEO4J_SECTION_COUNT = 50      # 2 sections per regulation
+NEO4J_SECTION_COUNT = 50  # 2 sections per regulation
 NEO4J_REQUIREMENT_COUNT = 100  # 2 requirements per section
 POSTGRES_API_KEY_COUNT = 10
 POSTGRES_SCHEDULER_JOB_COUNT = 15
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -73,11 +67,11 @@ def seed_neo4j():
         logger.error("❌ neo4j package not installed. Run: pip install neo4j")
         return False
 
-
     logger.info(f"🔌 Connecting to Neo4j at {NEO4J_URI}")
-    
+
     # Retry logic for Neo4j connection
     import time
+
     max_retries = 30
     for attempt in range(max_retries):
         try:
@@ -87,7 +81,9 @@ def seed_neo4j():
             break
         except Exception as e:
             if attempt < max_retries - 1:
-                logger.warning(f"⚠️ Neo4j connection failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                logger.warning(
+                    f"⚠️ Neo4j connection failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in 2s..."
+                )
                 time.sleep(2)
             else:
                 logger.error(f"❌ Neo4j connection failed after {max_retries} attempts: {e}")
@@ -95,10 +91,7 @@ def seed_neo4j():
 
     with driver.session() as session:
         # Clean up any previous seed data first
-        session.run(
-            "MATCH (n {_chaos_seed: $tag}) DETACH DELETE n",
-            tag=CHAOS_SEED_TAG
-        )
+        session.run("MATCH (n {_chaos_seed: $tag}) DETACH DELETE n", tag=CHAOS_SEED_TAG)
         logger.info("🧹 Cleaned up previous seed data")
 
         # Create Regulation nodes
@@ -177,10 +170,7 @@ def seed_neo4j():
         logger.info(f"  ✅ Created {NEO4J_REQUIREMENT_COUNT} Requirement nodes with HAS_REQUIREMENT relationships")
 
         # Verify counts
-        result = session.run(
-            "MATCH (n {_chaos_seed: $tag}) RETURN count(n) AS node_count",
-            tag=CHAOS_SEED_TAG
-        ).single()
+        result = session.run("MATCH (n {_chaos_seed: $tag}) RETURN count(n) AS node_count", tag=CHAOS_SEED_TAG).single()
         total_nodes = result["node_count"]
 
         result = session.run(
@@ -188,7 +178,7 @@ def seed_neo4j():
             MATCH (a {_chaos_seed: $tag})-[r]->(b {_chaos_seed: $tag})
             RETURN count(r) AS rel_count
             """,
-            tag=CHAOS_SEED_TAG
+            tag=CHAOS_SEED_TAG,
         ).single()
         total_rels = result["rel_count"]
 
@@ -213,21 +203,19 @@ def seed_neo4j():
 def seed_scheduler_jobs():
     """Seed persistent scheduler jobs using APScheduler."""
     logger.info("  📅 Seeding persistent scheduler jobs...")
-    
+
     try:
-        from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+        from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.interval import IntervalTrigger
 
         # Create a temporary scheduler to insert jobs into the DB
-        jobstores = {
-            'default': SQLAlchemyJobStore(url=POSTGRES_URL)
-        }
+        jobstores = {"default": SQLAlchemyJobStore(url=POSTGRES_URL)}
         scheduler = BackgroundScheduler(jobstores=jobstores)
         # We don't need to start it to add jobs, but adding a jobstore requires it?
         # Actually add_jobstore works on running or stopped scheduler.
         # But allow tables to be created if not exist.
-        
+
         # We start it in paused mode to avoid running jobs here
         scheduler.start(paused=True)
 
@@ -241,30 +229,33 @@ def seed_scheduler_jobs():
                 id=job_id,
                 name=f"Chaos Job {i}",
                 replace_existing=True,
-                coalesce=True
+                coalesce=True,
             )
-            
+
         scheduler.shutdown()
         logger.info(f"  📅 Created {POSTGRES_SCHEDULER_JOB_COUNT} persistent scheduler jobs")
-        
+
         return {"postgres_scheduler_jobs": POSTGRES_SCHEDULER_JOB_COUNT}
-        
+
     except Exception as e:
         logger.error(f"  ❌ Failed to seed scheduler jobs: {e}")
         return None
 
+
 def seed_postgres():
     """Seed PostgreSQL with API keys and Scheduler Jobs."""
     logger.info("🔌 Connecting to PostgreSQL")
-    
+
     # Retry logic for PostgreSQL connection
     import time
+
     max_retries = 30
     engine = None
-    
+
     for attempt in range(max_retries):
         try:
             from sqlalchemy import create_engine, text
+
             engine = create_engine(POSTGRES_URL)
 
             with engine.connect() as conn:
@@ -273,7 +264,9 @@ def seed_postgres():
             break
         except Exception as e:
             if attempt < max_retries - 1:
-                logger.warning(f"⚠️ PostgreSQL connection failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                logger.warning(
+                    f"⚠️ PostgreSQL connection failed (attempt {attempt + 1}/{max_retries}): {e}. Retrying in 2s..."
+                )
                 time.sleep(2)
             else:
                 logger.error(f"❌ PostgreSQL connection failed after {max_retries} attempts: {e}")
@@ -284,15 +277,13 @@ def seed_postgres():
     try:
         with engine.connect() as conn:
             # Clean up API keys
-            conn.execute(text(
-                "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
-            ))
+            conn.execute(text("DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"))
             conn.commit()
             logger.info("🧹 Cleaned up previous API key seed data")
-            
+
             # Seed API keys
             for i in range(POSTGRES_API_KEY_COUNT):
-                 conn.execute(
+                conn.execute(
                     text("""
                         INSERT INTO api_keys (id, tenant_id, key_hash, name, enabled, created_at)
                         VALUES (:id, :tenant_id, :key_hash, :name, true, :created_at)
@@ -307,30 +298,27 @@ def seed_postgres():
                     },
                 )
             conn.commit()
-            
+
             # Count API keys
-            api_count = conn.execute(
-                text("SELECT count(*) FROM api_keys WHERE name LIKE 'Chaos Test Key %'")
-            ).scalar()
+            api_count = conn.execute(text("SELECT count(*) FROM api_keys WHERE name LIKE 'Chaos Test Key %'")).scalar()
             api_manifest["postgres_api_keys"] = api_count
             logger.info(f"  🔑 Created {api_count} API keys")
-            
-        
+
     except Exception as e:
         logger.error(f"  ❌ Failed to seed API keys: {e}")
         return None
 
     # 2. Seed Scheduler Jobs (APScheduler)
     job_manifest = seed_scheduler_jobs()
-    
+
     if job_manifest:
         api_manifest.update(job_manifest)
 
     engine.dispose()
-    
+
     # Verify Total State
     # (Optional: check DB for jobs table)
-    
+
     return api_manifest
 
 
@@ -343,11 +331,11 @@ def cleanup_all():
 
     try:
         from neo4j import GraphDatabase
+
         driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
         with driver.session() as session:
             result = session.run(
-                "MATCH (n {_chaos_seed: $tag}) DETACH DELETE n RETURN count(n) AS deleted",
-                tag=CHAOS_SEED_TAG
+                "MATCH (n {_chaos_seed: $tag}) DETACH DELETE n RETURN count(n) AS deleted", tag=CHAOS_SEED_TAG
             ).single()
             logger.info(f"  Neo4j: deleted {result['deleted']} nodes")
         driver.close()
@@ -356,21 +344,18 @@ def cleanup_all():
 
     try:
         from sqlalchemy import create_engine, text
+
         engine = create_engine(POSTGRES_URL)
         with engine.connect() as conn:
-            r1 = conn.execute(text(
-                "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
-            ))
+            r1 = conn.execute(text("DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"))
             # Cleanup persistent jobs
             # Table name is 'apscheduler_jobs' by default for SQLAlchemyJobStore
             try:
-                r2 = conn.execute(text(
-                    "DELETE FROM apscheduler_jobs WHERE id LIKE 'chaos-job-%'"
-                ))
+                r2 = conn.execute(text("DELETE FROM apscheduler_jobs WHERE id LIKE 'chaos-job-%'"))
                 jobs_deleted = r2.rowcount
             except Exception:
-                jobs_deleted = 0 # Table might not exist if seeding failed
-                
+                jobs_deleted = 0  # Table might not exist if seeding failed
+
             conn.commit()
             logger.info(f"  PostgreSQL: deleted {r1.rowcount} API keys, {jobs_deleted} scheduler jobs")
         engine.dispose()
@@ -388,8 +373,12 @@ def main():
     parser.add_argument("--neo4j-only", action="store_true", help="Seed Neo4j only")
     parser.add_argument("--postgres-only", action="store_true", help="Seed PostgreSQL only")
     parser.add_argument("--cleanup", action="store_true", help="Remove all seed data")
-    parser.add_argument("--manifest", type=str, default="chaos_seed_manifest.json",
-                        help="Path to write seed manifest (default: chaos_seed_manifest.json)")
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        default="chaos_seed_manifest.json",
+        help="Path to write seed manifest (default: chaos_seed_manifest.json)",
+    )
     args = parser.parse_args()
 
     if args.cleanup:

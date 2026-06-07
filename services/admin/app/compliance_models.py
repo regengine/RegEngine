@@ -25,12 +25,12 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.types import TypeDecorator, CHAR
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import CHAR, TypeDecorator
 
 # Import base from existing models
-from .sqlalchemy_models import Base, GUID, JSONType
+from .sqlalchemy_models import GUID, Base, JSONType
 
 
 class ComplianceStatus(str, Enum):
@@ -86,9 +86,7 @@ class TenantComplianceStatusModel(Base):
 
     # Current status
     status = Column(String(50), nullable=False, default=ComplianceStatus.COMPLIANT.value)
-    last_status_change = Column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    last_status_change = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Alert counts
     active_alert_count = Column(Integer, nullable=False, default=0)
@@ -285,9 +283,7 @@ class ComplianceStatusLogModel(Base):
     # Timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    __table_args__ = (
-        Index("idx_status_log_tenant", "tenant_id", "created_at"),
-    )
+    __table_args__ = (Index("idx_status_log_tenant", "tenant_id", "created_at"),)
 
 
 class TenantProductProfileModel(Base):

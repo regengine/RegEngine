@@ -12,25 +12,23 @@ import logging
 import os
 import secrets
 import string
-from typing import TYPE_CHECKING, Optional
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     # Forward-ref only; avoids a circular import between mfa and sqlalchemy_models.
-    from .sqlalchemy_models import UserModel
     from .session_store import RedisSessionStore
+    from .sqlalchemy_models import UserModel
 
 try:
     import pyotp
 except ImportError:
-    raise ImportError(
-        "pyotp is required for MFA support. Install with: pip install pyotp qrcode"
-    )
+    raise ImportError("pyotp is required for MFA support. Install with: pip install pyotp qrcode")
 
 from fastapi import Depends, Header, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 
 from .audit import AuditLogger
 
@@ -92,9 +90,7 @@ def decrypt_mfa_secret(ciphertext: str) -> str:
     """
     f = _get_fernet()
     if f is None:
-        raise RuntimeError(
-            f"Cannot decrypt MFA secret: {_MFA_KEY_ENV} is not set or invalid."
-        )
+        raise RuntimeError(f"Cannot decrypt MFA secret: {_MFA_KEY_ENV} is not set or invalid.")
     return f.decrypt(ciphertext.encode("ascii")).decode("utf-8")
 
 
@@ -111,12 +107,11 @@ def resolve_user_mfa_secret(user: "UserModel") -> Optional[str]:
         try:
             return decrypt_mfa_secret(ciphertext)
         except Exception as exc:
-            _logger.error(
-                f"mfa_decrypt_failed user_id={getattr(user, 'id', '?')} error={exc}"
-            )
+            _logger.error(f"mfa_decrypt_failed user_id={getattr(user, 'id', '?')} error={exc}")
             # Fall through: if legacy plaintext also present we can still verify.
     plaintext = getattr(user, "mfa_secret", None)
     return plaintext or None
+
 
 # ──────────────────────────────────────────────────────────────
 # Configuration
@@ -321,8 +316,7 @@ def store_mfa_secret_on_user(user: "UserModel", secret: str) -> None:
         user.mfa_secret = None
     else:
         _logger.warning(
-            "MFA_ENCRYPTION_KEY not set — storing TOTP secret in plaintext. "
-            "This path is intended for local dev only."
+            "MFA_ENCRYPTION_KEY not set — storing TOTP secret in plaintext. This path is intended for local dev only."
         )
         user.mfa_secret = secret
         user.mfa_secret_ciphertext = None
@@ -648,12 +642,16 @@ async def require_mfa(
     # format matches a recovery code, so the overhead is negligible.
     # normalize_recovery_code / verify_recovery_code both normalize, so
     # "ABCD-EFGH", "abcd-efgh", etc. all match (#1377).
-    unused_codes = db.execute(
-        select(MFARecoveryCodeModel).where(
-            MFARecoveryCodeModel.user_id == current_user.id,
-            MFARecoveryCodeModel.used_at.is_(None),
+    unused_codes = (
+        db.execute(
+            select(MFARecoveryCodeModel).where(
+                MFARecoveryCodeModel.user_id == current_user.id,
+                MFARecoveryCodeModel.used_at.is_(None),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     recovery = None
     for candidate in unused_codes:
@@ -688,9 +686,8 @@ def require_mfa_dependency():
         async def protected_route(mfa_token: str = Depends(require_mfa_dependency())):
             ...
     """
-    from .dependencies import get_current_user, get_session_store
     from .database import get_session
-    from .dependencies import get_session_store
+    from .dependencies import get_current_user, get_session_store
 
     async def _require_mfa(
         x_mfa_token: Optional[str] = Header(None),
@@ -745,9 +742,7 @@ def create_enrollment_state(admin_id: str, hours_until_expiry: int = 1) -> MFAEn
     recovery_codes_hashed = [hash_recovery_code(code) for code in recovery_codes]
 
     now = datetime.now(timezone.utc)
-    expires_at = datetime.fromtimestamp(
-        now.timestamp() + (hours_until_expiry * 3600), tz=timezone.utc
-    )
+    expires_at = datetime.fromtimestamp(now.timestamp() + (hours_until_expiry * 3600), tz=timezone.utc)
 
     state = MFAEnrollmentState(
         admin_id=admin_id,

@@ -21,7 +21,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -50,9 +49,7 @@ def test_sysadmin_without_tenant_context_is_rejected(monkeypatch):
     from services.admin.app import dependencies as deps
 
     # No tenant context -> get_tenant_context returns None.
-    monkeypatch.setattr(
-        deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: None)
-    )
+    monkeypatch.setattr(deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: None))
 
     checker = deps.PermissionChecker("users.read")
     user = _FakeUser(is_sysadmin=True)
@@ -73,9 +70,7 @@ def test_sysadmin_with_tenant_context_passes_rbac_check(monkeypatch):
     from services.admin.app import dependencies as deps
 
     tenant_id = uuid.uuid4()
-    monkeypatch.setattr(
-        deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: tenant_id)
-    )
+    monkeypatch.setattr(deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: tenant_id))
 
     # Stub out ``has_permission`` so we don't need a real RoleModel graph.
     monkeypatch.setattr(deps, "has_permission", lambda perms, required: True)
@@ -103,9 +98,7 @@ def test_non_sysadmin_without_tenant_context_still_rejected(monkeypatch):
     ``E_NO_TENANT_CONTEXT``."""
     from services.admin.app import dependencies as deps
 
-    monkeypatch.setattr(
-        deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: None)
-    )
+    monkeypatch.setattr(deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: None))
 
     checker = deps.PermissionChecker("users.read")
     user = _FakeUser(is_sysadmin=False)

@@ -311,6 +311,7 @@ async def test_rejects_totp_replay_within_window():
 async def test_emits_failed_mfa_audit_and_tracks_lockout_attempt():
     """Failed MFA verification emits audit hook and increments lockout state."""
     from fastapi import HTTPException
+
     from services.admin.app import mfa as mfa_module
 
     user = _make_user()
@@ -336,6 +337,7 @@ async def test_emits_failed_mfa_audit_and_tracks_lockout_attempt():
 async def test_mfa_lockout_enforced_with_retry_after():
     """Reached threshold should block MFA verification with 423 + Retry-After."""
     from fastapi import HTTPException
+
     from services.admin.app import mfa as mfa_module
 
     user = _make_user()

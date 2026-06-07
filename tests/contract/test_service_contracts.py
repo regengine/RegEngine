@@ -4,10 +4,10 @@ These tests validate that services can communicate with each other correctly,
 ensuring the APIs consumers depend on remain stable.
 """
 
-import pytest
-import httpx
 from typing import Optional
 
+import httpx
+import pytest
 
 # Service URLs (configure via env in CI)
 SERVICE_URLS = {
@@ -21,10 +21,7 @@ SERVICE_URLS = {
 @pytest.fixture(scope="module")
 def clients():
     """Create HTTP clients for all services."""
-    return {
-        name: httpx.Client(base_url=url, timeout=10)
-        for name, url in SERVICE_URLS.items()
-    }
+    return {name: httpx.Client(base_url=url, timeout=10) for name, url in SERVICE_URLS.items()}
 
 
 class TestServiceHealthContracts:
@@ -35,9 +32,7 @@ class TestServiceHealthContracts:
         """Each service should have a working /health endpoint."""
         try:
             response = clients[service_name].get("/health")
-            assert response.status_code == 200, (
-                f"{service_name} health check failed: {response.status_code}"
-            )
+            assert response.status_code == 200, f"{service_name} health check failed: {response.status_code}"
         except httpx.ConnectError:
             pytest.skip(f"{service_name} not running")
 
@@ -77,7 +72,7 @@ class TestIngestionToNLPContract:
         """
         # This is a schema validation test
         expected_fields = ["job_id", "document_id", "content", "metadata"]
-        
+
         # Validate against Avro schema if available
         # For now, just document the expected format
         assert expected_fields  # Placeholder - actual validation in integration tests
@@ -91,9 +86,9 @@ class TestAdminToComplianceContract:
         # Both services should accept UUID format tenant IDs
         # This validates the shared contract
         import uuid
-        
+
         test_tenant_id = str(uuid.uuid4())
-        
+
         # Validate UUID format
         parsed = uuid.UUID(test_tenant_id)
         assert str(parsed) == test_tenant_id
@@ -121,17 +116,13 @@ class TestCrossServiceErrorHandling:
         """All services should return JSON errors for 404."""
         try:
             response = clients[service_name].get("/nonexistent-endpoint-12345")
-            
+
             if response.status_code == 404:
                 content_type = response.headers.get("content-type", "")
-                assert "application/json" in content_type, (
-                    f"{service_name} 404 should return JSON"
-                )
-                
+                assert "application/json" in content_type, f"{service_name} 404 should return JSON"
+
                 data = response.json()
-                assert "detail" in data, (
-                    f"{service_name} error response missing 'detail'"
-                )
+                assert "detail" in data, f"{service_name} error response missing 'detail'"
         except httpx.ConnectError:
             pytest.skip(f"{service_name} not running")
 
@@ -142,9 +133,9 @@ class TestCrossServiceErrorHandling:
             response = clients[service_name].post(
                 "/health",  # Using health as placeholder
                 content=b"not valid json",
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
-            
+
             # May return 405 (Method Not Allowed) or 400
             assert response.status_code in [400, 405, 422]
         except httpx.ConnectError:

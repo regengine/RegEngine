@@ -32,7 +32,6 @@ from services.shared.request_workflow import (
     RequestWorkflow,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -82,12 +81,20 @@ def _setup_workflow_with_case(case_dict):
 # 1. Workflow Stage Constants
 # ---------------------------------------------------------------------------
 
+
 class TestWorkflowConstants:
     def test_workflow_stages_order(self):
         expected = [
-            "intake", "scoping", "collecting", "gap_analysis",
-            "exception_triage", "assembling", "internal_review",
-            "ready", "submitted", "amended",
+            "intake",
+            "scoping",
+            "collecting",
+            "gap_analysis",
+            "exception_triage",
+            "assembling",
+            "internal_review",
+            "ready",
+            "submitted",
+            "amended",
         ]
         assert WORKFLOW_STAGES == expected
 
@@ -103,6 +110,7 @@ class TestWorkflowConstants:
 # ---------------------------------------------------------------------------
 # 2. Create Request Case — validation
 # ---------------------------------------------------------------------------
+
 
 class TestCreateRequestCase:
     def test_invalid_channel_raises(self):
@@ -128,6 +136,7 @@ class TestCreateRequestCase:
 # 3. State Transitions — update_scope
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateScope:
     def test_update_scope_from_intake_allowed(self):
         case = _mock_case_row(status="intake")
@@ -136,12 +145,14 @@ class TestUpdateScope:
         # Mock the DB execute to return a row
         mock_result = MagicMock()
         mock_result.mappings.return_value.fetchone.return_value = {
-            **case, "package_status": "scoping",
+            **case,
+            "package_status": "scoping",
         }
         db.execute.return_value = mock_result
 
         result = wf.update_scope(
-            TENANT, CASE_ID,
+            TENANT,
+            CASE_ID,
             affected_products=["PROD-B"],
         )
         assert result["package_status"] == "scoping"
@@ -151,7 +162,8 @@ class TestUpdateScope:
         wf, db = _setup_workflow_with_case(case)
         mock_result = MagicMock()
         mock_result.mappings.return_value.fetchone.return_value = {
-            **case, "package_status": "scoping",
+            **case,
+            "package_status": "scoping",
         }
         db.execute.return_value = mock_result
 
@@ -183,6 +195,7 @@ class TestUpdateScope:
 # ---------------------------------------------------------------------------
 # 4. State Transitions — collect_records
 # ---------------------------------------------------------------------------
+
 
 class TestCollectRecords:
     def test_collect_from_scoping_allowed(self):
@@ -219,6 +232,7 @@ class TestCollectRecords:
 # 5. Signoff Validation
 # ---------------------------------------------------------------------------
 
+
 class TestAddSignoff:
     def test_invalid_signoff_type_raises(self):
         case = _mock_case_row(status="assembling")
@@ -232,9 +246,7 @@ class TestAddSignoff:
         wf, db = _setup_workflow_with_case(case)
         db.execute.return_value = MagicMock()
 
-        result = wf.add_signoff(
-            TENANT, CASE_ID, "scope_approval", signed_by="qa_lead"
-        )
+        result = wf.add_signoff(TENANT, CASE_ID, "scope_approval", signed_by="qa_lead")
         assert result["signoff_type"] == "scope_approval"
         assert result["case_status"] == "exception_triage"
 
@@ -243,9 +255,7 @@ class TestAddSignoff:
         wf, db = _setup_workflow_with_case(case)
         db.execute.return_value = MagicMock()
 
-        result = wf.add_signoff(
-            TENANT, CASE_ID, "final_approval", signed_by="director"
-        )
+        result = wf.add_signoff(TENANT, CASE_ID, "final_approval", signed_by="director")
         assert result["case_status"] == "ready"
 
     def test_package_review_advances_to_internal_review(self):
@@ -253,9 +263,7 @@ class TestAddSignoff:
         wf, db = _setup_workflow_with_case(case)
         db.execute.return_value = MagicMock()
 
-        result = wf.add_signoff(
-            TENANT, CASE_ID, "package_review", signed_by="reviewer"
-        )
+        result = wf.add_signoff(TENANT, CASE_ID, "package_review", signed_by="reviewer")
         assert result["case_status"] == "internal_review"
 
     def test_signoff_returns_metadata(self):
@@ -264,8 +272,11 @@ class TestAddSignoff:
         db.execute.return_value = MagicMock()
 
         result = wf.add_signoff(
-            TENANT, CASE_ID, "scope_approval",
-            signed_by="qa_lead", notes="Looks good",
+            TENANT,
+            CASE_ID,
+            "scope_approval",
+            signed_by="qa_lead",
+            notes="Looks good",
         )
         assert "signoff_id" in result
         assert result["signed_by"] == "qa_lead"
@@ -276,9 +287,11 @@ class TestAddSignoff:
 # 6. check_blocking_defects logic
 # ---------------------------------------------------------------------------
 
+
 class TestCheckBlockingDefects:
-    def _setup_blocking_check(self, *, critical_fails=None, critical_exceptions=None,
-                               unevaluated=None, signoff_types=None):
+    def _setup_blocking_check(
+        self, *, critical_fails=None, critical_exceptions=None, unevaluated=None, signoff_types=None
+    ):
         """Wire up a workflow with mock DB responses for check_blocking_defects."""
         case = _mock_case_row(status="ready")
         wf, db = _setup_workflow_with_case(case)
@@ -307,9 +320,7 @@ class TestCheckBlockingDefects:
             elif idx == 3:
                 mock_result.mappings.return_value.fetchall.return_value = unevaluated or []
             elif idx == 4:
-                mock_result.fetchall.return_value = [
-                    (st,) for st in (signoff_types or [])
-                ]
+                mock_result.fetchall.return_value = [(st,) for st in (signoff_types or [])]
             elif idx == 5:
                 # identity review queue
                 mock_result.mappings.return_value.fetchall.return_value = []
@@ -343,14 +354,16 @@ class TestCheckBlockingDefects:
 
     def test_critical_rule_failure_blocks(self):
         wf = self._setup_blocking_check(
-            critical_fails=[{
-                "evaluation_id": "eval-1",
-                "event_id": "e1",
-                "rule_id": "r1",
-                "rule_title": "TLC Required",
-                "citation_reference": "21 CFR",
-                "why_failed": "Missing TLC",
-            }],
+            critical_fails=[
+                {
+                    "evaluation_id": "eval-1",
+                    "event_id": "e1",
+                    "rule_id": "r1",
+                    "rule_title": "TLC Required",
+                    "citation_reference": "21 CFR",
+                    "why_failed": "Missing TLC",
+                }
+            ],
             signoff_types=["scope_approval", "final_approval"],
         )
         result = wf.check_blocking_defects(TENANT, CASE_ID)
@@ -360,11 +373,13 @@ class TestCheckBlockingDefects:
 
     def test_unevaluated_event_blocks(self):
         wf = self._setup_blocking_check(
-            unevaluated=[{
-                "event_id": "e1",
-                "event_type": "receiving",
-                "traceability_lot_code": "TLC-001",
-            }],
+            unevaluated=[
+                {
+                    "event_id": "e1",
+                    "event_type": "receiving",
+                    "traceability_lot_code": "TLC-001",
+                }
+            ],
             signoff_types=["scope_approval", "final_approval"],
         )
         result = wf.check_blocking_defects(TENANT, CASE_ID)
@@ -377,6 +392,7 @@ class TestCheckBlockingDefects:
 # 7. check_deadline_status urgency classification
 # ---------------------------------------------------------------------------
 
+
 class TestCheckDeadlineStatus:
     def _setup_deadline_check(self, rows):
         db = _mock_db()
@@ -388,17 +404,19 @@ class TestCheckDeadlineStatus:
 
     @patch("services.shared.request_workflow.assembly.logger")
     def test_overdue_classification(self, _mock_logger):
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "collecting",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW - timedelta(hours=2),
-            "hours_remaining": -2.0,
-            "is_overdue": True,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "collecting",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW - timedelta(hours=2),
+                "hours_remaining": -2.0,
+                "is_overdue": True,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert len(cases) == 1
@@ -406,49 +424,55 @@ class TestCheckDeadlineStatus:
 
     @patch("services.shared.request_workflow.assembly.logger")
     def test_critical_classification(self, _mock_logger):
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "collecting",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW + timedelta(hours=1),
-            "hours_remaining": 1.0,
-            "is_overdue": False,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "collecting",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW + timedelta(hours=1),
+                "hours_remaining": 1.0,
+                "is_overdue": False,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "critical"
 
     def test_urgent_classification(self):
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "collecting",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW + timedelta(hours=4),
-            "hours_remaining": 4.0,
-            "is_overdue": False,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "collecting",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW + timedelta(hours=4),
+                "hours_remaining": 4.0,
+                "is_overdue": False,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "urgent"
 
     def test_normal_classification(self):
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "intake",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW + timedelta(hours=20),
-            "hours_remaining": 20.0,
-            "is_overdue": False,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "intake",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW + timedelta(hours=20),
+                "hours_remaining": 20.0,
+                "is_overdue": False,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "normal"
@@ -456,34 +480,38 @@ class TestCheckDeadlineStatus:
     @patch("services.shared.request_workflow.assembly.logger")
     def test_boundary_2_hours_is_critical(self, _mock_logger):
         """<2 hours = critical, so 1.99 hours should be critical."""
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "collecting",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW + timedelta(hours=1, minutes=59),
-            "hours_remaining": 1.99,
-            "is_overdue": False,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "collecting",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW + timedelta(hours=1, minutes=59),
+                "hours_remaining": 1.99,
+                "is_overdue": False,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "critical"
 
     def test_boundary_6_hours_is_normal(self):
         """>=6 hours = normal."""
-        rows = [{
-            "request_case_id": "c1",
-            "package_status": "collecting",
-            "requesting_party": "FDA",
-            "scope_description": "test",
-            "response_due_at": NOW + timedelta(hours=6),
-            "hours_remaining": 6.0,
-            "is_overdue": False,
-            "gap_count": 0,
-            "active_exception_count": 0,
-        }]
+        rows = [
+            {
+                "request_case_id": "c1",
+                "package_status": "collecting",
+                "requesting_party": "FDA",
+                "scope_description": "test",
+                "response_due_at": NOW + timedelta(hours=6),
+                "hours_remaining": 6.0,
+                "is_overdue": False,
+                "gap_count": 0,
+                "active_exception_count": 0,
+            }
+        ]
         wf = self._setup_deadline_check(rows)
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "normal"
@@ -492,6 +520,7 @@ class TestCheckDeadlineStatus:
 # ---------------------------------------------------------------------------
 # 8. Package Assembly — Hash Generation
 # ---------------------------------------------------------------------------
+
 
 class TestPackageHashGeneration:
     def test_sha256_of_sorted_json(self):
@@ -522,6 +551,7 @@ class TestPackageHashGeneration:
 # 9. Submit Package — validation
 # ---------------------------------------------------------------------------
 
+
 class TestSubmitPackage:
     def test_invalid_submission_type_raises(self):
         case = _mock_case_row(status="ready")
@@ -529,7 +559,9 @@ class TestSubmitPackage:
 
         with pytest.raises(ValueError, match="Invalid submission_type"):
             wf.submit_package(
-                TENANT, CASE_ID, "pkg-1",
+                TENANT,
+                CASE_ID,
+                "pkg-1",
                 submitted_by="user",
                 submission_type="magic",
             )
@@ -540,7 +572,9 @@ class TestSubmitPackage:
 
         with pytest.raises(ValueError, match="Invalid submission_method"):
             wf.submit_package(
-                TENANT, CASE_ID, "pkg-1",
+                TENANT,
+                CASE_ID,
+                "pkg-1",
                 submitted_by="user",
                 submission_method="carrier_pigeon",
             )
@@ -551,7 +585,9 @@ class TestSubmitPackage:
 
         with pytest.raises(ValueError, match="Cannot submit"):
             wf.submit_package(
-                TENANT, CASE_ID, "pkg-1",
+                TENANT,
+                CASE_ID,
+                "pkg-1",
                 submitted_by="user",
             )
 
@@ -561,7 +597,9 @@ class TestSubmitPackage:
 
         with pytest.raises(ValueError, match="Cannot submit"):
             wf.submit_package(
-                TENANT, CASE_ID, "pkg-1",
+                TENANT,
+                CASE_ID,
+                "pkg-1",
                 submitted_by="user",
             )
 
@@ -569,6 +607,7 @@ class TestSubmitPackage:
 # ---------------------------------------------------------------------------
 # 10. Amendment — state enforcement
 # ---------------------------------------------------------------------------
+
 
 class TestCreateAmendment:
     def test_amend_from_intake_rejected(self):

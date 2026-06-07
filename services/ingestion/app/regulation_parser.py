@@ -10,9 +10,10 @@ os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
 # Note: These imports require langchain, pypdf, docx2txt, and langchain-groq to be installed
 try:
     # Try modern namespace (0.1.0+)
-    from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader, BSHTMLLoader
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_community.document_loaders import BSHTMLLoader, Docx2txtLoader, PyPDFLoader, WebBaseLoader
     from langchain_core.prompts import PromptTemplate
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     try:
         from langchain_groq import ChatGroq
     except ImportError:
@@ -21,9 +22,10 @@ try:
 except ImportError:
     try:
         # Fallback to legacy namespace (<0.1.0)
-        from langchain.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader, BSHTMLLoader
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from langchain.document_loaders import BSHTMLLoader, Docx2txtLoader, PyPDFLoader, WebBaseLoader
         from langchain.prompts import PromptTemplate
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+
         try:
             from langchain_groq import ChatGroq
         except ImportError:
@@ -90,8 +92,8 @@ class RegulationParser:
                     )
                     # Use invoke instead of run
                     response = self.llm.invoke(prompt.format(text=text[:4000]))
-                    result = response.content if hasattr(response, 'content') else str(response)
-                    
+                    result = response.content if hasattr(response, "content") else str(response)
+
                     lines = result.split("\n")
                     current_category = None
                     for line in lines:
@@ -102,7 +104,7 @@ class RegulationParser:
                         elif "penalty" in line or "penalties" in line:
                             current_category = "penalties"
                             continue
-                        
+
                         if line.startswith(("-", "*", "•", "1.", "2.", "3.", "4.", "5.")):
                             item = line.lstrip("-*•12345. ").strip()
                             if item:

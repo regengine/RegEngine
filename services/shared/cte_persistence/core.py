@@ -58,8 +58,8 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.orm import Session
 
-from .models import StoreResult, ChainVerification, MerkleVerification, DuplicateEventError
-from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
+from .hashing import compute_chain_hash, compute_event_hash, compute_idempotency_key
+from .models import ChainVerification, DuplicateEventError, MerkleVerification, StoreResult
 
 # ---------------------------------------------------------------------------
 # Validation Status Constants (fix #1324)
@@ -149,13 +149,9 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
         try:
             dt = datetime.fromisoformat(candidate)
         except ValueError as exc:
-            raise ValueError(
-                f"{field} is not a valid ISO-8601 timestamp: {value!r}"
-            ) from exc
+            raise ValueError(f"{field} is not a valid ISO-8601 timestamp: {value!r}") from exc
     else:
-        raise ValueError(
-            f"{field} must be a string or datetime, got {type(value).__name__}"
-        )
+        raise ValueError(f"{field} must be a string or datetime, got {type(value).__name__}")
 
     if dt.tzinfo is None:
         raise ValueError(
@@ -168,8 +164,7 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
     now_utc = datetime.now(timezone.utc)
     if dt > now_utc + _FUTURE_SKEW_TOLERANCE:
         raise ValueError(
-            f"{field} is in the future beyond the allowed skew tolerance: "
-            f"{dt.isoformat()} (now={now_utc.isoformat()})"
+            f"{field} is in the future beyond the allowed skew tolerance: {dt.isoformat()} (now={now_utc.isoformat()})"
         )
     return dt
 
@@ -194,15 +189,17 @@ def _parse_timestamp(value: Any, *, field: str) -> datetime:
 # The cte_events schema does NOT currently accept 'growing', so this
 # module must not either — the two paths intentionally differ until
 # #1335 retires this module.
-_ALLOWED_CTE_TYPES = frozenset({
-    "harvesting",
-    "cooling",
-    "initial_packing",
-    "first_land_based_receiving",
-    "shipping",
-    "receiving",
-    "transformation",
-})
+_ALLOWED_CTE_TYPES = frozenset(
+    {
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        "transformation",
+    }
+)
 
 
 def _validate_event_type(value: Any) -> str:
@@ -224,8 +221,7 @@ def _validate_event_type(value: Any) -> str:
     """
     if not isinstance(value, str) or not value:
         raise ValueError(
-            f"event_type is required and must be a non-empty string, "
-            f"got {type(value).__name__}: {value!r}"
+            f"event_type is required and must be a non-empty string, got {type(value).__name__}: {value!r}"
         )
     if value not in _ALLOWED_CTE_TYPES:
         raise ValueError(
@@ -240,6 +236,7 @@ def _validate_event_type(value: Any) -> str:
 # ---------------------------------------------------------------------------
 # KDE Value Serialization (fix #1311)
 # ---------------------------------------------------------------------------
+
 
 def _jsonify_kde(value: Any) -> str:
     """Serialize a KDE value to JSON text suitable for ``::jsonb`` cast.
@@ -273,6 +270,7 @@ def _jsonify_kde(value: Any) -> str:
 # Append-only enforcement helpers (#1334)
 # ---------------------------------------------------------------------------
 
+
 def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
     """Raise DuplicateEventError if a CTE event with this sha256_hash already exists.
 
@@ -303,6 +301,7 @@ def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
 # ---------------------------------------------------------------------------
 # Persistence Layer
 # ---------------------------------------------------------------------------
+
 
 class CTEPersistence:
     """
@@ -346,6 +345,7 @@ class CTEPersistence:
         break every ``get_tenant_context()::UUID`` comparison in RLS.
         """
         from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+
         set_tenant_guc(self.session, tenant_id)
 
     # ------------------------------------------------------------------
@@ -442,9 +442,7 @@ class CTEPersistence:
         event_dt = _parse_timestamp(event_timestamp, field="event_timestamp")
         event_timestamp = event_dt.isoformat()
         if event_entry_timestamp is not None:
-            entry_dt = _parse_timestamp(
-                event_entry_timestamp, field="event_entry_timestamp"
-            )
+            entry_dt = _parse_timestamp(event_entry_timestamp, field="event_entry_timestamp")
             event_entry_timestamp = entry_dt.isoformat()
 
         # --- Determine validation status (fix #1324) ---
@@ -470,8 +468,13 @@ class CTEPersistence:
 
         # --- Idempotency check ---
         idempotency_key = compute_idempotency_key(
-            event_type, traceability_lot_code, event_timestamp, source, kdes,
-            location_gln=location_gln, location_name=location_name,
+            event_type,
+            traceability_lot_code,
+            event_timestamp,
+            source,
+            kdes,
+            location_gln=location_gln,
+            location_name=location_name,
         )
 
         existing = self.session.execute(
@@ -504,9 +507,16 @@ class CTEPersistence:
 
         # --- Compute hashes ---
         sha256_hash = compute_event_hash(
-            event_id, event_type, traceability_lot_code,
-            product_description, quantity, unit_of_measure,
-            location_gln, location_name, event_timestamp, kdes,
+            event_id,
+            event_type,
+            traceability_lot_code,
+            product_description,
+            quantity,
+            unit_of_measure,
+            location_gln,
+            location_name,
+            event_timestamp,
+            kdes,
         )
 
         # --- Append-only enforcement (#1334) ---
@@ -675,8 +685,12 @@ class CTEPersistence:
 
         # --- Insert alerts (non-fatal: savepoint so event still persists) ---
         _VALID_ALERT_TYPES = {
-            "missing_kde", "temperature_excursion", "deadline_approaching",
-            "supplier_non_compliant", "chain_break", "export_failure",
+            "missing_kde",
+            "temperature_excursion",
+            "deadline_approaching",
+            "supplier_non_compliant",
+            "chain_break",
+            "export_failure",
         }
         for alert in alerts:
             raw_type = alert.get("alert_type", "missing_kde")
@@ -705,9 +719,14 @@ class CTEPersistence:
                 )
             except Exception as exc:
                 nested.rollback()
-                logger.warning("alert_insert_failed", extra={
-                    "event_id": event_id, "alert_type": raw_type, "error": str(exc),
-                })
+                logger.warning(
+                    "alert_insert_failed",
+                    extra={
+                        "event_id": event_id,
+                        "alert_type": raw_type,
+                        "error": str(exc),
+                    },
+                )
 
         logger.info(
             "cte_event_persisted",
@@ -786,27 +805,28 @@ class CTEPersistence:
             evt = dict(evt)  # don't mutate caller input
             evt["event_type"] = _validate_event_type(evt.get("event_type"))
             # Parse + validate timestamps, normalize to UTC ISO-8601.
-            event_dt = _parse_timestamp(
-                evt.get("event_timestamp"), field="event_timestamp"
-            )
+            event_dt = _parse_timestamp(evt.get("event_timestamp"), field="event_timestamp")
             evt["event_timestamp"] = event_dt.isoformat()
             if evt.get("event_entry_timestamp") is not None:
-                entry_dt = _parse_timestamp(
-                    evt["event_entry_timestamp"], field="event_entry_timestamp"
-                )
+                entry_dt = _parse_timestamp(evt["event_entry_timestamp"], field="event_entry_timestamp")
                 evt["event_entry_timestamp"] = entry_dt.isoformat()
             idemp_key = compute_idempotency_key(
-                evt["event_type"], evt["traceability_lot_code"],
-                evt["event_timestamp"], source, kdes,
+                evt["event_type"],
+                evt["traceability_lot_code"],
+                evt["event_timestamp"],
+                source,
+                kdes,
                 location_gln=evt.get("location_gln"),
                 location_name=evt.get("location_name"),
             )
-            prepared.append({
-                "event_id": event_id,
-                "idemp_key": idemp_key,
-                "evt": evt,
-                "kdes": kdes,
-            })
+            prepared.append(
+                {
+                    "event_id": event_id,
+                    "idemp_key": idemp_key,
+                    "evt": evt,
+                    "kdes": kdes,
+                }
+            )
 
         # --- Step 2: Batch idempotency check ---
         all_keys = [p["idemp_key"] for p in prepared]
@@ -814,7 +834,7 @@ class CTEPersistence:
         # SQLAlchemy doesn't support WHERE IN with named params for lists easily,
         # so chunk into groups of 100
         for chunk_start in range(0, len(all_keys), 100):
-            chunk = all_keys[chunk_start:chunk_start + 100]
+            chunk = all_keys[chunk_start : chunk_start + 100]
             placeholders = ", ".join(f":k{i}" for i in range(len(chunk)))
             params = {f"k{i}": k for i, k in enumerate(chunk)}
             params["tid"] = tenant_id
@@ -855,10 +875,18 @@ class CTEPersistence:
             # Skip idempotent
             if p["idemp_key"] in existing_map:
                 eid, sha, ch = existing_map[p["idemp_key"]]
-                results.append(StoreResult(
-                    success=True, event_id=eid, sha256_hash=sha,
-                    chain_hash=ch, idempotent=True, errors=[], kde_completeness=1.0, alerts=[],
-                ))
+                results.append(
+                    StoreResult(
+                        success=True,
+                        event_id=eid,
+                        sha256_hash=sha,
+                        chain_hash=ch,
+                        idempotent=True,
+                        errors=[],
+                        kde_completeness=1.0,
+                        alerts=[],
+                    )
+                )
                 continue
 
             evt = p["evt"]
@@ -894,20 +922,21 @@ class CTEPersistence:
             try:
                 quantity = float(raw_qty)
             except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"quantity must be numeric, got {raw_qty!r}"
-                ) from exc
+                raise ValueError(f"quantity must be numeric, got {raw_qty!r}") from exc
             if quantity <= 0:
-                raise ValueError(
-                    f"quantity must be > 0, got {quantity} "
-                    f"(tlc={evt.get('traceability_lot_code')})"
-                )
+                raise ValueError(f"quantity must be > 0, got {quantity} (tlc={evt.get('traceability_lot_code')})")
 
             sha256_hash = compute_event_hash(
-                event_id, evt["event_type"], evt["traceability_lot_code"],
-                evt.get("product_description", ""), quantity,
-                evt.get("unit_of_measure", ""), evt.get("location_gln"),
-                evt.get("location_name"), evt["event_timestamp"], kdes,
+                event_id,
+                evt["event_type"],
+                evt["traceability_lot_code"],
+                evt.get("product_description", ""),
+                quantity,
+                evt.get("unit_of_measure", ""),
+                evt.get("location_gln"),
+                evt.get("location_name"),
+                evt["event_timestamp"],
+                kdes,
             )
 
             # --- Append-only enforcement (#1334) ---
@@ -915,63 +944,84 @@ class CTEPersistence:
 
             chain_hash = compute_chain_hash(sha256_hash, previous_chain_hash)
 
-            event_rows.append({
-                "id": event_id,
-                "tenant_id": tenant_id,
-                "event_type": evt["event_type"],
-                "tlc": evt["traceability_lot_code"],
-                "product_description": evt.get("product_description", ""),
-                "quantity": quantity,
-                "unit_of_measure": evt.get("unit_of_measure", ""),
-                "location_gln": evt.get("location_gln"),
-                "location_name": evt.get("location_name"),
-                "event_timestamp": evt["event_timestamp"],
-                "source": source,
-                "source_event_id": evt.get("source_event_id"),
-                "idempotency_key": p["idemp_key"],
-                "sha256_hash": sha256_hash,
-                "chain_hash": chain_hash,
-                "epcis_event_type": evt.get("epcis_event_type"),
-                "epcis_action": evt.get("epcis_action"),
-                "epcis_biz_step": evt.get("epcis_biz_step"),
-                "validation_status": validation_status,
-            })
+            event_rows.append(
+                {
+                    "id": event_id,
+                    "tenant_id": tenant_id,
+                    "event_type": evt["event_type"],
+                    "tlc": evt["traceability_lot_code"],
+                    "product_description": evt.get("product_description", ""),
+                    "quantity": quantity,
+                    "unit_of_measure": evt.get("unit_of_measure", ""),
+                    "location_gln": evt.get("location_gln"),
+                    "location_name": evt.get("location_name"),
+                    "event_timestamp": evt["event_timestamp"],
+                    "source": source,
+                    "source_event_id": evt.get("source_event_id"),
+                    "idempotency_key": p["idemp_key"],
+                    "sha256_hash": sha256_hash,
+                    "chain_hash": chain_hash,
+                    "epcis_event_type": evt.get("epcis_event_type"),
+                    "epcis_action": evt.get("epcis_action"),
+                    "epcis_biz_step": evt.get("epcis_biz_step"),
+                    "validation_status": validation_status,
+                }
+            )
 
             if validation_status != VALIDATION_STATUS_REJECTED:
                 for kde_key, kde_value in kdes.items():
                     if kde_value is not None:
-                        kde_rows.append({
-                            "tenant_id": tenant_id,
-                            "cte_event_id": event_id,
-                            "kde_key": kde_key,
-                            # fix #1311 — JSON text, cast to jsonb in the batch INSERT
-                            "kde_value": _jsonify_kde(kde_value),
-                            "is_required": False,
-                        })
+                        kde_rows.append(
+                            {
+                                "tenant_id": tenant_id,
+                                "cte_event_id": event_id,
+                                "kde_key": kde_key,
+                                # fix #1311 — JSON text, cast to jsonb in the batch INSERT
+                                "kde_value": _jsonify_kde(kde_value),
+                                "is_required": False,
+                            }
+                        )
 
-                chain_rows.append({
-                    "tenant_id": tenant_id,
-                    "cte_event_id": event_id,
-                    "sequence_num": next_sequence,
-                    "event_hash": sha256_hash,
-                    "previous_chain_hash": previous_chain_hash,
-                    "chain_hash": chain_hash,
-                })
+                chain_rows.append(
+                    {
+                        "tenant_id": tenant_id,
+                        "cte_event_id": event_id,
+                        "sequence_num": next_sequence,
+                        "event_hash": sha256_hash,
+                        "previous_chain_hash": previous_chain_hash,
+                        "chain_hash": chain_hash,
+                    }
+                )
 
-                results.append(StoreResult(
-                    success=True, event_id=event_id, sha256_hash=sha256_hash,
-                    chain_hash=chain_hash, idempotent=False, errors=[], kde_completeness=1.0, alerts=alerts,
-                ))
+                results.append(
+                    StoreResult(
+                        success=True,
+                        event_id=event_id,
+                        sha256_hash=sha256_hash,
+                        chain_hash=chain_hash,
+                        idempotent=False,
+                        errors=[],
+                        kde_completeness=1.0,
+                        alerts=alerts,
+                    )
+                )
 
                 # Advance chain state only for accepted events.
                 previous_chain_hash = chain_hash
                 next_sequence += 1
             else:
-                results.append(StoreResult(
-                    success=False, event_id=event_id, sha256_hash=sha256_hash,
-                    chain_hash=chain_hash, idempotent=False, errors=rejection_reasons,
-                    kde_completeness=1.0, alerts=alerts,
-                ))
+                results.append(
+                    StoreResult(
+                        success=False,
+                        event_id=event_id,
+                        sha256_hash=sha256_hash,
+                        chain_hash=chain_hash,
+                        idempotent=False,
+                        errors=rejection_reasons,
+                        kde_completeness=1.0,
+                        alerts=alerts,
+                    )
+                )
 
         # --- Step 5: Batch INSERT (with lost-race reconciliation — #1248) ---
         # ON CONFLICT DO NOTHING silently discards rows whose idempotency
@@ -985,7 +1035,7 @@ class CTEPersistence:
         if event_rows:
             # Chunk inserts to avoid parameter limits (Postgres max ~32K params)
             for chunk_start in range(0, len(event_rows), 50):
-                chunk = event_rows[chunk_start:chunk_start + 50]
+                chunk = event_rows[chunk_start : chunk_start + 50]
                 values_clauses = []
                 params: Dict[str, Any] = {}
                 for i, row in enumerate(chunk):
@@ -994,19 +1044,30 @@ class CTEPersistence:
                         f":gln_{i}, :ln_{i}, :ts_{i}, :eets_{i}, :src_{i}, :seid_{i}, :ik_{i}, "
                         f":sha_{i}, :ch_{i}, :eet_{i}, :ea_{i}, :ebs_{i}, :vs_{i})"
                     )
-                    params.update({
-                        f"id_{i}": row["id"], f"tid_{i}": row["tenant_id"],
-                        f"et_{i}": row["event_type"], f"tlc_{i}": row["tlc"],
-                        f"pd_{i}": row["product_description"], f"qty_{i}": row["quantity"],
-                        f"uom_{i}": row["unit_of_measure"], f"gln_{i}": row["location_gln"],
-                        f"ln_{i}": row["location_name"], f"ts_{i}": row["event_timestamp"],
-                        f"eets_{i}": row.get("event_entry_timestamp", datetime.now(timezone.utc).isoformat()),
-                        f"src_{i}": row["source"], f"seid_{i}": row["source_event_id"],
-                        f"ik_{i}": row["idempotency_key"], f"sha_{i}": row["sha256_hash"],
-                        f"ch_{i}": row["chain_hash"], f"eet_{i}": row["epcis_event_type"],
-                        f"ea_{i}": row["epcis_action"], f"ebs_{i}": row["epcis_biz_step"],
-                        f"vs_{i}": row["validation_status"],
-                    })
+                    params.update(
+                        {
+                            f"id_{i}": row["id"],
+                            f"tid_{i}": row["tenant_id"],
+                            f"et_{i}": row["event_type"],
+                            f"tlc_{i}": row["tlc"],
+                            f"pd_{i}": row["product_description"],
+                            f"qty_{i}": row["quantity"],
+                            f"uom_{i}": row["unit_of_measure"],
+                            f"gln_{i}": row["location_gln"],
+                            f"ln_{i}": row["location_name"],
+                            f"ts_{i}": row["event_timestamp"],
+                            f"eets_{i}": row.get("event_entry_timestamp", datetime.now(timezone.utc).isoformat()),
+                            f"src_{i}": row["source"],
+                            f"seid_{i}": row["source_event_id"],
+                            f"ik_{i}": row["idempotency_key"],
+                            f"sha_{i}": row["sha256_hash"],
+                            f"ch_{i}": row["chain_hash"],
+                            f"eet_{i}": row["epcis_event_type"],
+                            f"ea_{i}": row["epcis_action"],
+                            f"ebs_{i}": row["epcis_biz_step"],
+                            f"vs_{i}": row["validation_status"],
+                        }
+                    )
                 sql = f"""
                     INSERT INTO fsma.cte_events (
                         id, tenant_id, event_type, traceability_lot_code,
@@ -1017,7 +1078,7 @@ class CTEPersistence:
                         sha256_hash, chain_hash,
                         epcis_event_type, epcis_action, epcis_biz_step,
                         validation_status
-                    ) VALUES {', '.join(values_clauses)}
+                    ) VALUES {", ".join(values_clauses)}
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                     RETURNING id
                 """
@@ -1030,11 +1091,7 @@ class CTEPersistence:
             # concurrent writer won; re-select the winner by idempotency
             # key and rewrite our StoreResult so the caller sees the
             # authoritative event_id / sha256 / chain.
-            lost_idemp_keys = [
-                row["idempotency_key"]
-                for row in event_rows
-                if str(row["id"]) not in inserted_ids
-            ]
+            lost_idemp_keys = [row["idempotency_key"] for row in event_rows if str(row["id"]) not in inserted_ids]
             if lost_idemp_keys:
                 # Map idempotency_key → position in ``results`` so we can
                 # patch the entry the caller is going to see.
@@ -1043,13 +1100,9 @@ class CTEPersistence:
                     key_to_result_idx[p["idemp_key"]] = idx
                 winners: Dict[str, Tuple[str, str, str]] = {}
                 for chunk_start in range(0, len(lost_idemp_keys), 100):
-                    chunk_keys = lost_idemp_keys[chunk_start:chunk_start + 100]
-                    placeholders = ", ".join(
-                        f":lk{i}" for i in range(len(chunk_keys))
-                    )
-                    lr_params: Dict[str, Any] = {
-                        f"lk{i}": k for i, k in enumerate(chunk_keys)
-                    }
+                    chunk_keys = lost_idemp_keys[chunk_start : chunk_start + 100]
+                    placeholders = ", ".join(f":lk{i}" for i in range(len(chunk_keys)))
+                    lr_params: Dict[str, Any] = {f"lk{i}": k for i, k in enumerate(chunk_keys)}
                     lr_params["tid"] = tenant_id
                     rows = self.session.execute(
                         text(f"""
@@ -1086,23 +1139,25 @@ class CTEPersistence:
 
         if kde_rows:
             for chunk_start in range(0, len(kde_rows), 200):
-                chunk = kde_rows[chunk_start:chunk_start + 200]
+                chunk = kde_rows[chunk_start : chunk_start + 200]
                 values_clauses = []
                 params = {}
                 for i, row in enumerate(chunk):
                     # fix #1311: cast kde_value param to jsonb in the VALUES tuple
-                    values_clauses.append(
-                        f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})"
+                    values_clauses.append(f"(:tid_{i}, :eid_{i}, :kk_{i}, CAST(:kv_{i} AS jsonb), :ir_{i})")
+                    params.update(
+                        {
+                            f"tid_{i}": row["tenant_id"],
+                            f"eid_{i}": row["cte_event_id"],
+                            f"kk_{i}": row["kde_key"],
+                            f"kv_{i}": row["kde_value"],
+                            f"ir_{i}": row["is_required"],
+                        }
                     )
-                    params.update({
-                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
-                        f"kk_{i}": row["kde_key"], f"kv_{i}": row["kde_value"],
-                        f"ir_{i}": row["is_required"],
-                    })
                 sql = f"""
                     INSERT INTO fsma.cte_kdes (
                         tenant_id, cte_event_id, kde_key, kde_value, is_required
-                    ) VALUES {', '.join(values_clauses)}
+                    ) VALUES {", ".join(values_clauses)}
                     ON CONFLICT (cte_event_id, kde_key) DO NOTHING
                 """
                 self.session.execute(text(sql), params)
@@ -1302,7 +1357,9 @@ class CTEPersistence:
         # Resolve the full set of TLCs to query
         if follow_transformations:
             tlc_set = self._expand_tlcs_via_transformation_links(
-                tenant_id, tlc, depth=max_depth,
+                tenant_id,
+                tlc,
+                depth=max_depth,
             )
         else:
             tlc_set = [tlc]
@@ -1367,9 +1424,7 @@ class CTEPersistence:
                 "kdes": {},
                 # Trace relationship metadata (used in FDA export CSV)
                 "trace_seed_tlc": seed_tlc,
-                "trace_relationship": (
-                    "queried" if row_tlc == seed_tlc else "linked_via_transformation"
-                ),
+                "trace_relationship": ("queried" if row_tlc == seed_tlc else "linked_via_transformation"),
             }
             events.append(event)
 
@@ -1378,7 +1433,7 @@ class CTEPersistence:
             event_ids = [e["id"] for e in events]
             kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
             for chunk_start in range(0, len(event_ids), 100):
-                chunk = event_ids[chunk_start:chunk_start + 100]
+                chunk = event_ids[chunk_start : chunk_start + 100]
                 placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
                 kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
                 kde_params["tid"] = tenant_id
@@ -1466,8 +1521,7 @@ class CTEPersistence:
             "       product_description, quantity, unit_of_measure,"
             "       event_timestamp, validation_status, sha256_hash"
             " FROM fsma.cte_events"
-            " WHERE " + where +
-            " ORDER BY event_timestamp DESC"
+            " WHERE " + where + " ORDER BY event_timestamp DESC"
             " LIMIT :lim OFFSET :off"
         )
         rows = self.session.execute(
@@ -1586,8 +1640,7 @@ class CTEPersistence:
                     cte_events_count=0,
                 )
             errors = [
-                f"Empty chain but {cte_events_count} non-rejected events "
-                f"exist ({len(missing_ids)} missing chain rows)"
+                f"Empty chain but {cte_events_count} non-rejected events exist ({len(missing_ids)} missing chain rows)"
             ]
             return ChainVerification(
                 valid=False,
@@ -1609,16 +1662,12 @@ class CTEPersistence:
             # Check sequence continuity
             expected_seq = i + 1
             if seq != expected_seq:
-                errors.append(
-                    f"Sequence gap: expected {expected_seq}, got {seq}"
-                )
+                errors.append(f"Sequence gap: expected {expected_seq}, got {seq}")
 
             # Check previous_chain_hash linkage
             if i == 0:
                 if stored_prev is not None:
-                    errors.append(
-                        f"Genesis entry (seq={seq}) has non-null previous_chain_hash"
-                    )
+                    errors.append(f"Genesis entry (seq={seq}) has non-null previous_chain_hash")
                 expected_prev = None
             else:
                 expected_prev = rows[i - 1][3]  # chain_hash of previous row
@@ -1644,8 +1693,7 @@ class CTEPersistence:
             if matched_event_id is None:
                 orphan_chain_rows.append(int(seq))
                 errors.append(
-                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} "
-                    f"has no matching fsma.cte_events row"
+                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} has no matching fsma.cte_events row"
                 )
 
         # #1314: cross-check the row counts. chain rows should equal
@@ -1664,11 +1712,7 @@ class CTEPersistence:
                 )
 
         return ChainVerification(
-            valid=(
-                len(errors) == 0
-                and not orphan_chain_rows
-                and not missing_chain_rows
-            ),
+            valid=(len(errors) == 0 and not orphan_chain_rows and not missing_chain_rows),
             chain_length=len(rows),
             errors=errors,
             checked_at=checked_at,
@@ -1763,14 +1807,10 @@ class CTEPersistence:
             try:
                 proof = tree.generate_proof(i)
                 if not MerkleTree.verify_proof(event_hash, proof, merkle_root):
-                    errors.append(
-                        f"Merkle proof verification failed for event at index {i}"
-                    )
+                    errors.append(f"Merkle proof verification failed for event at index {i}")
             except Exception as e:
                 logger.warning(f"Merkle proof generation failed at index {i}", exc_info=True)
-                errors.append(
-                    f"Merkle proof generation failed at index {i}: {e}"
-                )
+                errors.append(f"Merkle proof generation failed at index {i}: {e}")
 
         return MerkleVerification(
             valid=len(errors) == 0,
@@ -1782,7 +1822,9 @@ class CTEPersistence:
         )
 
     def get_merkle_proof(
-        self, tenant_id: str, event_id: str,
+        self,
+        tenant_id: str,
+        event_id: str,
     ) -> Optional[Dict[str, Any]]:
         """
         Generate a Merkle inclusion proof for a specific event.
@@ -1986,8 +2028,7 @@ class CTEPersistence:
             # disappeared between statements. Fall through to a second
             # attempt rather than lying about success.
             raise RuntimeError(
-                "log_export: ON CONFLICT fired but no matching row found "
-                "for (tenant_id, export_fingerprint)"
+                "log_export: ON CONFLICT fired but no matching row found for (tenant_id, export_fingerprint)"
             )
         return str(existing[0])
 
@@ -2027,27 +2068,29 @@ class CTEPersistence:
 
         events = []
         for row in rows:
-            events.append({
-                "id": str(row[0]),
-                "event_type": row[1],
-                "traceability_lot_code": row[2],
-                "product_description": row[3],
-                "quantity": row[4],
-                "unit_of_measure": row[5],
-                "location_gln": row[6],
-                "location_name": row[7],
-                "event_timestamp": row[8].isoformat() if row[8] else None,
-                "source": row[9],
-                "sequence_num": row[10],
-                "kdes": {},
-            })
+            events.append(
+                {
+                    "id": str(row[0]),
+                    "event_type": row[1],
+                    "traceability_lot_code": row[2],
+                    "product_description": row[3],
+                    "quantity": row[4],
+                    "unit_of_measure": row[5],
+                    "location_gln": row[6],
+                    "location_name": row[7],
+                    "event_timestamp": row[8].isoformat() if row[8] else None,
+                    "source": row[9],
+                    "sequence_num": row[10],
+                    "kdes": {},
+                }
+            )
 
         # Bulk-fetch KDEs for all events in one query (avoids N+1)
         if events:
             event_ids = [e["id"] for e in events]
             kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
             for chunk_start in range(0, len(event_ids), 100):
-                chunk = event_ids[chunk_start:chunk_start + 100]
+                chunk = event_ids[chunk_start : chunk_start + 100]
                 placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
                 kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
                 kde_params["tid"] = tenant_id

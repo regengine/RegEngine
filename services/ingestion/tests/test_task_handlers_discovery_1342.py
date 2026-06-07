@@ -84,7 +84,6 @@ from app.task_handlers_discovery import (  # noqa: E402
     register_discovery_handlers,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -174,7 +173,8 @@ class TestRegisterDiscoveryHandlers:
     def test_registers_single_discovery_scrape_task(self, monkeypatch):
         captured: list[tuple[str, Any]] = []
         monkeypatch.setattr(
-            thd, "register_task_handler",
+            thd,
+            "register_task_handler",
             lambda t, h: captured.append((t, h)),
         )
         register_discovery_handlers()
@@ -186,7 +186,8 @@ class TestRegisterDiscoveryHandlers:
         # on identity for hot-reload and de-registration.
         captured: list[Any] = []
         monkeypatch.setattr(
-            thd, "register_task_handler",
+            thd,
+            "register_task_handler",
             lambda t, h: captured.append(h),
         )
         register_discovery_handlers()

@@ -34,7 +34,6 @@ sys.path.insert(0, str(service_dir))
 
 from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: E402
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -54,31 +53,41 @@ def _make_row_with_payload():
     25: sha256_hash, 26: chain_hash, 27: created_at, 28: amended_at
     """
     from datetime import datetime, timezone
+
     return [
-        "event-abc",                                          # 0
-        "tenant-xyz",                                         # 1
-        "manual",                                             # 2
-        "rec-1",                                              # 3
-        "shipping",                                           # 4
-        datetime.now(timezone.utc),                           # 5
-        "UTC",                                                # 6
-        "prod-1", "lot-1", "TLC-1",                           # 7,8,9
-        10.0, "LB",                                           # 10,11
-        "ent-a", "ent-b", "fac-a", "fac-b",                   # 12,13,14,15
-        None,                                                 # 16
-        {"required_kde_1": "value"},                          # 17 kdes
-        {"sensitive_grower_name": "Jane Grower",              # 18 raw_payload (PII!)
-         "phone": "555-867-5309",
-         "address": "123 Farm Rd"},
-        {"normalized": "value"},                              # 19 normalized
-        {"provenance": "v1"},                                 # 20 provenance
-        0.99,                                                 # 21 confidence
-        "active",                                             # 22 status
-        None,                                                 # 23
-        1,                                                    # 24 schema_version
-        "sha1", "chain1",                                     # 25,26
-        datetime.now(timezone.utc),                           # 27 created_at
-        None,                                                 # 28 amended_at
+        "event-abc",  # 0
+        "tenant-xyz",  # 1
+        "manual",  # 2
+        "rec-1",  # 3
+        "shipping",  # 4
+        datetime.now(timezone.utc),  # 5
+        "UTC",  # 6
+        "prod-1",
+        "lot-1",
+        "TLC-1",  # 7,8,9
+        10.0,
+        "LB",  # 10,11
+        "ent-a",
+        "ent-b",
+        "fac-a",
+        "fac-b",  # 12,13,14,15
+        None,  # 16
+        {"required_kde_1": "value"},  # 17 kdes
+        {
+            "sensitive_grower_name": "Jane Grower",  # 18 raw_payload (PII!)
+            "phone": "555-867-5309",
+            "address": "123 Farm Rd",
+        },
+        {"normalized": "value"},  # 19 normalized
+        {"provenance": "v1"},  # 20 provenance
+        0.99,  # 21 confidence
+        "active",  # 22 status
+        None,  # 23
+        1,  # 24 schema_version
+        "sha1",
+        "chain1",  # 25,26
+        datetime.now(timezone.utc),  # 27 created_at
+        None,  # 28 amended_at
     ]
 
 
@@ -101,8 +110,7 @@ def test_default_get_event_omits_raw_payload():
     event = store.get_event("tenant-xyz", "event-abc")
     assert event is not None
     assert "raw_payload" not in event, (
-        "#1297: get_event must NOT return raw_payload by default — "
-        "this is a PII/GDPR vector."
+        "#1297: get_event must NOT return raw_payload by default — this is a PII/GDPR vector."
     )
 
 
@@ -121,9 +129,7 @@ def test_include_raw_payload_true_returns_payload():
     """Legitimate consumers (auditor, record-detail) opt in and get
     the original supplier record."""
     store = _store_with_fake_row(_make_row_with_payload())
-    event = store.get_event(
-        "tenant-xyz", "event-abc", include_raw_payload=True
-    )
+    event = store.get_event("tenant-xyz", "event-abc", include_raw_payload=True)
     assert event is not None
     assert "raw_payload" in event
     assert event["raw_payload"]["sensitive_grower_name"] == "Jane Grower"
@@ -137,12 +143,8 @@ def test_include_raw_payload_is_keyword_only():
     re-enabling raw_payload in a new callsite."""
     sig = inspect.signature(CanonicalEventStore.get_event)
     param = sig.parameters.get("include_raw_payload")
-    assert param is not None, (
-        "#1297: get_event must accept include_raw_payload parameter"
-    )
-    assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        "#1297: include_raw_payload must be keyword-only"
-    )
+    assert param is not None, "#1297: get_event must accept include_raw_payload parameter"
+    assert param.kind == inspect.Parameter.KEYWORD_ONLY, "#1297: include_raw_payload must be keyword-only"
     # And its default must be False (the safer default)
     assert param.default is False
 
@@ -164,8 +166,15 @@ def test_non_raw_payload_fields_unaffected():
     event = store.get_event("tenant-xyz", "event-abc")
     assert event is not None
     # These must still be present
-    for key in ["kdes", "normalized_payload", "provenance_metadata",
-                "event_id", "tenant_id", "sha256_hash", "chain_hash"]:
+    for key in [
+        "kdes",
+        "normalized_payload",
+        "provenance_metadata",
+        "event_id",
+        "tenant_id",
+        "sha256_hash",
+        "chain_hash",
+    ]:
         assert key in event, f"#1297: regression dropped {key}"
 
 

@@ -164,9 +164,7 @@ class TestDriftDetector:
         alerts = detector.get_alerts(severity=AlertSeverity.INFO)
         assert len(alerts) >= 1
 
-        new_supplier_alerts = [
-            a for a in alerts if a.alert_type == AlertType.NEW_SUPPLIER_DETECTED
-        ]
+        new_supplier_alerts = [a for a in alerts if a.alert_type == AlertType.NEW_SUPPLIER_DETECTED]
         assert len(new_supplier_alerts) == 1
         assert new_supplier_alerts[0].supplier_gln == "NEW-SUPPLIER-001"
 
@@ -254,9 +252,7 @@ class TestDriftDetector:
         result = detector.analyze_drift()
 
         # Should not have completeness alerts (may have new supplier alerts)
-        completeness_alerts = [
-            a for a in result.alerts if a.alert_type == AlertType.KDE_COMPLETENESS_DROP
-        ]
+        completeness_alerts = [a for a in result.alerts if a.alert_type == AlertType.KDE_COMPLETENESS_DROP]
         assert len(completeness_alerts) == 0
 
     def test_supplier_specific_analysis(self):
@@ -267,18 +263,14 @@ class TestDriftDetector:
         for i in range(5):
             detector._supplier_snapshots["SUPPLIER-A"].append(
                 KDESnapshot(
-                    timestamp=(
-                        datetime.now(timezone.utc) - timedelta(days=3, hours=i)
-                    ).isoformat(),
+                    timestamp=(datetime.now(timezone.utc) - timedelta(days=3, hours=i)).isoformat(),
                     supplier_gln="SUPPLIER-A",
                     completeness_rate=0.95,
                 )
             )
             detector._supplier_snapshots["SUPPLIER-A"].append(
                 KDESnapshot(
-                    timestamp=(
-                        datetime.now(timezone.utc) - timedelta(hours=i)
-                    ).isoformat(),
+                    timestamp=(datetime.now(timezone.utc) - timedelta(hours=i)).isoformat(),
                     supplier_gln="SUPPLIER-A",
                     completeness_rate=0.94,
                 )
@@ -291,8 +283,7 @@ class TestDriftDetector:
         completeness_alerts = [
             a
             for a in result.alerts
-            if a.alert_type
-            in (AlertType.KDE_COMPLETENESS_DROP, AlertType.SUPPLIER_FORMAT_CHANGE)
+            if a.alert_type in (AlertType.KDE_COMPLETENESS_DROP, AlertType.SUPPLIER_FORMAT_CHANGE)
         ]
         assert len(completeness_alerts) == 0
 
@@ -570,9 +561,5 @@ class TestDriftIntegration:
         assert len(health) == 3
 
         # All should have new supplier alerts
-        new_supplier_alerts = [
-            a
-            for a in detector.get_alerts()
-            if a.alert_type == AlertType.NEW_SUPPLIER_DETECTED
-        ]
+        new_supplier_alerts = [a for a in detector.get_alerts() if a.alert_type == AlertType.NEW_SUPPLIER_DETECTED]
         assert len(new_supplier_alerts) == 3

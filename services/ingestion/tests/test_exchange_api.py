@@ -12,9 +12,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.authz as authz
 import app.exchange_api as exchange_api
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.exchange_api import _exchange_store, router as exchange_router
 
 

@@ -39,13 +39,13 @@ for _name in list(sys.modules):
         sys.modules.pop(_name, None)
 
 from shared.paths import ensure_shared_importable  # noqa: E402
+
 ensure_shared_importable()
 
-import pytest  # noqa: E402
-import httpx  # noqa: E402
-
-from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
 import app.notifications as notifications_mod  # noqa: E402
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from app.models import EnforcementItem, EnforcementSeverity, SourceType  # noqa: E402
 
 OutboxEntry = notifications_mod.OutboxEntry
 WebhookNotifier = notifications_mod.WebhookNotifier
@@ -381,9 +381,7 @@ class TestPersistentOutbox_Issue1150:
             next_retry_at=time.time() - 1,
         )
         outbox.write_text(
-            json.dumps(good.to_dict()) + "\n"
-            "{not valid json\n"
-            "\n"  # empty line
+            json.dumps(good.to_dict()) + "\n{not valid json\n\n"  # empty line
         )
 
         n = WebhookNotifier(
@@ -411,9 +409,7 @@ class TestPersistentOutbox_Issue1150:
             )
             for i in range(3)
         ]
-        outbox.write_text(
-            "\n".join(json.dumps(e.to_dict()) for e in entries) + "\n"
-        )
+        outbox.write_text("\n".join(json.dumps(e.to_dict()) for e in entries) + "\n")
 
         n = WebhookNotifier(
             urls=["https://hook.example.com"],
@@ -429,9 +425,7 @@ class TestPersistentOutbox_Issue1150:
         assert not (tmp_path / "outbox.jsonl.tmp").exists()
         reparsed = [json.loads(line) for line in outbox.read_text().splitlines()]
         assert len(reparsed) == 3
-        assert {e["url"] for e in reparsed} == {
-            f"https://hook{i}.example.com" for i in range(3)
-        }
+        assert {e["url"] for e in reparsed} == {f"https://hook{i}.example.com" for i in range(3)}
 
 
 # ── Per-URL failure-streak observability ─────────────────────────────────────
@@ -477,11 +471,13 @@ class TestFailureStreak_Issue1150:
             max_retries=1,
             max_workers=2,
         )
+
         # hook1 fails, hook2 succeeds — streak only on hook1.
         def route(url, **kw):
             if "hook1" in url:
                 return _make_response(500)
             return _make_response(200)
+
         with patch.object(n.session, "post", side_effect=lambda url, **kw: route(url, **kw)):
             n.notify([_make_item()])
         streaks = n.get_failure_streaks()

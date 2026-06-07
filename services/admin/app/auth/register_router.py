@@ -4,10 +4,12 @@ Exposes:
   router                 — APIRouter with /register registered
   register_initial_admin — handler (re-exported from auth_routes for compat)
 """
+
 from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
+from shared.rate_limit import limiter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,10 +17,9 @@ from ..audit import AuditLogger
 from ..auth_utils import get_password_hash
 from ..database import get_session
 from ..models import RegisterAdminResponse
-from ..password_policy import validate_password, PasswordPolicyError
+from ..password_policy import PasswordPolicyError, validate_password
 from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 from .schemas import RegisterRequest
-from shared.rate_limit import limiter
 
 router = APIRouter()
 logger = structlog.get_logger("auth")

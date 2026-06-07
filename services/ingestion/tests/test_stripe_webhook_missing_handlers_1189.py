@@ -43,9 +43,10 @@ import structlog
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
-from app.stripe_billing import state as state_mod  # noqa: E402
-from app.stripe_billing import webhooks as webhooks_mod  # noqa: E402
-
+from app.stripe_billing import (
+    state as state_mod,  # noqa: E402
+    webhooks as webhooks_mod,  # noqa: E402
+)
 
 # ── Fake Redis that models enough for these handlers ───────────────────────
 
@@ -147,8 +148,7 @@ class TestTrialWillEnd_Issue1189:
             f"trial_end must be ISO8601 formatted, got: {mapping.get('trial_end')!r}"
         )
         assert mapping["trial_will_end_notified_at"], (
-            "trial_will_end_notified_at must be set so repeat notifications "
-            "can be suppressed downstream"
+            "trial_will_end_notified_at must be set so repeat notifications can be suppressed downstream"
         )
 
     def test_keeps_existing_plan_id_and_billing_period(self, fake_redis) -> None:
@@ -169,7 +169,8 @@ class TestTrialWillEnd_Issue1189:
         assert mapping["billing_period"] == "monthly"
 
     def test_warn_log_emitted_for_operator_visibility(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """The trial-notice must emit WARN so the 3-day countdown lands
         in operator dashboards and alerting. A silent INFO would hide
@@ -185,14 +186,9 @@ class TestTrialWillEnd_Issue1189:
                 }
             )
         warn_entries = [
-            e for e in log_entries
-            if e.get("log_level") == "warning"
-            and e.get("event") == "stripe_trial_will_end"
+            e for e in log_entries if e.get("log_level") == "warning" and e.get("event") == "stripe_trial_will_end"
         ]
-        assert len(warn_entries) == 1, (
-            f"Expected exactly one WARN stripe_trial_will_end log, "
-            f"got {len(warn_entries)}"
-        )
+        assert len(warn_entries) == 1, f"Expected exactly one WARN stripe_trial_will_end log, got {len(warn_entries)}"
 
     def test_unknown_tenant_does_not_crash(self, fake_redis) -> None:
         """If the subscription/customer cannot be mapped to a tenant
@@ -208,18 +204,19 @@ class TestTrialWillEnd_Issue1189:
                 }
             )
         # Must have logged the miss.
-        assert any(
-            e.get("event") == "stripe_trial_will_end_tenant_not_found"
-            for e in log_entries
-        ), "Missing-tenant branch must log for operator visibility"
+        assert any(e.get("event") == "stripe_trial_will_end_tenant_not_found" for e in log_entries), (
+            "Missing-tenant branch must log for operator visibility"
+        )
 
     def test_dispatcher_routes_trial_will_end_to_handler(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """End-to-end: the top-level ``_handle_stripe_event`` dispatcher
         must route ``customer.subscription.trial_will_end`` to our new
         handler (not fall through to stripe_webhook_ignored)."""
         import asyncio
+
         _prebind_tenant(fake_redis)
         event = {
             "id": "evt_trial_1",
@@ -274,12 +271,12 @@ class TestDisputeCreated_Issue1189:
         assert mapping["last_dispute_reason"] == "fraudulent"
         assert mapping["last_dispute_status"] == "warning_needs_response"
         assert mapping["last_dispute_opened_at"].startswith("2024-04-05"), (
-            f"dispute opened_at must be ISO8601 from 'created' epoch, "
-            f"got {mapping.get('last_dispute_opened_at')!r}"
+            f"dispute opened_at must be ISO8601 from 'created' epoch, got {mapping.get('last_dispute_opened_at')!r}"
         )
 
     def test_amount_cents_is_integer_string_not_float(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """Amount must be stored as a cents-integer string, never a
         float/dollars conversion. A regression that divides by 100
@@ -299,14 +296,13 @@ class TestDisputeCreated_Issue1189:
             }
         )
         mapping = state_mod._get_subscription_mapping(TENANT)
-        assert mapping["last_dispute_amount_cents"] == "1999", (
-            "amount must be stored as the raw Stripe cents integer"
-        )
+        assert mapping["last_dispute_amount_cents"] == "1999", "amount must be stored as the raw Stripe cents integer"
         # Must not contain a decimal point.
         assert "." not in mapping["last_dispute_amount_cents"]
 
     def test_error_level_log_for_oncall_paging(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """Chargebacks must log at ERROR so alerting pipelines
         (PagerDuty, Sentry) page a human. A WARN-level log would be
@@ -327,17 +323,15 @@ class TestDisputeCreated_Issue1189:
                 }
             )
         error_entries = [
-            e for e in log_entries
-            if e.get("log_level") == "error"
-            and e.get("event") == "stripe_dispute_opened"
+            e for e in log_entries if e.get("log_level") == "error" and e.get("event") == "stripe_dispute_opened"
         ]
         assert len(error_entries) == 1, (
-            f"Expected exactly one ERROR stripe_dispute_opened log for "
-            f"oncall paging, got {len(error_entries)}"
+            f"Expected exactly one ERROR stripe_dispute_opened log for oncall paging, got {len(error_entries)}"
         )
 
     def test_unknown_customer_logs_error_does_not_crash(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """If Stripe sends a dispute for a customer we don't know
         (shouldn't happen in prod — all our customers originate from
@@ -356,17 +350,16 @@ class TestDisputeCreated_Issue1189:
                     "created": 1712345678,
                 }
             )
-        assert any(
-            e.get("event") == "stripe_dispute_tenant_not_found"
-            for e in log_entries
-        )
+        assert any(e.get("event") == "stripe_dispute_tenant_not_found" for e in log_entries)
 
     def test_dispatcher_routes_dispute_created_to_handler(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """End-to-end: dispatcher must route
         ``charge.dispute.created`` into ``_handle_dispute_created``."""
         import asyncio
+
         _prebind_tenant(fake_redis)
         event = {
             "id": "evt_dispute_1",
@@ -408,8 +401,7 @@ class TestCustomerDeleted_Issue1189:
         mapping = state_mod._get_subscription_mapping(TENANT)
         assert mapping["status"] == "customer_deleted"
         assert mapping["customer_deleted_at"], (
-            "customer_deleted_at must be set so audit trail shows WHEN "
-            "the deletion notice arrived"
+            "customer_deleted_at must be set so audit trail shows WHEN the deletion notice arrived"
         )
 
     def test_clears_customer_lookup_key(self, fake_redis) -> None:
@@ -418,18 +410,13 @@ class TestCustomerDeleted_Issue1189:
         cannot silently re-bind to the same tenant."""
         _prebind_tenant(fake_redis)
         lookup_key = state_mod._customer_lookup_key(CUSTOMER)
-        assert lookup_key in fake_redis.values, (
-            "Preconditions: lookup key must exist before deletion"
-        )
+        assert lookup_key in fake_redis.values, "Preconditions: lookup key must exist before deletion"
 
         webhooks_mod._handle_customer_deleted({"id": CUSTOMER})
         assert lookup_key not in fake_redis.values, (
-            "customer lookup key MUST be deleted so a later webhook "
-            "cannot silently re-resolve to the deleted tenant"
+            "customer lookup key MUST be deleted so a later webhook cannot silently re-resolve to the deleted tenant"
         )
-        assert lookup_key in fake_redis.delete_calls, (
-            "Handler must have called redis.delete on the lookup key"
-        )
+        assert lookup_key in fake_redis.delete_calls, "Handler must have called redis.delete on the lookup key"
 
     def test_clears_subscription_lookup_key(self, fake_redis) -> None:
         """The ``billing:subscription:{subscription_id}`` lookup must
@@ -441,12 +428,12 @@ class TestCustomerDeleted_Issue1189:
 
         webhooks_mod._handle_customer_deleted({"id": CUSTOMER})
         assert sub_key not in fake_redis.values, (
-            "subscription lookup key must be dropped alongside the "
-            "customer key — both are now stale"
+            "subscription lookup key must be dropped alongside the customer key — both are now stale"
         )
 
     def test_preserves_tenant_subscription_hash_for_audit(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """The tenant's subscription HASH (billing:tenant:{tenant_id})
         must survive for audit. Deleting it would erase billing history
@@ -458,14 +445,14 @@ class TestCustomerDeleted_Issue1189:
 
         webhooks_mod._handle_customer_deleted({"id": CUSTOMER})
         assert tenant_key in fake_redis.hashes, (
-            "tenant subscription hash must survive customer deletion "
-            "(audit trail requirement)"
+            "tenant subscription hash must survive customer deletion (audit trail requirement)"
         )
         # The audit record retains the original plan_id.
         assert fake_redis.hashes[tenant_key].get("plan_id") == "growth"
 
     def test_unknown_customer_still_clears_lookup_defensively(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """If we never saw the customer (no _find_tenant_id hit), we
         still call delete on the lookup key defensively — there's no
@@ -477,19 +464,14 @@ class TestCustomerDeleted_Issue1189:
         with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({"id": "cus_never_seen"})
         # Tenant-not-found warning fired.
-        assert any(
-            e.get("event") == "stripe_customer_deleted_tenant_not_found"
-            for e in log_entries
-        ), (
-            "Unknown-customer branch must log tenant_not_found for "
-            "operator visibility"
+        assert any(e.get("event") == "stripe_customer_deleted_tenant_not_found" for e in log_entries), (
+            "Unknown-customer branch must log tenant_not_found for operator visibility"
         )
         # The defensive delete was issued (even though the key wasn't
         # there — the idempotent DELETE is safe and the contract is
         # that we always clear the lookup on a deletion notice).
         assert state_mod._customer_lookup_key("cus_never_seen") in fake_redis.delete_calls, (
-            "Defensive delete must be called on the customer lookup "
-            "key even when no tenant binding exists"
+            "Defensive delete must be called on the customer lookup key even when no tenant binding exists"
         )
 
     def test_missing_id_does_not_crash(self, fake_redis) -> None:
@@ -498,17 +480,16 @@ class TestCustomerDeleted_Issue1189:
         out as a 500)."""
         with structlog.testing.capture_logs() as log_entries:
             webhooks_mod._handle_customer_deleted({})
-        assert any(
-            e.get("event") == "stripe_customer_deleted_missing_id"
-            for e in log_entries
-        )
+        assert any(e.get("event") == "stripe_customer_deleted_missing_id" for e in log_entries)
 
     def test_dispatcher_routes_customer_deleted_to_handler(
-        self, fake_redis,
+        self,
+        fake_redis,
     ) -> None:
         """End-to-end: dispatcher must route ``customer.deleted`` into
         ``_handle_customer_deleted``."""
         import asyncio
+
         _prebind_tenant(fake_redis)
         event = {
             "id": "evt_cust_del_1",
@@ -517,9 +498,7 @@ class TestCustomerDeleted_Issue1189:
         }
         asyncio.run(webhooks_mod._handle_stripe_event(event))
         mapping = state_mod._get_subscription_mapping(TENANT)
-        assert mapping.get("status") == "customer_deleted", (
-            "Dispatcher must route customer.deleted into the handler"
-        )
+        assert mapping.get("status") == "customer_deleted", "Dispatcher must route customer.deleted into the handler"
 
 
 # ---------------------------------------------------------------------------

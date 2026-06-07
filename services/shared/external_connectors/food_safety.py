@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from .base import (
     AuthType,
-    ConnectorConfig,
     ConnectionStatus,
+    ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
 )
@@ -46,6 +46,7 @@ class FoodReadyConnector(IntegrationConnector):
             return False
         try:
             import httpx
+
             async with httpx.AsyncClient(
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
                 timeout=self.config.timeout_seconds,
@@ -68,6 +69,7 @@ class FoodReadyConnector(IntegrationConnector):
         """Fetch food safety records from FoodReady."""
         try:
             import httpx
+
             params: Dict[str, Any] = {"limit": limit}
             if since:
                 params["since"] = since.isoformat()
@@ -177,6 +179,7 @@ class FoodDocsConnector(IntegrationConnector):
         """Fetch monitoring records from FoodDocs."""
         try:
             import httpx
+
             params: Dict[str, Any] = {"limit": limit}
             if since:
                 params["modified_after"] = since.isoformat()
@@ -270,6 +273,7 @@ class TiveConnector(IntegrationConnector):
             return False
         try:
             import httpx
+
             async with httpx.AsyncClient(
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
                 timeout=self.config.timeout_seconds,
@@ -292,6 +296,7 @@ class TiveConnector(IntegrationConnector):
         """Fetch completed shipment tracking data from Tive."""
         try:
             import httpx
+
             params: Dict[str, Any] = {"limit": limit, "status": "delivered"}
             if since:
                 params["since"] = since.isoformat()
@@ -338,57 +343,65 @@ class TiveConnector(IntegrationConnector):
 
         # Shipping CTE
         if shipment.get("ship_date"):
-            events.append(NormalizedCTEEvent(
-                cte_type="shipping",
-                traceability_lot_code=tlc,
-                product_description=product,
-                quantity=quantity,
-                unit_of_measure=unit,
-                timestamp=shipment["ship_date"],
-                location_name=shipment.get("origin", {}).get("name"),
-                location_gln=shipment.get("origin", {}).get("gln"),
-                kdes={
-                    **temp_kdes,
-                    "carrier_name": shipment.get("carrier", ""),
-                    "tracking_number": shipment.get("tracking_number", ""),
-                    "tive_tracker_id": shipment.get("tracker_id", ""),
-                    "ship_to_location": shipment.get("destination", {}).get("name", ""),
-                    "ship_to_gln": shipment.get("destination", {}).get("gln", ""),
-                },
-                source_event_id=f"tive-ship-{shipment.get('id', '')}",
-            ))
+            events.append(
+                NormalizedCTEEvent(
+                    cte_type="shipping",
+                    traceability_lot_code=tlc,
+                    product_description=product,
+                    quantity=quantity,
+                    unit_of_measure=unit,
+                    timestamp=shipment["ship_date"],
+                    location_name=shipment.get("origin", {}).get("name"),
+                    location_gln=shipment.get("origin", {}).get("gln"),
+                    kdes={
+                        **temp_kdes,
+                        "carrier_name": shipment.get("carrier", ""),
+                        "tracking_number": shipment.get("tracking_number", ""),
+                        "tive_tracker_id": shipment.get("tracker_id", ""),
+                        "ship_to_location": shipment.get("destination", {}).get("name", ""),
+                        "ship_to_gln": shipment.get("destination", {}).get("gln", ""),
+                    },
+                    source_event_id=f"tive-ship-{shipment.get('id', '')}",
+                )
+            )
 
         # Receiving CTE (when delivered)
         if shipment.get("delivery_date"):
-            events.append(NormalizedCTEEvent(
-                cte_type="receiving",
-                traceability_lot_code=tlc,
-                product_description=product,
-                quantity=quantity,
-                unit_of_measure=unit,
-                timestamp=shipment["delivery_date"],
-                location_name=shipment.get("destination", {}).get("name"),
-                location_gln=shipment.get("destination", {}).get("gln"),
-                kdes={
-                    **temp_kdes,
-                    "tive_tracker_id": shipment.get("tracker_id", ""),
-                    "transit_time_hours": shipment.get("transit_hours"),
-                    "receiving_location": shipment.get("destination", {}).get("name", ""),
-                },
-                source_event_id=f"tive-recv-{shipment.get('id', '')}",
-            ))
+            events.append(
+                NormalizedCTEEvent(
+                    cte_type="receiving",
+                    traceability_lot_code=tlc,
+                    product_description=product,
+                    quantity=quantity,
+                    unit_of_measure=unit,
+                    timestamp=shipment["delivery_date"],
+                    location_name=shipment.get("destination", {}).get("name"),
+                    location_gln=shipment.get("destination", {}).get("gln"),
+                    kdes={
+                        **temp_kdes,
+                        "tive_tracker_id": shipment.get("tracker_id", ""),
+                        "transit_time_hours": shipment.get("transit_hours"),
+                        "receiving_location": shipment.get("destination", {}).get("name", ""),
+                    },
+                    source_event_id=f"tive-recv-{shipment.get('id', '')}",
+                )
+            )
 
         return events
 
     def normalize_event(self, raw_event: Dict[str, Any]) -> NormalizedCTEEvent:
         ctes = self._shipment_to_ctes(raw_event)
-        return ctes[0] if ctes else NormalizedCTEEvent(
-            cte_type="shipping",
-            traceability_lot_code="",
-            product_description="",
-            quantity=1,
-            unit_of_measure="cases",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+        return (
+            ctes[0]
+            if ctes
+            else NormalizedCTEEvent(
+                cte_type="shipping",
+                traceability_lot_code="",
+                product_description="",
+                quantity=1,
+                unit_of_measure="cases",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
         )
 
     def get_connector_info(self) -> Dict[str, Any]:

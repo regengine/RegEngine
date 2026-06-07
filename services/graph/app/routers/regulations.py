@@ -4,15 +4,16 @@ import uuid
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.auth import APIKey, require_api_key
+from shared.middleware import get_current_tenant_id
 
 from ..neo4j_utils import Neo4jClient
-from shared.auth import require_api_key, APIKey
-from shared.middleware import get_current_tenant_id
 
 logger = structlog.get_logger("graph-regulations")
 router = APIRouter()
+
 
 @router.get("/list", response_model=List[Dict[str, Any]])
 async def list_regulations(
@@ -49,6 +50,7 @@ async def list_regulations(
                 logger.error("neo4j_query_failed", error=str(e), endpoint="/list")
                 raise HTTPException(status_code=503, detail="Graph database unavailable")
 
+
 @router.get("/{name}/sections")
 async def get_regulation_sections(
     name: str,
@@ -62,18 +64,25 @@ async def get_regulation_sections(
     async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
             try:
-                result = await session.run("""
+                result = await session.run(
+                    """
                     MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s:Section)
                     WHERE s.tenant_id = $tenant_id
                     RETURN s.id as id, s.title as title, s.text as text, s.jurisdiction as jurisdiction, s.effective_date as effective_date
                     ORDER BY s.id
                     SKIP $skip LIMIT $limit
-                """, name=name, skip=skip, limit=limit, tenant_id=str(tenant_id))
+                """,
+                    name=name,
+                    skip=skip,
+                    limit=limit,
+                    tenant_id=str(tenant_id),
+                )
                 sections = [dict(record) async for record in result]
                 return sections
             except Exception as e:
                 logger.error("neo4j_query_failed", error=str(e), endpoint=f"/{name}/sections")
                 raise HTTPException(status_code=503, detail="Graph database unavailable")
+
 
 @router.get("/{name}/citations")
 async def get_regulation_citations(
@@ -88,13 +97,19 @@ async def get_regulation_citations(
     async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
             try:
-                result = await session.run("""
+                result = await session.run(
+                    """
                     MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
                     WHERE s.tenant_id = $tenant_id
                     RETURN DISTINCT c.text as citation, count(s) as mention_count
                     ORDER BY mention_count DESC
                     SKIP $skip LIMIT $limit
-                """, name=name, skip=skip, limit=limit, tenant_id=str(tenant_id))
+                """,
+                    name=name,
+                    skip=skip,
+                    limit=limit,
+                    tenant_id=str(tenant_id),
+                )
                 records = [dict(record) async for record in result]
                 return records
             except Exception as e:
@@ -116,14 +131,20 @@ async def search_regulations(
         async with client.session() as session:
             # Note: Requires a full-text index named 'sectionText' on (:Section {text})
             try:
-                result = await session.run("""
+                result = await session.run(
+                    """
                     CALL db.index.fulltext.queryNodes("sectionText", $q) YIELD node, score
                     WHERE node.tenant_id = $tenant_id
                     RETURN node.id as section_id, node.title as title, node.text as text,
                            node.regulation as regulation, score
                     ORDER BY score DESC
                     SKIP $skip LIMIT $limit
-                """, q=q, skip=skip, limit=limit, tenant_id=str(tenant_id))
+                """,
+                    q=q,
+                    skip=skip,
+                    limit=limit,
+                    tenant_id=str(tenant_id),
+                )
                 records = [dict(record) async for record in result]
                 return records
             except Exception as e:
@@ -187,8 +208,8 @@ async def harmonize_requirement(
     """Trigger LLM-based semantic mapping for a specific requirement."""
     # Function-local: avoids importing optional ML deps (langchain, langchain_groq)
     # at module-load time. The engine is only needed by this endpoint.
-    from ..mapping_engine import MappingEngine
     from ..config import settings
+    from ..mapping_engine import MappingEngine
 
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     engine = MappingEngine(
@@ -203,7 +224,7 @@ async def harmonize_requirement(
             "status": "completed",
             "obligation_id": obligation_id,
             "mappings_found": len(mappings),
-            "mappings": mappings
+            "mappings": mappings,
         }
     except Exception as e:
         logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=str(tenant_id), error=str(e))

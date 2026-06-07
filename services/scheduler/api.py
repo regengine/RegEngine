@@ -1,16 +1,16 @@
 """Scheduler Service Management API with rate limiting."""
 
 from contextlib import asynccontextmanager
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import structlog
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from shared.cors import get_allowed_origins
+from shared.metrics_auth import require_metrics_key
 
 # Production Hardening
 from shared.rate_limit import add_rate_limiting, limiter
-from shared.metrics_auth import require_metrics_key
-from shared.cors import get_allowed_origins
 
 # Import only under type-checking to break the runtime circular import
 # between api.py (imported by main.py) and SchedulerService (defined in
@@ -59,8 +59,8 @@ app.add_middleware(
 from shared.middleware.request_id import RequestIDMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
 from shared.observability.fastapi_metrics import install_metrics
-from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=60)
@@ -74,6 +74,7 @@ add_rate_limiting(app)
 
 # Global exception handlers
 from shared.error_handling import install_exception_handlers
+
 install_exception_handlers(app)
 
 # Prometheus RED metrics (#1325). The scheduler's own /metrics endpoint below
@@ -86,11 +87,7 @@ install_metrics(app, service_name="scheduler-service", metrics_path=None)
 @limiter.limit("100/minute")
 async def health():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "scheduler",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy", "service": "scheduler", "version": "1.0.0"}
 
 
 @app.get("/status", dependencies=[Depends(require_metrics_key)])
@@ -112,7 +109,7 @@ async def status():
                 "success": r.success,
                 "count": r.items_found,
                 "scraped_at": r.scraped_at.isoformat(),
-                "error": r.error_message if not r.success else None
+                "error": r.error_message if not r.success else None,
             }
             for st, r in _scheduler_service.last_results.items()
         },
@@ -127,7 +124,9 @@ async def metrics():
         return {"metrics": "service not initialized"}
 
     from app.metrics import metrics as metrics_instance
+
     content = metrics_instance.get_metrics()
 
     from fastapi.responses import Response
+
     return Response(content=content, media_type="text/plain; charset=utf-8")

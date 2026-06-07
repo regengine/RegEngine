@@ -226,7 +226,9 @@ class TestConsumerTLCSourceValidation:
         with pytest.raises(TLCSourceValidationError) as exc_info:
             await ingest_fsma_event(mock_client_instance, event)
 
-        assert "tlc_source_gln or tlc_source_fda_reg" in str(exc_info.value) or "Missing TLC Source" in str(exc_info.value)
+        assert "tlc_source_gln or tlc_source_fda_reg" in str(exc_info.value) or "Missing TLC Source" in str(
+            exc_info.value
+        )
         assert "TRANSFORMATION" in str(exc_info.value)
 
     @pytest.mark.asyncio

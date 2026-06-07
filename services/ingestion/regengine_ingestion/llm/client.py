@@ -1,9 +1,11 @@
+import json
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import openai
 from openai import AsyncOpenAI
-import json
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 
 class LLMClient:
     def __init__(self, api_key: Optional[str] = None):
@@ -18,7 +20,9 @@ class LLMClient:
     @retry(
         wait=wait_exponential(),
         stop=stop_after_attempt(3),
-        retry=retry_if_exception_type((IOError, ConnectionError, TimeoutError, openai.APIConnectionError, openai.RateLimitError)),
+        retry=retry_if_exception_type(
+            (IOError, ConnectionError, TimeoutError, openai.APIConnectionError, openai.RateLimitError)
+        ),
     )
     async def analyze_image_structured(self, image_b64: str, prompt: str) -> Dict[str, Any]:
         """
@@ -34,9 +38,7 @@ class LLMClient:
                         {"type": "text", "text": prompt},
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_b64}"
-                            },
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
                         },
                     ],
                 }
@@ -48,5 +50,5 @@ class LLMClient:
         content = response.choices[0].message.content
         if not content:
             return {}
-            
+
         return json.loads(content)

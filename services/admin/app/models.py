@@ -213,6 +213,7 @@ from sqlalchemy import text
 # Response Models for API Endpoints
 # ============================================================================
 
+
 class ControlResponse(BaseModel):
     """Response model for control operations."""
 
@@ -404,10 +405,7 @@ class TenantContext:
             session.info["tenant_id"] = str(tenant_id)
             return
 
-        session.execute(
-            text("SELECT set_tenant_context(:tid)"),
-            {"tid": str(tenant_id)}
-        )
+        session.execute(text("SELECT set_tenant_context(:tid)"), {"tid": str(tenant_id)})
 
     @staticmethod
     def get_tenant_context(session) -> Optional[UUID]:
@@ -460,17 +458,15 @@ class TenantContext:
             return
 
         import structlog
+
         _logger = structlog.get_logger("rls-admin-context")
         if is_sysadmin:
             _logger.warning(
                 "sysadmin_context_activated",
                 msg="RLS sysadmin bypass enabled for this session. "
-                    "Bypass only effective if connected as regengine_sysadmin role.",
+                "Bypass only effective if connected as regengine_sysadmin role.",
             )
-        session.execute(
-            text("SELECT set_admin_context(:is_admin)"),
-            {"is_admin": is_sysadmin}
-        )
+        session.execute(text("SELECT set_admin_context(:is_admin)"), {"is_admin": is_sysadmin})
 
     @staticmethod
     def clear_tenant_context(session) -> None:

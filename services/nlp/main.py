@@ -1,10 +1,11 @@
-from contextlib import asynccontextmanager
-import threading
 import os
 
 # --- Standardized Bootstrap ---
 import sys
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
+
 _SERVICE_DIR = Path(__file__).resolve().parent
 _SERVICES_DIR = _SERVICE_DIR.parent
 if str(_SERVICE_DIR) not in sys.path:
@@ -13,6 +14,7 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 # ------------------------------
 
@@ -30,35 +32,38 @@ require_env("DATABASE_URL")
 
 # Sentry error tracking (must be before app creation)
 from shared.error_handling import init_sentry
+
 init_sentry()
 
 # Production Hardening (Phase 18)
 from shared.logging_config import configure_logging  # (#556) shared structured JSON logging
 from shared.middleware.security import add_security
-from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
 from shared.observability.fastapi_metrics import install_metrics
+from shared.rate_limit import add_rate_limiting
 
 # Initialize standardized logging early — all subsequent log calls are JSON
 configure_logging(service_name="nlp-service")
 import structlog as _structlog
+
 logger = _structlog.get_logger("nlp")
 
 # Local package imports (using absolute-style imports from services root)
 # Refers to services/nlp/app/...
 from app.config import settings
+
 # DEPRECATED: Kafka consumer import — will be removed once EVENT_BACKBONE=pg is
 # default (see #1159 #1240). Gated by EVENT_BACKBONE=kafka env flag below.
 from app.consumer import run_consumer, stop_consumer
 from app.routes import router as nlp_router
-
 from fastapi import FastAPI
+
 
 @asynccontextmanager
 async def lifespan(api_app: FastAPI):
     # Startup
     logger.info("nlp_service_startup")
-    
+
     # DEPRECATED (#1159 #1240): Kafka consumer only runs when EVENT_BACKBONE=kafka.
     # Default is pg (task_processor). Remove this block once #1159 is merged.
     consumer_thread: threading.Thread | None = None
@@ -77,7 +82,9 @@ async def lifespan(api_app: FastAPI):
         stop_consumer()
         consumer_thread.join(timeout=5.0)
 
+
 from shared.env import is_production
+
 _is_prod = is_production()
 
 # Naming the instance 'app' is standard for uvicorn
@@ -97,7 +104,7 @@ add_security(app)
 add_rate_limiting(app)
 add_observability(app, service_name="nlp-service")
 
-from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.middleware import RequestIDMiddleware, TenantContextMiddleware
 from shared.observability.correlation import CorrelationIdMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
@@ -106,6 +113,7 @@ app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 
@@ -114,6 +122,7 @@ app.add_middleware(CorrelationIdMiddleware)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
+
 install_exception_handlers(app)
 
 # Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)

@@ -55,7 +55,6 @@ from app.scrapers.state_adaptors.google_discovery import (  # noqa: E402
     GoogleDiscoveryScraper,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers — structlog-compatible logger spy (see module docstring)
 # ---------------------------------------------------------------------------
@@ -156,7 +155,7 @@ def capture_httpx_get(monkeypatch):
         # the query string back out so legacy assertions on calls[i]["params"]
         # keep working.
         if params is None and "?" in url:
-            from urllib.parse import urlparse, parse_qsl
+            from urllib.parse import parse_qsl, urlparse
 
             qs = urlparse(url).query
             params = dict(parse_qsl(qs))
@@ -166,9 +165,7 @@ def capture_httpx_get(monkeypatch):
                 if isinstance(v, str) and v.lstrip("-").isdigit():
                     params[k] = int(v)
             url = url.split("?", 1)[0]
-        calls.append(
-            {"url": url, "params": params, "timeout": timeout, "headers": headers}
-        )
+        calls.append({"url": url, "params": params, "timeout": timeout, "headers": headers})
         if responses:
             return responses.pop(0)
         return _FakeResponse(json_body={})
@@ -197,9 +194,7 @@ class TestConstructor:
 
 
 class TestListSourcesConfigMissing:
-    def test_no_api_key_returns_empty_and_warns(
-        self, patch_settings, capture_httpx_get, _patch_logger
-    ):
+    def test_no_api_key_returns_empty_and_warns(self, patch_settings, capture_httpx_get, _patch_logger):
         patch_settings(google_api_key=None, google_cx="c")
         scraper = GoogleDiscoveryScraper()
         calls, _ = capture_httpx_get
@@ -215,9 +210,7 @@ class TestListSourcesConfigMissing:
             for level, event, _kw in _patch_logger.calls
         )
 
-    def test_no_cx_returns_empty_and_warns(
-        self, patch_settings, capture_httpx_get, _patch_logger
-    ):
+    def test_no_cx_returns_empty_and_warns(self, patch_settings, capture_httpx_get, _patch_logger):
         patch_settings(google_api_key="k", google_cx=None)
         scraper = GoogleDiscoveryScraper()
         calls, _ = capture_httpx_get
@@ -225,9 +218,7 @@ class TestListSourcesConfigMissing:
         assert scraper.list_sources() == []
         assert calls == []
 
-    def test_empty_string_api_key_treated_as_missing(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_empty_string_api_key_treated_as_missing(self, patch_settings, capture_httpx_get):
         patch_settings(google_api_key="", google_cx="c")
         scraper = GoogleDiscoveryScraper()
         calls, _ = capture_httpx_get
@@ -248,16 +239,8 @@ class TestListSourcesHappyPath:
     def test_paginates_two_pages(self, patch_settings, capture_httpx_get):
         patch_settings()
         calls, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(
-                json_body={"items": [_item(f"https://a.gov/{i}.pdf") for i in range(10)]}
-            )
-        )
-        responses.append(
-            _FakeResponse(
-                json_body={"items": [_item(f"https://b.gov/{i}.pdf") for i in range(10)]}
-            )
-        )
+        responses.append(_FakeResponse(json_body={"items": [_item(f"https://a.gov/{i}.pdf") for i in range(10)]}))
+        responses.append(_FakeResponse(json_body={"items": [_item(f"https://b.gov/{i}.pdf") for i in range(10)]}))
 
         sources = list(GoogleDiscoveryScraper().list_sources())
 
@@ -268,9 +251,7 @@ class TestListSourcesHappyPath:
         # 20 total sources (10 per page).
         assert len(sources) == 20
 
-    def test_page_two_skipped_when_items_missing(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_page_two_skipped_when_items_missing(self, patch_settings, capture_httpx_get):
         patch_settings()
         calls, responses = capture_httpx_get
         # Page 1 returns NO "items" key — we must bail rather than
@@ -282,9 +263,7 @@ class TestListSourcesHappyPath:
         assert sources == []
         assert len(calls) == 1  # no page 2
 
-    def test_forwards_api_key_cx_query_and_pdf_filetype(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_forwards_api_key_cx_query_and_pdf_filetype(self, patch_settings, capture_httpx_get):
         patch_settings(
             google_api_key="abc",
             google_cx="cx-1",
@@ -338,9 +317,7 @@ class TestJurisdictionHeuristic:
             ("https://example.gov/doc.pdf", "US"),
         ],
     )
-    def test_maps_domain_to_jurisdiction(
-        self, patch_settings, capture_httpx_get, url, expected
-    ):
+    def test_maps_domain_to_jurisdiction(self, patch_settings, capture_httpx_get, url, expected):
         patch_settings()
         _, responses = capture_httpx_get
         responses.append(_FakeResponse(json_body={"items": [_item(url)]}))
@@ -349,18 +326,10 @@ class TestJurisdictionHeuristic:
         sources = list(GoogleDiscoveryScraper().list_sources())
         assert sources[0].jurisdiction_code == expected
 
-    def test_attaches_snippet_and_iso_discovery_date(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_attaches_snippet_and_iso_discovery_date(self, patch_settings, capture_httpx_get):
         patch_settings()
         _, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(
-                json_body={
-                    "items": [_item("https://a.gov/1.pdf", title="t", snippet="sn")]
-                }
-            )
-        )
+        responses.append(_FakeResponse(json_body={"items": [_item("https://a.gov/1.pdf", title="t", snippet="sn")]}))
         responses.append(_FakeResponse(json_body={}))
 
         sources = list(GoogleDiscoveryScraper().list_sources())
@@ -377,24 +346,15 @@ class TestJurisdictionHeuristic:
 
 
 class TestListSourcesErrors:
-    def test_http_error_returns_empty_and_logs_error(
-        self, patch_settings, capture_httpx_get, _patch_logger
-    ):
+    def test_http_error_returns_empty_and_logs_error(self, patch_settings, capture_httpx_get, _patch_logger):
         patch_settings()
         _, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(raise_for_status_error=RuntimeError("503 upstream"))
-        )
+        responses.append(_FakeResponse(raise_for_status_error=RuntimeError("503 upstream")))
 
         assert list(GoogleDiscoveryScraper().list_sources()) == []
-        assert any(
-            event == "google_discovery_failed"
-            for _level, event, _kw in _patch_logger.calls
-        )
+        assert any(event == "google_discovery_failed" for _level, event, _kw in _patch_logger.calls)
 
-    def test_malformed_json_returns_empty(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_malformed_json_returns_empty(self, patch_settings, capture_httpx_get):
         patch_settings()
         _, responses = capture_httpx_get
 
@@ -413,9 +373,7 @@ class TestListSourcesErrors:
 
 
 class TestFetch:
-    def test_happy_path_returns_fetched_item(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_happy_path_returns_fetched_item(self, patch_settings, capture_httpx_get):
         patch_settings()
         _, responses = capture_httpx_get
         responses.append(
@@ -433,9 +391,7 @@ class TestFetch:
         assert item.content_bytes == b"%PDF-1.4 body"
         assert item.content_type == "application/pdf"
 
-    def test_missing_content_type_defaults_to_pdf(
-        self, patch_settings, capture_httpx_get
-    ):
+    def test_missing_content_type_defaults_to_pdf(self, patch_settings, capture_httpx_get):
         patch_settings()
         _, responses = capture_httpx_get
         responses.append(_FakeResponse(content=b"%PDF", headers={}))
@@ -453,14 +409,10 @@ class TestFetch:
         assert calls[0]["headers"] == {"User-Agent": "RegEngine/1.0"}
         assert calls[0]["timeout"] == 30
 
-    def test_http_error_returns_empty_fetched_item(
-        self, patch_settings, capture_httpx_get, _patch_logger
-    ):
+    def test_http_error_returns_empty_fetched_item(self, patch_settings, capture_httpx_get, _patch_logger):
         patch_settings()
         _, responses = capture_httpx_get
-        responses.append(
-            _FakeResponse(raise_for_status_error=RuntimeError("404"))
-        )
+        responses.append(_FakeResponse(raise_for_status_error=RuntimeError("404")))
 
         source = Source(url="https://a.gov/missing.pdf")
         item = GoogleDiscoveryScraper().fetch(source)
@@ -468,14 +420,9 @@ class TestFetch:
         assert item.source is source
         assert item.content_bytes == b""
         assert item.content_type is None
-        assert any(
-            event == "google_fetch_failed"
-            for _level, event, _kw in _patch_logger.calls
-        )
+        assert any(event == "google_fetch_failed" for _level, event, _kw in _patch_logger.calls)
 
-    def test_ssrf_raises_caught_and_returns_empty(
-        self, patch_settings, monkeypatch
-    ):
+    def test_ssrf_raises_caught_and_returns_empty(self, patch_settings, monkeypatch):
         # After RE-SEC-INGEST-003 migration, validation runs inside
         # safe_httpx_get_sync. Simulate an SSRF rejection by making the safe
         # helper raise; the scraper must swallow it and return an empty item.

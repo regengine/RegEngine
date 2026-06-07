@@ -1,5 +1,6 @@
-from opentelemetry import trace, baggage, _logs as logs
+from opentelemetry import _logs as logs, baggage, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 try:
     from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 except ImportError:  # pragma: no cover
@@ -8,21 +9,23 @@ try:
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 except ImportError:  # pragma: no cover
     HTTPXClientInstrumentor = None  # type: ignore[assignment,misc]
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
-from opentelemetry.sdk.resources import Resource
+
 try:
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 except ImportError:  # pragma: no cover - depends on optional exporter package versions
     OTLPSpanExporter = None  # type: ignore[assignment,misc]
     OTLPLogExporter = None  # type: ignore[assignment,misc]
+import os
+
+import structlog
+from fastapi import FastAPI
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from fastapi import FastAPI
-import os
-import structlog
 
 logger = structlog.get_logger("observability")
 
@@ -73,6 +76,7 @@ def get_shared_resource(service_name: str):
     # Filter out None values to prevent OTel crashes
     valid_attributes = {k: v for k, v in attributes.items() if v is not None}
     return Resource.create(valid_attributes)
+
 
 def _instrument_downstream_clients() -> None:
     """Instrument SQLAlchemy and httpx so DB queries and outbound HTTP appear in traces.
@@ -152,6 +156,7 @@ def add_observability(app: FastAPI, service_name: str):
         _instrument_downstream_clients()
     except Exception as e:
         logger.error("otel_setup_failed", service=service_name, error=str(e))
+
 
 def setup_standalone_observability(service_name: str):
     """Setup OTel for workers and consumers (no FastAPI app)."""

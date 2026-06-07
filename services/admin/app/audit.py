@@ -10,11 +10,11 @@ making retroactive tampering detectable.
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -42,9 +42,7 @@ except ImportError:  # prometheus_client not installed
 except ValueError:  # already registered (double-import / module reload)
     from prometheus_client import REGISTRY
 
-    AUDIT_LOG_FAILURES_COUNTER = REGISTRY._names_to_collectors.get(
-        "admin_audit_log_failures_total"
-    )
+    AUDIT_LOG_FAILURES_COUNTER = REGISTRY._names_to_collectors.get("admin_audit_log_failures_total")
 
 
 # #1415: audit chain integrity hash schema version. v1 hashed only

@@ -18,6 +18,7 @@ EPIC-L mandates one redaction strategy shared by every export path:
 
 Related issue: EPIC-L (#1655).
 """
+
 from __future__ import annotations
 
 import hashlib

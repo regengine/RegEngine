@@ -27,8 +27,8 @@ def _make_response(content: bytes = b"<html></html>", content_type: str = "text/
 
 
 def test_cppa_scraper_uses_safe_http():
-    from app.scrapers.state_adaptors.cppa import CPPAScraper
     from app.scrapers.state_adaptors.base import Source
+    from app.scrapers.state_adaptors.cppa import CPPAScraper
 
     scraper = CPPAScraper()
     src = Source(url="https://cppa.ca.gov/regulations/", title="t", jurisdiction_code="US-CA")
@@ -43,8 +43,8 @@ def test_cppa_scraper_uses_safe_http():
 
 
 def test_fl_rss_scraper_uses_safe_http():
-    from app.scrapers.state_adaptors.fl_rss import FloridaRSSScraper
     from app.scrapers.state_adaptors.base import Source
+    from app.scrapers.state_adaptors.fl_rss import FloridaRSSScraper
 
     scraper = FloridaRSSScraper()
     src = Source(url="https://www.flsenate.gov/PublishedContent/Session/", title="t", jurisdiction_code="US-FL")
@@ -58,8 +58,8 @@ def test_fl_rss_scraper_uses_safe_http():
 
 
 def test_generic_rss_scraper_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.generic import GenericRSSScraper
     from app.scrapers.state_adaptors.base import Source
+    from app.scrapers.state_adaptors.generic import GenericRSSScraper
 
     scraper = GenericRSSScraper(feed_url="https://example.com/feed", jurisdiction="US-XX", title_prefix="X")
     src = Source(url="https://example.com/doc", title="t", jurisdiction_code="US-XX")
@@ -138,8 +138,8 @@ def test_google_discovery_fetch_uses_safe_http():
 
 
 def test_fda_enforcement_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
     from app.scrapers.state_adaptors.base import Source
+    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
     scraper = FDAEnforcementScraper()
     src = Source(url="https://www.fda.gov/warning-letter/abc", title="t", jurisdiction_code="US-FDA")
@@ -154,8 +154,8 @@ def test_fda_enforcement_fetch_uses_safe_http():
 
 
 def test_fda_enforcement_pdf_deep_fetch_uses_safe_http():
-    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
     from app.scrapers.state_adaptors.base import Source
+    from app.scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
     scraper = FDAEnforcementScraper()
     src = Source(url="https://www.fda.gov/warning-letter/abc", title="t", jurisdiction_code="US-FDA")
@@ -189,9 +189,7 @@ def test_no_direct_httpx_get_in_state_adaptors():
     for py in adaptors_dir.glob("*.py"):
         text = py.read_text()
         # Strip comments before scanning.
-        scrubbed = "\n".join(
-            line for line in text.splitlines() if not line.lstrip().startswith("#")
-        )
+        scrubbed = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
         if "httpx.get(" in scrubbed or "httpx.post(" in scrubbed:
             offenders.append(py.name)
     assert offenders == [], f"Direct httpx calls found in: {offenders}"

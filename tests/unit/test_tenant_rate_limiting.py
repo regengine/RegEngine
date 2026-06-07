@@ -4,14 +4,15 @@ Tests for per-tenant rate limiting middleware.
 Tests the TenantRateLimitMiddleware and _InMemoryBucket.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from starlette.testclient import TestClient
+
+import pytest
 from fastapi import FastAPI
 from shared.tenant_rate_limiting import (
     TenantRateLimitMiddleware,
     _InMemoryBucket,
 )
+from starlette.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,7 @@ def _reset_rate_limit_bucket(monkeypatch):
 
 
 # ── Bucket Tests ────────────────────────────────────────────────
+
 
 class TestInMemoryBucket:
     """Unit tests for the sliding-window bucket."""
@@ -61,6 +63,7 @@ class TestInMemoryBucket:
 
 
 # ── Middleware Integration Tests ────────────────────────────────
+
 
 def _create_test_app(default_rpm: int = 5, tenant_overrides: dict = None) -> FastAPI:
     """Create a FastAPI app with tenant rate limiting for testing."""

@@ -26,8 +26,8 @@ import httpx
 
 from .base import (
     AuthType,
-    ConnectorConfig,
     ConnectionStatus,
+    ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
 )
@@ -82,9 +82,7 @@ class SafetyCultureConnector(IntegrationConnector):
             config.base_url = self.API_BASE
         self._client: Optional[httpx.AsyncClient] = None
         # Custom template → CTE type overrides from tenant config
-        self._template_cte_map: Dict[str, str] = config.extra.get(
-            "template_cte_map", {}
-        )
+        self._template_cte_map: Dict[str, str] = config.extra.get("template_cte_map", {})
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -116,9 +114,7 @@ class SafetyCultureConnector(IntegrationConnector):
                 return True
             else:
                 self._status = ConnectionStatus.ERROR
-                logger.warning(
-                    "safetyculture_auth_failed status=%d", resp.status_code
-                )
+                logger.warning("safetyculture_auth_failed status=%d", resp.status_code)
                 return False
         except Exception as exc:
             self._status = ConnectionStatus.ERROR
@@ -139,8 +135,15 @@ class SafetyCultureConnector(IntegrationConnector):
         client = self._get_client()
 
         params: Dict[str, Any] = {
-            "field": ["audit_id", "modified_at", "template_id", "audit_title",
-                       "created_at", "completed_at", "audit_data"],
+            "field": [
+                "audit_id",
+                "modified_at",
+                "template_id",
+                "audit_title",
+                "created_at",
+                "completed_at",
+                "audit_data",
+            ],
             "order": "asc",
             "limit": min(limit, 100),
             "completed": "true",  # only completed inspections
@@ -170,7 +173,8 @@ class SafetyCultureConnector(IntegrationConnector):
             except Exception as exc:
                 logger.warning(
                     "safetyculture_normalize_failed audit_id=%s error=%s",
-                    audit.get("audit_id"), str(exc),
+                    audit.get("audit_id"),
+                    str(exc),
                 )
 
         return events, next_cursor if next_cursor else None
@@ -219,12 +223,7 @@ class SafetyCultureConnector(IntegrationConnector):
         )
 
         # Product description
-        product = (
-            kdes.get("product_description")
-            or kdes.get("product_name")
-            or kdes.get("product")
-            or template_name
-        )
+        product = kdes.get("product_description") or kdes.get("product_name") or kdes.get("product") or template_name
 
         # Quantity
         quantity = 1.0
@@ -239,9 +238,7 @@ class SafetyCultureConnector(IntegrationConnector):
 
         # Timestamp
         timestamp = (
-            raw_event.get("completed_at")
-            or raw_event.get("modified_at")
-            or datetime.now(timezone.utc).isoformat()
+            raw_event.get("completed_at") or raw_event.get("modified_at") or datetime.now(timezone.utc).isoformat()
         )
 
         # Add SafetyCulture-specific KDEs
@@ -342,6 +339,7 @@ class SafetyCultureConnector(IntegrationConnector):
                 raise ValueError("Invalid SafetyCulture webhook signature")
 
         import json
+
         data = json.loads(payload)
         event_type = data.get("event_type", "")
 
@@ -369,8 +367,12 @@ class SafetyCultureConnector(IntegrationConnector):
                 "audit responses."
             ),
             "supported_cte_types": [
-                "receiving", "shipping", "cooling", "harvesting",
-                "initial_packing", "transformation",
+                "receiving",
+                "shipping",
+                "cooling",
+                "harvesting",
+                "initial_packing",
+                "transformation",
             ],
             "auth_type": AuthType.API_KEY.value,
             "docs_url": "https://developer.safetyculture.com/",

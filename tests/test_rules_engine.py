@@ -10,22 +10,21 @@ Validates:
 """
 
 import pytest
-
 from shared.rules_engine import (
+    FSMA_RULE_SEEDS,
+    EvaluationSummary,
     RuleDefinition,
     RuleEvaluationResult,
-    EvaluationSummary,
-    _evaluate_field_presence,
-    _evaluate_field_format,
-    _evaluate_multi_field_presence,
-    FSMA_RULE_SEEDS,
     RulesEngine,
+    _evaluate_field_format,
+    _evaluate_field_presence,
+    _evaluate_multi_field_presence,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_rule(**overrides) -> RuleDefinition:
     """Create a test rule definition."""
@@ -76,6 +75,7 @@ def _make_event(**overrides) -> dict:
 # ---------------------------------------------------------------------------
 # Field Presence Evaluation
 # ---------------------------------------------------------------------------
+
 
 class TestFieldPresence:
     def test_field_present_passes(self):
@@ -135,33 +135,40 @@ class TestFieldPresence:
 # Multi-Field Presence Evaluation
 # ---------------------------------------------------------------------------
 
+
 class TestMultiFieldPresence:
     def test_at_least_one_present_passes(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "multi_field_presence",
-            "field": "kdes.tlc_source_reference",
-            "params": {"fields": ["kdes.tlc_source_reference", "kdes.tlc_source_gln"]},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "multi_field_presence",
+                "field": "kdes.tlc_source_reference",
+                "params": {"fields": ["kdes.tlc_source_reference", "kdes.tlc_source_gln"]},
+            }
+        )
         event = _make_event()
         result = _evaluate_multi_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
 
     def test_all_missing_fails(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "multi_field_presence",
-            "field": "kdes.missing",
-            "params": {"fields": ["kdes.field_a", "kdes.field_b", "kdes.field_c"]},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "multi_field_presence",
+                "field": "kdes.missing",
+                "params": {"fields": ["kdes.field_a", "kdes.field_b", "kdes.field_c"]},
+            }
+        )
         event = _make_event()
         result = _evaluate_multi_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
         assert len(result.evidence_fields_inspected) == 3
 
     def test_evidence_shows_all_checked_fields(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "multi_field_presence",
-            "params": {"fields": ["kdes.receive_date", "kdes.missing"]},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "multi_field_presence",
+                "params": {"fields": ["kdes.receive_date", "kdes.missing"]},
+            }
+        )
         event = _make_event()
         result = _evaluate_multi_field_presence(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
@@ -175,33 +182,40 @@ class TestMultiFieldPresence:
 # Field Format Evaluation
 # ---------------------------------------------------------------------------
 
+
 class TestFieldFormat:
     def test_matching_format_passes(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "field_format",
-            "field": "from_facility_reference",
-            "params": {"pattern": r"^\d{13}$"},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "field_format",
+                "field": "from_facility_reference",
+                "params": {"pattern": r"^\d{13}$"},
+            }
+        )
         event = _make_event(from_facility_reference="0061414100001")
         result = _evaluate_field_format(event, rule.evaluation_logic, rule)
         assert result.result == "pass"
 
     def test_non_matching_format_fails(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "field_format",
-            "field": "from_facility_reference",
-            "params": {"pattern": r"^\d{13}$"},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "field_format",
+                "field": "from_facility_reference",
+                "params": {"pattern": r"^\d{13}$"},
+            }
+        )
         event = _make_event(from_facility_reference="not-a-gln")
         result = _evaluate_field_format(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
 
     def test_missing_field_fails_format_check(self):
-        rule = _make_rule(evaluation_logic={
-            "type": "field_format",
-            "field": "kdes.missing_field",
-            "params": {"pattern": r".*"},
-        })
+        rule = _make_rule(
+            evaluation_logic={
+                "type": "field_format",
+                "field": "kdes.missing_field",
+                "params": {"pattern": r".*"},
+            }
+        )
         event = _make_event()
         result = _evaluate_field_format(event, rule.evaluation_logic, rule)
         assert result.result == "fail"
@@ -210,6 +224,7 @@ class TestFieldFormat:
 # ---------------------------------------------------------------------------
 # Rule Applicability
 # ---------------------------------------------------------------------------
+
 
 class TestRuleApplicability:
     def test_rules_filter_by_cte_type(self):
@@ -241,6 +256,7 @@ class TestRuleApplicability:
 # ---------------------------------------------------------------------------
 # Seed Data Integrity
 # ---------------------------------------------------------------------------
+
 
 class TestRuleSeedData:
     def test_seed_count(self):
@@ -284,6 +300,7 @@ class TestRuleSeedData:
 # ---------------------------------------------------------------------------
 # Evaluation Summary
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluationSummary:
     def test_compliant_when_no_failures(self):

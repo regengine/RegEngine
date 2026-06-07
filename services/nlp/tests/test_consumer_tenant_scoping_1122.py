@@ -68,12 +68,10 @@ class TestRetryCountScopedByTenant:
             _retry_counts[key_b] = _retry_counts.get(key_b, 0) + 1
 
         assert _retry_counts[key_a] == 2, (
-            "tenant A retry counter was shared with tenant B — cross-tenant "
-            "DLQ leakage regression"
+            "tenant A retry counter was shared with tenant B — cross-tenant DLQ leakage regression"
         )
         assert _retry_counts[key_b] == 2, (
-            "tenant B retry counter was shared with tenant A — cross-tenant "
-            "DLQ leakage regression"
+            "tenant B retry counter was shared with tenant A — cross-tenant DLQ leakage regression"
         )
         # And the keys are different objects.
         assert key_a != key_b
@@ -168,9 +166,7 @@ class TestExtractorCarriesTenantId:
         from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
 
         extractor = FSMAExtractor()
-        result = extractor.extract(
-            text="no meaningful content", document_id="d1", tenant_id=TENANT_A
-        )
+        result = extractor.extract(text="no meaningful content", document_id="d1", tenant_id=TENANT_A)
         graph_event = extractor.to_graph_event(result)
         assert graph_event["tenant_id"] == TENANT_A
 
@@ -189,9 +185,7 @@ class TestMissingTenantOnEventRaises:
         and payload are absent it must return ``(None, reason)``."""
         from services.nlp.app.consumer import _resolve_tenant_id
 
-        resolved, reason = _resolve_tenant_id(
-            header_tenant_id=None, payload_tenant_id=None
-        )
+        resolved, reason = _resolve_tenant_id(header_tenant_id=None, payload_tenant_id=None)
         assert resolved is None
         assert reason is not None
         assert "no_tenant_id" in reason.lower()
@@ -203,7 +197,9 @@ class TestMissingTenantOnEventRaises:
 
         with pytest.raises(ValueError, match="E_MISSING_TENANT_ID"):
             FSMAExtractor().extract(
-                text="x", document_id="d1", tenant_id=None  # type: ignore[arg-type]
+                text="x",
+                document_id="d1",
+                tenant_id=None,  # type: ignore[arg-type]
             )
 
     def test_run_fsma_extractor_short_circuits_on_missing_tenant(self):
@@ -266,9 +262,7 @@ class TestKafkaMessageKeyIncludesTenantId:
 
         from unittest.mock import patch
 
-        with patch.object(
-            consumer_mod, "_get_fsma_extractor", return_value=mock_extractor
-        ):
+        with patch.object(consumer_mod, "_get_fsma_extractor", return_value=mock_extractor):
             consumer_mod._run_fsma_extractor(
                 text="doc",
                 doc_id="doc1",
@@ -281,9 +275,7 @@ class TestKafkaMessageKeyIncludesTenantId:
         mock_producer.send.assert_called_once()
         kwargs = mock_producer.send.call_args.kwargs
         key = kwargs.get("key")
-        assert key == f"{TENANT_A}:doc1", (
-            f"expected tenant-scoped key, got {key!r} — #1122 regression"
-        )
+        assert key == f"{TENANT_A}:doc1", f"expected tenant-scoped key, got {key!r} — #1122 regression"
 
     def test_kafka_key_differs_across_tenants_with_same_doc_id(self):
         """Two tenants + same doc_id must yield different Kafka keys.
@@ -303,8 +295,9 @@ class TestKafkaMessageKeyIncludesTenantId:
     def test_route_extraction_high_confidence_uses_tenant_scoped_key(self):
         """``_route_extraction`` emitting to ``graph.update`` must also use
         the tenant-scoped key."""
-        from services.nlp.app import consumer as consumer_mod
         from shared.schemas import ExtractionPayload, ObligationType
+
+        from services.nlp.app import consumer as consumer_mod
 
         extraction = ExtractionPayload(
             subject="s",
@@ -333,8 +326,9 @@ class TestKafkaMessageKeyIncludesTenantId:
 
     def test_route_extraction_review_tier_uses_tenant_scoped_key(self):
         """Review queue emit must also be tenant-scoped."""
-        from services.nlp.app import consumer as consumer_mod
         from shared.schemas import ExtractionPayload, ObligationType
+
+        from services.nlp.app import consumer as consumer_mod
 
         extraction = ExtractionPayload(
             subject="s",

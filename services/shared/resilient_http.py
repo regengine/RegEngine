@@ -26,7 +26,6 @@ from typing import Optional
 
 import httpx
 import structlog
-
 from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
 
 logger = structlog.get_logger("resilient_http")
@@ -47,10 +46,11 @@ def get_http_circuit(name: str) -> CircuitBreaker:
         )
     return _http_circuits[name]
 
+
 _RETRYABLE_STATUS_CODES = {502, 503, 504}
 _DEFAULT_RETRIES = 3
 _DEFAULT_BACKOFF_BASE = 0.5  # seconds
-_DEFAULT_BACKOFF_MAX = 8.0   # seconds
+_DEFAULT_BACKOFF_MAX = 8.0  # seconds
 
 
 class RetryTransport(httpx.AsyncBaseTransport):
@@ -107,7 +107,7 @@ class RetryTransport(httpx.AsyncBaseTransport):
 
     def _delay(self, attempt: int) -> float:
         """Exponential backoff with 20% jitter."""
-        base = min(self._backoff_base * (2 ** attempt), self._backoff_max)
+        base = min(self._backoff_base * (2**attempt), self._backoff_max)
         jitter = base * 0.2 * random.random()
         return base + jitter
 

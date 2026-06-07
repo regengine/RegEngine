@@ -40,7 +40,6 @@ from app.epcis_export import (
 from app.webhook_compat import _verify_api_key, require_tenant_context
 from shared.tenant_context import TenantContext
 
-
 # ---------------------------------------------------------------------------
 # Fake SQLAlchemy helpers
 # ---------------------------------------------------------------------------
@@ -285,13 +284,9 @@ class TestExportEpcisEndpoint:
         assert response.headers["X-RegEngine-Events-Count"] == str(len(SAMPLE_EPCIS_EVENTS))
         assert "X-RegEngine-Schema-Valid" not in response.headers
 
-    def test_returns_tenant_events_when_db_has_rows(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_tenant_events_when_db_has_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row = dict(_event_row()._mapping)
-        monkeypatch.setattr(
-            epcis_export, "_query_tenant_events", lambda *a, **k: [row]
-        )
+        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
             json={"tenant_id": "tenant-x", "format": "epcis"},
@@ -313,24 +308,22 @@ class TestExportEpcisEndpoint:
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
         assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
 
-    def test_fills_defaults_when_row_fields_are_null(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        row = dict(_event_row(
-            event_type=None,
-            epcis_event_type=None,
-            epcis_action=None,
-            epcis_biz_step=None,
-            event_timestamp=None,
-            location_gln=None,
-            traceability_lot_code=None,
-            quantity=None,
-            unit_of_measure=None,
-            sha256_hash=None,
-        )._mapping)
-        monkeypatch.setattr(
-            epcis_export, "_query_tenant_events", lambda *a, **k: [row]
+    def test_fills_defaults_when_row_fields_are_null(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        row = dict(
+            _event_row(
+                event_type=None,
+                epcis_event_type=None,
+                epcis_action=None,
+                epcis_biz_step=None,
+                event_timestamp=None,
+                location_gln=None,
+                traceability_lot_code=None,
+                quantity=None,
+                unit_of_measure=None,
+                sha256_hash=None,
+            )._mapping
         )
+        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
             json={"tenant_id": "tenant-x"},
@@ -368,9 +361,7 @@ class TestExportEpcisEndpoint:
 
 
 class TestExportFdaEndpoint:
-    def test_sample_fallback_when_no_rows(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_sample_fallback_when_no_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/fda",
@@ -387,9 +378,7 @@ class TestExportFdaEndpoint:
         assert "TOM-0226-F3-001" in body
         assert "HARVESTING" in body
 
-    def test_builds_csv_from_real_rows(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_builds_csv_from_real_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row1 = dict(_event_row()._mapping)
         row2 = dict(
             _event_row(
@@ -410,9 +399,7 @@ class TestExportFdaEndpoint:
                 traceability_lot_code=None,
             )._mapping
         )
-        monkeypatch.setattr(
-            epcis_export, "_query_tenant_events", lambda *a, **k: [row1, row2]
-        )
+        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row1, row2])
         response = client.post(
             "/api/v1/export/fda",
             json={"tenant_id": "tenant-x"},

@@ -36,7 +36,6 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-
 # Make services/ingestion importable.
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -46,7 +45,6 @@ from app.webhook_compat import _verify_api_key, require_tenant_context  # noqa: 
 from shared.external_connectors import registry as registry_mod  # noqa: E402
 from shared.external_connectors.base import ConnectionStatus, ConnectorConfig  # noqa: E402
 from shared.tenant_context import TenantContext  # noqa: E402
-
 
 TENANT = "tenant-integ-1"
 CONNECTOR_ID = "safetyculture"
@@ -147,9 +145,7 @@ class TestListAvailable:
             {"id": "safetyculture", "name": "SafetyCulture", "category": "food_safety"},
             {"id": "sap_s4hana", "name": "SAP S/4HANA", "category": "erp"},
         ]
-        monkeypatch.setattr(
-            registry_mod, "list_available_connectors", lambda: sample
-        )
+        monkeypatch.setattr(registry_mod, "list_available_connectors", lambda: sample)
         resp = client.get("/api/v1/integrations/available")
         assert resp.status_code == 200
         assert resp.json() == {"integrations": sample}
@@ -195,9 +191,7 @@ class TestConfigureConnector:
     def test_unknown_connector_returns_404(self, client, monkeypatch):
         """If the requested connector_id isn't registered, 404 with a
         diagnostic naming the bad ID — not a 500 from the None class."""
-        monkeypatch.setattr(
-            registry_mod, "get_connector_class", lambda _id: None
-        )
+        monkeypatch.setattr(registry_mod, "get_connector_class", lambda _id: None)
         resp = client.post(
             f"/api/v1/integrations/configure/{TENANT}",
             json={"connector_id": "nonexistent"},
@@ -245,9 +239,7 @@ class TestConfigureConnector:
         assert created["config"].api_key == "sk_test_123"
         assert created["config"].base_url == "https://api.example.com"
 
-    def test_public_slug_alias_configures_canonical_connector(
-        self, client, monkeypatch
-    ):
+    def test_public_slug_alias_configures_canonical_connector(self, client, monkeypatch):
         """Public docs/UI slugs should work even when the backend stores
         an older underscore connector ID."""
 
@@ -266,12 +258,8 @@ class TestConfigureConnector:
             created["config"] = config
             return _FakeConnector(status=ConnectionStatus.CONNECTED)
 
-        monkeypatch.setattr(
-            registry_mod, "_CONNECTOR_CLASSES", {"inflow_lab": _FakeClass}
-        )
-        monkeypatch.setattr(
-            registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"}
-        )
+        monkeypatch.setattr(registry_mod, "_CONNECTOR_CLASSES", {"inflow_lab": _FakeClass})
+        monkeypatch.setattr(registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"})
         monkeypatch.setattr(registry_mod, "get_or_create_connector", _get_or_create)
 
         resp = client.post(
@@ -284,9 +272,7 @@ class TestConfigureConnector:
         assert created["connector_id"] == "inflow_lab"
         assert created["config"].connector_id == "inflow_lab"
 
-    def test_category_falls_back_to_class_name_on_introspection_failure(
-        self, client, monkeypatch
-    ):
+    def test_category_falls_back_to_class_name_on_introspection_failure(self, client, monkeypatch):
         """When the connector instantiation for info-lookup blows up, the
         handler falls back to class-name-based category rather than
         returning 500. Important regression lock — a buggy third-party
@@ -323,30 +309,20 @@ class TestConfigureConnector:
 
 class TestConnection:
     def test_unconfigured_connector_returns_404(self, client, monkeypatch):
-        monkeypatch.setattr(
-            registry_mod, "get_tenant_connectors", lambda _tid: {}
-        )
-        resp = client.post(
-            f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}"
-        )
+        monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {})
+        resp = client.post(f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}")
         assert resp.status_code == 404
         assert CONNECTOR_ID in resp.json()["detail"]
         assert TENANT in resp.json()["detail"]
 
-    def test_configured_connector_returns_connection_state(
-        self, client, monkeypatch
-    ):
-        connector = _FakeConnector(
-            status=ConnectionStatus.CONNECTED, test_result=True
-        )
+    def test_configured_connector_returns_connection_state(self, client, monkeypatch):
+        connector = _FakeConnector(status=ConnectionStatus.CONNECTED, test_result=True)
         monkeypatch.setattr(
             registry_mod,
             "get_tenant_connectors",
             lambda _tid: {CONNECTOR_ID: connector},
         )
-        resp = client.post(
-            f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}"
-        )
+        resp = client.post(f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}")
         assert resp.status_code == 200
         assert resp.json() == {
             "connector_id": CONNECTOR_ID,
@@ -354,15 +330,9 @@ class TestConnection:
             "status": "connected",
         }
 
-    def test_public_slug_alias_reaches_configured_connector(
-        self, client, monkeypatch
-    ):
-        connector = _FakeConnector(
-            status=ConnectionStatus.CONNECTED, test_result=True
-        )
-        monkeypatch.setattr(
-            registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"}
-        )
+    def test_public_slug_alias_reaches_configured_connector(self, client, monkeypatch):
+        connector = _FakeConnector(status=ConnectionStatus.CONNECTED, test_result=True)
+        monkeypatch.setattr(registry_mod, "_CONNECTOR_ALIASES", {"inflow-lab": "inflow_lab"})
         monkeypatch.setattr(
             registry_mod,
             "get_tenant_connectors",
@@ -378,17 +348,13 @@ class TestConnection:
         """A failed ``test_connection`` is not an API-error condition —
         it's useful DIAGNOSTIC output. The endpoint should return 200
         with ``connected=False`` so the UI can show a health badge."""
-        connector = _FakeConnector(
-            status=ConnectionStatus.ERROR, test_result=False
-        )
+        connector = _FakeConnector(status=ConnectionStatus.ERROR, test_result=False)
         monkeypatch.setattr(
             registry_mod,
             "get_tenant_connectors",
             lambda _tid: {CONNECTOR_ID: connector},
         )
-        resp = client.post(
-            f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}"
-        )
+        resp = client.post(f"/api/v1/integrations/test/{TENANT}/{CONNECTOR_ID}")
         assert resp.status_code == 200
         assert resp.json()["connected"] is False
         assert resp.json()["status"] == "error"
@@ -401,9 +367,7 @@ class TestConnection:
 
 class TestTriggerSync:
     def test_unconfigured_connector_returns_404(self, client, monkeypatch):
-        monkeypatch.setattr(
-            registry_mod, "get_tenant_connectors", lambda _tid: {}
-        )
+        monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {})
         resp = client.post(
             f"/api/v1/integrations/sync/{TENANT}",
             json={"connector_id": CONNECTOR_ID},
@@ -612,9 +576,7 @@ class TestInboundWebhook:
     layer — it validates signatures via ``connector.handle_webhook``."""
 
     def test_unconfigured_connector_returns_404(self, client, monkeypatch):
-        monkeypatch.setattr(
-            registry_mod, "get_tenant_connectors", lambda _tid: {}
-        )
+        monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {})
         resp = client.post(
             f"/api/v1/integrations/webhook/{TENANT}/{CONNECTOR_ID}",
             json={"event": "ping"},
@@ -706,9 +668,7 @@ class TestInboundWebhook:
 
 
 class TestDisconnect:
-    def test_disconnect_calls_registry_and_returns_flag(
-        self, client, monkeypatch
-    ):
+    def test_disconnect_calls_registry_and_returns_flag(self, client, monkeypatch):
         removed: Dict[str, str] = {}
 
         def _remove(tenant_id, connector_id):
@@ -716,9 +676,7 @@ class TestDisconnect:
             removed["connector_id"] = connector_id
 
         monkeypatch.setattr(registry_mod, "remove_connector", _remove)
-        resp = client.delete(
-            f"/api/v1/integrations/disconnect/{TENANT}/{CONNECTOR_ID}"
-        )
+        resp = client.delete(f"/api/v1/integrations/disconnect/{TENANT}/{CONNECTOR_ID}")
         assert resp.status_code == 200
         assert resp.json() == {
             "disconnected": True,
@@ -726,16 +684,12 @@ class TestDisconnect:
         }
         assert removed == {"tenant_id": TENANT, "connector_id": CONNECTOR_ID}
 
-    def test_disconnect_idempotent_for_unknown_connector(
-        self, client, monkeypatch
-    ):
+    def test_disconnect_idempotent_for_unknown_connector(self, client, monkeypatch):
         """``remove_connector`` is a no-op if the connector isn't
         registered, so disconnect should return 200 rather than 404 —
         mirrors the ``pop(key, None)`` semantics of the registry."""
         monkeypatch.setattr(registry_mod, "remove_connector", lambda _t, _c: None)
-        resp = client.delete(
-            f"/api/v1/integrations/disconnect/{TENANT}/never-configured"
-        )
+        resp = client.delete(f"/api/v1/integrations/disconnect/{TENANT}/never-configured")
         assert resp.status_code == 200
         assert resp.json()["disconnected"] is True
 
@@ -838,9 +792,7 @@ class TestAuthGate:
             ("DELETE", f"/api/v1/integrations/disconnect/{TENANT}/{CONNECTOR_ID}"),
         ],
     )
-    def test_protected_endpoint_requires_api_key(
-        self, unauth_client, method, path
-    ):
+    def test_protected_endpoint_requires_api_key(self, unauth_client, method, path):
         """Without an API key header these endpoints should NOT be
         open — anything other than 200 is acceptable (exact status
         code depends on how ``_verify_api_key`` formats the error)."""
@@ -852,27 +804,18 @@ class TestAuthGate:
             resp = unauth_client.post(path, json={"connector_id": CONNECTOR_ID})
         # The key assertion is "NOT 200" — we don't want an
         # un-authed 200 from any of these routes.
-        assert resp.status_code != 200, (
-            f"{method} {path} returned 200 without API-key; "
-            "auth dependency isn't wired"
-        )
+        assert resp.status_code != 200, f"{method} {path} returned 200 without API-key; auth dependency isn't wired"
 
-    def test_webhook_endpoint_does_NOT_require_api_key(
-        self, unauth_client, monkeypatch
-    ):
+    def test_webhook_endpoint_does_NOT_require_api_key(self, unauth_client, monkeypatch):
         """The webhook endpoint is intentionally open — it authenticates
         via the connector's webhook signature, not a platform API key.
         Regressing this to require auth would break every partner
         integration silently."""
-        monkeypatch.setattr(
-            registry_mod, "get_tenant_connectors", lambda _tid: {}
-        )
+        monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {})
         # 404 is OK (no connector) — what we're asserting is that we
         # reached the handler without a pre-handler 401.
         resp = unauth_client.post(
             f"/api/v1/integrations/webhook/{TENANT}/{CONNECTOR_ID}",
             json={"event": "ping"},
         )
-        assert resp.status_code != 401, (
-            "Webhook endpoint should not require platform API key auth"
-        )
+        assert resp.status_code != 401, "Webhook endpoint should not require platform API key auth"

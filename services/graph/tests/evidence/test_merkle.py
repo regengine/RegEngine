@@ -7,22 +7,22 @@ verify_chain_integrity).
 """
 
 import pytest
-from services.graph.app.evidence.merkle import (
-    build_merkle_tree,
-    generate_merkle_proof,
-    verify_merkle_proof,
-    hash_pair,
-    compute_event_hash,
-    append_to_chain,
-    verify_chain_integrity,
-)
-from services.graph.app.evidence.envelope import MerkleProof
 
+from services.graph.app.evidence.envelope import MerkleProof
+from services.graph.app.evidence.merkle import (
+    append_to_chain,
+    build_merkle_tree,
+    compute_event_hash,
+    generate_merkle_proof,
+    hash_pair,
+    verify_chain_integrity,
+    verify_merkle_proof,
+)
 
 # ─── build_merkle_tree ────────────────────────────────────────────────────────
 
-class TestBuildMerkleTree:
 
+class TestBuildMerkleTree:
     def test_single_element_root_equals_leaf(self):
         """With one leaf, the root hash is that leaf's hash (after duplication)."""
         leaf = "abc123leaf"
@@ -81,8 +81,8 @@ class TestBuildMerkleTree:
 
 # ─── generate_merkle_proof ────────────────────────────────────────────────────
 
-class TestGenerateMerkleProof:
 
+class TestGenerateMerkleProof:
     def test_proof_for_leaf_0_in_4_leaf_tree(self):
         """Proof for leaf 0 in a 4-leaf tree has the right path length."""
         leaves = ["h0", "h1", "h2", "h3"]
@@ -118,8 +118,8 @@ class TestGenerateMerkleProof:
 
 # ─── verify_merkle_proof ──────────────────────────────────────────────────────
 
-class TestVerifyMerkleProof:
 
+class TestVerifyMerkleProof:
     def test_valid_proof_returns_true(self):
         """Round-trip: generate proof then verify it returns True."""
         leaves = ["leaf0", "leaf1", "leaf2", "leaf3"]
@@ -172,8 +172,8 @@ class TestVerifyMerkleProof:
 
 # ─── compute_event_hash ───────────────────────────────────────────────────────
 
-class TestComputeEventHash:
 
+class TestComputeEventHash:
     def _make_event(self, **overrides):
         base = {
             "event_id": "evt-001",
@@ -227,8 +227,8 @@ class TestComputeEventHash:
 
 # ─── verify_chain_integrity ───────────────────────────────────────────────────
 
-class TestVerifyChainIntegrity:
 
+class TestVerifyChainIntegrity:
     def _build_chain(self, n: int):
         """Build a valid chain of n events using append_to_chain."""
         chain = []
@@ -279,10 +279,7 @@ class TestVerifyChainIntegrity:
         chain[2] = dict(chain[2], previous_hash="wrong-previous-hash")
         result = verify_chain_integrity(chain)
         assert result["valid"] is False
-        assert any(
-            e.get("issue") in ("hash_mismatch", "chain_link_broken")
-            for e in result["errors"]
-        )
+        assert any(e.get("issue") in ("hash_mismatch", "chain_link_broken") for e in result["errors"])
 
     def test_genesis_with_previous_hash_detected(self):
         """Genesis event (index 0) must have previous_hash == None."""

@@ -3,16 +3,16 @@
 Split from supplier_onboarding_routes.py for maintainability.
 All shared models, helpers, and constants are imported from the original module.
 """
+
 from __future__ import annotations
 
 import uuid as uuid_module
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.pagination import PaginationParams
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
-
-from shared.pagination import PaginationParams
 
 from .database import get_session
 from .dependencies import get_current_user
@@ -24,21 +24,21 @@ from .sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
-from .supplier_graph_sync import supplier_graph_sync
 from .supplier_cte_service import _persist_supplier_cte_event
+from .supplier_graph_sync import supplier_graph_sync
 from .supplier_onboarding_routes import (
     FTL_CATEGORY_CATALOG,
     FTL_CATEGORY_LOOKUP,
-    SupplierFacilityCreateRequest,
-    SupplierFacilityResponse,
     FacilityFTLScopingRequest,
     FacilityFTLScopingResponse,
     SupplierCTEEventCreateRequest,
     SupplierCTEEventResponse,
-    SupplierTLCUpsertRequest,
+    SupplierFacilityCreateRequest,
+    SupplierFacilityResponse,
     SupplierTLCResponse,
-    _get_supplier_facility_or_404,
+    SupplierTLCUpsertRequest,
     _derive_required_ctes,
+    _get_supplier_facility_or_404,
     _iso_utc,
 )
 
@@ -69,9 +69,7 @@ async def list_supplier_facilities(
         SupplierFacilityModel.supplier_user_id == current_user.id,
     ]
 
-    total = db.execute(
-        select(func.count()).select_from(SupplierFacilityModel).where(*base_filter)
-    ).scalar()
+    total = db.execute(select(func.count()).select_from(SupplierFacilityModel).where(*base_filter)).scalar()
 
     rows = db.scalars(
         select(SupplierFacilityModel)
@@ -230,9 +228,7 @@ async def get_required_ctes(
         facility_id=facility_uuid,
     )
 
-    graph_payload = supplier_graph_sync.get_required_ctes_for_facility(
-        str(facility.id), tenant_id=str(tenant_id)
-    )
+    graph_payload = supplier_graph_sync.get_required_ctes_for_facility(str(facility.id), tenant_id=str(tenant_id))
     if graph_payload is not None:
         return FacilityFTLScopingResponse(
             facility_id=str(facility.id),
@@ -241,12 +237,16 @@ async def get_required_ctes(
             source=graph_payload.get("source", "neo4j"),
         )
 
-    category_rows = db.execute(
-        select(SupplierFacilityFTLCategoryModel).where(
-            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
-            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+    category_rows = (
+        db.execute(
+            select(SupplierFacilityFTLCategoryModel).where(
+                SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+                SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     categories = [
         {
@@ -416,9 +416,7 @@ async def list_tlcs(
         )
         base_filters.append(SupplierTraceabilityLotModel.facility_id == facility_uuid)
 
-    total = db.execute(
-        select(func.count()).select_from(SupplierTraceabilityLotModel).where(*base_filters)
-    ).scalar()
+    total = db.execute(select(func.count()).select_from(SupplierTraceabilityLotModel).where(*base_filters)).scalar()
 
     lot_query = (
         select(SupplierTraceabilityLotModel)

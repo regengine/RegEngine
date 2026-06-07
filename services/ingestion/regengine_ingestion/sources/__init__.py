@@ -1,9 +1,9 @@
 """Sources module."""
 
 from .base import SourceAdapter
-from .federal_register import FederalRegisterAdapter
 from .ecfr import ECFRAdapter
 from .fda import FDAAdapter
+from .federal_register import FederalRegisterAdapter
 from .fsma_204 import FSMA204Adapter
 
 __all__ = [

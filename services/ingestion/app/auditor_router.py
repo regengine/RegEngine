@@ -26,11 +26,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.database import get_db_session
 from sqlalchemy import text
 
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
-from shared.database import get_db_session
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 logger = logging.getLogger("auditor-review")
 
@@ -41,17 +41,17 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Auditor Review (Read-Only)"])
 # DB Session
 # ---------------------------------------------------------------------------
 
+
 def _require_db(db_session):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     return db_session
 
 
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/summary",
@@ -70,10 +70,13 @@ async def audit_summary(
     tid = resolve_tenant(tenant_id, principal)
 
     # Total canonical events
-    event_count = db.execute(
-        text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid AND status = 'active'"),
-        {"tid": tid},
-    ).scalar() or 0
+    event_count = (
+        db.execute(
+            text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid AND status = 'active'"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Rule evaluation stats
     eval_stats = db.execute(
@@ -118,10 +121,13 @@ async def audit_summary(
     ).fetchone()
 
     # Chain integrity
-    chain_length = db.execute(
-        text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"),
-        {"tid": tid},
-    ).scalar() or 0
+    chain_length = (
+        db.execute(
+            text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"),
+            {"tid": tid},
+        ).scalar()
+        or 0
+    )
 
     # Ingestion sources
     sources = db.execute(
@@ -244,8 +250,7 @@ async def audit_events(
                 "total_rules": r[11],
                 "passed": r[12],
                 "failed": r[13],
-                "status": "compliant" if r[13] == 0 and r[11] > 0 else
-                          "non_compliant" if r[13] > 0 else "unevaluated",
+                "status": "compliant" if r[13] == 0 and r[11] > 0 else "non_compliant" if r[13] > 0 else "unevaluated",
             },
         }
         for r in rows
@@ -272,6 +277,7 @@ async def audit_event_detail(
     tid = resolve_tenant(tenant_id, principal)
 
     from shared.canonical_persistence import CanonicalEventStore
+
     store = CanonicalEventStore(db, dual_write=False)
     # #1297: auditor endpoint legitimately needs the raw supplier
     # payload for chain-of-custody verification — opt in explicitly.
@@ -526,6 +532,7 @@ async def audit_chain(
     tid = resolve_tenant(tenant_id, principal)
 
     from shared.cte_persistence import CTEPersistence
+
     persistence = CTEPersistence(db)
     result = persistence.verify_chain(tid)
 

@@ -32,12 +32,8 @@ def _enforce_kde_coverage_gate(
                 "error": "kde_coverage_below_threshold",
                 "kde_coverage_ratio": kde_coverage,
                 "threshold": _KDE_COVERAGE_THRESHOLD,
-                "events_with_missing_required_fields": completeness_summary[
-                    "events_with_missing_required_fields"
-                ],
-                "missing_required_by_field": completeness_summary.get(
-                    "missing_required_by_field", {}
-                ),
+                "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
+                "missing_required_by_field": completeness_summary.get("missing_required_by_field", {}),
                 "message": (
                     f"Required-KDE coverage is {kde_coverage:.2%}, below "
                     f"the {_KDE_COVERAGE_THRESHOLD:.0%} FSMA-204 threshold. "
@@ -57,8 +53,6 @@ def _enforce_kde_coverage_gate(
             "export_scope": export_scope,
             "kde_coverage_ratio": kde_coverage,
             "threshold": _KDE_COVERAGE_THRESHOLD,
-            "events_with_missing_required_fields": completeness_summary[
-                "events_with_missing_required_fields"
-            ],
+            "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
         },
     )

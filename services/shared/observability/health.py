@@ -3,16 +3,19 @@
 Supports standard Phase 17/18 HealthCheck class and legacy health functions.
 """
 
-from typing import Dict, Any, Optional, Callable
-from fastapi import FastAPI, APIRouter
-from fastapi.responses import JSONResponse
 import inspect
-import time
-import socket
 import os
+import socket
+import time
+from typing import Any, Callable, Dict, Optional
+
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import JSONResponse
+
 
 class HealthCheck:
     """Standardized health check manager (Phase 17)."""
+
     def __init__(self, service_name: str):
         self.service_name = service_name
         self.start_time = time.time()
@@ -40,8 +43,9 @@ class HealthCheck:
             "version": os.getenv("VERSION", "1.0.0"),
             "hostname": socket.gethostname(),
             "uptime": time.time() - self.start_time,
-            "dependencies": results
+            "dependencies": results,
         }
+
 
 def install_health_router(app: FastAPI, service_name: str, health_check: Optional[HealthCheck] = None):
     """Install standard /health and /ready routes."""
@@ -58,6 +62,7 @@ def install_health_router(app: FastAPI, service_name: str, health_check: Optiona
         return res if res["status"] == "healthy" else JSONResponse(status_code=503, content=res)
 
     app.include_router(router)
+
 
 # --- Legacy Health Functions (for backward compatibility) ---
 def check_health() -> Dict[str, Any]:

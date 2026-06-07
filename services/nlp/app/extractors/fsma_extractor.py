@@ -22,16 +22,16 @@ import structlog
 from shared.pii import redact_pii
 
 from .fsma_types import (
+    CTE,
+    HITL_CONFIDENCE_THRESHOLD,
+    KDE,
+    TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW,
     CTEType,
     DocumentType,
     ExtractionConfidence,
-    LineItem,
-    KDE,
-    CTE,
     FSMAExtractionResult,
-    TOPIC_GRAPH_UPDATE,
-    TOPIC_NEEDS_REVIEW,
-    HITL_CONFIDENCE_THRESHOLD,
+    LineItem,
 )
 
 # #1116 — Food Traceability List scoping. The rules engine already
@@ -258,10 +258,7 @@ class FSMAExtractor:
     }
 
     def __init__(
-        self,
-        confidence_threshold: float = 0.85,
-        threshold_high: float = 0.95,
-        threshold_medium: float = 0.85
+        self, confidence_threshold: float = 0.85, threshold_high: float = 0.95, threshold_medium: float = 0.85
     ):
         """
         Initialize the FSMA Extractor.
@@ -275,11 +272,7 @@ class FSMAExtractor:
         self.threshold_high = threshold_high
         self.threshold_medium = threshold_medium
         self._table_extractor = None  # Lazy-loaded
-        logger.info(
-            "fsma_extractor_initialized",
-            threshold_high=threshold_high,
-            threshold_medium=threshold_medium
-        )
+        logger.info("fsma_extractor_initialized", threshold_high=threshold_high, threshold_medium=threshold_medium)
 
     @property
     def table_extractor(self):
@@ -359,8 +352,8 @@ class FSMAExtractor:
         if ctes:
             doc_confidence = min(cte.confidence for cte in ctes)
         elif line_items:
-             # Fallback if only line items but no full CTEs (rare)
-             doc_confidence = 0.7
+            # Fallback if only line items but no full CTEs (rare)
+            doc_confidence = 0.7
 
         # Determine risk level
         risk_level = self._determine_risk_level(doc_confidence)
@@ -389,7 +382,7 @@ class FSMAExtractor:
         if doc_type == DocumentType.INVOICE:
             warnings.append("Invoice document routed to HITL review; no CTE emitted automatically")
         if review_required:
-             warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
+            warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
             warnings.append("KDE minimum not met: TLC and Event Date are both required")
 
@@ -404,7 +397,7 @@ class FSMAExtractor:
             warnings=warnings,
             line_items=line_items,
             confidence_level=risk_level,
-            review_required=review_required
+            review_required=review_required,
         )
 
         logger.info(
@@ -487,9 +480,7 @@ class FSMAExtractor:
 
         return _ClassificationResult(top_types[0], None)
 
-    def _extract_tabular_data(
-        self, text: str, pdf_bytes: Optional[bytes] = None
-    ) -> List[LineItem]:
+    def _extract_tabular_data(self, text: str, pdf_bytes: Optional[bytes] = None) -> List[LineItem]:
         """
         Extract line items from tabular data in the document.
 
@@ -559,9 +550,7 @@ class FSMAExtractor:
                         unit_of_measure=qty_match[1] if qty_match else None,
                         gtin=gtin,
                         row_index=row.row_index,
-                        bounding_box=(
-                            row.bounding_box.to_dict() if row.bounding_box else None
-                        ),
+                        bounding_box=(row.bounding_box.to_dict() if row.bounding_box else None),
                         confidence=0.9 if lot_code and description else 0.7,
                     )
                     line_items.append(item)
@@ -648,12 +637,8 @@ class FSMAExtractor:
                     item = LineItem(
                         description=desc[:100],
                         lot_code=lot_code,
-                        quantity=(
-                            float(match.group("qty")) if match.group("qty") else None
-                        ),
-                        unit_of_measure=(
-                            match.group("unit").lower() if match.group("unit") else None
-                        ),
+                        quantity=(float(match.group("qty")) if match.group("qty") else None),
+                        unit_of_measure=(match.group("unit").lower() if match.group("unit") else None),
                         row_index=idx,
                         confidence=0.75,
                     )
@@ -670,12 +655,8 @@ class FSMAExtractor:
                     item = LineItem(
                         description=desc[:100],
                         lot_code=lot_code,
-                        quantity=(
-                            float(match.group("qty")) if match.group("qty") else None
-                        ),
-                        unit_of_measure=(
-                            match.group("unit").lower() if match.group("unit") else None
-                        ),
+                        quantity=(float(match.group("qty")) if match.group("qty") else None),
+                        unit_of_measure=(match.group("unit").lower() if match.group("unit") else None),
                         row_index=idx,
                         confidence=0.75,
                     )
@@ -697,11 +678,7 @@ class FSMAExtractor:
             match = re.search(pattern, row_text, re.IGNORECASE)
             if match:
                 qty = float(match.group(1))
-                unit = (
-                    match.group(2).lower()
-                    if len(match.groups()) > 1 and match.group(2)
-                    else None
-                )
+                unit = match.group(2).lower() if len(match.groups()) > 1 and match.group(2) else None
                 return (qty, unit)
         return None
 
@@ -777,9 +754,7 @@ class FSMAExtractor:
         # If we have line items with sufficient data, create CTEs from them
         # Otherwise fall back to global extraction
         useful_line_items = [
-            item
-            for item in (line_items or [])
-            if item.lot_code and (item.quantity is not None or item.description)
+            item for item in (line_items or []) if item.lot_code and (item.quantity is not None or item.description)
         ]
 
         if useful_line_items and len(useful_line_items) > 0:
@@ -797,9 +772,7 @@ class FSMAExtractor:
                 )
                 # #1116 — FTL classification from the line item's
                 # description (the most-specific signal available).
-                kde.is_ftl_covered, kde.ftl_category = self._classify_ftl(
-                    item.description
-                )
+                kde.is_ftl_covered, kde.ftl_category = self._classify_ftl(item.description)
                 # Extract common fields from full text
                 self._populate_shared_kdes(kde, text)
 
@@ -823,10 +796,7 @@ class FSMAExtractor:
 
         # Only create CTE if we found at least one meaningful KDE
         has_meaningful_kde = (
-            kdes.traceability_lot_code
-            or kdes.quantity is not None
-            or kdes.location_identifier
-            or kdes.event_date
+            kdes.traceability_lot_code or kdes.quantity is not None or kdes.location_identifier or kdes.event_date
         )
 
         if has_meaningful_kde:
@@ -835,9 +805,7 @@ class FSMAExtractor:
             # away from the FSMA path instead of letting them fill
             # the review queue with false-positive "missing TLC"
             # warnings.
-            kdes.is_ftl_covered, kdes.ftl_category = self._classify_ftl(
-                kdes.product_description
-            )
+            kdes.is_ftl_covered, kdes.ftl_category = self._classify_ftl(kdes.product_description)
             # Calculate confidence based on completeness
             confidence = self._calculate_confidence(kdes, cte_type)
 
@@ -853,9 +821,7 @@ class FSMAExtractor:
             ctes = self._split_bol_into_shipping_and_receiving(ctes)
         return ctes
 
-    def _split_bol_into_shipping_and_receiving(
-        self, ctes: List[CTE]
-    ) -> List[CTE]:
+    def _split_bol_into_shipping_and_receiving(self, ctes: List[CTE]) -> List[CTE]:
         """For each SHIPPING CTE extracted from a BOL, emit a matching
         RECEIVING CTE at the ship-to party — #1123.
 
@@ -891,9 +857,7 @@ class FSMAExtractor:
             # is unknown. Emitting an unscoped RECEIVING would plant a
             # phantom downstream node, which is worse than leaving the
             # chain forward-incomplete.
-            has_ship_to = bool(
-                cte.kdes.ship_to_gln or cte.kdes.ship_to_location
-            )
+            has_ship_to = bool(cte.kdes.ship_to_gln or cte.kdes.ship_to_location)
             if not has_ship_to:
                 logger.warning(
                     "bol_receiving_skipped_unknown_party",
@@ -908,9 +872,7 @@ class FSMAExtractor:
                 quantity=cte.kdes.quantity,
                 unit_of_measure=cte.kdes.unit_of_measure,
                 # Scope location to the ship-to side (the receiver).
-                location_identifier=(
-                    cte.kdes.ship_to_gln or cte.kdes.location_identifier
-                ),
+                location_identifier=(cte.kdes.ship_to_gln or cte.kdes.location_identifier),
                 event_date=cte.kdes.event_date,
                 event_time=cte.kdes.event_time,
                 ship_from_location=cte.kdes.ship_from_location,
@@ -1036,9 +998,7 @@ class FSMAExtractor:
         # Fallback: sequential GLNs across the document for mapping
         gln_occurrences: List[str] = []
         for pattern in self.PATTERNS.get("gln", []):
-            gln_occurrences.extend(
-                [m.group(1) for m in re.finditer(pattern, text, re.IGNORECASE)]
-            )
+            gln_occurrences.extend([m.group(1) for m in re.finditer(pattern, text, re.IGNORECASE)])
 
         unique_glns: List[str] = []
         for gln_value in gln_occurrences:
@@ -1084,9 +1044,7 @@ class FSMAExtractor:
         gln_roles = self._extract_gln_roles(text)
 
         kde.tlc_source_gln = kde.tlc_source_gln or gln_roles.get("tlc_source_gln")
-        kde.tlc_source_fda_reg = kde.tlc_source_fda_reg or gln_roles.get(
-            "tlc_source_fda_reg"
-        )
+        kde.tlc_source_fda_reg = kde.tlc_source_fda_reg or gln_roles.get("tlc_source_fda_reg")
         kde.ship_from_gln = kde.ship_from_gln or gln_roles.get("ship_from_gln")
         kde.ship_to_gln = kde.ship_to_gln or gln_roles.get("ship_to_gln")
 
@@ -1293,27 +1251,20 @@ class FSMAExtractor:
 
         fields = required_fields.get(cte_type, required_fields[CTEType.SHIPPING])
         total_weight = sum(self._FIELD_WEIGHTS.get(f, 1) for f in fields)
-        weighted_found = sum(
-            self._FIELD_WEIGHTS.get(f, 1)
-            for f in fields
-            if getattr(kde, f, None) is not None
-        )
+        weighted_found = sum(self._FIELD_WEIGHTS.get(f, 1) for f in fields if getattr(kde, f, None) is not None)
 
         if total_weight == 0:
             return 0.0
 
         score = round(weighted_found / total_weight, 2)
         missing_high_priority = any(
-            self._FIELD_WEIGHTS.get(f, 1) >= 3 and getattr(kde, f, None) is None
-            for f in fields
+            self._FIELD_WEIGHTS.get(f, 1) >= 3 and getattr(kde, f, None) is None for f in fields
         )
         if missing_high_priority:
             return min(score, 0.5)
         return score
 
-    def _validate_extraction(
-        self, ctes: List[CTE], doc_type: DocumentType
-    ) -> List[str]:
+    def _validate_extraction(self, ctes: List[CTE], doc_type: DocumentType) -> List[str]:
         """Generate warnings for incomplete or suspicious extractions."""
         warnings = []
 
@@ -1326,23 +1277,15 @@ class FSMAExtractor:
 
             # Check TLC format against production GTIN-14 pattern
             if cte.kdes.traceability_lot_code:
-                if not re.match(
-                    self.GTIN14_TLC_PATTERN, cte.kdes.traceability_lot_code
-                ):
-                    if not re.match(
-                        r"^[A-Za-z0-9\-\.]{5,}$", cte.kdes.traceability_lot_code
-                    ):
-                        warnings.append(
-                            f"{prefix}: TLC format may not be GS1 compliant"
-                        )
+                if not re.match(self.GTIN14_TLC_PATTERN, cte.kdes.traceability_lot_code):
+                    if not re.match(r"^[A-Za-z0-9\-\.]{5,}$", cte.kdes.traceability_lot_code):
+                        warnings.append(f"{prefix}: TLC format may not be GS1 compliant")
             else:
                 warnings.append(f"{prefix}: Missing Traceability Lot Code (CRITICAL)")
 
             # Check confidence
             if cte.confidence < self.confidence_threshold:
-                warnings.append(
-                    f"{prefix}: Low confidence ({cte.confidence:.0%}) - requires review"
-                )
+                warnings.append(f"{prefix}: Low confidence ({cte.confidence:.0%}) - requires review")
 
             # Check required fields
             if not cte.kdes.event_date:
@@ -1361,10 +1304,7 @@ class FSMAExtractor:
         in the graph event payload. CTEs missing either field are omitted to
         prevent incomplete nodes from entering the knowledge graph.
         """
-        qualified_ctes = [
-            cte for cte in result.ctes
-            if cte.kdes.traceability_lot_code and cte.kdes.event_date
-        ]
+        qualified_ctes = [cte for cte in result.ctes if cte.kdes.traceability_lot_code and cte.kdes.event_date]
 
         return {
             "event_type": "fsma.extraction",
@@ -1402,10 +1342,7 @@ class FSMAExtractor:
                 for cte in qualified_ctes
             ],
             "warnings": result.warnings,
-            "risk_assessment": {
-                "level": result.confidence_level.value,
-                "review_required": result.review_required
-            }
+            "risk_assessment": {"level": result.confidence_level.value, "review_required": result.review_required},
         }
 
     def _extract_sku_fallback(self, text: str) -> Optional[str]:
@@ -1530,9 +1467,7 @@ class FSMAExtractor:
             }
             events.append(event)
 
-        logger.info(
-            "fsma_events_generated", count=len(events), document_id=result.document_id
-        )
+        logger.info("fsma_events_generated", count=len(events), document_id=result.document_id)
         return events
 
     def _extract_gtin_from_tlc(self, tlc: str) -> Optional[str]:
@@ -1544,9 +1479,7 @@ class FSMAExtractor:
             return tlc[:14]
         return None
 
-    def _build_kde_list(
-        self, cte: CTE, result: FSMAExtractionResult
-    ) -> List[Dict[str, Any]]:
+    def _build_kde_list(self, cte: CTE, result: FSMAExtractionResult) -> List[Dict[str, Any]]:
         """
         Build list of 7 KDEs with confidence scores.
 
@@ -1578,8 +1511,7 @@ class FSMAExtractor:
                 {
                     "name": "quantity",
                     "value": str(cte.kdes.quantity),
-                    "confidence": base_confidence
-                    * 0.95,  # Slightly lower for numeric extraction
+                    "confidence": base_confidence * 0.95,  # Slightly lower for numeric extraction
                 }
             )
 

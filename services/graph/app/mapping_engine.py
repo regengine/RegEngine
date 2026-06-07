@@ -13,6 +13,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 import structlog
+
 try:
     from langchain_core.prompts import PromptTemplate
 except ImportError:
@@ -30,10 +31,7 @@ class MappingEngine:
     """Engine for semantic mapping and harmonization of global regulations."""
 
     def __init__(
-        self,
-        uri: str = "bolt://localhost:7687",
-        user: str = "neo4j",
-        password: str = os.getenv("NEO4J_PASSWORD", "")
+        self, uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = os.getenv("NEO4J_PASSWORD", "")
     ):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         self._groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
@@ -66,23 +64,31 @@ class MappingEngine:
         # 1. Fetch the source obligation and its context
         async with self.driver.session() as session:
             tenant_filter = "AND o.tenant_id = $tenant_id" if tenant_id else ""
-            source_res = await session.run(f"""
+            source_res = await session.run(
+                f"""
                 MATCH (o:Obligation {{text: $id}})<-[:REQUIRES]-(s:Section)
                 WHERE true {tenant_filter}
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 1
-            """, id=obligation_id, tenant_id=tenant_id)
+            """,
+                id=obligation_id,
+                tenant_id=tenant_id,
+            )
             source = await source_res.single()
             if not source:
                 return []
 
             # 2. Find candidate obligations from OTHER regulations
-            candidates_res = await session.run(f"""
+            candidates_res = await session.run(
+                f"""
                 MATCH (o:Obligation)<-[:REQUIRES]-(s:Section)
                 WHERE s.regulation <> $reg {tenant_filter}
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 20
-            """, reg=source["regulation"], tenant_id=tenant_id)
+            """,
+                reg=source["regulation"],
+                tenant_id=tenant_id,
+            )
             candidates = [dict(c) async for c in candidates_res]
 
         if not candidates:
@@ -100,11 +106,9 @@ class MappingEngine:
             )
 
             cand_text = "\n".join([f"{i}. {c['text']} (from {c['regulation']})" for i, c in enumerate(candidates)])
-            response = await self.llm.ainvoke(prompt.format(
-                source_text=source["text"],
-                source_reg=source["regulation"],
-                candidates_text=cand_text
-            ))
+            response = await self.llm.ainvoke(
+                prompt.format(source_text=source["text"], source_reg=source["regulation"], candidates_text=cand_text)
+            )
             result = response.content.strip().upper()
 
             if result != "NONE":
@@ -121,12 +125,14 @@ class MappingEngine:
                             confidence = 0.9
                         if 0 <= idx < len(candidates) and confidence >= min_confidence:
                             match = candidates[idx]
-                            mappings.append({
-                                "source_id": obligation_id,
-                                "target_id": match["text"],
-                                "confidence": confidence,
-                                "justification": f"Semantic harmonization via {self._groq_model}"
-                            })
+                            mappings.append(
+                                {
+                                    "source_id": obligation_id,
+                                    "target_id": match["text"],
+                                    "confidence": confidence,
+                                    "justification": f"Semantic harmonization via {self._groq_model}",
+                                }
+                            )
 
         except Exception as e:
             logger.error("llm_mapping_failed", error=str(e))
@@ -136,7 +142,8 @@ class MappingEngine:
         if mappings:
             tenant_match = ", tenant_id: $tenant_id" if tenant_id else ""
             async with self.driver.session() as session:
-                await session.run(f"""
+                await session.run(
+                    f"""
                     UNWIND $mappings as map
                     MATCH (o1:Obligation {{text: map.source_id{tenant_match}}})
                     MATCH (o2:Obligation {{text: map.target_id{tenant_match}}})
@@ -144,6 +151,9 @@ class MappingEngine:
                     SET r.confidence = map.confidence,
                         r.justification = map.justification,
                         r.mapped_at = datetime()
-                """, mappings=mappings, tenant_id=tenant_id)
+                """,
+                    mappings=mappings,
+                    tenant_id=tenant_id,
+                )
 
         return mappings

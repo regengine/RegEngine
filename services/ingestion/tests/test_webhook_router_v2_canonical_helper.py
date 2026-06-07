@@ -15,6 +15,7 @@ explicit parameters. These tests pin the routing contract:
 The fakes track call counts on class vars so the assertions are
 deterministic — no FastAPI DI surface, no TestClient, no threading.
 """
+
 from __future__ import annotations
 
 import sys
@@ -27,10 +28,10 @@ import pytest
 from services.ingestion.app import webhook_router_v2 as wrv2
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-
 # ---------------------------------------------------------------------------
 # Fakes — class vars track calls so assertions don't need MagicMock spec.
 # ---------------------------------------------------------------------------
+
 
 class _FakeCanonicalEventStore:
     persist_call_count: int = 0
@@ -40,10 +41,12 @@ class _FakeCanonicalEventStore:
 
     def __init__(self, db_session: Any, dual_write: bool = False, skip_chain_write: bool = False) -> None:
         self.db_session = db_session
-        _FakeCanonicalEventStore.init_kwargs.append({
-            "dual_write": dual_write,
-            "skip_chain_write": skip_chain_write,
-        })
+        _FakeCanonicalEventStore.init_kwargs.append(
+            {
+                "dual_write": dual_write,
+                "skip_chain_write": skip_chain_write,
+            }
+        )
 
     def persist_event(self, canonical: Any) -> Any:
         _FakeCanonicalEventStore.persist_call_count += 1
@@ -59,6 +62,7 @@ class _FakeCanonicalEventStore:
 class _FakeEngine:
     """Records every call to evaluate_event and persist_summary so tests
     can assert exact routing under each mode/summary combination."""
+
     summary_to_return: Any = None
     evaluate_event_persist_true_calls: list = []
     evaluate_event_persist_false_calls: list = []
@@ -69,19 +73,19 @@ class _FakeEngine:
 
     def evaluate_event(self, event_data: dict, persist: bool, tenant_id: str) -> Any:
         bucket = (
-            _FakeEngine.evaluate_event_persist_true_calls
-            if persist
-            else _FakeEngine.evaluate_event_persist_false_calls
+            _FakeEngine.evaluate_event_persist_true_calls if persist else _FakeEngine.evaluate_event_persist_false_calls
         )
         bucket.append({"event_data": event_data, "tenant_id": tenant_id})
         return _FakeEngine.summary_to_return
 
     def persist_summary(self, summary: Any, *, tenant_id: str, event_id=None) -> None:
-        _FakeEngine.persist_summary_calls.append({
-            "summary": summary,
-            "tenant_id": tenant_id,
-            "event_id": event_id,
-        })
+        _FakeEngine.persist_summary_calls.append(
+            {
+                "summary": summary,
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+            }
+        )
 
 
 class _FakeExceptionQueueService:
@@ -91,10 +95,12 @@ class _FakeExceptionQueueService:
         self.db_session = db_session
 
     def create_exceptions_from_evaluation(self, tenant_id: str, summary: Any) -> None:
-        _FakeExceptionQueueService.create_calls.append({
-            "tenant_id": tenant_id,
-            "summary": summary,
-        })
+        _FakeExceptionQueueService.create_calls.append(
+            {
+                "tenant_id": tenant_id,
+                "summary": summary,
+            }
+        )
 
 
 class _FakeCanonical:
@@ -130,6 +136,7 @@ def _fake_normalize_webhook_event(event: Any, tenant_id: str, **_: Any) -> Any:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _install(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -178,36 +185,48 @@ def _make_event():
 
 def _critical_summary() -> EvaluationSummary:
     crit = RuleEvaluationResult(
-        rule_id="CTE_REQ_HARVEST_DATE", severity="critical",
-        result="fail", why_failed="harvest_date missing",
+        rule_id="CTE_REQ_HARVEST_DATE",
+        severity="critical",
+        result="fail",
+        why_failed="harvest_date missing",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[crit], critical_failures=[crit],
+        total_rules=1,
+        failed=1,
+        results=[crit],
+        critical_failures=[crit],
         event_id="from-pre-eval",
     )
 
 
 def _warning_only_summary() -> EvaluationSummary:
     warn = RuleEvaluationResult(
-        rule_id="R_WARN", severity="warning",
-        result="fail", why_failed="non-critical",
+        rule_id="R_WARN",
+        severity="warning",
+        result="fail",
+        why_failed="non-critical",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[warn], critical_failures=[],
+        total_rules=1,
+        failed=1,
+        results=[warn],
+        critical_failures=[],
         event_id="from-pre-eval",
     )
 
 
 def _no_verdict_summary() -> EvaluationSummary:
     return EvaluationSummary(
-        total_rules=0, no_verdict_reason="no_rules_loaded",
+        total_rules=0,
+        no_verdict_reason="no_rules_loaded",
         event_id="from-pre-eval",
     )
 
 
 def _compliant_summary() -> EvaluationSummary:
     return EvaluationSummary(
-        total_rules=1, passed=1,
+        total_rules=1,
+        passed=1,
         results=[RuleEvaluationResult(rule_id="R_OK", severity="info", result="pass")],
         event_id="from-pre-eval",
     )
@@ -217,19 +236,19 @@ def _compliant_summary() -> EvaluationSummary:
 # Fast path: pre-computed summary present → persist_summary, no re-eval
 # ---------------------------------------------------------------------------
 
-class TestFastPathUsingPreComputedSummary:
 
+class TestFastPathUsingPreComputedSummary:
     def test_compliant_summary_uses_persist_summary(self, _make_event):
         precomputed = _compliant_summary()
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
         # Canonical persisted exactly once.
         assert _FakeCanonicalEventStore.persist_call_count == 1
-        assert _FakeCanonicalEventStore.init_kwargs == [
-            {"dual_write": False, "skip_chain_write": True}
-        ]
+        assert _FakeCanonicalEventStore.init_kwargs == [{"dual_write": False, "skip_chain_write": True}]
         # persist_summary called once with the pre-computed summary.
         assert len(_FakeEngine.persist_summary_calls) == 1
         call = _FakeEngine.persist_summary_calls[0]
@@ -250,7 +269,9 @@ class TestFastPathUsingPreComputedSummary:
         non-empty failure set, regardless of severity)."""
         precomputed = _warning_only_summary()
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
         assert len(_FakeEngine.persist_summary_calls) == 1
@@ -267,7 +288,9 @@ class TestFastPathUsingPreComputedSummary:
         anyway, e.g. a config flip mid-request). Persist + exception-queue."""
         precomputed = _critical_summary()
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
         assert len(_FakeEngine.persist_summary_calls) == 1
@@ -279,8 +302,8 @@ class TestFastPathUsingPreComputedSummary:
 # Fallback path: no pre-computed summary OR empty results
 # ---------------------------------------------------------------------------
 
-class TestFallbackPathUsesEvaluateEvent:
 
+class TestFallbackPathUsesEvaluateEvent:
     def test_summary_none_falls_back_to_evaluate_event(self, _make_event):
         """OFF mode (or pre-eval errored) → caller passes None →
         ``evaluate_event(persist=True)`` runs, persist_summary doesn't.
@@ -289,7 +312,9 @@ class TestFallbackPathUsesEvaluateEvent:
         identical to pre-Phase-0 behavior."""
         _FakeEngine.summary_to_return = _compliant_summary()
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=None,
         )
         # Canonical persisted.
@@ -313,7 +338,9 @@ class TestFallbackPathUsesEvaluateEvent:
         _FakeEngine.summary_to_return = _no_verdict_summary()
         precomputed = _no_verdict_summary()  # same shape
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
         # Falls through to evaluate_event because results is empty.
@@ -326,7 +353,9 @@ class TestFallbackPathUsesEvaluateEvent:
         Same behavior as the fast path, just routed through evaluate."""
         _FakeEngine.summary_to_return = _warning_only_summary()
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=None,
         )
         assert len(_FakeEngine.evaluate_event_persist_true_calls) == 1
@@ -337,15 +366,17 @@ class TestFallbackPathUsesEvaluateEvent:
 # Invariants common to both paths
 # ---------------------------------------------------------------------------
 
-class TestCommonInvariants:
 
+class TestCommonInvariants:
     def test_canonical_always_persisted(self, _make_event):
         """Canonical event is persisted in BOTH paths — the dual-write
         contract (#1335) doesn't depend on which rules-eval branch ran."""
         # Fast path
         _FakeEngine.summary_to_return = _compliant_summary()  # for fallback consumers
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=_compliant_summary(),
         )
         assert _FakeCanonicalEventStore.persist_call_count == 1
@@ -353,7 +384,9 @@ class TestCommonInvariants:
         # Fallback path
         _FakeCanonicalEventStore.persist_call_count = 0
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=None,
         )
         assert _FakeCanonicalEventStore.persist_call_count == 1
@@ -370,7 +403,9 @@ class TestCommonInvariants:
         # programming error where the helper writes rows against it.
         precomputed.event_id = "PRE_EVAL_SENTINEL_DO_NOT_USE"
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
         call = _FakeEngine.persist_summary_calls[0]
@@ -398,9 +433,7 @@ class TestCommonInvariants:
         canonical = _FakeCanonicalEventStore.persist_args[0]
         assert str(canonical.event_id) == legacy_event_id
         assert canonical.prepare_call_count == 1
-        assert _FakeCanonicalEventStore.init_kwargs == [
-            {"dual_write": False, "skip_chain_write": True}
-        ]
+        assert _FakeCanonicalEventStore.init_kwargs == [{"dual_write": False, "skip_chain_write": True}]
         assert _FakeEngine.persist_summary_calls[0]["event_id"] == legacy_event_id
 
     def test_rule_evidence_uses_idempotent_canonical_store_result(self, _make_event):
@@ -412,7 +445,9 @@ class TestCommonInvariants:
         precomputed = _compliant_summary()
 
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
 
@@ -423,7 +458,9 @@ class TestCommonInvariants:
         precomputed = _warning_only_summary()
 
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=precomputed,
         )
 
@@ -436,7 +473,9 @@ class TestCommonInvariants:
         _FakeEngine.summary_to_return = _compliant_summary()
 
         wrv2._persist_canonical_and_eval(
-            db_session=MagicMock(), event=_make_event, tenant_id="t-1",
+            db_session=MagicMock(),
+            event=_make_event,
+            tenant_id="t-1",
             precomputed_summary=None,
         )
 

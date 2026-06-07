@@ -1,8 +1,9 @@
 import asyncio
 import os
+import sys
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine
-import sys
 
 # DSNs — loaded from environment variables
 SYNC_DSN = os.environ.get(
@@ -14,6 +15,7 @@ ASYNC_DSN = os.environ.get(
     SYNC_DSN.replace("postgresql://", "postgresql+asyncpg://").replace("?sslmode=require", ""),
 )
 
+
 def test_sync():
     print(f"Testing SYNC connection to: {SYNC_DSN.split('@')[-1]}")
     try:
@@ -23,6 +25,7 @@ def test_sync():
             print(f"SYNC SUCCESS: {ver}")
     except Exception as e:
         print(f"SYNC FAILURE: {e}")
+
 
 async def test_async():
     print(f"Testing ASYNC connection to: {ASYNC_DSN.split('@')[-1]}")
@@ -35,6 +38,7 @@ async def test_async():
             print(f"ASYNC SUCCESS: {ver}")
     except Exception as e:
         print(f"ASYNC FAILURE: {e}")
+
 
 if __name__ == "__main__":
     test_sync()

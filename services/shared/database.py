@@ -1,16 +1,18 @@
+import asyncio
 import os
 import random
-import time
 import threading
-import asyncio
+import time
+from contextlib import asynccontextmanager, contextmanager
+
 import structlog
+from prometheus_client import REGISTRY, CollectorRegistry, Gauge
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
-from contextlib import contextmanager, asynccontextmanager
-from prometheus_client import Gauge, CollectorRegistry, REGISTRY
+from sqlalchemy.orm import sessionmaker
 
 logger = structlog.get_logger("shared.database")
+
 
 # Prometheus Metrics — guard against duplicate registration on re-import
 def _safe_gauge(name: str, description: str) -> Gauge:
@@ -21,6 +23,7 @@ def _safe_gauge(name: str, description: str) -> Gauge:
         # Already registered — return the existing collector
         return REGISTRY._names_to_collectors.get(name, Gauge(name, description, registry=None))
 
+
 db_circuit_breaker_state = _safe_gauge("db_circuit_breaker_state", "0=closed, 1=open, 2=half_open")
 db_pool_checkedout = _safe_gauge("db_pool_checkedout", "Active connections")
 db_pool_overflow = _safe_gauge("db_pool_overflow", "Overflow connections")
@@ -29,6 +32,7 @@ db_pool_overflow = _safe_gauge("db_pool_overflow", "Overflow connections")
 BULKHEAD_LIMIT = int(os.getenv("DB_BULKHEAD_LIMIT", "20"))
 sync_bulkhead = threading.Semaphore(BULKHEAD_LIMIT)
 async_bulkhead = asyncio.Semaphore(BULKHEAD_LIMIT)
+
 
 class CircuitBreaker:
     def __init__(self, failure_threshold=5, base_recovery=30, backoff_factor=2):
@@ -42,7 +46,7 @@ class CircuitBreaker:
     def call(self, func, *args, **kwargs):
         if self.state == "OPEN":
             elapsed = time.time() - self.last_failure
-            recovery = self.base_recovery * (self.backoff_factor ** self.failure_count)
+            recovery = self.base_recovery * (self.backoff_factor**self.failure_count)
             if elapsed > recovery:
                 self.state = "HALF_OPEN"
                 db_circuit_breaker_state.set(2)
@@ -64,6 +68,7 @@ class CircuitBreaker:
                 db_circuit_breaker_state.set(1)
             raise
 
+
 def retry_with_jitter(func, max_retries=3, base_delay=0.1):
     """Execute function with exponential backoff and 20% jitter."""
     for attempt in range(max_retries):
@@ -72,20 +77,21 @@ def retry_with_jitter(func, max_retries=3, base_delay=0.1):
         except OperationalError:
             if attempt == max_retries - 1:
                 raise
-            delay = base_delay * (2 ** attempt) * (1 + random.uniform(-0.2, 0.2))
-            logger.warning("database_retry", attempt=attempt+1, delay=delay)
+            delay = base_delay * (2**attempt) * (1 + random.uniform(-0.2, 0.2))
+            logger.warning("database_retry", attempt=attempt + 1, delay=delay)
             time.sleep(delay)
+
 
 # Engine initialization
 _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 from shared.env import is_production
+
 _is_prod = is_production()
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
     if _is_prod:
         raise ValueError(
-            "DATABASE_URL environment variable must be set in production. "
-            "Refusing to start with default credentials."
+            "DATABASE_URL environment variable must be set in production. Refusing to start with default credentials."
         )
     logger.warning(
         "database_url_default",
@@ -117,6 +123,7 @@ db_pool_overflow.set_function(lambda: engine.pool.overflow())
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 circuit_breaker = CircuitBreaker()
 
+
 @contextmanager
 def get_db():
     """Sync session generator with bulkhead, circuit breaker, and retry logic.
@@ -129,14 +136,11 @@ def get_db():
         db = SessionLocal()
         try:
             # Validate the connection through the circuit breaker
-            retry_with_jitter(
-                lambda: circuit_breaker.call(
-                    lambda: db.execute(text("SELECT 1"))
-                )
-            )
+            retry_with_jitter(lambda: circuit_breaker.call(lambda: db.execute(text("SELECT 1"))))
             yield db
         finally:
             db.close()
+
 
 @asynccontextmanager
 async def get_db_async():
@@ -144,14 +148,11 @@ async def get_db_async():
     async with async_bulkhead:
         db = SessionLocal()
         try:
-            retry_with_jitter(
-                lambda: circuit_breaker.call(
-                    lambda: db.execute(text("SELECT 1"))
-                )
-            )
+            retry_with_jitter(lambda: circuit_breaker.call(lambda: db.execute(text("SELECT 1"))))
             yield db
         finally:
             db.close()
+
 
 # ── Convenience helpers for ingestion modules ──────────────────────────
 

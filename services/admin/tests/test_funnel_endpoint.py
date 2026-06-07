@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 # Previously imported services.admin.main, which eagerly initialized the
 # Postgres pool at module load and broke any test host without a running
 # local Postgres. Build a minimal FastAPI app around just the v1_router
 # so the endpoint is exercisable with in-memory mocks.
 from app import routes as routes_mod
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def _build_app() -> FastAPI:

@@ -37,7 +37,6 @@ from unittest.mock import mock_open, patch
 
 import pytest
 
-
 # The admin service uses `app.*` as the import root for its own modules
 # (see other tests under services/admin/tests). We stay consistent by
 # importing through the package path that is already sys.path-rooted.
@@ -45,6 +44,7 @@ service_dir = Path(__file__).resolve().parent.parent
 if str(service_dir) not in sys.path:
     sys.path.insert(0, str(service_dir))
 
+from services.admin.app import password_policy as pp  # noqa: E402
 from services.admin.app.password_policy import (  # noqa: E402
     PasswordPolicy,
     PasswordPolicyError,
@@ -52,8 +52,6 @@ from services.admin.app.password_policy import (  # noqa: E402
     get_policy_requirements,
     validate_password,
 )
-from services.admin.app import password_policy as pp  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # PasswordPolicyError construction (lines 62-64)
@@ -135,10 +133,7 @@ def test_validate_flags_three_consecutive_repeats():
     policy = PasswordPolicy()
     # Triple 'a' in the middle; satisfies length + upper + lower + digit + special.
     violations = policy.validate("Goodaaa1!Longenough")
-    assert (
-        "Password must not contain more than 2 consecutive identical characters"
-        in violations
-    )
+    assert "Password must not contain more than 2 consecutive identical characters" in violations
 
 
 def test_validate_allows_double_but_not_triple_repeats():
@@ -214,9 +209,7 @@ def test_validate_personal_info_missing_value_skipped():
         "Proper-Strong-Pass-1!",
         user_context={"username": None, "email": ""},
     )
-    assert not any(
-        "username" in v or "email" in v for v in violations
-    ), violations
+    assert not any("username" in v or "email" in v for v in violations), violations
 
 
 # ---------------------------------------------------------------------------

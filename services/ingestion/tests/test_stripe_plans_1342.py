@@ -47,7 +47,6 @@ from app.stripe_billing.plans import (  # noqa: E402
     _resolve_price_id,
 )
 
-
 # ---------------------------------------------------------------------------
 # _normalize_plan_id — alias map + passthrough
 # ---------------------------------------------------------------------------

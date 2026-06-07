@@ -11,14 +11,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.tenant_validation import (
-    ValidTenantId,
     _TENANT_ID_PATTERN,
+    ValidTenantId,
     resolve_tenant,
     validate_tenant_id,
 )
+from fastapi import HTTPException
 
 
 class TestTenantIdPattern:
@@ -50,9 +49,20 @@ class TestTenantIdPattern:
 
     @pytest.mark.parametrize(
         "bad",
-        ["tenant with space", "tenant.abc", "tenant/abc", "tenant@abc",
-         "tenant!", "tenant#", "tenant$", "tenant%", "tenant*",
-         "tenant;DROP TABLE", "tenant\nabc", "tenant\tabc"],
+        [
+            "tenant with space",
+            "tenant.abc",
+            "tenant/abc",
+            "tenant@abc",
+            "tenant!",
+            "tenant#",
+            "tenant$",
+            "tenant%",
+            "tenant*",
+            "tenant;DROP TABLE",
+            "tenant\nabc",
+            "tenant\tabc",
+        ],
     )
     def test_rejects_special_chars(self, bad):
         assert _TENANT_ID_PATTERN.match(bad) is None
@@ -173,6 +183,7 @@ class TestValidTenantIdDependency:
 
     def test_returns_path_param_with_pattern(self):
         from fastapi.params import Path as PathParam
+
         dep = ValidTenantId()
         assert isinstance(dep, PathParam)
 
@@ -192,6 +203,7 @@ class TestValidTenantIdDependency:
         dep = ValidTenantId()
         # Path(...) means required — default is the Ellipsis sentinel
         from pydantic_core import PydanticUndefined
+
         # FastAPI represents required as Undefined
         assert dep.default is PydanticUndefined or dep.default is Ellipsis
 
@@ -201,10 +213,12 @@ class TestModuleSurface:
 
     def test_exports_exist(self):
         import app.tenant_validation as mod
+
         assert callable(mod.validate_tenant_id)
         assert callable(mod.resolve_tenant)
         assert callable(mod.ValidTenantId)
 
     def test_pattern_is_compiled_regex(self):
         import re
+
         assert isinstance(_TENANT_ID_PATTERN, re.Pattern)

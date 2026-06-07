@@ -10,10 +10,10 @@ from urllib.parse import urlparse, urlunparse
 import stripe
 import structlog
 from fastapi import HTTPException
+from shared.permissions import has_permission
 
 from ..authz import IngestionPrincipal
 from ..shared.tenant_resolution import resolve_principal_tenant_id
-from shared.permissions import has_permission
 
 logger = structlog.get_logger("stripe-billing.helpers")
 
@@ -177,10 +177,7 @@ def _validate_redirect_url(
                 "error": "redirect_scheme_not_https",
                 "field": field,
                 "scheme": scheme or "(empty)",
-                "message": (
-                    "Only https:// redirect URLs are allowed for Stripe "
-                    "checkout/portal flows."
-                ),
+                "message": ("Only https:// redirect URLs are allowed for Stripe checkout/portal flows."),
             },
         )
 
@@ -213,7 +210,8 @@ def _validate_redirect_url(
     if not _is_host_allowed(host):
         logger.warning(
             "stripe_redirect_rejected field=%s host=%s",
-            field, host,
+            field,
+            host,
         )
         raise HTTPException(
             status_code=400,
@@ -232,14 +230,16 @@ def _validate_redirect_url(
     # Reconstruct with the lowercased host to normalize; keep path/query
     # untouched so Stripe's own `{CHECKOUT_SESSION_ID}` template tokens
     # survive round-tripping.
-    cleaned = urlunparse((
-        scheme,
-        host if not parsed.port else f"{host}:{parsed.port}",
-        parsed.path or "",
-        parsed.params or "",
-        parsed.query or "",
-        parsed.fragment or "",
-    ))
+    cleaned = urlunparse(
+        (
+            scheme,
+            host if not parsed.port else f"{host}:{parsed.port}",
+            parsed.path or "",
+            parsed.params or "",
+            parsed.query or "",
+            parsed.fragment or "",
+        )
+    )
     return cleaned
 
 
@@ -320,10 +320,7 @@ def _enforce_admin_or_operator(principal: IngestionPrincipal, required_permissio
     if _principal_role(principal) == "viewer":
         raise HTTPException(
             status_code=403,
-            detail=(
-                "Insufficient role for invoice access: "
-                f"requires admin/operator role with '{required_permission}'"
-            ),
+            detail=(f"Insufficient role for invoice access: requires admin/operator role with '{required_permission}'"),
         )
 
 

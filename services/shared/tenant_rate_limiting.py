@@ -1,18 +1,19 @@
-from collections import defaultdict
 import os
 import time
+import uuid
+from collections import defaultdict
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
-import uuid
 
-from fastapi import Request
-from prometheus_client import Counter, REGISTRY
 import redis
 import structlog
+from fastapi import Request
+from prometheus_client import REGISTRY, Counter
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 logger = structlog.get_logger("shared.tenant_rate_limiting")
+
 
 def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter:
     """Return an existing Prometheus Counter when this module is re-imported."""
@@ -110,6 +111,7 @@ class _RedisBucket:
                 self._fallback_logged = True
             # Alert via Sentry (deduplicated)
             from shared.redis_health import report_redis_fallback
+
             report_redis_fallback("rate_limiter", str(exc))
             return self._fallback_bucket.is_allowed(key, limit, window)
 

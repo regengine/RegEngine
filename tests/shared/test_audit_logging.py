@@ -10,37 +10,37 @@ Tests cover:
 """
 
 import asyncio
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+import pytest
 from shared.audit_logging import (
+    # Data classes
+    AuditActor,
+    AuditContext,
+    AuditEvent,
     # Enums
     AuditEventCategory,
     AuditEventType,
-    AuditSeverity,
-    # Data classes
-    AuditActor,
-    AuditResource,
-    AuditContext,
-    AuditEvent,
     # Integrity
     AuditIntegrity,
+    # Logger
+    AuditLogger,
+    AuditResource,
+    AuditSeverity,
     # Storage
     AuditStorageBackend,
     InMemoryAuditStorage,
-    # Logger
-    AuditLogger,
     # Decorators
     audit_action,
     # Functions
     get_audit_logger,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+
 
 @pytest.fixture(autouse=True)
 def _set_audit_key(monkeypatch):
@@ -111,22 +111,23 @@ def audit_logger(storage):
 # Test: Enums
 # =============================================================================
 
+
 class TestAuditEnums:
     """Test audit enums."""
-    
+
     def test_event_categories(self):
         """Should have expected categories."""
         assert AuditEventCategory.AUTHENTICATION == "authentication"
         assert AuditEventCategory.AUTHORIZATION == "authorization"
         assert AuditEventCategory.DATA_ACCESS == "data_access"
         assert AuditEventCategory.SECURITY == "security"
-    
+
     def test_event_types(self):
         """Should have authentication event types."""
         assert AuditEventType.LOGIN_SUCCESS == "login_success"
         assert AuditEventType.LOGIN_FAILURE == "login_failure"
         assert AuditEventType.ACCESS_DENIED == "access_denied"
-    
+
     def test_severity_levels(self):
         """Should have severity levels."""
         assert AuditSeverity.DEBUG == "debug"
@@ -140,23 +141,24 @@ class TestAuditEnums:
 # Test: Data Classes
 # =============================================================================
 
+
 class TestAuditActor:
     """Test AuditActor data class."""
-    
+
     def test_actor_creation(self, actor):
         """Should create actor with all fields."""
         assert actor.actor_id == "user-123"
         assert actor.actor_type == "user"
         assert actor.username == "testuser"
         assert actor.ip_address == "192.168.1.100"
-    
+
     def test_actor_to_dict(self, actor):
         """Should convert to dict."""
         data = actor.to_dict()
         assert data["actor_id"] == "user-123"
         assert data["username"] == "testuser"
         assert "roles" in data
-    
+
     def test_actor_to_dict_excludes_none(self):
         """Should exclude None values in dict."""
         actor = AuditActor(
@@ -170,13 +172,13 @@ class TestAuditActor:
 
 class TestAuditResource:
     """Test AuditResource data class."""
-    
+
     def test_resource_creation(self, resource):
         """Should create resource with all fields."""
         assert resource.resource_type == "document"
         assert resource.resource_id == "doc-123"
         assert resource.attributes["status"] == "active"
-    
+
     def test_resource_to_dict(self, resource):
         """Should convert to dict."""
         data = resource.to_dict()
@@ -187,13 +189,13 @@ class TestAuditResource:
 
 class TestAuditContext:
     """Test AuditContext data class."""
-    
+
     def test_context_creation(self, context):
         """Should create context with all fields."""
         assert context.request_id == "req-123"
         assert context.endpoint == "/api/v1/test"
         assert context.http_status == 200
-    
+
     def test_context_to_dict(self, context):
         """Should convert to dict."""
         data = context.to_dict()
@@ -203,7 +205,7 @@ class TestAuditContext:
 
 class TestAuditEvent:
     """Test AuditEvent data class."""
-    
+
     def test_event_creation(self, actor, resource, context):
         """Should create complete event."""
         event = AuditEvent(
@@ -221,11 +223,11 @@ class TestAuditEvent:
             details={"method": "password"},
             tags=["auth"],
         )
-        
+
         assert event.event_id == "evt-123"
         assert event.event_type == AuditEventType.LOGIN_SUCCESS
         assert event.outcome == "success"
-    
+
     def test_event_to_dict(self, actor):
         """Should convert to dict."""
         event = AuditEvent(
@@ -238,12 +240,12 @@ class TestAuditEvent:
             action="login",
             outcome="success",
         )
-        
+
         data = event.to_dict()
         assert data["event_id"] == "evt-123"
         assert data["timestamp"] == "2024-01-15T12:00:00+00:00"
         assert data["event_type"] == "login_success"
-    
+
     def test_event_to_json(self, actor):
         """Should convert to JSON."""
         event = AuditEvent(
@@ -256,7 +258,7 @@ class TestAuditEvent:
             action="login",
             outcome="success",
         )
-        
+
         json_str = event.to_json()
         assert '"event_id": "evt-123"' in json_str
         assert '"login_success"' in json_str
@@ -266,13 +268,14 @@ class TestAuditEvent:
 # Test: Integrity
 # =============================================================================
 
+
 class TestAuditIntegrity:
     """Test AuditIntegrity hash chains."""
-    
+
     def test_compute_hash(self, actor):
         """Should compute integrity hash."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         event = AuditEvent(
             event_id="evt-123",
             timestamp=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -283,18 +286,18 @@ class TestAuditIntegrity:
             action="login",
             outcome="success",
         )
-        
+
         hash1 = integrity.compute_hash(event)
         assert len(hash1) == 64  # SHA256 hex
-        
+
         # Same event should produce same hash
         hash2 = integrity.compute_hash(event)
         assert hash1 == hash2
-    
+
     def test_sign_event(self, actor):
         """Should sign event with hash."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         event = AuditEvent(
             event_id="evt-123",
             timestamp=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -305,15 +308,15 @@ class TestAuditIntegrity:
             action="login",
             outcome="success",
         )
-        
+
         signed = integrity.sign_event(event)
         assert signed.integrity_hash is not None
         assert signed.previous_hash is None  # First event
-    
+
     def test_sign_chain(self, actor):
         """Should create hash chain."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         event1 = AuditEvent(
             event_id="evt-1",
             timestamp=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -324,7 +327,7 @@ class TestAuditIntegrity:
             action="login",
             outcome="success",
         )
-        
+
         event2 = AuditEvent(
             event_id="evt-2",
             timestamp=datetime(2024, 1, 15, 12, 0, 1, tzinfo=timezone.utc),
@@ -335,16 +338,16 @@ class TestAuditIntegrity:
             action="logout",
             outcome="success",
         )
-        
+
         signed1 = integrity.sign_event(event1)
         signed2 = integrity.sign_event(event2)
-        
+
         assert signed2.previous_hash == signed1.integrity_hash
-    
+
     def test_verify_event(self, actor):
         """Should verify event integrity."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         event = AuditEvent(
             event_id="evt-123",
             timestamp=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -355,14 +358,14 @@ class TestAuditIntegrity:
             action="login",
             outcome="success",
         )
-        
+
         signed = integrity.sign_event(event)
         assert integrity.verify_event(signed) is True
-    
+
     def test_verify_tampered_event(self, actor):
         """Should detect tampered event."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         event = AuditEvent(
             event_id="evt-123",
             timestamp=datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
@@ -373,18 +376,18 @@ class TestAuditIntegrity:
             action="login",
             outcome="success",
         )
-        
+
         signed = integrity.sign_event(event)
-        
+
         # Tamper with event
         signed.action = "tampered"
-        
+
         assert integrity.verify_event(signed) is False
-    
+
     def test_verify_chain(self, actor):
         """Should verify event chain."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         events = []
         for i in range(5):
             event = AuditEvent(
@@ -398,13 +401,13 @@ class TestAuditIntegrity:
                 outcome="success",
             )
             events.append(integrity.sign_event(event))
-        
+
         assert integrity.verify_chain(events) is True
-    
+
     def test_detect_broken_chain(self, actor):
         """Should detect broken chain."""
         integrity = AuditIntegrity(secret_key="test-key")
-        
+
         events = []
         for i in range(3):
             event = AuditEvent(
@@ -418,10 +421,10 @@ class TestAuditIntegrity:
                 outcome="success",
             )
             events.append(integrity.sign_event(event))
-        
+
         # Break the chain
         events[1].previous_hash = "fake-hash"
-        
+
         assert integrity.verify_chain(events) is False
 
 
@@ -429,9 +432,10 @@ class TestAuditIntegrity:
 # Test: Storage
 # =============================================================================
 
+
 class TestInMemoryStorage:
     """Test InMemoryAuditStorage."""
-    
+
     @pytest.mark.asyncio
     async def test_store_event(self, storage, actor):
         """Should store event."""
@@ -445,10 +449,10 @@ class TestInMemoryStorage:
             action="login",
             outcome="success",
         )
-        
+
         result = await storage.store(event)
         assert result is True
-    
+
     @pytest.mark.asyncio
     async def test_get_by_id(self, storage, actor):
         """Should retrieve event by ID."""
@@ -462,18 +466,18 @@ class TestInMemoryStorage:
             action="login",
             outcome="success",
         )
-        
+
         await storage.store(event)
-        
+
         retrieved = await storage.get_by_id("evt-123")
         assert retrieved is not None
         assert retrieved.event_id == "evt-123"
-    
+
     @pytest.mark.asyncio
     async def test_query_by_time_range(self, storage, actor):
         """Should query by time range."""
         now = datetime.now(timezone.utc)
-        
+
         for i in range(10):
             event = AuditEvent(
                 event_id=f"evt-{i}",
@@ -486,15 +490,15 @@ class TestInMemoryStorage:
                 outcome="success",
             )
             await storage.store(event)
-        
+
         # Query last 5 hours
         results = await storage.query(
             start_time=now - timedelta(hours=5),
             end_time=now,
         )
-        
+
         assert len(results) == 6  # 0-5 hours ago
-    
+
     @pytest.mark.asyncio
     async def test_query_by_event_type(self, storage, actor):
         """Should query by event type."""
@@ -503,7 +507,7 @@ class TestInMemoryStorage:
             AuditEventType.LOGIN_FAILURE,
             AuditEventType.LOGIN_SUCCESS,
         ]
-        
+
         for i, et in enumerate(event_types):
             event = AuditEvent(
                 event_id=f"evt-{i}",
@@ -516,13 +520,13 @@ class TestInMemoryStorage:
                 outcome="success" if "SUCCESS" in et.name else "failure",
             )
             await storage.store(event)
-        
+
         results = await storage.query(
             event_types=[AuditEventType.LOGIN_FAILURE],
         )
-        
+
         assert len(results) == 1
-    
+
     @pytest.mark.asyncio
     async def test_query_by_actor(self, storage, actor):
         """Should query by actor ID."""
@@ -530,7 +534,7 @@ class TestInMemoryStorage:
             actor_id="other-user",
             actor_type="user",
         )
-        
+
         for i in range(5):
             a = actor if i < 3 else other_actor
             event = AuditEvent(
@@ -544,10 +548,10 @@ class TestInMemoryStorage:
                 outcome="success",
             )
             await storage.store(event)
-        
+
         results = await storage.query(actor_id="user-123")
         assert len(results) == 3
-    
+
     @pytest.mark.asyncio
     async def test_query_pagination(self, storage, actor):
         """Should support pagination."""
@@ -563,19 +567,19 @@ class TestInMemoryStorage:
                 outcome="success",
             )
             await storage.store(event)
-        
+
         page1 = await storage.query(limit=10, offset=0)
         page2 = await storage.query(limit=10, offset=10)
-        
+
         assert len(page1) == 10
         assert len(page2) == 10
         assert page1[0].event_id != page2[0].event_id
-    
+
     @pytest.mark.asyncio
     async def test_max_events_trimming(self, actor):
         """Should trim old events when max reached."""
         storage = InMemoryAuditStorage(max_events=5)
-        
+
         for i in range(10):
             event = AuditEvent(
                 event_id=f"evt-{i}",
@@ -588,10 +592,10 @@ class TestInMemoryStorage:
                 outcome="success",
             )
             await storage.store(event)
-        
+
         results = await storage.query()
         assert len(results) == 5
-        
+
         # First events should be trimmed
         assert await storage.get_by_id("evt-0") is None
         assert await storage.get_by_id("evt-9") is not None
@@ -601,9 +605,10 @@ class TestInMemoryStorage:
 # Test: Audit Logger
 # =============================================================================
 
+
 class TestAuditLogger:
     """Test AuditLogger main class."""
-    
+
     @pytest.mark.asyncio
     async def test_log_event(self, audit_logger, actor):
         """Should log event."""
@@ -616,10 +621,10 @@ class TestAuditLogger:
             outcome="success",
             message="Test login",
         )
-        
+
         assert event.event_id is not None
         assert event.integrity_hash is not None
-    
+
     @pytest.mark.asyncio
     async def test_log_with_resource(self, audit_logger, actor, resource):
         """Should log event with resource."""
@@ -632,10 +637,10 @@ class TestAuditLogger:
             outcome="success",
             resource=resource,
         )
-        
+
         assert event.resource is not None
         assert event.resource.resource_id == "doc-123"
-    
+
     @pytest.mark.asyncio
     async def test_log_with_context(self, audit_logger, actor, context):
         """Should log event with context."""
@@ -648,10 +653,10 @@ class TestAuditLogger:
             outcome="success",
             context=context,
         )
-        
+
         assert event.context is not None
         assert event.context.endpoint == "/api/v1/test"
-    
+
     @pytest.mark.asyncio
     async def test_query_events(self, audit_logger, actor):
         """Should query logged events."""
@@ -663,10 +668,10 @@ class TestAuditLogger:
             action="login",
             outcome="success",
         )
-        
+
         events = await audit_logger.query()
         assert len(events) == 1
-    
+
     @pytest.mark.asyncio
     async def test_get_event(self, audit_logger, actor):
         """Should get event by ID."""
@@ -678,21 +683,21 @@ class TestAuditLogger:
             action="login",
             outcome="success",
         )
-        
+
         retrieved = await audit_logger.get_event(logged.event_id)
         assert retrieved is not None
         assert retrieved.event_id == logged.event_id
-    
+
     @pytest.mark.asyncio
     async def test_hook_called(self, audit_logger, actor):
         """Should call registered hooks."""
         hook_called = []
-        
+
         def test_hook(event: AuditEvent):
             hook_called.append(event)
-        
+
         audit_logger.add_hook(test_hook)
-        
+
         await audit_logger.log(
             event_type=AuditEventType.LOGIN_SUCCESS,
             category=AuditEventCategory.AUTHENTICATION,
@@ -701,7 +706,7 @@ class TestAuditLogger:
             action="login",
             outcome="success",
         )
-        
+
         assert len(hook_called) == 1
 
 
@@ -709,9 +714,10 @@ class TestAuditLogger:
 # Test: Convenience Methods
 # =============================================================================
 
+
 class TestConvenienceMethods:
     """Test audit logger convenience methods."""
-    
+
     @pytest.mark.asyncio
     async def test_log_login_success(self, audit_logger):
         """Should log successful login."""
@@ -721,11 +727,11 @@ class TestConvenienceMethods:
             ip_address="192.168.1.100",
             mfa_used=True,
         )
-        
+
         assert event.event_type == AuditEventType.LOGIN_SUCCESS
         assert event.outcome == "success"
         assert event.details["mfa_used"] is True
-    
+
     @pytest.mark.asyncio
     async def test_log_login_failure(self, audit_logger):
         """Should log failed login."""
@@ -734,11 +740,11 @@ class TestConvenienceMethods:
             ip_address="192.168.1.100",
             reason="invalid_password",
         )
-        
+
         assert event.event_type == AuditEventType.LOGIN_FAILURE
         assert event.outcome == "failure"
         assert event.severity == AuditSeverity.WARNING
-    
+
     @pytest.mark.asyncio
     async def test_log_access_denied(self, audit_logger, actor, resource):
         """Should log access denied."""
@@ -747,10 +753,10 @@ class TestConvenienceMethods:
             resource=resource,
             required_permission="admin:write",
         )
-        
+
         assert event.event_type == AuditEventType.ACCESS_DENIED
         assert event.details["required_permission"] == "admin:write"
-    
+
     @pytest.mark.asyncio
     async def test_log_data_access(self, audit_logger, actor, resource):
         """Should log data access."""
@@ -760,10 +766,10 @@ class TestConvenienceMethods:
             access_type="read",
             fields_accessed=["name", "email"],
         )
-        
+
         assert event.event_type == AuditEventType.DATA_READ
         assert "name" in event.details["fields_accessed"]
-    
+
     @pytest.mark.asyncio
     async def test_log_data_modification(self, audit_logger, actor, resource):
         """Should log data modification."""
@@ -773,10 +779,10 @@ class TestConvenienceMethods:
             operation="update",
             changes={"status": {"old": "draft", "new": "published"}},
         )
-        
+
         assert event.event_type == AuditEventType.DATA_UPDATE
         assert "changes" in event.details
-    
+
     @pytest.mark.asyncio
     async def test_log_security_event(self, audit_logger, actor):
         """Should log security event."""
@@ -787,11 +793,11 @@ class TestConvenienceMethods:
             severity=AuditSeverity.CRITICAL,
             details={"payload": "'; DROP TABLE users;--"},
         )
-        
+
         assert event.event_type == AuditEventType.INJECTION_ATTEMPT
         assert event.severity == AuditSeverity.CRITICAL
         assert "security" in event.tags
-    
+
     @pytest.mark.asyncio
     async def test_log_sensitive_data_access(self, audit_logger, actor, resource):
         """Should log sensitive data access."""
@@ -801,7 +807,7 @@ class TestConvenienceMethods:
             data_classification="PII",
             reason="Customer support request",
         )
-        
+
         assert event.event_type == AuditEventType.SENSITIVE_DATA_ACCESS
         assert event.details["data_classification"] == "PII"
         assert "pii" in event.tags
@@ -811,9 +817,10 @@ class TestConvenienceMethods:
 # Test: Singleton
 # =============================================================================
 
+
 class TestSingleton:
     """Test singleton pattern."""
-    
+
     def test_get_instance(self):
         """Should return singleton instance."""
         AuditLogger._instance = None
@@ -836,15 +843,16 @@ class TestSingleton:
 # Test: Decorator
 # =============================================================================
 
+
 class TestAuditDecorator:
     """Test audit_action decorator."""
-    
+
     @pytest.mark.asyncio
     async def test_decorator_logs_success(self):
         """Should log successful action."""
         storage = InMemoryAuditStorage()
         AuditLogger.configure(storage=storage)
-        
+
         @audit_action(
             event_type=AuditEventType.DATA_CREATE,
             category=AuditEventCategory.DATA_MODIFICATION,
@@ -852,22 +860,22 @@ class TestAuditDecorator:
         )
         async def create_item(data: dict, actor: AuditActor):
             return {"id": "new-123"}
-        
+
         actor = AuditActor(actor_id="user-123", actor_type="user")
         result = await create_item({"name": "test"}, actor=actor)
-        
+
         assert result["id"] == "new-123"
-        
+
         events = await storage.query()
         assert len(events) == 1
         assert events[0].outcome == "success"
-    
+
     @pytest.mark.asyncio
     async def test_decorator_logs_failure(self):
         """Should log failed action."""
         storage = InMemoryAuditStorage()
         AuditLogger.configure(storage=storage)
-        
+
         @audit_action(
             event_type=AuditEventType.DATA_CREATE,
             category=AuditEventCategory.DATA_MODIFICATION,
@@ -875,12 +883,12 @@ class TestAuditDecorator:
         )
         async def failing_action(actor: AuditActor):
             raise ValueError("Test error")
-        
+
         actor = AuditActor(actor_id="user-123", actor_type="user")
-        
+
         with pytest.raises(ValueError):
             await failing_action(actor=actor)
-        
+
         events = await storage.query()
         assert len(events) == 1
         assert events[0].outcome == "failure"
@@ -891,9 +899,10 @@ class TestAuditDecorator:
 # Test: Global Function
 # =============================================================================
 
+
 class TestGlobalFunction:
     """Test get_audit_logger function."""
-    
+
     def test_get_audit_logger(self):
         """Should return logger instance."""
         logger = get_audit_logger()

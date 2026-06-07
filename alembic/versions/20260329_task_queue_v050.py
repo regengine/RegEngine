@@ -10,13 +10,14 @@ and a polling fallback. Replaces three Kafka consumers:
   2. Graph FSMA ingestion (topic: fsma.events.extracted)
   3. Admin review queue (topic: nlp.needs_review)
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'd4e5f6a7b8c9'
-down_revision: Union[str, Sequence[str], None] = 'c3d4e5f6a7b8'
+revision: str = "d4e5f6a7b8c9"
+down_revision: Union[str, Sequence[str], None] = "c3d4e5f6a7b8"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

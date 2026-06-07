@@ -14,9 +14,8 @@ if str(_services_dir) not in sys.path:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from pydantic import ValidationError
-
 from app.webhook_models import IngestEvent, WebhookCTEType, validate_gln
+from pydantic import ValidationError
 
 
 def _valid_event_kwargs(**overrides):
@@ -76,9 +75,13 @@ class TestWebhookCTEType:
     def test_expected_members(self):
         expected = {
             "growing",  # legacy/internal — normalizes to farm metadata
-            "harvesting", "cooling", "initial_packing",
-            "first_land_based_receiving", "shipping",
-            "receiving", "transformation",
+            "harvesting",
+            "cooling",
+            "initial_packing",
+            "first_land_based_receiving",
+            "shipping",
+            "receiving",
+            "transformation",
         }
         actual = {m.value for m in WebhookCTEType}
         assert actual == expected
@@ -112,20 +115,24 @@ class TestIngestEvent:
     def test_requires_location_gln_or_name(self):
         """FSMA 204 requires at least one location identifier."""
         with pytest.raises(ValidationError) as exc_info:
-            IngestEvent(**_valid_event_kwargs(
-                location_name=None,
-                location_gln=None,
-            ))
+            IngestEvent(
+                **_valid_event_kwargs(
+                    location_name=None,
+                    location_gln=None,
+                )
+            )
         errors = exc_info.value.errors()
         assert any("location" in str(e["msg"]).lower() for e in errors)
 
     def test_location_kde_satisfies_requirement(self):
         """A location KDE (e.g. ship_from_location) should satisfy the location check."""
-        event = IngestEvent(**_valid_event_kwargs(
-            location_name=None,
-            location_gln=None,
-            kdes={"ship_from_location": "Some Warehouse"},
-        ))
+        event = IngestEvent(
+            **_valid_event_kwargs(
+                location_name=None,
+                location_gln=None,
+                kdes={"ship_from_location": "Some Warehouse"},
+            )
+        )
         assert event.location_name is None
         assert event.kdes["ship_from_location"] == "Some Warehouse"
 

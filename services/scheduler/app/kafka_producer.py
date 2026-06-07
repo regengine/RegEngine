@@ -9,7 +9,6 @@ from typing import Optional
 import structlog
 from shared.kafka_auth import KafkaAuthError, sign_event
 from shared.kafka_compat import KafkaError, KafkaProducerCompat as KafkaProducerLib
-
 from shared.observability.kafka_propagation import inject_correlation_headers_tuples
 
 from .config import get_settings

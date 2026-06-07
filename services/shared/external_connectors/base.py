@@ -26,6 +26,7 @@ logger = logging.getLogger("integration-connector")
 
 class ConnectionStatus(str, Enum):
     """Integration connection states."""
+
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
     PENDING = "pending"
@@ -35,6 +36,7 @@ class ConnectionStatus(str, Enum):
 
 class AuthType(str, Enum):
     """Supported authentication methods."""
+
     API_KEY = "api_key"
     OAUTH2 = "oauth2"
     WEBHOOK_SECRET = "webhook_secret"
@@ -45,9 +47,10 @@ class AuthType(str, Enum):
 @dataclass
 class ConnectorConfig:
     """Configuration for an integration connector."""
-    connector_id: str          # e.g. "safetyculture", "sap_s4hana"
-    display_name: str          # e.g. "SafetyCulture (iAuditor)"
-    category: str              # iot, erp, retailer, food_safety, developer
+
+    connector_id: str  # e.g. "safetyculture", "sap_s4hana"
+    display_name: str  # e.g. "SafetyCulture (iAuditor)"
+    category: str  # iot, erp, retailer, food_safety, developer
     auth_type: AuthType = AuthType.API_KEY
     base_url: str = ""
     api_key: str = ""
@@ -57,7 +60,7 @@ class ConnectorConfig:
     oauth_token_url: str = ""
     webhook_secret: str = ""
     tenant_id: str = ""
-    rate_limit_rpm: int = 60   # requests per minute
+    rate_limit_rpm: int = 60  # requests per minute
     timeout_seconds: int = 30
     retry_max: int = 3
     retry_backoff: float = 1.0  # base seconds for exponential backoff
@@ -67,6 +70,7 @@ class ConnectorConfig:
 @dataclass
 class SyncResult:
     """Result of a sync operation."""
+
     connector_id: str
     events_fetched: int = 0
     events_accepted: int = 0
@@ -90,12 +94,13 @@ class NormalizedCTEEvent:
     webhook_models.py, so it can be fed directly into the V2 ingestion
     pipeline.
     """
-    cte_type: str               # harvesting, cooling, shipping, receiving, etc.
+
+    cte_type: str  # harvesting, cooling, shipping, receiving, etc.
     traceability_lot_code: str
     product_description: str
     quantity: float
     unit_of_measure: str
-    timestamp: str              # ISO 8601
+    timestamp: str  # ISO 8601
     location_gln: Optional[str] = None
     location_name: Optional[str] = None
     kdes: Dict[str, Any] = field(default_factory=dict)
@@ -205,9 +210,7 @@ class IntegrationConnector(ABC):
         Default: not supported. Override in connectors that support
         bidirectional sync.
         """
-        raise NotImplementedError(
-            f"{self.connector_id} does not support outbound event push"
-        )
+        raise NotImplementedError(f"{self.connector_id} does not support outbound event push")
 
     async def handle_webhook(
         self,
@@ -218,9 +221,7 @@ class IntegrationConnector(ABC):
 
         Default: not supported. Override for webhook-driven integrations.
         """
-        raise NotImplementedError(
-            f"{self.connector_id} does not support inbound webhooks"
-        )
+        raise NotImplementedError(f"{self.connector_id} does not support inbound webhooks")
 
     # ── Sync orchestration ───────────────────────────────────────
 
@@ -252,9 +253,7 @@ class IntegrationConnector(ABC):
 
             while fetched < limit:
                 batch_limit = min(100, limit - fetched)
-                events, next_cursor = await self.fetch_events(
-                    since=since, cursor=current_cursor, limit=batch_limit
-                )
+                events, next_cursor = await self.fetch_events(since=since, cursor=current_cursor, limit=batch_limit)
                 all_events.extend(events)
                 fetched += len(events)
                 current_cursor = next_cursor
@@ -271,7 +270,8 @@ class IntegrationConnector(ABC):
         except Exception as exc:
             logger.error(
                 "sync_failed connector=%s error=%s",
-                self.connector_id, str(exc),
+                self.connector_id,
+                str(exc),
             )
             result.errors.append(str(exc))
             self._status = ConnectionStatus.ERROR
@@ -289,15 +289,11 @@ class IntegrationConnector(ABC):
         """Simple sliding-window rate limiter."""
         now = time.monotonic()
         window = 60.0  # 1 minute
-        self._request_timestamps = [
-            ts for ts in self._request_timestamps if now - ts < window
-        ]
+        self._request_timestamps = [ts for ts in self._request_timestamps if now - ts < window]
         if len(self._request_timestamps) >= self.config.rate_limit_rpm:
             self._status = ConnectionStatus.RATE_LIMITED
             sleep_time = window - (now - self._request_timestamps[0])
-            raise RateLimitError(
-                f"{self.connector_id} rate limited. Retry in {sleep_time:.1f}s"
-            )
+            raise RateLimitError(f"{self.connector_id} rate limited. Retry in {sleep_time:.1f}s")
         self._request_timestamps.append(now)
 
     # ── Webhook signature verification ───────────────────────────
@@ -310,7 +306,9 @@ class IntegrationConnector(ABC):
     ) -> bool:
         """Verify HMAC signature on inbound webhook payloads."""
         if not self.config.webhook_secret:
-            logger.warning("webhook_no_secret connector=%s", self.connector_id)  # nosemgrep: python-logger-credential-disclosure
+            logger.warning(
+                "webhook_no_secret connector=%s", self.connector_id
+            )  # nosemgrep: python-logger-credential-disclosure
             return False
 
         if algorithm == "sha256":
@@ -345,4 +343,5 @@ class IntegrationConnector(ABC):
 
 class RateLimitError(Exception):
     """Raised when connector exceeds rate limit."""
+
     pass

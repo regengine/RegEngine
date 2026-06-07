@@ -19,11 +19,12 @@ Recall Scenario:
 Usage:
     python3 scripts/seed_lifecycle_test.py
 """
-import sys
+
 import json
+import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 
 # ── Configuration ──────────────────────────────────────────────────────
@@ -133,353 +134,394 @@ PRODUCTS = [
 # Timeline: March 10-15, 2026 (normal flow)
 #           March 12 harvest lot = CONTAMINATED (E. coli found later)
 
+
 def build_supply_chain_events():
     """Build a realistic multi-day, multi-supplier supply chain."""
     events = []
 
     # ── Day 1: March 10 — Harvesting across all 3 farms ──
-    events.append({
-        "cte_type": "harvesting",
-        "timestamp": "2026-03-10T06:00:00Z",
-        "location_name": "Valley Fresh Farms - Field 7",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-VFF-HARVEST-0310",
-        "quantity": 3000,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "harvest_date": "2026-03-10",
+    events.append(
+        {
+            "cte_type": "harvesting",
+            "timestamp": "2026-03-10T06:00:00Z",
             "location_name": "Valley Fresh Farms - Field 7",
-            "farm_name": "Valley Fresh Farms",
-            "growing_area": "Field 7 - Block C",
-            "gtin": "00611269991000",
-        },
-    })
-    events.append({
-        "cte_type": "harvesting",
-        "timestamp": "2026-03-10T06:30:00Z",
-        "location_name": "Sunrise Organics - Plot 3A",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-SO-HARVEST-0310",
-        "quantity": 2500,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "harvest_date": "2026-03-10",
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-VFF-HARVEST-0310",
+            "quantity": 3000,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "harvest_date": "2026-03-10",
+                "location_name": "Valley Fresh Farms - Field 7",
+                "farm_name": "Valley Fresh Farms",
+                "growing_area": "Field 7 - Block C",
+                "gtin": "00611269991000",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "harvesting",
+            "timestamp": "2026-03-10T06:30:00Z",
             "location_name": "Sunrise Organics - Plot 3A",
-            "farm_name": "Sunrise Organics",
-            "growing_area": "Plot 3A - South Section",
-            "gtin": "00611269991000",
-        },
-    })
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-SO-HARVEST-0310",
+            "quantity": 2500,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "harvest_date": "2026-03-10",
+                "location_name": "Sunrise Organics - Plot 3A",
+                "farm_name": "Sunrise Organics",
+                "growing_area": "Plot 3A - South Section",
+                "gtin": "00611269991000",
+            },
+        }
+    )
 
     # ── Day 1: Cooling ──
-    events.append({
-        "cte_type": "cooling",
-        "timestamp": "2026-03-10T08:00:00Z",
-        "location_name": "Valley Fresh Farms - Vacuum Cooler",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-VFF-COOL-0310",
-        "quantity": 3000,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "cooling_date": "2026-03-10",
+    events.append(
+        {
+            "cte_type": "cooling",
+            "timestamp": "2026-03-10T08:00:00Z",
             "location_name": "Valley Fresh Farms - Vacuum Cooler",
-            "cooling_method": "vacuum_cooling",
-            "target_temperature": "34",
-            "input_tlc": "TLC-VFF-HARVEST-0310",
-        },
-    })
-    events.append({
-        "cte_type": "cooling",
-        "timestamp": "2026-03-10T08:30:00Z",
-        "location_name": "Sunrise Organics - Hydrocooler",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-SO-COOL-0310",
-        "quantity": 2500,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "cooling_date": "2026-03-10",
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-VFF-COOL-0310",
+            "quantity": 3000,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "cooling_date": "2026-03-10",
+                "location_name": "Valley Fresh Farms - Vacuum Cooler",
+                "cooling_method": "vacuum_cooling",
+                "target_temperature": "34",
+                "input_tlc": "TLC-VFF-HARVEST-0310",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "cooling",
+            "timestamp": "2026-03-10T08:30:00Z",
             "location_name": "Sunrise Organics - Hydrocooler",
-            "cooling_method": "hydrocooling",
-            "target_temperature": "35",
-            "input_tlc": "TLC-SO-HARVEST-0310",
-        },
-    })
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-SO-COOL-0310",
+            "quantity": 2500,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "cooling_date": "2026-03-10",
+                "location_name": "Sunrise Organics - Hydrocooler",
+                "cooling_method": "hydrocooling",
+                "target_temperature": "35",
+                "input_tlc": "TLC-SO-HARVEST-0310",
+            },
+        }
+    )
 
     # ── Day 1: Initial Packing ──
-    events.append({
-        "cte_type": "initial_packing",
-        "timestamp": "2026-03-10T10:00:00Z",
-        "location_name": "Valley Fresh Farms - Pack House",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-PACK-0310",
-        "quantity": 1200,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "packing_date": "2026-03-10",
+    events.append(
+        {
+            "cte_type": "initial_packing",
+            "timestamp": "2026-03-10T10:00:00Z",
             "location_name": "Valley Fresh Farms - Pack House",
-            "package_type": "3ct_clamshell",
-            "upc": "00611269991000",
-            "input_tlc": "TLC-VFF-COOL-0310",
-        },
-    })
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-PACK-0310",
+            "quantity": 1200,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "packing_date": "2026-03-10",
+                "location_name": "Valley Fresh Farms - Pack House",
+                "package_type": "3ct_clamshell",
+                "upc": "00611269991000",
+                "input_tlc": "TLC-VFF-COOL-0310",
+            },
+        }
+    )
 
     # ── Day 1: Shipping to DC ──
-    events.append({
-        "cte_type": "shipping",
-        "timestamp": "2026-03-10T14:00:00Z",
-        "location_name": "Valley Fresh Farms",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-SHIP-0310",
-        "quantity": 1200,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "ship_date": "2026-03-10",
-            "ship_from_location": "Valley Fresh Farms, Salinas CA",
-            "ship_to_location": "FreshCo DC, Stockton CA",
-            "carrier": "ColdChain Logistics",
-            "bol_number": "BOL-2026-0310-VFF-001",
-            "trailer_temp": "34",
-        },
-    })
+    events.append(
+        {
+            "cte_type": "shipping",
+            "timestamp": "2026-03-10T14:00:00Z",
+            "location_name": "Valley Fresh Farms",
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-SHIP-0310",
+            "quantity": 1200,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "ship_date": "2026-03-10",
+                "ship_from_location": "Valley Fresh Farms, Salinas CA",
+                "ship_to_location": "FreshCo DC, Stockton CA",
+                "carrier": "ColdChain Logistics",
+                "bol_number": "BOL-2026-0310-VFF-001",
+                "trailer_temp": "34",
+            },
+        }
+    )
 
     # ── Day 2: March 11 — Receiving at DC ──
-    events.append({
-        "cte_type": "receiving",
-        "timestamp": "2026-03-11T06:00:00Z",
-        "location_name": "FreshCo Distribution Center - Stockton",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-RECV-0311",
-        "quantity": 1200,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "receive_date": "2026-03-11",
-            "receiving_location": "FreshCo DC - Stockton, CA",
-            "temperature_on_arrival": "35.8",
-            "po_number": "PO-FC-2026-0310-001",
-            "input_tlc": "TLC-VFF-SHIP-0310",
-        },
-    })
+    events.append(
+        {
+            "cte_type": "receiving",
+            "timestamp": "2026-03-11T06:00:00Z",
+            "location_name": "FreshCo Distribution Center - Stockton",
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-RECV-0311",
+            "quantity": 1200,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "receive_date": "2026-03-11",
+                "receiving_location": "FreshCo DC - Stockton, CA",
+                "temperature_on_arrival": "35.8",
+                "po_number": "PO-FC-2026-0310-001",
+                "input_tlc": "TLC-VFF-SHIP-0310",
+            },
+        }
+    )
 
     # ═══════════════════════════════════════════════════════════════════
     #  ★ CONTAMINATED LOT: March 12 harvest from Valley Fresh Field 12
     # ═══════════════════════════════════════════════════════════════════
-    events.append({
-        "cte_type": "harvesting",
-        "timestamp": "2026-03-12T05:30:00Z",
-        "location_name": "Valley Fresh Farms - Field 12",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-VFF-HARVEST-0312",
-        "quantity": 4000,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "harvest_date": "2026-03-12",
+    events.append(
+        {
+            "cte_type": "harvesting",
+            "timestamp": "2026-03-12T05:30:00Z",
             "location_name": "Valley Fresh Farms - Field 12",
-            "farm_name": "Valley Fresh Farms",
-            "growing_area": "Field 12 - All Blocks",
-            "gtin": "00611269991000",
-        },
-    })
-    events.append({
-        "cte_type": "cooling",
-        "timestamp": "2026-03-12T07:30:00Z",
-        "location_name": "Valley Fresh Farms - Vacuum Cooler",
-        "product_description": "Romaine Lettuce Hearts - Organic",
-        "traceability_lot_code": "TLC-VFF-COOL-0312",
-        "quantity": 4000,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "cooling_date": "2026-03-12",
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-VFF-HARVEST-0312",
+            "quantity": 4000,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "harvest_date": "2026-03-12",
+                "location_name": "Valley Fresh Farms - Field 12",
+                "farm_name": "Valley Fresh Farms",
+                "growing_area": "Field 12 - All Blocks",
+                "gtin": "00611269991000",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "cooling",
+            "timestamp": "2026-03-12T07:30:00Z",
             "location_name": "Valley Fresh Farms - Vacuum Cooler",
-            "cooling_method": "vacuum_cooling",
-            "target_temperature": "34",
-            "input_tlc": "TLC-VFF-HARVEST-0312",
-        },
-    })
-    events.append({
-        "cte_type": "initial_packing",
-        "timestamp": "2026-03-12T10:00:00Z",
-        "location_name": "Valley Fresh Farms - Pack House",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-PACK-0312",
-        "quantity": 1600,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "packing_date": "2026-03-12",
+            "product_description": "Romaine Lettuce Hearts - Organic",
+            "traceability_lot_code": "TLC-VFF-COOL-0312",
+            "quantity": 4000,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "cooling_date": "2026-03-12",
+                "location_name": "Valley Fresh Farms - Vacuum Cooler",
+                "cooling_method": "vacuum_cooling",
+                "target_temperature": "34",
+                "input_tlc": "TLC-VFF-HARVEST-0312",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "initial_packing",
+            "timestamp": "2026-03-12T10:00:00Z",
             "location_name": "Valley Fresh Farms - Pack House",
-            "package_type": "3ct_clamshell",
-            "upc": "00611269991000",
-            "input_tlc": "TLC-VFF-COOL-0312",
-        },
-    })
-    events.append({
-        "cte_type": "shipping",
-        "timestamp": "2026-03-12T13:00:00Z",
-        "location_name": "Valley Fresh Farms",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-SHIP-0312",
-        "quantity": 1600,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "ship_date": "2026-03-12",
-            "ship_from_location": "Valley Fresh Farms, Salinas CA",
-            "ship_to_location": "FreshCo DC, Stockton CA",
-            "carrier": "ColdChain Logistics",
-            "bol_number": "BOL-2026-0312-VFF-002",
-            "trailer_temp": "33",
-        },
-    })
-    events.append({
-        "cte_type": "receiving",
-        "timestamp": "2026-03-13T06:30:00Z",
-        "location_name": "FreshCo Distribution Center - Stockton",
-        "product_description": "Romaine Lettuce Hearts - Organic 3ct",
-        "traceability_lot_code": "TLC-VFF-RECV-0313",
-        "quantity": 1600,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "receive_date": "2026-03-13",
-            "receiving_location": "FreshCo DC - Stockton, CA",
-            "temperature_on_arrival": "36.1",
-            "po_number": "PO-FC-2026-0312-002",
-            "input_tlc": "TLC-VFF-SHIP-0312",
-        },
-    })
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-PACK-0312",
+            "quantity": 1600,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "packing_date": "2026-03-12",
+                "location_name": "Valley Fresh Farms - Pack House",
+                "package_type": "3ct_clamshell",
+                "upc": "00611269991000",
+                "input_tlc": "TLC-VFF-COOL-0312",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "shipping",
+            "timestamp": "2026-03-12T13:00:00Z",
+            "location_name": "Valley Fresh Farms",
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-SHIP-0312",
+            "quantity": 1600,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "ship_date": "2026-03-12",
+                "ship_from_location": "Valley Fresh Farms, Salinas CA",
+                "ship_to_location": "FreshCo DC, Stockton CA",
+                "carrier": "ColdChain Logistics",
+                "bol_number": "BOL-2026-0312-VFF-002",
+                "trailer_temp": "33",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "receiving",
+            "timestamp": "2026-03-13T06:30:00Z",
+            "location_name": "FreshCo Distribution Center - Stockton",
+            "product_description": "Romaine Lettuce Hearts - Organic 3ct",
+            "traceability_lot_code": "TLC-VFF-RECV-0313",
+            "quantity": 1600,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "receive_date": "2026-03-13",
+                "receiving_location": "FreshCo DC - Stockton, CA",
+                "temperature_on_arrival": "36.1",
+                "po_number": "PO-FC-2026-0312-002",
+                "input_tlc": "TLC-VFF-SHIP-0312",
+            },
+        }
+    )
 
     # ── Transformation: contaminated lot mixed into Spring Mix ──
-    events.append({
-        "cte_type": "transformation",
-        "timestamp": "2026-03-13T09:00:00Z",
-        "location_name": "FreshCo DC - Processing Line A",
-        "product_description": "Spring Mix Salad Kit - 12oz",
-        "traceability_lot_code": "TLC-FC-XFORM-0313",
-        "quantity": 600,
-        "unit_of_measure": "units",
-        "kdes": {
-            "transformation_date": "2026-03-13",
-            "input_lot_codes": "TLC-VFF-RECV-0313,TLC-SO-COOL-0310",
-            "output_product": "Spring Mix Salad Kit - 12oz",
-            "processing_facility": "FreshCo DC - Processing Line A",
-            "gtin_output": "00611269991024",
-        },
-    })
+    events.append(
+        {
+            "cte_type": "transformation",
+            "timestamp": "2026-03-13T09:00:00Z",
+            "location_name": "FreshCo DC - Processing Line A",
+            "product_description": "Spring Mix Salad Kit - 12oz",
+            "traceability_lot_code": "TLC-FC-XFORM-0313",
+            "quantity": 600,
+            "unit_of_measure": "units",
+            "kdes": {
+                "transformation_date": "2026-03-13",
+                "input_lot_codes": "TLC-VFF-RECV-0313,TLC-SO-COOL-0310",
+                "output_product": "Spring Mix Salad Kit - 12oz",
+                "processing_facility": "FreshCo DC - Processing Line A",
+                "gtin_output": "00611269991024",
+            },
+        }
+    )
 
     # ── Shipping to retail (contaminated product distributed) ──
-    events.append({
-        "cte_type": "shipping",
-        "timestamp": "2026-03-13T15:00:00Z",
-        "location_name": "FreshCo DC - Stockton",
-        "product_description": "Spring Mix Salad Kit - 12oz",
-        "traceability_lot_code": "TLC-FC-SHIP-RETAIL-0313A",
-        "quantity": 300,
-        "unit_of_measure": "units",
-        "kdes": {
-            "ship_date": "2026-03-13",
-            "ship_from_location": "FreshCo DC, Stockton CA",
-            "ship_to_location": "Whole Foods Market #1042, Sacramento CA",
-            "carrier": "Regional Fresh Delivery",
-            "bol_number": "BOL-2026-0313-FC-RETAIL-A",
-        },
-    })
-    events.append({
-        "cte_type": "shipping",
-        "timestamp": "2026-03-13T15:30:00Z",
-        "location_name": "FreshCo DC - Stockton",
-        "product_description": "Spring Mix Salad Kit - 12oz",
-        "traceability_lot_code": "TLC-FC-SHIP-RETAIL-0313B",
-        "quantity": 300,
-        "unit_of_measure": "units",
-        "kdes": {
-            "ship_date": "2026-03-13",
-            "ship_from_location": "FreshCo DC, Stockton CA",
-            "ship_to_location": "Safeway Store #2781, Oakland CA",
-            "carrier": "Regional Fresh Delivery",
-            "bol_number": "BOL-2026-0313-FC-RETAIL-B",
-        },
-    })
+    events.append(
+        {
+            "cte_type": "shipping",
+            "timestamp": "2026-03-13T15:00:00Z",
+            "location_name": "FreshCo DC - Stockton",
+            "product_description": "Spring Mix Salad Kit - 12oz",
+            "traceability_lot_code": "TLC-FC-SHIP-RETAIL-0313A",
+            "quantity": 300,
+            "unit_of_measure": "units",
+            "kdes": {
+                "ship_date": "2026-03-13",
+                "ship_from_location": "FreshCo DC, Stockton CA",
+                "ship_to_location": "Whole Foods Market #1042, Sacramento CA",
+                "carrier": "Regional Fresh Delivery",
+                "bol_number": "BOL-2026-0313-FC-RETAIL-A",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "shipping",
+            "timestamp": "2026-03-13T15:30:00Z",
+            "location_name": "FreshCo DC - Stockton",
+            "product_description": "Spring Mix Salad Kit - 12oz",
+            "traceability_lot_code": "TLC-FC-SHIP-RETAIL-0313B",
+            "quantity": 300,
+            "unit_of_measure": "units",
+            "kdes": {
+                "ship_date": "2026-03-13",
+                "ship_from_location": "FreshCo DC, Stockton CA",
+                "ship_to_location": "Safeway Store #2781, Oakland CA",
+                "carrier": "Regional Fresh Delivery",
+                "bol_number": "BOL-2026-0313-FC-RETAIL-B",
+            },
+        }
+    )
 
     # ── Day 3: March 14 — Green Leaf Growers flow (clean lot) ──
-    events.append({
-        "cte_type": "harvesting",
-        "timestamp": "2026-03-14T06:00:00Z",
-        "location_name": "Green Leaf Growers - Field 2",
-        "product_description": "Chopped Romaine - Foodservice",
-        "traceability_lot_code": "TLC-GLG-HARVEST-0314",
-        "quantity": 1800,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "harvest_date": "2026-03-14",
+    events.append(
+        {
+            "cte_type": "harvesting",
+            "timestamp": "2026-03-14T06:00:00Z",
             "location_name": "Green Leaf Growers - Field 2",
-            "farm_name": "Green Leaf Growers",
-            "growing_area": "Field 2 - East",
-            "gtin": "00611269991017",
-        },
-    })
-    events.append({
-        "cte_type": "cooling",
-        "timestamp": "2026-03-14T08:00:00Z",
-        "location_name": "Green Leaf Growers - Forced Air Cooler",
-        "product_description": "Chopped Romaine - Foodservice",
-        "traceability_lot_code": "TLC-GLG-COOL-0314",
-        "quantity": 1800,
-        "unit_of_measure": "lbs",
-        "kdes": {
-            "cooling_date": "2026-03-14",
+            "product_description": "Chopped Romaine - Foodservice",
+            "traceability_lot_code": "TLC-GLG-HARVEST-0314",
+            "quantity": 1800,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "harvest_date": "2026-03-14",
+                "location_name": "Green Leaf Growers - Field 2",
+                "farm_name": "Green Leaf Growers",
+                "growing_area": "Field 2 - East",
+                "gtin": "00611269991017",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "cooling",
+            "timestamp": "2026-03-14T08:00:00Z",
             "location_name": "Green Leaf Growers - Forced Air Cooler",
-            "cooling_method": "forced_air",
-            "target_temperature": "36",
-            "input_tlc": "TLC-GLG-HARVEST-0314",
-        },
-    })
-    events.append({
-        "cte_type": "initial_packing",
-        "timestamp": "2026-03-14T11:00:00Z",
-        "location_name": "Green Leaf Growers - Pack House",
-        "product_description": "Chopped Romaine - Foodservice 2lb",
-        "traceability_lot_code": "TLC-GLG-PACK-0314",
-        "quantity": 450,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "packing_date": "2026-03-14",
+            "product_description": "Chopped Romaine - Foodservice",
+            "traceability_lot_code": "TLC-GLG-COOL-0314",
+            "quantity": 1800,
+            "unit_of_measure": "lbs",
+            "kdes": {
+                "cooling_date": "2026-03-14",
+                "location_name": "Green Leaf Growers - Forced Air Cooler",
+                "cooling_method": "forced_air",
+                "target_temperature": "36",
+                "input_tlc": "TLC-GLG-HARVEST-0314",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "initial_packing",
+            "timestamp": "2026-03-14T11:00:00Z",
             "location_name": "Green Leaf Growers - Pack House",
-            "package_type": "2lb_foodservice_bag",
-            "upc": "00611269991017",
-            "input_tlc": "TLC-GLG-COOL-0314",
-        },
-    })
-    events.append({
-        "cte_type": "shipping",
-        "timestamp": "2026-03-14T14:30:00Z",
-        "location_name": "Green Leaf Growers",
-        "product_description": "Chopped Romaine - Foodservice 2lb",
-        "traceability_lot_code": "TLC-GLG-SHIP-0314",
-        "quantity": 450,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "ship_date": "2026-03-14",
-            "ship_from_location": "Green Leaf Growers, Watsonville CA",
-            "ship_to_location": "Pacific DC, Portland OR",
-            "carrier": "Northwest Cold Freight",
-            "bol_number": "BOL-2026-0314-GLG-001",
-        },
-    })
+            "product_description": "Chopped Romaine - Foodservice 2lb",
+            "traceability_lot_code": "TLC-GLG-PACK-0314",
+            "quantity": 450,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "packing_date": "2026-03-14",
+                "location_name": "Green Leaf Growers - Pack House",
+                "package_type": "2lb_foodservice_bag",
+                "upc": "00611269991017",
+                "input_tlc": "TLC-GLG-COOL-0314",
+            },
+        }
+    )
+    events.append(
+        {
+            "cte_type": "shipping",
+            "timestamp": "2026-03-14T14:30:00Z",
+            "location_name": "Green Leaf Growers",
+            "product_description": "Chopped Romaine - Foodservice 2lb",
+            "traceability_lot_code": "TLC-GLG-SHIP-0314",
+            "quantity": 450,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "ship_date": "2026-03-14",
+                "ship_from_location": "Green Leaf Growers, Watsonville CA",
+                "ship_to_location": "Pacific DC, Portland OR",
+                "carrier": "Northwest Cold Freight",
+                "bol_number": "BOL-2026-0314-GLG-001",
+            },
+        }
+    )
 
     # ── Day 5: March 15 — Receiving at Pacific DC ──
-    events.append({
-        "cte_type": "receiving",
-        "timestamp": "2026-03-15T07:00:00Z",
-        "location_name": "Pacific Distribution Center - Portland",
-        "product_description": "Chopped Romaine - Foodservice 2lb",
-        "traceability_lot_code": "TLC-GLG-RECV-0315",
-        "quantity": 450,
-        "unit_of_measure": "cases",
-        "kdes": {
-            "receive_date": "2026-03-15",
-            "receiving_location": "Pacific DC - Portland, OR",
-            "temperature_on_arrival": "37.2",
-            "po_number": "PO-PDC-2026-0314-001",
-            "input_tlc": "TLC-GLG-SHIP-0314",
-        },
-    })
+    events.append(
+        {
+            "cte_type": "receiving",
+            "timestamp": "2026-03-15T07:00:00Z",
+            "location_name": "Pacific Distribution Center - Portland",
+            "product_description": "Chopped Romaine - Foodservice 2lb",
+            "traceability_lot_code": "TLC-GLG-RECV-0315",
+            "quantity": 450,
+            "unit_of_measure": "cases",
+            "kdes": {
+                "receive_date": "2026-03-15",
+                "receiving_location": "Pacific DC - Portland, OR",
+                "temperature_on_arrival": "37.2",
+                "po_number": "PO-PDC-2026-0314-001",
+                "input_tlc": "TLC-GLG-SHIP-0314",
+            },
+        }
+    )
 
     return events
 
@@ -487,6 +529,7 @@ def build_supply_chain_events():
 # ══════════════════════════════════════════════════════════════════════
 #  MAIN EXECUTION
 # ══════════════════════════════════════════════════════════════════════
+
 
 def main():
     results = {}

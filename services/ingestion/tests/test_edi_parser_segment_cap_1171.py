@@ -21,6 +21,7 @@ Complementary coverage:
 * ``test_edi_segment_metrics`` — Prometheus metric emission on reject
   and success.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -32,9 +33,7 @@ from fastapi import HTTPException
 
 # Make the edi_ingestion package importable the same way the existing
 # parser/metrics tests do.
-sys.path.insert(
-    0, str(Path(__file__).resolve().parents[1] / "app")
-)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 
 
 def _reload_parser():
@@ -72,10 +71,7 @@ def _build_envelope_with_raw_count(raw_count: int) -> str:
         raise ValueError("raw_count must be >= 2 to produce ISA + trailing empty")
 
     # Standard 106-char ISA (ends with ``~`` at index 105).
-    isa = (
-        "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       "
-        "*260418*0000*U*00401*000000001*0*P*>~"
-    )
+    isa = "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *260418*0000*U*00401*000000001*0*P*>~"
     assert len(isa) == 106, f"ISA must be 106 chars for separator detection, got {len(isa)}"
 
     n_pads = raw_count - 2
@@ -121,8 +117,7 @@ def test_parser_rejects_file_with_more_than_MAX_EDI_SEGMENTS(parser):
     # Sanity: confirm we actually built something over the cap before
     # claiming the parser rejected it for the right reason.
     assert _raw_segment_count(envelope) == cap + 1, (
-        f"bogus test setup: raw count {_raw_segment_count(envelope)} "
-        f"must equal cap+1 ({cap + 1})"
+        f"bogus test setup: raw count {_raw_segment_count(envelope)} must equal cap+1 ({cap + 1})"
     )
 
     with pytest.raises(HTTPException) as excinfo:
@@ -134,9 +129,7 @@ def test_parser_rejects_file_with_more_than_MAX_EDI_SEGMENTS(parser):
     # ``E_EDI_TOO_MANY_SEGMENTS`` maps to ``segment_count_exceeded``
     # in the existing detail schema; we lock in both the status code
     # and the programmatic error tag.
-    assert excinfo.value.status_code == 413, (
-        "#1171: over-cap input must be rejected with 413 Payload Too Large"
-    )
+    assert excinfo.value.status_code == 413, "#1171: over-cap input must be rejected with 413 Payload Too Large"
     detail = excinfo.value.detail
     assert isinstance(detail, dict), f"detail should be structured, got {type(detail)!r}"
     assert detail["error"] == "segment_count_exceeded", (
@@ -180,9 +173,7 @@ def test_parser_accepts_file_at_exact_limit(parser):
     cap = parser._max_segments()
     envelope = _build_envelope_with_raw_count(cap)
 
-    assert _raw_segment_count(envelope) == cap, (
-        "test setup: raw count must equal cap for the boundary check"
-    )
+    assert _raw_segment_count(envelope) == cap, "test setup: raw count must equal cap for the boundary check"
 
     try:
         parser._parse_x12_segments(envelope)
@@ -193,8 +184,7 @@ def test_parser_accepts_file_at_exact_limit(parser):
         # fire at exactly ``cap``.
         detail = exc.detail if isinstance(exc.detail, dict) else {}
         assert detail.get("error") != "segment_count_exceeded", (
-            f"#1171 off-by-one: cap={cap} must NOT reject at exactly "
-            f"cap segments. Got detail={detail!r}"
+            f"#1171 off-by-one: cap={cap} must NOT reject at exactly cap segments. Got detail={detail!r}"
         )
     except Exception:
         # Non-HTTPException failures (ValueError, IndexError, ...) are

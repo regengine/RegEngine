@@ -29,9 +29,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import export_monitoring as em
 from app.export_monitoring import (
     ExportHealthCheck,
@@ -45,7 +42,8 @@ from app.export_monitoring import (
     _query_export_logs,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -56,7 +54,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     bypass = lambda: None
     app.dependency_overrides[_verify_api_key] = bypass
     install_tenant_context_override(app)
@@ -110,11 +110,16 @@ class TestPydanticModels:
 
     def test_health_check_result_fields(self):
         r = HealthCheckResult(
-            name="test", status="healthy", message="ok",
+            name="test",
+            status="healthy",
+            message="ok",
         )
         assert r.details is None
         r2 = HealthCheckResult(
-            name="x", status="critical", message="m", details={"k": 1},
+            name="x",
+            status="critical",
+            message="m",
+            details={"k": 1},
         )
         assert r2.details == {"k": 1}
 
@@ -126,8 +131,11 @@ class TestPydanticModels:
 
     def test_monitoring_alert_fields(self):
         a = MonitoringAlert(
-            id="a1", tenant_id="t", alert_type="x",
-            severity="warning", message="msg",
+            id="a1",
+            tenant_id="t",
+            alert_type="x",
+            severity="warning",
+            message="msg",
         )
         assert a.created_at  # auto-generated
 
@@ -139,22 +147,31 @@ class TestPydanticModels:
 
 class TestQueryExportLogs:
     def test_happy_path(self, monkeypatch):
-        session = _FakeSession(rows=[
-            _row(
-                id="e1", tenant_id="t", export_type="fda", record_count=5,
-                export_time_ms=200.0,
-                created_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
-                format="csv",
-            ),
-            _row(
-                id="e2", tenant_id="t", export_type="fda", record_count=10,
-                export_time_ms=150.0,
-                created_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
-                format="json",
-            ),
-        ])
+        session = _FakeSession(
+            rows=[
+                _row(
+                    id="e1",
+                    tenant_id="t",
+                    export_type="fda",
+                    record_count=5,
+                    export_time_ms=200.0,
+                    created_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
+                    format="csv",
+                ),
+                _row(
+                    id="e2",
+                    tenant_id="t",
+                    export_type="fda",
+                    record_count=10,
+                    export_time_ms=150.0,
+                    created_at=datetime(2026, 4, 16, 10, 0, 0, tzinfo=timezone.utc),
+                    format="json",
+                ),
+            ]
+        )
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         logs = _query_export_logs("t")
@@ -166,14 +183,22 @@ class TestQueryExportLogs:
         assert session.closed
 
     def test_null_created_at(self, monkeypatch):
-        session = _FakeSession(rows=[
-            _row(
-                id="e1", tenant_id="t", export_type="fda", record_count=5,
-                export_time_ms=200.0, created_at=None, format="csv",
-            ),
-        ])
+        session = _FakeSession(
+            rows=[
+                _row(
+                    id="e1",
+                    tenant_id="t",
+                    export_type="fda",
+                    record_count=5,
+                    export_time_ms=200.0,
+                    created_at=None,
+                    format="csv",
+                ),
+            ]
+        )
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         logs = _query_export_logs("t")
@@ -184,6 +209,7 @@ class TestQueryExportLogs:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         assert _query_export_logs("t") is None
@@ -199,6 +225,7 @@ class TestCheckDbConnectivity:
         session = _FakeSession(row=(1,))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_db_connectivity()
@@ -211,6 +238,7 @@ class TestCheckDbConnectivity:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         result = _check_db_connectivity()
@@ -228,14 +256,18 @@ class TestCheckChainIntegrity:
         session = _FakeSession()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, chain_length=42, errors=[])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
 
         result = _check_chain_integrity("t")
@@ -248,6 +280,7 @@ class TestCheckChainIntegrity:
         session = _FakeSession()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         class _Result:
@@ -255,11 +288,14 @@ class TestCheckChainIntegrity:
             errors = []
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return _Result()
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
 
         result = _check_chain_integrity("t")
@@ -270,14 +306,18 @@ class TestCheckChainIntegrity:
         session = _FakeSession()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=False, errors=["block 3 mismatch"])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
 
         result = _check_chain_integrity("t")
@@ -288,6 +328,7 @@ class TestCheckChainIntegrity:
         session = _FakeSession()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         class _Result:
@@ -295,11 +336,14 @@ class TestCheckChainIntegrity:
             # No 'errors' attribute
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return _Result()
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
 
         result = _check_chain_integrity("t")
@@ -311,6 +355,7 @@ class TestCheckChainIntegrity:
             raise RuntimeError("import fail")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         result = _check_chain_integrity("t")
@@ -328,6 +373,7 @@ class TestCheckExportReadiness:
         session = _FakeSession(row=_row(cnt=5))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_export_readiness("t")
@@ -339,6 +385,7 @@ class TestCheckExportReadiness:
         session = _FakeSession(row=_row(cnt=0))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_export_readiness("t")
@@ -349,6 +396,7 @@ class TestCheckExportReadiness:
         session = _FakeSession(row=None)
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_export_readiness("t")
@@ -359,6 +407,7 @@ class TestCheckExportReadiness:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         result = _check_export_readiness("t")
@@ -376,6 +425,7 @@ class TestCheckKdeCompleteness:
         session = _FakeSession(row=_row(total=0, with_kdes=0))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_kde_completeness("t")
@@ -386,6 +436,7 @@ class TestCheckKdeCompleteness:
         session = _FakeSession(row=_row(total=10, with_kdes=9))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_kde_completeness("t")
@@ -397,6 +448,7 @@ class TestCheckKdeCompleteness:
         session = _FakeSession(row=_row(total=10, with_kdes=8))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_kde_completeness("t")
@@ -406,6 +458,7 @@ class TestCheckKdeCompleteness:
         session = _FakeSession(row=_row(total=10, with_kdes=5))
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_kde_completeness("t")
@@ -416,6 +469,7 @@ class TestCheckKdeCompleteness:
         session = _FakeSession(row=None)
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         result = _check_kde_completeness("t")
@@ -426,6 +480,7 @@ class TestCheckKdeCompleteness:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         result = _check_kde_completeness("t")
@@ -463,20 +518,29 @@ class TestExportMetricsEndpoint:
         now = datetime.now(timezone.utc)
         logs = [
             {  # 1h ago — counts for both 24h and 7d
-                "id": "e1", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 10, "export_time_ms": 200.0,
+                "id": "e1",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 10,
+                "export_time_ms": 200.0,
                 "created_at": (now - timedelta(hours=1)).isoformat(),
                 "format": "csv",
             },
             {  # 3d ago — counts for 7d only
-                "id": "e2", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 20, "export_time_ms": 400.0,
+                "id": "e2",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 20,
+                "export_time_ms": 400.0,
                 "created_at": (now - timedelta(days=3)).isoformat(),
                 "format": "json",
             },
             {  # 30d ago — counts for neither
-                "id": "e3", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 5, "export_time_ms": 100.0,
+                "id": "e3",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 5,
+                "export_time_ms": 100.0,
                 "created_at": (now - timedelta(days=30)).isoformat(),
                 "format": "csv",
             },
@@ -496,9 +560,13 @@ class TestExportMetricsEndpoint:
         now = datetime.now(timezone.utc)
         logs = [
             {
-                "id": "e1", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 10, "export_time_ms": 200.0,
-                "created_at": now.isoformat(), "format": None,
+                "id": "e1",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 10,
+                "export_time_ms": 200.0,
+                "created_at": now.isoformat(),
+                "format": None,
             },
         ]
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: logs)
@@ -512,14 +580,22 @@ class TestExportMetricsEndpoint:
         now = datetime.now(timezone.utc)
         logs = [
             {
-                "id": "e1", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 10, "export_time_ms": None,
-                "created_at": now.isoformat(), "format": "csv",
+                "id": "e1",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 10,
+                "export_time_ms": None,
+                "created_at": now.isoformat(),
+                "format": "csv",
             },
             {
-                "id": "e2", "tenant_id": "t1", "export_type": "fda",
-                "record_count": 0, "export_time_ms": None,  # 0 is falsy → excluded
-                "created_at": now.isoformat(), "format": "csv",
+                "id": "e2",
+                "tenant_id": "t1",
+                "export_type": "fda",
+                "record_count": 0,
+                "export_time_ms": None,  # 0 is falsy → excluded
+                "created_at": now.isoformat(),
+                "format": "csv",
             },
         ]
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: logs)
@@ -536,14 +612,24 @@ class TestExportMetricsEndpoint:
 
 
 def _stub_all_healthy(monkeypatch):
-    monkeypatch.setattr(em, "_check_db_connectivity",
-                        lambda: HealthCheckResult(name="db_connectivity", status="healthy", message="ok"))
-    monkeypatch.setattr(em, "_check_chain_integrity",
-                        lambda tid: HealthCheckResult(name="chain_integrity", status="healthy", message="ok"))
-    monkeypatch.setattr(em, "_check_export_readiness",
-                        lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"))
-    monkeypatch.setattr(em, "_check_kde_completeness",
-                        lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"))
+    monkeypatch.setattr(
+        em, "_check_db_connectivity", lambda: HealthCheckResult(name="db_connectivity", status="healthy", message="ok")
+    )
+    monkeypatch.setattr(
+        em,
+        "_check_chain_integrity",
+        lambda tid: HealthCheckResult(name="chain_integrity", status="healthy", message="ok"),
+    )
+    monkeypatch.setattr(
+        em,
+        "_check_export_readiness",
+        lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"),
+    )
+    monkeypatch.setattr(
+        em,
+        "_check_kde_completeness",
+        lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"),
+    )
 
 
 class TestHealthCheckEndpoint:
@@ -556,27 +642,51 @@ class TestHealthCheckEndpoint:
         assert len(body["checks"]) == 4
 
     def test_warning_wins_over_healthy(self, client, monkeypatch):
-        monkeypatch.setattr(em, "_check_db_connectivity",
-                            lambda: HealthCheckResult(name="db_connectivity", status="healthy", message="ok"))
-        monkeypatch.setattr(em, "_check_chain_integrity",
-                            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"))
-        monkeypatch.setattr(em, "_check_export_readiness",
-                            lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"))
-        monkeypatch.setattr(em, "_check_kde_completeness",
-                            lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"))
+        monkeypatch.setattr(
+            em,
+            "_check_db_connectivity",
+            lambda: HealthCheckResult(name="db_connectivity", status="healthy", message="ok"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_chain_integrity",
+            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_export_readiness",
+            lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_kde_completeness",
+            lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"),
+        )
 
         r = client.get("/api/v1/monitoring/health/t1")
         assert r.json()["status"] == "warning"
 
     def test_critical_wins_over_warning(self, client, monkeypatch):
-        monkeypatch.setattr(em, "_check_db_connectivity",
-                            lambda: HealthCheckResult(name="db_connectivity", status="critical", message="down"))
-        monkeypatch.setattr(em, "_check_chain_integrity",
-                            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"))
-        monkeypatch.setattr(em, "_check_export_readiness",
-                            lambda tid: HealthCheckResult(name="export_readiness", status="warning", message="none"))
-        monkeypatch.setattr(em, "_check_kde_completeness",
-                            lambda tid: HealthCheckResult(name="kde_completeness", status="warning", message="low"))
+        monkeypatch.setattr(
+            em,
+            "_check_db_connectivity",
+            lambda: HealthCheckResult(name="db_connectivity", status="critical", message="down"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_chain_integrity",
+            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_export_readiness",
+            lambda tid: HealthCheckResult(name="export_readiness", status="warning", message="none"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_kde_completeness",
+            lambda tid: HealthCheckResult(name="kde_completeness", status="warning", message="low"),
+        )
 
         r = client.get("/api/v1/monitoring/health/t1")
         assert r.json()["status"] == "critical"
@@ -598,14 +708,26 @@ class TestAlertsEndpoint:
         assert body["alerts"] == []
 
     def test_warning_and_critical_produce_alerts(self, client, monkeypatch):
-        monkeypatch.setattr(em, "_check_db_connectivity",
-                            lambda: HealthCheckResult(name="db_connectivity", status="critical", message="down"))
-        monkeypatch.setattr(em, "_check_chain_integrity",
-                            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"))
-        monkeypatch.setattr(em, "_check_export_readiness",
-                            lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"))
-        monkeypatch.setattr(em, "_check_kde_completeness",
-                            lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"))
+        monkeypatch.setattr(
+            em,
+            "_check_db_connectivity",
+            lambda: HealthCheckResult(name="db_connectivity", status="critical", message="down"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_chain_integrity",
+            lambda tid: HealthCheckResult(name="chain_integrity", status="warning", message="slow"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_export_readiness",
+            lambda tid: HealthCheckResult(name="export_readiness", status="healthy", message="ok"),
+        )
+        monkeypatch.setattr(
+            em,
+            "_check_kde_completeness",
+            lambda tid: HealthCheckResult(name="kde_completeness", status="healthy", message="ok"),
+        )
         monkeypatch.setattr(em, "_query_export_logs", lambda tid: None)
 
         r = client.get("/api/v1/monitoring/alerts/t1")
@@ -620,9 +742,13 @@ class TestAlertsEndpoint:
         _stub_all_healthy(monkeypatch)
         now = datetime.now(timezone.utc)
         # Last export 10 days ago → stale
-        monkeypatch.setattr(em, "_query_export_logs", lambda tid: [
-            {"created_at": (now - timedelta(days=10)).isoformat()},
-        ])
+        monkeypatch.setattr(
+            em,
+            "_query_export_logs",
+            lambda tid: [
+                {"created_at": (now - timedelta(days=10)).isoformat()},
+            ],
+        )
 
         r = client.get("/api/v1/monitoring/alerts/t1")
         body = r.json()
@@ -632,9 +758,13 @@ class TestAlertsEndpoint:
     def test_recent_export_no_stale_alert(self, client, monkeypatch):
         _stub_all_healthy(monkeypatch)
         now = datetime.now(timezone.utc)
-        monkeypatch.setattr(em, "_query_export_logs", lambda tid: [
-            {"created_at": (now - timedelta(days=2)).isoformat()},
-        ])
+        monkeypatch.setattr(
+            em,
+            "_query_export_logs",
+            lambda tid: [
+                {"created_at": (now - timedelta(days=2)).isoformat()},
+            ],
+        )
 
         r = client.get("/api/v1/monitoring/alerts/t1")
         body = r.json()
@@ -644,9 +774,13 @@ class TestAlertsEndpoint:
         _stub_all_healthy(monkeypatch)
         # Naive datetime 10 days ago (no tz) should still trigger stale check
         naive = (datetime.now() - timedelta(days=10)).isoformat()
-        monkeypatch.setattr(em, "_query_export_logs", lambda tid: [
-            {"created_at": naive},
-        ])
+        monkeypatch.setattr(
+            em,
+            "_query_export_logs",
+            lambda tid: [
+                {"created_at": naive},
+            ],
+        )
 
         r = client.get("/api/v1/monitoring/alerts/t1")
         body = r.json()
@@ -656,9 +790,13 @@ class TestAlertsEndpoint:
 
     def test_malformed_timestamp_silently_skipped(self, client, monkeypatch):
         _stub_all_healthy(monkeypatch)
-        monkeypatch.setattr(em, "_query_export_logs", lambda tid: [
-            {"created_at": "not-a-date"},
-        ])
+        monkeypatch.setattr(
+            em,
+            "_query_export_logs",
+            lambda tid: [
+                {"created_at": "not-a-date"},
+            ],
+        )
 
         r = client.get("/api/v1/monitoring/alerts/t1")
         body = r.json()

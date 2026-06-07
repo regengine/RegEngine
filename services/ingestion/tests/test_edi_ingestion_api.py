@@ -13,8 +13,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
 from app.webhook_models import EventResult, IngestResponse, WebhookCTEType  # noqa: E402
 
@@ -230,9 +230,7 @@ def test_legacy_856_rejects_missing_kdes_without_placeholder_persistence(
     }
     assert "payload" not in captured_payload
 
-    blocked_placeholders = {
-        error["placeholder_blocked"] for error in detail["errors"]
-    }
+    blocked_placeholders = {error["placeholder_blocked"] for error in detail["errors"]}
     assert {"1.0", "Unknown ship-from", "Unknown ship-to", "EDI 856 Shipment"} <= blocked_placeholders
 
     rejections = list_edi_rejections(TEST_TENANT_ID)
@@ -339,9 +337,7 @@ def test_legacy_856_rejects_invalid_unit_before_units_placeholder_persistence(
     assert "payload" not in captured_payload
 
 
-def test_document_ingest_fsma_strict_rejects_bad_tlc(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient, captured_payload: dict) -> None:
     """#1174: EDI documents that fail FSMAEvent schema validation must
     return 422 and persist nothing into the canonical stream. The
     rejection is still recorded in the EDI rejection log so auditors
@@ -380,9 +376,7 @@ def test_document_ingest_fsma_strict_rejects_bad_tlc(
     assert rejections[0]["reason"] == "fsma_validation_failed"
 
 
-def test_document_ingest_strict_false_query_advisory(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_document_ingest_strict_false_query_advisory(client: TestClient, captured_payload: dict) -> None:
     """#1174: ?strict=false records the rejection in the EDI rejection
     log and DOES NOT persist into the canonical ingest stream. Prior
     behavior wrote ``fsma_validation_status=failed`` into the canonical
@@ -413,9 +407,7 @@ def test_document_ingest_strict_false_query_advisory(
     # canonical ingest stream must NOT see it.
     assert body["status"] == "rejected"
     assert body["extracted"]["fsma_validation_status"] == "failed"
-    assert body["ingestion_result"] is None, (
-        "advisory-mode rejections must not be reported as canonical ingestions"
-    )
+    assert body["ingestion_result"] is None, "advisory-mode rejections must not be reported as canonical ingestions"
     rejection = body["rejection"]
     assert rejection["reason"] == "fsma_validation_failed"
     assert rejection["rejection_id"].startswith("edi-rej-")
@@ -424,9 +416,7 @@ def test_document_ingest_strict_false_query_advisory(
     # Canonical webhook pipeline must not have been invoked — that is
     # the whole point of #1174. The TestClient fixture would have
     # populated captured_payload["payload"] if ingest_events was called.
-    assert "payload" not in captured_payload, (
-        "ingest_events must not be called for FSMA-invalid EDI documents"
-    )
+    assert "payload" not in captured_payload, "ingest_events must not be called for FSMA-invalid EDI documents"
 
     # The rejection is durably recorded for the audit trail.
     rejections = list_edi_rejections(TEST_TENANT_ID)
@@ -439,9 +429,7 @@ def test_document_ingest_strict_false_query_advisory(
     assert len(recorded["errors"]) >= 1
 
 
-def test_document_ingest_strict_passes_with_compliant_tlc(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_document_ingest_strict_passes_with_compliant_tlc(client: TestClient, captured_payload: dict) -> None:
     """#1174 sanity: compliant TLC passes strict validation."""
     response = client.post(
         "/api/v1/ingest/edi/document",
@@ -493,9 +481,7 @@ def test_unparseable_date_returns_400(client: TestClient) -> None:
     assert detail["error"] == "invalid_edi_date"
 
 
-def test_segment_cap_exceeded_returns_413(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_segment_cap_exceeded_returns_413(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """#1171: a crafted envelope over EDI_MAX_SEGMENTS must fail fast
     rather than expanding in memory past the file-size cap.
     """

@@ -15,26 +15,26 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 import pytest
-
 from shared.canonical_event import (
+    SCHEMA_VERSION,
     CTEType,
     EventStatus,
     IngestionSource,
     ProvenanceMetadata,
     TraceabilityEvent,
-    normalize_webhook_event,
-    normalize_epcis_event,
     normalize_csv_row,
-    SCHEMA_VERSION,
+    normalize_epcis_event,
+    normalize_webhook_event,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 class MockWebhookEvent:
     """Simulates an IngestEvent from webhook_models.py."""
+
     def __init__(self, **kwargs):
         self.cte_type = kwargs.get("cte_type", "receiving")
         self.traceability_lot_code = kwargs.get("traceability_lot_code", "00614141000001ABC123")
@@ -44,12 +44,15 @@ class MockWebhookEvent:
         self.location_gln = kwargs.get("location_gln", "0061414100001")
         self.location_name = kwargs.get("location_name", "Acme Distribution Center")
         self.timestamp = kwargs.get("timestamp", "2026-03-25T14:30:00Z")
-        self.kdes = kwargs.get("kdes", {
-            "receive_date": "2026-03-25",
-            "reference_document": "BOL-2026-0325-001",
-            "immediate_previous_source": "Fresh Farms LLC",
-            "tlc_source_reference": "0061414100002",
-        })
+        self.kdes = kwargs.get(
+            "kdes",
+            {
+                "receive_date": "2026-03-25",
+                "reference_document": "BOL-2026-0325-001",
+                "immediate_previous_source": "Fresh Farms LLC",
+                "tlc_source_reference": "0061414100002",
+            },
+        )
         self.input_traceability_lot_codes = kwargs.get("input_traceability_lot_codes", None)
 
 
@@ -59,6 +62,7 @@ TENANT_ID = str(uuid4())
 # ---------------------------------------------------------------------------
 # TraceabilityEvent Construction
 # ---------------------------------------------------------------------------
+
 
 class TestTraceabilityEventModel:
     def test_basic_construction(self):
@@ -198,6 +202,7 @@ class TestTraceabilityEventModel:
 # Webhook Normalization
 # ---------------------------------------------------------------------------
 
+
 class TestWebhookNormalization:
     def test_basic_normalization(self):
         webhook_event = MockWebhookEvent()
@@ -244,7 +249,7 @@ class TestWebhookNormalization:
             kdes={
                 "ship_from_location": "Warehouse A",
                 "ship_to_location": "Distribution Center B",
-            }
+            },
         )
         canonical = normalize_webhook_event(webhook_event, TENANT_ID)
         assert canonical.event_type == CTEType.SHIPPING
@@ -274,6 +279,7 @@ class TestWebhookNormalization:
 # ---------------------------------------------------------------------------
 # EPCIS Normalization
 # ---------------------------------------------------------------------------
+
 
 class TestEPCISNormalization:
     def test_basic_epcis_normalization(self):
@@ -308,6 +314,7 @@ class TestEPCISNormalization:
 # ---------------------------------------------------------------------------
 # CSV Normalization
 # ---------------------------------------------------------------------------
+
 
 class TestCSVNormalization:
     def test_basic_csv_normalization(self):
@@ -365,7 +372,13 @@ class TestCSVNormalization:
             "UOM": "kg",
             "Date": "2026-03-25",
         }
-        column_mapping = {"Type": "event_type", "TLC": "traceability_lot_code", "Qty": "quantity", "UOM": "unit_of_measure", "Date": "event_timestamp"}
+        column_mapping = {
+            "Type": "event_type",
+            "TLC": "traceability_lot_code",
+            "Qty": "quantity",
+            "UOM": "unit_of_measure",
+            "Date": "event_timestamp",
+        }
         canonical = normalize_csv_row(row, TENANT_ID, column_mapping)
 
         # Unknown type defaults to "receiving" with lower confidence
@@ -374,9 +387,16 @@ class TestCSVNormalization:
 
     def test_csv_provenance_tracks_source_file(self):
         row = {"TLC": "TLC-004", "Qty": "10", "UOM": "cases", "Date": "2026-03-25"}
-        column_mapping = {"TLC": "traceability_lot_code", "Qty": "quantity", "UOM": "unit_of_measure", "Date": "event_timestamp"}
+        column_mapping = {
+            "TLC": "traceability_lot_code",
+            "Qty": "quantity",
+            "UOM": "unit_of_measure",
+            "Date": "event_timestamp",
+        }
         canonical = normalize_csv_row(
-            row, TENANT_ID, column_mapping,
+            row,
+            TENANT_ID,
+            column_mapping,
             source_file_name="supplier_data_q1.csv",
             row_number=42,
         )
@@ -387,6 +407,7 @@ class TestCSVNormalization:
 # ---------------------------------------------------------------------------
 # ProvenanceMetadata
 # ---------------------------------------------------------------------------
+
 
 class TestProvenanceMetadata:
     def test_default_provenance(self):

@@ -58,9 +58,7 @@ def extractor() -> FSMAExtractor:
 class TestTLCOriginatorPreserved_Issue1104:
     """The originator-assigned TLC must survive extraction verbatim."""
 
-    def test_explicit_tlc_preserved_with_unrelated_gtin_in_doc(
-        self, extractor: FSMAExtractor
-    ):
+    def test_explicit_tlc_preserved_with_unrelated_gtin_in_doc(self, extractor: FSMAExtractor):
         """An explicit TLC field + an unrelated 14-digit number in the
         document must produce ``traceability_lot_code == 'LOT-ABC-123'``
         with the GTIN captured separately on ``KDE.gtin``.
@@ -79,10 +77,7 @@ class TestTLCOriginatorPreserved_Issue1104:
             "TLC as assigned by the originator — synthesizing "
             "'<gtin>-<lot>' is non-compliant (#1104)."
         )
-        assert kde.gtin == "01234567890128", (
-            f"GTIN must be stored separately on KDE.gtin; got "
-            f"{kde.gtin!r} (#1104)."
-        )
+        assert kde.gtin == "01234567890128", f"GTIN must be stored separately on KDE.gtin; got {kde.gtin!r} (#1104)."
         # Defensive: the old concat pattern must not reappear.
         assert "01234567890128" not in (kde.traceability_lot_code or ""), (
             "GTIN digits leaked into the TLC — #1104 regression"
@@ -98,9 +93,7 @@ class TestTLCOriginatorPreserved_Issue1104:
         correct model for GTIN/lot association all along. The global
         ``_extract_kdes`` path was rewritten to behave the same way.
         """
-        row_text = (
-            "Romaine Lettuce  GTIN: 00012345678901  LOT: L-2024-A  50 cases"
-        )
+        row_text = "Romaine Lettuce  GTIN: 00012345678901  LOT: L-2024-A  50 cases"
 
         # Row-scoped primitives used by _process_tables_to_line_items.
         lot = extractor._extract_from_row(row_text, extractor.PATTERNS["lot_code"])
@@ -111,8 +104,7 @@ class TestTLCOriginatorPreserved_Issue1104:
         # _build_tlc returns the originator's lot verbatim, ignoring the
         # row's GTIN — the GTIN stays on the LineItem/KDE.
         assert extractor._build_tlc(gtin, lot) == "L-2024-A", (
-            "Row-scoped _build_tlc must preserve the originator's lot "
-            "code verbatim (#1104)."
+            "Row-scoped _build_tlc must preserve the originator's lot code verbatim (#1104)."
         )
 
         # End-to-end: a LineItem produces a CTE whose KDE has both the
@@ -147,16 +139,10 @@ class TestTLCOriginatorPreserved_Issue1104:
         # Document has no "TLC:" / "Traceability Lot Code:" field.
         # Row-scoped heuristic must still recover the lot code from the
         # tabular line, and the downstream KDE must carry it verbatim.
-        text = (
-            "PACKING SLIP\n"
-            "Romaine Lettuce Hearts        LOT: L-2024-ORIG-7   50 cases\n"
-        )
+        text = "PACKING SLIP\nRomaine Lettuce Hearts        LOT: L-2024-ORIG-7   50 cases\n"
 
         line_items = extractor._extract_line_items_heuristic(text)
-        assert line_items, (
-            "Row-scoped heuristic must recover a line item even when no "
-            "'TLC:' label is present (#1104)."
-        )
+        assert line_items, "Row-scoped heuristic must recover a line item even when no 'TLC:' label is present (#1104)."
         item = line_items[0]
         assert item.lot_code == "L-2024-ORIG-7"
 
@@ -170,13 +156,11 @@ class TestTLCOriginatorPreserved_Issue1104:
         assert ctes, "Row-scoped extraction must produce at least one CTE."
         tlc = ctes[0].kdes.traceability_lot_code
         assert tlc == "L-2024-ORIG-7", (
-            f"Row-scoped synthesis must emit the verbatim lot as the "
-            f"TLC; got {tlc!r} (#1104)."
+            f"Row-scoped synthesis must emit the verbatim lot as the TLC; got {tlc!r} (#1104)."
         )
 
         # And when no lot code is present at all, _build_tlc returns
         # None rather than masquerading a GTIN as a TLC.
         assert extractor._build_tlc(gtin="01234567890128", lot_code=None) is None, (
-            "An unpaired GTIN must not be promoted to a TLC — that was "
-            "the same #1104 defect in a different guise."
+            "An unpaired GTIN must not be promoted to a TLC — that was the same #1104 defect in a different guise."
         )

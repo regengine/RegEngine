@@ -22,21 +22,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from app.sandbox import rule_loader
 from app.sandbox.rule_loader import (
     _DEMO_CUSTOM_RULES,
-    _build_rules_from_seeds,
-    _get_applicable_rules,
     _SANDBOX_RULES,
     _SANDBOX_RULES_WITH_CUSTOM,
+    _build_rules_from_seeds,
+    _get_applicable_rules,
 )
 from shared.rules_engine import FSMA_RULE_SEEDS, RuleDefinition
-
 
 # ===========================================================================
 # _build_rules_from_seeds — default (no custom)
 # ===========================================================================
+
 
 class TestBuildRulesDefault:
     """Default path: ``include_custom=False`` builds only FSMA seeds."""
@@ -92,9 +91,7 @@ class TestBuildRulesDefault:
             assert rule.description == seed.get("description")
             assert rule.citation_reference == seed.get("citation_reference")
             assert rule.remediation_suggestion == seed.get("remediation_suggestion")
-            assert rule.applicability_conditions == seed.get(
-                "applicability_conditions", {}
-            )
+            assert rule.applicability_conditions == seed.get("applicability_conditions", {})
 
     def test_include_custom_false_excludes_demo_rules(self):
         """The demo custom rules are only appended when asked for."""
@@ -107,6 +104,7 @@ class TestBuildRulesDefault:
 # ===========================================================================
 # _build_rules_from_seeds — with custom rules
 # ===========================================================================
+
 
 class TestBuildRulesWithCustom:
     """``include_custom=True`` appends the four demo business rules."""
@@ -155,6 +153,7 @@ class TestBuildRulesWithCustom:
 # _DEMO_CUSTOM_RULES — contract checks on the advertised demo set
 # ===========================================================================
 
+
 class TestDemoCustomRulesShape:
     """The demo rules are a marketing surface; assert their core contract."""
 
@@ -162,12 +161,15 @@ class TestDemoCustomRulesShape:
         """If someone changes the count, the UI/demo copy likely needs updating."""
         assert len(_DEMO_CUSTOM_RULES) == 4
 
-    @pytest.mark.parametrize("idx, expected_cte", [
-        (0, ["cooling", "receiving"]),   # Cold chain
-        (1, ["harvesting"]),              # Supplier certification
-        (2, ["shipping"]),                # BOL
-        (3, ["harvesting"]),              # Field traceability
-    ])
+    @pytest.mark.parametrize(
+        "idx, expected_cte",
+        [
+            (0, ["cooling", "receiving"]),  # Cold chain
+            (1, ["harvesting"]),  # Supplier certification
+            (2, ["shipping"]),  # BOL
+            (3, ["harvesting"]),  # Field traceability
+        ],
+    )
     def test_demo_rules_map_to_expected_ctes(self, idx: int, expected_cte):
         """Each demo rule targets the CTE claimed in its description."""
         rule = _DEMO_CUSTOM_RULES[idx]
@@ -177,9 +179,14 @@ class TestDemoCustomRulesShape:
     def test_every_demo_rule_has_required_fields(self, rule):
         """Every demo rule must have what ``_build_rules_from_seeds`` reads."""
         required = {
-            "title", "description", "severity", "category",
-            "applicability_conditions", "citation_reference",
-            "evaluation_logic", "failure_reason_template",
+            "title",
+            "description",
+            "severity",
+            "category",
+            "applicability_conditions",
+            "citation_reference",
+            "evaluation_logic",
+            "failure_reason_template",
             "remediation_suggestion",
         }
         assert required <= set(rule.keys())
@@ -198,6 +205,7 @@ class TestDemoCustomRulesShape:
 # Module-level pre-built sets
 # ===========================================================================
 
+
 class TestModuleLevelRulesets:
     """``_SANDBOX_RULES`` and ``_SANDBOX_RULES_WITH_CUSTOM`` cached on import."""
 
@@ -205,22 +213,19 @@ class TestModuleLevelRulesets:
         assert len(_SANDBOX_RULES) == len(FSMA_RULE_SEEDS)
 
     def test_sandbox_rules_with_custom_includes_demos(self):
-        assert len(_SANDBOX_RULES_WITH_CUSTOM) == (
-            len(FSMA_RULE_SEEDS) + len(_DEMO_CUSTOM_RULES)
-        )
+        assert len(_SANDBOX_RULES_WITH_CUSTOM) == (len(FSMA_RULE_SEEDS) + len(_DEMO_CUSTOM_RULES))
 
     def test_sandbox_rules_are_rule_definitions(self):
         assert all(isinstance(r, RuleDefinition) for r in _SANDBOX_RULES)
 
     def test_sandbox_rules_with_custom_are_rule_definitions(self):
-        assert all(
-            isinstance(r, RuleDefinition) for r in _SANDBOX_RULES_WITH_CUSTOM
-        )
+        assert all(isinstance(r, RuleDefinition) for r in _SANDBOX_RULES_WITH_CUSTOM)
 
 
 # ===========================================================================
 # _get_applicable_rules
 # ===========================================================================
+
 
 class TestGetApplicableRules:
     """Filter rules by ``cte_types`` with fall-through semantics."""
@@ -245,10 +250,7 @@ class TestGetApplicableRules:
         # Build a synthetic rule set with one empty-list rule and confirm
         # it appears for any event type. We can inspect the existing
         # seeds: if any has empty list, that's evidence enough.
-        empty_cte_rules = [
-            r for r in _SANDBOX_RULES
-            if not r.applicability_conditions.get("cte_types", [])
-        ]
+        empty_cte_rules = [r for r in _SANDBOX_RULES if not r.applicability_conditions.get("cte_types", [])]
         if not empty_cte_rules:
             pytest.skip(
                 "No seed rule has empty cte_types — fall-through branch can't "
@@ -406,9 +408,7 @@ class TestGetApplicableRulesFallthroughBranches:
             remediation_suggestion=None,
         )
         monkeypatch.setattr(rule_loader, "_SANDBOX_RULES", [])
-        monkeypatch.setattr(
-            rule_loader, "_SANDBOX_RULES_WITH_CUSTOM", [marker_rule]
-        )
+        monkeypatch.setattr(rule_loader, "_SANDBOX_RULES_WITH_CUSTOM", [marker_rule])
         # Default path: the empty _SANDBOX_RULES is consulted
         assert _get_applicable_rules("shipping") == []
         # include_custom: the populated _SANDBOX_RULES_WITH_CUSTOM is consulted

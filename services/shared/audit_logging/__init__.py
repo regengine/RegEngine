@@ -9,20 +9,19 @@ Package layout:
 """
 
 # Schema — enums and data classes
-from shared.audit_logging.schema import (  # noqa: F401
-    AuditEventCategory,
-    AuditEventType,
-    AuditSeverity,
-    AuditActor,
-    AuditResource,
-    AuditContext,
-    AuditEvent,
-)
-
 # Integrity — TRUST-CRITICAL hash chain logic
 from shared.audit_logging.integrity import (  # noqa: F401
     AuditIntegrity,
     verify_audit_chain,
+)
+from shared.audit_logging.schema import (  # noqa: F401
+    AuditActor,
+    AuditContext,
+    AuditEvent,
+    AuditEventCategory,
+    AuditEventType,
+    AuditResource,
+    AuditSeverity,
 )
 
 # Storage backends

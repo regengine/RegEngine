@@ -22,6 +22,7 @@ is mocked, the FastAPI router is mounted on a bare app, and
 ``require_api_key`` / ``get_current_tenant_id`` are overridden via
 ``app.dependency_overrides``.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,20 +31,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from services.graph.app.routers.lineage_traversal import router as lineage_router
 from shared.auth import require_api_key
 from shared.middleware import get_current_tenant_id
 
+from services.graph.app.routers.lineage_traversal import router as lineage_router
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
 
-_AUTH_HEADERS = {
-    "X-RegEngine-API-Key": os.getenv(
-        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
-    )
-}
+_AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
 def _build_app(tenant_id: uuid.UUID) -> FastAPI:

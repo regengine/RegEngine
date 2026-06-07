@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Iterable, List, Optional, Type
 
-from .base import ConnectorConfig, ConnectionStatus, IntegrationConnector
+from .base import ConnectionStatus, ConnectorConfig, IntegrationConnector
 
 logger = logging.getLogger("connector-registry")
 
@@ -64,7 +64,8 @@ def list_available_connectors() -> List[Dict]:
         except Exception as exc:
             logger.warning(
                 "connector_info_failed id=%s error=%s",
-                connector_id, str(exc),
+                connector_id,
+                str(exc),
             )
             result.append({"id": connector_id, "name": connector_id, "error": str(exc)})
     return result
@@ -125,15 +126,18 @@ def get_all_integration_statuses(tenant_id: str) -> List[Dict]:
             except Exception as exc:
                 logger.warning(
                     "connector_status_info_failed id=%s error=%s",
-                    connector_id, str(exc),
+                    connector_id,
+                    str(exc),
                 )
-            statuses.append({
-                "id": connector_id,
-                "name": info.get("name", connector_id),
-                "category": info.get("category", "unknown"),
-                "status": ConnectionStatus.DISCONNECTED.value,
-                "last_sync": None,
-                "docs_url": info.get("docs_url"),
-            })
+            statuses.append(
+                {
+                    "id": connector_id,
+                    "name": info.get("name", connector_id),
+                    "category": info.get("category", "unknown"),
+                    "status": ConnectionStatus.DISCONNECTED.value,
+                    "last_sync": None,
+                    "docs_url": info.get("docs_url"),
+                }
+            )
 
     return statuses

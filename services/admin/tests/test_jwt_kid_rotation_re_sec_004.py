@@ -18,13 +18,14 @@ This module pins that production path:
   * a token whose ``kid`` is not in the registry is rejected rather
     than silently falling back to another key.
 """
+
 from __future__ import annotations
 
 import jwt as pyjwt
 import pytest
+from shared.jwt_key_registry import SigningKey
 
 from services.admin.app import auth_utils
-from shared.jwt_key_registry import SigningKey
 
 
 @pytest.fixture

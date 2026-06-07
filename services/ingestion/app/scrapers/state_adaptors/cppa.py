@@ -4,7 +4,6 @@ from typing import Iterable
 
 import httpx
 import structlog
-
 from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import SSRFError
 
@@ -38,11 +37,7 @@ class CPPAScraper(StateRegistryScraper):
             )
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "text/html").split(";")[0]
-            return FetchedItem(
-                source=source,
-                content_bytes=response.content,
-                content_type=content_type
-            )
+            return FetchedItem(source=source, content_bytes=response.content, content_type=content_type)
         except (httpx.HTTPError, SSRFError, ValueError) as e:
             # Log error but return empty content to allow graceful degradation
             logger.warning("fetch_failed", url=source.url, error=str(e))

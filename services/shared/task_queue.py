@@ -467,7 +467,7 @@ def compute_backoff_seconds(attempts: int, *, cap_seconds: int = 600) -> int:
     """
     if attempts < 0:
         attempts = 0
-    base = 30 * (2 ** attempts)
+    base = 30 * (2**attempts)
     return min(base, cap_seconds)
 
 

@@ -31,10 +31,9 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import request_workflow_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.request_workflow_router import _get_service  # noqa: E402
-
 
 TENANT = "tenant-rw-1342"
 
@@ -82,9 +81,7 @@ class TestGetService:
         assert exc.value.status_code == 503
         assert exc.value.detail == "Database unavailable"
 
-    def test_constructs_request_workflow_when_db_present(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_constructs_request_workflow_when_db_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Lines 50-51: lazy import + wrap.
         captured: dict[str, object] = {}
 
@@ -156,9 +153,7 @@ class TestSubmitNonBlockingValueError:
         # Line 335: raise (unhandled ValueError). FastAPI surfaces
         # unhandled ValueError as 500.
         mock_svc = MagicMock()
-        mock_svc.submit_package.side_effect = ValueError(
-            "something else entirely went wrong"
-        )
+        mock_svc.submit_package.side_effect = ValueError("something else entirely went wrong")
         client = _build_client(mock_svc)
 
         with pytest.raises(ValueError, match="something else entirely"):
@@ -175,9 +170,7 @@ class TestSubmitNonBlockingValueError:
         # tests, but pinning it here alongside the 335 test makes the
         # intent obvious when reviewing the diff.
         mock_svc = MagicMock()
-        mock_svc.submit_package.side_effect = ValueError(
-            "cannot submit: blocking defect present on rc-blk"
-        )
+        mock_svc.submit_package.side_effect = ValueError("cannot submit: blocking defect present on rc-blk")
         client = _build_client(mock_svc)
 
         response = client.post(
@@ -208,8 +201,7 @@ class TestCreateAmendment:
 
         response = client.post(
             "/api/v1/requests/rc-am/amend",
-            json={"generated_by": "compliance@acme.test",
-                  "amendment_reason": "scope expansion"},
+            json={"generated_by": "compliance@acme.test", "amendment_reason": "scope expansion"},
         )
         assert response.status_code == 200
         payload = response.json()
@@ -218,9 +210,7 @@ class TestCreateAmendment:
         assert payload["version_number"] == 2
         assert payload["diff_from_previous"]["added"] == ["lot-X"]
         assert payload["status"] == "amended"
-        mock_svc.create_amendment.assert_called_once_with(
-            TENANT, "rc-am", "compliance@acme.test"
-        )
+        mock_svc.create_amendment.assert_called_once_with(TENANT, "rc-am", "compliance@acme.test")
 
 
 # --------------------------------------------------------------------------- #

@@ -8,6 +8,7 @@ This module exists to keep the existing ``app.shared.csv_safety``
 import path working for ingestion-service callers during the rollout.
 New code should import from :mod:`shared.fda_export`.
 """
+
 from __future__ import annotations
 
 from shared.fda_export.csv_safety import (

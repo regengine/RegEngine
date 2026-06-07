@@ -30,8 +30,8 @@ async def verify_export_handler(
     """
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
         from sqlalchemy import text as sql_text
 
         db_session = SessionLocal()

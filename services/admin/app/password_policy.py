@@ -5,20 +5,19 @@ SEC-009: Implements configurable password strength requirements.
 Usage:
     from app.password_policy import validate_password, PasswordPolicyError
     import structlog
-    
+
     logger = structlog.get_logger(__name__)
-    
+
     try:
         validate_password("MyP@ssw0rd!")
     except PasswordPolicyError as e:
         logger.error("password_validation_failed", violations=e.message)
 """
 
-import re
 import os
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
-
 
 # Password Policy Configuration (all values configurable via env)
 MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "12"))
@@ -42,14 +41,44 @@ def _load_blocklist() -> frozenset:
     except FileNotFoundError:
         pass
     # Inline fallback — minimum viable blocklist
-    return frozenset({
-        "password", "password123", "123456", "qwerty", "admin", "letmein",
-        "welcome", "monkey", "dragon", "master", "123456789", "12345678",
-        "abc123", "111111", "iloveyou", "trustno1", "sunshine", "princess",
-        "football", "baseball", "shadow", "michael", "batman", "access",
-        "hello", "charlie", "donald", "login", "passw0rd", "1234567890",
-        "regengine", "compliance", "traceability", "fsma204",
-    })
+    return frozenset(
+        {
+            "password",
+            "password123",
+            "123456",
+            "qwerty",
+            "admin",
+            "letmein",
+            "welcome",
+            "monkey",
+            "dragon",
+            "master",
+            "123456789",
+            "12345678",
+            "abc123",
+            "111111",
+            "iloveyou",
+            "trustno1",
+            "sunshine",
+            "princess",
+            "football",
+            "baseball",
+            "shadow",
+            "michael",
+            "batman",
+            "access",
+            "hello",
+            "charlie",
+            "donald",
+            "login",
+            "passw0rd",
+            "1234567890",
+            "regengine",
+            "compliance",
+            "traceability",
+            "fsma204",
+        }
+    )
 
 
 COMMON_PASSWORDS = _load_blocklist()
@@ -114,12 +143,12 @@ class PasswordPolicy:
 
         # Personal Information Check
         if user_context:
-            for field_name in ['email', 'username', 'first_name', 'last_name']:
+            for field_name in ["email", "username", "first_name", "last_name"]:
                 value = user_context.get(field_name)
                 if value and len(value) > 3:
                     # For email, check the part before @
-                    if field_name == 'email':
-                        parts = value.split('@')
+                    if field_name == "email":
+                        parts = value.split("@")
                         check_values = [p for p in parts if len(p) > 3]
                     else:
                         check_values = [value]
@@ -139,7 +168,9 @@ class PasswordPolicy:
 _default_policy = PasswordPolicy()
 
 
-def validate_password(password: str, policy: Optional[PasswordPolicy] = None, user_context: Optional[dict] = None) -> None:
+def validate_password(
+    password: str, policy: Optional[PasswordPolicy] = None, user_context: Optional[dict] = None
+) -> None:
     """Validate password against policy, raising on failure.
 
     Args:

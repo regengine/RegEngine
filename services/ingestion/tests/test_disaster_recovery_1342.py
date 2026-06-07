@@ -4,16 +4,13 @@ Part of the #1342 ingestion coverage sweep. Covers DR readiness checks,
 backup status, and recovery simulation endpoints including all helper
 paths (db unavailable, empty results, SQL errors, success branches).
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import SQLAlchemyError
-
 from app import disaster_recovery as dr
 from app.disaster_recovery import (
     DRCheck,
@@ -29,7 +26,9 @@ from app.disaster_recovery import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -426,20 +425,24 @@ class TestCompileRecommendations:
         assert any("active supplier participation" in r for r in recs)
 
     def test_multiple_checks(self):
-        recs = _compile_recommendations([
-            _chk("database_connectivity", "fail"),
-            _chk("hash_chain_integrity", "fail"),
-            _chk("export_completeness", "warn"),
-        ])
+        recs = _compile_recommendations(
+            [
+                _chk("database_connectivity", "fail"),
+                _chk("hash_chain_integrity", "fail"),
+                _chk("export_completeness", "warn"),
+            ]
+        )
         assert any("Restore database" in r for r in recs)
         assert any("hash chain gaps" in r for r in recs)
         assert any("regular data exports" in r for r in recs)
 
     def test_pass_status_ignored(self):
-        recs = _compile_recommendations([
-            _chk("database_connectivity", "pass"),
-            _chk("hash_chain_integrity", "pass"),
-        ])
+        recs = _compile_recommendations(
+            [
+                _chk("database_connectivity", "pass"),
+                _chk("hash_chain_integrity", "pass"),
+            ]
+        )
         # Pass status never adds recs, so default fallback applies
         assert len(recs) == 1
         assert "All checks passed" in recs[0]
@@ -461,21 +464,20 @@ class TestOverallStatus:
         assert _overall_status([_chk("x", "fail"), _chk("y", "fail")]) == "critical"
 
     def test_three_warn(self):
-        assert (
-            _overall_status([_chk("x", "warn"), _chk("y", "warn"), _chk("z", "warn")])
-            == "at_risk"
-        )
+        assert _overall_status([_chk("x", "warn"), _chk("y", "warn"), _chk("z", "warn")]) == "at_risk"
 
     def test_two_warn_is_ready(self):
         assert _overall_status([_chk("x", "warn"), _chk("y", "warn")]) == "ready"
 
     def test_many_fails_and_warns_critical(self):
         assert (
-            _overall_status([
-                _chk("a", "fail"),
-                _chk("b", "fail"),
-                _chk("c", "warn"),
-            ])
+            _overall_status(
+                [
+                    _chk("a", "fail"),
+                    _chk("b", "fail"),
+                    _chk("c", "warn"),
+                ]
+            )
             == "critical"
         )
 
@@ -489,6 +491,7 @@ def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app)
     return app
@@ -512,19 +515,21 @@ class TestReadinessEndpoint:
     def test_all_pass_flow(self, monkeypatch):
         # Each check calls get_db_safe() once; we need a fresh session each call
         def factory():
-            return _CountedSession([
-                (1,),              # SELECT 1
-                ("streaming",),    # replication
-            ])
+            return _CountedSession(
+                [
+                    (1,),  # SELECT 1
+                    ("streaming",),  # replication
+                ]
+            )
 
         # Different helpers call get_db_safe separately → need separate mocks
         calls = {"n": 0}
         sessions = [
-            _CountedSession([(1,), ("streaming",)]),   # db connectivity
-            _CountedSession([(100, 0)]),               # hash chain
-            _CountedSession([(5, "2026-04-18")]),      # export
-            _CountedSession([(1500, 12, 30.0)]),       # data volume
-            _CountedSession([(10, 9)]),                # supplier
+            _CountedSession([(1,), ("streaming",)]),  # db connectivity
+            _CountedSession([(100, 0)]),  # hash chain
+            _CountedSession([(5, "2026-04-18")]),  # export
+            _CountedSession([(1500, 12, 30.0)]),  # data volume
+            _CountedSession([(10, 9)]),  # supplier
         ]
 
         def _next():
@@ -564,9 +569,9 @@ class TestReadinessEndpoint:
 class TestBackupStatusEndpoint:
     def test_normal_flow(self, monkeypatch):
         sessions = [
-            _CountedSession([(1,), ("streaming",)]),   # db
-            _CountedSession([(3, "2026-04-18")]),      # export
-            _CountedSession([(200, 5, 10.0)]),         # volume
+            _CountedSession([(1,), ("streaming",)]),  # db
+            _CountedSession([(3, "2026-04-18")]),  # export
+            _CountedSession([(200, 5, 10.0)]),  # volume
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -594,9 +599,9 @@ class TestBackupStatusEndpoint:
 class TestRecoverySimulationEndpoint:
     def test_successful_recovery(self, monkeypatch):
         sessions = [
-            _CountedSession([(1500, 12, 30.0)]),       # data volume
-            _CountedSession([(100, 0)]),               # hash chain
-            _CountedSession([(85.5,)]),                # KDE
+            _CountedSession([(1500, 12, 30.0)]),  # data volume
+            _CountedSession([(100, 0)]),  # hash chain
+            _CountedSession([(85.5,)]),  # KDE
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -618,9 +623,9 @@ class TestRecoverySimulationEndpoint:
 
     def test_chain_failure_blocks_rebuild(self, monkeypatch):
         sessions = [
-            _CountedSession([(1000, 10, 5.0)]),        # data volume
-            _CountedSession([(50, 5)]),                # hash chain: gaps → fail
-            _CountedSession([(None,)]),                # KDE: row exists but value is None
+            _CountedSession([(1000, 10, 5.0)]),  # data volume
+            _CountedSession([(50, 5)]),  # hash chain: gaps → fail
+            _CountedSession([(None,)]),  # KDE: row exists but value is None
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -638,8 +643,8 @@ class TestRecoverySimulationEndpoint:
     def test_kde_low_average(self, monkeypatch):
         sessions = [
             _CountedSession([(500, 5, 2.0)]),
-            _CountedSession([(50, 0)]),                # hash chain: pass
-            _CountedSession([(45.0,)]),                # KDE: < 80 → warn
+            _CountedSession([(50, 0)]),  # hash chain: pass
+            _CountedSession([(45.0,)]),  # KDE: < 80 → warn
         ]
         it = iter(sessions)
         monkeypatch.setattr(dr, "get_db_safe", lambda: next(it))
@@ -661,13 +666,17 @@ class TestRecoverySimulationEndpoint:
                 return _CountedSession([(1000, 5, 2.0)])
             if calls["n"] == 2:
                 return _CountedSession([(50, 0)])
+
             # Third call is the KDE query — raise on execute
             class _RaisingSession:
                 closed = False
+
                 def execute(self, *a, **k):
                     raise SQLAlchemyError("kde boom")
+
                 def close(self):
                     self.closed = True
+
             return _RaisingSession()
 
         monkeypatch.setattr(dr, "get_db_safe", _db)
@@ -684,7 +693,7 @@ class TestRecoverySimulationEndpoint:
         calls = {"n": 0}
         sessions = [
             _CountedSession([(1000, 5, 2.0)]),  # volume
-            _CountedSession([(50, 0)]),          # chain
+            _CountedSession([(50, 0)]),  # chain
         ]
 
         def _db():
@@ -707,7 +716,7 @@ class TestRecoverySimulationEndpoint:
 
     def test_zero_events_flags_re_export_warn(self, monkeypatch):
         sessions = [
-            _CountedSession([(0, 0, 0)]),              # zero events → warn
+            _CountedSession([(0, 0, 0)]),  # zero events → warn
             _CountedSession([(100, 0)]),
             _CountedSession([(90.0,)]),
         ]

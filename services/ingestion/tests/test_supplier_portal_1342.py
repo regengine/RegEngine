@@ -4,6 +4,7 @@ Part of the #1342 ingestion coverage sweep. Covers link creation,
 listing, revocation, link-scoped detail lookup, and supplier submission
 with DB / in-memory fallback and expiry handling.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -12,11 +13,8 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
-from app import integration_router as ir
-from app import supplier_portal as sp
+from app import integration_router as ir, supplier_portal as sp
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.supplier_portal import (
     CreatePortalLinkRequest,
     PortalLinkResponse,
@@ -28,9 +26,10 @@ from app.supplier_portal import (
     _get_active_portal_link,
     router,
 )
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 def _portal_integration_router():
@@ -116,23 +115,29 @@ def _build_app(principal_tenant: Optional[str] = None) -> FastAPI:
 class TestDbStorePortalLink:
     def test_no_db(self, monkeypatch):
         monkeypatch.setattr(sp, "get_db_safe", lambda: None)
-        ok = _db_store_portal_link("tok", {
-            "tenant_id": "t1",
-            "supplier_name": "S",
-            "created_at": "2026-04-17",
-            "expires_at": "2026-05-17",
-        })
+        ok = _db_store_portal_link(
+            "tok",
+            {
+                "tenant_id": "t1",
+                "supplier_name": "S",
+                "created_at": "2026-04-17",
+                "expires_at": "2026-05-17",
+            },
+        )
         assert ok is False
 
     def test_success(self, monkeypatch):
         session = _FakeSession()
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
-        ok = _db_store_portal_link("tok", {
-            "tenant_id": "t1",
-            "supplier_name": "S",
-            "created_at": "2026-04-17",
-            "expires_at": "2026-05-17",
-        })
+        ok = _db_store_portal_link(
+            "tok",
+            {
+                "tenant_id": "t1",
+                "supplier_name": "S",
+                "created_at": "2026-04-17",
+                "expires_at": "2026-05-17",
+            },
+        )
         assert ok is True
         assert session.committed is True
         assert session.closed is True
@@ -141,12 +146,15 @@ class TestDbStorePortalLink:
     def test_failure_rolls_back(self, monkeypatch):
         session = _FakeSession(raise_on_execute=RuntimeError("boom"))
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
-        ok = _db_store_portal_link("tok", {
-            "tenant_id": "t1",
-            "supplier_name": "S",
-            "created_at": "2026-04-17",
-            "expires_at": "2026-05-17",
-        })
+        ok = _db_store_portal_link(
+            "tok",
+            {
+                "tenant_id": "t1",
+                "supplier_name": "S",
+                "created_at": "2026-04-17",
+                "expires_at": "2026-05-17",
+            },
+        )
         assert ok is False
         assert session.rolled_back is True
         assert session.closed is True
@@ -272,7 +280,8 @@ class TestGetActivePortalLink:
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
         status_updates: list = []
         monkeypatch.setattr(
-            sp, "_db_update_portal_link_status",
+            sp,
+            "_db_update_portal_link_status",
             lambda pid, status, tenant_id=None: status_updates.append((pid, status, tenant_id)) or True,
         )
         with pytest.raises(Exception) as exc:
@@ -441,9 +450,9 @@ class TestListPortalLinks:
         past = now - timedelta(days=1)
         future = now + timedelta(days=10)
         rows = [
-            ("id1", "t1", "ActiveCo", "tok1", "active", now, future),   # active
-            ("id2", "t1", "StaleCo", "tok2", "active", now, past),       # will auto-expire
-            ("id3", "t1", "RevokedCo", "tok3", "revoked", now, past),    # stays revoked
+            ("id1", "t1", "ActiveCo", "tok1", "active", now, future),  # active
+            ("id2", "t1", "StaleCo", "tok2", "active", now, past),  # will auto-expire
+            ("id3", "t1", "RevokedCo", "tok3", "revoked", now, past),  # stays revoked
         ]
         session = _FakeSession(rows=rows)
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
@@ -558,10 +567,7 @@ class TestListPortalLinks:
     def test_pagination(self, monkeypatch):
         now = datetime.now(timezone.utc)
         future = now + timedelta(days=10)
-        rows = [
-            ("id%d" % i, "t1", "S%d" % i, "tok%d" % i, "active", now, future)
-            for i in range(10)
-        ]
+        rows = [("id%d" % i, "t1", "S%d" % i, "tok%d" % i, "active", now, future) for i in range(10)]
         session = _FakeSession(rows=rows)
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
 
@@ -574,9 +580,11 @@ class TestListPortalLinks:
         assert body["limit"] == 2
 
     def test_memory_null_timestamp_columns(self, monkeypatch):
-        session = _FakeSession(rows=[
-            ("id1", "t1", "S", "tok1", "active", None, None),
-        ])
+        session = _FakeSession(
+            rows=[
+                ("id1", "t1", "S", "tok1", "active", None, None),
+            ]
+        )
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
 
         client = TestClient(_build_app())
@@ -815,14 +823,16 @@ class TestSubmitSupplierData:
         monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
 
         data = self._payload()
-        data.update({
-            "ship_from_gln": "0614141000043",
-            "ship_to_gln": "0614141999996",
-            "carrier_name": "FreshTrans",
-            "po_number": "PO-123",
-            "temperature_celsius": 4.2,
-            "notes": "Keep refrigerated",
-        })
+        data.update(
+            {
+                "ship_from_gln": "0614141000043",
+                "ship_to_gln": "0614141999996",
+                "carrier_name": "FreshTrans",
+                "po_number": "PO-123",
+                "temperature_celsius": 4.2,
+                "notes": "Keep refrigerated",
+            }
+        )
         client = TestClient(_build_app())
         resp = client.post("/api/v1/portal/tok/submit", json=data)
         assert resp.status_code == 200
@@ -847,9 +857,7 @@ class TestSubmitSupplierData:
         monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
 
         async def _fake_ingest(payload, **_kwargs):
-            return _make_ingest_response(
-                accepted=0, errors=["bad_tlc", "no_gln"]
-            )
+            return _make_ingest_response(accepted=0, errors=["bad_tlc", "no_gln"])
 
         monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
 

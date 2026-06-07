@@ -22,10 +22,8 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
-
 from app.fda_export import merkle as merkle_mod
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # Stub factories
@@ -111,7 +109,6 @@ def stub_deps(monkeypatch):
 
 
 class TestMerkleRootHandler:
-
     def test_happy_path_returns_full_payload(self, stub_deps):
         out = asyncio.run(merkle_mod.get_merkle_root_handler("tenant-1"))
         assert out == {
@@ -203,11 +200,8 @@ class TestMerkleRootHandler:
 
 
 class TestMerkleProofHandler:
-
     def test_happy_path_returns_proof_with_tenant_id(self, stub_deps):
-        out = asyncio.run(
-            merkle_mod.get_merkle_proof_handler("tenant-1", "E1")
-        )
+        out = asyncio.run(merkle_mod.get_merkle_proof_handler("tenant-1", "E1"))
         assert out["tenant_id"] == "tenant-1"
         assert out["event_id"] == "E1"
         assert out["proof"] == ["0xdead"]

@@ -6,31 +6,33 @@ Verifies:
   - validate_tables_exist raises RuntimeError when tables are absent.
   - validate_tables_exist passes when tables are present.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Import tests
 # ---------------------------------------------------------------------------
+
 
 def test_legacy_dual_write_importable():
     """The canonical module name imports without error."""
     from shared.canonical_persistence import legacy_dual_write  # noqa: F401
     from shared.canonical_persistence.legacy_dual_write import (  # noqa: F401
-        validate_tables_exist,
         dual_write_legacy,
         publish_graph_sync,
         stage_graph_sync,
+        validate_tables_exist,
     )
 
 
 # ---------------------------------------------------------------------------
 # validate_tables_exist tests
 # ---------------------------------------------------------------------------
+
 
 def _make_inspector(present_tables: dict[str, list[str]]) -> MagicMock:
     """Return a mock SQLAlchemy Inspector that reports the given tables."""
@@ -62,9 +64,11 @@ def test_validate_tables_exist_passes_when_all_tables_present():
     from shared.canonical_persistence.legacy_dual_write import validate_tables_exist
 
     mock_engine = MagicMock()
-    full_inspector = _make_inspector({
-        "fsma": ["traceability_events", "cte_events", "cte_kdes"],
-    })
+    full_inspector = _make_inspector(
+        {
+            "fsma": ["traceability_events", "cte_events", "cte_kdes"],
+        }
+    )
 
     with patch("shared.canonical_persistence.legacy_dual_write.sa_inspect", return_value=full_inspector):
         # Should not raise.
@@ -77,9 +81,11 @@ def test_validate_tables_exist_raises_when_partially_missing():
 
     mock_engine = MagicMock()
     # Only cte_events present; traceability_events and cte_kdes absent.
-    partial_inspector = _make_inspector({
-        "fsma": ["cte_events"],
-    })
+    partial_inspector = _make_inspector(
+        {
+            "fsma": ["cte_events"],
+        }
+    )
 
     with patch("shared.canonical_persistence.legacy_dual_write.sa_inspect", return_value=partial_inspector):
         with pytest.raises(RuntimeError) as exc_info:

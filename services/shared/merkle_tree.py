@@ -36,6 +36,7 @@ def _hash_leaf(event_hash: str) -> str:
 @dataclass
 class MerkleProofStep:
     """A single step in a Merkle inclusion proof."""
+
     position: str  # "left" or "right" — sibling's position relative to the path node
     hash: str
 
@@ -172,6 +173,7 @@ class MerkleTree:
 # ---------------------------------------------------------------------------
 # Convenience functions (module-level API)
 # ---------------------------------------------------------------------------
+
 
 def compute_merkle_root(hashes: list[str]) -> str:
     """Compute the Merkle root from a list of event hashes."""

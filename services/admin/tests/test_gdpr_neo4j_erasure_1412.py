@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -64,7 +63,9 @@ async def test_neo4j_user_graph_deleted_with_tenant_and_user_id(monkeypatch):
     with patch.dict("sys.modules", {"neo4j": MagicMock(AsyncGraphDatabase=mock_async_gdb)}):
         # Re-import to pick up patched module
         import importlib
+
         import services.admin.app.erasure_routes as mod
+
         importlib.reload(mod)
 
         await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
@@ -77,12 +78,8 @@ async def test_neo4j_user_graph_deleted_with_tenant_and_user_id(monkeypatch):
     # Cypher must use parameter placeholders, not formatted identifiers.
     assert "$tenant_id" in cypher, "tenant_id must be a Cypher parameter"
     assert "$user_id" in cypher, "user_id must be a Cypher parameter"
-    assert TEST_TENANT_ID not in cypher, (
-        "tenant_id must NOT be string-formatted into the Cypher query"
-    )
-    assert TEST_USER_ID not in cypher, (
-        "user_id must NOT be string-formatted into the Cypher query"
-    )
+    assert TEST_TENANT_ID not in cypher, "tenant_id must NOT be string-formatted into the Cypher query"
+    assert TEST_USER_ID not in cypher, "user_id must NOT be string-formatted into the Cypher query"
     assert "WHERE" in cypher, "delete query must filter by user data"
     assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in cypher
     assert kwargs.get("tenant_id") == TEST_TENANT_ID
@@ -101,9 +98,7 @@ async def test_neo4j_unavailable_erasure_succeeds_and_warns(monkeypatch):
     monkeypatch.setenv("NEO4J_URI", "bolt://neo4j-test:7687")
     monkeypatch.setenv("NEO4J_PASSWORD", "testpass")
 
-    mock_async_gdb, mock_driver, mock_session = _make_async_driver_mock(
-        run_side_effect=Exception("Connection refused")
-    )
+    mock_async_gdb, mock_driver, mock_session = _make_async_driver_mock(run_side_effect=Exception("Connection refused"))
 
     warning_events: list = []
 
@@ -116,7 +111,9 @@ async def test_neo4j_unavailable_erasure_succeeds_and_warns(monkeypatch):
 
     with patch.dict("sys.modules", {"neo4j": MagicMock(AsyncGraphDatabase=mock_async_gdb)}):
         import importlib
+
         import services.admin.app.erasure_routes as mod
+
         importlib.reload(mod)
 
         with structlog.testing.capture_logs() as cap_logs:
@@ -125,9 +122,7 @@ async def test_neo4j_unavailable_erasure_succeeds_and_warns(monkeypatch):
 
     # A warning must have been emitted
     warning_logs = [e for e in cap_logs if e.get("log_level") == "warning"]
-    assert warning_logs, (
-        f"Expected a warning log when Neo4j is unavailable; got: {cap_logs}"
-    )
+    assert warning_logs, f"Expected a warning log when Neo4j is unavailable; got: {cap_logs}"
     assert any("neo4j" in e.get("event", "").lower() for e in warning_logs)
 
 
@@ -147,7 +142,9 @@ async def test_neo4j_skipped_when_uri_not_set(monkeypatch):
 
     with patch.dict("sys.modules", {"neo4j": MagicMock(AsyncGraphDatabase=mock_async_gdb)}):
         import importlib
+
         import services.admin.app.erasure_routes as mod
+
         importlib.reload(mod)
 
         # Must not raise and must not call driver()
@@ -165,18 +162,10 @@ def test_cypher_constant_uses_user_parameter_not_tenant_wide_delete():
     """The module-level Cypher must stay user-scoped, never tenant-wide."""
     import pathlib
 
-    source = (
-        pathlib.Path(__file__).resolve().parents[1]
-        / "app"
-        / "erasure_routes.py"
-    ).read_text()
+    source = (pathlib.Path(__file__).resolve().parents[1] / "app" / "erasure_routes.py").read_text()
 
-    assert "$tenant_id" in source, (
-        "Cypher query must use $tenant_id parameter placeholder"
-    )
-    assert "$user_id" in source, (
-        "Cypher query must use $user_id parameter placeholder"
-    )
+    assert "$tenant_id" in source, "Cypher query must use $tenant_id parameter placeholder"
+    assert "$user_id" in source, "Cypher query must use $user_id parameter placeholder"
     assert "DETACH DELETE" in source, "DETACH DELETE must appear in erasure_routes.py"
     assert "_delete_neo4j_tenant_subgraph" not in source
     assert "_CYPHER_DELETE_TENANT_SUBGRAPH" not in source
@@ -209,12 +198,9 @@ def test_erasure_enqueues_graph_outbox_row_before_commit():
     commit_match = re.search(r"\bdb\.commit\s*\(", source)
 
     assert enqueue_match is not None, (
-        "request_erasure must call enqueue_graph_write() so the Neo4j "
-        "deletion is durable via the graph_outbox drainer."
+        "request_erasure must call enqueue_graph_write() so the Neo4j deletion is durable via the graph_outbox drainer."
     )
-    assert commit_match is not None, (
-        "request_erasure handler shape changed — db.commit() not found"
-    )
+    assert commit_match is not None, "request_erasure handler shape changed — db.commit() not found"
     assert enqueue_match.start() < commit_match.start(), (
         "enqueue_graph_write() must run BEFORE db.commit() so the outbox "
         "row lands in the same Postgres transaction as the soft-delete. "
@@ -223,12 +209,9 @@ def test_erasure_enqueues_graph_outbox_row_before_commit():
     )
 
     # Operation tag must be stable for outbox dedupe + metric labels.
-    assert (
-        'operation="user_erasure"' in source
-        or "operation='user_erasure'" in source
-    ), "operation tag must be 'user_erasure'"
+    assert 'operation="user_erasure"' in source or "operation='user_erasure'" in source, (
+        "operation tag must be 'user_erasure'"
+    )
 
     # dedupe_key required so a retried request doesn't write a second row.
-    assert "dedupe_key=" in source, (
-        "enqueue_graph_write call must pass a dedupe_key to make retries idempotent"
-    )
+    assert "dedupe_key=" in source, "enqueue_graph_write call must pass a dedupe_key to make retries idempotent"

@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import os
-import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-
 from shared.auth import APIKey, require_api_key
+
 from .shared.upload_limits import (
     MAX_IMAGE_FILE_SIZE_BYTES,
     read_upload_with_limit,
@@ -31,14 +31,18 @@ router = APIRouter(prefix="/api/v1/vision", tags=["Computer Vision"])
 
 # ── Response models ──────────────────────────────────────────────────
 
+
 class ExtractedKDE(BaseModel):
     """A single Key Data Element extracted from the label."""
+
     field: str = Field(..., description="KDE field name (e.g. gtin, lot_code, expiry_date)")
     value: Optional[str] = None
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="Model confidence 0-1")
 
+
 class LabelVisionResponse(BaseModel):
     """Structured output from food label vision analysis."""
+
     product_name: Optional[str] = None
     brand: Optional[str] = None
     gtin: Optional[str] = None
@@ -108,13 +112,13 @@ Return ONLY valid JSON matching this schema:
 
 # ── Endpoint ─────────────────────────────────────────────────────────
 
+
 @router.post(
     "/analyze-label",
     response_model=LabelVisionResponse,
     summary="Analyze food label image with computer vision",
     description=(
-        "Upload a photo of a food product label or packaging. "
-        "Returns structured KDE fields for FSMA 204 traceability."
+        "Upload a photo of a food product label or packaging. Returns structured KDE fields for FSMA 204 traceability."
     ),
 )
 async def analyze_label(
@@ -188,11 +192,7 @@ async def analyze_label(
                 ("net_weight", parsed.get("net_weight")),
                 ("country_of_origin", parsed.get("country_of_origin")),
             ]
-            fsma_kdes = [
-                {"field": f, "value": v, "confidence": 0.9}
-                for f, v in kde_fields
-                if v
-            ]
+            fsma_kdes = [{"field": f, "value": v, "confidence": 0.9} for f, v in kde_fields if v]
 
         return LabelVisionResponse(
             product_name=parsed.get("product_name"),

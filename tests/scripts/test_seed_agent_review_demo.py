@@ -9,7 +9,6 @@ from uuid import UUID
 from shared.agent_artifacts import AgentArtifact
 from shared.agent_task_bridge import build_agent_artifact_task_payload
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "seed_agent_review_demo.py"
 
@@ -57,9 +56,7 @@ def test_build_demo_artifacts_are_valid_deterministic_and_cover_all_payload_type
     first = module.build_demo_artifacts()
     second = module.build_demo_artifacts()
 
-    assert [artifact.artifact_id for artifact in first] == [
-        artifact.artifact_id for artifact in second
-    ]
+    assert [artifact.artifact_id for artifact in first] == [artifact.artifact_id for artifact in second]
     assert {artifact.artifact_type for artifact in first} == EXPECTED_TYPES
     assert len(first) == 5
 
@@ -163,39 +160,51 @@ def test_database_url_safety_guard_defaults_to_local_development_only() -> None:
 
     assert module.is_safe_database_url_for_demo_seed(None) is False
     assert module.is_safe_database_url_for_demo_seed("sqlite:///:memory:") is True
-    assert module.is_safe_database_url_for_demo_seed(
-        _postgres_url(
-            username="regengine",
-            credential="regengine",
-            host="localhost",
-            port=5432,
-            database="regengine",
+    assert (
+        module.is_safe_database_url_for_demo_seed(
+            _postgres_url(
+                username="regengine",
+                credential="regengine",
+                host="localhost",
+                port=5432,
+                database="regengine",
+            )
         )
-    ) is True
-    assert module.is_safe_database_url_for_demo_seed(
-        _postgres_url(
-            username="regengine",
-            credential="regengine",
-            host="postgres",
-            port=5432,
-            database="regengine",
+        is True
+    )
+    assert (
+        module.is_safe_database_url_for_demo_seed(
+            _postgres_url(
+                username="regengine",
+                credential="regengine",
+                host="postgres",
+                port=5432,
+                database="regengine",
+            )
         )
-    ) is True
-    assert module.is_safe_database_url_for_demo_seed(
-        _postgres_url(
-            username="postgres",
-            credential="example-value",
-            host="db.example.supabase.co",
-            port=6543,
-            database="postgres",
+        is True
+    )
+    assert (
+        module.is_safe_database_url_for_demo_seed(
+            _postgres_url(
+                username="postgres",
+                credential="example-value",
+                host="db.example.supabase.co",
+                port=6543,
+                database="postgres",
+            )
         )
-    ) is False
-    assert module.is_safe_database_url_for_demo_seed(
-        _postgres_url(
-            username="postgres",
-            credential="example-value",
-            host="pooler.supabase.com",
-            port=6543,
-            database="postgres",
+        is False
+    )
+    assert (
+        module.is_safe_database_url_for_demo_seed(
+            _postgres_url(
+                username="postgres",
+                credential="example-value",
+                host="pooler.supabase.com",
+                port=6543,
+                database="postgres",
+            )
         )
-    ) is False
+        is False
+    )

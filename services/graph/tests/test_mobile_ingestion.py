@@ -15,15 +15,12 @@ from fastapi.testclient import TestClient
 # Add local path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-_AUTH_HEADERS = {
-    "X-RegEngine-API-Key": os.getenv(
-        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
-    )
-}
+_AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def mock_neo4j_client():
@@ -36,28 +33,33 @@ def mock_neo4j_client():
         mock.get_tenant_database_name.return_value = "test-db"
         yield mock_instance
 
+
 @pytest.fixture
 def mock_validation():
     """Mock identifier validation utilities."""
-    with patch("services.graph.app.routers.fsma.traceability.validate_tlc") as mock_tlc, \
-         patch("services.graph.app.routers.fsma.traceability.validate_gln") as mock_gln, \
-         patch("services.graph.app.routers.fsma.traceability.validate_gtin") as mock_gtin:
-        
+    with (
+        patch("services.graph.app.routers.fsma.traceability.validate_tlc") as mock_tlc,
+        patch("services.graph.app.routers.fsma.traceability.validate_gln") as mock_gln,
+        patch("services.graph.app.routers.fsma.traceability.validate_gtin") as mock_gtin,
+    ):
         mock_tlc.return_value = MagicMock(is_valid=True)
         mock_gln.return_value = MagicMock(is_valid=True)
         mock_gtin.return_value = MagicMock(is_valid=True)
         yield mock_tlc, mock_gln, mock_gtin
 
+
 # =============================================================================
 # TESTS
 # =============================================================================
 
+
 def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     """Verify that a valid mobile event is successfully validated and persisted."""
-    from services.graph.app.routers.fsma.traceability import router
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
     from shared.rate_limit import add_rate_limiting
+
+    from services.graph.app.routers.fsma.traceability import router
 
     app = FastAPI()
     add_rate_limiting(app)
@@ -68,7 +70,7 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
     client = TestClient(app)
-    
+
     payload = {
         "event_type": "RECEIVING",
         "event_date": "2026-02-22",
@@ -76,11 +78,13 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
         "location_identifier": "0614141000036",
         "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
         "product_description": "Green Spinach 10oz",
-        "gtin": "10614141000019"
+        "gtin": "10614141000019",
     }
-    
-    with patch("shared.canonical_persistence.CanonicalEventStore") as mock_store_cls, \
-         patch("shared.database.SessionLocal") as mock_session_local:
+
+    with (
+        patch("shared.canonical_persistence.CanonicalEventStore") as mock_store_cls,
+        patch("shared.database.SessionLocal") as mock_session_local,
+    ):
         mock_db = MagicMock()
         mock_session_local.return_value = mock_db
 
@@ -96,17 +100,19 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     mock_store_cls.return_value.persist_event.assert_called_once()
     mock_db.commit.assert_called_once()
     mock_db.close.assert_called_once()
-    
+
     # Check that persistence was triggered correctly
     mock_run = mock_neo4j_client.session.return_value.__aenter__.return_value.run
-    assert mock_run.call_count == 5 # TraceEvent, Lot, Facility, and 2 Relationships
+    assert mock_run.call_count == 5  # TraceEvent, Lot, Facility, and 2 Relationships
+
 
 def test_log_traceability_event_missing_responsible_party_contact(mock_neo4j_client, mock_validation):
     """Verify that missing responsible_party_contact returns 422 per 21 CFR 1.1370(c)."""
-    from services.graph.app.routers.fsma.traceability import router
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
     from shared.rate_limit import add_rate_limiting
+
+    from services.graph.app.routers.fsma.traceability import router
 
     app = FastAPI()
     add_rate_limiting(app)
@@ -136,12 +142,15 @@ def test_log_traceability_event_missing_responsible_party_contact(mock_neo4j_cli
 def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
     """Verify that identity validation failures are handled with 400 Bad Request."""
     mock_tlc, _, _ = mock_validation
-    mock_tlc.return_value = MagicMock(is_valid=False, errors=[MagicMock(message="Format violation: TLC must be alphanumeric")])
+    mock_tlc.return_value = MagicMock(
+        is_valid=False, errors=[MagicMock(message="Format violation: TLC must be alphanumeric")]
+    )
 
-    from services.graph.app.routers.fsma.traceability import router
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
     from shared.rate_limit import add_rate_limiting
+
+    from services.graph.app.routers.fsma.traceability import router
 
     app = FastAPI()
     add_rate_limiting(app)
@@ -151,7 +160,7 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
     app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
     client = TestClient(app)
-    
+
     payload = {
         "event_type": "RECEIVING",
         "event_date": "2026-02-22",
@@ -159,12 +168,12 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
         "location_identifier": "0614141000036",
         "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
     }
-    
+
     response = client.post("/event", json=payload, headers=_AUTH_HEADERS)
 
     assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.json()}"
     assert "Invalid TLC" in response.json()["detail"]
     assert "Format violation" in response.json()["detail"]
-    
+
     # Verify no persistence occurred
     mock_neo4j_client.session.return_value.__aenter__.return_value.run.assert_not_called()

@@ -15,15 +15,14 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import structlog
-from prometheus_client import Counter, Gauge, REGISTRY
+from prometheus_client import REGISTRY, Counter, Gauge
+from shared.tenant_context import set_tenant_guc
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
 from .sqlalchemy_models import ReviewItemModel, TenantModel
-
-from shared.tenant_context import set_tenant_guc
 from .webhook_outbox import (
     SIGNATURE_HEADER,
     enqueue_webhook,
@@ -53,12 +52,14 @@ _FALLBACK_SECRET_ENV = "HALLUCINATION_WEBHOOK_SECRET"
 
 
 # Blocklist for SSRF — same shape as services/ingestion/app/models.py.
-_WEBHOOK_BLOCKED_HOSTNAMES = frozenset({
-    "metadata.google.internal",
-    "169.254.169.254",
-    "fd00:ec2::254",
-    "localhost",
-})
+_WEBHOOK_BLOCKED_HOSTNAMES = frozenset(
+    {
+        "metadata.google.internal",
+        "169.254.169.254",
+        "fd00:ec2::254",
+        "localhost",
+    }
+)
 
 _WEBHOOK_BLOCKED_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
@@ -106,9 +107,7 @@ def _validate_webhook_url(url: str, *, host_allowlist: Optional[Iterable[str]] =
     if host_allowlist is not None:
         allow = {h.strip().lower() for h in host_allowlist if h and isinstance(h, str)}
         if allow and host_lower not in allow:
-            raise WebhookTargetError(
-                f"webhook host '{host}' not in tenant allowlist"
-            )
+            raise WebhookTargetError(f"webhook host '{host}' not in tenant allowlist")
 
     # Literal IP short-circuit — don't bother with DNS.
     try:
@@ -140,14 +139,10 @@ def _reject_if_private_ip(
 ) -> None:
     detail = f"resolved '{host}' -> {resolved_as}" if resolved_as else f"host '{host}'"
     if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-        raise WebhookTargetError(
-            f"webhook target in private/reserved range ({detail})"
-        )
+        raise WebhookTargetError(f"webhook target in private/reserved range ({detail})")
     for net in _WEBHOOK_BLOCKED_NETWORKS:
         if addr in net:
-            raise WebhookTargetError(
-                f"webhook target in blocked network ({detail})"
-            )
+            raise WebhookTargetError(f"webhook target in blocked network ({detail})")
 
 
 # Webhook signing is now provided by ``app.webhook_outbox.sign_payload``
@@ -157,12 +152,14 @@ def _reject_if_private_ip(
 
 try:  # Optional dependency for local dev
     import redis  # type: ignore
+
     RedisType = redis.Redis
 except ImportError:  # pragma: no cover
     redis = None  # type: ignore
     RedisType = None  # type: ignore
 
 logger = structlog.get_logger("hallucination-tracker")
+
 
 def _get_or_create_counter(name, documentation, labelnames):
     if name in REGISTRY._names_to_collectors:
@@ -172,6 +169,7 @@ def _get_or_create_counter(name, documentation, labelnames):
     except ValueError:
         return REGISTRY._names_to_collectors[name]
 
+
 def _get_or_create_gauge(name, documentation, labelnames):
     if name in REGISTRY._names_to_collectors:
         return REGISTRY._names_to_collectors[name]
@@ -179,6 +177,7 @@ def _get_or_create_gauge(name, documentation, labelnames):
         return Gauge(name, documentation, labelnames)
     except ValueError:
         return REGISTRY._names_to_collectors[name]
+
 
 hallucination_events_total = _get_or_create_counter(
     "hallucination_events_total",
@@ -448,9 +447,7 @@ class HallucinationTracker:
         )
         return serialized
 
-    def _find_existing(
-        self, tenant_uuid: Optional[UUID], doc_hash: str, text_raw: str
-    ) -> Dict[str, Any]:
+    def _find_existing(self, tenant_uuid: Optional[UUID], doc_hash: str, text_raw: str) -> Dict[str, Any]:
         """Find existing review item for duplicate detection."""
         with self._session_scope() as session:
             query = session.query(ReviewItemModel).filter(
@@ -473,14 +470,14 @@ class HallucinationTracker:
         items: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Record multiple hallucinations in a single transaction for efficiency.
-        
+
         Returns:
             Dict with 'successful', 'failed', and 'results' keys.
         """
         results = []
         successful = 0
         failed = 0
-        
+
         with self._session_scope() as session:
             for item_data in items:
                 try:
@@ -491,7 +488,7 @@ class HallucinationTracker:
                     attributes.setdefault("document_id", item_data.get("document_id", "unknown"))
                     attributes["extractor"] = item_data.get("extractor", "unknown")
                     resolved_text = item_data.get("text_raw") or extraction_payload.get("source_text") or ""
-                    
+
                     db_item = ReviewItemModel(
                         tenant_id=tenant_uuid,
                         doc_hash=item_data.get("doc_hash", "unknown"),
@@ -508,7 +505,7 @@ class HallucinationTracker:
                     logger.warning(f"Metric insert failed: {exc}", exc_info=True)
                     results.append({"status": "error", "error": str(exc), "input": item_data})
                     failed += 1
-            
+
             # Flush all at once
             try:
                 session.flush()
@@ -521,9 +518,9 @@ class HallucinationTracker:
                 # Some duplicates in batch - fall back to individual inserts
                 session.rollback()
                 return self._record_batch_fallback(items)
-        
+
         return {"successful": successful, "failed": failed, "results": results}
-    
+
     def _record_batch_fallback(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Fallback to individual inserts when batch has duplicates."""
         results = []
@@ -549,7 +546,7 @@ class HallucinationTracker:
         cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
         """List hallucinations with cursor-based pagination.
-        
+
         Returns:
             Dict with 'items', 'next_cursor', and 'has_more' keys.
         """
@@ -559,7 +556,7 @@ class HallucinationTracker:
                 query = query.filter(ReviewItemModel.status == status.upper())
             if tenant_id:
                 query = query.filter(ReviewItemModel.tenant_id == UUID(tenant_id))
-            
+
             # Cursor-based pagination using created_at + id
             if cursor:
                 try:
@@ -569,14 +566,11 @@ class HallucinationTracker:
                     # Items older than cursor OR same time but smaller ID
                     query = query.filter(
                         (ReviewItemModel.created_at < cursor_dt)
-                        | (
-                            (ReviewItemModel.created_at == cursor_dt)
-                            & (ReviewItemModel.id < cursor_uuid)
-                        )
+                        | ((ReviewItemModel.created_at == cursor_dt) & (ReviewItemModel.id < cursor_uuid))
                     )
                 except (ValueError, TypeError) as exc:
                     logger.warning("invalid_pagination_cursor", cursor=cursor, error=str(exc))
-            
+
             clamped_limit = max(1, min(limit, 500))
             items = (
                 query.order_by(
@@ -586,16 +580,16 @@ class HallucinationTracker:
                 .limit(clamped_limit + 1)  # fetch one extra to check for more
                 .all()
             )
-            
+
             has_more = len(items) > clamped_limit
             if has_more:
                 items = items[:clamped_limit]
-            
+
             next_cursor = None
             if has_more and items:
                 last_item = items[-1]
                 next_cursor = f"{last_item.created_at.isoformat()}_{last_item.id}"
-            
+
             return {
                 # List aggregates use the lean projection (#1409):
                 # full ``text_raw`` is excluded; a bounded
@@ -747,9 +741,7 @@ class HallucinationTracker:
                 if notes:
                     import hashlib as _hashlib
 
-                    audit_metadata["review_notes_sha256"] = _hashlib.sha256(
-                        notes.encode("utf-8")
-                    ).hexdigest()
+                    audit_metadata["review_notes_sha256"] = _hashlib.sha256(notes.encode("utf-8")).hexdigest()
 
                 AuditLogger.log_event(
                     db=session,
@@ -931,11 +923,7 @@ class HallucinationTracker:
         if tenant_id is not None:
             headers["X-RegEngine-Tenant"] = str(tenant_id)
 
-        dedupe_key = (
-            f"{review_id}:{status}"
-            if review_id
-            else None
-        )
+        dedupe_key = f"{review_id}:{status}" if review_id else None
         tenant_str = str(tenant_id) if tenant_id else None
 
         def _send() -> None:

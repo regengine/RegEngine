@@ -17,10 +17,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # shared.observability.context unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestWrapJobWithNewCorrelation:
     """Unit tests for the wrapping helper that provides thread-local context."""
@@ -29,11 +29,13 @@ class TestWrapJobWithNewCorrelation:
         """Import helpers after sys.path has been set up by conftest."""
         from shared.observability.context import (
             _capture_observability_context,
+            _request_id_ctx,
             _restore_observability_context,
+            _tenant_id_ctx,
             wrap_job_with_new_correlation,
         )
         from shared.observability.correlation import correlation_id_ctx
-        from shared.observability.context import _tenant_id_ctx, _request_id_ctx
+
         return (
             _capture_observability_context,
             _restore_observability_context,
@@ -97,6 +99,7 @@ class TestWrapJobWithNewCorrelation:
     def test_wrapped_job_seeds_tenant_id_in_structlog(self):
         """Structlog contextvars contain correlation_id after the wrapper runs."""
         import structlog
+
         (
             _,
             _,
@@ -178,6 +181,7 @@ class TestMakeJobContextWrapper:
 # Integration: SchedulerService._add_tracked_job uses the wrapper
 # ---------------------------------------------------------------------------
 
+
 class TestSchedulerServiceContextPropagation:
     """Integration tests confirming schedule_jobs wraps callables."""
 
@@ -211,15 +215,18 @@ class TestSchedulerServiceContextPropagation:
             # Import here so sys.path set up by conftest is used.
             import sys
             from pathlib import Path
+
             _svc_dir = Path(__file__).resolve().parent.parent
             _svcs_dir = _svc_dir.parent
             for d in (str(_svc_dir), str(_svcs_dir)):
                 if d not in sys.path:
                     sys.path.insert(0, d)
             from shared.paths import ensure_shared_importable
+
             ensure_shared_importable()
 
             from main import SchedulerService
+
             return SchedulerService()
 
     def test_add_tracked_job_wraps_callable(self):
@@ -246,9 +253,7 @@ class TestSchedulerServiceContextPropagation:
         job = jobs[0]
 
         # The registered func should NOT be the raw function — it's a wrapper.
-        assert job.func is not _raw_job, (
-            "add_job should store a wrapper, not the original callable"
-        )
+        assert job.func is not _raw_job, "add_job should store a wrapper, not the original callable"
 
     def test_wrapped_job_sets_correlation_id(self):
         """Executing the wrapped job produces a job:-prefixed correlation_id."""

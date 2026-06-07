@@ -12,9 +12,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app import identity_router
-
+from app.authz import IngestionPrincipal, get_ingestion_principal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,6 +80,7 @@ def client(mock_svc):
 # List entities
 # ---------------------------------------------------------------------------
 
+
 def test_list_entities_with_search(client, mock_svc):
     mock_svc.find_potential_matches.return_value = [
         {"entity_id": "e-1", "canonical_name": "Acme Foods", "entity_type": "firm"},
@@ -130,6 +130,7 @@ def test_list_entities_without_search_queries_db(monkeypatch):
 # Create entity
 # ---------------------------------------------------------------------------
 
+
 def test_register_entity(client, mock_svc):
     mock_svc.register_entity.return_value = "e-new-1"
     resp = client.post(
@@ -157,6 +158,7 @@ def test_register_entity(client, mock_svc):
 # Get entity
 # ---------------------------------------------------------------------------
 
+
 def test_get_entity_found(client, mock_svc):
     mock_svc.get_entity.return_value = {
         "entity_id": "e-1",
@@ -180,6 +182,7 @@ def test_get_entity_not_found(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Add alias
 # ---------------------------------------------------------------------------
+
 
 def test_add_alias(client, mock_svc):
     mock_svc.add_alias.return_value = "alias-new-1"
@@ -205,6 +208,7 @@ def test_add_alias(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Reviews
 # ---------------------------------------------------------------------------
+
 
 def test_list_reviews(client, mock_svc):
     mock_svc.list_pending_reviews.return_value = [
@@ -239,6 +243,7 @@ def test_resolve_review(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Merge entities
 # ---------------------------------------------------------------------------
+
 
 def test_merge_entities(client, mock_svc):
     mock_svc.merge_entities.return_value = "merge-1"
@@ -277,6 +282,7 @@ def test_split_entities(client, mock_svc):
 # Lookup by alias
 # ---------------------------------------------------------------------------
 
+
 def test_lookup_by_alias(client, mock_svc):
     mock_svc.find_entity_by_alias.return_value = [
         {"entity_id": "e-1", "canonical_name": "Acme Foods"},
@@ -294,6 +300,7 @@ def test_lookup_by_alias(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Auth & tenant isolation
 # ---------------------------------------------------------------------------
+
 
 def test_read_only_scope_blocks_write(monkeypatch):
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))

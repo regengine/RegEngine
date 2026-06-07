@@ -20,14 +20,14 @@ import asyncio
 import fnmatch
 import json
 import os
-import structlog
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, List, Optional
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
-from pydantic import BaseModel, Field
 
 import redis.asyncio as redis
+import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger("session_store")
 
@@ -364,10 +364,7 @@ class SessionData(BaseModel):
     ip_address: Optional[str] = Field(default=None, description="Client IP address")
 
     class Config:
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {UUID: str, datetime: lambda v: v.isoformat()}
 
     def to_redis_hash(self) -> dict:
         """Convert to Redis hash format (all strings)."""
@@ -425,9 +422,7 @@ class RedisSessionStore:
         self._client: Optional[redis.Redis] = None
 
         logger.info(
-            "redis_session_store_init",
-            redis_url=redact_connection_url(redis_url),
-            default_ttl_days=default_ttl_days
+            "redis_session_store_init", redis_url=redact_connection_url(redis_url), default_ttl_days=default_ttl_days
         )
 
     async def _get_client(self) -> redis.Redis:
@@ -499,34 +494,19 @@ class RedisSessionStore:
         # Use pipeline for atomic multi-key write
         async with client.pipeline(transaction=True) as pipe:
             # 1. Store session data
-            await pipe.hset(
-                self._session_key(session_id),
-                mapping=session_data.to_redis_hash()
-            )
+            await pipe.hset(self._session_key(session_id), mapping=session_data.to_redis_hash())
             await pipe.expire(self._session_key(session_id), ttl)
 
             # 2. Add to user's session set
-            await pipe.sadd(
-                self._user_sessions_key(session_data.user_id),
-                str(session_id)
-            )
+            await pipe.sadd(self._user_sessions_key(session_data.user_id), str(session_id))
             await pipe.expire(self._user_sessions_key(session_data.user_id), ttl)
 
             # 3. Create token hash → session_id mapping
-            await pipe.setex(
-                self._token_hash_key(session_data.refresh_token_hash),
-                ttl,
-                str(session_id)
-            )
+            await pipe.setex(self._token_hash_key(session_data.refresh_token_hash), ttl, str(session_id))
 
             await pipe.execute()
 
-        logger.info(
-            "session_created",
-            session_id=str(session_id),
-            user_id=str(session_data.user_id),
-            ttl_seconds=ttl
-        )
+        logger.info("session_created", session_id=str(session_id), user_id=str(session_data.user_id), ttl_seconds=ttl)
 
         return session_data
 
@@ -665,7 +645,7 @@ class RedisSessionStore:
         session_id: UUID,
         updates: dict,
         new_token_hash: Optional[str] = None,
-        old_token_hash: Optional[str] = None
+        old_token_hash: Optional[str] = None,
     ) -> bool:
         """Update session fields.
 
@@ -704,11 +684,7 @@ class RedisSessionStore:
                 await pipe.delete(self._token_hash_key(old_token_hash))
             if new_token_hash:
                 # Create new mapping
-                await pipe.setex(
-                    self._token_hash_key(new_token_hash),
-                    ttl,
-                    str(session_id)
-                )
+                await pipe.setex(self._token_hash_key(new_token_hash), ttl, str(session_id))
 
             await pipe.execute()
 
@@ -716,7 +692,7 @@ class RedisSessionStore:
             "session_updated",
             session_id=str(session_id),
             fields_updated=list(updates.keys()) if updates else [],
-            token_rotated=new_token_hash is not None
+            token_rotated=new_token_hash is not None,
         )
 
         return True
@@ -768,10 +744,7 @@ class RedisSessionStore:
             await pipe.delete(self._session_key(session_id))
 
             # 2. Remove from user's session set
-            await pipe.srem(
-                self._user_sessions_key(session.user_id),
-                str(session_id)
-            )
+            await pipe.srem(self._user_sessions_key(session.user_id), str(session_id))
 
             # 3. Delete token hash mapping
             await pipe.delete(self._token_hash_key(session.refresh_token_hash))
@@ -781,11 +754,7 @@ class RedisSessionStore:
         logger.info("session_deleted", session_id=str(session_id))
         return True
 
-    async def list_user_sessions(
-        self,
-        user_id: UUID,
-        active_only: bool = True
-    ) -> List[SessionData]:
+    async def list_user_sessions(self, user_id: UUID, active_only: bool = True) -> List[SessionData]:
         """List all sessions for a user.
 
         Args:
@@ -816,10 +785,7 @@ class RedisSessionStore:
         for session_id_str, data in zip(session_ids, results):
             if not data:
                 # Session expired or deleted, clean up
-                await client.srem(
-                    self._user_sessions_key(user_id),
-                    session_id_str
-                )
+                await client.srem(self._user_sessions_key(user_id), session_id_str)
                 continue
 
             session = SessionData.from_redis_hash(UUID(session_id_str), data)
@@ -869,11 +835,7 @@ class RedisSessionStore:
             for session in sessions:
                 if except_session_id is not None and session.id == except_session_id:
                     continue
-                await pipe.hset(
-                    self._session_key(session.id),
-                    "is_revoked",
-                    "true"
-                )
+                await pipe.hset(self._session_key(session.id), "is_revoked", "true")
                 # Tear down the refresh-token mapping so /refresh can't claim it.
                 if session.refresh_token_hash:
                     await pipe.delete(self._token_hash_key(session.refresh_token_hash))
@@ -915,18 +877,11 @@ class RedisSessionStore:
             exists = await client.exists(self._session_key(UUID(session_id_str)))
             if not exists:
                 # Remove from set
-                await client.srem(
-                    self._user_sessions_key(user_id),
-                    session_id_str
-                )
+                await client.srem(self._user_sessions_key(user_id), session_id_str)
                 removed += 1
 
         if removed > 0:
-            logger.info(
-                "expired_sessions_cleaned",
-                user_id=str(user_id),
-                removed=removed
-            )
+            logger.info("expired_sessions_cleaned", user_id=str(user_id), removed=removed)
 
         return removed
 

@@ -37,9 +37,7 @@ os.environ.setdefault("GRAPH_SERVICE_URL", "http://localhost:8200")
 
 # Ensure the compliance service directory is on sys.path so ``from main import
 # app`` resolves correctly regardless of where pytest is invoked from.
-_COMPLIANCE_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "services" / "compliance"
-)
+_COMPLIANCE_DIR = Path(__file__).resolve().parent.parent.parent / "services" / "compliance"
 _SERVICES_DIR = _COMPLIANCE_DIR.parent
 
 # Clear any cached ``app`` / ``main`` modules that may belong to a sibling
@@ -60,7 +58,6 @@ if str(_NLP_DIR) not in sys.path:
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app  # noqa: E402 — path bootstrapped above
 
 # The shared auth bypass token is recognised by shared/auth.py when
@@ -95,6 +92,7 @@ def extractor() -> FSMAExtractor:
 # ---------------------------------------------------------------------------
 # Document fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def bol_text() -> str:
@@ -178,6 +176,7 @@ def receiving_bol_text() -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ftl_commodity_from_cte(cte_list) -> str:
     """Pick an FTL-safe commodity string to send to /validate.
 
@@ -201,6 +200,7 @@ def _ftl_commodity_from_cte(cte_list) -> str:
 # ---------------------------------------------------------------------------
 # 1. Happy path
 # ---------------------------------------------------------------------------
+
 
 class TestHappyPath:
     """FSMAExtractor produces valid CTEs that /validate accepts (200)."""
@@ -285,9 +285,7 @@ class TestHappyPath:
         )
         assert resp.status_code == 200, resp.text
 
-    def test_each_cte_has_document_id_and_tenant_id(
-        self, extractor: FSMAExtractor, bol_text: str
-    ) -> None:
+    def test_each_cte_has_document_id_and_tenant_id(self, extractor: FSMAExtractor, bol_text: str) -> None:
         """Extraction result carries both document_id and tenant_id through."""
         doc_id = "doc-bol-tenant-check"
         result = extractor.extract(bol_text, doc_id, tenant_id=TENANT_ID)
@@ -295,18 +293,14 @@ class TestHappyPath:
         assert result.document_id == doc_id
         assert result.tenant_id == TENANT_ID
 
-    def test_graph_event_includes_tenant_id(
-        self, extractor: FSMAExtractor, bol_text: str
-    ) -> None:
+    def test_graph_event_includes_tenant_id(self, extractor: FSMAExtractor, bol_text: str) -> None:
         """to_graph_event() threads tenant_id through the routing envelope."""
         result = extractor.extract(bol_text, "doc-graph-001", tenant_id=TENANT_ID)
         envelope = extractor.to_graph_event(result)
 
         assert envelope["tenant_id"] == TENANT_ID
 
-    def test_fsma_events_respect_kde_minimum_gate(
-        self, extractor: FSMAExtractor, bol_text: str
-    ) -> None:
+    def test_fsma_events_respect_kde_minimum_gate(self, extractor: FSMAExtractor, bol_text: str) -> None:
         """to_fsma_events() only emits events that have both TLC and event date."""
         result = extractor.extract(bol_text, "doc-kde-gate-001", tenant_id=TENANT_ID)
         events = extractor.to_fsma_events(result)
@@ -320,12 +314,11 @@ class TestHappyPath:
 # 2. Idempotent re-ingestion
 # ---------------------------------------------------------------------------
 
+
 class TestIdempotentReIngestion:
     """Same document submitted twice must produce deterministic, identical results."""
 
-    def test_bol_double_extraction_same_cte_count(
-        self, extractor: FSMAExtractor, bol_text: str
-    ) -> None:
+    def test_bol_double_extraction_same_cte_count(self, extractor: FSMAExtractor, bol_text: str) -> None:
         """Extracting the same BOL twice returns the same number of CTEs."""
         result_a = extractor.extract(bol_text, "doc-idem-bol", tenant_id=TENANT_ID)
         result_b = extractor.extract(bol_text, "doc-idem-bol", tenant_id=TENANT_ID)
@@ -334,18 +327,14 @@ class TestIdempotentReIngestion:
             "Re-ingestion produced a different CTE count — extraction is not deterministic"
         )
 
-    def test_bol_double_extraction_same_cte_types(
-        self, extractor: FSMAExtractor, bol_text: str
-    ) -> None:
+    def test_bol_double_extraction_same_cte_types(self, extractor: FSMAExtractor, bol_text: str) -> None:
         """Extracting the same BOL twice returns the same CTE types in the same order."""
         result_a = extractor.extract(bol_text, "doc-idem-bol", tenant_id=TENANT_ID)
         result_b = extractor.extract(bol_text, "doc-idem-bol", tenant_id=TENANT_ID)
 
         types_a = [cte.type for cte in result_a.ctes]
         types_b = [cte.type for cte in result_b.ctes]
-        assert types_a == types_b, (
-            f"CTE type list differs on re-ingestion: {types_a} vs {types_b}"
-        )
+        assert types_a == types_b, f"CTE type list differs on re-ingestion: {types_a} vs {types_b}"
 
     def test_production_log_double_extraction_same_tlc(
         self, extractor: FSMAExtractor, production_log_text: str
@@ -356,13 +345,9 @@ class TestIdempotentReIngestion:
 
         tlcs_a = [cte.kdes.traceability_lot_code for cte in result_a.ctes]
         tlcs_b = [cte.kdes.traceability_lot_code for cte in result_b.ctes]
-        assert tlcs_a == tlcs_b, (
-            f"TLC values differ on re-ingestion: {tlcs_a} vs {tlcs_b}"
-        )
+        assert tlcs_a == tlcs_b, f"TLC values differ on re-ingestion: {tlcs_a} vs {tlcs_b}"
 
-    def test_compliance_validate_idempotent(
-        self, compliance_client: TestClient
-    ) -> None:
+    def test_compliance_validate_idempotent(self, compliance_client: TestClient) -> None:
         """POST /validate with the same payload twice returns 200 both times."""
         payload = {"ftl_commodity": "leafy greens"}
         resp1 = compliance_client.post("/validate", json=payload, headers=_AUTH)
@@ -379,33 +364,36 @@ class TestIdempotentReIngestion:
 # 3. Adversarial inputs
 # ---------------------------------------------------------------------------
 
+
 class TestAdversarialInputs:
     """Malformed / injection text must not crash the extractor or service."""
 
-    @pytest.mark.parametrize("bad_text", [
-        "",                                           # empty document
-        "   \n\n\t  ",                               # whitespace only
-        "=CMD|' /C calc'!A0",                        # spreadsheet formula injection
-        "'; DROP TABLE cte_events; --",              # SQL injection
-        "<script>alert('xss')</script>",             # XSS injection
-        "A" * 100_000,                               # very long input (no crash)
-        "\x00\x01\x02\x03",                         # null bytes / control chars
-        "Lot: " + "A" * 5_000,                      # oversized lot code field
-        "GTIN: 99999999999999" + "\n" * 1_000,      # many blank lines after GTIN
-    ], ids=[
-        "empty",
-        "whitespace-only",
-        "formula-injection",
-        "sql-injection",
-        "xss-injection",
-        "very-long",
-        "null-bytes",
-        "oversized-lot",
-        "trailing-newlines",
-    ])
-    def test_extractor_does_not_crash(
-        self, extractor: FSMAExtractor, bad_text: str
-    ) -> None:
+    @pytest.mark.parametrize(
+        "bad_text",
+        [
+            "",  # empty document
+            "   \n\n\t  ",  # whitespace only
+            "=CMD|' /C calc'!A0",  # spreadsheet formula injection
+            "'; DROP TABLE cte_events; --",  # SQL injection
+            "<script>alert('xss')</script>",  # XSS injection
+            "A" * 100_000,  # very long input (no crash)
+            "\x00\x01\x02\x03",  # null bytes / control chars
+            "Lot: " + "A" * 5_000,  # oversized lot code field
+            "GTIN: 99999999999999" + "\n" * 1_000,  # many blank lines after GTIN
+        ],
+        ids=[
+            "empty",
+            "whitespace-only",
+            "formula-injection",
+            "sql-injection",
+            "xss-injection",
+            "very-long",
+            "null-bytes",
+            "oversized-lot",
+            "trailing-newlines",
+        ],
+    )
+    def test_extractor_does_not_crash(self, extractor: FSMAExtractor, bad_text: str) -> None:
         """FSMAExtractor must not raise on any of the adversarial inputs."""
         result = extractor.extract(bad_text, "doc-adv-001", tenant_id=TENANT_ID)
         # Result must be a valid object — presence of warnings is fine.
@@ -413,39 +401,29 @@ class TestAdversarialInputs:
         assert isinstance(result.ctes, list)
         assert isinstance(result.warnings, list)
 
-    def test_empty_document_yields_no_ctes(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_empty_document_yields_no_ctes(self, extractor: FSMAExtractor) -> None:
         """Empty document must produce an empty CTE list, not a crash."""
         result = extractor.extract("", "doc-empty", tenant_id=TENANT_ID)
         assert result.ctes == []
 
-    def test_injection_text_yields_empty_or_low_confidence_ctes(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_injection_text_yields_empty_or_low_confidence_ctes(self, extractor: FSMAExtractor) -> None:
         """Formula / SQL injection text should not produce high-confidence CTEs."""
         injection = "=CMD|' /C calc'!A0\n'; DROP TABLE cte_events; --"
         result = extractor.extract(injection, "doc-inject", tenant_id=TENANT_ID)
         for cte in result.ctes:
-            assert cte.confidence < 0.85, (
-                f"Injection text produced a high-confidence CTE: {cte}"
-            )
+            assert cte.confidence < 0.85, f"Injection text produced a high-confidence CTE: {cte}"
 
     def test_missing_tenant_id_raises(self, extractor: FSMAExtractor) -> None:
         """extract() with empty tenant_id must raise ValueError(E_MISSING_TENANT_ID)."""
         with pytest.raises(ValueError, match="E_MISSING_TENANT_ID"):
             extractor.extract("Bill of Lading\nDate: 2026-04-20", "doc-notenant", tenant_id="")
 
-    def test_compliance_validate_missing_ftl_commodity_returns_422(
-        self, compliance_client: TestClient
-    ) -> None:
+    def test_compliance_validate_missing_ftl_commodity_returns_422(self, compliance_client: TestClient) -> None:
         """POST /validate with no ftl_commodity field returns HTTP 422."""
         resp = compliance_client.post("/validate", json={}, headers=_AUTH)
         assert resp.status_code == 422, resp.text
 
-    def test_compliance_validate_injection_commodity_rejected(
-        self, compliance_client: TestClient
-    ) -> None:
+    def test_compliance_validate_injection_commodity_rejected(self, compliance_client: TestClient) -> None:
         """POST /validate with an injection payload as ftl_commodity returns 400."""
         resp = compliance_client.post(
             "/validate",
@@ -460,35 +438,40 @@ class TestAdversarialInputs:
 # 4. Non-FTL foods
 # ---------------------------------------------------------------------------
 
+
 class TestNonFTLFoods:
     """Products not on the FDA FTL should be flagged or rejected."""
 
-    @pytest.mark.parametrize("doc_text,doc_id,expected_ftl", [
-        (
-            "BILL OF LADING\nDate: 2026-04-20\n"
-            "Ship From: Banana Grove GLN: 0614141999001\n"
-            "Ship To: Supermart DC GLN: 0614141999002\n"
-            "Product: Bananas\nLot: LOT-BN-2026-04\nQuantity: 200 cases\n",
-            "doc-banana-bol",
-            False,
-        ),
-        (
-            "PRODUCTION LOG\nDate: 2026-04-20\n"
-            "Product: Apple Juice\nLot: LOT-AJ-2026\nQuantity: 50 cases\n"
-            "Processing Location GLN: 0614141888001\n"
-            "Kill Step: Pasteurization\n",
-            "doc-apple-juice",
-            False,
-        ),
-        (
-            "BILL OF LADING\nDate: 2026-04-20\n"
-            "Ship From: Beef Co GLN: 0614141777001\n"
-            "Ship To: Meat Market GLN: 0614141777002\n"
-            "Product: Ground Beef\nLot: LOT-GB-2026\nQuantity: 100 lbs\n",
-            "doc-ground-beef",
-            False,
-        ),
-    ], ids=["bananas", "apple-juice", "ground-beef"])
+    @pytest.mark.parametrize(
+        "doc_text,doc_id,expected_ftl",
+        [
+            (
+                "BILL OF LADING\nDate: 2026-04-20\n"
+                "Ship From: Banana Grove GLN: 0614141999001\n"
+                "Ship To: Supermart DC GLN: 0614141999002\n"
+                "Product: Bananas\nLot: LOT-BN-2026-04\nQuantity: 200 cases\n",
+                "doc-banana-bol",
+                False,
+            ),
+            (
+                "PRODUCTION LOG\nDate: 2026-04-20\n"
+                "Product: Apple Juice\nLot: LOT-AJ-2026\nQuantity: 50 cases\n"
+                "Processing Location GLN: 0614141888001\n"
+                "Kill Step: Pasteurization\n",
+                "doc-apple-juice",
+                False,
+            ),
+            (
+                "BILL OF LADING\nDate: 2026-04-20\n"
+                "Ship From: Beef Co GLN: 0614141777001\n"
+                "Ship To: Meat Market GLN: 0614141777002\n"
+                "Product: Ground Beef\nLot: LOT-GB-2026\nQuantity: 100 lbs\n",
+                "doc-ground-beef",
+                False,
+            ),
+        ],
+        ids=["bananas", "apple-juice", "ground-beef"],
+    )
     def test_non_ftl_product_extraction_yields_false_ftl_flag(
         self, extractor: FSMAExtractor, doc_text: str, doc_id: str, expected_ftl: bool
     ) -> None:
@@ -496,11 +479,7 @@ class TestNonFTLFoods:
         result = extractor.extract(doc_text, doc_id, tenant_id=TENANT_ID)
 
         # May produce zero or more CTEs — check any that have a classification.
-        ftl_flags = [
-            cte.kdes.is_ftl_covered
-            for cte in result.ctes
-            if cte.kdes.is_ftl_covered is not None
-        ]
+        ftl_flags = [cte.kdes.is_ftl_covered for cte in result.ctes if cte.kdes.is_ftl_covered is not None]
         if ftl_flags:
             # If the FTL classifier ran and produced a verdict, it should be False
             assert all(flag == expected_ftl for flag in ftl_flags), (
@@ -509,18 +488,19 @@ class TestNonFTLFoods:
         # If FTL_CATEGORIES was not imported (degraded mode), is_ftl_covered stays None
         # — that's acceptable per the extractor's own docstring (#1116 / #1346).
 
-    @pytest.mark.parametrize("commodity", [
-        "bananas",
-        "apples",
-        "beef",
-        "pork",
-        "chicken",
-        "orange juice",
-        "potato chips",
-    ])
-    def test_compliance_rejects_non_ftl_commodity(
-        self, compliance_client: TestClient, commodity: str
-    ) -> None:
+    @pytest.mark.parametrize(
+        "commodity",
+        [
+            "bananas",
+            "apples",
+            "beef",
+            "pork",
+            "chicken",
+            "orange juice",
+            "potato chips",
+        ],
+    )
+    def test_compliance_rejects_non_ftl_commodity(self, compliance_client: TestClient, commodity: str) -> None:
         """POST /validate returns 400 E_NON_FTL_FOOD for any non-FTL commodity."""
         resp = compliance_client.post(
             "/validate",
@@ -532,13 +512,9 @@ class TestNonFTLFoods:
         )
         body = resp.json()
         message = body.get("detail") or (body.get("error") or {}).get("message")
-        assert message == "E_NON_FTL_FOOD", (
-            f"Expected E_NON_FTL_FOOD for '{commodity}'; got: {body}"
-        )
+        assert message == "E_NON_FTL_FOOD", f"Expected E_NON_FTL_FOOD for '{commodity}'; got: {body}"
 
-    def test_compliance_accepts_ftl_commodity_after_non_ftl_rejection(
-        self, compliance_client: TestClient
-    ) -> None:
+    def test_compliance_accepts_ftl_commodity_after_non_ftl_rejection(self, compliance_client: TestClient) -> None:
         """After a non-FTL rejection, a valid FTL commodity is still accepted (no state bleed)."""
         # First call: non-FTL
         resp_bad = compliance_client.post(
@@ -557,9 +533,7 @@ class TestNonFTLFoods:
         assert resp_ok.status_code == 200, resp_ok.text
         assert resp_ok.json()["valid"] is True
 
-    def test_extractor_ftl_classification_does_not_crash_without_catalog(
-        self, extractor: FSMAExtractor
-    ) -> None:
+    def test_extractor_ftl_classification_does_not_crash_without_catalog(self, extractor: FSMAExtractor) -> None:
         """FTL classification must degrade gracefully when catalog is empty/missing.
 
         The extractor is designed to return (None, None) when FTL_CATEGORIES is

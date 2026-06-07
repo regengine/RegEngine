@@ -56,9 +56,7 @@ def test_successful_response_is_normalized(monkeypatch):
     fake_response.raise_for_status = MagicMock()
 
     monkeypatch.setattr(safe_http, "validate_url", lambda u: u)
-    monkeypatch.setattr(
-        safe_http, "safe_httpx_get_sync", lambda *a, **kw: fake_response
-    )
+    monkeypatch.setattr(safe_http, "safe_httpx_get_sync", lambda *a, **kw: fake_response)
 
     result = safe_http.safe_fetch_content("https://example.com/")
     assert result == {

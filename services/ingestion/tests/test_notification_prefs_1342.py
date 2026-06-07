@@ -10,9 +10,6 @@ Issue: #1342
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import notification_prefs as np_mod
 from app.notification_prefs import (
     AlertPreference,
@@ -27,8 +24,10 @@ from app.notification_prefs import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 # ---------------------------------------------------------------------------
 # Fixtures

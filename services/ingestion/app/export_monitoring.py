@@ -19,9 +19,9 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("export-monitoring")
 
@@ -38,6 +38,7 @@ KDE_COMPLETENESS_THRESHOLD = 0.80  # 80%
 
 class ExportMetrics(BaseModel):
     """Aggregated export activity metrics for a tenant."""
+
     tenant_id: str
     total_exports: int = 0
     exports_last_24h: int = 0
@@ -50,6 +51,7 @@ class ExportMetrics(BaseModel):
 
 class HealthCheckResult(BaseModel):
     """Result of a single health check."""
+
     name: str
     status: HealthStatus
     message: str
@@ -58,6 +60,7 @@ class HealthCheckResult(BaseModel):
 
 class ExportHealthCheck(BaseModel):
     """Aggregated health check results for a tenant."""
+
     tenant_id: str
     status: HealthStatus = "healthy"
     checks: List[HealthCheckResult] = Field(default_factory=list)
@@ -66,6 +69,7 @@ class ExportHealthCheck(BaseModel):
 
 class MonitoringAlert(BaseModel):
     """A monitoring alert for export pipeline issues."""
+
     id: str
     tenant_id: str
     alert_type: str
@@ -77,6 +81,7 @@ class MonitoringAlert(BaseModel):
 # ---------------------------------------------------------------------------
 # Helper: query export logs from DB
 # ---------------------------------------------------------------------------
+
 
 def _query_export_logs(tenant_id: str) -> Optional[List[dict]]:
     """Query fsma.fda_export_log for a tenant. Returns None if DB unavailable."""
@@ -144,8 +149,8 @@ def _check_db_connectivity() -> HealthCheckResult:
 def _check_chain_integrity(tenant_id: str) -> HealthCheckResult:
     """Run verify_chain and check for gaps."""
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db = SessionLocal()
         try:
@@ -400,14 +405,16 @@ async def monitoring_alerts(
                     last_dt = last_dt.replace(tzinfo=timezone.utc)
                 stale_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
                 if last_dt < stale_cutoff:
-                    alerts.append(MonitoringAlert(
-                        id=f"mon-stale-exports-{tenant_id}",
-                        tenant_id=tenant_id,
-                        alert_type="stale_exports",
-                        severity="warning",
-                        message=f"No exports in 7+ days. Last export: {last_export_str}.",
-                        created_at=now_iso,
-                    ))
+                    alerts.append(
+                        MonitoringAlert(
+                            id=f"mon-stale-exports-{tenant_id}",
+                            tenant_id=tenant_id,
+                            alert_type="stale_exports",
+                            severity="warning",
+                            message=f"No exports in 7+ days. Last export: {last_export_str}.",
+                            created_at=now_iso,
+                        )
+                    )
             except (ValueError, TypeError):
                 pass
 

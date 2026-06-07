@@ -50,11 +50,7 @@ def _allowlisted_paths() -> set[Path]:
 def _source_files(base: Path) -> list[Path]:
     if not base.exists():
         return []
-    return sorted(
-        path
-        for path in base.rglob("*")
-        if path.is_file() and path.suffix in TEXT_EXTENSIONS
-    )
+    return sorted(path for path in base.rglob("*") if path.is_file() and path.suffix in TEXT_EXTENSIONS)
 
 
 def _line_hits(path: Path, pattern: re.Pattern[str]) -> list[str]:

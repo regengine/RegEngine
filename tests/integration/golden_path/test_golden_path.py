@@ -35,23 +35,23 @@ from shared.canonical_event import (
     TraceabilityEvent,
 )
 from shared.cte_persistence import compute_chain_hash
-from shared.rules.types import RuleDefinition, RuleEvaluationResult, EvaluationSummary
 from shared.rules.evaluators.stateless import (
     evaluate_field_presence,
     evaluate_multi_field_presence,
 )
+from shared.rules.types import EvaluationSummary, RuleDefinition, RuleEvaluationResult
 
 from tests.integration.golden_path.helpers import (
+    GOLDEN_RULE_SEEDS,
     make_receiving_event,
     make_shipping_event,
     make_transformation_event,
-    GOLDEN_RULE_SEEDS,
 )
-
 
 # ===================================================================
 # Scenario 1: Clean Happy Path
 # ===================================================================
+
 
 class TestScenario1CleanHappyPath:
     """
@@ -176,6 +176,7 @@ class TestScenario1CleanHappyPath:
 # Scenario 2: Identity Collision
 # ===================================================================
 
+
 class TestScenario2IdentityCollision:
     """
     Two ingested events reference the same entity with slightly different
@@ -188,24 +189,28 @@ class TestScenario2IdentityCollision:
     def test_exact_name_match(self):
         """Identical entity names should produce a confidence of 1.0."""
         from difflib import SequenceMatcher
+
         ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farms LLC").ratio()
         assert ratio == 1.0
 
     def test_near_match_above_high_threshold(self):
         """Minor typos should produce confidence above 0.90 (auto-merge threshold)."""
         from difflib import SequenceMatcher
+
         ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farms, LLC").ratio()
         assert ratio >= 0.90, f"Expected >= 0.90, got {ratio}"
 
     def test_fuzzy_match_in_ambiguous_range(self):
         """Similar but distinct names should fall in the review range (0.60-0.90)."""
         from difflib import SequenceMatcher
+
         ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farm Foods Inc").ratio()
         assert 0.40 <= ratio < 0.90, f"Expected ambiguous range, got {ratio}"
 
     def test_distinct_entities_below_threshold(self):
         """Completely different names should score below 0.60."""
         from difflib import SequenceMatcher
+
         ratio = SequenceMatcher(None, "Fresh Farms LLC", "Pacific Seafood Corp").ratio()
         assert ratio < 0.60, f"Expected < 0.60, got {ratio}"
 
@@ -225,6 +230,7 @@ class TestScenario2IdentityCollision:
 # ===================================================================
 # Scenario 3: Compliance Violation (Mass Balance / Missing KDEs)
 # ===================================================================
+
 
 class TestScenario3ComplianceViolation:
     """
@@ -331,6 +337,7 @@ class TestScenario3ComplianceViolation:
 # Scenario 4: Temporal Ordering / Amendment Chain
 # ===================================================================
 
+
 class TestScenario4TemporalOrdering:
     """
     Events ingested out of chronological order. The system should handle
@@ -390,6 +397,7 @@ class TestScenario4TemporalOrdering:
 # ===================================================================
 # Scenario 5: Export Column Mapping
 # ===================================================================
+
 
 class TestScenario5ExportMapping:
     """

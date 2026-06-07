@@ -194,10 +194,7 @@ class TestRegulatoryDateConfidence:
         extractions = _convert_entities_to_extraction(
             entities, doc_id="doc-hostile", source_url="https://attacker.example"
         )
-        reg_date_extractions = [
-            e for e in extractions
-            if e.attributes.get("fact_type") == "compliance_date"
-        ]
+        reg_date_extractions = [e for e in extractions if e.attributes.get("fact_type") == "compliance_date"]
         assert reg_date_extractions, "expected at least one REGULATORY_DATE extraction"
         for ext in reg_date_extractions:
             # Cap (0.60) is below the auto-approval gate (0.95).
@@ -206,10 +203,7 @@ class TestRegulatoryDateConfidence:
     def test_legitimate_fsma_date_still_detected(self):
         from services.nlp.app.extractor import extract_entities
 
-        doc = (
-            "The FSMA Rule establishes a Compliance Date of January 20, 2026 "
-            "for covered facilities."
-        )
+        doc = "The FSMA Rule establishes a Compliance Date of January 20, 2026 for covered facilities."
         entities = extract_entities(doc)
         reg_dates = [e for e in entities if e["type"] == "REGULATORY_DATE"]
         assert reg_dates
@@ -238,9 +232,7 @@ class TestLegacyHeuristicCap:
             "thresholds for compliance in the United States jurisdiction."
         )
         entities = extract_entities(doc)
-        extractions = _convert_entities_to_extraction(
-            entities, doc_id="doc-cap", source_url="https://example.com"
-        )
+        extractions = _convert_entities_to_extraction(entities, doc_id="doc-cap", source_url="https://example.com")
         assert extractions
         for ext in extractions:
             assert ext.confidence_score <= _LEGACY_HEURISTIC_CONFIDENCE_CAP

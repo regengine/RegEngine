@@ -5,9 +5,11 @@ Tests for hash chaining, tamper detection, and Merkle proof verification.
 """
 
 import pytest
+
+from services.graph.app.evidence.envelope import MerkleNode, MerkleProof
 from services.graph.app.evidence.hashing import (
-    compute_payload_hash,
     compute_envelope_hash,
+    compute_payload_hash,
     verify_hash,
 )
 from services.graph.app.evidence.merkle import (
@@ -15,7 +17,6 @@ from services.graph.app.evidence.merkle import (
     generate_merkle_proof,
     verify_merkle_proof,
 )
-from services.graph.app.evidence.envelope import MerkleNode, MerkleProof
 
 
 class TestHashChainIntegrity:
@@ -107,11 +108,7 @@ class TestChainBreakDetected:
         payload = {"data": "orphan"}
         hash_orphan = compute_payload_hash(payload)
 
-        envelope = {
-            "payload": payload,
-            "current_hash": hash_orphan,
-            "previous_hash": "nonexistent_previous_hash"
-        }
+        envelope = {"payload": payload, "current_hash": hash_orphan, "previous_hash": "nonexistent_previous_hash"}
 
         computed = compute_envelope_hash(envelope)
         assert computed != "nonexistent_previous_hash"

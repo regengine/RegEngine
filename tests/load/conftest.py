@@ -8,4 +8,5 @@ https://github.com/gevent/gevent/issues/1016).
 The Locust scenarios are executed via ``locust -f <file>`` in CI/infra,
 not via pytest. Skip them during collection so the main suite can run.
 """
+
 collect_ignore_glob = ["test_*.py"]

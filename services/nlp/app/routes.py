@@ -3,28 +3,28 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
+import uuid
 from typing import Any, Optional
 from urllib.parse import quote
-import uuid
 
 import httpx
 import structlog
-from shared.resilient_http import resilient_client
-from shared.circuit_breaker import CircuitOpenError
 from fastapi import APIRouter, Depends, HTTPException, Request
-from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel, Field
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, require_api_key
+from shared.circuit_breaker import CircuitOpenError
+from shared.funnel_events import emit_funnel_event
+from shared.metrics_auth import require_metrics_key
+from shared.permissions import has_permission
+from shared.rate_limit import limiter
+from shared.resilient_http import resilient_client
+from shared.tenant_context import resolve_tenant_context
 
 from .config import settings
 from .query_planner import QueryPlan, parse_query
-from shared.auth import APIKey, require_api_key
-from shared.rate_limit import limiter
-from shared.api_key_store import APIKeyResponse
-from shared.funnel_events import emit_funnel_event
-from shared.permissions import has_permission
-from shared.tenant_context import resolve_tenant_context
 
 logger = structlog.get_logger("nlp.test")
 router = APIRouter()
@@ -139,8 +139,7 @@ async def _execute_query_plan(
         facilities = payload.get("facilities", [])
         downstream_lots = payload.get("downstream_lots", [])
         answer = (
-            f"Found {len(facilities)} downstream facilities and "
-            f"{len(downstream_lots)} downstream lots for {plan.tlc}."
+            f"Found {len(facilities)} downstream facilities and {len(downstream_lots)} downstream lots for {plan.tlc}."
         )
         return [payload], [QueryEvidence(endpoint=endpoint, result_count=1)], answer
 
@@ -151,10 +150,7 @@ async def _execute_query_plan(
         payload = await _graph_get(request, tenant_id, endpoint, params={})
         facilities = payload.get("facilities", [])
         source_lots = payload.get("source_lots", [])
-        answer = (
-            f"Found {len(source_lots)} source lots across "
-            f"{len(facilities)} facilities for {plan.tlc}."
-        )
+        answer = f"Found {len(source_lots)} source lots across {len(facilities)} facilities for {plan.tlc}."
         return [payload], [QueryEvidence(endpoint=endpoint, result_count=1)], answer
 
     if plan.intent == "lot_timeline":
@@ -178,10 +174,7 @@ async def _execute_query_plan(
         params = {"days_stagnant": plan.days_stagnant or 30}
         payload = await _graph_get(request, tenant_id, endpoint, params=params)
         orphans = payload.get("orphans", [])
-        answer = (
-            f"Found {len(orphans)} orphaned lots with at least "
-            f"{params['days_stagnant']} stagnant days."
-        )
+        answer = f"Found {len(orphans)} orphaned lots with at least {params['days_stagnant']} stagnant days."
         return orphans, [QueryEvidence(endpoint=endpoint, params=params, result_count=len(orphans))], answer
 
     # Explicit events_search handler — must be listed before the unknown-intent guard
@@ -297,14 +290,18 @@ async def _graph_get(
 
     if response.status_code >= 500:
         correlation_id = str(uuid.uuid4())
-        logger.error("graph_service_5xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id)
+        logger.error(
+            "graph_service_5xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id
+        )
         raise HTTPException(
             status_code=502,
             detail=f"Upstream service temporarily unavailable (ref: {correlation_id})",
         )
     if response.status_code >= 400:
         correlation_id = str(uuid.uuid4())
-        logger.warning("graph_service_4xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id)
+        logger.warning(
+            "graph_service_4xx", status=response.status_code, body=response.text[:500], correlation_id=correlation_id
+        )
         raise HTTPException(
             status_code=response.status_code,
             detail=f"Request could not be processed (ref: {correlation_id})",

@@ -64,14 +64,8 @@ class TestTraceQueryMetrics:
         )
 
         # Verify metrics were updated (checking labels exist)
-        assert (
-            TRACE_QUERIES_TOTAL.labels(direction="forward", status="success")
-            is not None
-        )
-        assert (
-            TRACE_QUERY_LATENCY.labels(direction="forward", status="success")
-            is not None
-        )
+        assert TRACE_QUERIES_TOTAL.labels(direction="forward", status="success") is not None
+        assert TRACE_QUERY_LATENCY.labels(direction="forward", status="success") is not None
 
     def test_record_trace_query_error(self):
         """Test recording failed trace query."""
@@ -83,9 +77,7 @@ class TestTraceQueryMetrics:
             facility_count=0,
         )
 
-        assert (
-            TRACE_QUERIES_TOTAL.labels(direction="backward", status="error") is not None
-        )
+        assert TRACE_QUERIES_TOTAL.labels(direction="backward", status="error") is not None
 
     def test_record_trace_query_both_directions(self):
         """Test both forward and backward trace metrics."""
@@ -113,9 +105,7 @@ class TestRecallSLAMetrics:
 
     def test_record_recall_export_full_package(self):
         """Test recording full package export."""
-        record_recall_export(
-            export_type="full_package", duration_seconds=30.0, status="success"
-        )
+        record_recall_export(export_type="full_package", duration_seconds=30.0, status="success")
 
         assert RECALL_SLA_SECONDS.labels(export_type="full_package") is not None
 
@@ -227,12 +217,7 @@ class TestAPIMetrics:
             duration=0.25,
         )
 
-        assert (
-            FSMA_API_CALLS.labels(
-                endpoint="/v1/fsma/trace/forward", method="GET", status="success"
-            )
-            is not None
-        )
+        assert FSMA_API_CALLS.labels(endpoint="/v1/fsma/trace/forward", method="GET", status="success") is not None
 
 
 # ============================================================================
@@ -259,19 +244,13 @@ class TestValidationMetrics:
         """Test recording GTIN validation."""
         record_validation(identifier_type="GTIN", is_valid=True)
 
-        assert (
-            GS1_VALIDATIONS_TOTAL.labels(identifier_type="GTIN", result="valid")
-            is not None
-        )
+        assert GS1_VALIDATIONS_TOTAL.labels(identifier_type="GTIN", result="valid") is not None
 
     def test_record_gln_validation(self):
         """Test recording GLN validation."""
         record_validation(identifier_type="GLN", is_valid=False)
 
-        assert (
-            GS1_VALIDATIONS_TOTAL.labels(identifier_type="GLN", result="invalid")
-            is not None
-        )
+        assert GS1_VALIDATIONS_TOTAL.labels(identifier_type="GLN", result="invalid") is not None
 
 
 # ============================================================================

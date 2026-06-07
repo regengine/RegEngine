@@ -54,11 +54,12 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import stripe_billing  # noqa: E402
-from app.stripe_billing import state as state_mod  # noqa: E402
-from app.stripe_billing import webhooks as webhooks_mod  # noqa: E402
-
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.stripe_billing import (
+    state as state_mod,  # noqa: E402
+    webhooks as webhooks_mod,  # noqa: E402
+)
 
 # ── Fake Redis with realistic SET/NX semantics ──────────────────────────────
 
@@ -299,7 +300,7 @@ def test_webhook_dedup_is_per_event_id(monkeypatch: pytest.MonkeyPatch) -> None:
         for _ in range(3):
             resp = client.post(
                 "/api/v1/billing/webhooks",
-                content=b'{}',
+                content=b"{}",
                 headers={"Stripe-Signature": "t=1,v1=fake"},
             )
             assert resp.status_code == 200
@@ -324,9 +325,7 @@ def test_webhook_dedup_runs_after_signature_verification(
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 99))
 
     def _fake_construct_event(payload, sig_header, secret):
-        raise _stripe_pkg.error.SignatureVerificationError(
-            "forged signature", sig_header=sig_header
-        )
+        raise _stripe_pkg.error.SignatureVerificationError("forged signature", sig_header=sig_header)
 
     handler = AsyncMock()
     monkeypatch.setattr(stripe_billing.stripe.Webhook, "construct_event", _fake_construct_event)
@@ -361,9 +360,14 @@ def test_webhook_fails_open_when_redis_errors(
             raise _redis_pkg.RedisError("connection refused")
 
         # Other helpers may be called downstream; make them no-ops.
-        def hset(self, *a, **k): return None
-        def hgetall(self, *a, **k): return {}
-        def get(self, *a, **k): return None
+        def hset(self, *a, **k):
+            return None
+
+        def hgetall(self, *a, **k):
+            return {}
+
+        def get(self, *a, **k):
+            return None
 
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: _ExplodingRedis())
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
@@ -412,7 +416,7 @@ def test_webhook_missing_event_id_does_not_crash(
     with _build_client(_principal()) as client:
         response = client.post(
             "/api/v1/billing/webhooks",
-            content=b'{}',
+            content=b"{}",
             headers={"Stripe-Signature": "t=123,v1=fake"},
         )
 

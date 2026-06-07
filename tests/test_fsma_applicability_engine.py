@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+
 # ---------------------------------------------------------------------------
 # Stub legacy `shared.*` imports defensively before loading fsma_engine.py.
 # FSMAApplicabilityEngine itself has zero dependency on these modules.
@@ -21,6 +22,7 @@ def _make_stub(name: str, **attrs):
     mod = types.ModuleType(name)
     mod.__dict__.update(attrs)
     return mod
+
 
 _shared = _make_stub("shared")
 _validators = _make_stub(
@@ -49,9 +51,6 @@ _mod = importlib.util.module_from_spec(_spec)
 sys.modules["fsma_engine_module"] = _mod
 _spec.loader.exec_module(_mod)
 FSMAApplicabilityEngine = _mod.FSMAApplicabilityEngine
-
-
-
 
 
 @pytest.fixture

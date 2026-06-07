@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 @dataclass
 class LabelData:
     """Data for a single TLC label."""
+
     traceability_lot_code: str
     product_description: str
     quantity: int
@@ -37,6 +38,7 @@ class LabelData:
 
 # ─── QR Code ─────────────────────────────────────────────────────────────────
 
+
 def generate_qr(data: str, box_size: int = 8) -> Image.Image:
     """Generate a QR code image from string data."""
     qr = qrcode.QRCode(
@@ -51,6 +53,7 @@ def generate_qr(data: str, box_size: int = 8) -> Image.Image:
 
 
 # ─── PNG Label ───────────────────────────────────────────────────────────────
+
 
 def generate_label_png(label: LabelData) -> bytes:
     """
@@ -152,6 +155,7 @@ def generate_label_png(label: LabelData) -> bytes:
 
 # ─── ZPL Label ───────────────────────────────────────────────────────────────
 
+
 def generate_label_zpl(label: LabelData) -> str:
     """
     Generate ZPL (Zebra Programming Language) for thermal printers.
@@ -175,6 +179,7 @@ def generate_label_zpl(label: LabelData) -> str:
 
 
 # ─── PDF Label ───────────────────────────────────────────────────────────────
+
 
 def generate_label_pdf(label: LabelData) -> bytes:
     """Generate a PDF label (single label per page, 4x2 inches)."""
@@ -236,6 +241,7 @@ def _png_to_simple_pdf(png_bytes: bytes) -> bytes:
 
 # ─── Batch Generation ────────────────────────────────────────────────────────
 
+
 def generate_batch_labels(
     labels: list[LabelData],
     fmt: str = "png",
@@ -294,7 +300,7 @@ if __name__ == "__main__":
     outdir.mkdir(exist_ok=True)
 
     # Sanitize TLC for use in filename — reject traversal characters
-    safe_tlc = re.sub(r'[^a-zA-Z0-9_\-.]', '_', args.tlc)
+    safe_tlc = re.sub(r"[^a-zA-Z0-9_\-.]", "_", args.tlc)
 
     if args.format == "png":
         data = generate_label_png(label)

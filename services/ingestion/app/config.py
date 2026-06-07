@@ -23,15 +23,9 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     discovery_query: str = "site:gov filetype:pdf FSMA food traceability"
 
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
-    processed_bucket: str = Field(
-        default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"
-    )
-    kafka_bootstrap_servers: str = Field(
-        default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS"
-    )
-    kafka_topic_normalized: str = Field(
-        default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED"
-    )
+    processed_bucket: str = Field(default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET")
+    kafka_bootstrap_servers: str = Field(default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS")
+    kafka_topic_normalized: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
     api_key: Optional[str] = Field(default=None, alias="API_KEY")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
     env: str = Field(default="development", alias="ENV")
@@ -59,6 +53,7 @@ def get_settings() -> Settings:
     of silently falling back.
     """
     from shared.env import is_production
+
     settings = Settings()
     _is_prod = is_production()
     configured_api_key = settings.api_key or os.environ.get("REGENGINE_API_KEY")

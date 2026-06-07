@@ -10,10 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
-STORAGE_CALL_START = re.compile(
-    r"(?:window\.)?(?P<storage>localStorage|sessionStorage)\.setItem\s*\("
-)
+STORAGE_CALL_START = re.compile(r"(?:window\.)?(?P<storage>localStorage|sessionStorage)\.setItem\s*\(")
 
 SENSITIVE_KEY_TERMS = (
     "access_token",
@@ -211,9 +208,7 @@ def scan_paths(paths: Iterable[Path]) -> list[Violation]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Fail when frontend browser storage persists likely PII."
-    )
+    parser = argparse.ArgumentParser(description="Fail when frontend browser storage persists likely PII.")
     parser.add_argument(
         "paths",
         nargs="*",
@@ -229,10 +224,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("Browser storage PII scan failed:")
     for violation in violations:
-        print(
-            f"{violation.path}:{violation.line_no}: "
-            f"{violation.reason} in {violation.storage}.setItem"
-        )
+        print(f"{violation.path}:{violation.line_no}: {violation.reason} in {violation.storage}.setItem")
         print(f"  {violation.snippet}")
     return 1
 

@@ -77,9 +77,7 @@ class OverlayResolver:
                     return {"error": "Product not found", "product_id": str(product_id)}
 
                 product_data = dict(record["product"])
-                controls_data = [
-                    dict(control) for control in record["controls"] if control
-                ]
+                controls_data = [dict(control) for control in record["controls"] if control]
 
             # Step 2: Get provision mappings for these controls
             provision_hashes = []
@@ -127,9 +125,7 @@ class OverlayResolver:
                     prov_result = await session.run(global_query, {"hashes": unique_hashes})
                     async for prov_record in prov_result:
                         provision = dict(prov_record["prov"])
-                        document = (
-                            dict(prov_record["doc"]) if prov_record["doc"] else None
-                        )
+                        document = dict(prov_record["doc"]) if prov_record["doc"] else None
                         provisions_data.append(
                             {
                                 "provision": provision,
@@ -338,9 +334,7 @@ class OverlayResolver:
             await tenant_client.close()
             await global_client.close()
 
-    async def get_compliance_gaps(
-        self, product_id: UUID, jurisdiction: str
-    ) -> dict[str, Any]:
+    async def get_compliance_gaps(self, product_id: UUID, jurisdiction: str) -> dict[str, Any]:
         """Identify regulatory provisions not yet mapped to controls for a product.
 
         Args:
@@ -387,9 +381,7 @@ class OverlayResolver:
                     mapped_hashes = record["mapped_hashes"] or []
 
             # Identify gaps
-            unmapped_provisions = [
-                p for p in all_provisions if p.get("hash") not in mapped_hashes
-            ]
+            unmapped_provisions = [p for p in all_provisions if p.get("hash") not in mapped_hashes]
 
             logger.info(
                 "compliance_gaps_identified",
@@ -407,11 +399,7 @@ class OverlayResolver:
                 "mapped_provisions": len(all_provisions) - len(unmapped_provisions),
                 "unmapped_provisions": unmapped_provisions,
                 "coverage_percentage": (
-                    (
-                        (len(all_provisions) - len(unmapped_provisions))
-                        / len(all_provisions)
-                        * 100
-                    )
+                    ((len(all_provisions) - len(unmapped_provisions)) / len(all_provisions) * 100)
                     if all_provisions
                     else 0
                 ),

@@ -10,18 +10,16 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-
 from app.edi_ingestion import dedup as dedup_mod
 from app.edi_ingestion.extractors import (
-    _extract_envelope_ids,
-    _extract_856_fields,
-    _extract_850_fields,
     _extract_810_fields,
+    _extract_850_fields,
+    _extract_856_fields,
     _extract_861_fields,
+    _extract_envelope_ids,
 )
 from app.edi_ingestion.parser import _parse_x12_segments
-
+from fastapi import HTTPException
 
 # Canonical X12 856 template with both ISA and GS.
 #
@@ -30,8 +28,7 @@ from app.edi_ingestion.parser import _parse_x12_segments
 # header is therefore fixed-width (exactly 106 chars terminated by ``~``).
 _ISA_BASE = (
     # ISA*00*<10sp>*00*<10sp>*ZZ*SENDER_ID_10ch *ZZ*RECEIVER_ID_14sp*240417*1200*U*00401*000000123*0*P*>~
-    "ISA*00*          *00*          *ZZ*SENDER_ID      "
-    "*ZZ*RECEIVER_ID    *240417*1200*U*00401*000000123*0*P*>~"
+    "ISA*00*          *00*          *ZZ*SENDER_ID      *ZZ*RECEIVER_ID    *240417*1200*U*00401*000000123*0*P*>~"
 )
 assert len(_ISA_BASE) == 106, f"ISA header must be 106 chars (got {len(_ISA_BASE)})"
 
@@ -43,10 +40,7 @@ def _build_isa(sender: str = "SENDER_ID", receiver: str = "RECEIVER_ID", isa13: 
     sender = sender.ljust(15)[:15]
     receiver = receiver.ljust(15)[:15]
     isa13 = isa13.rjust(9, "0")[:9]
-    header = (
-        f"ISA*00*          *00*          *ZZ*{sender}*ZZ*{receiver}"
-        f"*240417*1200*U*00401*{isa13}*0*P*>~"
-    )
+    header = f"ISA*00*          *00*          *ZZ*{sender}*ZZ*{receiver}*240417*1200*U*00401*{isa13}*0*P*>~"
     assert len(header) == 106, f"ISA header must be 106 chars (got {len(header)})"
     return header
 

@@ -32,7 +32,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Ensure ``services/shared`` is on sys.path under the "shared" namespace so
 # ``from shared.rules...`` works when tests are run from the repo root.
 _ROOT = Path(__file__).resolve().parents[2]
@@ -46,7 +45,6 @@ from shared.rules import uom  # noqa: E402
 from shared.rules.evaluators.stateless import EVALUATORS, evaluate_numeric_range  # noqa: E402
 from shared.rules.seeds import FSMA_RULE_SEEDS  # noqa: E402
 from shared.rules.types import RuleDefinition  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -76,9 +74,7 @@ def _make_rule(**overrides) -> RuleDefinition:
                 "unit": "C",
             },
         },
-        failure_reason_template=(
-            "Cooling temperature {value} {unit} is outside [{min}, {max}] {unit} ({citation})"
-        ),
+        failure_reason_template=("Cooling temperature {value} {unit} is outside [{min}, {max}] {unit} ({citation})"),
         remediation_suggestion="Re-cool to 0–5 °C",
     )
     defaults.update(overrides)
@@ -170,10 +166,12 @@ class TestResolveTemperatureReading_Issue1364:
     def test_cooling_specific_fields_preferred_over_generic(self):
         """When both ``cooling_temperature_celsius`` and ``temperature_celsius`` are
         present, the cooling-specific field must win — it's the one FDA asks for."""
-        got = uom.resolve_temperature_reading({
-            "cooling_temperature_celsius": 2.0,
-            "temperature_celsius": 25.0,  # ambient, irrelevant
-        })
+        got = uom.resolve_temperature_reading(
+            {
+                "cooling_temperature_celsius": 2.0,
+                "temperature_celsius": 25.0,  # ambient, irrelevant
+            }
+        )
         assert got is not None
         value_c, source = got
         assert value_c == pytest.approx(2.0)
@@ -236,9 +234,7 @@ class TestNumericRangeEvaluator_Issue1364:
         for boundary in (0.0, 5.0):
             event = _cooling_event(cooling_temperature_celsius=boundary)
             res = evaluate_numeric_range(event, rule.evaluation_logic, rule)
-            assert res.result == "pass", (
-                f"boundary {boundary}°C must be inclusive: got {res.result}"
-            )
+            assert res.result == "pass", f"boundary {boundary}°C must be inclusive: got {res.result}"
 
     def test_temperature_above_max_fails(self):
         rule = _make_rule()
@@ -260,8 +256,7 @@ class TestNumericRangeEvaluator_Issue1364:
         event = _cooling_event(cooling_temperature_fahrenheit=72.0)
         res = evaluate_numeric_range(event, rule.evaluation_logic, rule)
         assert res.result == "fail", (
-            "72°F (≈22°C) must fail the 0–5°C cold-chain window — fail-open "
-            "regression: see #1364"
+            "72°F (≈22°C) must fail the 0–5°C cold-chain window — fail-open regression: see #1364"
         )
 
     def test_fahrenheit_reading_in_range_passes(self):
@@ -342,17 +337,12 @@ class TestNumericRangeEvaluator_Issue1364:
 class TestCoolingSeedRules_Issue1364:
     def _cooling_seeds(self):
         return [
-            s
-            for s in FSMA_RULE_SEEDS
-            if "cooling" in (s.get("applicability_conditions") or {}).get("cte_types", [])
+            s for s in FSMA_RULE_SEEDS if "cooling" in (s.get("applicability_conditions") or {}).get("cte_types", [])
         ]
 
     def test_cooling_temperature_numeric_range_rule_exists(self):
         seeds = self._cooling_seeds()
-        range_rules = [
-            s for s in seeds
-            if s["evaluation_logic"].get("type") == "numeric_range"
-        ]
+        range_rules = [s for s in seeds if s["evaluation_logic"].get("type") == "numeric_range"]
         assert len(range_rules) >= 1, (
             "COOLING CTE must have at least one numeric_range rule validating "
             "the temperature is in the cold-chain window — #1364"
@@ -360,20 +350,14 @@ class TestCoolingSeedRules_Issue1364:
 
     def test_cooling_temperature_numeric_range_rule_is_operational_warning(self):
         seeds = self._cooling_seeds()
-        numeric = [
-            s for s in seeds
-            if s["evaluation_logic"].get("type") == "numeric_range"
-        ][0]
+        numeric = [s for s in seeds if s["evaluation_logic"].get("type") == "numeric_range"][0]
         assert numeric["severity"] == "warning"
         assert numeric["category"] == "operational_quality"
         assert numeric["citation_reference"] == "Operational cold-chain check"
 
     def test_cooling_temperature_range_bounds_match_fda_cold_chain(self):
         seeds = self._cooling_seeds()
-        numeric = [
-            s for s in seeds
-            if s["evaluation_logic"].get("type") == "numeric_range"
-        ][0]
+        numeric = [s for s in seeds if s["evaluation_logic"].get("type") == "numeric_range"][0]
         params = numeric["evaluation_logic"]["params"]
         assert params.get("source") == "temperature"
         assert params.get("root") == "kdes"

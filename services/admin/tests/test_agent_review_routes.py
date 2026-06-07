@@ -8,7 +8,6 @@ from unittest.mock import MagicMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from shared.agent_operator_view import (
     AgentArtifactTimelineResponse,
     AgentReviewDecisionResponse,
@@ -83,9 +82,7 @@ def test_agent_review_items_sysadmin_can_bind_requested_tenant(monkeypatch) -> N
     monkeypatch.setattr(routes, "fetch_agent_review_items", helper)
 
     client = TestClient(_build_app(_make_user(is_sysadmin=True), db))
-    resp = client.get(
-        f"/v1/agent-reviews/items?tenant_id={requested_tenant}&limit=25&offset=5"
-    )
+    resp = client.get(f"/v1/agent-reviews/items?tenant_id={requested_tenant}&limit=25&offset=5")
 
     assert resp.status_code == 200
     assert bound_tenants == [(db, str(requested_tenant))]
@@ -209,9 +206,7 @@ def test_agent_review_timeline_uses_authenticated_tenant(monkeypatch) -> None:
                     "rule_gap_risk": 10.0,
                 },
                 compliance_gap_count=1,
-                compliance_gaps=[
-                    {"code": "human_review_required", "message": "Review required."}
-                ],
+                compliance_gaps=[{"code": "human_review_required", "message": "Review required."}],
             ),
             timeline=None,
             chain_valid=None,

@@ -25,6 +25,7 @@ This test pins:
        attempts in BOTH branches so subsequent-request side-effects
        don't become a secondary oracle.
 """
+
 from __future__ import annotations
 
 import statistics
@@ -33,7 +34,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Unit: verify_login behaviour
@@ -47,14 +47,14 @@ def test_verify_login_returns_false_for_unknown_user():
 
 
 def test_verify_login_returns_false_for_wrong_password():
-    from services.admin.app.auth_utils import verify_login, get_password_hash
+    from services.admin.app.auth_utils import get_password_hash, verify_login
 
     user = SimpleNamespace(password_hash=get_password_hash("correct-horse-battery-staple"))
     assert verify_login("wrong-password", user) is False
 
 
 def test_verify_login_returns_true_for_correct_password():
-    from services.admin.app.auth_utils import verify_login, get_password_hash
+    from services.admin.app.auth_utils import get_password_hash, verify_login
 
     user = SimpleNamespace(password_hash=get_password_hash("correct-horse-battery-staple"))
     assert verify_login("correct-horse-battery-staple", user) is True
@@ -114,7 +114,7 @@ def test_verify_login_timing_parity_unknown_vs_wrong_password():
     the unknown branch is essentially free (~microseconds) while the
     wrong-password branch still eats ~80-200 ms of argon2, and this
     assertion fails loudly."""
-    from services.admin.app.auth_utils import verify_login, get_password_hash
+    from services.admin.app.auth_utils import get_password_hash, verify_login
 
     password = "correct-horse-battery-staple"
     user = SimpleNamespace(password_hash=get_password_hash(password))
@@ -144,9 +144,9 @@ def test_verify_login_timing_parity_unknown_vs_wrong_password():
     delta = abs(p50_unknown - p50_wrong)
 
     assert delta < _TIMING_TOLERANCE_SECONDS, (
-        f"Timing oracle regression: p50 unknown-email={p50_unknown*1000:.1f}ms "
-        f"vs p50 wrong-password={p50_wrong*1000:.1f}ms, "
-        f"delta={delta*1000:.1f}ms exceeds {_TIMING_TOLERANCE_SECONDS*1000:.0f}ms tolerance. "
+        f"Timing oracle regression: p50 unknown-email={p50_unknown * 1000:.1f}ms "
+        f"vs p50 wrong-password={p50_wrong * 1000:.1f}ms, "
+        f"delta={delta * 1000:.1f}ms exceeds {_TIMING_TOLERANCE_SECONDS * 1000:.0f}ms tolerance. "
         f"If the delta is small but negative (unknown > wrong), that is fine — "
         f"only an attacker-useful gap (unknown much shorter than wrong) breaks the test."
     )
@@ -241,7 +241,12 @@ def _extract_function(src: str, signature_prefix: str) -> str:
             # another top-level def. The login function ends before
             # the next ``@router.post(...)`` block.
             stripped = line.lstrip()
-            if line.startswith("@router.") or line.startswith("def ") or line.startswith("async def ") or (line.startswith("class ") and "(" in line):
+            if (
+                line.startswith("@router.")
+                or line.startswith("def ")
+                or line.startswith("async def ")
+                or (line.startswith("class ") and "(" in line)
+            ):
                 break
             out.append(line)
     return "".join(out)

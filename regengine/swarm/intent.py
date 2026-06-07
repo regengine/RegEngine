@@ -26,6 +26,7 @@ logger = structlog.get_logger("swarm.intent")
 
 class SwarmCommand(Enum):
     """Recognized swarm commands."""
+
     SOLVE = "solve"
     ANALYZE = "analyze"
     REVIEW = "review"
@@ -39,6 +40,7 @@ class SwarmCommand(Enum):
 @dataclass
 class SwarmIntent:
     """Parsed intent from a @swarm comment."""
+
     command: SwarmCommand
     raw_comment: str
     target_issue: Optional[int] = None
@@ -161,6 +163,7 @@ def parse_intent(
 
 
 # ── Response Formatter ────────────────────────────────────
+
 
 def format_swarm_response(
     intent: SwarmIntent,

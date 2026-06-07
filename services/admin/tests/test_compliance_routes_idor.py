@@ -10,6 +10,7 @@ Written as a direct-call unit test of the dependency function, rather than
 a TestClient round-trip, because admin-service TestClient imports are
 currently blocked by #1435 (pytest collection stale imports).
 """
+
 from __future__ import annotations
 
 # Admin-test sys.path bootstrap — see services/admin/conftest.py for the
@@ -29,7 +30,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
-
 
 AUTH_TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 OTHER_TENANT = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -60,13 +60,9 @@ def _user(is_sysadmin: bool = False):
 def test_path_tenant_mismatch_rejected(monkeypatch):
     """Caller in tenant A cannot pass tenant B's UUID in the URL path."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT)
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT))
     with pytest.raises(HTTPException) as exc:
-        verify_path_tenant_matches(
-            tenant_id=str(OTHER_TENANT), user=_user(), db=MagicMock()
-        )
+        verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(), db=MagicMock())
     assert exc.value.status_code == 403
     assert "Tenant mismatch" in exc.value.detail
 
@@ -75,12 +71,8 @@ def test_path_tenant_mismatch_rejected(monkeypatch):
 def test_path_tenant_match_allowed(monkeypatch):
     """Caller in tenant A passing tenant A's UUID succeeds."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT)
-    )
-    result = verify_path_tenant_matches(
-        tenant_id=str(AUTH_TENANT), user=_user(), db=MagicMock()
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT))
+    result = verify_path_tenant_matches(tenant_id=str(AUTH_TENANT), user=_user(), db=MagicMock())
     assert result == AUTH_TENANT
 
 
@@ -88,13 +80,9 @@ def test_path_tenant_match_allowed(monkeypatch):
 def test_invalid_tenant_uuid_rejected(monkeypatch):
     """Malformed tenant_id string is rejected with 400."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT)
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT))
     with pytest.raises(HTTPException) as exc:
-        verify_path_tenant_matches(
-            tenant_id="not-a-uuid", user=_user(), db=MagicMock()
-        )
+        verify_path_tenant_matches(tenant_id="not-a-uuid", user=_user(), db=MagicMock())
     assert exc.value.status_code == 400
 
 
@@ -102,13 +90,9 @@ def test_invalid_tenant_uuid_rejected(monkeypatch):
 def test_no_tenant_context_rejected(monkeypatch):
     """Session with no tenant context is rejected (non-sysadmin)."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: None)
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: None))
     with pytest.raises(HTTPException) as exc:
-        verify_path_tenant_matches(
-            tenant_id=str(AUTH_TENANT), user=_user(), db=MagicMock()
-        )
+        verify_path_tenant_matches(tenant_id=str(AUTH_TENANT), user=_user(), db=MagicMock())
     assert exc.value.status_code == 403
     assert "No tenant context active" in exc.value.detail
 
@@ -117,12 +101,8 @@ def test_no_tenant_context_rejected(monkeypatch):
 def test_sysadmin_cross_tenant_allowed(monkeypatch):
     """Sysadmin may cross tenant boundaries for support/ops workflows."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT)
-    )
-    result = verify_path_tenant_matches(
-        tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock()
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: AUTH_TENANT))
+    result = verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
     assert result == OTHER_TENANT
 
 
@@ -130,12 +110,8 @@ def test_sysadmin_cross_tenant_allowed(monkeypatch):
 def test_sysadmin_without_context_allowed(monkeypatch):
     """Sysadmin without a tenant context may still act (cross-tenant ops)."""
     verify_path_tenant_matches, TenantContext = _load_dep()
-    monkeypatch.setattr(
-        TenantContext, "get_tenant_context", staticmethod(lambda _db: None)
-    )
-    result = verify_path_tenant_matches(
-        tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock()
-    )
+    monkeypatch.setattr(TenantContext, "get_tenant_context", staticmethod(lambda _db: None))
+    result = verify_path_tenant_matches(tenant_id=str(OTHER_TENANT), user=_user(is_sysadmin=True), db=MagicMock())
     assert result == OTHER_TENANT
 
 
@@ -190,8 +166,7 @@ def test_create_alert_route_path_is_tenant_scoped():
         f"tenant). Found POST alert paths: {post_alert_paths}"
     )
     assert "/v1/compliance/alerts" not in post_alert_paths, (
-        "Bare POST /v1/compliance/alerts is the pre-fix shape and must not "
-        "exist alongside the tenant-scoped path."
+        "Bare POST /v1/compliance/alerts is the pre-fix shape and must not exist alongside the tenant-scoped path."
     )
 
 
@@ -209,8 +184,7 @@ def test_create_alert_route_uses_verify_path_tenant_matches():
         (
             r
             for r in compliance_routes.router.routes
-            if getattr(r, "path", "") == "/v1/compliance/alerts/{tenant_id}"
-            and "POST" in getattr(r, "methods", set())
+            if getattr(r, "path", "") == "/v1/compliance/alerts/{tenant_id}" and "POST" in getattr(r, "methods", set())
         ),
         None,
     )
@@ -265,11 +239,7 @@ def test_every_compliance_route_uses_tenant_scoped_session():
         if not hasattr(route, "dependant"):
             continue
         session_dep = next(
-            (
-                d
-                for d in route.dependant.dependencies
-                if getattr(d, "name", None) == "session"
-            ),
+            (d for d in route.dependant.dependencies if getattr(d, "name", None) == "session"),
             None,
         )
         if session_dep is None:
@@ -277,8 +247,7 @@ def test_every_compliance_route_uses_tenant_scoped_session():
         session_bearing.append(route.path)
         if session_dep.call is not get_tenant_scoped_session:
             misbound.append(
-                f"{sorted(route.methods)} {route.path}: "
-                f"session resolves to {session_dep.call.__qualname__}"
+                f"{sorted(route.methods)} {route.path}: session resolves to {session_dep.call.__qualname__}"
             )
 
     assert misbound == [], (

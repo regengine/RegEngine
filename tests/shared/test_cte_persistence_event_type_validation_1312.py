@@ -16,22 +16,21 @@ the top of ``store_event`` and inside the batch loop. The guard:
 The tests drive the writer with a mocked session so cap semantics and
 error paths are exercised without touching Postgres.
 """
+
 from __future__ import annotations
 
 import pytest
-
 from shared.cte_persistence.core import (
-    CTEPersistence,
     _ALLOWED_CTE_TYPES,
+    CTEPersistence,
     _validate_event_type,
 )
 
 from tests.shared.test_cte_persistence_hardening import (
     FakeSession,
-    _FakeResult,
     _base_event,
+    _FakeResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pure-function guard — _validate_event_type
@@ -126,9 +125,7 @@ class TestStoreEventRejectsInvalidType_Issue1312:
         session = FakeSession()
 
         def _explode(sql, params):
-            raise AssertionError(
-                f"SQL issued despite invalid event_type: {sql[:80]!r}"
-            )
+            raise AssertionError(f"SQL issued despite invalid event_type: {sql[:80]!r}")
 
         session.add_rule(r".", _explode)
         return session
@@ -203,9 +200,7 @@ class TestStoreEventsBatchValidatesPerRow_Issue1312:
         ]
 
         with pytest.raises(ValueError, match="not a recognized"):
-            persistence.store_events_batch(
-                tenant_id="tenant-1", events=events
-            )
+            persistence.store_events_batch(tenant_id="tenant-1", events=events)
 
     def test_batch_with_all_valid_types_passes_guard(self):
         """Sanity-check the positive path — every valid type makes it

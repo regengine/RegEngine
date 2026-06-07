@@ -46,7 +46,7 @@ from __future__ import annotations
 import logging
 import sys
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -62,8 +62,6 @@ for _p in (_SERVICE_DIR, _SERVICES_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from fastapi import HTTPException  # noqa: E402
-
 import app.supplier_cte_service as cte_service  # noqa: E402
 from app.supplier_cte_service import (  # noqa: E402
     _acquire_tenant_merkle_lock,
@@ -73,7 +71,7 @@ from app.supplier_cte_service import (  # noqa: E402
     _normalize_supplier_cte_type,
     _persist_supplier_cte_event,
 )
-
+from fastapi import HTTPException  # noqa: E402
 
 TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000001342")
 
@@ -84,7 +82,6 @@ TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000001342")
 
 
 class TestIsoUtcNaiveBranch:
-
     def test_naive_datetime_is_stamped_as_utc_isoformat(self):
         """A naive datetime (``tzinfo is None``) must be treated as UTC and
         emitted with ``+00:00`` so the ``payload_sha256`` is reproducible
@@ -97,9 +94,7 @@ class TestIsoUtcNaiveBranch:
         """An aware datetime must be ``astimezone(UTC)``'d, NOT re-stamped
         as UTC. Pins that line 35 is the ``is None`` branch and line 36
         is the else branch, so neither corrupts the other."""
-        aware_est = datetime(
-            2026, 4, 20, 9, 45, 0, tzinfo=timezone(timedelta(hours=-4))
-        )
+        aware_est = datetime(2026, 4, 20, 9, 45, 0, tzinfo=timezone(timedelta(hours=-4)))
         result = _iso_utc(aware_est)
         # 09:45 EDT -> 13:45 UTC
         assert result == "2026-04-20T13:45:00+00:00"
@@ -111,7 +106,6 @@ class TestIsoUtcNaiveBranch:
 
 
 class TestAsUtcNaiveBranch:
-
     def test_naive_datetime_gets_utc_tzinfo_attached(self):
         """A naive datetime must gain ``tzinfo=UTC`` via ``.replace`` —
         NOT via ``astimezone`` which would mis-shift by the local
@@ -127,9 +121,7 @@ class TestAsUtcNaiveBranch:
     def test_aware_datetime_is_converted_to_utc(self):
         """An aware datetime is converted via ``astimezone`` — pins line
         43 (naive branch) versus line 44 (aware branch)."""
-        aware_pst = datetime(
-            2026, 4, 20, 6, 45, 0, tzinfo=timezone(timedelta(hours=-7))
-        )
+        aware_pst = datetime(2026, 4, 20, 6, 45, 0, tzinfo=timezone(timedelta(hours=-7)))
         result = _as_utc(aware_pst)
         assert result is not None
         assert result.tzinfo == timezone.utc
@@ -148,7 +140,6 @@ class TestAsUtcNaiveBranch:
 
 
 class TestAcquireTenantMerkleLockMissingTenant:
-
     def test_missing_tenant_raises_http_400(self):
         """When the ``SELECT ... FOR UPDATE`` on the tenant row returns
         ``None``, the lock acquisition must raise HTTPException(400)
@@ -206,7 +197,6 @@ def reset_fake_store():
 
 
 class TestBridgeToCanonicalHappyPath:
-
     def test_success_path_logs_bridged_info(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -226,9 +216,8 @@ class TestBridgeToCanonicalHappyPath:
         # submodule so a ``from shared.canonical_persistence import
         # CanonicalEventStore`` at call-time resolves to the fake.
         import shared.canonical_persistence.writer as cp_writer
-        monkeypatch.setattr(
-            cp_writer, "CanonicalEventStore", _FakeCanonicalEventStore
-        )
+
+        monkeypatch.setattr(cp_writer, "CanonicalEventStore", _FakeCanonicalEventStore)
 
         event = MagicMock()
         event.id = uuid.UUID("00000000-0000-0000-0000-000000000aaa")
@@ -261,7 +250,8 @@ class TestBridgeToCanonicalHappyPath:
 
         # Line 145 fired -> exactly one INFO record with the bridged msg.
         bridged = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.name == "supplier-canonical-bridge"
             and r.levelno == logging.INFO
             and r.message == "supplier_cte_canonical_bridged"
@@ -313,7 +303,8 @@ class TestBridgeToCanonicalHappyPath:
             )
 
         failed = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.name == "supplier-canonical-bridge"
             and r.levelno == logging.WARNING
             and r.message == "supplier_canonical_bridge_failed"
@@ -327,7 +318,6 @@ class TestBridgeToCanonicalHappyPath:
 
 
 class TestPersistSupplierCteEventEmptyTlc:
-
     def _mk_user(self):
         u = MagicMock()
         u.id = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
@@ -405,7 +395,6 @@ class TestPersistSupplierCteEventEmptyTlc:
 
 
 class TestSupplierCteTypeAliases:
-
     def test_canonical_transformation_alias_maps_to_supplier_type(self):
         assert _normalize_supplier_cte_type("transformation") == "transforming"
 

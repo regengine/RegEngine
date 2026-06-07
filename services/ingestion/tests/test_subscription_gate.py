@@ -12,9 +12,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-
 from shared.circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 
 # ---------------------------------------------------------------------------
@@ -65,8 +64,10 @@ def client():
 @pytest.mark.asyncio
 async def test_active_subscription_allowed(client, fresh_circuit):
     """Active subscription should return 200."""
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "active"
         with patch("redis.from_url", return_value=mock_redis):
@@ -77,8 +78,10 @@ async def test_active_subscription_allowed(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_cancelled_subscription_blocked(client, fresh_circuit):
     """Cancelled subscription should return 402."""
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "cancelled"
         with patch("redis.from_url", return_value=mock_redis):
@@ -89,8 +92,10 @@ async def test_cancelled_subscription_blocked(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_trialing_subscription_allowed(client, fresh_circuit):
     """Trialing subscription should return 200."""
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "trialing"
         with patch("redis.from_url", return_value=mock_redis):
@@ -101,8 +106,10 @@ async def test_trialing_subscription_allowed(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_missing_key_fails_closed_402(client, fresh_circuit):
     """#1182: When Redis key is missing, deny with 402 — no fail-open grant."""
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = None
         with patch("redis.from_url", return_value=mock_redis):
@@ -126,8 +133,10 @@ async def test_redis_failure_fails_closed_503(client, fresh_circuit):
     """
     import redis as redis_lib
 
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.side_effect = redis_lib.ConnectionError("Connection refused")
 
@@ -154,8 +163,10 @@ async def test_circuit_open_returns_503_immediately(client, fresh_circuit):
     fresh_circuit._transition_to(CircuitState.OPEN)
     fresh_circuit._last_failure_time = time.monotonic()
 
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         # Redis should NOT be called at all
         with patch("redis.from_url") as mock_from_url:
             resp = await client.get("/protected", headers={"X-Tenant-ID": "t1"})
@@ -175,8 +186,10 @@ async def test_circuit_recovers_after_timeout(client, fresh_circuit):
     fresh_circuit._transition_to(CircuitState.OPEN)
     fresh_circuit._last_failure_time = time.monotonic() - (fresh_circuit.recovery_timeout + 1)
 
-    with patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"), \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv", return_value="redis://localhost:6379"),
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         mock_redis = MagicMock()
         mock_redis.hget.return_value = "active"
         with patch("redis.from_url", return_value=mock_redis):

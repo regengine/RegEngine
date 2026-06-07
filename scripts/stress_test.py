@@ -6,30 +6,32 @@ Covers: health, read endpoints, write endpoints, concurrent load, error handling
 """
 
 import asyncio
-import aiohttp
 import json
-import time
-import sys
 import statistics
+import sys
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+import aiohttp
+
 # ─── CONFIG ───
-CONCURRENCY = 50          # simultaneous connections
+CONCURRENCY = 50  # simultaneous connections
 REQUESTS_PER_ENDPOINT = 100  # requests per test
-TIMEOUT = 10              # seconds per request
+TIMEOUT = 10  # seconds per request
 
 TEST_TENANT = "00000000-0000-0000-0000-000000000123"
 ADMIN_KEY = "8f623912638891629831b9d8c91c9182dec283746571928374abcdef123456"
 
 SERVICES = {
-    "ingestion":  "http://localhost:8002",
-    "nlp":        "http://localhost:8100",
-    "graph":      "http://localhost:8200",
-    "admin":      "http://localhost:8400",
+    "ingestion": "http://localhost:8002",
+    "nlp": "http://localhost:8100",
+    "graph": "http://localhost:8200",
+    "admin": "http://localhost:8400",
     "compliance": "http://localhost:8500",
-    "scheduler":  "http://localhost:8600",
+    "scheduler": "http://localhost:8600",
 }
+
 
 @dataclass
 class EndpointResult:
@@ -77,77 +79,93 @@ class EndpointResult:
 
 TESTS = [
     # === HEALTH CHECKS (all 6 services) ===
-    {"name": "ingestion/health",  "method": "GET",  "url": "{ingestion}/health"},
-    {"name": "nlp/health",        "method": "GET",  "url": "{nlp}/health"},
-    {"name": "graph/health",      "method": "GET",  "url": "{graph}/health"},
-    {"name": "admin/health",      "method": "GET",  "url": "{admin}/health"},
-    {"name": "compliance/health", "method": "GET",  "url": "{compliance}/health"},
-    {"name": "scheduler/health",  "method": "GET",  "url": "{scheduler}/health"},
-
+    {"name": "ingestion/health", "method": "GET", "url": "{ingestion}/health"},
+    {"name": "nlp/health", "method": "GET", "url": "{nlp}/health"},
+    {"name": "graph/health", "method": "GET", "url": "{graph}/health"},
+    {"name": "admin/health", "method": "GET", "url": "{admin}/health"},
+    {"name": "compliance/health", "method": "GET", "url": "{compliance}/health"},
+    {"name": "scheduler/health", "method": "GET", "url": "{scheduler}/health"},
     # === READINESS PROBES ===
-    {"name": "ingestion/ready",  "method": "GET",  "url": "{ingestion}/ready"},
-    {"name": "nlp/ready",        "method": "GET",  "url": "{nlp}/ready"},
-    {"name": "graph/ready",      "method": "GET",  "url": "{graph}/ready"},
-    {"name": "admin/ready",      "method": "GET",  "url": "{admin}/ready"},
-
+    {"name": "ingestion/ready", "method": "GET", "url": "{ingestion}/ready"},
+    {"name": "nlp/ready", "method": "GET", "url": "{nlp}/ready"},
+    {"name": "graph/ready", "method": "GET", "url": "{graph}/ready"},
+    {"name": "admin/ready", "method": "GET", "url": "{admin}/ready"},
     # === INGESTION SERVICE ===
-    {"name": "ingestion/templates",      "method": "GET",  "url": "{ingestion}/api/v1/templates"},
-    {"name": "ingestion/ftl-categories", "method": "GET",  "url": "{ingestion}/api/v1/products/categories/ftl"},
-    {"name": "ingestion/export-formats", "method": "GET",  "url": "{ingestion}/api/v1/export/formats"},
-    {"name": "ingestion/billing-plans",  "method": "GET",  "url": "{ingestion}/api/v1/billing/plans"},
-    {"name": "ingestion/onboard-steps",  "method": "GET",  "url": "{ingestion}/api/v1/onboarding/steps"},
-    {"name": "ingestion/sim-scenarios",  "method": "GET",  "url": "{ingestion}/api/v1/simulations/scenarios"},
-    {"name": "ingestion/integrations",   "method": "GET",  "url": "{ingestion}/api/v1/integrations/available"},
-    {"name": "ingestion/team-roles",     "method": "GET",  "url": "{ingestion}/api/v1/team/roles/definitions"},
-    {"name": "ingestion/epcis-validate", "method": "POST", "url": "{ingestion}/api/v1/epcis/validate",
-     "body": {
-         "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
-         "type": "ObjectEvent",
-         "eventTime": "2026-02-28T09:30:00.000-05:00",
-         "eventTimeZoneOffset": "-05:00",
-         "action": "OBSERVE",
-         "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-         "bizLocation": {"id": "urn:epc:id:sgln:0614141.00002.0"},
-         "ilmd": {"cbvmda:lotNumber": "ROM-0042", "fsma:traceabilityLotCode": "00012345678901-ROM0042"}
-     }},
-
+    {"name": "ingestion/templates", "method": "GET", "url": "{ingestion}/api/v1/templates"},
+    {"name": "ingestion/ftl-categories", "method": "GET", "url": "{ingestion}/api/v1/products/categories/ftl"},
+    {"name": "ingestion/export-formats", "method": "GET", "url": "{ingestion}/api/v1/export/formats"},
+    {"name": "ingestion/billing-plans", "method": "GET", "url": "{ingestion}/api/v1/billing/plans"},
+    {"name": "ingestion/onboard-steps", "method": "GET", "url": "{ingestion}/api/v1/onboarding/steps"},
+    {"name": "ingestion/sim-scenarios", "method": "GET", "url": "{ingestion}/api/v1/simulations/scenarios"},
+    {"name": "ingestion/integrations", "method": "GET", "url": "{ingestion}/api/v1/integrations/available"},
+    {"name": "ingestion/team-roles", "method": "GET", "url": "{ingestion}/api/v1/team/roles/definitions"},
+    {
+        "name": "ingestion/epcis-validate",
+        "method": "POST",
+        "url": "{ingestion}/api/v1/epcis/validate",
+        "body": {
+            "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+            "type": "ObjectEvent",
+            "eventTime": "2026-02-28T09:30:00.000-05:00",
+            "eventTimeZoneOffset": "-05:00",
+            "action": "OBSERVE",
+            "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+            "bizLocation": {"id": "urn:epc:id:sgln:0614141.00002.0"},
+            "ilmd": {"cbvmda:lotNumber": "ROM-0042", "fsma:traceabilityLotCode": "00012345678901-ROM0042"},
+        },
+    },
     # === GRAPH SERVICE ===
-    {"name": "graph/regulations",     "method": "GET",  "url": "{graph}/api/v1/regulations/list"},
-    {"name": "graph/reg-mappings",    "method": "GET",  "url": "{graph}/api/v1/regulations/mappings"},
-    {"name": "graph/recall-history",  "method": "GET",  "url": "{graph}/api/v1/fsma/recall/history"},
-    {"name": "graph/recall-readiness","method": "GET",  "url": "{graph}/api/v1/fsma/recall/readiness"},
-    {"name": "graph/recall-sla",      "method": "GET",  "url": "{graph}/api/v1/fsma/recall/sla"},
+    {"name": "graph/regulations", "method": "GET", "url": "{graph}/api/v1/regulations/list"},
+    {"name": "graph/reg-mappings", "method": "GET", "url": "{graph}/api/v1/regulations/mappings"},
+    {"name": "graph/recall-history", "method": "GET", "url": "{graph}/api/v1/fsma/recall/history"},
+    {"name": "graph/recall-readiness", "method": "GET", "url": "{graph}/api/v1/fsma/recall/readiness"},
+    {"name": "graph/recall-sla", "method": "GET", "url": "{graph}/api/v1/fsma/recall/sla"},
     {"name": "graph/compliance-coverage", "method": "GET", "url": "{graph}/api/v1/fsma/compliance/coverage"},
-    {"name": "graph/compliance-gaps", "method": "GET",  "url": "{graph}/api/v1/fsma/compliance/gaps"},
-    {"name": "graph/compliance-score","method": "GET",  "url": "{graph}/api/v1/fsma/compliance/score"},
-    {"name": "graph/metrics",         "method": "GET",  "url": "{graph}/api/v1/fsma/metrics/metrics"},
-    {"name": "graph/dashboard",       "method": "GET",  "url": "{graph}/api/v1/fsma/metrics/dashboard"},
-    {"name": "graph/search-events",   "method": "GET",  "url": "{graph}/api/v1/fsma/traceability/search/events"},
-    {"name": "graph/reg-search",      "method": "GET",  "url": "{graph}/api/v1/regulations/search?q=fsma"},
-
+    {"name": "graph/compliance-gaps", "method": "GET", "url": "{graph}/api/v1/fsma/compliance/gaps"},
+    {"name": "graph/compliance-score", "method": "GET", "url": "{graph}/api/v1/fsma/compliance/score"},
+    {"name": "graph/metrics", "method": "GET", "url": "{graph}/api/v1/fsma/metrics/metrics"},
+    {"name": "graph/dashboard", "method": "GET", "url": "{graph}/api/v1/fsma/metrics/dashboard"},
+    {"name": "graph/search-events", "method": "GET", "url": "{graph}/api/v1/fsma/traceability/search/events"},
+    {"name": "graph/reg-search", "method": "GET", "url": "{graph}/api/v1/regulations/search?q=fsma"},
     # === ADMIN SERVICE ===
-    {"name": "admin/system-status",   "method": "GET",  "url": "{admin}/v1/system/status"},
-    {"name": "admin/system-metrics",  "method": "GET",  "url": "{admin}/v1/system/metrics"},
-    {"name": "admin/ftl-categories",  "method": "GET",  "url": "{admin}/v1/supplier/ftl-categories"},
-    {"name": "admin/social-proof",    "method": "GET",  "url": "{admin}/v1/supplier/social-proof"},
-    {"name": "admin/admin-roles",     "method": "GET",  "url": "{admin}/v1/admin/roles"},
-
+    {"name": "admin/system-status", "method": "GET", "url": "{admin}/v1/system/status"},
+    {"name": "admin/system-metrics", "method": "GET", "url": "{admin}/v1/system/metrics"},
+    {"name": "admin/ftl-categories", "method": "GET", "url": "{admin}/v1/supplier/ftl-categories"},
+    {"name": "admin/social-proof", "method": "GET", "url": "{admin}/v1/supplier/social-proof"},
+    {"name": "admin/admin-roles", "method": "GET", "url": "{admin}/v1/admin/roles"},
     # === COMPLIANCE SERVICE ===
     {"name": "compliance/risk-summary", "method": "GET", "url": "{compliance}/v1/risk/summary"},
-    {"name": "compliance/ckg-summary",  "method": "GET", "url": "{compliance}/v1/ckg/summary"},
-    {"name": "compliance/scope-wall",   "method": "GET", "url": "{compliance}/v1/scope-wall"},
-
+    {"name": "compliance/ckg-summary", "method": "GET", "url": "{compliance}/v1/ckg/summary"},
+    {"name": "compliance/scope-wall", "method": "GET", "url": "{compliance}/v1/scope-wall"},
     # === NLP SERVICE ===
     {"name": "nlp/metrics", "method": "GET", "url": "{nlp}/api/v1/metrics"},
-    {"name": "nlp/query",   "method": "POST", "url": "{nlp}/api/v1/query/traceability",
-     "body": {"query": "What are the FSMA 204 requirements for leafy greens?"}},
-
+    {
+        "name": "nlp/query",
+        "method": "POST",
+        "url": "{nlp}/api/v1/query/traceability",
+        "body": {"query": "What are the FSMA 204 requirements for leafy greens?"},
+    },
     # === ERROR HANDLING (intentional bad requests) ===
-    {"name": "ingestion/404",        "method": "GET",  "url": "{ingestion}/api/v1/nonexistent", "expect_error": True},
-    {"name": "admin/bad-tenant",     "method": "GET",  "url": "{admin}/v1/compliance/status/not-a-uuid", "expect_error": True},
-    {"name": "graph/bad-tlc-trace",  "method": "GET",  "url": "{graph}/api/v1/fsma/traceability/trace/forward/INVALID", "expect_error": True},
-    {"name": "ingestion/empty-epcis","method": "POST", "url": "{ingestion}/api/v1/epcis/validate",
-     "body": {}, "expect_error": True},
+    {"name": "ingestion/404", "method": "GET", "url": "{ingestion}/api/v1/nonexistent", "expect_error": True},
+    {
+        "name": "admin/bad-tenant",
+        "method": "GET",
+        "url": "{admin}/v1/compliance/status/not-a-uuid",
+        "expect_error": True,
+    },
+    {
+        "name": "graph/bad-tlc-trace",
+        "method": "GET",
+        "url": "{graph}/api/v1/fsma/traceability/trace/forward/INVALID",
+        "expect_error": True,
+    },
+    {
+        "name": "ingestion/empty-epcis",
+        "method": "POST",
+        "url": "{ingestion}/api/v1/epcis/validate",
+        "body": {},
+        "expect_error": True,
+    },
 ]
 
 
@@ -167,7 +185,9 @@ async def run_single_request(session: aiohttp.ClientSession, test: dict, result:
                 status = resp.status
                 await resp.read()
         else:
-            async with session.post(url, headers=headers, json=body, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as resp:
+            async with session.post(
+                url, headers=headers, json=body, timeout=aiohttp.ClientTimeout(total=TIMEOUT)
+            ) as resp:
                 status = resp.status
                 await resp.read()
 
@@ -255,12 +275,14 @@ def print_results(results: list[EndpointResult]):
 
             codes_str = " ".join(f"{k}:{v}" for k, v in sorted(r.status_codes.items()))
 
-            print(f"  │ {status} {endpoint_name:<30} "
-                  f"{r.success:>4}/{r.total_requests:<4} "
-                  f"p50={r.p50*1000:>6.1f}ms  "
-                  f"p95={r.p95*1000:>6.1f}ms  "
-                  f"p99={r.p99*1000:>6.1f}ms  "
-                  f"[{codes_str}]")
+            print(
+                f"  │ {status} {endpoint_name:<30} "
+                f"{r.success:>4}/{r.total_requests:<4} "
+                f"p50={r.p50 * 1000:>6.1f}ms  "
+                f"p95={r.p95 * 1000:>6.1f}ms  "
+                f"p99={r.p99 * 1000:>6.1f}ms  "
+                f"[{codes_str}]"
+            )
 
             if r.errors > 0:
                 failed_endpoints.append(r)
@@ -275,20 +297,20 @@ def print_results(results: list[EndpointResult]):
     print(f"  SUMMARY")
     print(f"{'=' * 100}")
     print(f"  Total requests:   {total_requests:,}")
-    print(f"  Successful:       {total_success:,} ({total_success/max(total_requests,1)*100:.1f}%)")
-    print(f"  Errors:           {total_errors:,} ({total_errors/max(total_requests,1)*100:.1f}%)")
+    print(f"  Successful:       {total_success:,} ({total_success / max(total_requests, 1) * 100:.1f}%)")
+    print(f"  Errors:           {total_errors:,} ({total_errors / max(total_requests, 1) * 100:.1f}%)")
 
     if all_latencies:
         sorted_all = sorted(all_latencies)
-        print(f"  Avg latency:      {statistics.mean(all_latencies)*1000:.1f}ms")
-        print(f"  p50 latency:      {statistics.median(all_latencies)*1000:.1f}ms")
+        print(f"  Avg latency:      {statistics.mean(all_latencies) * 1000:.1f}ms")
+        print(f"  p50 latency:      {statistics.median(all_latencies) * 1000:.1f}ms")
         p95_idx = int(len(sorted_all) * 0.95)
-        print(f"  p95 latency:      {sorted_all[min(p95_idx, len(sorted_all)-1)]*1000:.1f}ms")
+        print(f"  p95 latency:      {sorted_all[min(p95_idx, len(sorted_all) - 1)] * 1000:.1f}ms")
         p99_idx = int(len(sorted_all) * 0.99)
-        print(f"  p99 latency:      {sorted_all[min(p99_idx, len(sorted_all)-1)]*1000:.1f}ms")
-        print(f"  Max latency:      {max(all_latencies)*1000:.1f}ms")
+        print(f"  p99 latency:      {sorted_all[min(p99_idx, len(sorted_all) - 1)] * 1000:.1f}ms")
+        print(f"  Max latency:      {max(all_latencies) * 1000:.1f}ms")
         total_wall = sum(all_latencies)
-        print(f"  Throughput:       ~{total_requests / max(total_wall/CONCURRENCY, 0.001):.0f} req/s effective")
+        print(f"  Throughput:       ~{total_requests / max(total_wall / CONCURRENCY, 0.001):.0f} req/s effective")
 
     if failed_endpoints:
         print(f"\n  ⚠️  {len(failed_endpoints)} endpoint(s) had failures:")
@@ -304,13 +326,15 @@ def print_results(results: list[EndpointResult]):
 
 async def main():
     print(f"\n🔥 Starting RegEngine Stress Test")
-    print(f"   {len(TESTS)} endpoints × {REQUESTS_PER_ENDPOINT} requests = {len(TESTS) * REQUESTS_PER_ENDPOINT:,} total requests")
+    print(
+        f"   {len(TESTS)} endpoints × {REQUESTS_PER_ENDPOINT} requests = {len(TESTS) * REQUESTS_PER_ENDPOINT:,} total requests"
+    )
     print(f"   Concurrency: {CONCURRENCY}\n")
 
     results = []
     for i, test in enumerate(TESTS):
         endpoint_label = test["name"]
-        progress = f"[{i+1}/{len(TESTS)}]"
+        progress = f"[{i + 1}/{len(TESTS)}]"
         sys.stdout.write(f"  {progress} Testing {endpoint_label:<40}")
         sys.stdout.flush()
 
@@ -319,7 +343,7 @@ async def main():
         elapsed = time.monotonic() - start
 
         status = "✅" if result.errors == 0 else "❌"
-        sys.stdout.write(f" {status}  {elapsed:.1f}s  (p50={result.p50*1000:.0f}ms)\n")
+        sys.stdout.write(f" {status}  {elapsed:.1f}s  (p50={result.p50 * 1000:.0f}ms)\n")
         results.append(result)
 
     success = print_results(results)

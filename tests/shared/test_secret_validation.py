@@ -2,9 +2,9 @@
 SEC-004: Tests for current environment validation.
 """
 
-from pathlib import Path
 import importlib.util
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).parent.parent.parent
 SPEC = importlib.util.spec_from_file_location(
@@ -94,8 +94,9 @@ class TestEnvExample:
         for line in content.split("\n"):
             if line.startswith("ADMIN_MASTER_KEY="):
                 value = line.split("=", 1)[1].strip()
-                assert value == "" or "your-" in value.lower() or value.startswith("#"), \
+                assert value == "" or "your-" in value.lower() or value.startswith("#"), (
                     f"ADMIN_MASTER_KEY should be empty in example: {line}"
+                )
 
 
 class TestDevCompose:

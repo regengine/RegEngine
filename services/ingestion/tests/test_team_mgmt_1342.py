@@ -12,13 +12,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import team_mgmt as tm
 from app.team_mgmt import (
-    InviteRequest,
     ROLE_PERMISSIONS,
+    InviteRequest,
     TeamMember,
     TeamResponse,
     _db_add_team_member,
@@ -27,8 +24,10 @@ from app.team_mgmt import (
     router,
 )
 from app.webhook_compat import _verify_api_key
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -83,9 +82,14 @@ class TestPydanticModels:
 
     def test_team_member_with_all_fields(self):
         m = TeamMember(
-            id="m1", name="Alice Smith", email="a@x.com", role="admin",
-            status="active", last_active="2026-04-18T00:00:00Z",
-            invited_at="2026-04-18T00:00:00Z", avatar_initials="AS",
+            id="m1",
+            name="Alice Smith",
+            email="a@x.com",
+            role="admin",
+            status="active",
+            last_active="2026-04-18T00:00:00Z",
+            invited_at="2026-04-18T00:00:00Z",
+            avatar_initials="AS",
             is_sample=True,
         )
         assert m.avatar_initials == "AS"
@@ -101,8 +105,11 @@ class TestPydanticModels:
 
     def test_team_response_schema(self):
         resp = TeamResponse(
-            tenant_id="t1", total_members=2, active_members=1,
-            pending_invites=1, roles_breakdown={"admin": 1, "viewer": 1},
+            tenant_id="t1",
+            total_members=2,
+            active_members=1,
+            pending_invites=1,
+            roles_breakdown={"admin": 1, "viewer": 1},
             members=[],
         )
         assert resp.total_members == 2
@@ -159,10 +166,12 @@ class TestDbGetTeam:
         session.close.assert_called_once()
 
     def test_maps_rows_to_team_members(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("m1", "Alice Smith", "a@x.com", "admin", "active", "2026-04-18T00:00:00Z", None),
-            ("m2", "Bob Jones", "b@x.com", "viewer", "invited", None, "2026-04-18T00:00:00Z"),
-        ])
+        session = _mock_db_session(
+            rows=[
+                ("m1", "Alice Smith", "a@x.com", "admin", "active", "2026-04-18T00:00:00Z", None),
+                ("m2", "Bob Jones", "b@x.com", "viewer", "invited", None, "2026-04-18T00:00:00Z"),
+            ]
+        )
         monkeypatch.setattr(tm, "get_db_safe", lambda: session)
         result = _db_get_team("t1")
         assert len(result) == 2
@@ -173,25 +182,31 @@ class TestDbGetTeam:
         assert result[1].avatar_initials == "BJ"
 
     def test_avatar_initials_single_word_name(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("m1", "Alice", "a@x.com", "admin", "active", None, None),
-        ])
+        session = _mock_db_session(
+            rows=[
+                ("m1", "Alice", "a@x.com", "admin", "active", None, None),
+            ]
+        )
         monkeypatch.setattr(tm, "get_db_safe", lambda: session)
         result = _db_get_team("t1")
         assert result[0].avatar_initials == "A"
 
     def test_avatar_initials_multi_word_takes_first_two(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("m1", "Alice Beatrice Carol Smith", "a@x.com", "admin", "active", None, None),
-        ])
+        session = _mock_db_session(
+            rows=[
+                ("m1", "Alice Beatrice Carol Smith", "a@x.com", "admin", "active", None, None),
+            ]
+        )
         monkeypatch.setattr(tm, "get_db_safe", lambda: session)
         result = _db_get_team("t1")
         assert result[0].avatar_initials == "AB"
 
     def test_avatar_initials_empty_name_is_empty(self, monkeypatch):
-        session = _mock_db_session(rows=[
-            ("m1", "", "a@x.com", "admin", "active", None, None),
-        ])
+        session = _mock_db_session(
+            rows=[
+                ("m1", "", "a@x.com", "admin", "active", None, None),
+            ]
+        )
         monkeypatch.setattr(tm, "get_db_safe", lambda: session)
         result = _db_get_team("t1")
         assert result[0].avatar_initials == ""
@@ -219,8 +234,13 @@ class TestDbGetTeam:
 class TestDbAddTeamMember:
     def _member(self):
         return TeamMember(
-            id="m1", name="Alice", email="a@x.com", role="admin", status="active",
-            last_active="2026-04-18T00:00:00Z", invited_at=None,
+            id="m1",
+            name="Alice",
+            email="a@x.com",
+            role="admin",
+            status="active",
+            last_active="2026-04-18T00:00:00Z",
+            invited_at=None,
         )
 
     def test_returns_false_when_no_db(self, monkeypatch):
@@ -381,8 +401,9 @@ class TestInviteMemberEndpoint:
         # DB read returns a list (not None) so line 206 doesn't init memory.
         # DB write fails. Memory didn't have tenant_id yet -> line 223-224 runs.
         monkeypatch.setattr(
-            tm, "_db_get_team",
-            lambda tid: [TeamMember(id="existing", name="E", email="e@x.com", role="admin", status="active")]
+            tm,
+            "_db_get_team",
+            lambda tid: [TeamMember(id="existing", name="E", email="e@x.com", role="admin", status="active")],
         )
         monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: False)
         assert "fresh-tenant" not in _team_store
@@ -446,8 +467,9 @@ class TestUpdateRoleEndpoint:
         # DB read returns a distinct list (simulating DB-as-source-of-truth),
         # DB write fails, so memory copy is also updated
         monkeypatch.setattr(
-            tm, "_db_get_team",
-            lambda tid: [TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")]
+            tm,
+            "_db_get_team",
+            lambda tid: [TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")],
         )
         monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: False)
         resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
@@ -469,8 +491,9 @@ class TestUpdateRoleEndpoint:
     def test_update_role_db_write_failure_no_memory_still_returns_updated(self, client, monkeypatch):
         # DB read succeeds, DB write fails, memory not initialized — still returns updated=True
         monkeypatch.setattr(
-            tm, "_db_get_team",
-            lambda tid: [TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")]
+            tm,
+            "_db_get_team",
+            lambda tid: [TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")],
         )
         monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: False)
         resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})

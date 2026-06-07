@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
-
 from app.models import (
     AlertEvent,
     EnforcementItem,
@@ -169,11 +168,13 @@ class TestMetricsCollector:
 
     def test_collector_init(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         assert hasattr(collector, "enabled")
 
     def test_record_scrape_no_error(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         # Should not raise even if prometheus is available or not
         collector.record_scrape(
@@ -186,6 +187,7 @@ class TestMetricsCollector:
 
     def test_record_webhook_no_error(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         collector.record_webhook(
             url="https://example.com/hook",
@@ -195,11 +197,13 @@ class TestMetricsCollector:
 
     def test_record_kafka_event_no_error(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         collector.record_kafka_event(topic="alerts.regulatory", success=True)
 
     def test_record_circuit_state_no_error(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         collector.record_circuit_state(name="fda_scraper", state="closed")
         collector.record_circuit_state(name="fda_scraper", state="open")
@@ -207,11 +211,13 @@ class TestMetricsCollector:
 
     def test_set_info_no_error(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         collector.set_info(version="1.0.0", environment="test")
 
     def test_get_metrics_returns_bytes(self):
         from app.metrics import MetricsCollector
+
         collector = MetricsCollector()
         result = collector.get_metrics()
         assert isinstance(result, bytes)
@@ -222,6 +228,7 @@ class TestStateManagerHash:
 
     def test_compute_hash_deterministic(self):
         from app.state import StateManager
+
         h1 = StateManager.compute_hash("hello world")
         h2 = StateManager.compute_hash("hello world")
         assert h1 == h2
@@ -229,6 +236,7 @@ class TestStateManagerHash:
 
     def test_compute_hash_different_input(self):
         from app.state import StateManager
+
         h1 = StateManager.compute_hash("hello")
         h2 = StateManager.compute_hash("world")
         assert h1 != h2

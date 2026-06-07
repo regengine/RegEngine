@@ -2,10 +2,11 @@
 Pydantic models for framework arbitrage and compliance analysis
 """
 
-from pydantic import BaseModel, Field
-from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class Effort(str, Enum):
@@ -98,9 +99,7 @@ class ArbitrageOpportunity(BaseModel):
     total_controls: int = Field(..., description="Total controls in target framework")
     overlap_percentage: float = Field(..., description="Overlap percentage")
     estimated_savings_hours: float = Field(..., description="Estimated time savings in hours")
-    path: List[ControlMapping] = Field(
-        default_factory=list, description="Control mappings showing overlap"
-    )
+    path: List[ControlMapping] = Field(default_factory=list, description="Control mappings showing overlap")
 
     class Config:
         json_schema_extra = {

@@ -25,11 +25,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from shared.pagination import PaginationParams
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
 from shared.database import get_db_session
+from shared.pagination import PaginationParams
+
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 # Backwards-compat alias for tests:
 # ``app.dependency_overrides[_get_db_session]`` matches ``Depends(get_db_session)``
@@ -46,12 +46,14 @@ def _get_service(db_session):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     from shared.exception_queue import ExceptionQueueService
+
     return ExceptionQueueService(db_session)
 
 
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
+
 
 class CreateExceptionRequest(BaseModel):
     severity: str = "warning"
@@ -87,6 +89,7 @@ class AddCommentRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "",

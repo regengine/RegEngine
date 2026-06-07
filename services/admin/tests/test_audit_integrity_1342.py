@@ -39,7 +39,6 @@ sys.path.insert(0, str(service_dir))
 
 from app.audit_integrity import verify_chain  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # helpers — build v1 and v2 hash bodies the same way audit.py does
 # ---------------------------------------------------------------------------
@@ -72,9 +71,7 @@ def _hash_v2(
         "severity": severity,
         "endpoint": endpoint,
     }
-    return hashlib.sha256(
-        json.dumps(body, sort_keys=True, default=str).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _hash_v1(prev_hash, tenant_id, timestamp, event_type, action, resource_id, metadata):
@@ -87,26 +84,45 @@ def _hash_v1(prev_hash, tenant_id, timestamp, event_type, action, resource_id, m
         "resource_id": resource_id,
         "metadata": metadata,
     }
-    return hashlib.sha256(
-        json.dumps(body, sort_keys=True, default=str).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _entry(*, id_, prev_hash, tenant="t-1", timestamp="2026-04-20T00:00:00Z",
-           event_type="auth.login", action="login", resource_id=None,
-           metadata=None, actor_id="a-1", actor_email="a@example.com",
-           severity="info", endpoint="/login", hash_version=2,
-           override_hash=None):
+def _entry(
+    *,
+    id_,
+    prev_hash,
+    tenant="t-1",
+    timestamp="2026-04-20T00:00:00Z",
+    event_type="auth.login",
+    action="login",
+    resource_id=None,
+    metadata=None,
+    actor_id="a-1",
+    actor_email="a@example.com",
+    severity="info",
+    endpoint="/login",
+    hash_version=2,
+    override_hash=None,
+):
     metadata = metadata or {}
     if override_hash is not None:
         actual_hash = override_hash
     elif hash_version == 1:
-        actual_hash = _hash_v1(prev_hash, tenant, timestamp, event_type, action,
-                               resource_id, metadata)
+        actual_hash = _hash_v1(prev_hash, tenant, timestamp, event_type, action, resource_id, metadata)
     else:
-        actual_hash = _hash_v2(prev_hash, tenant, timestamp, event_type, action,
-                               resource_id, metadata, actor_id, actor_email,
-                               severity, endpoint)
+        actual_hash = _hash_v2(
+            prev_hash,
+            tenant,
+            timestamp,
+            event_type,
+            action,
+            resource_id,
+            metadata,
+            actor_id,
+            actor_email,
+            severity,
+            endpoint,
+        )
     return {
         "id": id_,
         "tenant_id": tenant,
@@ -128,7 +144,6 @@ def _entry(*, id_, prev_hash, tenant="t-1", timestamp="2026-04-20T00:00:00Z",
 
 
 class TestEmptyChain:
-
     def test_empty_list_returns_trivially_valid(self):
         """Line 40: an empty ``entries`` list must return the canonical
         'trivially valid' dict so the export endpoint handles
@@ -149,7 +164,6 @@ class TestEmptyChain:
 
 
 class TestPrevHashMismatch:
-
     def test_second_entry_wrong_prev_hash_flags_mismatch(self):
         """Line 63: if entry[1].prev_hash doesn't match entry[0].hash,
         an error with ``error='prev_hash_mismatch'`` is appended. The
@@ -162,10 +176,7 @@ class TestPrevHashMismatch:
         result = verify_chain([e1, e2])
 
         assert result["valid"] is False
-        assert any(
-            err["error"] == "prev_hash_mismatch" and err["id"] == 2
-            for err in result["errors"]
-        )
+        assert any(err["error"] == "prev_hash_mismatch" and err["id"] == 2 for err in result["errors"])
         mismatch = next(err for err in result["errors"] if err["error"] == "prev_hash_mismatch")
         assert mismatch["expected"] == e1["integrity"]["hash"]
         assert mismatch["actual"] == bogus_prev
@@ -187,7 +198,6 @@ class TestPrevHashMismatch:
 
 
 class TestSchemaVersionFallback:
-
     def test_valid_v2_chain_verifies_clean(self):
         e1 = _entry(id_=1, prev_hash=None, hash_version=2)
         e2 = _entry(id_=2, prev_hash=e1["integrity"]["hash"], hash_version=2)

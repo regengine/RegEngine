@@ -9,9 +9,9 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
+from shared.rules.types import RuleDefinition
 
 from tests.integration.golden_path.helpers import GOLDEN_RULE_SEEDS
-from shared.rules.types import RuleDefinition
 
 
 @pytest.fixture(autouse=True)

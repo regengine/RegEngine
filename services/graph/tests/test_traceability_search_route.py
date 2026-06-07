@@ -4,16 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from services.graph.app.routers.fsma.traceability import router as traceability_router
 from shared.auth import require_api_key
 from shared.middleware import get_current_tenant_id
 
-_AUTH_HEADERS = {
-    "X-RegEngine-API-Key": os.getenv(
-        "AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest"
-    )
-}
+from services.graph.app.routers.fsma.traceability import router as traceability_router
+
+_AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
 def _build_app() -> FastAPI:
@@ -23,9 +19,7 @@ def _build_app() -> FastAPI:
         "tenant_id": "11111111-1111-1111-1111-111111111111",
         "key_id": "test-key",
     }
-    app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID(
-        "11111111-1111-1111-1111-111111111111"
-    )
+    app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("11111111-1111-1111-1111-111111111111")
     return app
 
 
@@ -39,10 +33,13 @@ def test_search_events_with_filters_and_cursor_pagination():
         {"event_id": "evt-3", "type": "RECEIVING"},
     ]
 
-    with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_client_cls, patch(
-        "services.graph.app.routers.fsma.traceability.query_events_by_range",
-        new_callable=AsyncMock,
-    ) as mock_query:
+    with (
+        patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_client_cls,
+        patch(
+            "services.graph.app.routers.fsma.traceability.query_events_by_range",
+            new_callable=AsyncMock,
+        ) as mock_query,
+    ):
         mock_client = MagicMock()
         mock_client.close = AsyncMock()
         mock_client_cls.return_value = mock_client

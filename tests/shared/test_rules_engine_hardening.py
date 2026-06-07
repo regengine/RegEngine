@@ -20,16 +20,14 @@ from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
 import pytest
-
+from shared.rules.engine import RulesEngine
+from shared.rules.evaluators.relational import evaluate_identity_consistency
+from shared.rules.ftl import get_ftl_category, is_ftl_food
 from shared.rules.types import (
     EvaluationSummary,
     RuleDefinition,
     RuleEvaluationResult,
 )
-from shared.rules.engine import RulesEngine
-from shared.rules.evaluators.relational import evaluate_identity_consistency
-from shared.rules.ftl import is_ftl_food, get_ftl_category
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -323,7 +321,10 @@ class TestIssue1344TenantIsolation:
         event_data["tenant_id"] = "ATTACKER-TENANT"  # forged!
 
         result = evaluate_identity_consistency(
-            event_data, rule.evaluation_logic, rule, session,
+            event_data,
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="VICTIM-TENANT",  # authenticated kwarg
         )
 
@@ -340,7 +341,10 @@ class TestIssue1344TenantIsolation:
         event_data["tenant_id"] = "TENANT-ATTACKER"
 
         evaluate_identity_consistency(
-            event_data, rule.evaluation_logic, rule, session,
+            event_data,
+            rule.evaluation_logic,
+            rule,
+            session,
             tenant_id="TENANT-REAL",
         )
         assert session._captured["tenant_id"] == "TENANT-REAL"
@@ -387,6 +391,7 @@ class TestIssue1344TenantIsolation:
 # rule-engine wiring (#1203 option-2 rewire) is done. Promoting it earlier
 # would advertise an endpoint whose validation logic is still partial.
 
+
 class TestValidateEndpointNotPromotedAtRoot:
     """Pin the post-#1105 status quo: ``/validate`` is registered for FTL gating
     (see ``test_validator_ftl_scoping_1105.py``) but must not be advertised in
@@ -395,6 +400,7 @@ class TestValidateEndpointNotPromotedAtRoot:
     def test_validate_not_in_compliance_root_listing(self):
         """The root JSON must not advertise /validate as a key endpoint."""
         from fastapi.testclient import TestClient
+
         from services.compliance.main import app as compliance_app
 
         with TestClient(compliance_app) as client:

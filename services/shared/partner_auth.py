@@ -22,6 +22,7 @@ when the unimplemented partner gateway stub surface was retired (Path B,
 W8.F scoping doc). The auth scaffolding is generic and forward-compatible;
 the stub router/spec/ingress were deleted.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional, Union
@@ -29,7 +30,6 @@ from typing import Any, Optional, Union
 import structlog
 from fastapi import Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
-
 from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore
 from shared.auth import APIKey, get_key_store
 from shared.permissions import has_permission
@@ -91,9 +91,7 @@ async def _enforce_partner_rate_limit(
 
 async def get_partner_principal(
     request: Request,
-    x_regengine_partner_key: Optional[str] = Header(
-        default=None, alias="X-RegEngine-Partner-Key"
-    ),
+    x_regengine_partner_key: Optional[str] = Header(default=None, alias="X-RegEngine-Partner-Key"),
 ) -> PartnerPrincipal:
     """Validate the partner API key and return a typed principal.
 
@@ -187,10 +185,7 @@ def require_partner_scope(required_scope: str):
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Insufficient permissions: this endpoint requires "
-                    f"'{required_scope}'."
-                ),
+                detail=(f"Insufficient permissions: this endpoint requires '{required_scope}'."),
             )
         return principal
 

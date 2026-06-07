@@ -9,12 +9,14 @@ shape valid without rewriting historical audit rows.
 Requires Docker for testcontainers. If Docker is unavailable the test
 module skips cleanly.
 """
+
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 
 import pytest
+
 from tests.integration_requirements import create_started_container_or_skip
 
 testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
@@ -23,20 +25,12 @@ pytest.importorskip("testcontainers.postgres")
 from sqlalchemy import create_engine, text  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260426_9d60e8724725_v071_audit_logs_tamper_columns_repair.py"
-)
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260426_9d60e8724725_v071_audit_logs_tamper_columns_repair.py"
 
 
 def _load_v071_module():
-    spec = importlib.util.spec_from_file_location(
-        "v071_audit_logs_tamper_columns_repair", MIGRATION_PATH
-    )
+    spec = importlib.util.spec_from_file_location("v071_audit_logs_tamper_columns_repair", MIGRATION_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

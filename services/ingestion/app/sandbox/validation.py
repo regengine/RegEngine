@@ -17,10 +17,10 @@ from ..webhook_models import (
     WebhookCTEType,
 )
 
-
 # ---------------------------------------------------------------------------
 # KDE Validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_kdes(event: Dict[str, Any]) -> List[str]:
     """Validate required KDEs for a raw event dict."""
@@ -58,6 +58,7 @@ def _validate_kdes(event: Dict[str, Any]) -> List[str]:
 # Duplicate Lot Detection
 # ---------------------------------------------------------------------------
 
+
 def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]:
     """
     Detect duplicate traceability lot codes within the same CTE type.
@@ -80,21 +81,14 @@ def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]
 
         # Include reference_document in key to allow split shipments
         kdes = event.get("kdes", {})
-        ref_doc = (
-            kdes.get("reference_document")
-            or event.get("reference_document")
-            or ""
-        ).strip().lower()
+        ref_doc = (kdes.get("reference_document") or event.get("reference_document") or "").strip().lower()
 
         key = (tlc, cte, ref_doc)
         if key in seen:
             first_index = seen[key]
             original_tlc = (event.get("traceability_lot_code") or "").strip()
             original_cte = (event.get("cte_type") or "").strip()
-            msg = (
-                f"Duplicate lot code '{original_tlc}' for CTE type "
-                f"'{original_cte}'"
-            )
+            msg = f"Duplicate lot code '{original_tlc}' for CTE type '{original_cte}'"
             if ref_doc:
                 msg += f" with same reference document"
             msg += f" \u2014 row may be redundant (see event {first_index})"
@@ -111,9 +105,24 @@ def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]
 
 # Suffixes to strip during normalization (longer/more specific first)
 _ENTITY_SUFFIXES = [
-    "incorporated", "corporation", "limited", "company",
-    "l.l.c.", "l.l.p.", "l.p.", "corp.", "inc.", "ltd.", "co.",
-    "llc", "llp", "corp", "inc", "ltd", "co", "lp",
+    "incorporated",
+    "corporation",
+    "limited",
+    "company",
+    "l.l.c.",
+    "l.l.p.",
+    "l.p.",
+    "corp.",
+    "inc.",
+    "ltd.",
+    "co.",
+    "llc",
+    "llp",
+    "corp",
+    "inc",
+    "ltd",
+    "co",
+    "lp",
 ]
 
 # Compiled pattern: match any suffix at end of string (preceded by whitespace or comma)
@@ -124,8 +133,12 @@ _SUFFIX_PATTERN = re.compile(
 
 # Fields to inspect explicitly
 _ENTITY_FIELDS_EXPLICIT = {
-    "location_name", "ship_from_location", "ship_to_location",
-    "receiving_location", "from_entity_reference", "immediate_previous_source",
+    "location_name",
+    "ship_from_location",
+    "ship_to_location",
+    "receiving_location",
+    "from_entity_reference",
+    "immediate_previous_source",
 }
 
 # Substrings that mark a field as entity-like

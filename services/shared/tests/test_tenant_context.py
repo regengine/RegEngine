@@ -14,6 +14,7 @@ Covers the public contract of resolve_tenant_context():
 These are the failure modes EPIC-A consolidates. If any regresses, CI
 should fail here before Semgrep catches it elsewhere.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,6 @@ from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---- Load services.shared.tenant_context without needing package __init__ ----
 _shared_dir = Path(__file__).resolve().parent.parent
@@ -43,6 +43,7 @@ TenantContextError = tenant_context.TenantContextError
 
 
 # ---- Helpers ----
+
 
 @dataclass
 class _FakeAPIKey:
@@ -102,6 +103,7 @@ def _run(req):
 
 # ---- Happy paths ----
 
+
 def test_api_key_principal_with_tenant_returns_context():
     req = _make_request(api_key=_FakeAPIKey(key_id="abc123", tenant_id="tenant-A"))
     ctx = _run(req)
@@ -154,6 +156,7 @@ def test_matching_query_param_tenant_is_idempotent():
 
 
 # ---- Failure modes ----
+
 
 def test_no_principal_raises_401_e_no_principal():
     req = _make_request()

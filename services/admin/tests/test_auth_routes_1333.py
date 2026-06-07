@@ -24,14 +24,14 @@ Covers:
 
 from __future__ import annotations
 
-import uuid as uuid_mod
 import json
+import sys
 import time
-from datetime import datetime, timezone, timedelta
+import uuid as uuid_mod
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
-import sys
-from pathlib import Path
 
 import jwt as _jwt
 import pytest
@@ -42,46 +42,45 @@ repo_root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(repo_root / "services" / "admin"))
 
-import services.admin.app.auth_routes as ar
-import services.admin.app.auth.login_router as _login_router_mod
-import services.admin.app.auth.email_code_router as _email_code_router_mod
-import services.admin.app.auth.signup_router as _signup_router_mod  # noqa: F401
-import services.admin.app.auth.refresh_router as _refresh_router_mod  # noqa: F401
-import services.admin.app.auth.sessions_router as _sessions_router_mod  # noqa: F401
-import services.admin.app.auth.register_router as _register_router_mod  # noqa: F401
 import services.admin.app.auth.change_password_router as _change_password_router_mod  # noqa: F401
-import services.admin.app.auth.reset_password_router as _reset_password_router_mod  # noqa: F401
 import services.admin.app.auth.confirm_router as _confirm_router_mod  # noqa: F401
+import services.admin.app.auth.email_code_router as _email_code_router_mod
+import services.admin.app.auth.login_router as _login_router_mod
+import services.admin.app.auth.refresh_router as _refresh_router_mod  # noqa: F401
+import services.admin.app.auth.register_router as _register_router_mod  # noqa: F401
+import services.admin.app.auth.reset_password_router as _reset_password_router_mod  # noqa: F401
+import services.admin.app.auth.sessions_router as _sessions_router_mod  # noqa: F401
+import services.admin.app.auth.signup_router as _signup_router_mod  # noqa: F401
+import services.admin.app.auth_routes as ar
 from services.admin.app.auth_routes import (
-    EmailCodeConfirmRequest,
-    EmailCodeRequest,
-    LoginRequest,
-    RegisterRequest,
-    RefreshRequest,
-    ResetPasswordRequest,
-    ChangePasswordRequest,
-    ConfirmPasswordRequest,
-    _slugify_tenant_name,
-    _email_attempt_key,
-    _lockout_key,
-    _lockout_delay_key,
-    _progressive_delay_seconds,
-    _LOCKOUT_THRESHOLD,
     _EMAIL_ATTEMPT_LIMIT,
     _EMAIL_ATTEMPT_WINDOW,
     _LOCKOUT_DURATION,
+    _LOCKOUT_THRESHOLD,
     _PROGRESSIVE_DELAY_CAP_SECONDS,
+    ChangePasswordRequest,
+    ConfirmPasswordRequest,
+    EmailCodeConfirmRequest,
+    EmailCodeRequest,
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    _email_attempt_key,
+    _lockout_delay_key,
+    _lockout_key,
+    _progressive_delay_seconds,
+    _slugify_tenant_name,
 )
 from services.admin.app.auth_utils import (
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
+    create_refresh_token,
     decode_access_token,
     get_password_hash,
     hash_token,
-    create_refresh_token,
-    REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from services.admin.app.session_store import SessionData
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Login route configuration
@@ -112,6 +111,7 @@ def test_login_rate_limit_honors_explicit_override(monkeypatch):
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _make_request(path: str = "/auth/login", headers: dict | None = None):
     """Build a minimal Starlette Request object."""
@@ -312,14 +312,16 @@ class TestJwtIssuance:
     def test_access_token_has_correct_claims(self):
         user_id = str(uuid_mod.uuid4())
         tenant_id = str(uuid_mod.uuid4())
-        token = create_access_token({
-            "sub": user_id,
-            "email": "test@example.com",
-            "tenant_id": tenant_id,
-            "tid": tenant_id,
-            "tenant_status": "active",
-            "tv": 0,
-        })
+        token = create_access_token(
+            {
+                "sub": user_id,
+                "email": "test@example.com",
+                "tenant_id": tenant_id,
+                "tid": tenant_id,
+                "tenant_status": "active",
+                "tv": 0,
+            }
+        )
         payload = decode_access_token(token)
         assert payload["sub"] == user_id
         assert payload["email"] == "test@example.com"
@@ -330,7 +332,9 @@ class TestJwtIssuance:
 
     def test_expired_token_raises_401(self):
         import jwt as _pyjwt
-        from services.admin.app.auth_utils import SECRET_KEY, ALGORITHM, SESSION_AUDIENCE, SESSION_ISSUER
+
+        from services.admin.app.auth_utils import ALGORITHM, SECRET_KEY, SESSION_AUDIENCE, SESSION_ISSUER
+
         # Mint a token that expired in the past.
         payload = {
             "sub": "user-1",
@@ -351,6 +355,7 @@ class TestJwtIssuance:
 
     def test_tampered_token_raises_401(self):
         import jwt as _pyjwt
+
         token = create_access_token({"sub": "u1", "tv": 0})
         tampered = token[:-4] + "XXXX"
         with pytest.raises((_pyjwt.InvalidSignatureError, _pyjwt.DecodeError, HTTPException)):
@@ -457,10 +462,14 @@ class TestLogin:
         membership = _make_membership(user, tenant)
         db = _make_db_with_user(user, tenant, membership)
         client = _make_redis_client()
-        client.get = AsyncMock(return_value=json.dumps({
-            "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
-            "attempts": 3,
-        }))
+        client.get = AsyncMock(
+            return_value=json.dumps(
+                {
+                    "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
+                    "attempts": 3,
+                }
+            )
+        )
         session_store = _make_session_store(redis_client=client)
         monkeypatch.setattr(_email_code_router_mod, "AuditLogger", MagicMock())
 
@@ -484,10 +493,14 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_wrong_email_code_decrements_attempts(self):
         client = _make_redis_client()
-        client.get = AsyncMock(return_value=json.dumps({
-            "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
-            "attempts": 3,
-        }))
+        client.get = AsyncMock(
+            return_value=json.dumps(
+                {
+                    "code_hash": _email_code_router_mod._hash_email_code("user@example.com", "123456"),
+                    "attempts": 3,
+                }
+            )
+        )
         session_store = _make_session_store(redis_client=client)
 
         valid = await _email_code_router_mod._check_email_code(
@@ -736,16 +749,20 @@ class TestRefreshToken:
         db = _make_db_with_user(user, tenant, membership)
 
         # Provide old access token in Authorization header so tenant preserved
-        old_access = create_access_token({
-            "sub": str(user.id),
-            "tenant_id": str(tenant.id),
-            "tid": str(tenant.id),
-            "tv": 0,
-        })
-        request = _make_request(headers={
-            "authorization": f"Bearer {old_access}",
-            "user-agent": "pytest",
-        })
+        old_access = create_access_token(
+            {
+                "sub": str(user.id),
+                "tenant_id": str(tenant.id),
+                "tid": str(tenant.id),
+                "tv": 0,
+            }
+        )
+        request = _make_request(
+            headers={
+                "authorization": f"Bearer {old_access}",
+                "user-agent": "pytest",
+            }
+        )
 
         result = await ar.refresh_session.__wrapped__(
             payload=RefreshRequest(refresh_token=raw_token),
@@ -873,16 +890,20 @@ class TestRefreshToken:
         db.execute.return_value.scalars.return_value.all.return_value = []
 
         # Pass old access token with a tenant_id not in memberships
-        old_access = create_access_token({
-            "sub": str(user.id),
-            "tenant_id": str(old_tenant_id),
-            "tid": str(old_tenant_id),
-            "tv": 0,
-        })
-        request = _make_request(headers={
-            "authorization": f"Bearer {old_access}",
-            "user-agent": "pytest",
-        })
+        old_access = create_access_token(
+            {
+                "sub": str(user.id),
+                "tenant_id": str(old_tenant_id),
+                "tid": str(old_tenant_id),
+                "tv": 0,
+            }
+        )
+        request = _make_request(
+            headers={
+                "authorization": f"Bearer {old_access}",
+                "user-agent": "pytest",
+            }
+        )
 
         with pytest.raises(HTTPException) as exc:
             await ar.refresh_session.__wrapped__(
@@ -949,6 +970,7 @@ class TestSessionManagement:
         session_store.get_session = AsyncMock(return_value=fake_session)
 
         from services.admin.app.auth_routes import revoke_session
+
         result = await revoke_session(
             session_id=session_id,
             current_user=user,
@@ -978,6 +1000,7 @@ class TestSessionManagement:
         session_store.get_session = AsyncMock(return_value=fake_session)
 
         from services.admin.app.auth_routes import revoke_session
+
         with pytest.raises(HTTPException) as exc:
             await revoke_session(
                 session_id=session_id,
@@ -1002,6 +1025,7 @@ class TestSessionManagement:
         )
 
         from services.admin.app.auth_routes import revoke_all_sessions
+
         result = await revoke_all_sessions(
             current_user=user,
             db=db,
@@ -1040,6 +1064,7 @@ class TestSessionManagement:
         )
 
         from services.admin.app.auth_routes import revoke_all_sessions
+
         await revoke_all_sessions(
             current_user=user,
             db=db,
@@ -1081,10 +1106,12 @@ class TestPasswordReset:
         """If Supabase client unavailable → 503."""
         monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: None)
 
-        request = _make_request(headers={
-            "authorization": "Bearer some-token",
-            "user-agent": "pytest",
-        })
+        request = _make_request(
+            headers={
+                "authorization": "Bearer some-token",
+                "user-agent": "pytest",
+            }
+        )
         db = MagicMock()
         session_store = _make_session_store()
 
@@ -1100,17 +1127,15 @@ class TestPasswordReset:
     @pytest.mark.asyncio
     async def test_reset_invalid_supabase_token_raises_401(self, monkeypatch):
         """Supabase rejects token → 401."""
-        fake_sb = SimpleNamespace(
-            auth=SimpleNamespace(
-                get_user=MagicMock(side_effect=RuntimeError("bad token"))
-            )
-        )
+        fake_sb = SimpleNamespace(auth=SimpleNamespace(get_user=MagicMock(side_effect=RuntimeError("bad token"))))
         monkeypatch.setattr(_reset_password_router_mod, "get_supabase", lambda: fake_sb)
 
-        request = _make_request(headers={
-            "authorization": "Bearer garbage-token",
-            "user-agent": "pytest",
-        })
+        request = _make_request(
+            headers={
+                "authorization": "Bearer garbage-token",
+                "user-agent": "pytest",
+            }
+        )
         db = MagicMock()
         session_store = _make_session_store()
 
@@ -1135,7 +1160,9 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(
+            recovery_token_payload, "irrelevant", algorithm="HS256"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -1161,10 +1188,12 @@ class TestPasswordReset:
             AsyncMock(return_value=0),
         )
 
-        request = _make_request(headers={
-            "authorization": f"Bearer {recovery_token}",
-            "user-agent": "pytest",
-        })
+        request = _make_request(
+            headers={
+                "authorization": f"Bearer {recovery_token}",
+                "user-agent": "pytest",
+            }
+        )
 
         old_hash = user.password_hash
         result = await ar.reset_password.__wrapped__(
@@ -1192,7 +1221,9 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(
+            recovery_token_payload, "irrelevant", algorithm="HS256"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -1243,10 +1274,12 @@ class TestPasswordReset:
 
         result = await ar.reset_password.__wrapped__(
             payload=ResetPasswordRequest(new_password="NewStrongPass-9!"),
-            request=_make_request(headers={
-                "authorization": f"Bearer {recovery_token}",
-                "user-agent": "pytest",
-            }),
+            request=_make_request(
+                headers={
+                    "authorization": f"Bearer {recovery_token}",
+                    "user-agent": "pytest",
+                }
+            ),
             db=db,
             session_store=session_store,
         )
@@ -1269,7 +1302,9 @@ class TestPasswordReset:
             "exp": now_ts + 3600,
             "jti": str(uuid_mod.uuid4()),
         }
-        recovery_token = _jwt.encode(recovery_token_payload, "irrelevant", algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+        recovery_token = _jwt.encode(
+            recovery_token_payload, "irrelevant", algorithm="HS256"
+        )  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
         fake_sb_user = SimpleNamespace(id="sb-user-1", email="reset@example.com")
         fake_sb = SimpleNamespace(
@@ -1286,10 +1321,12 @@ class TestPasswordReset:
         with pytest.raises(HTTPException) as exc:
             await ar.reset_password.__wrapped__(
                 payload=ResetPasswordRequest(new_password="short"),
-                request=_make_request(headers={
-                    "authorization": f"Bearer {recovery_token}",
-                    "user-agent": "pytest",
-                }),
+                request=_make_request(
+                    headers={
+                        "authorization": f"Bearer {recovery_token}",
+                        "user-agent": "pytest",
+                    }
+                ),
                 db=db,
                 session_store=session_store,
             )
@@ -1513,9 +1550,7 @@ class TestRequireReauthAccept:
             },
             expires_delta=timedelta(minutes=5),
         )
-        access = create_access_token(
-            {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0}
-        )
+        access = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0})
 
         request = MagicMock()
         request.headers = {
@@ -1897,9 +1932,7 @@ class TestSourceGuardrails:
         )
 
     def test_confirm_endpoint_has_lockout_integration(self):
-        assert "_check_account_lockout" in self._text, (
-            "/confirm must integrate with lockout infrastructure (#1340)"
-        )
+        assert "_check_account_lockout" in self._text, "/confirm must integrate with lockout infrastructure (#1340)"
 
 
 if __name__ == "__main__":

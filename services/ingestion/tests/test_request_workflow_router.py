@@ -12,9 +12,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app import request_workflow_router
-
+from app.authz import IngestionPrincipal, get_ingestion_principal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -79,6 +78,7 @@ def client(mock_svc):
 # List requests
 # ---------------------------------------------------------------------------
 
+
 def test_list_requests(client, mock_svc):
     mock_svc.get_active_cases.return_value = [
         {"request_case_id": "rc-1", "status": "intake"},
@@ -94,6 +94,7 @@ def test_list_requests(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Create request
 # ---------------------------------------------------------------------------
+
 
 def test_create_request(client, mock_svc):
     mock_svc.create_request_case.return_value = "rc-new-1"
@@ -123,6 +124,7 @@ def test_create_request(client, mock_svc):
 # Get single request
 # ---------------------------------------------------------------------------
 
+
 def test_get_request_found(client, mock_svc):
     mock_svc.get_active_cases.return_value = [
         {"request_case_id": "rc-1", "status": "intake"},
@@ -142,6 +144,7 @@ def test_get_request_not_found(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Assemble package
 # ---------------------------------------------------------------------------
+
 
 def test_assemble_package(client, mock_svc):
     mock_svc.assemble_response_package.return_value = {
@@ -165,6 +168,7 @@ def test_assemble_package(client, mock_svc):
 # Submit — success and blocking enforcement
 # ---------------------------------------------------------------------------
 
+
 def test_submit_package_success(client, mock_svc):
     mock_svc.submit_package.return_value = {"submission_id": "sub-1"}
     resp = client.post(
@@ -181,9 +185,7 @@ def test_submit_package_success(client, mock_svc):
 
 
 def test_submit_blocked_by_defects(client, mock_svc):
-    mock_svc.submit_package.side_effect = ValueError(
-        "Cannot submit: 2 blocking defect(s) remain"
-    )
+    mock_svc.submit_package.side_effect = ValueError("Cannot submit: 2 blocking defect(s) remain")
     resp = client.post(
         "/api/v1/requests/rc-1/submit",
         json={
@@ -215,6 +217,7 @@ def test_submit_with_force_bypasses_blockers(client, mock_svc):
 # Blockers
 # ---------------------------------------------------------------------------
 
+
 def test_get_blockers(client, mock_svc):
     mock_svc.check_blocking_defects.return_value = {
         "has_blockers": True,
@@ -235,6 +238,7 @@ def test_get_blockers(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Deadlines
 # ---------------------------------------------------------------------------
+
 
 def test_deadlines_route(client, mock_svc):
     """The /deadlines route returns urgency classification for active cases."""
@@ -261,6 +265,7 @@ async def test_deadlines_handler_directly(mock_svc, monkeypatch):
     request_workflow_router._get_service = lambda db: mock_svc
 
     from unittest.mock import AsyncMock
+
     principal = _make_principal()
     result = await request_workflow_router.check_deadlines(
         tenant_id=TENANT,
@@ -303,6 +308,7 @@ async def test_deadlines_no_alerts_directly(mock_svc, monkeypatch):
 # Scope update
 # ---------------------------------------------------------------------------
 
+
 def test_update_scope(client, mock_svc):
     resp = client.patch(
         "/api/v1/requests/rc-1/scope",
@@ -320,6 +326,7 @@ def test_update_scope(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Signoff
 # ---------------------------------------------------------------------------
+
 
 def test_add_signoff(client, mock_svc):
     resp = client.post(
@@ -339,6 +346,7 @@ def test_add_signoff(client, mock_svc):
 # ---------------------------------------------------------------------------
 # Auth: read-only blocks write endpoints
 # ---------------------------------------------------------------------------
+
 
 def test_read_only_blocks_create(monkeypatch):
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))

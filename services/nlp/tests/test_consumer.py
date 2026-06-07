@@ -13,7 +13,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 from uuid import uuid4
 
 import pytest
@@ -30,10 +30,10 @@ class TestNowIso:
     def test_returns_iso_format(self):
         """Verify ISO 8601 format is returned."""
         from services.nlp.app.consumer import _now_iso
-        
+
         result = _now_iso()
         # Should be parseable as datetime
-        dt = datetime.fromisoformat(result.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(result.replace("Z", "+00:00"))
         assert dt is not None
 
     def test_returns_utc_timestamp(self):
@@ -42,8 +42,8 @@ class TestNowIso:
 
         result = _now_iso()
         # Contract: `Z` suffix, matching FSMA extractor output.
-        assert result.endswith('Z'), f"expected Z suffix, got {result!r}"
-        assert '+00:00' not in result
+        assert result.endswith("Z"), f"expected Z suffix, got {result!r}"
+        assert "+00:00" not in result
 
 
 class TestConvertEntitiesToExtraction:
@@ -52,20 +52,20 @@ class TestConvertEntitiesToExtraction:
     def test_converts_empty_list(self):
         """Verify empty entity list returns empty extractions."""
         from services.nlp.app.consumer import _convert_entities_to_extraction
-        
+
         result = _convert_entities_to_extraction(
             entities=[],
             doc_id="doc-123",
             source_url="https://example.com/doc.pdf",
         )
-        
+
         assert isinstance(result, list)
         assert len(result) == 0
 
     def test_converts_single_entity(self):
         """Verify single entity is converted correctly."""
         from services.nlp.app.consumer import _convert_entities_to_extraction
-        
+
         entities = [
             {
                 "type": "OBLIGATION",
@@ -75,29 +75,31 @@ class TestConvertEntitiesToExtraction:
                 "end": 130,
             }
         ]
-        
+
         result = _convert_entities_to_extraction(
             entities=entities,
             doc_id="doc-123",
             source_url="https://example.com/doc.pdf",
         )
-        
+
         assert len(result) == 1
         assert "confidence_score" in result[0] or hasattr(result[0], "confidence_score")
 
     def test_preserves_source_url(self):
         """Verify source_url is included in extraction."""
         from services.nlp.app.consumer import _convert_entities_to_extraction
-        
-        entities = [{"type": "OBLIGATION", "text": "Banks must maintain 10% capital", "confidence": 0.85, "start": 0, "end": 30}]
+
+        entities = [
+            {"type": "OBLIGATION", "text": "Banks must maintain 10% capital", "confidence": 0.85, "start": 0, "end": 30}
+        ]
         source_url = "https://regulator.gov/rule.pdf"
-        
+
         result = _convert_entities_to_extraction(
             entities=entities,
             doc_id="doc-456",
             source_url=source_url,
         )
-        
+
         assert len(result) == 1
         assert result[0].attributes.get("source_url") == source_url
 
@@ -108,7 +110,7 @@ class TestLoadSchema:
     def test_load_schema_returns_validator(self):
         """Verify _load_schema returns a usable validator."""
         from services.nlp.app.consumer import _load_schema
-        
+
         schema = _load_schema()
         # Schema should be a dictionary or validator
         assert schema is not None
@@ -128,8 +130,8 @@ class TestRouteExtraction:
 
     def test_high_confidence_routes_to_graph(self, mock_producer):
         """Verify high confidence extractions go to graph.update topic."""
-        from services.nlp.app.consumer import _route_extraction, CONFIDENCE_THRESHOLD, ExtractionPayload
-        
+        from services.nlp.app.consumer import CONFIDENCE_THRESHOLD, ExtractionPayload, _route_extraction
+
         extraction = ExtractionPayload(
             subject="Banks",
             action="must maintain",
@@ -139,7 +141,7 @@ class TestRouteExtraction:
             source_offset=0,
             attributes={},
         )
-        
+
         _route_extraction(
             extraction=extraction,
             doc_id="doc-123",
@@ -148,7 +150,7 @@ class TestRouteExtraction:
             producer=mock_producer,
             tenant_id=str(uuid4()),
         )
-        
+
         # Should send to graph.update topic
         mock_producer.send.assert_called()
         call_args = mock_producer.send.call_args
@@ -156,8 +158,8 @@ class TestRouteExtraction:
 
     def test_low_confidence_routes_to_review(self, mock_producer):
         """Verify low confidence extractions go to needs_review topic."""
-        from services.nlp.app.consumer import _route_extraction, CONFIDENCE_THRESHOLD, ExtractionPayload
-        
+        from services.nlp.app.consumer import CONFIDENCE_THRESHOLD, ExtractionPayload, _route_extraction
+
         extraction = ExtractionPayload(
             subject="banks",
             action="should maintain",
@@ -167,7 +169,7 @@ class TestRouteExtraction:
             source_offset=0,
             attributes={},
         )
-        
+
         _route_extraction(
             extraction=extraction,
             doc_id="doc-123",
@@ -176,15 +178,15 @@ class TestRouteExtraction:
             producer=mock_producer,
             tenant_id=str(uuid4()),
         )
-        
+
         mock_producer.send.assert_called()
         call_args = mock_producer.send.call_args
         assert call_args[0][0] == "nlp.needs_review"
 
     def test_includes_tenant_id_in_message(self, mock_producer):
         """Verify tenant_id is included in routed message."""
-        from services.nlp.app.consumer import _route_extraction, ExtractionPayload
-        
+        from services.nlp.app.consumer import ExtractionPayload, _route_extraction
+
         tenant_id = str(uuid4())
         extraction = ExtractionPayload(
             subject="entities",
@@ -195,7 +197,7 @@ class TestRouteExtraction:
             source_offset=0,
             attributes={},
         )
-        
+
         _route_extraction(
             extraction=extraction,
             doc_id="doc-123",
@@ -204,7 +206,7 @@ class TestRouteExtraction:
             producer=mock_producer,
             tenant_id=tenant_id,
         )
-        
+
         mock_producer.send.assert_called()
 
 
@@ -213,14 +215,14 @@ class TestStopConsumer:
 
     def test_stop_sets_shutdown_event(self):
         """Verify stop_consumer sets the shutdown event."""
-        from services.nlp.app.consumer import stop_consumer, _shutdown_event
-        
+        from services.nlp.app.consumer import _shutdown_event, stop_consumer
+
         # Reset the event first
         _shutdown_event.clear()
         assert not _shutdown_event.is_set()
-        
+
         stop_consumer()
-        
+
         assert _shutdown_event.is_set()
 
 
@@ -230,14 +232,14 @@ class TestEnsureTopic:
     def test_ensure_topic_creates_if_missing(self):
         """Verify _ensure_topic attempts to create topic."""
         from services.nlp.app.consumer import _ensure_topic
-        
+
         with patch("services.nlp.app.consumer.KafkaAdminClient") as mock_admin:
             mock_instance = MagicMock()
             mock_admin.return_value = mock_instance
             mock_instance.list_topics.return_value.topics = {}
-            
+
             _ensure_topic("test.topic")
-            
+
             # Should have been called
             mock_admin.assert_called()
 
@@ -248,7 +250,7 @@ class TestConfidenceThreshold:
     def test_threshold_is_reasonable(self):
         """Verify confidence threshold is between 0 and 1."""
         from services.nlp.app.consumer import CONFIDENCE_THRESHOLD
-        
+
         assert 0.0 < CONFIDENCE_THRESHOLD < 1.0
         assert CONFIDENCE_THRESHOLD == 0.95  # Default from settings.extraction_confidence_high
 

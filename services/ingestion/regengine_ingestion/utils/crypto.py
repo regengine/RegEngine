@@ -7,10 +7,10 @@ from typing import Tuple
 def hash_content(content: bytes) -> Tuple[str, str]:
     """
     Compute SHA-256 and SHA-512 hashes of content.
-    
+
     Args:
         content: Raw bytes to hash
-        
+
     Returns:
         Tuple of (sha256_hex, sha512_hex)
     """
@@ -22,10 +22,10 @@ def hash_content(content: bytes) -> Tuple[str, str]:
 def hash_text(text: str) -> Tuple[str, str]:
     """
     Compute SHA-256 and SHA-512 hashes of text.
-    
+
     Args:
         text: Text string to hash
-        
+
     Returns:
         Tuple of (sha256_hex, sha512_hex)
     """
@@ -36,11 +36,11 @@ def hash_text(text: str) -> Tuple[str, str]:
 def verify_hash(content: bytes, expected_sha256: str) -> bool:
     """
     Verify content matches expected SHA-256 hash.
-    
+
     Args:
         content: Content to verify
         expected_sha256: Expected SHA-256 hex digest
-        
+
     Returns:
         True if hash matches, False otherwise
     """
@@ -65,6 +65,7 @@ def generate_document_id(content_sha256: str, prefix_length: int = 64) -> str:
     """
     if prefix_length < 64:
         import warnings
+
         warnings.warn(
             f"generate_document_id prefix_length={prefix_length} is deprecated; "
             "use full 64-char digest for collision safety",

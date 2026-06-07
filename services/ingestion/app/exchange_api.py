@@ -20,11 +20,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
 from .shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
-from shared.database import get_db_safe
 
 logger = logging.getLogger("b2b-exchange")
 
@@ -50,6 +50,7 @@ class ExchangeSendRequest(BaseModel):
 
 def _is_production() -> bool:
     from shared.env import is_production
+
     return is_production()
 
 
@@ -58,7 +59,6 @@ def _allow_in_memory_fallback() -> bool:
     if explicit is not None:
         return explicit.lower() in {"1", "true", "yes"}
     return not _is_production()
-
 
 
 # Tenant resolution is now imported from app.shared.tenant_resolution
@@ -155,7 +155,7 @@ def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSen
                     '{{}}'::jsonb
                 ) AS kdes
             FROM fsma.cte_events e
-            WHERE {' AND '.join(where)}
+            WHERE {" AND ".join(where)}
             ORDER BY e.event_timestamp ASC
             LIMIT :limit
             """
@@ -251,9 +251,7 @@ def _build_package(
         "records": records,
     }
 
-    package_hash = sha256(
-        json.dumps(package, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    package_hash = sha256(json.dumps(package, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     package["package_hash"] = package_hash
 
     return package_id, package_hash, package
@@ -457,9 +455,7 @@ def _load_packages_fallback(
     include_payload: bool,
     mark_received: bool,
 ) -> list[dict[str, Any]]:
-    all_items = [
-        item for item in _exchange_store.values() if item["receiver_tenant_id"] == receiver_tenant_id
-    ]
+    all_items = [item for item in _exchange_store.values() if item["receiver_tenant_id"] == receiver_tenant_id]
     all_items.sort(key=lambda item: item.get("created_at", ""), reverse=True)
 
     if package_id:
@@ -546,13 +542,7 @@ async def send_exchange_package(
                 }
             )
 
-        lot_codes = sorted(
-            {
-                code
-                for code in ([request.traceability_lot_code] + list(request.lot_codes))
-                if code
-            }
-        )
+        lot_codes = sorted({code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code})
         package = {
             "package_id": package_id,
             "package_version": "1.0",
@@ -568,9 +558,7 @@ async def send_exchange_package(
             },
             "records": records,
         }
-        package_hash = sha256(
-            json.dumps(package, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
+        package_hash = sha256(json.dumps(package, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         package["package_hash"] = package_hash
         _store_package_fallback(package)
 

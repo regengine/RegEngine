@@ -9,13 +9,9 @@ from typing import Any, Optional
 import stripe
 import structlog
 from fastapi import HTTPException, Request
-
 from shared import funnel_events as _funnel_mod
 
-from . import customers as _customers_mod
-from . import helpers as _helpers_mod
-from . import plans as _plans_mod
-from . import state as _state_mod
+from . import customers as _customers_mod, helpers as _helpers_mod, plans as _plans_mod, state as _state_mod
 
 logger = structlog.get_logger("stripe-billing")
 
@@ -316,9 +312,7 @@ def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
     """
     subscription_id = subscription.get("id")
     customer_id = subscription.get("customer")
-    trial_end = _helpers_mod._format_period_end(
-        _helpers_mod._coerce_int(subscription.get("trial_end"))
-    )
+    trial_end = _helpers_mod._format_period_end(_helpers_mod._coerce_int(subscription.get("trial_end")))
 
     tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
     if not tenant_id:
@@ -334,9 +328,7 @@ def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
         {
             "trial_end": trial_end or "",
             "trial_will_end_notified_at": datetime.now(timezone.utc).isoformat(),
-            "status": (
-                str(subscription.get("status") or existing.get("status") or "trialing")
-            ),
+            "status": (str(subscription.get("status") or existing.get("status") or "trialing")),
             "subscription_id": str(subscription_id or existing.get("subscription_id", "")),
             "customer_id": str(customer_id or existing.get("customer_id", "")),
         }
@@ -388,16 +380,12 @@ def _handle_dispute_created(dispute: dict[str, Any]) -> None:
         {
             "last_dispute_id": dispute_id,
             "last_dispute_charge_id": charge_id,
-            "last_dispute_amount_cents": str(
-                _helpers_mod._coerce_int(dispute.get("amount"))
-            ),
+            "last_dispute_amount_cents": str(_helpers_mod._coerce_int(dispute.get("amount"))),
             "last_dispute_currency": str(dispute.get("currency", "") or ""),
             "last_dispute_reason": str(dispute.get("reason", "") or ""),
             "last_dispute_status": str(dispute.get("status", "") or ""),
             "last_dispute_opened_at": (
-                _helpers_mod._format_period_end(
-                    _helpers_mod._coerce_int(dispute.get("created"))
-                )
+                _helpers_mod._format_period_end(_helpers_mod._coerce_int(dispute.get("created")))
                 or datetime.now(timezone.utc).isoformat()
             ),
         }
@@ -490,7 +478,9 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             customer_id=data_object.get("customer"),
             status="past_due",
             last_invoice_id=str(data_object.get("id", "") or ""),
-            last_payment_failure_at=_helpers_mod._format_period_end(_helpers_mod._coerce_int(data_object.get("created"))),
+            last_payment_failure_at=_helpers_mod._format_period_end(
+                _helpers_mod._coerce_int(data_object.get("created"))
+            ),
             event_created=event_created,
         )
         return
@@ -543,7 +533,9 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             except (ValueError, TypeError):
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
-                existing["current_period_end"] = _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
+                existing["current_period_end"] = (
+                    _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
+                )
                 _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 

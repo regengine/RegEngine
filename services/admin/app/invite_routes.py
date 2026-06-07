@@ -1,4 +1,3 @@
-
 import hashlib
 import html
 import json
@@ -10,24 +9,23 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
 import structlog
-from shared.pii import mask_email
-from shared.permissions import can_invite_role
-from shared.rate_limit import limiter
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session
-from sqlalchemy import func, select
-
 from shared.pagination import PaginationParams
+from shared.permissions import can_invite_role
+from shared.pii import mask_email
+from shared.rate_limit import limiter
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from .database import get_session
-from .sqlalchemy_models import InviteModel, RoleModel, UserModel, MembershipModel
-from .dependencies import get_current_user, PermissionChecker
 from .audit import AuditLogger
 from .auth_utils import get_password_hash
+from .database import get_session
+from .dependencies import PermissionChecker, get_current_user
 from .models import TenantContext
-from .password_policy import validate_password, PasswordPolicyError
+from .password_policy import PasswordPolicyError, validate_password
+from .sqlalchemy_models import InviteModel, MembershipModel, RoleModel, UserModel
 from .supplier_graph_sync import supplier_graph_sync
 
 router = APIRouter()
@@ -144,16 +142,17 @@ def _send_invite_email(recipient_email: str, invite_link: str) -> None:
     except Exception as exc:  # pragma: no cover - external SDK/network behavior
         logger.warning("invite_email_send_failed", email=mask_email(recipient_email), error=str(exc))
 
+
 # DTOs
 class InviteCreate(BaseModel):
     email: str
     role_id: UUID
 
-    @field_validator('email')
+    @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
         if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", v):
-            raise ValueError('Invalid email format')
+            raise ValueError("Invalid email format")
         return v
 
 
@@ -166,29 +165,34 @@ class InviteResponse(BaseModel):
     expires_at: datetime
     invite_link: str  # For dev/demo convenience
 
+
 class AcceptInviteRequest(BaseModel):
     token: str
     password: str
     name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check.
-               # Note: UserModel has no 'name' col in the viewed file (step 2800), only email/password_hash/mfa/sysadmin/status.
-               # So I will ignore name for now or assume it's metadata.
+    # Note: UserModel has no 'name' col in the viewed file (step 2800), only email/password_hash/mfa/sysadmin/status.
+    # So I will ignore name for now or assume it's metadata.
+
 
 class RevokeInviteResponse(BaseModel):
     """Response for revoking an invite."""
+
     status: str
+
 
 class AcceptInviteResponse(BaseModel):
     """Response for accepting an invite."""
+
     status: str
     user_id: str
 
+
 # --- Admin Endpoints ---
+
 
 @router.post("/admin/invites", response_model=InviteResponse, dependencies=[Depends(PermissionChecker("users.invite"))])
 async def create_invite(
-    invite_data: InviteCreate,
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    invite_data: InviteCreate, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
@@ -198,12 +202,9 @@ async def create_invite(
     existing_member = db.execute(
         select(MembershipModel)
         .join(UserModel)
-        .where(
-            MembershipModel.tenant_id == tenant_id,
-            UserModel.email == invite_data.email
-        )
+        .where(MembershipModel.tenant_id == tenant_id, UserModel.email == invite_data.email)
     ).scalar_one_or_none()
-    
+
     if existing_member:
         raise HTTPException(status_code=409, detail="User already a member of this tenant")
 
@@ -214,7 +215,7 @@ async def create_invite(
             InviteModel.email == invite_data.email,
             InviteModel.revoked_at.is_(None),
             InviteModel.accepted_at.is_(None),
-            InviteModel.expires_at > datetime.now(timezone.utc)
+            InviteModel.expires_at > datetime.now(timezone.utc),
         )
     ).scalar_one_or_none()
 
@@ -225,7 +226,7 @@ async def create_invite(
     # Verify role exists and is valid for tenant
     role = db.get(RoleModel, invite_data.role_id)
     if not role or (role.tenant_id and role.tenant_id != tenant_id):
-         raise HTTPException(status_code=400, detail="Invalid role")
+        raise HTTPException(status_code=400, detail="Invalid role")
 
     # #1387 — privilege-escalation guard. Holder of users.invite can create an
     # invite, but they can NOT assign a role of higher rank than their own.
@@ -276,11 +277,11 @@ async def create_invite(
         role_id=invite_data.role_id,
         token_hash=token_hash,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
-        created_by=current_user.id
+        created_by=current_user.id,
     )
     db.add(new_invite)
     db.flush()  # Ensure ID is generated
-    
+
     # Audit Log
     AuditLogger.log_event(
         db,
@@ -291,9 +292,9 @@ async def create_invite(
         resource_type="invite",
         resource_id=str(new_invite.id),
         actor_id=current_user.id,
-        metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)}
+        metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)},
     )
-    
+
     db.commit()
     db.refresh(new_invite)
 
@@ -316,8 +317,9 @@ async def create_invite(
         status="pending",
         created_at=new_invite.created_at,
         expires_at=new_invite.expires_at,
-        invite_link=invite_link
+        invite_link=invite_link,
     )
+
 
 @router.get("/admin/invites", response_model=dict[str, Any], dependencies=[Depends(PermissionChecker("users.read"))])
 async def list_invites(
@@ -336,48 +338,55 @@ async def list_invites(
     ]
 
     # Count total
-    total = db.execute(
-        select(func.count()).select_from(InviteModel).where(*base_filter)
-    ).scalar()
+    total = db.execute(select(func.count()).select_from(InviteModel).where(*base_filter)).scalar()
 
-    stmt = select(InviteModel).where(
-        *base_filter
-    ).order_by(InviteModel.created_at.desc()).offset(pagination.skip).limit(pagination.limit)
+    stmt = (
+        select(InviteModel)
+        .where(*base_filter)
+        .order_by(InviteModel.created_at.desc())
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+    )
 
     invites = db.execute(stmt).scalars().all()
 
     # Simple serialization
     results = []
     for inv in invites:
-        results.append({
-            "id": inv.id,
-            "email": inv.email,
-            "role_id": inv.role_id,
-            "status": "pending",
-            "created_at": inv.created_at,
-            "expires_at": inv.expires_at
-        })
+        results.append(
+            {
+                "id": inv.id,
+                "email": inv.email,
+                "role_id": inv.role_id,
+                "status": "pending",
+                "created_at": inv.created_at,
+                "expires_at": inv.expires_at,
+            }
+        )
     return {"items": results, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
-@router.post("/admin/invites/{invite_id}/revoke", response_model=RevokeInviteResponse, dependencies=[Depends(PermissionChecker("users.invite"))])
+
+@router.post(
+    "/admin/invites/{invite_id}/revoke",
+    response_model=RevokeInviteResponse,
+    dependencies=[Depends(PermissionChecker("users.invite"))],
+)
 async def revoke_invite(
-    invite_id: UUID,
-    current_user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_session)
+    invite_id: UUID, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
+
     invite = db.get(InviteModel, invite_id)
     if not invite or invite.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Invite not found")
-        
+
     if invite.accepted_at or invite.revoked_at:
         raise HTTPException(status_code=400, detail="Invite already processed")
-        
+
     invite.revoked_at = datetime.now(timezone.utc)
-    
+
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
@@ -387,13 +396,15 @@ async def revoke_invite(
         resource_type="invite",
         resource_id=str(invite.id),
         actor_id=current_user.id,
-        metadata={"revoked_by": str(current_user.id)}
+        metadata={"revoked_by": str(current_user.id)},
     )
-    
+
     db.commit()
     return {"status": "revoked"}
 
+
 # --- Public Endpoint ---
+
 
 class AcceptInviteExistingUserRequest(BaseModel):
     """Acceptance payload used when the invited email matches an existing user.
@@ -402,6 +413,7 @@ class AcceptInviteExistingUserRequest(BaseModel):
     before the new membership is granted (#1337 Path B). No password-set is
     performed in this branch — the existing account is unchanged.
     """
+
     token: str
     current_password: str
 
@@ -434,9 +446,7 @@ async def accept_invite(
     # Verify Token (hashed lookup; tokens stay opaque at rest).
     token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
 
-    invite = db.execute(
-        select(InviteModel).where(InviteModel.token_hash == token_hash)
-    ).scalar_one_or_none()
+    invite = db.execute(select(InviteModel).where(InviteModel.token_hash == token_hash)).scalar_one_or_none()
 
     # Uniform 400 for all not-usable cases (#1337).
     if not invite:
@@ -480,7 +490,7 @@ async def accept_invite(
         # Path A — create new user with invite-supplied password.
         # Enforce password policy FIRST so we don't flush half-constructed rows.
         try:
-            validate_password(payload.password, user_context={'email': invite.email})
+            validate_password(payload.password, user_context={"email": invite.email})
         except PasswordPolicyError as e:
             raise HTTPException(status_code=400, detail=e.message)
 
@@ -495,10 +505,7 @@ async def accept_invite(
 
     # Check membership (idempotency + defense-in-depth).
     existing_membership = db.execute(
-        select(MembershipModel).where(
-            MembershipModel.user_id == user.id,
-            MembershipModel.tenant_id == invite.tenant_id
-        )
+        select(MembershipModel).where(MembershipModel.user_id == user.id, MembershipModel.tenant_id == invite.tenant_id)
     ).scalar_one_or_none()
 
     if existing_membership:
@@ -512,7 +519,7 @@ async def accept_invite(
         user_id=user.id,
         tenant_id=invite.tenant_id,
         role_id=invite.role_id,
-        created_by=None  # Self-accepted via system
+        created_by=None,  # Self-accepted via system
     )
     db.add(membership)
 
@@ -529,7 +536,7 @@ async def accept_invite(
         resource_type="membership",
         resource_id=str(user.id),
         actor_id=user.id,
-        metadata={"role_id": str(invite.role_id)}
+        metadata={"role_id": str(invite.role_id)},
     )
 
     db.commit()

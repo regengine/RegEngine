@@ -1,4 +1,5 @@
 """Tests for Stripe webhook rate limiting -- #1198."""
+
 from __future__ import annotations
 
 import sys
@@ -12,9 +13,8 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from fastapi import HTTPException
-
 import app.stripe_billing.rate_limiting as rl
+from fastapi import HTTPException
 
 
 def _make_request(ip: str = "1.2.3.4") -> MagicMock:
@@ -33,7 +33,7 @@ def _make_request(ip: str = "1.2.3.4") -> MagicMock:
 def test_rate_limit_allows_requests_under_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
     """Requests below the limit should pass without raising."""
     monkeypatch.setattr(rl, "_redis_failed", True)  # force in-memory path
-    monkeypatch.setattr(rl, "_rate_buckets", {})     # fresh state
+    monkeypatch.setattr(rl, "_rate_buckets", {})  # fresh state
     req = _make_request("10.0.0.1")
 
     # Send 5 requests — well under the 100 RPM limit

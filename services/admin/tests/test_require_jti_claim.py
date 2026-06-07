@@ -12,6 +12,7 @@ state every token has one. The only way to produce a pre-jti token is
 to forge one (omitting the claim) or to have minted it before the
 jti-adding code landed. Both cases should fail auth now.
 """
+
 from __future__ import annotations
 
 import os
@@ -20,7 +21,6 @@ from datetime import timedelta
 
 import jwt as pyjwt
 import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────
 # _check_revoked — sync-path contract
@@ -103,7 +103,8 @@ def test_decode_rejects_forged_jti_free_token(monkeypatch):
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
 
     # Forge a token with no jti using the same signing key.
-    from services.admin.app.auth_utils import SECRET_KEY, ALGORITHM
+    from services.admin.app.auth_utils import ALGORITHM, SECRET_KEY
+
     forged = pyjwt.encode(
         {"sub": "u1", "exp": int((__import__("time").time())) + 3600},
         SECRET_KEY,
@@ -139,5 +140,7 @@ def test_create_access_token_always_embeds_jti():
 
     for _ in range(5):
         tok = create_access_token({"sub": str(uuid.uuid4())})
-        payload = pyjwt.decode(tok, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        payload = pyjwt.decode(
+            tok, options={"verify_signature": False}
+        )  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         assert payload.get("jti"), "every token must embed a jti (#1069)"

@@ -98,9 +98,7 @@ def build_recall_where_clause(
         params["product"] = f"%{product}%"
 
     if location:
-        conditions.append(
-            "(LOWER(e.location_name) LIKE LOWER(:loc) OR e.location_gln LIKE :loc_exact)"
-        )
+        conditions.append("(LOWER(e.location_name) LIKE LOWER(:loc) OR e.location_gln LIKE :loc_exact)")
         params["loc"] = f"%{location}%"
         params["loc_exact"] = f"%{location}%"
 
@@ -161,22 +159,24 @@ def rows_to_event_dicts(rows) -> list[dict]:
         if hasattr(ts, "isoformat"):
             ts = ts.isoformat()
         ingested = r[13]
-        events.append({
-            "id": str(r[0]),
-            "event_type": r[1],
-            "traceability_lot_code": r[2],
-            "product_description": r[3],
-            "quantity": r[4],
-            "unit_of_measure": r[5],
-            "event_timestamp": str(ts) if ts else "",
-            "location_gln": r[7],
-            "location_name": r[8],
-            "source": r[9],
-            "sha256_hash": r[10],
-            "chain_hash": r[11] or "",
-            "kdes": kdes,
-            "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
-        })
+        events.append(
+            {
+                "id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": r[4],
+                "unit_of_measure": r[5],
+                "event_timestamp": str(ts) if ts else "",
+                "location_gln": r[7],
+                "location_name": r[8],
+                "source": r[9],
+                "sha256_hash": r[10],
+                "chain_hash": r[11] or "",
+                "kdes": kdes,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
+            }
+        )
     return events
 
 
@@ -250,8 +250,7 @@ def log_recall_export(
                 "cnt": len(events),
                 "hash": export_hash,
                 "etype": "recall_package" if format == "package" else "recall",
-                "generated_by": user_id
-                or ("api_recall_package" if format == "package" else "api_recall"),
+                "generated_by": user_id or ("api_recall_package" if format == "package" else "api_recall"),
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
@@ -276,8 +275,7 @@ def log_recall_export(
         except Exception:
             pass
         raise AuditLogWriteError(
-            "FDA recall export audit log write failed; export aborted to "
-            "preserve FSMA 204 chain-of-custody."
+            "FDA recall export audit log write failed; export aborted to preserve FSMA 204 chain-of-custody."
         ) from exc
 
     # Structured audit trail line — captured by log shippers even when
@@ -411,24 +409,26 @@ def v2_rows_to_event_dicts(rows) -> list[dict]:
             except (json.JSONDecodeError, TypeError):
                 rule_results_raw = []
 
-        events.append({
-            "id": str(r[0]),
-            "event_type": r[1],
-            "traceability_lot_code": r[2],
-            "product_description": r[3],
-            "quantity": r[4],
-            "unit_of_measure": r[5],
-            "event_timestamp": str(ts) if ts else "",
-            "location_gln": r[7],
-            "location_name": r[8],
-            "source": r[9],
-            "sha256_hash": r[10],
-            "chain_hash": r[11] or "",
-            "kdes": kdes,
-            "provenance": provenance,
-            "rule_results": rule_results_raw,
-            "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
-        })
+        events.append(
+            {
+                "id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": r[4],
+                "unit_of_measure": r[5],
+                "event_timestamp": str(ts) if ts else "",
+                "location_gln": r[7],
+                "location_name": r[8],
+                "source": r[9],
+                "sha256_hash": r[10],
+                "chain_hash": r[11] or "",
+                "kdes": kdes,
+                "provenance": provenance,
+                "rule_results": rule_results_raw,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
+            }
+        )
     return events
 
 
@@ -466,8 +466,7 @@ def log_v2_export(
                 "cnt": len(events),
                 "hash": export_hash,
                 "etype": "v2_package" if format == "package" else "v2_spreadsheet",
-                "generated_by": user_id
-                or ("api_v2_package" if format == "package" else "api_v2"),
+                "generated_by": user_id or ("api_v2_package" if format == "package" else "api_v2"),
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
@@ -492,8 +491,7 @@ def log_v2_export(
         except Exception:
             pass
         raise AuditLogWriteError(
-            "FDA v2 export audit log write failed; export aborted to "
-            "preserve FSMA 204 chain-of-custody."
+            "FDA v2 export audit log write failed; export aborted to preserve FSMA 204 chain-of-custody."
         ) from exc
 
     logger.info(
@@ -529,9 +527,7 @@ def fetch_trace_graph_data(
 
     Returns a dict with nodes, edges, and summary stats.
     """
-    linked_tlcs = persistence._expand_tlcs_via_transformation_links(
-        tenant_id=tenant_id, seed_tlc=tlc, depth=depth
-    )
+    linked_tlcs = persistence._expand_tlcs_via_transformation_links(tenant_id=tenant_id, seed_tlc=tlc, depth=depth)
 
     # Fetch event counts per TLC in one query
     if linked_tlcs:
@@ -588,8 +584,10 @@ def fetch_trace_graph_data(
             "tlc": t,
             "is_seed": t == tlc,
             "role": (
-                "seed" if t == tlc
-                else "downstream" if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges)
+                "seed"
+                if t == tlc
+                else "downstream"
+                if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges)
                 else "upstream"
             ),
             **tlc_stats.get(t, {"event_count": 0, "first_event": None, "last_event": None}),

@@ -182,6 +182,7 @@ async def test_refresh_access_token_carries_sid_and_session_id():
 @pytest.mark.asyncio
 async def test_logout_revokes_current_jti_session_and_blocks_replay(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
     from services.admin.app.auth.sessions_router import logout
     from services.admin.app.auth_utils import create_access_token, hash_token
@@ -213,6 +214,7 @@ async def test_logout_revokes_current_jti_session_and_blocks_replay(monkeypatch)
 @pytest.mark.asyncio
 async def test_legacy_no_sid_logout_revokes_jti(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
     from services.admin.app.auth.sessions_router import logout
     from services.admin.app.auth_utils import create_access_token
@@ -237,6 +239,7 @@ async def test_legacy_no_sid_logout_revokes_jti(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_current_user_rejects_revoked_session_bound_token(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
     from services.admin.app.auth_utils import create_access_token
     from services.admin.app.session_store import InMemorySessionStore
@@ -256,6 +259,7 @@ async def test_get_current_user_rejects_revoked_session_bound_token(monkeypatch)
 @pytest.mark.asyncio
 async def test_get_current_user_returns_503_when_session_store_unavailable(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
     from services.admin.app.auth_utils import create_access_token
 
@@ -276,6 +280,7 @@ async def test_get_current_user_returns_503_when_session_store_unavailable(monke
 @pytest.mark.asyncio
 async def test_refresh_enforces_idle_timeout_and_revokes(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app.auth import refresh_router
     from services.admin.app.auth.refresh_router import RefreshRequest
 
@@ -305,6 +310,7 @@ async def test_refresh_enforces_idle_timeout_and_revokes(monkeypatch):
 @pytest.mark.asyncio
 async def test_refresh_absolute_timeout_still_wins(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app.auth import refresh_router
     from services.admin.app.auth.refresh_router import RefreshRequest
 
@@ -333,6 +339,7 @@ async def test_refresh_absolute_timeout_still_wins(monkeypatch):
 @pytest.mark.asyncio
 async def test_refresh_reuse_detection_still_revokes_family():
     from fastapi import HTTPException
+
     from services.admin.app.auth.refresh_router import RefreshRequest, refresh_session
 
     user_id = uuid.uuid4()
@@ -392,7 +399,9 @@ async def test_multiple_active_sessions_are_allowed(monkeypatch):
 
     active_sessions = await store.list_user_sessions(user.id, active_only=True)
     first_token = create_access_token({"sub": str(user.id), "sid": str(first.id), "session_id": str(first.id), "tv": 0})
-    second_token = create_access_token({"sub": str(user.id), "sid": str(second.id), "session_id": str(second.id), "tv": 0})
+    second_token = create_access_token(
+        {"sub": str(user.id), "sid": str(second.id), "session_id": str(second.id), "tv": 0}
+    )
 
     assert {s.id for s in active_sessions} == {first.id, second.id}
     assert await dependencies.get_current_user(token=first_token, db=db, session_store=store) == user

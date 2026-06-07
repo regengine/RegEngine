@@ -15,12 +15,13 @@ import pytest
 from services.shared.exception_queue import ExceptionQueueService
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 
 class _FakeResult:
-    def __init__(self, *, row: tuple[Any, ...] | None = None, rows: list[tuple[Any, ...]] | None = None, rowcount: int = 1):
+    def __init__(
+        self, *, row: tuple[Any, ...] | None = None, rows: list[tuple[Any, ...]] | None = None, rowcount: int = 1
+    ):
         self._row = row
         self._rows = rows or []
         self.rowcount = rowcount

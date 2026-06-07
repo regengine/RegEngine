@@ -18,9 +18,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import recall_report as rr
 from app.recall_report import (
     RecallDimension,
@@ -30,7 +27,8 @@ from app.recall_report import (
     _status,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Test fixtures / helpers
@@ -41,7 +39,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app)
     return app
@@ -58,6 +58,7 @@ class _ScoringSession:
     Pass a dict of {sql_substring: scalar_value}. Optional `raise_on`
     maps substrings → exceptions to simulate mid-query failures.
     """
+
     def __init__(self, route=None, raise_on=None):
         self.route = route or {}
         self.raise_on = raise_on or {}
@@ -114,24 +115,44 @@ def _full_route(
 
 
 class TestGradeHelper:
-    @pytest.mark.parametrize("score,expected", [
-        (100, "A"), (95, "A"), (90, "A"),
-        (89, "B"), (85, "B"), (80, "B"),
-        (79, "C"), (75, "C"), (70, "C"),
-        (69, "D"), (65, "D"), (60, "D"),
-        (59, "F"), (30, "F"), (0, "F"),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected",
+        [
+            (100, "A"),
+            (95, "A"),
+            (90, "A"),
+            (89, "B"),
+            (85, "B"),
+            (80, "B"),
+            (79, "C"),
+            (75, "C"),
+            (70, "C"),
+            (69, "D"),
+            (65, "D"),
+            (60, "D"),
+            (59, "F"),
+            (30, "F"),
+            (0, "F"),
+        ],
+    )
     def test_grade_threshold(self, score, expected):
         assert _grade(score) == expected
 
 
 class TestStatusHelper:
-    @pytest.mark.parametrize("score,expected", [
-        (100, "excellent"), (90, "excellent"),
-        (89, "good"), (80, "good"),
-        (79, "needs_improvement"), (70, "needs_improvement"),
-        (69, "critical"), (0, "critical"),
-    ])
+    @pytest.mark.parametrize(
+        "score,expected",
+        [
+            (100, "excellent"),
+            (90, "excellent"),
+            (89, "good"),
+            (80, "good"),
+            (79, "needs_improvement"),
+            (70, "needs_improvement"),
+            (69, "critical"),
+            (0, "critical"),
+        ],
+    )
     def test_status_threshold(self, score, expected):
         assert _status(score) == expected
 
@@ -144,18 +165,29 @@ class TestStatusHelper:
 class TestPydanticModels:
     def test_recall_dimension_defaults(self):
         d = RecallDimension(
-            id="x", name="X", score=80, grade="B", status="good",
-            findings=[], recommendations=[],
+            id="x",
+            name="X",
+            score=80,
+            grade="B",
+            status="good",
+            findings=[],
+            recommendations=[],
         )
         assert d.max_score == 100
 
     def test_recall_report_demo_defaults(self):
         r = RecallReport(
-            tenant_id="t", generated_at="now", report_title="r",
-            overall_score=80, overall_grade="B", overall_status="good",
+            tenant_id="t",
+            generated_at="now",
+            report_title="r",
+            overall_score=80,
+            overall_grade="B",
+            overall_status="good",
             time_to_respond_estimate="1h",
-            dimensions=[], executive_summary="s",
-            action_items=[], regulatory_citations=[],
+            dimensions=[],
+            executive_summary="s",
+            action_items=[],
+            regulatory_citations=[],
         )
         assert r.demo_mode is False
         assert r.demo_disclaimer is None
@@ -170,6 +202,7 @@ class TestQueryScoringData:
     def test_happy_path_with_gaps(self, monkeypatch):
         sess = _ScoringSession(route=_full_route(chain_length=50, max_seq=55))
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         data = _query_scoring_data("t1")
@@ -187,6 +220,7 @@ class TestQueryScoringData:
         """max_seq <= chain_length → gap_count clamps to 0 via max(0, ...)."""
         sess = _ScoringSession(route=_full_route(chain_length=50, max_seq=50))
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         data = _query_scoring_data("t1")
@@ -195,6 +229,7 @@ class TestQueryScoringData:
     def test_has_export_false_when_count_zero(self, monkeypatch):
         sess = _ScoringSession(route=_full_route(has_export=0))
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         data = _query_scoring_data("t1")
@@ -210,6 +245,7 @@ class TestQueryScoringData:
             raise_on={"MAX(sequence_num)": RuntimeError("should not be called")},
         )
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         data = _query_scoring_data("t1")
@@ -221,6 +257,7 @@ class TestQueryScoringData:
         # Empty route means every scalar() returns None
         sess = _ScoringSession(route={})
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         data = _query_scoring_data("t1")
@@ -245,6 +282,7 @@ class TestQueryScoringData:
             raise_on={"COUNT(*) FROM fsma.cte_events": ValueError("boom")},
         )
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
         assert _query_scoring_data("t1") is None
@@ -434,15 +472,19 @@ class TestGenerateReportRealMode:
             cte_count=0,  # Would trigger demo — override
         )
         # Force not-demo by pretending cte_count>0 via the scoring dict
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: {
-            "cte_count": 1,  # non-zero to stay in real mode
-            "tlc_count": 0,
-            "cte_types": 0,
-            "has_export": False,
-            "supplier_count": 0,
-            "chain_length": 0,
-            "chain_gap_count": 0,
-        })
+        monkeypatch.setattr(
+            rr,
+            "_query_scoring_data",
+            lambda tid: {
+                "cte_count": 1,  # non-zero to stay in real mode
+                "tlc_count": 0,
+                "cte_types": 0,
+                "has_export": False,
+                "supplier_count": 0,
+                "chain_length": 0,
+                "chain_gap_count": 0,
+            },
+        )
 
         r = client.get("/api/v1/recall/lonely/report")
         body = r.json()
@@ -467,8 +509,7 @@ class TestReportShape:
 
         # Executive summary mentions tenant id + score
         assert "abc" in body["executive_summary"]
-        assert "21 CFR 1.1455" in body["executive_summary"] or \
-               "21 CFR 1.1455" in " ".join(body["regulatory_citations"])
+        assert "21 CFR 1.1455" in body["executive_summary"] or "21 CFR 1.1455" in " ".join(body["regulatory_citations"])
         # Regulatory citations fully populated
         assert len(body["regulatory_citations"]) == 4
         # Action items populated

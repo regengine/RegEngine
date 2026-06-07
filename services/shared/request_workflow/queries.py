@@ -26,11 +26,7 @@ class QueryMixin:
         Returns cases ordered by urgency (closest deadline first).
         Each case includes hours_remaining and is_overdue fields.
         """
-        status_filter = (
-            "1=1"
-            if include_submitted
-            else "package_status NOT IN ('submitted', 'amended')"
-        )
+        status_filter = "1=1" if include_submitted else "package_status NOT IN ('submitted', 'amended')"
 
         result = self.db.execute(
             text(f"""

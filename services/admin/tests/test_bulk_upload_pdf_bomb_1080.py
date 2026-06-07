@@ -17,14 +17,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-
 from app.bulk_upload import parsers
 from app.bulk_upload.parsers import (
     DEFAULT_MAX_PDF_PAGES,
     _max_pdf_pages,
     _parse_pdf_bytes,
 )
+from fastapi import HTTPException
 
 
 class _FakePdf:
@@ -40,12 +39,8 @@ class _FakePdf:
         # If anything *does* try to iterate, fail loudly so the test
         # surfaces the regression instead of silently hanging.
         for page in self.pages:
-            page.extract_tables.side_effect = AssertionError(
-                "page.extract_tables called despite page-count guard"
-            )
-            page.extract_text.side_effect = AssertionError(
-                "page.extract_text called despite page-count guard"
-            )
+            page.extract_tables.side_effect = AssertionError("page.extract_tables called despite page-count guard")
+            page.extract_text.side_effect = AssertionError("page.extract_text called despite page-count guard")
 
     def __enter__(self) -> "_FakePdf":
         return self
@@ -89,9 +84,7 @@ def test_parse_pdf_bytes_accepts_under_cap_no_page_iteration_error():
     returns no tables and no text, so the parser should fall through to the
     "no structured rows detected" warning rather than raising.
     """
-    under_cap_module = SimpleNamespace(
-        open=lambda _buf: _UnderCapFakePdf(DEFAULT_MAX_PDF_PAGES)
-    )
+    under_cap_module = SimpleNamespace(open=lambda _buf: _UnderCapFakePdf(DEFAULT_MAX_PDF_PAGES))
 
     parsed: dict = {
         "detected_format": "pdf",

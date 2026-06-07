@@ -17,6 +17,7 @@ Pins the remaining uncovered branches after test_mfa_verification.py:
 
 No production code is modified.
 """
+
 from __future__ import annotations
 
 import os
@@ -66,7 +67,6 @@ else:  # pragma: no cover - real pyotp present locally
 
 
 from services.admin.app import mfa as mfa_module  # noqa: E402
-
 
 # ==============================================================
 # Fernet / encryption primitives (#1376)
@@ -253,9 +253,7 @@ class TestGenerateAndProvision:
         assert "JBSWY3DPEHPK3PXP" in uri
 
     def test_create_provisioning_uri_default_issuer(self):
-        uri = mfa_module.create_provisioning_uri(
-            secret="JBSWY3DPEHPK3PXP", email="bob@example.com"
-        )
+        uri = mfa_module.create_provisioning_uri(secret="JBSWY3DPEHPK3PXP", email="bob@example.com")
         assert "RegEngine" in uri
 
 
@@ -369,9 +367,7 @@ class TestRequireMfaCurrentUserGuards:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            await mfa_module.require_mfa(
-                x_mfa_token="999111", current_user=None, db=MagicMock()
-            )
+            await mfa_module.require_mfa(x_mfa_token="999111", current_user=None, db=MagicMock())
         assert exc_info.value.status_code == 403
         assert "MFA not enrolled" in exc_info.value.detail
 
@@ -384,9 +380,7 @@ class TestRequireMfaDependencyFactory:
     """
 
     @pytest.mark.asyncio
-    async def test_factory_returns_callable_that_delegates_to_require_mfa(
-        self, monkeypatch
-    ):
+    async def test_factory_returns_callable_that_delegates_to_require_mfa(self, monkeypatch):
         """The returned coroutine delegates to require_mfa with kwargs intact."""
         dep = mfa_module.require_mfa_dependency()
         assert callable(dep)
@@ -433,17 +427,13 @@ class TestEnrollmentState:
 
     def test_create_enrollment_state_populates_fields(self):
         """Lines 482-501: all fields set, hashes match codes, times sensible."""
-        state = mfa_module.create_enrollment_state(
-            admin_id="admin-123", hours_until_expiry=2
-        )
+        state = mfa_module.create_enrollment_state(admin_id="admin-123", hours_until_expiry=2)
         assert state.admin_id == "admin-123"
         assert state.secret  # some base32 seed
         assert len(state.recovery_codes) == mfa_module.RECOVERY_CODE_COUNT
         assert len(state.recovery_codes_hashed) == mfa_module.RECOVERY_CODE_COUNT
         # Hashes should line up pairwise.
-        for code, code_hash in zip(
-            state.recovery_codes, state.recovery_codes_hashed
-        ):
+        for code, code_hash in zip(state.recovery_codes, state.recovery_codes_hashed):
             assert mfa_module.verify_recovery_code(code, code_hash)
         # Expiry should be roughly 2 hours after created_at.
         delta = state.expires_at - state.created_at
@@ -474,7 +464,6 @@ class TestEnrollmentState:
 
 
 class TestMfaImportErrorReRaise:
-
     def test_missing_pyotp_raises_import_error_with_hint(self):
         """Lines 24-25: if pyotp is absent from the environment, the
         module re-raises ImportError with an actionable install hint
@@ -499,6 +488,7 @@ class TestMfaImportErrorReRaise:
         sys.modules["pyotp"] = None  # type: ignore[assignment]
         try:
             import importlib.util
+
             spec = importlib.util.spec_from_file_location(
                 "_mfa_reimport_test",
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "mfa.py"),

@@ -9,16 +9,17 @@ import redis
 import stripe
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-
-from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
 from shared import funnel_events as _funnel_mod
 
-from . import customers as _customers_mod
-from . import rate_limiting as _rate_limiting_mod
-from . import helpers as _helpers_mod
-from . import plans as _plans_mod
-from . import state as _state_mod
-from . import webhooks as _webhooks_mod
+from ..authz import IngestionPrincipal, get_ingestion_principal, require_permission
+from . import (
+    customers as _customers_mod,
+    helpers as _helpers_mod,
+    plans as _plans_mod,
+    rate_limiting as _rate_limiting_mod,
+    state as _state_mod,
+    webhooks as _webhooks_mod,
+)
 from .helpers import (
     _coerce_int,
     _format_period_end,
@@ -166,12 +167,8 @@ async def create_checkout(
     # #1186: validate redirect URLs against the allowlist BEFORE handing
     # them to Stripe. An unvalidated ``success_url`` lets an attacker
     # chain Stripe-branded trust into an arbitrary-host redirect.
-    safe_success_url = _helpers_mod._validate_redirect_url(
-        request.success_url, field="success_url"
-    )
-    safe_cancel_url = _helpers_mod._validate_redirect_url(
-        request.cancel_url, field="cancel_url"
-    )
+    safe_success_url = _helpers_mod._validate_redirect_url(request.success_url, field="success_url")
+    safe_cancel_url = _helpers_mod._validate_redirect_url(request.cancel_url, field="cancel_url")
 
     checkout_kwargs: dict[str, Any] = {
         "mode": "subscription",
@@ -191,7 +188,9 @@ async def create_checkout(
         session = stripe.checkout.Session.create(**checkout_kwargs)
     except stripe.error.StripeError as exc:
         logger.error("checkout_create_failed", error=str(exc), plan=plan["id"])
-        raise HTTPException(status_code=502, detail=f"Stripe checkout creation failed: {exc.user_message or str(exc)}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Stripe checkout creation failed: {exc.user_message or str(exc)}"
+        ) from exc
 
     if authenticated_tenant_id:
         try:
@@ -374,14 +373,10 @@ async def create_portal_session_for_tenant(
     # default (still validated so misconfigured env vars fail loudly instead
     # of shipping a stray open redirect).
     if request.return_url:
-        return_url = _helpers_mod._validate_redirect_url(
-            request.return_url, field="return_url"
-        )
+        return_url = _helpers_mod._validate_redirect_url(request.return_url, field="return_url")
     else:
         server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
-        return_url = _helpers_mod._validate_redirect_url(
-            server_default, field="return_url"
-        )
+        return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:
         customer_id = _customers_mod._ensure_customer_mapping(
@@ -495,9 +490,7 @@ async def list_invoices(
     "/invoices/{invoice_id}/pdf",
     response_model=InvoicePdfResponse,
     summary="Get Stripe invoice PDF URL",
-    description=(
-        "Fetches a Stripe invoice by ID and returns the hosted invoice PDF URL for the tenant."
-    ),
+    description=("Fetches a Stripe invoice by ID and returns the hosted invoice PDF URL for the tenant."),
 )
 async def get_invoice_pdf(
     invoice_id: str,
@@ -575,9 +568,7 @@ async def create_portal_session_legacy(
     safe_principal = principal if isinstance(principal, IngestionPrincipal) else None
     safe_x_tenant_id = x_tenant_id if isinstance(x_tenant_id, str) else None
 
-    auth_tenant_id = _helpers_mod._resolve_tenant_context(
-        None, safe_x_tenant_id, safe_principal
-    )
+    auth_tenant_id = _helpers_mod._resolve_tenant_context(None, safe_x_tenant_id, safe_principal)
     if tenant_id != auth_tenant_id:
         logger.warning(
             "portal_legacy_tenant_mismatch",
@@ -594,9 +585,7 @@ async def create_portal_session_legacy(
     # run through the allowlist so a misconfigured STRIPE_PORTAL_RETURN_URL
     # fails at request time rather than silently redirecting.
     server_default = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
-    return_url = _helpers_mod._validate_redirect_url(
-        server_default, field="return_url"
-    )
+    return_url = _helpers_mod._validate_redirect_url(server_default, field="return_url")
 
     try:
         customer_id = _customers_mod._ensure_customer_mapping(
@@ -612,7 +601,9 @@ async def create_portal_session_legacy(
         session = _customers_mod._create_portal_session(customer_id=customer_id, return_url=return_url)
     except stripe.error.StripeError as exc:
         logger.error("portal_session_create_failed", tenant_id=tenant_id, error=str(exc))
-        raise HTTPException(status_code=502, detail=f"Stripe portal creation failed: {exc.user_message or str(exc)}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Stripe portal creation failed: {exc.user_message or str(exc)}"
+        ) from exc
 
     portal_url = str(_stripe_get(session, "url", "") or "")
     if not portal_url:

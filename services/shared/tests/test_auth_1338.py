@@ -41,7 +41,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Module loading
 # ---------------------------------------------------------------------------
@@ -58,9 +57,7 @@ if str(_services_dir) not in sys.path:
 if "shared.auth" in sys.modules:
     auth = sys.modules["shared.auth"]
 else:
-    _spec = importlib.util.spec_from_file_location(
-        "shared.auth", _shared_dir / "auth.py"
-    )
+    _spec = importlib.util.spec_from_file_location("shared.auth", _shared_dir / "auth.py")
     auth = importlib.util.module_from_spec(_spec)
     sys.modules["shared.auth"] = auth
     _spec.loader.exec_module(auth)
@@ -234,10 +231,12 @@ class TestRequireApiKeyPresharedHappyPath:
         monkeypatch.setenv("API_KEY", master)
         monkeypatch.setenv("REGENGINE_ENV", "production")
         request = _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID})
-        result = _run(require_api_key(
-            request,
-            master,
-        ))
+        result = _run(
+            require_api_key(
+                request,
+                master,
+            )
+        )
         assert isinstance(result, APIKey)
         assert result.key_id == "preshared-master"
         assert result.tenant_id == _VALID_TENANT_UUID
@@ -248,10 +247,12 @@ class TestRequireApiKeyPresharedHappyPath:
         master = "configured-via-regengine-api-key-env-var"
         monkeypatch.setenv("REGENGINE_API_KEY", master)
         monkeypatch.setenv("REGENGINE_ENV", "production")
-        result = _run(require_api_key(
-            _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID}),
-            master,
-        ))
+        result = _run(
+            require_api_key(
+                _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID}),
+                master,
+            )
+        )
         assert result.key_id == "preshared-master"
 
 
@@ -324,9 +325,7 @@ class TestRequireApiKeyDatabaseStoreBranch:
         rate_info = MagicMock()
         rate_info.allowed = False
 
-        instance = _make_db_store_stub(
-            validate_return=principal, rate_limit_return=rate_info
-        )
+        instance = _make_db_store_stub(validate_return=principal, rate_limit_return=rate_info)
         monkeypatch.setattr(auth, "_db_store_instance", instance)
         with pytest.raises(HTTPException) as exc:
             _run(require_api_key(_make_request(), "rge_db.secret"))
@@ -341,9 +340,7 @@ class TestRequireApiKeyDatabaseStoreBranch:
         rate_info = MagicMock()
         rate_info.allowed = True
 
-        instance = _make_db_store_stub(
-            validate_return=principal, rate_limit_return=rate_info
-        )
+        instance = _make_db_store_stub(validate_return=principal, rate_limit_return=rate_info)
         monkeypatch.setattr(auth, "_db_store_instance", instance)
         request = _make_request()
         result = _run(require_api_key(request, "rge_db.secret"))
@@ -430,7 +427,9 @@ class TestVerifyJurisdictionAccess:
     def test_none_allowed_jurisdictions_treated_as_empty(self):
         """Defensive: if allowed_jurisdictions is None at the model level."""
         key = APIKey(
-            key_id="k", key_hash="h", name="n",
+            key_id="k",
+            key_hash="h",
+            name="n",
             created_at=datetime.now(timezone.utc),
         )
         key.allowed_jurisdictions = None  # type: ignore[assignment]

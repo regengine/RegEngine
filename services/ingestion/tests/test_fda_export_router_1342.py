@@ -42,18 +42,17 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 from app.authz import IngestionPrincipal, get_ingestion_principal
+
 # Import the router.py module directly so monkeypatch can reach the
 # helper-function bindings (``build_v2_where_clause``, ``fetch_v2_events``
 # ...). ``from app.fda_export import router`` returns the APIRouter object
 # because __init__ re-exports it; importlib avoids that package attribute.
 router_module = importlib.import_module("app.fda_export.router")
 recall_module = importlib.import_module("app.fda_export.recall")
+import shared.cte_persistence as shared_cte_persistence
 from app.fda_export.router import router as fda_router
 from app.fda_export_service import _generate_csv
 from app.subscription_gate import require_active_subscription
-
-import shared.cte_persistence as shared_cte_persistence
-
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -327,9 +326,7 @@ class TestAuthorizePIIAccess:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -354,9 +351,7 @@ class TestEnforceKDECoverageGate:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             # Explicitly do NOT pass allow_incomplete; fully-populated
@@ -409,9 +404,7 @@ class TestExportFDASpreadsheetMissingBranches:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=_session_factory,
-            persistence_cls=lambda s: _FakePersistence(
-                s, log_export_raises=RuntimeError("db down")
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, log_export_raises=RuntimeError("db down")),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -499,9 +492,7 @@ class TestExportAllEvents:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -519,9 +510,7 @@ class TestExportAllEvents:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -537,9 +526,7 @@ class TestExportAllEvents:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -610,9 +597,7 @@ class TestExportAllEvents:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-001": [_SAMPLE_EVENT_1]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-001": [_SAMPLE_EVENT_1]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -656,9 +641,7 @@ class TestExportAllEvents:
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _HugePersistence(
-                s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}
-            ),
+            persistence_cls=lambda s: _HugePersistence(s, events_by_tlc={"TLC-2026-003": [_FULLY_POPULATED_EVENT]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -668,18 +651,14 @@ class TestExportAllEvents:
         assert resp.status_code == 200
         assert "x-truncated" in {k.lower() for k in resp.headers}
 
-    def test_kde_coverage_below_threshold_with_ack_emits_warning_header(
-        self, monkeypatch
-    ):
+    def test_kde_coverage_below_threshold_with_ack_emits_warning_header(self, monkeypatch):
         """allow_incomplete=true bypasses the 409 and the compliance-warning
         header is added when KDE coverage is below 0.80 (line 732)."""
         app = _build_app_with_principal(scopes=["fda.export"])
         _install_fake_dependencies(
             monkeypatch,
             session_factory=lambda: _FakeSession(),
-            persistence_cls=lambda s: _FakePersistence(
-                s, events_by_tlc={"TLC-2026-001": [_SAMPLE_EVENT_1]}
-            ),
+            persistence_cls=lambda s: _FakePersistence(s, events_by_tlc={"TLC-2026-001": [_SAMPLE_EVENT_1]}),
         )
         with TestClient(app) as client:
             resp = client.get(
@@ -693,18 +672,13 @@ class TestExportAllEvents:
         # KDE coverage < 0.80 triggers the compliance warning.
         assert float(resp.headers["x-kde-coverage"]) < 0.80
         assert "x-compliance-warning" in {k.lower() for k in resp.headers}
-        assert (
-            "KDE coverage below 80% threshold"
-            in resp.headers["x-compliance-warning"]
-        )
+        assert "KDE coverage below 80% threshold" in resp.headers["x-compliance-warning"]
 
     def test_batch_fetch_over_50_tlcs_hits_second_loop_pass(self, monkeypatch):
         """>50 distinct TLCs exercises the batch-iteration path."""
         many_tlcs = [f"TLC-{i:03d}" for i in range(55)]
         events_by_tlc = {
-            tlc: [dict(_FULLY_POPULATED_EVENT, id=f"evt-{tlc}",
-                       traceability_lot_code=tlc)]
-            for tlc in many_tlcs
+            tlc: [dict(_FULLY_POPULATED_EVENT, id=f"evt-{tlc}", traceability_lot_code=tlc)] for tlc in many_tlcs
         }
 
         class _ManyTLCs(_FakePersistence):
@@ -905,11 +879,7 @@ class TestExportRecallFiltered:
 
 class TestExportV2:
     def _make_v2_events(self, *, with_rules: bool = True) -> list[dict]:
-        rule_results = (
-            [{"rule_name": "romaine_temp", "passed": True, "why_failed": None}]
-            if with_rules
-            else []
-        )
+        rule_results = [{"rule_name": "romaine_temp", "passed": True, "why_failed": None}] if with_rules else []
         return [
             {
                 **_FULLY_POPULATED_EVENT,

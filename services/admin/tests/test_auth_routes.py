@@ -3,6 +3,7 @@
 Covers the seven critical paths with FastAPI TestClient + mocked Supabase
 and Redis so no live infrastructure is required.
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,6 +25,7 @@ for _p in (_repo_root, _service_dir):
 
 # Stub out heavy env-required imports before anything else loads.
 import os
+
 os.environ.setdefault("ADMIN_DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -36,6 +38,7 @@ pytest.importorskip("httpx")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_user(
     *,
@@ -78,6 +81,7 @@ def _make_session_data(user_id):
     sd.user_id = user_id
     sd.is_revoked = False
     from datetime import datetime, timedelta, timezone
+
     sd.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
     return sd
 
@@ -85,6 +89,7 @@ def _make_session_data(user_id):
 # ---------------------------------------------------------------------------
 # Shared mock-store fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_session_store():
@@ -102,10 +107,12 @@ def mock_session_store():
     )
     mock_pipe.incr = MagicMock()
     mock_pipe.expire = MagicMock()
-    redis_client.pipeline = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_pipe),
-        __aexit__=AsyncMock(return_value=False),
-    ))
+    redis_client.pipeline = MagicMock(
+        return_value=AsyncMock(
+            __aenter__=AsyncMock(return_value=mock_pipe),
+            __aexit__=AsyncMock(return_value=False),
+        )
+    )
     store._get_client = AsyncMock(return_value=redis_client)
     store.create_session = AsyncMock(return_value=None)
     store.claim_session_by_token = AsyncMock()
@@ -123,6 +130,7 @@ def mock_session_store():
 # ---------------------------------------------------------------------------
 # Test: 1 — Happy-path login
 # ---------------------------------------------------------------------------
+
 
 class TestLoginHappyPath:
     def test_login_returns_tokens(self, mock_session_store):
@@ -146,8 +154,9 @@ class TestLoginHappyPath:
             patch("services.admin.app.auth.login_router.verify_login", return_value=True),
             patch("services.admin.app.auth.login_router.AuditLogger.log_event", return_value=None),
         ):
-            from services.admin.app.auth.login_router import login
             import asyncio
+
+            from services.admin.app.auth.login_router import login
 
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -160,6 +169,7 @@ class TestLoginHappyPath:
 
             # Patch DB execute to return different things on successive calls
             call_count = [0]
+
             def side_effect(stmt):
                 r = MagicMock()
                 if call_count[0] == 0:
@@ -170,6 +180,7 @@ class TestLoginHappyPath:
                     r.all.return_value = [(mem, tenant, role)]
                 call_count[0] += 1
                 return r
+
             db_session.execute.side_effect = side_effect
 
             result = asyncio.get_event_loop().run_until_complete(
@@ -188,6 +199,7 @@ class TestLoginHappyPath:
 # Test: 2 — Login with bad credentials → 401
 # ---------------------------------------------------------------------------
 
+
 class TestLoginBadCredentials:
     def test_wrong_password_returns_401(self, mock_session_store):
         from fastapi import HTTPException
@@ -199,8 +211,9 @@ class TestLoginBadCredentials:
         with (
             patch("services.admin.app.auth.login_router.verify_login", return_value=False),
         ):
-            from services.admin.app.auth.login_router import login
             import asyncio
+
+            from services.admin.app.auth.login_router import login
 
             req = MagicMock()
             req.headers = {"User-Agent": "pytest"}
@@ -222,11 +235,13 @@ class TestLoginBadCredentials:
 # Test: 3 — Signup with existing email → 409
 # ---------------------------------------------------------------------------
 
+
 class TestSignupExistingEmail:
     def test_existing_email_returns_200_generic(self, mock_session_store):
         """Existing email returns 200 generic response (email enumeration guard).
         Uses __wrapped__ to bypass the SlowAPI rate-limit decorator."""
         import asyncio
+
         import services.admin.app.auth_routes as ar
 
         existing_user = _make_user()
@@ -260,14 +275,17 @@ class TestSignupExistingEmail:
 # Supabase account.
 # ---------------------------------------------------------------------------
 
+
 class TestSignupDbFlushBeforeSupabase:
     def test_integrity_error_on_flush_returns_409_no_supabase_call(self, mock_session_store):
         """When db.flush() raises IntegrityError the route must return 409 and
         must NOT call supabase create_user.  Uses __wrapped__ to bypass the
         SlowAPI rate-limit decorator (same pattern as test_auth_cluster_hardening)."""
         import asyncio
+
         from fastapi import HTTPException
         from sqlalchemy.exc import IntegrityError
+
         import services.admin.app.auth_routes as ar
 
         db_session = MagicMock()
@@ -306,6 +324,7 @@ class TestSignupDbFlushBeforeSupabase:
 # Test: 4 — Password change revokes sessions
 # ---------------------------------------------------------------------------
 
+
 class TestChangePasswordRevokeSessions:
     def test_change_password_increments_token_version(self, mock_session_store):
         """change_password bumps token_version, which signals session revocation."""
@@ -321,10 +340,13 @@ class TestChangePasswordRevokeSessions:
             patch("services.admin.app.auth.change_password_router.validate_password", return_value=None),
             patch("services.admin.app.auth.change_password_router.get_password_hash", return_value="new-hash"),
             patch("services.admin.app.auth.change_password_router.get_supabase", return_value=None),
-            patch("services.admin.app.auth.change_password_router._revoke_all_elevation_tokens_for_user", new=AsyncMock()),
+            patch(
+                "services.admin.app.auth.change_password_router._revoke_all_elevation_tokens_for_user", new=AsyncMock()
+            ),
         ):
-            from services.admin.app.auth_routes import change_password
             import asyncio
+
+            from services.admin.app.auth_routes import change_password
 
             req = MagicMock()
             payload = MagicMock()
@@ -351,6 +373,7 @@ class TestChangePasswordRevokeSessions:
 # Test: 5 — Token refresh → 200 with new token
 # ---------------------------------------------------------------------------
 
+
 class TestTokenRefresh:
     def test_refresh_returns_new_access_token(self, mock_session_store):
         user = _make_user()
@@ -366,6 +389,7 @@ class TestTokenRefresh:
         mock_session_store.update_session = AsyncMock(return_value=None)
 
         db_session = MagicMock()
+
         def get_side_effect(_model, ident):
             if ident == user.id:
                 return user
@@ -374,15 +398,20 @@ class TestTokenRefresh:
             if ident == membership.role_id:
                 return role
             return None
+
         db_session.get.side_effect = get_side_effect
         db_session.execute.return_value.scalars.return_value.all.return_value = [membership]
 
         with (
-            patch("services.admin.app.auth.refresh_router.decode_access_token", return_value={"tenant_id": None, "tid": None}),
+            patch(
+                "services.admin.app.auth.refresh_router.decode_access_token",
+                return_value={"tenant_id": None, "tid": None},
+            ),
             patch("services.admin.app.auth.refresh_router.create_access_token", return_value="new-access-token"),
         ):
-            from services.admin.app.auth_routes import refresh_session
             import asyncio
+
+            from services.admin.app.auth_routes import refresh_session
 
             req = MagicMock()
             req.headers = {"Authorization": "Bearer old-token", "User-Agent": "pytest"}
@@ -405,6 +434,7 @@ class TestTokenRefresh:
 # Test: 6 — MFA verification happy path (TOTP)
 # ---------------------------------------------------------------------------
 
+
 class TestMFAVerificationHappyPath:
     def test_valid_totp_token_accepted(self, mock_session_store):
         """require_mfa accepts a TOTP token that pyotp verifies."""
@@ -414,15 +444,21 @@ class TestMFAVerificationHappyPath:
         # Stub pyotp if not installed
         if "pyotp" not in sys.modules:
             stub = _types.ModuleType("pyotp")
+
             class _FakeTOTP:
-                def __init__(self, secret): pass
-                def verify(self, token, valid_window=1): return token == "888000"
+                def __init__(self, secret):
+                    pass
+
+                def verify(self, token, valid_window=1):
+                    return token == "888000"
+
             stub.TOTP = _FakeTOTP
             stub.random_base32 = lambda: "JBSWY3DPEHPK3PXP"
             sys.modules["pyotp"] = stub
 
-        from services.admin.app.mfa import require_mfa
         import asyncio
+
+        from services.admin.app.mfa import require_mfa
 
         user = SimpleNamespace(id=uuid.uuid4(), email="alice@example.com", mfa_secret="TESTBASE32SECRET")
         with patch("services.admin.app.mfa.verify_totp", return_value=True):
@@ -441,6 +477,7 @@ class TestMFAVerificationHappyPath:
 # Test: 7 — MFA recovery code happy path
 # ---------------------------------------------------------------------------
 
+
 class TestMFARecoveryCodeHappyPath:
     def test_valid_recovery_code_accepted_and_consumed(self, mock_session_store):
         """require_mfa accepts XXXX-XXXX format recovery codes and marks them used."""
@@ -449,15 +486,21 @@ class TestMFARecoveryCodeHappyPath:
 
         if "pyotp" not in sys.modules:
             stub = _types.ModuleType("pyotp")
+
             class _FakeTOTP:
-                def __init__(self, secret): pass
-                def verify(self, token, valid_window=1): return False
+                def __init__(self, secret):
+                    pass
+
+                def verify(self, token, valid_window=1):
+                    return False
+
             stub.TOTP = _FakeTOTP
             stub.random_base32 = lambda: "JBSWY3DPEHPK3PXP"
             sys.modules["pyotp"] = stub
 
-        from services.admin.app.mfa import require_mfa
         import asyncio
+
+        from services.admin.app.mfa import require_mfa
 
         user = SimpleNamespace(id=uuid.uuid4(), email="alice@example.com", mfa_secret="TESTBASE32SECRET")
 

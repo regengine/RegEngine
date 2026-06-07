@@ -9,6 +9,7 @@ import importlib.util
 import os
 import socket
 from pathlib import Path
+
 import structlog
 
 # Configure pretty logging for the founder
@@ -37,21 +38,25 @@ SERVICES = {
     "Redpanda (Kafka)": 9092,
 }
 
+
 def check_port(port: int, host: str = "localhost") -> bool:
     """Check if a port is open."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(1)
         return s.connect_ex((host, port)) == 0
 
+
 def check_redis_distributed() -> bool:
     """Check if Redis is reachable and usable for rate limiting."""
     try:
         import redis
+
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         r = redis.from_url(url)
         return r.ping()
     except Exception:
         return False
+
 
 def check_agent_helper() -> bool:
     """Verify the supported small-scale agent helper is present."""
@@ -71,13 +76,14 @@ def check_agent_helper() -> bool:
 
     return True
 
+
 def run_diagnostics():
     print("\n" + "═" * 60)
     print("🚀 REGENGINE FOUNDER'S HEALTH CHECK")
     print("═" * 60 + "\n")
 
     failure_count = 0
-    
+
     # 1. Port Check
     log.info("DIAGNOSTIC: Port Scan")
     for name, port in SERVICES.items():
@@ -112,6 +118,7 @@ def run_diagnostics():
     else:
         print(f"⚠️  {failure_count} ISSUES DETECTED — CHECK LOGS ABOVE")
     print("═" * 60 + "\n")
+
 
 if __name__ == "__main__":
     run_diagnostics()

@@ -43,16 +43,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-
 # Make services/ingestion importable as the ingestion service expects.
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz  # noqa: E402
-from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app import metrics_router  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from shared.database import get_db_session  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # FakeSession — regex-keyed SQLAlchemy stand-in
@@ -142,9 +140,7 @@ def _build_client(
 def _disable_rate_limit(monkeypatch):
     """Rate-limit is exercised elsewhere; here we want stable 200s so
     the metrics assertions are the focus."""
-    monkeypatch.setattr(
-        authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99)
-    )
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
 
 # ---------------------------------------------------------------------------
@@ -185,9 +181,7 @@ class TestAuthGate:
         (services/ingestion/app/authz.py:385). Master/admin contexts that
         legitimately need cross-tenant reach are unbound (``tenant_id=None``)
         and unaffected."""
-        principal = _make_principal(
-            tenant_id="admin-tenant", scopes=["metrics.read", "*"]
-        )
+        principal = _make_principal(tenant_id="admin-tenant", scopes=["metrics.read", "*"])
         client = _build_client(principal, FakeSession())
         resp = client.get(
             "/api/v1/metrics/compliance",
@@ -224,9 +218,7 @@ class TestTenantResolution:
         principal = _make_principal(tenant_id=None, scopes=["metrics.read"])
         session = FakeSession()
         client = _build_client(principal, session)
-        resp = client.get(
-            "/api/v1/metrics/compliance", params={"tenant_id": "tenant-via-param"}
-        )
+        resp = client.get("/api/v1/metrics/compliance", params={"tenant_id": "tenant-via-param"})
         assert resp.status_code == 200
         assert resp.json()["tenant_id"] == "tenant-via-param"
 
@@ -256,13 +248,9 @@ class TestTenantResolution:
         Uses ``tenant_id=None`` so the format-validation path runs without
         being short-circuited by the cross-tenant check (which the 2026-05
         wildcard-bypass fix tightened)."""
-        principal = _make_principal(
-            tenant_id=None, scopes=["metrics.read", "*"]
-        )
+        principal = _make_principal(tenant_id=None, scopes=["metrics.read", "*"])
         client = _build_client(principal, FakeSession())
-        resp = client.get(
-            "/api/v1/metrics/compliance", params={"tenant_id": bad_tenant}
-        )
+        resp = client.get("/api/v1/metrics/compliance", params={"tenant_id": bad_tenant})
         assert resp.status_code == 400
 
 
@@ -366,9 +354,7 @@ class TestHappyPath:
         return FakeSession(
             routes={
                 # 1. normalization — (total, normalized, rejected)
-                r"FILTER \(WHERE status = 'active'\) AS normalized": (
-                    lambda _p: (1000, 950, 30)
-                ),
+                r"FILTER \(WHERE status = 'active'\) AS normalized": (lambda _p: (1000, 950, 30)),
                 # 2. provenance — (total, with_chain)
                 r"AS with_chain": lambda _p: (900, 810),
                 # 3. remediation — (total_failures, with_remediation)
@@ -376,15 +362,11 @@ class TestHappyPath:
                 # 4. median resolve — scalar hours
                 r"resolved_at\s*-\s*created_at": lambda _p: 12.345,
                 # 5. median package — scalar hours
-                r"rp\.generated_at\s*-\s*rc\.request_received_at": (
-                    lambda _p: 4.5678
-                ),
+                r"rp\.generated_at\s*-\s*rc\.request_received_at": (lambda _p: 4.5678),
                 # 6. request completion — (total, completed)
                 r"FILTER \(WHERE package_status IN": lambda _p: (50, 45),
                 # 7. entity resolution — (total_entities, verified)
-                r"FILTER \(WHERE verification_status = 'verified'\)": (
-                    lambda _p: (2000, 1800)
-                ),
+                r"FILTER \(WHERE verification_status = 'verified'\)": (lambda _p: (2000, 1800)),
                 # 8. ambiguous backlog — scalar
                 r"FROM fsma\.identity_review_queue": lambda _p: 17,
                 # reliability counts
@@ -425,9 +407,7 @@ class TestHappyPath:
 
     def test_reliability_counts_surface_verbatim(self, populated_session):
         client = _build_client(_make_principal(), populated_session)
-        reliability = client.get("/api/v1/metrics/compliance").json()[
-            "reliability_metrics"
-        ]
+        reliability = client.get("/api/v1/metrics/compliance").json()["reliability_metrics"]
         assert reliability["total_packages_generated"] == 42
         assert reliability["total_rule_evaluations"] == 777
         assert reliability["chain_length"] == 5000
@@ -479,9 +459,7 @@ class TestTenantScopedQueries:
             "+ backlog); if it dropped below, a KPI regressed"
         )
         for sql, params in session.calls:
-            assert params.get("tid") == TENANT, (
-                f"Query {sql[:120]!r} fired without tenant binding"
-            )
+            assert params.get("tid") == TENANT, f"Query {sql[:120]!r} fired without tenant binding"
 
     def test_query_count_matches_documented_kpis(self):
         """Lock the query count so future KPI changes are deliberate

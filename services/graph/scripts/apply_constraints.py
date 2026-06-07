@@ -32,41 +32,38 @@ def apply_constraints():
     uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     user = os.getenv("NEO4J_USER", "neo4j")
     password = os.getenv("NEO4J_PASSWORD")
-    
+
     if not password:
         print("Error: NEO4J_PASSWORD environment variable is required")
         sys.exit(1)
-    
+
     # Read constraints file
     script_dir = Path(__file__).parent
     constraints_file_name = os.getenv("NEO4J_CONSTRAINTS_FILE", "init_constraints.cypher")
     constraints_file = script_dir / constraints_file_name
-    
+
     if not constraints_file.exists():
         print(f"Error: Constraints file not found: {constraints_file}")
         sys.exit(1)
-    
-    with open(constraints_file, 'r', encoding='utf-8') as f:
+
+    with open(constraints_file, "r", encoding="utf-8") as f:
         cypher_content = f.read()
-    
+
     # Split into individual statements (by semicolon)
-    statements = [s.strip() for s in cypher_content.split(';') if s.strip()]
-    
+    statements = [s.strip() for s in cypher_content.split(";") if s.strip()]
+
     # Filter out comments and empty lines
-    statements = [
-        s for s in statements 
-        if s and not s.startswith('//') and 'CREATE CONSTRAINT' in s
-    ]
-    
+    statements = [s for s in statements if s and not s.startswith("//") and "CREATE CONSTRAINT" in s]
+
     print(f"Connecting to Neo4j at {uri}...")
     driver = GraphDatabase.driver(uri, auth=(user, password))
-    
+
     try:
         with driver.session() as session:
             for i, statement in enumerate(statements, 1):
                 print(f"\nApplying constraint {i}/{len(statements)}...")
                 print(f"Statement: {statement[:80]}...")
-                
+
                 try:
                     result = session.run(statement + ";")
                     result.consume()
@@ -79,11 +76,11 @@ def apply_constraints():
                     else:
                         print(f"✗ Error applying constraint: {e}")
                         raise
-        
-        print("\n" + "="*60)
+
+        print("\n" + "=" * 60)
         print("All constraints applied successfully!")
-        print("="*60)
-        
+        print("=" * 60)
+
     finally:
         driver.close()
 

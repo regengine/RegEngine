@@ -14,21 +14,23 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 # Block requests to private IP ranges and well-known metadata endpoints.
 # ---------------------------------------------------------------------------
 
-_BLOCKED_HOSTNAMES = frozenset({
-    "metadata.google.internal",
-    "169.254.169.254",          # AWS/GCP/Azure IMDS
-    "fd00:ec2::254",            # AWS IPv6 IMDS
-})
+_BLOCKED_HOSTNAMES = frozenset(
+    {
+        "metadata.google.internal",
+        "169.254.169.254",  # AWS/GCP/Azure IMDS
+        "fd00:ec2::254",  # AWS IPv6 IMDS
+    }
+)
 
 _SSRF_BLOCKED_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),   # Link-local / IMDS
-    ipaddress.ip_network("::1/128"),           # IPv6 loopback
-    ipaddress.ip_network("fc00::/7"),          # IPv6 ULA
-    ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local / IMDS
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 ]
 
 
@@ -48,9 +50,7 @@ def _reject_private_host(url: HttpUrl) -> None:
     # the bracket-stripped form is required for the IPv6 entries in
     # ``_BLOCKED_HOSTNAMES`` (e.g. ``fd00:ec2::254``) to fire at all.
     if host_bare.lower() in _BLOCKED_HOSTNAMES:
-        raise ValueError(
-            f"Requests to '{host}' are not permitted (metadata endpoint)."
-        )
+        raise ValueError(f"Requests to '{host}' are not permitted (metadata endpoint).")
 
     # Short-circuit literal-IP URLs: if the host is already an IPv4 or
     # IPv6 address, don't bother with DNS — apply the private-range
@@ -98,16 +98,10 @@ def _reject_if_private_ip(
     """
     detail = f"resolved '{host}' → {resolved_as}" if resolved_as else f"host '{host}'"
     if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-        raise ValueError(
-            f"Requests to private or reserved IP addresses are not permitted "
-            f"({detail})."
-        )
+        raise ValueError(f"Requests to private or reserved IP addresses are not permitted ({detail}).")
     for network in _SSRF_BLOCKED_NETWORKS:
         if addr in network:
-            raise ValueError(
-                f"Requests to private or reserved IP addresses are not permitted "
-                f"({detail})."
-            )
+            raise ValueError(f"Requests to private or reserved IP addresses are not permitted ({detail}).")
 
 
 class IngestRequest(BaseModel):
@@ -263,6 +257,7 @@ class ExportVerifyResponse(BaseModel):
 
 
 # Response models for ingestion routes
+
 
 class IngestRegulationResponse(BaseModel):
     """Response from POST /v1/ingest/regulation."""

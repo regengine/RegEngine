@@ -4,12 +4,13 @@ RegEngine Second-Pass Audit — GitHub Issue Creator
 Findings from Security, Legal/Compliance, SRE, and API/DX sweeps.
 Run: GITHUB_TOKEN=ghp_xxx python audit-issues-pass2.py
 """
+
 import os
 import sys
 import time
 
 try:
-    from github import Github, Auth
+    from github import Auth, Github
 except ImportError:
     print("pip install PyGithub")
     sys.exit(1)

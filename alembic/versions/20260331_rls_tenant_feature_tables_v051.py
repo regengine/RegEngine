@@ -23,27 +23,28 @@ Revises: d4e5f6a7b8c9
 Create Date: 2026-03-31 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'e5f6a7b8c9d0'
-down_revision: Union[str, Sequence[str], None] = 'd4e5f6a7b8c9'
+revision: str = "e5f6a7b8c9d0"
+down_revision: Union[str, Sequence[str], None] = "d4e5f6a7b8c9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 # Tables from V042 that need RLS enabled.
 _TENANT_TABLES = [
-    'tenant_suppliers',
-    'tenant_products',
-    'tenant_team_members',
-    'tenant_notification_prefs',
-    'tenant_settings',
-    'tenant_onboarding',
-    'tenant_exchanges',
-    'tenant_portal_links',
+    "tenant_suppliers",
+    "tenant_products",
+    "tenant_team_members",
+    "tenant_notification_prefs",
+    "tenant_settings",
+    "tenant_onboarding",
+    "tenant_exchanges",
+    "tenant_portal_links",
 ]
 
 
@@ -518,8 +519,8 @@ def downgrade() -> None:
     op.execute("ALTER TABLE obligations DISABLE ROW LEVEL SECURITY;")
 
     # Remove SQL_V048 triggers and policies on core tables
-    for tbl in ['ingestion.documents', 'vertical_projects', 'evidence_logs', 'audit_logs', 'memberships', 'users']:
-        short = tbl.split('.')[-1]
+    for tbl in ["ingestion.documents", "vertical_projects", "evidence_logs", "audit_logs", "memberships", "users"]:
+        short = tbl.split(".")[-1]
         op.execute(f"DROP TRIGGER IF EXISTS trg_audit_sysadmin_{short} ON {tbl};")
 
     op.execute("DROP FUNCTION IF EXISTS set_admin_context(boolean);")

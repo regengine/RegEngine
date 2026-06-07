@@ -19,14 +19,15 @@ Revises: 97588ba8edf3
 Create Date: 2026-03-25 08:00:00.000000
 
 """
-from typing import Sequence, Union
+
 from pathlib import Path
+from typing import Sequence, Union
 
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'a1b2c3d4e5f6'
-down_revision: Union[str, Sequence[str], None] = '97588ba8edf3'
+revision: str = "a1b2c3d4e5f6"
+down_revision: Union[str, Sequence[str], None] = "97588ba8edf3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -49,10 +50,7 @@ def upgrade() -> None:
     for sql_file in _SQL_FILES:
         sql_path = _MIGRATIONS_DIR / sql_file
         if not sql_path.exists():
-            raise FileNotFoundError(
-                f"Migration file not found: {sql_path}\n"
-                f"Expected in: {_MIGRATIONS_DIR}"
-            )
+            raise FileNotFoundError(f"Migration file not found: {sql_path}\nExpected in: {_MIGRATIONS_DIR}")
         sql = sql_path.read_text(encoding="utf-8")
         # Strip BEGIN/COMMIT — Alembic manages its own transactions
         sql = sql.replace("BEGIN;", "").replace("COMMIT;", "")

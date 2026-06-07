@@ -8,6 +8,7 @@ Revision ID: e4f5a6b7c8d9
 Revises: d3e4f5a6b7c8
 Create Date: 2026-04-15
 """
+
 from alembic import op
 
 revision = "e4f5a6b7c8d9"

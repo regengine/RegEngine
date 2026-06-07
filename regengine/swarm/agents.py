@@ -21,6 +21,7 @@ logger = structlog.get_logger("swarm.agents")
 
 # ── Planner Agent ─────────────────────────────────────────
 
+
 class PlannerAgent(BaseAgent):
     """Breaks tasks into structured, actionable implementation plans.
 
@@ -95,6 +96,7 @@ class PlannerAgent(BaseAgent):
 
 # ── Coder Agent ───────────────────────────────────────────
 
+
 class CoderAgent(BaseAgent):
     """Implements code based on structured plans.
 
@@ -163,22 +165,26 @@ class CoderAgent(BaseAgent):
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                
-                written.append({
-                    "path": path,
-                    "action": action,
-                    "lines": len(content.splitlines()),
-                    "status": "written",
-                })
+
+                written.append(
+                    {
+                        "path": path,
+                        "action": action,
+                        "lines": len(content.splitlines()),
+                        "status": "written",
+                    }
+                )
                 self.log.info("file_written", path=path)
             except Exception as e:
                 self.log.error("file_write_failed", path=path, error=str(e))
-                written.append({
-                    "path": path,
-                    "action": action,
-                    "status": "failed",
-                    "error": str(e),
-                })
+                written.append(
+                    {
+                        "path": path,
+                        "action": action,
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
 
         return {
             "files_written": written,
@@ -208,6 +214,7 @@ class CoderAgent(BaseAgent):
 
 
 # ── Reviewer Agent ────────────────────────────────────────
+
 
 class ReviewerAgent(BaseAgent):
     """Reviews code for quality, security, and adherence to standards.
@@ -262,9 +269,7 @@ class ReviewerAgent(BaseAgent):
             "verdict": plan.get("verdict", "unknown"),
             "score": plan.get("score", 0.0),
             "issue_count": len(plan.get("issues", [])),
-            "critical_issues": [
-                i for i in plan.get("issues", []) if i.get("severity") == "critical"
-            ],
+            "critical_issues": [i for i in plan.get("issues", []) if i.get("severity") == "critical"],
         }
 
     async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -285,6 +290,7 @@ class ReviewerAgent(BaseAgent):
 
 
 # ── Tester Agent ──────────────────────────────────────────
+
 
 class TesterAgent(BaseAgent):
     """Generates and validates test suites for code changes.
@@ -370,6 +376,7 @@ class TesterAgent(BaseAgent):
 
 # ── CI Resilience Agent ───────────────────────────────────
 
+
 class CIResilienceAgent(BaseAgent):
     """Analyzes CI/CD failures and orchestrates autonomous remediation.
 
@@ -409,8 +416,7 @@ class CIResilienceAgent(BaseAgent):
                 prompt_parts.append(f"RECENT CHANGES:\n{json.dumps(context['recent_changes'], indent=2)}")
 
         prompt_parts.append(
-            "\nAnalyze these logs and determine the root cause. "
-            "Propose an immediate fix to stabilize the pipeline."
+            "\nAnalyze these logs and determine the root cause. Propose an immediate fix to stabilize the pipeline."
         )
 
         return await self._call_llm_json("\n".join(prompt_parts), "troubleshooting")
@@ -444,6 +450,7 @@ class CIResilienceAgent(BaseAgent):
 
 
 # ── Security Agent ────────────────────────────────────────
+
 
 class SecurityAgent(BaseAgent):
     """Audits code changes for security vulnerabilities, secrets, and compliance risks.
@@ -497,7 +504,7 @@ class SecurityAgent(BaseAgent):
         """Generate the security scorecard."""
         vulnerabilities = plan.get("vulnerabilities", [])
         verdict = plan.get("verdict", "fail")
-        
+
         return {
             "vulnerabilities": vulnerabilities,
             "vulnerability_count": len(vulnerabilities),
@@ -515,11 +522,14 @@ class SecurityAgent(BaseAgent):
         return {
             "status": "pass" if not issues else "needs_improvement",
             "issues": issues,
-            "critical_vulnerabilities": len([v for v in result.get("vulnerabilities", []) if v["severity"] in ["high", "critical"]]),
+            "critical_vulnerabilities": len(
+                [v for v in result.get("vulnerabilities", []) if v["severity"] in ["high", "critical"]]
+            ),
         }
 
 
 # ── Janitor Agent ─────────────────────────────────────────
+
 
 class JanitorAgent(BaseAgent):
     """Automates repository maintenance and safe merging of verified PRs.
@@ -571,15 +581,15 @@ class JanitorAgent(BaseAgent):
         """Perform the merge and cleanup if decided."""
         decision = plan.get("decision", "hold")
         reasoning = plan.get("reasoning", "")
-        
+
         # Note: Actual GitHub execution logic will be handled by the github_integration client
         # or the workflow caller. The agent just makes the decision here.
-        
+
         return {
             "decision": decision,
             "reasoning": reasoning,
             "cleanup_actions": plan.get("cleanup_actions", []),
-            "merged": False, # Flag to be updated by caller
+            "merged": False,  # Flag to be updated by caller
         }
 
     async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:

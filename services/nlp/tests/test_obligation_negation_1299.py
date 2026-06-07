@@ -85,9 +85,7 @@ class TestInferObligationTypeDoubleHedge:
 
     def test_shall_not_be_required_to_is_prohibited(self):
         """'shall not be required to' — double hedge, still PROHIBITED."""
-        result = infer_obligation_type(
-            "Small farms shall not be required to maintain full traceability records."
-        )
+        result = infer_obligation_type("Small farms shall not be required to maintain full traceability records.")
         assert result["obligation"] == "PROHIBITED"
         assert result["negation_detected"] is True
 
@@ -97,18 +95,14 @@ class TestInferObligationTypeConditional:
 
     def test_required_unless_exempt_is_conditional(self, caplog):
         with caplog.at_level(logging.WARNING, logger="services.nlp.app.extractor"):
-            result = infer_obligation_type(
-                "All handlers are required to file unless exempt under subsection (b)."
-            )
+            result = infer_obligation_type("All handlers are required to file unless exempt under subsection (b).")
         assert result["obligation"] == "CONDITIONAL"
         assert result["negation_detected"] is False
         assert any("CONDITIONAL" in r.message for r in caplog.records)
 
     def test_must_unless_is_conditional(self, caplog):
         with caplog.at_level(logging.WARNING, logger="services.nlp.app.extractor"):
-            result = infer_obligation_type(
-                "The operator must comply unless provided that an exemption applies."
-            )
+            result = infer_obligation_type("The operator must comply unless provided that an exemption applies.")
         assert result["obligation"] == "CONDITIONAL"
 
 
@@ -133,7 +127,6 @@ class TestExtractEntitiesNegationAttrs:
         assert obl_ents, "Expected at least one OBLIGATION entity"
         # At least one entity should detect negation and be PROHIBITED.
         prohibited = [
-            e for e in obl_ents
-            if e["attrs"].get("negation_detected") and e["attrs"].get("obligation") == "PROHIBITED"
+            e for e in obl_ents if e["attrs"].get("negation_detected") and e["attrs"].get("obligation") == "PROHIBITED"
         ]
         assert prohibited, f"Expected PROHIBITED entity; got {[e['attrs'] for e in obl_ents]}"

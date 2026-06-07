@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -50,10 +50,10 @@ def ingestion_client(monkeypatch, mock_kafka_producer, mock_s3_client):
     monkeypatch.setenv("REQUIRE_REDIS", "false")
     monkeypatch.setenv("OBJECT_STORAGE_ENDPOINT_URL", "http://localhost:9000")
     monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-    
+
     # Mock the shared auth to accept test keys
     from shared import auth as shared_auth
-    
+
     test_key = shared_auth.APIKey(
         key_id="test-key-id",
         key_hash="test-hash",
@@ -62,16 +62,17 @@ def ingestion_client(monkeypatch, mock_kafka_producer, mock_s3_client):
         created_at=datetime.now(timezone.utc),
         enabled=True,
     )
-    
+
     store = shared_auth.APIKeyStore()
     monkeypatch.setattr(shared_auth, "_key_store", store, raising=False)
-    
+
     # Create a real test key
     raw_key, _ = store.create_key("test", tenant_id=str(uuid4()))
-    
+
     from services.ingestion.main import app
+
     client = TestClient(app)
-    
+
     return client, raw_key
 
 
@@ -81,24 +82,24 @@ class TestIngestUrlEndpoint:
     def test_ingest_url_requires_api_key(self, ingestion_client):
         """Verify that API key is required."""
         client, _ = ingestion_client
-        
+
         resp = client.post(
             "/ingest/url",
             json={"url": "https://example.com/doc.pdf", "source_system": "test"},
         )
-        
+
         assert resp.status_code in (401, 403), f"Expected auth error, got {resp.status_code}"
 
     def test_ingest_url_validates_source_system_required(self, ingestion_client):
         """Verify source_system field is required."""
         client, api_key = ingestion_client
-        
+
         resp = client.post(
             "/ingest/url",
             headers={"X-RegEngine-API-Key": api_key},
             json={"url": "https://example.com/doc.pdf"},
         )
-        
+
         assert resp.status_code == 422
         data = resp.json()
         assert "source_system" in str(data)
@@ -106,26 +107,26 @@ class TestIngestUrlEndpoint:
     def test_ingest_url_validates_url_required(self, ingestion_client):
         """Verify url field is required."""
         client, api_key = ingestion_client
-        
+
         resp = client.post(
             "/ingest/url",
             headers={"X-RegEngine-API-Key": api_key},
             json={"source_system": "test"},
         )
-        
+
         assert resp.status_code == 422
 
     def test_ingest_url_rejects_private_ip_addresses(self, ingestion_client):
         """Verify SSRF protection blocks private IPs."""
         client, api_key = ingestion_client
-        
+
         private_urls = [
             "http://127.0.0.1/secret",
             "http://localhost/admin",
             "http://192.168.1.1/config",
             "http://10.0.0.1/internal",
         ]
-        
+
         for url in private_urls:
             resp = client.post(
                 "/ingest/url",
@@ -138,13 +139,13 @@ class TestIngestUrlEndpoint:
     def test_ingest_url_rejects_non_http_schemes(self, ingestion_client):
         """Verify only http/https schemes are allowed."""
         client, api_key = ingestion_client
-        
+
         invalid_urls = [
             "file:///etc/passwd",
             "ftp://example.com/doc.pdf",
             "data:text/html,<script>alert(1)</script>",
         ]
-        
+
         for url in invalid_urls:
             resp = client.post(
                 "/ingest/url",
@@ -160,28 +161,29 @@ class TestUrlValidation:
     def test_validate_url_allows_https(self):
         """Verify https URLs are allowed."""
         from services.ingestion.app.routes import _validate_url
-        
+
         # This should not raise
         _validate_url("https://example.com/document.pdf")
 
     def test_validate_url_allows_http(self):
         """Verify http URLs are allowed."""
         from services.ingestion.app.routes import _validate_url
-        
+
         # This should not raise
         _validate_url("http://example.com/document.pdf")
 
     def test_validate_url_rejects_invalid_format(self):
         """Verify malformed URLs are rejected."""
-        from services.ingestion.app.routes import _validate_url
         from fastapi import HTTPException
-        
+
+        from services.ingestion.app.routes import _validate_url
+
         invalid_urls = [
             "not-a-url",
             "://missing-scheme.com",
             "https://",  # Missing host
         ]
-        
+
         for url in invalid_urls:
             with pytest.raises(HTTPException):
                 _validate_url(url)
@@ -193,25 +195,25 @@ class TestContentTypeDetection:
     def test_detect_extension_pdf(self):
         """Verify PDF content type detection."""
         from services.ingestion.app.routes import _detect_extension
-        
+
         assert _detect_extension("application/pdf") == ".pdf"
 
     def test_detect_extension_json(self):
         """Verify JSON content type detection."""
         from services.ingestion.app.routes import _detect_extension
-        
+
         assert _detect_extension("application/json") == ".json"
 
     def test_detect_extension_html(self):
         """Verify HTML content type detection."""
         from services.ingestion.app.routes import _detect_extension
-        
+
         assert _detect_extension("text/html") == ".html"
 
     def test_detect_extension_unknown(self):
         """Verify unknown content type handling."""
         from services.ingestion.app.routes import _detect_extension
-        
+
         result = _detect_extension("application/octet-stream")
         # Should return a sensible default or None
         assert result is None or result == ""
@@ -223,22 +225,23 @@ class TestSizeLimits:
     def test_enforce_size_limit_allows_small_content(self):
         """Verify small content passes size check."""
         from services.ingestion.app.routes import _enforce_size_limit
-        
+
         small_content = b"x" * 1000  # 1KB
         # Should not raise
         _enforce_size_limit(small_content)
 
     def test_enforce_size_limit_rejects_oversized_content(self):
         """Verify oversized content is rejected."""
-        from services.ingestion.app.routes import _enforce_size_limit
         from fastapi import HTTPException
-        
+
+        from services.ingestion.app.routes import _enforce_size_limit
+
         # This is intentionally large - adjust based on actual limit
         huge_content = b"x" * (50 * 1024 * 1024)  # 50MB
-        
+
         with pytest.raises(HTTPException) as exc_info:
             _enforce_size_limit(huge_content)
-        
+
         assert exc_info.value.status_code == 413
 
 
@@ -256,7 +259,7 @@ class TestIngestResponseFormat:
             "source_url",
             "timestamp",
         ]
-        
+
         # This is a structural test - actual response depends on mocking
         # In integration tests, verify these fields are present
         assert len(required_fields) == 7  # Sanity check

@@ -31,7 +31,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-
 from app import subscription_gate
 from app.subscription_gate import (
     _check_subscription_and_redis_health,
@@ -41,7 +40,6 @@ from app.subscription_gate import (
 )
 from fastapi import HTTPException
 from shared.circuit_breaker import CircuitOpenError
-
 
 # ===========================================================================
 # Helpers
@@ -117,7 +115,6 @@ def _set_redis_url(monkeypatch, value="redis://localhost:6379"):
 
 
 class TestFailOpenOverride:
-
     @pytest.mark.parametrize("val", ["1", "true", "yes", "on", "TRUE", "Yes", " ON "])
     def test_enabled_for_truthy_values(self, monkeypatch, val):
         monkeypatch.setenv("SUBSCRIPTION_GATE_FAIL_OPEN", val)
@@ -142,7 +139,6 @@ class TestFailOpenOverride:
 
 
 class TestTenantIdExtraction:
-
     def test_principal_wins_over_header_and_query(self):
         """EPIC-A #1651: principal is first priority."""
         req = _mk_request(
@@ -203,9 +199,9 @@ class TestTenantIdExtraction:
 
 
 class TestCheckSubscriptionAndHealth:
-
     def setup_method(self):
         from shared.circuit_breaker import redis_circuit
+
         redis_circuit.reset()
 
     def test_returns_none_false_when_no_redis_url(self, monkeypatch):
@@ -245,9 +241,7 @@ class TestCheckSubscriptionAndHealth:
         def _boom(*a, **kw):
             raise CircuitOpenError("redis", 5.0)
 
-        monkeypatch.setattr(
-            subscription_gate.redis_circuit, "_check_state", _boom
-        )
+        monkeypatch.setattr(subscription_gate.redis_circuit, "_check_state", _boom)
         with pytest.raises(CircuitOpenError):
             _check_subscription_and_redis_health("t-1")
 
@@ -258,7 +252,6 @@ class TestCheckSubscriptionAndHealth:
 
 
 class TestRequireActiveSubscriptionBypass:
-
     def test_missing_tenant_id_fails_closed(self, monkeypatch):
         """Paid endpoints without authenticated tenant context are rejected."""
         req = _mk_request(principal_tenant=None)

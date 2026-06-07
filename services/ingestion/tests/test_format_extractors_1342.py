@@ -53,7 +53,6 @@ from app.format_extractors import (
     is_edi_content,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers to simulate a missing optional dependency.
 # ---------------------------------------------------------------------------
@@ -80,22 +79,21 @@ def _hide_module(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
 
 
 class TestHtmlFallbacks:
-    def test_missing_beautifulsoup_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_beautifulsoup_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "bs4")
         text, meta, pos = extract_from_html(b"<html><body>x</body></html>")
         assert meta.engine == "fallback-html"
         assert len(pos) == 1
 
-    def test_html_parse_exception_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_html_parse_exception_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Force BeautifulSoup to raise a ValueError — the try/except at
         # line 88 swallows it and returns the fallback.
         import bs4
+
         monkeypatch.setattr(
-            bs4, "BeautifulSoup", lambda *a, **kw: (_ for _ in ()).throw(ValueError("bad")),
+            bs4,
+            "BeautifulSoup",
+            lambda *a, **kw: (_ for _ in ()).throw(ValueError("bad")),
         )
         text, meta, _ = extract_from_html(b"<html>x</html>")
         assert meta.engine == "fallback-html"
@@ -136,9 +134,7 @@ class TestXmlFallbacks:
 
 
 class TestCsvBranches:
-    def test_pandas_missing_uses_stdlib_fallback_path(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_pandas_missing_uses_stdlib_fallback_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         csv_bytes = b"name,qty\nA,1\nB,2\n"
         text, meta, _ = extract_from_csv(csv_bytes)
@@ -149,38 +145,32 @@ class TestCsvBranches:
         assert "Total Rows: 2" in text
         assert "A" in text and "B" in text
 
-    def test_stdlib_fallback_detects_tab_delimiter(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_stdlib_fallback_detects_tab_delimiter(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         tsv = b"a\tb\tc\n1\t2\t3\n"
         text, _, _ = extract_from_csv(tsv)
         assert "Columns: a, b, c" in text
 
-    def test_stdlib_fallback_detects_semicolon_delimiter(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_stdlib_fallback_detects_semicolon_delimiter(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         semi = b"a;b;c\n1;2;3\n"
         text, _, _ = extract_from_csv(semi)
         assert "Columns: a, b, c" in text
 
-    def test_stdlib_fallback_on_empty_input(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_stdlib_fallback_on_empty_input(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         text, meta, _ = extract_from_csv(b"")
         # No rows → falls through to ``_fallback_extraction``.
         assert meta.engine == "fallback-csv"
 
-    def test_stdlib_fallback_exception_handled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_stdlib_fallback_exception_handled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         # Force the stdlib csv reader to raise a csv.Error.
         import csv as csv_mod
+
         def _boom(*_a, **_kw):
             raise csv_mod.Error("boom")
+
         monkeypatch.setattr(csv_mod, "reader", _boom)
         text, meta, _ = extract_from_csv(b"a,b\n1,2\n")
         assert meta.engine == "fallback-csv"
@@ -193,13 +183,13 @@ class TestCsvBranches:
         assert meta.engine == "pandas"
         assert "Columns" in text
 
-    def test_pandas_path_exception_handler(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_pandas_path_exception_handler(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Force ``pd.read_csv`` to raise to cover lines 270-272.
         import pandas as pd
+
         def _boom(*_a, **_kw):
             raise pd.errors.ParserError("bad csv")
+
         monkeypatch.setattr(pd, "read_csv", _boom)
         text, meta, _ = extract_from_csv(b"a,b\n1,2\n")
         assert meta.engine == "fallback-csv"
@@ -212,6 +202,7 @@ class TestCsvBranches:
 
 def _build_xlsx_bytes() -> bytes:
     import openpyxl
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "TestSheet"
@@ -231,32 +222,29 @@ class TestExcelExtraction:
         assert "val1" in text
         assert len(pos) >= 1
 
-    def test_missing_pandas_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_pandas_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "pandas")
         text, meta, _ = extract_from_excel(b"anything")
         assert meta.engine == "fallback-excel"
 
-    def test_openpyxl_failure_then_missing_xlrd_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_openpyxl_failure_then_missing_xlrd_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Pass non-xlsx bytes → openpyxl raises BadZipFile;
         # xlrd fallback attempt raises ImportError (we shadow xlrd).
         _hide_module(monkeypatch, "xlrd")
         text, meta, _ = extract_from_excel(b"not an xlsx")
         assert meta.engine == "fallback-excel"
 
-    def test_parse_exception_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_parse_exception_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Force a ValueError after a (stubbed) ExcelFile is constructed:
         # sheet_names iteration triggers the exception handler at 343-345.
         import pandas as pd
+
         class _BadExcel:
             sheet_names = ["S1"]
+
             def parse(self, *a, **kw):
                 raise ValueError("parse boom")
+
         monkeypatch.setattr(pd, "ExcelFile", lambda *a, **kw: _BadExcel())
         text, meta, _ = extract_from_excel(b"stub")
         assert meta.engine == "fallback-excel"
@@ -269,6 +257,7 @@ class TestExcelExtraction:
 
 def _build_docx_bytes() -> bytes:
     from docx import Document
+
     d = Document()
     d.add_heading("Title", level=1)
     d.add_heading("Sub", level=2)
@@ -296,9 +285,7 @@ class TestDocxExtraction:
         assert "[Table 1]" in text
         assert "v1" in text
 
-    def test_missing_python_docx_falls_back(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_python_docx_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _hide_module(monkeypatch, "docx")
         text, meta, _ = extract_from_docx(b"stub")
         assert meta.engine == "fallback-docx"
@@ -308,23 +295,25 @@ class TestDocxExtraction:
         text, meta, _ = extract_from_docx(b"not a docx")
         assert meta.engine == "fallback-docx"
 
-    def test_heading_with_non_numeric_level_defaults_to_1(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_heading_with_non_numeric_level_defaults_to_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``int(level)`` ValueError → ``level_num = 1`` (covers line 376)."""
         import docx as docx_mod
+
         # Build a real doc and patch its paragraphs to have a Heading
         # style whose name can't be parsed as an int.
         class _Style:
             def __init__(self, name: str) -> None:
                 self.name = name
+
         class _Para:
             def __init__(self, text: str, style_name: str) -> None:
                 self.text = text
                 self.style = _Style(style_name)
+
         class _Doc:
             paragraphs = [_Para("Oddly Named", "HeadingFoo")]
             tables = []
+
         monkeypatch.setattr(docx_mod, "Document", lambda *a, **kw: _Doc())
         text, _, _ = extract_from_docx(b"stub")
         # level_num=1 → single '#' prefix.
@@ -372,14 +361,13 @@ class TestEdiBranches:
         # (covers line 585 branch).
         assert "a / b / c" in text
 
-    def test_extract_from_edi_exception_handler(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_extract_from_edi_exception_handler(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The outer try in ``extract_from_edi`` swallows ValueError /
         # UnicodeDecodeError / IndexError. Easiest way to trigger it is
         # to force ``_parse_x12`` to raise — it's inside the try.
         def _boom(*_a, **_kw):
             raise ValueError("parse boom")
+
         monkeypatch.setattr(fe, "_parse_x12", _boom)
         text, meta, _ = extract_from_edi(b"ISA*00*...")
         assert meta.engine == "fallback-edi"
@@ -444,13 +432,16 @@ class TestDetectFormat:
         """The text-detection ``try`` block at the end of
         ``detect_format`` swallows UnicodeDecodeError / ValueError
         (covers lines 661-662)."""
+
         class _RaisingBytes(bytes):
             def __getitem__(self, s):  # type: ignore[override]
                 # Return self for any slice — comparisons still work
                 # because self IS a bytes subclass.
                 return self
+
             def decode(self, *a, **kw):  # type: ignore[override]
                 raise UnicodeDecodeError("utf-8", b"", 0, 1, "bad")
+
         # No magic-byte match; text detection raises; fall through to
         # "unknown".
         assert detect_format(None, _RaisingBytes(b"\xff\xfe\xfd\xfc")) == "unknown"
@@ -461,8 +452,10 @@ class TestIsEdiContent:
         class _BadBytes:
             def __getitem__(self, s):
                 return self
+
             def decode(self, *a, **kw):
                 raise UnicodeDecodeError("utf-8", b"", 0, 1, "bad")
+
         assert is_edi_content(_BadBytes()) is False
 
 
@@ -480,21 +473,20 @@ class TestFallbackExtraction:
         assert meta.engine == "fallback-csv"
         assert len(pos) == 1
 
-    def test_latin1_fallback_on_lookup_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_latin1_fallback_on_lookup_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """``raw_bytes.decode('utf-8', errors='ignore')`` normally can't
         fail, but if it raises ``LookupError`` we fall through to
         latin-1 (covers lines 693-694)."""
+
         class _RaisingBytes(bytes):
             _call = 0
+
             def decode(self, encoding: str, *a, **kw) -> str:
                 _RaisingBytes._call += 1
                 if encoding == "utf-8":
                     raise LookupError("codec vanished")
                 return super().decode(encoding, *a, **kw)
-        text, meta, _ = _fallback_extraction(
-            _RaisingBytes(b"hello"), format_hint="html"
-        )
+
+        text, meta, _ = _fallback_extraction(_RaisingBytes(b"hello"), format_hint="html")
         assert text == "hello"
         assert meta.engine == "fallback-html"

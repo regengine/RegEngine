@@ -52,7 +52,7 @@ class DistributedContext:
             # stays open as long as we hold leadership.
             pool_size=1,
             max_overflow=0,
-            connect_args={"keepalives": 1, "keepalives_idle": 30}
+            connect_args={"keepalives": 1, "keepalives_idle": 30},
         )
         self._is_leader = False
         # #1142: heartbeat state. ``_leader_pid`` is the backend pid we
@@ -85,8 +85,7 @@ class DistributedContext:
                     # Try to acquire advisory lock (non-blocking)
                     # pg_try_advisory_lock returns true if lock obtained, false otherwise
                     result = connection.execute(
-                        text("SELECT pg_try_advisory_lock(:lock_id)"),
-                        {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                        text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                     ).scalar()
 
                     if result:
@@ -123,11 +122,10 @@ class DistributedContext:
                 try:
                     # Release lock if we held it
                     if self._is_leader:
-                         connection.execute(
-                            text("SELECT pg_advisory_unlock(:lock_id)"),
-                            {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                        connection.execute(
+                            text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                         )
-                         logger.info("leadership_released", lock_id=SCHEDULER_LEADER_LOCK_ID)
+                        logger.info("leadership_released", lock_id=SCHEDULER_LEADER_LOCK_ID)
                     connection.close()
                 except Exception as e:
                     logger.error("error_releasing_lock", error=str(e))
@@ -207,17 +205,14 @@ class DistributedContext:
                 while True:
                     # Try to get lock
                     got_lock = conn.execute(
-                        text("SELECT pg_try_advisory_lock(:lock_id)"),
-                        {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                        text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                     ).scalar()
 
                     if got_lock:
                         # #1142: stash our backend pid so the heartbeat
                         # thread can verify the lock still belongs to us.
                         try:
-                            self._leader_pid = conn.execute(
-                                text("SELECT pg_backend_pid()")
-                            ).scalar()
+                            self._leader_pid = conn.execute(text("SELECT pg_backend_pid()")).scalar()
                         except Exception as pid_err:
                             # If we can't get our pid, the heartbeat
                             # can't do its job reliably. Log loudly but
@@ -272,9 +267,7 @@ class DistributedContext:
                             # tear-down that would look like "lock lost".
                             self._heartbeat_stop.set()
                             if self._heartbeat_thread is not None:
-                                self._heartbeat_thread.join(
-                                    timeout=_HEARTBEAT_SHUTDOWN_JOIN_TIMEOUT_SECONDS
-                                )
+                                self._heartbeat_thread.join(timeout=_HEARTBEAT_SHUTDOWN_JOIN_TIMEOUT_SECONDS)
                                 if self._heartbeat_thread.is_alive():
                                     # Daemon thread — OK to leave behind,
                                     # but log so we don't silently leak.
@@ -290,8 +283,7 @@ class DistributedContext:
                             # If callback finishes, we unlock
                             try:
                                 conn.execute(
-                                    text("SELECT pg_advisory_unlock(:lock_id)"),
-                                    {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                                    text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                                 )
                                 logger.info("leadership_released_callback_finished")
                             except Exception as unlock_err:
@@ -412,10 +404,7 @@ class DistributedContext:
                 leader_pid=leader_pid,
                 consecutive_failures=consecutive_failures,
                 max_failures=max_failures,
-                note=(
-                    "pg_locks shows no advisory lock for our backend pid — "
-                    "session may have been dropped by the DB"
-                ),
+                note=("pg_locks shows no advisory lock for our backend pid — session may have been dropped by the DB"),
             )
             if consecutive_failures >= max_failures:
                 logger.error(

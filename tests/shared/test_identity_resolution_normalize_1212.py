@@ -200,7 +200,10 @@ class TestAddAliasNormalization_Issue1212:
     def test_padded_gln_stripped_before_insert(self, svc, mock_session):
         # _require_entity uses fetchone which we've already mocked to return (1,).
         svc.add_alias(
-            TENANT, "entity-id-abc", "gln", "  0614141123452  ",
+            TENANT,
+            "entity-id-abc",
+            "gln",
+            "  0614141123452  ",
             source_system="test",
         )
         # _insert_alias is the final SQL call; find its alias_value param.
@@ -209,7 +212,9 @@ class TestAddAliasNormalization_Issue1212:
 
     def test_urn_fda_lowercased_before_insert(self, svc, mock_session):
         svc.add_alias(
-            TENANT, "entity-id-abc", "fda_registration",
+            TENANT,
+            "entity-id-abc",
+            "fda_registration",
             "  URN:FDA:REG:12345678  ",
             source_system="test",
         )
@@ -220,7 +225,10 @@ class TestAddAliasNormalization_Issue1212:
         """Free-text name aliases must not be mutated."""
         raw = "  Acme Foods LLC  "
         svc.add_alias(
-            TENANT, "entity-id-abc", "name", raw,
+            TENANT,
+            "entity-id-abc",
+            "name",
+            raw,
             source_system="test",
         )
         insert_params = mock_session.execute.call_args_list[-1].args[1]

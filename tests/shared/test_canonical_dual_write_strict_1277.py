@@ -17,6 +17,7 @@ These tests mock the SQLAlchemy session so they run without a live
 Postgres instance; they assert on exception propagation and return-
 type semantics, which are the parts the regression depends on.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -25,7 +26,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from shared.canonical_persistence import legacy_dual_write as migration
 from shared.canonical_persistence.writer import CanonicalEventStore
 
@@ -34,7 +34,6 @@ from tests.shared.test_canonical_persistence_hardening import (
     _FakeResult,
     _make_event,
 )
-
 
 # ---------------------------------------------------------------------------
 # migration.dual_write_legacy contract
@@ -114,13 +113,17 @@ class TestPersistEventPropagatesDualWriteFailure_Issue1277:
             r"INSERT INTO fsma\.traceability_events",
             _FakeResult(rows=[(str(uuid4()), "sha", "chain")]),
         )
+
         # ...but legacy INSERT blows up.
         def _fail(sql, params):
             raise RuntimeError("legacy write exploded")
+
         session.add_rule(r"INSERT INTO fsma\.cte_events", _fail)
 
         store = CanonicalEventStore(
-            session=session, dual_write=True, skip_chain_write=True,
+            session=session,
+            dual_write=True,
+            skip_chain_write=True,
         )
         evt = _make_event()
 
@@ -138,15 +141,17 @@ class TestPersistEventPropagatesDualWriteFailure_Issue1277:
             r"INSERT INTO fsma\.traceability_events",
             _FakeResult(rows=[(str(uuid4()), "sha", "chain")]),
         )
+
         # A rule that would explode if hit — proves the code never calls it.
         def _fail(sql, params):
-            raise AssertionError(
-                "dual_write=False must NOT execute INSERT INTO fsma.cte_events"
-            )
+            raise AssertionError("dual_write=False must NOT execute INSERT INTO fsma.cte_events")
+
         session.add_rule(r"INSERT INTO fsma\.cte_events", _fail)
 
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         result = store.persist_event(_make_event())
         assert result.success is True
@@ -191,7 +196,9 @@ class TestPersistEventsBatchPropagatesDualWriteFailure_Issue1277:
         session.add_rule(r"INSERT INTO fsma\.cte_events", _cte_events_rule)
 
         store = CanonicalEventStore(
-            session=session, dual_write=True, skip_chain_write=True,
+            session=session,
+            dual_write=True,
+            skip_chain_write=True,
         )
 
         with pytest.raises(RuntimeError, match="second event's legacy write failed"):
@@ -215,10 +222,13 @@ class TestPersistEventsBatchPropagatesDualWriteFailure_Issue1277:
 
         def _fail(sql, params):
             raise AssertionError("dual_write=False must skip legacy INSERTs")
+
         session.add_rule(r"INSERT INTO fsma\.cte_events", _fail)
 
         store = CanonicalEventStore(
-            session=session, dual_write=False, skip_chain_write=True,
+            session=session,
+            dual_write=False,
+            skip_chain_write=True,
         )
         results = store.persist_events_batch(evts)
         assert len(results) == 3

@@ -3,18 +3,18 @@
 Split from supplier_onboarding_routes.py for maintainability.
 All shared models, helpers, and constants are imported from the original module.
 """
+
 from __future__ import annotations
 
-import structlog
 import uuid as uuid_module
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.rate_limit import BruteForceLimiter
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
-
-from shared.rate_limit import BruteForceLimiter
 
 from .audit import AuditLogger
 from .database import get_session
@@ -29,21 +29,21 @@ from .sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-from .supplier_graph_sync import supplier_graph_sync
 from .supplier_cte_service import _persist_supplier_cte_event
+from .supplier_graph_sync import supplier_graph_sync
 from .supplier_onboarding_routes import (
     FTL_CATEGORY_LOOKUP,
     SupplierDemoResetResponse,
     SupplierFunnelEventRequest,
     SupplierFunnelEventResponse,
-    SupplierSocialProofResponse,
     SupplierFunnelSummaryResponse,
-    _get_supplier_facility_or_404,
-    _derive_required_ctes,
-    _iso_utc,
-    _compute_supplier_compliance,
-    _compute_social_proof,
+    SupplierSocialProofResponse,
     _compute_funnel_summary,
+    _compute_social_proof,
+    _compute_supplier_compliance,
+    _derive_required_ctes,
+    _get_supplier_facility_or_404,
+    _iso_utc,
 )
 
 logger = structlog.get_logger("supplier_funnel_routes")
@@ -123,10 +123,7 @@ async def reset_supplier_demo(
             status_code=400,
             detail={
                 "error": "confirmation_required",
-                "message": (
-                    f"Demo reset requires the query param "
-                    f"'?confirm={_DEMO_RESET_CONFIRM_PHRASE}'."
-                ),
+                "message": (f"Demo reset requires the query param '?confirm={_DEMO_RESET_CONFIRM_PHRASE}'."),
             },
         )
 
@@ -168,8 +165,7 @@ async def reset_supplier_demo(
             detail={
                 "error": "rate_limited",
                 "message": (
-                    "Supplier demo reset is limited to 1 invocation per "
-                    "24 hours per supplier. Try again tomorrow."
+                    "Supplier demo reset is limited to 1 invocation per 24 hours per supplier. Try again tomorrow."
                 ),
             },
         )
@@ -180,22 +176,34 @@ async def reset_supplier_demo(
     # models — see class docstring).
     pre_counts: dict[str, int] = {}
     for label, stmt in (
-        ("supplier_cte_events", select(SupplierCTEEventModel.id).where(
-            SupplierCTEEventModel.tenant_id == tenant_id,
-            SupplierCTEEventModel.supplier_user_id == current_user.id,
-        )),
-        ("supplier_traceability_lots", select(SupplierTraceabilityLotModel.id).where(
-            SupplierTraceabilityLotModel.tenant_id == tenant_id,
-            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
-        )),
-        ("supplier_funnel_events", select(SupplierFunnelEventModel.id).where(
-            SupplierFunnelEventModel.tenant_id == tenant_id,
-            SupplierFunnelEventModel.supplier_user_id == current_user.id,
-        )),
-        ("supplier_facilities", select(SupplierFacilityModel.id).where(
-            SupplierFacilityModel.tenant_id == tenant_id,
-            SupplierFacilityModel.supplier_user_id == current_user.id,
-        )),
+        (
+            "supplier_cte_events",
+            select(SupplierCTEEventModel.id).where(
+                SupplierCTEEventModel.tenant_id == tenant_id,
+                SupplierCTEEventModel.supplier_user_id == current_user.id,
+            ),
+        ),
+        (
+            "supplier_traceability_lots",
+            select(SupplierTraceabilityLotModel.id).where(
+                SupplierTraceabilityLotModel.tenant_id == tenant_id,
+                SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+            ),
+        ),
+        (
+            "supplier_funnel_events",
+            select(SupplierFunnelEventModel.id).where(
+                SupplierFunnelEventModel.tenant_id == tenant_id,
+                SupplierFunnelEventModel.supplier_user_id == current_user.id,
+            ),
+        ),
+        (
+            "supplier_facilities",
+            select(SupplierFacilityModel.id).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == current_user.id,
+            ),
+        ),
     ):
         pre_counts[label] = len(db.execute(stmt).all())
 
@@ -232,10 +240,7 @@ async def reset_supplier_demo(
             status_code=500,
             detail={
                 "error": "audit_write_failed",
-                "message": (
-                    "Could not write required audit entry. Demo reset "
-                    "aborted — no data was modified."
-                ),
+                "message": ("Could not write required audit entry. Demo reset aborted — no data was modified."),
             },
         )
 
@@ -369,22 +374,198 @@ async def reset_supplier_demo(
 
     seed_now = datetime.now(timezone.utc)
     event_blueprints = [
-        {"facility_key": "grower", "cte_type": "harvesting", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 120, "kde_data": {"quantity": 520, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "HRV-1001"}},
-        {"facility_key": "grower", "cte_type": "cooling", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 116, "kde_data": {"quantity": 520, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "CL-1001"}},
-        {"facility_key": "grower", "cte_type": "initial_packing", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 112, "kde_data": {"quantity": 500, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "IP-1001"}},
-        {"facility_key": "grower", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 108, "kde_data": {"quantity": 340, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "RCV-1002"}},
-        {"facility_key": "grower", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 104, "kde_data": {"quantity": 320, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "XFM-1002"}},
-        {"facility_key": "grower", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 100, "kde_data": {"quantity": 320, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "BOL-1002"}},
-        {"facility_key": "cooler", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 96, "kde_data": {"quantity": 500, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-2001"}},
-        {"facility_key": "cooler", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 92, "kde_data": {"quantity": 490, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "XFM-2001"}},
-        {"facility_key": "cooler", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 88, "kde_data": {"quantity": 490, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-2001"}},
-        {"facility_key": "packer", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 84, "kde_data": {"quantity": 480, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-3001"}},
-        {"facility_key": "packer", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 80, "kde_data": {"quantity": 470, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-3001"}},
-        {"facility_key": "packer", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1003", "hours_ago": 76, "kde_data": {"quantity": 260, "unit_of_measure": "cases", "product_description": "Romaine Hearts", "reference_document": "RCV-3003"}},
-        {"facility_key": "packer", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1003", "hours_ago": 72, "kde_data": {"quantity": 250, "unit_of_measure": "cases", "product_description": "Romaine Hearts", "reference_document": "BOL-3003"}},
-        {"facility_key": "distributor", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 64, "kde_data": {"quantity": 460, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-4001"}},
-        {"facility_key": "distributor", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 60, "kde_data": {"quantity": 450, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "XFM-4001"}},
-        {"facility_key": "distributor", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 56, "kde_data": {"quantity": 450, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-4001"}},
+        {
+            "facility_key": "grower",
+            "cte_type": "harvesting",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 120,
+            "kde_data": {
+                "quantity": 520,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "HRV-1001",
+            },
+        },
+        {
+            "facility_key": "grower",
+            "cte_type": "cooling",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 116,
+            "kde_data": {
+                "quantity": 520,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "CL-1001",
+            },
+        },
+        {
+            "facility_key": "grower",
+            "cte_type": "initial_packing",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 112,
+            "kde_data": {
+                "quantity": 500,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "IP-1001",
+            },
+        },
+        {
+            "facility_key": "grower",
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-1002",
+            "hours_ago": 108,
+            "kde_data": {
+                "quantity": 340,
+                "unit_of_measure": "cases",
+                "product_description": "Spring Mix",
+                "reference_document": "RCV-1002",
+            },
+        },
+        {
+            "facility_key": "grower",
+            "cte_type": "transforming",
+            "tlc_code": "TLC-2026-SAL-1002",
+            "hours_ago": 104,
+            "kde_data": {
+                "quantity": 320,
+                "unit_of_measure": "cases",
+                "product_description": "Spring Mix",
+                "reference_document": "XFM-1002",
+            },
+        },
+        {
+            "facility_key": "grower",
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-1002",
+            "hours_ago": 100,
+            "kde_data": {
+                "quantity": 320,
+                "unit_of_measure": "cases",
+                "product_description": "Spring Mix",
+                "reference_document": "BOL-1002",
+            },
+        },
+        {
+            "facility_key": "cooler",
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 96,
+            "kde_data": {
+                "quantity": 500,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "RCV-2001",
+            },
+        },
+        {
+            "facility_key": "cooler",
+            "cte_type": "transforming",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 92,
+            "kde_data": {
+                "quantity": 490,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "XFM-2001",
+            },
+        },
+        {
+            "facility_key": "cooler",
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 88,
+            "kde_data": {
+                "quantity": 490,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "BOL-2001",
+            },
+        },
+        {
+            "facility_key": "packer",
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 84,
+            "kde_data": {
+                "quantity": 480,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "RCV-3001",
+            },
+        },
+        {
+            "facility_key": "packer",
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 80,
+            "kde_data": {
+                "quantity": 470,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "BOL-3001",
+            },
+        },
+        {
+            "facility_key": "packer",
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-1003",
+            "hours_ago": 76,
+            "kde_data": {
+                "quantity": 260,
+                "unit_of_measure": "cases",
+                "product_description": "Romaine Hearts",
+                "reference_document": "RCV-3003",
+            },
+        },
+        {
+            "facility_key": "packer",
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-1003",
+            "hours_ago": 72,
+            "kde_data": {
+                "quantity": 250,
+                "unit_of_measure": "cases",
+                "product_description": "Romaine Hearts",
+                "reference_document": "BOL-3003",
+            },
+        },
+        {
+            "facility_key": "distributor",
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 64,
+            "kde_data": {
+                "quantity": 460,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "RCV-4001",
+            },
+        },
+        {
+            "facility_key": "distributor",
+            "cte_type": "transforming",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 60,
+            "kde_data": {
+                "quantity": 450,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "XFM-4001",
+            },
+        },
+        {
+            "facility_key": "distributor",
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-1001",
+            "hours_ago": 56,
+            "kde_data": {
+                "quantity": 450,
+                "unit_of_measure": "cases",
+                "product_description": "Baby Spinach",
+                "reference_document": "BOL-4001",
+            },
+        },
     ]
 
     seeded_records: list[tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, SupplierFacilityModel]] = []
@@ -453,13 +634,11 @@ async def reset_supplier_demo(
     )
 
     seeded_tlc_codes = list(dict.fromkeys(lot.tlc_code for _, lot, _facility in seeded_records if lot.tlc_code))
-    seeded_cte_types = list(dict.fromkeys(event.cte_type for event, _lot, _facility in seeded_records if event.cte_type))
+    seeded_cte_types = list(
+        dict.fromkeys(event.cte_type for event, _lot, _facility in seeded_records if event.cte_type)
+    )
     focus_gap = next(
-        (
-            gap
-            for gap in gap_payloads
-            if gap.get("facility_id") == str(focus_facility.id)
-        ),
+        (gap for gap in gap_payloads if gap.get("facility_id") == str(focus_facility.id)),
         gap_payloads[0] if gap_payloads else None,
     )
     return SupplierDemoResetResponse(

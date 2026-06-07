@@ -18,6 +18,7 @@ Requires Docker for testcontainers. If Docker is unavailable the test
 module skips cleanly — the CI guard (scripts/check_rls_fallback.py) is
 the static safety net.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -34,7 +35,6 @@ from sqlalchemy.engine import Engine  # noqa: E402
 from sqlalchemy.exc import InternalError, ProgrammingError  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
-
 # Subset of tenant-scoped tables covered by the active RLS hardening chain.
 # We don't need to re-verify every one —
 # a representative sample across each source migration is sufficient to
@@ -47,14 +47,18 @@ from testcontainers.postgres import PostgresContainer  # noqa: E402
 SAMPLE_TABLES = [
     # (table_name, insert_columns, values_sql_placeholders)
     # The insert SQL uses :tid for tenant_id and gen_random_uuid() for id.
-    ("pcos_companies", "id, tenant_id, legal_name, entity_type",
-     "gen_random_uuid(), :tid, 'TestCo', 'llc_single_member'"),
-    ("pcos_projects", "id, tenant_id, company_id, project_name",
-     "gen_random_uuid(), :tid, gen_random_uuid(), 'TestProject'"),
-    ("pcos_evidence", "id, tenant_id",
-     "gen_random_uuid(), :tid"),
-    ("vertical_projects", "id, tenant_id",
-     "gen_random_uuid(), :tid"),
+    (
+        "pcos_companies",
+        "id, tenant_id, legal_name, entity_type",
+        "gen_random_uuid(), :tid, 'TestCo', 'llc_single_member'",
+    ),
+    (
+        "pcos_projects",
+        "id, tenant_id, company_id, project_name",
+        "gen_random_uuid(), :tid, gen_random_uuid(), 'TestProject'",
+    ),
+    ("pcos_evidence", "id, tenant_id", "gen_random_uuid(), :tid"),
+    ("vertical_projects", "id, tenant_id", "gen_random_uuid(), :tid"),
 ]
 
 
@@ -75,9 +79,7 @@ def pg_engine() -> Iterator[Engine]:
         pytest.skip(f"PostgresContainer unavailable: {exc}")
 
     try:
-        url = container.get_connection_url().replace(
-            "postgresql+psycopg2://", "postgresql+psycopg://"
-        )
+        url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
         engine = create_engine(url, future=True)
 
         _bootstrap_schema(engine)
@@ -96,47 +98,59 @@ def _bootstrap_schema(engine: Engine) -> None:
     with engine.begin() as conn:
         # Supabase stubs: the `authenticated` role and `auth.uid()` fn.
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth"))
-        conn.execute(text(
-            "CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid "
-            "AS $$ SELECT '00000000-0000-0000-0000-000000000000'::uuid $$ "
-            "LANGUAGE SQL"
-        ))
-        conn.execute(text("""
+        conn.execute(
+            text(
+                "CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid "
+                "AS $$ SELECT '00000000-0000-0000-0000-000000000000'::uuid $$ "
+                "LANGUAGE SQL"
+            )
+        )
+        conn.execute(
+            text("""
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
                     CREATE ROLE authenticated;
                 END IF;
             END $$
-        """))
+        """)
+        )
         # Create the sample tables with the minimal columns we need.
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS pcos_companies (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL,
                 legal_name text,
                 entity_type text
             )
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS pcos_projects (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL,
                 company_id uuid,
                 project_name text
             )
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS pcos_evidence (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL
             )
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS vertical_projects (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL
             )
-        """))
+        """)
+        )
         for tbl, _, _ in SAMPLE_TABLES:
             conn.execute(text(f"GRANT SELECT ON {tbl} TO authenticated"))
 
@@ -146,7 +160,8 @@ def _apply_rls_hardening_pattern(engine: Engine) -> None:
     FORCE RLS on the sample tables. Mirrors the active hardening shape
     for the subset of tables we test."""
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION get_tenant_context()
             RETURNS UUID AS $fn$
             DECLARE
@@ -160,22 +175,26 @@ def _apply_rls_hardening_pattern(engine: Engine) -> None:
                 RETURN tid::UUID;
             END;
             $fn$ LANGUAGE plpgsql STABLE
-        """))
+        """)
+        )
 
         for tbl, _, _ in SAMPLE_TABLES:
             conn.execute(text(f"ALTER TABLE {tbl} ENABLE ROW LEVEL SECURITY"))
             conn.execute(text(f"ALTER TABLE {tbl} FORCE ROW LEVEL SECURITY"))
             conn.execute(text(f"DROP POLICY IF EXISTS {tbl}_tenant_isolation ON {tbl}"))
-            conn.execute(text(
-                f'CREATE POLICY {tbl}_tenant_isolation ON {tbl} '
-                f'FOR ALL TO public '
-                f'USING (tenant_id = get_tenant_context())'
-            ))
+            conn.execute(
+                text(
+                    f"CREATE POLICY {tbl}_tenant_isolation ON {tbl} "
+                    f"FOR ALL TO public "
+                    f"USING (tenant_id = get_tenant_context())"
+                )
+            )
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("table,cols,vals", SAMPLE_TABLES)
 def test_same_tenant_context_sees_row(pg_engine: Engine, table: str, cols: str, vals: str):
@@ -207,8 +226,7 @@ def test_cross_tenant_context_hides_row(pg_engine: Engine, table: str, cols: str
         conn.execute(text("SET ROLE authenticated"))
         count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
         assert count == 0, (
-            f"{table}: cross-tenant row leaked — got {count} rows under wrong tenant "
-            "(fail-open RLS not fixed)"
+            f"{table}: cross-tenant row leaked — got {count} rows under wrong tenant (fail-open RLS not fixed)"
         )
 
 
@@ -239,8 +257,10 @@ def test_fallback_uuid_context_sees_no_sandbox_data(pg_engine: Engine):
     sandbox = uuid.UUID("00000000-0000-0000-0000-000000000001")
     with pg_engine.begin() as conn:
         conn.execute(
-            text("INSERT INTO pcos_companies (id, tenant_id, legal_name, entity_type) "
-                 "VALUES (gen_random_uuid(), :tid, 'RealCo', 'llc_single_member')"),
+            text(
+                "INSERT INTO pcos_companies (id, tenant_id, legal_name, entity_type) "
+                "VALUES (gen_random_uuid(), :tid, 'RealCo', 'llc_single_member')"
+            ),
             {"tid": real_tenant},
         )
 

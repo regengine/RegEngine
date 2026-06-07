@@ -39,6 +39,7 @@ NOW = datetime(2026, 3, 20, 12, 0, 0, tzinfo=timezone.utc)
 
 class _Row(tuple):
     """Tuple subclass that behaves like a SQLAlchemy row."""
+
     pass
 
 
@@ -72,11 +73,24 @@ def _make_event_row(
     schema_version: str = "1.0",
     created_at: datetime = NOW,
 ) -> _Row:
-    return _Row((
-        event_id, event_type, tlc, product_ref, quantity, uom,
-        from_facility, to_facility, ts, source_system, status,
-        confidence, schema_version, created_at,
-    ))
+    return _Row(
+        (
+            event_id,
+            event_type,
+            tlc,
+            product_ref,
+            quantity,
+            uom,
+            from_facility,
+            to_facility,
+            ts,
+            source_system,
+            status,
+            confidence,
+            schema_version,
+            created_at,
+        )
+    )
 
 
 def _make_run_row(
@@ -92,11 +106,21 @@ def _make_run_row(
     started_at: datetime = NOW,
     completed_at: datetime = NOW,
 ) -> _Row:
-    return _Row((
-        run_id, source_system, file_name, record_count,
-        accepted, rejected, status, mapper_version,
-        initiated_by, started_at, completed_at,
-    ))
+    return _Row(
+        (
+            run_id,
+            source_system,
+            file_name,
+            record_count,
+            accepted,
+            rejected,
+            status,
+            mapper_version,
+            initiated_by,
+            started_at,
+            completed_at,
+        )
+    )
 
 
 def _make_run_detail_row(
@@ -116,11 +140,25 @@ def _make_run_detail_row(
     completed_at: datetime = NOW,
     errors: str = "[]",
 ) -> _Row:
-    return _Row((
-        run_id, source_system, file_name, file_hash, file_size,
-        record_count, accepted, rejected, status, mapper_version,
-        schema_version, initiated_by, started_at, completed_at, errors,
-    ))
+    return _Row(
+        (
+            run_id,
+            source_system,
+            file_name,
+            file_hash,
+            file_size,
+            record_count,
+            accepted,
+            rejected,
+            status,
+            mapper_version,
+            schema_version,
+            initiated_by,
+            started_at,
+            completed_at,
+            errors,
+        )
+    )
 
 
 def _make_eval_row(
@@ -230,14 +268,18 @@ def principal() -> IngestionPrincipal:
 @pytest.fixture()
 def list_session() -> _FakeSession:
     """Session pre-loaded for list_records: count then rows."""
-    return _FakeSession([
-        _Result(row=(3,)),  # COUNT(*)
-        _Result(rows=[
-            _make_event_row(event_id="evt-1"),
-            _make_event_row(event_id="evt-2"),
-            _make_event_row(event_id="evt-3"),
-        ]),
-    ])
+    return _FakeSession(
+        [
+            _Result(row=(3,)),  # COUNT(*)
+            _Result(
+                rows=[
+                    _make_event_row(event_id="evt-1"),
+                    _make_event_row(event_id="evt-2"),
+                    _make_event_row(event_id="evt-3"),
+                ]
+            ),
+        ]
+    )
 
 
 @pytest.fixture()
@@ -264,19 +306,30 @@ class TestListRecords:
         resp = client.get("/api/v1/records", params={"tenant_id": TENANT_ID})
         evt = resp.json()["events"][0]
         expected_keys = {
-            "event_id", "event_type", "traceability_lot_code",
-            "product_reference", "quantity", "unit_of_measure",
-            "from_facility_reference", "to_facility_reference",
-            "event_timestamp", "source_system", "status",
-            "confidence_score", "schema_version", "created_at",
+            "event_id",
+            "event_type",
+            "traceability_lot_code",
+            "product_reference",
+            "quantity",
+            "unit_of_measure",
+            "from_facility_reference",
+            "to_facility_reference",
+            "event_timestamp",
+            "source_system",
+            "status",
+            "confidence_score",
+            "schema_version",
+            "created_at",
         }
         assert set(evt.keys()) == expected_keys
 
     def test_pagination_params_accepted(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=(100,)),
-            _Result(rows=[_make_event_row(event_id="evt-50")]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(100,)),
+                _Result(rows=[_make_event_row(event_id="evt-50")]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             "/api/v1/records",
@@ -288,10 +341,12 @@ class TestListRecords:
         assert len(body["events"]) == 1
 
     def test_filter_by_event_type(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row(event_type="receiving")]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row(event_type="receiving")]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             "/api/v1/records",
@@ -301,10 +356,12 @@ class TestListRecords:
         assert resp.json()["events"][0]["event_type"] == "receiving"
 
     def test_filter_by_tlc(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row(tlc="TLC-SPECIAL")]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row(tlc="TLC-SPECIAL")]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             "/api/v1/records",
@@ -314,10 +371,12 @@ class TestListRecords:
         assert resp.json()["events"][0]["traceability_lot_code"] == "TLC-SPECIAL"
 
     def test_empty_result(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=(0,)),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(0,)),
+                _Result(rows=[]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -350,10 +409,12 @@ class TestGetRecord:
         exc_rows = [_make_exception_row()]
 
         # Session: first call for eval query, second for exception query
-        session = _FakeSession([
-            _Result(rows=eval_rows),
-            _Result(rows=exc_rows),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=eval_rows),
+                _Result(rows=exc_rows),
+            ]
+        )
 
         # Patch CanonicalEventStore
         fake_event = {
@@ -367,6 +428,7 @@ class TestGetRecord:
         class _PatchedStore:
             def __init__(self, sess, dual_write=False):
                 pass
+
             def get_event(self, tid, eid, include_raw_payload=False):
                 if tid == TENANT_ID and eid == EVENT_ID:
                     return dict(fake_event)
@@ -388,9 +450,7 @@ class TestGetRecord:
         assert len(body["exception_cases"]) == 1
         assert body["exception_cases"][0]["case_id"] == "case-001"
 
-    def test_record_not_found_returns_404(
-        self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_record_not_found_returns_404(self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession([])
 
         import app.canonical_router as cr_module
@@ -398,6 +458,7 @@ class TestGetRecord:
         class _EmptyStore:
             def __init__(self, sess, dual_write=False):
                 pass
+
             def get_event(self, tid, eid, include_raw_payload=False):
                 return None
 
@@ -429,10 +490,12 @@ class TestGetRecord:
 class TestGetRecordHistory:
     def test_empty_amendment_chain(self, principal: IngestionPrincipal) -> None:
         # Walk backward returns None (no supersedes), walk forward returns None
-        session = _FakeSession([
-            _Result(row=_Row((EVENT_ID, None, "shipping", "active", NOW, None))),
-            _Result(row=None),  # no forward link
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=_Row((EVENT_ID, None, "shipping", "active", NOW, None))),
+                _Result(row=None),  # no forward link
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(f"/api/v1/records/{EVENT_ID}/history", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -443,14 +506,16 @@ class TestGetRecordHistory:
     def test_amendment_chain_with_predecessor(self, principal: IngestionPrincipal) -> None:
         # Walk backward: first iteration finds a link, second iteration has no further link
         # Walk forward: no successor
-        session = _FakeSession([
-            # backward step 1: event has supersedes_event_id
-            _Result(row=_Row((EVENT_ID, "evt-old", "shipping", "active", NOW, None))),
-            # backward step 2: predecessor has no further link
-            _Result(row=_Row(("evt-old", None, "shipping", "superseded", NOW, None))),
-            # forward step 1: no successor
-            _Result(row=None),
-        ])
+        session = _FakeSession(
+            [
+                # backward step 1: event has supersedes_event_id
+                _Result(row=_Row((EVENT_ID, "evt-old", "shipping", "active", NOW, None))),
+                # backward step 2: predecessor has no further link
+                _Result(row=_Row(("evt-old", None, "shipping", "superseded", NOW, None))),
+                # forward step 1: no successor
+                _Result(row=None),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(f"/api/v1/records/{EVENT_ID}/history", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -477,9 +542,11 @@ class TestGetRecordHistory:
 
 class TestListIngestionRuns:
     def test_returns_runs(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(rows=[_make_run_row(), _make_run_row(run_id="run-002")]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[_make_run_row(), _make_run_row(run_id="run-002")]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records/ingestion-runs", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -489,23 +556,35 @@ class TestListIngestionRuns:
         assert len(body["runs"]) == 2
 
     def test_run_shape(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(rows=[_make_run_row()]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[_make_run_row()]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records/ingestion-runs", params={"tenant_id": TENANT_ID})
         run = resp.json()["runs"][0]
         expected_keys = {
-            "id", "source_system", "source_file_name", "record_count",
-            "accepted_count", "rejected_count", "status", "mapper_version",
-            "initiated_by", "started_at", "completed_at",
+            "id",
+            "source_system",
+            "source_file_name",
+            "record_count",
+            "accepted_count",
+            "rejected_count",
+            "status",
+            "mapper_version",
+            "initiated_by",
+            "started_at",
+            "completed_at",
         }
         assert set(run.keys()) == expected_keys
 
     def test_filter_by_status(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(rows=[_make_run_row(status="failed")]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[_make_run_row(status="failed")]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             "/api/v1/records/ingestion-runs",
@@ -540,9 +619,11 @@ class TestListIngestionRuns:
 
 class TestGetIngestionRun:
     def test_returns_run_detail(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=_make_run_detail_row()),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=_make_run_detail_row()),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             f"/api/v1/records/ingestion-runs/{RUN_ID}",
@@ -558,9 +639,11 @@ class TestGetIngestionRun:
 
     def test_run_detail_with_errors_list(self, principal: IngestionPrincipal) -> None:
         errors = [{"row": 5, "message": "bad TLC"}]
-        session = _FakeSession([
-            _Result(row=_make_run_detail_row(errors=json.dumps(errors))),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=_make_run_detail_row(errors=json.dumps(errors))),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get(
             f"/api/v1/records/ingestion-runs/{RUN_ID}",
@@ -599,15 +682,14 @@ class TestGetIngestionRun:
 
 
 class TestAuth:
-    def test_no_auth_returns_401_in_production_mode(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_auth_returns_401_in_production_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When API_KEY is configured, requests without a key get 401."""
         monkeypatch.setenv("REGENGINE_ENV", "production")
         monkeypatch.setenv("API_KEY", "secret-master-key")
 
         # Force config cache to clear
         from app.config import get_settings
+
         get_settings.cache_clear()
 
         app = FastAPI()
@@ -631,10 +713,12 @@ class TestAuth:
             tenant_id=TENANT_ID,
             auth_mode="test",
         )
-        session = _FakeSession([
-            _Result(row=(0,)),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(0,)),
+                _Result(rows=[]),
+            ]
+        )
         c = _make_app_and_client(limited_principal, session)
         resp = c.get("/api/v1/records", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 403
@@ -655,10 +739,12 @@ class TestTenantIsolation:
             tenant_id=TENANT_ID,
             auth_mode="test",
         )
-        session = _FakeSession([
-            _Result(row=(0,)),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(0,)),
+                _Result(rows=[]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records", params={"tenant_id": OTHER_TENANT_ID})
         assert resp.status_code == 403
@@ -675,10 +761,12 @@ class TestTenantIsolation:
             tenant_id=TENANT_ID,
             auth_mode="test",
         )
-        session = _FakeSession([
-            _Result(row=(0,)),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(0,)),
+                _Result(rows=[]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records", params={"tenant_id": OTHER_TENANT_ID})
         assert resp.status_code == 403
@@ -692,10 +780,12 @@ class TestTenantIsolation:
             tenant_id=TENANT_ID,
             auth_mode="test",
         )
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row()]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row()]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         # No tenant_id in params — should use principal's tenant_id
         resp = c.get("/api/v1/records")
@@ -710,10 +800,12 @@ class TestTenantIsolation:
             tenant_id=None,
             auth_mode="test",
         )
-        session = _FakeSession([
-            _Result(row=(0,)),
-            _Result(rows=[]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(0,)),
+                _Result(rows=[]),
+            ]
+        )
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records")
         assert resp.status_code == 400

@@ -13,6 +13,7 @@ No live services required — the DB session and Kafka producer are mocked.
 
 Covers issue #1134.
 """
+
 from __future__ import annotations
 
 import sys
@@ -34,12 +35,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
 from services.nlp.app.extractors.fsma_types import (
+    CTE,
+    KDE,
     CTEType,
     DocumentType,
     ExtractionConfidence,
     FSMAExtractionResult,
-    KDE,
-    CTE,
 )
 
 # ---------------------------------------------------------------------------
@@ -211,19 +212,13 @@ class TestNLPToComplianceE2E:
 
         # --- KDE completeness for first CTE ---
         first_cte: CTE = result.ctes[0]
-        assert first_cte.kdes.traceability_lot_code, (
-            "TLC must be extracted from BOL lot line"
-        )
-        assert first_cte.kdes.quantity is not None, (
-            "Quantity must be extracted from BOL item line"
-        )
+        assert first_cte.kdes.traceability_lot_code, "TLC must be extracted from BOL lot line"
+        assert first_cte.kdes.quantity is not None, "Quantity must be extracted from BOL item line"
 
         # --- Compliance gate ---
         compliance = validate_extraction_for_compliance(result, "romaine lettuce")
         assert compliance["ftl_commodity"] == "romaine lettuce"
-        assert compliance["valid"] is True, (
-            f"Compliance should pass for FTL commodity. Errors: {compliance['errors']}"
-        )
+        assert compliance["valid"] is True, f"Compliance should pass for FTL commodity. Errors: {compliance['errors']}"
 
     # ------------------------------------------------------------------
     # 2. Non-FTL commodity is rejected before CTE evaluation
@@ -262,11 +257,7 @@ class TestNLPToComplianceE2E:
         )
 
         assert len(result.ctes) > 0, "Harvest log must produce at least one CTE"
-        tlc_values = [
-            cte.kdes.traceability_lot_code
-            for cte in result.ctes
-            if cte.kdes.traceability_lot_code
-        ]
+        tlc_values = [cte.kdes.traceability_lot_code for cte in result.ctes if cte.kdes.traceability_lot_code]
         assert tlc_values, "At least one CTE must carry a TLC from the harvest log"
 
     # ------------------------------------------------------------------
@@ -317,8 +308,8 @@ class TestNLPToComplianceE2E:
         kwargs that WOULD be passed to store_event. The contract is derived
         from inspecting CTEPersistence.store_event's signature directly.
         """
-        import inspect
         import importlib.util as _ilu
+        import inspect
 
         # Load core.py outside its broken package __init__ using
         # importlib machinery that allows relative imports by pre-
@@ -331,8 +322,7 @@ class TestNLPToComplianceE2E:
         if _pkg_name not in _sys.modules:
             _pkg_mod = _types.ModuleType(_pkg_name)
             _pkg_mod.__path__ = [
-                str(Path(__file__).resolve().parent.parent
-                    / "services" / "shared" / "cte_persistence")
+                str(Path(__file__).resolve().parent.parent / "services" / "shared" / "cte_persistence")
             ]
             _pkg_mod.__package__ = _pkg_name
             _sys.modules[_pkg_name] = _pkg_mod
@@ -342,8 +332,7 @@ class TestNLPToComplianceE2E:
             _sub_fqn = f"{_pkg_name}.{_sub}"
             if _sub_fqn not in _sys.modules:
                 _sub_path = str(
-                    Path(__file__).resolve().parent.parent
-                    / "services" / "shared" / "cte_persistence" / f"{_sub}.py"
+                    Path(__file__).resolve().parent.parent / "services" / "shared" / "cte_persistence" / f"{_sub}.py"
                 )
                 _spec = _ilu.spec_from_file_location(_sub_fqn, _sub_path)
                 _mod = _ilu.module_from_spec(_spec)
@@ -355,8 +344,7 @@ class TestNLPToComplianceE2E:
         _core_fqn = f"{_pkg_name}.core"
         if _core_fqn not in _sys.modules:
             _core_path = str(
-                Path(__file__).resolve().parent.parent
-                / "services" / "shared" / "cte_persistence" / "core.py"
+                Path(__file__).resolve().parent.parent / "services" / "shared" / "cte_persistence" / "core.py"
             )
             _spec = _ilu.spec_from_file_location(_core_fqn, _core_path)
             _core_mod = _ilu.module_from_spec(_spec)
@@ -411,14 +399,10 @@ class TestNLPToComplianceE2E:
 
             # All required parameters must be present.
             missing = required_params - set(kwargs)
-            assert not missing, (
-                f"NLP→persistence mapping missing required args: {missing}"
-            )
+            assert not missing, f"NLP→persistence mapping missing required args: {missing}"
 
             # event_type must be a valid CTEType string (store_event validates this).
-            assert cte.type.value in {t.value for t in CTEType}, (
-                f"event_type '{cte.type.value}' is not a valid CTEType"
-            )
+            assert cte.type.value in {t.value for t in CTEType}, f"event_type '{cte.type.value}' is not a valid CTEType"
 
             # tenant_id must be non-empty.
             assert kwargs["tenant_id"], "tenant_id must not be empty at persistence"
@@ -474,17 +458,15 @@ class TestNLPToComplianceE2E:
         )
 
         # At least one CTE should be above or at the auto-accept boundary
-        above_threshold = [
-            cte for cte in result.ctes if cte.confidence >= HITL_CONFIDENCE_THRESHOLD
-        ]
+        above_threshold = [cte for cte in result.ctes if cte.confidence >= HITL_CONFIDENCE_THRESHOLD]
         # This is a soft assertion — the extractor may legitimately
         # put all CTEs below threshold if the doc lacks required fields.
         # We log a warning rather than fail hard, since the routing
         # decision is a downstream concern.
         if not above_threshold:
             import warnings
+
             warnings.warn(
-                "No CTEs at or above HITL threshold for sample BOL — "
-                "all events would route to nlp.needs_review",
+                "No CTEs at or above HITL threshold for sample BOL — all events would route to nlp.needs_review",
                 stacklevel=1,
             )

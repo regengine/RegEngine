@@ -19,6 +19,7 @@ can't slip past a reader's quoting heuristics.
 
 Related issues: #1081 (ingestion), #1272 (compliance), EPIC-L (#1655).
 """
+
 from __future__ import annotations
 
 from typing import Iterable, Mapping

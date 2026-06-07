@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
 from shared import kafka_compat as kc
 
 
@@ -144,4 +143,3 @@ def test_consumer_poll_returns_legacy_batch_shape(monkeypatch):
     consumer.close()
     assert holder["consumer"].committed is True
     assert holder["consumer"].closed is True
-

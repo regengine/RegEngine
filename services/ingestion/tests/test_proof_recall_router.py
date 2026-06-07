@@ -13,16 +13,16 @@ Public recall-drill endpoint. Coverage:
   429 (rate-limit triggers), and the response is deterministic across
   successive successful calls.
 """
+
 from __future__ import annotations
 
 import sys
 from itertools import count
 
+import app.proof_recall_router as proof_recall_module
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import app.proof_recall_router as proof_recall_module
 
 FDA_24H_MANDATE_SECONDS = proof_recall_module.FDA_24H_MANDATE_SECONDS
 FROZEN_LOT_CODE = proof_recall_module.FROZEN_LOT_CODE
@@ -95,10 +95,7 @@ class TestTenantIsolation:
         from app import proof_recall_router as mod
 
         src = open(mod.__file__).read()
-        import_lines = [
-            ln for ln in src.splitlines()
-            if ln.lstrip().startswith(("import ", "from "))
-        ]
+        import_lines = [ln for ln in src.splitlines() if ln.lstrip().startswith(("import ", "from "))]
         forbidden = [
             "shared.database",
             "shared.cte_persistence",
@@ -111,10 +108,7 @@ class TestTenantIsolation:
         ]
         joined = "\n".join(import_lines)
         offenders = [tok for tok in forbidden if tok in joined]
-        assert not offenders, (
-            f"proof_recall_router imports tenant-scoped symbols: {offenders}\n"
-            f"Import lines:\n{joined}"
-        )
+        assert not offenders, f"proof_recall_router imports tenant-scoped symbols: {offenders}\nImport lines:\n{joined}"
 
     def test_tenant_id_header_is_ignored(self, client: TestClient):
         """A caller-supplied tenant header must not change behavior."""
@@ -202,10 +196,7 @@ class TestFailureModes:
         _reset_limiter_state()
         for i in range(5):
             resp = client.post("/api/v1/proof/recall-drill")
-            assert resp.status_code == 200, (
-                f"request {i + 1}/5 unexpectedly failed: "
-                f"{resp.status_code} {resp.text}"
-            )
+            assert resp.status_code == 200, f"request {i + 1}/5 unexpectedly failed: {resp.status_code} {resp.text}"
 
         resp = client.post("/api/v1/proof/recall-drill")
         assert resp.status_code == 429, resp.text

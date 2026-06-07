@@ -240,16 +240,16 @@ class GraphOutboxDrainer:
     #: Backoff schedule (seconds) indexed by attempt count. Attempt 0 =
     #: first retry after initial failure.
     _BACKOFF = (
-        5.0,     # 1st retry:    +5 s
-        30.0,    # 2nd retry:   +30 s
-        120.0,   # 3rd:       +2 min
-        600.0,   # 4th:      +10 min
+        5.0,  # 1st retry:    +5 s
+        30.0,  # 2nd retry:   +30 s
+        120.0,  # 3rd:       +2 min
+        600.0,  # 4th:      +10 min
         1800.0,  # 5th:      +30 min
         3600.0,  # 6th:       +1 h
-        14400.0, # 7th:       +4 h
-        43200.0, # 8th:      +12 h
-        86400.0, # 9th:       +1 d
-        86400.0, # 10th:      +1 d
+        14400.0,  # 7th:       +4 h
+        43200.0,  # 8th:      +12 h
+        86400.0,  # 9th:       +1 d
+        86400.0,  # 10th:      +1 d
     )
 
     def __init__(
@@ -306,8 +306,9 @@ class GraphOutboxDrainer:
         # Postgres (TIMESTAMPTZ, Python datetime coerces fine) and on
         # SQLite (text column, string-sorts by ISO ordering).
         now = datetime.now(timezone.utc).isoformat()
-        rows = self._session.execute(
-            text("""
+        rows = (
+            self._session.execute(
+                text("""
                 SELECT id, tenant_id, operation, cypher, params,
                        attempts, max_attempts, dedupe_key
                 FROM graph_outbox
@@ -316,8 +317,11 @@ class GraphOutboxDrainer:
                 ORDER BY next_attempt_at ASC, id ASC
                 LIMIT :limit
             """),
-            {"now": now, "limit": batch_size},
-        ).mappings().all()
+                {"now": now, "limit": batch_size},
+            )
+            .mappings()
+            .all()
+        )
         return [
             OutboxRow(
                 id=r["id"],
@@ -475,15 +479,19 @@ def reconcile_graph_outbox(session: Session) -> OutboxHealth:
     have wired up. The drainer emits per-row structured logs; this is
     the coarse-grained health check for alerting.
     """
-    row = session.execute(
-        text("""
+    row = (
+        session.execute(
+            text("""
             SELECT
                 COUNT(*) FILTER (WHERE status = 'pending')  AS pending_count,
                 COUNT(*) FILTER (WHERE status = 'failed')   AS failed_count,
                 MIN(enqueued_at) FILTER (WHERE status = 'pending') AS oldest_pending
             FROM graph_outbox
         """)
-    ).mappings().first()
+        )
+        .mappings()
+        .first()
+    )
 
     oldest = row["oldest_pending"] if row else None
     age_seconds: Optional[float] = None

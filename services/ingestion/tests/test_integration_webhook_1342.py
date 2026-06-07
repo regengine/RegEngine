@@ -18,9 +18,6 @@ Issue: #1342
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import integration_webhook as iw
 from app.integration_webhook import (
     FieldMapping,
@@ -30,7 +27,8 @@ from app.integration_webhook import (
     _extract_nested,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -210,7 +208,7 @@ class TestReceiveWebhook:
         """Calling the stub endpoint raises NotImplementedError so a future
         accidental wire-up surfaces immediately rather than silently accepting
         unauthenticated traffic."""
-        from app.integration_webhook import receive_webhook, FieldMapping
+        from app.integration_webhook import FieldMapping, receive_webhook
 
         async def _run():
             return await receive_webhook(
@@ -246,6 +244,7 @@ class TestReceiveWebhook:
         wiring exists for it in services/ingestion/main.py.
         """
         import importlib
+
         # Re-import to ensure no side effects.
         importlib.import_module("app.integration_webhook")
         # Best-effort check: load main.py source and verify it does not

@@ -9,35 +9,36 @@ Mock pattern: stub ``shared.auth.get_key_store`` to return a fake store
 with a controllable ``validate_key`` so we can exercise success / 401 /
 403 / 429 paths without standing up a real database.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
-
 import shared.partner_auth as partner_auth
+from fastapi import HTTPException
 
 
 @contextmanager
 def _patched_partner_store(fake_store):
     """Patch the auth module's resolver to return the fake store."""
-    with patch.object(
-        partner_auth,
-        "get_key_store",
-        return_value=fake_store,
-    ), patch.object(
-        partner_auth,
-        "DatabaseAPIKeyStore",
-        new=type(fake_store),
+    with (
+        patch.object(
+            partner_auth,
+            "get_key_store",
+            return_value=fake_store,
+        ),
+        patch.object(
+            partner_auth,
+            "DatabaseAPIKeyStore",
+            new=type(fake_store),
+        ),
     ):
         yield
 
 
-def _fake_validated_key(
-    scopes: list[str], partner_id: str | None = "partner_acme"
-) -> MagicMock:
+def _fake_validated_key(scopes: list[str], partner_id: str | None = "partner_acme") -> MagicMock:
     """Return an object that quacks like ``APIKeyResponse``.
 
     ``partner_id`` is a real column on ``api_keys`` (v076) — set it
@@ -70,9 +71,7 @@ def _fake_db_store(
 ) -> MagicMock:
     fake_store = MagicMock()
     fake_store.validate_key = AsyncMock(return_value=validate_return)
-    fake_store.check_rate_limit = AsyncMock(
-        return_value=_rate_info(rate_allowed, retry_after)
-    )
+    fake_store.check_rate_limit = AsyncMock(return_value=_rate_info(rate_allowed, retry_after))
     return fake_store
 
 
@@ -91,9 +90,7 @@ def _fake_request(path: str = "/partner/anything") -> MagicMock:
 async def test_missing_partner_header_returns_401():
     """No header → 401 with WWW-Authenticate set."""
     with pytest.raises(HTTPException) as exc:
-        await partner_auth.get_partner_principal(
-            request=_fake_request(), x_regengine_partner_key=None
-        )
+        await partner_auth.get_partner_principal(request=_fake_request(), x_regengine_partner_key=None)
     assert exc.value.status_code == 401
     assert exc.value.headers.get("WWW-Authenticate") == "ApiKey"
     assert "Missing" in exc.value.detail
@@ -132,9 +129,7 @@ async def test_valid_key_returns_principal_and_checks_rate_limit():
 @pytest.mark.asyncio
 async def test_valid_key_without_partner_id_returns_403():
     """Partner-tier keys must be bound to a real partner_id column value."""
-    fake_store = _fake_db_store(
-        _fake_validated_key(["partner.clients.read"], partner_id=None)
-    )
+    fake_store = _fake_db_store(_fake_validated_key(["partner.clients.read"], partner_id=None))
     with _patched_partner_store(fake_store):
         with pytest.raises(HTTPException) as exc:
             await partner_auth.get_partner_principal(
@@ -185,9 +180,7 @@ async def test_partner_id_is_not_read_from_extra_data():
     fake_store = _fake_db_store(fake_key)
 
     with _patched_partner_store(fake_store):
-        principal = await partner_auth.get_partner_principal(
-            request=_fake_request(), x_regengine_partner_key="rge_x.s"
-        )
+        principal = await partner_auth.get_partner_principal(request=_fake_request(), x_regengine_partner_key="rge_x.s")
 
     assert principal.partner_id == "partner_legit"
     assert principal.partner_id != "partner_evil"

@@ -4,7 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "check_legacy_dead_code.py"
 
 
@@ -23,11 +22,7 @@ _MODULE = _load_module()
 def test_manual_agent_sweep_guard_allows_dispatch_only(tmp_path: Path) -> None:
     _write_agent_sweep(
         tmp_path,
-        "on:\n"
-        "  workflow_dispatch:\n"
-        "    inputs:\n"
-        "      sweep_type:\n"
-        "        required: true\n",
+        "on:\n  workflow_dispatch:\n    inputs:\n      sweep_type:\n        required: true\n",
     )
 
     assert _MODULE.check_manual_agent_sweep(tmp_path) == []
@@ -36,10 +31,7 @@ def test_manual_agent_sweep_guard_allows_dispatch_only(tmp_path: Path) -> None:
 def test_manual_agent_sweep_guard_blocks_scheduled_sweeps(tmp_path: Path) -> None:
     _write_agent_sweep(
         tmp_path,
-        "on:\n"
-        "  schedule:\n"
-        "    - cron: '0 9 * * 1'\n"
-        "  workflow_dispatch:\n",
+        "on:\n  schedule:\n    - cron: '0 9 * * 1'\n  workflow_dispatch:\n",
     )
 
     findings = _MODULE.check_manual_agent_sweep(tmp_path)

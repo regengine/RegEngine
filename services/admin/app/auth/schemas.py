@@ -8,6 +8,7 @@ subsequent handler extractions can import them without circular risk.
 ``from services.admin.app.auth_routes import LoginRequest`` imports
 continue to resolve unchanged.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional

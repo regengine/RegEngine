@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import uuid4
 
-
 # Map common CSV column headers to our internal field names.
 # Aliases cover abbreviations, snake_case variants, and common spreadsheet headers.
 _CSV_COLUMN_MAP = {
@@ -442,14 +441,16 @@ def _parse_csv_to_events(
                 # Track header alias (once per unique alias)
                 if track_normalizations and col_lower != mapped and col_lower not in header_aliases_logged:
                     header_aliases_logged.add(col_lower)
-                    normalizations.append({
-                        "field": mapped,
-                        "original": col.strip(),
-                        "normalized": mapped,
-                        "action_type": "header_alias",
-                        "reasoning": f"Column '{col.strip()}' is a common alias for the FSMA 204 field '{mapped}'. Renaming ensures consistent rule evaluation.",
-                        "event_index": -1,
-                    })
+                    normalizations.append(
+                        {
+                            "field": mapped,
+                            "original": col.strip(),
+                            "normalized": mapped,
+                            "action_type": "header_alias",
+                            "reasoning": f"Column '{col.strip()}' is a common alias for the FSMA 204 field '{mapped}'. Renaming ensures consistent rule evaluation.",
+                            "event_index": -1,
+                        }
+                    )
                 continue
 
             # 2. Check KDE alias map → store under canonical KDE name
@@ -464,14 +465,16 @@ def _parse_csv_to_events(
                 # Track KDE alias (once per unique alias)
                 if track_normalizations and col_lower != kde_canonical and col_lower not in header_aliases_logged:
                     header_aliases_logged.add(col_lower)
-                    normalizations.append({
-                        "field": kde_canonical,
-                        "original": col.strip(),
-                        "normalized": kde_canonical,
-                        "action_type": "header_alias",
-                        "reasoning": f"Column '{col.strip()}' maps to the KDE field '{kde_canonical}' required by FSMA 204 for rule evaluation.",
-                        "event_index": -1,
-                    })
+                    normalizations.append(
+                        {
+                            "field": kde_canonical,
+                            "original": col.strip(),
+                            "normalized": kde_canonical,
+                            "action_type": "header_alias",
+                            "reasoning": f"Column '{col.strip()}' maps to the KDE field '{kde_canonical}' required by FSMA 204 for rule evaluation.",
+                            "event_index": -1,
+                        }
+                    )
                 continue
 
             # 3. Unknown columns go into kdes as-is
@@ -487,14 +490,16 @@ def _parse_csv_to_events(
             cte_lower = raw_cte.strip().lower().replace(" ", "_").replace("-", "_")
             canonical_cte = _CTE_TYPE_ALIASES.get(cte_lower, cte_lower)
             if canonical_cte != cte_lower and track_normalizations:
-                normalizations.append({
-                    "field": "cte_type",
-                    "original": raw_cte,
-                    "normalized": canonical_cte,
-                    "action_type": "cte_type_normalize",
-                    "reasoning": f"CTE type '{raw_cte}' is not a canonical FSMA 204 type. Resolved to '{canonical_cte}' so CTE-specific rules (21 CFR 1.1310) can be applied.",
-                    "event_index": row_index,
-                })
+                normalizations.append(
+                    {
+                        "field": "cte_type",
+                        "original": raw_cte,
+                        "normalized": canonical_cte,
+                        "action_type": "cte_type_normalize",
+                        "reasoning": f"CTE type '{raw_cte}' is not a canonical FSMA 204 type. Resolved to '{canonical_cte}' so CTE-specific rules (21 CFR 1.1310) can be applied.",
+                        "event_index": row_index,
+                    }
+                )
             event["cte_type"] = canonical_cte
             events.append(event)
             row_index += 1
@@ -525,14 +530,16 @@ def _collect_value_normalizations(
             key = ("uom", raw_uom)
             if key not in seen:
                 seen.add(key)
-                normalizations.append({
-                    "field": "unit_of_measure",
-                    "original": raw_uom,
-                    "normalized": can_uom,
-                    "action_type": "uom_normalize",
-                    "reasoning": f"Unit '{raw_uom}' standardized to '{can_uom}' for consistent mass balance calculations across the supply chain.",
-                    "event_index": i,
-                })
+                normalizations.append(
+                    {
+                        "field": "unit_of_measure",
+                        "original": raw_uom,
+                        "normalized": can_uom,
+                        "action_type": "uom_normalize",
+                        "reasoning": f"Unit '{raw_uom}' standardized to '{can_uom}' for consistent mass balance calculations across the supply chain.",
+                        "event_index": i,
+                    }
+                )
 
         # CTE type normalization
         raw_cte = (raw.get("cte_type") or "").strip()
@@ -541,14 +548,16 @@ def _collect_value_normalizations(
             key = ("cte", raw_cte)
             if key not in seen:
                 seen.add(key)
-                normalizations.append({
-                    "field": "cte_type",
-                    "original": raw_cte,
-                    "normalized": can_cte,
-                    "action_type": "cte_type_normalize",
-                    "reasoning": f"CTE type '{raw_cte}' resolved to canonical '{can_cte}' for FSMA 204 rule matching.",
-                    "event_index": i,
-                })
+                normalizations.append(
+                    {
+                        "field": "cte_type",
+                        "original": raw_cte,
+                        "normalized": can_cte,
+                        "action_type": "cte_type_normalize",
+                        "reasoning": f"CTE type '{raw_cte}' resolved to canonical '{can_cte}' for FSMA 204 rule matching.",
+                        "event_index": i,
+                    }
+                )
 
     return normalizations
 
@@ -571,11 +580,7 @@ def _normalize_for_rules(event: Dict[str, Any]) -> Dict[str, Any]:
         or kdes.get("ship_from_location")
         or event.get("location_name")
     )
-    to_facility = (
-        kdes.get("ship_to_gln")
-        or kdes.get("ship_to_location")
-        or kdes.get("receiving_location")
-    )
+    to_facility = kdes.get("ship_to_gln") or kdes.get("ship_to_location") or kdes.get("receiving_location")
 
     if event_type == "shipping":
         from_facility = from_facility or event.get("location_name")

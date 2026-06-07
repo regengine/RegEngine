@@ -38,10 +38,9 @@ if str(_services_dir) not in sys.path:
 
 pytest.importorskip("fastapi")
 
-from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.canonical_router as cr_module
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.canonical_router import _get_db_session, router as canonical_router
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -116,9 +115,20 @@ def _make_event_row(
     created_at: datetime = NOW,
 ) -> tuple:
     return (
-        event_id, event_type, tlc, product_ref, quantity, uom,
-        from_facility, to_facility, ts, source_system, status,
-        confidence, schema_version, created_at,
+        event_id,
+        event_type,
+        tlc,
+        product_ref,
+        quantity,
+        uom,
+        from_facility,
+        to_facility,
+        ts,
+        source_system,
+        status,
+        confidence,
+        schema_version,
+        created_at,
     )
 
 
@@ -157,13 +167,13 @@ class TestListRecordsRemainingFilters:
 
     ENDPOINT = "/api/v1/records"
 
-    def test_source_system_filter_adds_where_fragment(
-        self, principal: IngestionPrincipal
-    ) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row(source_system="epcis")]),
-        ])
+    def test_source_system_filter_adds_where_fragment(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row(source_system="epcis")]),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(
             self.ENDPOINT,
@@ -176,13 +186,13 @@ class TestListRecordsRemainingFilters:
         assert "source_system = :source_system" in count_sql
         assert count_params["source_system"] == "epcis"
 
-    def test_start_date_filter_adds_where_fragment(
-        self, principal: IngestionPrincipal
-    ) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row()]),
-        ])
+    def test_start_date_filter_adds_where_fragment(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row()]),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(
             self.ENDPOINT,
@@ -193,13 +203,13 @@ class TestListRecordsRemainingFilters:
         assert "event_timestamp >= :start_date" in count_sql
         assert count_params["start_date"] == "2026-01-01T00:00:00Z"
 
-    def test_end_date_filter_adds_where_fragment(
-        self, principal: IngestionPrincipal
-    ) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row()]),
-        ])
+    def test_end_date_filter_adds_where_fragment(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row()]),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(
             self.ENDPOINT,
@@ -211,10 +221,12 @@ class TestListRecordsRemainingFilters:
         assert count_params["end_date"] == "2026-12-31T23:59:59Z"
 
     def test_all_filters_combined(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([
-            _Result(row=(1,)),
-            _Result(rows=[_make_event_row()]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(1,)),
+                _Result(rows=[_make_event_row()]),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(
             self.ENDPOINT,
@@ -282,9 +294,7 @@ class _EventStoreStub:
         return event
 
 
-def _patch_event_store(
-    monkeypatch: pytest.MonkeyPatch, event: Optional[Dict[str, Any]]
-) -> _EventStoreStub:
+def _patch_event_store(monkeypatch: pytest.MonkeyPatch, event: Optional[Dict[str, Any]]) -> _EventStoreStub:
     """Install ``stub`` in both places the router reaches for the class."""
     stub = _EventStoreStub(event)
     # Route module-level import (used by trace_forward / trace_backward).
@@ -292,6 +302,7 @@ def _patch_event_store(
     # Route the lazy ``from shared.canonical_persistence import ...``
     # inside ``get_record``.
     import shared.canonical_persistence as persistence_mod
+
     monkeypatch.setattr(persistence_mod, "CanonicalEventStore", stub)
     return stub
 
@@ -312,19 +323,37 @@ class TestGetRecord:
                 "supersedes_event_id": None,
             },
         )
-        session = _FakeSession([
-            # 1. rule_evaluations query
-            _Result(rows=[(
-                "fail", "Missing TLC", "TLC Required",
-                "critical", "21 CFR 1.1315",
-                "Add traceability lot code", "data_quality",
-            )]),
-            # 2. exception_cases query
-            _Result(rows=[(
-                "case-001", "high", "open", "Review record",
-                "user-1", NOW,
-            )]),
-        ])
+        session = _FakeSession(
+            [
+                # 1. rule_evaluations query
+                _Result(
+                    rows=[
+                        (
+                            "fail",
+                            "Missing TLC",
+                            "TLC Required",
+                            "critical",
+                            "21 CFR 1.1315",
+                            "Add traceability lot code",
+                            "data_quality",
+                        )
+                    ]
+                ),
+                # 2. exception_cases query
+                _Result(
+                    rows=[
+                        (
+                            "case-001",
+                            "high",
+                            "open",
+                            "Review record",
+                            "user-1",
+                            NOW,
+                        )
+                    ]
+                ),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(
             f"/api/v1/records/{EVENT_ID}",
@@ -334,33 +363,35 @@ class TestGetRecord:
         body = resp.json()
         assert body["event_id"] == EVENT_ID
         # Rule evaluation enrichment landed.
-        assert body["rule_evaluations"] == [{
-            "result": "fail",
-            "why_failed": "Missing TLC",
-            "rule_title": "TLC Required",
-            "severity": "critical",
-            "citation_reference": "21 CFR 1.1315",
-            "remediation_suggestion": "Add traceability lot code",
-            "category": "data_quality",
-        }]
+        assert body["rule_evaluations"] == [
+            {
+                "result": "fail",
+                "why_failed": "Missing TLC",
+                "rule_title": "TLC Required",
+                "severity": "critical",
+                "citation_reference": "21 CFR 1.1315",
+                "remediation_suggestion": "Add traceability lot code",
+                "category": "data_quality",
+            }
+        ]
         # Exception case enrichment landed; due_date is isoformatted.
-        assert body["exception_cases"] == [{
-            "case_id": "case-001",
-            "severity": "high",
-            "status": "open",
-            "recommended_remediation": "Review record",
-            "owner_user_id": "user-1",
-            "due_date": NOW.isoformat(),
-        }]
+        assert body["exception_cases"] == [
+            {
+                "case_id": "case-001",
+                "severity": "high",
+                "status": "open",
+                "recommended_remediation": "Review record",
+                "owner_user_id": "user-1",
+                "due_date": NOW.isoformat(),
+            }
+        ]
         # No supersedes → no amendment_chain key.
         assert "amendment_chain" not in body
         # And raw payload was requested (covers the include_raw_payload=True
         # call site at line 295).
         assert body["raw_payload"] == {"included": True}
 
-    def test_record_not_found_returns_404(
-        self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_record_not_found_returns_404(self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_event_store(monkeypatch, None)
         # No DB calls happen once ``get_event`` returns None.
         session = _FakeSession([])
@@ -376,10 +407,12 @@ class TestGetRecord:
             monkeypatch,
             {"event_id": EVENT_ID, "tenant_id": TENANT_ID},
         )
-        session = _FakeSession([
-            _Result(rows=[]),  # no evaluations
-            _Result(rows=[]),  # no exception cases
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[]),  # no evaluations
+                _Result(rows=[]),  # no exception cases
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(f"/api/v1/records/{EVENT_ID}", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -396,12 +429,23 @@ class TestGetRecord:
             monkeypatch,
             {"event_id": EVENT_ID, "tenant_id": TENANT_ID},
         )
-        session = _FakeSession([
-            _Result(rows=[]),
-            _Result(rows=[(
-                "case-002", "low", "closed", "Noop", "user-2", None,
-            )]),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[]),
+                _Result(
+                    rows=[
+                        (
+                            "case-002",
+                            "low",
+                            "closed",
+                            "Noop",
+                            "user-2",
+                            None,
+                        )
+                    ]
+                ),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(f"/api/v1/records/{EVENT_ID}", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
@@ -424,22 +468,26 @@ class TestGetRecord:
         # 3. _get_amendment_chain backward step 1 (this event supersedes evt-prev)
         # 4. _get_amendment_chain backward step 2 (evt-prev → no further link)
         # 5. _get_amendment_chain forward step 1 (no successor)
-        session = _FakeSession([
-            _Result(rows=[]),
-            _Result(rows=[]),
-            _Result(row=(EVENT_ID, "evt-prev", "shipping", "active", NOW, None)),
-            _Result(row=("evt-prev", None, "shipping", "superseded", NOW, None)),
-            _Result(row=None),
-        ])
+        session = _FakeSession(
+            [
+                _Result(rows=[]),
+                _Result(rows=[]),
+                _Result(row=(EVENT_ID, "evt-prev", "shipping", "active", NOW, None)),
+                _Result(row=("evt-prev", None, "shipping", "superseded", NOW, None)),
+                _Result(row=None),
+            ]
+        )
         c = _client(principal, session)
         resp = c.get(f"/api/v1/records/{EVENT_ID}", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
         body = resp.json()
-        assert body["amendment_chain"] == [{
-            "event_id": "evt-prev",
-            "superseded_by": EVENT_ID,
-            "status": "superseded",
-        }]
+        assert body["amendment_chain"] == [
+            {
+                "event_id": "evt-prev",
+                "superseded_by": EVENT_ID,
+                "status": "superseded",
+            }
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -453,46 +501,46 @@ class TestAmendmentChainForwardWalk:
 
     ENDPOINT_TEMPLATE = "/api/v1/records/{event_id}/history"
 
-    def test_forward_walk_appends_successor(
-        self, principal: IngestionPrincipal
-    ) -> None:
+    def test_forward_walk_appends_successor(self, principal: IngestionPrincipal) -> None:
         # Backward walk: initial event has no supersedes → loop exits
         # after one probe.
         # Forward walk: initial event HAS a successor → loop appends and
         # then the second probe returns None → loop exits.
-        session = _FakeSession([
-            # backward step: event has no supersedes (row[1] is None).
-            _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
-            # forward step 1: successor found.
-            _Result(row=("evt-new", "active", NOW)),
-            # forward step 2: no further successor.
-            _Result(row=None),
-        ])
+        session = _FakeSession(
+            [
+                # backward step: event has no supersedes (row[1] is None).
+                _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
+                # forward step 1: successor found.
+                _Result(row=("evt-new", "active", NOW)),
+                # forward step 2: no further successor.
+                _Result(row=None),
+            ]
+        )
         c = _client(principal, session)
-        resp = c.get(self.ENDPOINT_TEMPLATE.format(event_id=EVENT_ID),
-                     params={"tenant_id": TENANT_ID})
+        resp = c.get(self.ENDPOINT_TEMPLATE.format(event_id=EVENT_ID), params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
         chain = resp.json()["amendment_chain"]
         # One forward-walk entry appended.
-        assert chain == [{
-            "event_id": "evt-new",
-            "supersedes": EVENT_ID,
-            "status": "active",
-            "created_at": NOW.isoformat(),
-        }]
+        assert chain == [
+            {
+                "event_id": "evt-new",
+                "supersedes": EVENT_ID,
+                "status": "active",
+                "created_at": NOW.isoformat(),
+            }
+        ]
 
-    def test_forward_walk_null_created_at(
-        self, principal: IngestionPrincipal
-    ) -> None:
+    def test_forward_walk_null_created_at(self, principal: IngestionPrincipal) -> None:
         """Covers the ``r[2].isoformat() if r[2] else None`` None branch."""
-        session = _FakeSession([
-            _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
-            _Result(row=("evt-new", "active", None)),  # created_at = None
-            _Result(row=None),
-        ])
+        session = _FakeSession(
+            [
+                _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
+                _Result(row=("evt-new", "active", None)),  # created_at = None
+                _Result(row=None),
+            ]
+        )
         c = _client(principal, session)
-        resp = c.get(self.ENDPOINT_TEMPLATE.format(event_id=EVENT_ID),
-                     params={"tenant_id": TENANT_ID})
+        resp = c.get(self.ENDPOINT_TEMPLATE.format(event_id=EVENT_ID), params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200
         chain = resp.json()["amendment_chain"]
         assert chain[0]["created_at"] is None
@@ -521,22 +569,16 @@ class _TraceStoreStub:
     def __call__(self, session: Any, dual_write: bool = False) -> "_TraceStoreStub":
         return self
 
-    def trace_forward(
-        self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000
-    ) -> tuple:
+    def trace_forward(self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000) -> tuple:
         self.forward_calls.append((tenant_id, tlc, max_depth, max_results))
         return self._forward
 
-    def trace_backward(
-        self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000
-    ) -> tuple:
+    def trace_backward(self, tenant_id: str, tlc: str, max_depth: int = 5, max_results: int = 10000) -> tuple:
         self.backward_calls.append((tenant_id, tlc, max_depth, max_results))
         return self._backward
 
 
-def _patch_trace_store(
-    monkeypatch: pytest.MonkeyPatch, stub: _TraceStoreStub
-) -> None:
+def _patch_trace_store(monkeypatch: pytest.MonkeyPatch, stub: _TraceStoreStub) -> None:
     monkeypatch.setattr(cr_module, "CanonicalEventStore", stub)
 
 
@@ -549,9 +591,7 @@ class TestTraceForward:
         assert resp.status_code == 503
         assert resp.json()["detail"] == "Database unavailable"
 
-    def test_empty_links_total_hops_zero(
-        self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_links_total_hops_zero(self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch) -> None:
         stub = _TraceStoreStub(forward_result=([], False))
         _patch_trace_store(monkeypatch, stub)
         # Also provide a session so the SET LOCAL call succeeds.
@@ -580,7 +620,8 @@ class TestTraceForward:
     ) -> None:
         raw_links = [
             {
-                "input_tlc": "TLC-A", "output_tlc": "TLC-B",
+                "input_tlc": "TLC-A",
+                "output_tlc": "TLC-B",
                 "transformation_event_id": "evt-1",
                 "process_type": "repack",
                 "depth": 1,
@@ -589,7 +630,8 @@ class TestTraceForward:
                 "output_unit": "cases",
             },
             {
-                "input_tlc": "TLC-B", "output_tlc": "TLC-C",
+                "input_tlc": "TLC-B",
+                "output_tlc": "TLC-C",
                 "transformation_event_id": "evt-2",
                 # No process_type / confidence / quantity / unit -> defaults.
                 "depth": 3,
@@ -635,9 +677,7 @@ class TestTraceBackward:
         resp = c.get(self.ENDPOINT_TEMPLATE.format(tlc="TLC-1"))
         assert resp.status_code == 503
 
-    def test_empty_links_total_hops_zero(
-        self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_links_total_hops_zero(self, principal: IngestionPrincipal, monkeypatch: pytest.MonkeyPatch) -> None:
         stub = _TraceStoreStub(backward_result=([], False))
         _patch_trace_store(monkeypatch, stub)
         session = _FakeSession([_Result()])
@@ -664,7 +704,8 @@ class TestTraceBackward:
         # raw row (vs ``output_*`` for the forward endpoint).
         raw_links = [
             {
-                "input_tlc": "TLC-A", "output_tlc": "TLC-B",
+                "input_tlc": "TLC-A",
+                "output_tlc": "TLC-B",
                 "transformation_event_id": "evt-1",
                 "process_type": "blend",
                 "depth": 2,
@@ -698,7 +739,8 @@ class TestTraceBackward:
         fallbacks)."""
         raw_links = [
             {
-                "input_tlc": "TLC-A", "output_tlc": "TLC-B",
+                "input_tlc": "TLC-A",
+                "output_tlc": "TLC-B",
                 "transformation_event_id": "evt-1",
                 "depth": 1,
                 # No process_type, confidence_score, input_quantity, input_unit

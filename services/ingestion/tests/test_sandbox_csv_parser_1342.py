@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 import pytest
-
 from app.sandbox.csv_parser import (
     _collect_value_normalizations,
     _normalize_for_rules,
@@ -31,13 +30,12 @@ from app.sandbox.csv_parser import (
     get_erp_presets,
 )
 
-
 # ===========================================================================
 # get_erp_presets
 # ===========================================================================
 
-class TestGetErpPresets:
 
+class TestGetErpPresets:
     def test_returns_dict_with_known_presets(self):
         presets = get_erp_presets()
         assert isinstance(presets, dict)
@@ -65,8 +63,8 @@ class TestGetErpPresets:
 # _parse_csv_to_events — basic happy paths
 # ===========================================================================
 
-class TestParseCsvBasics:
 
+class TestParseCsvBasics:
     def test_empty_csv_returns_empty_list(self):
         assert _parse_csv_to_events("") == []
 
@@ -89,12 +87,7 @@ class TestParseCsvBasics:
         assert e["unit_of_measure"] == "cases"
 
     def test_multiple_rows_produce_multiple_events(self):
-        csv = (
-            "cte_type,tlc\n"
-            "harvesting,LOT-A\n"
-            "shipping,LOT-B\n"
-            "receiving,LOT-C\n"
-        )
+        csv = "cte_type,tlc\nharvesting,LOT-A\nshipping,LOT-B\nreceiving,LOT-C\n"
         events = _parse_csv_to_events(csv)
         assert len(events) == 3
         assert events[0]["traceability_lot_code"] == "LOT-A"
@@ -116,10 +109,7 @@ class TestParseCsvBasics:
 
     def test_blank_column_name_is_ignored(self):
         """A header row with an empty column name skips that column without crashing."""
-        csv = (
-            "cte_type,,product\n"
-            "harvesting,ghost,Cheese\n"
-        )
+        csv = "cte_type,,product\nharvesting,ghost,Cheese\n"
         events = _parse_csv_to_events(csv)
         assert events[0]["cte_type"] == "harvesting"
         # "ghost" cell under the blank column is dropped
@@ -144,8 +134,8 @@ class TestParseCsvBasics:
 # _parse_csv_to_events — header alias mapping
 # ===========================================================================
 
-class TestParseCsvHeaderAliases:
 
+class TestParseCsvHeaderAliases:
     def test_cte_type_aliases_map_to_canonical(self):
         """'event_type', 'type', etc. all map to cte_type."""
         csv = "event_type,tlc\nharvesting,LOT-1\n"
@@ -204,8 +194,8 @@ class TestParseCsvHeaderAliases:
 # _parse_csv_to_events — KDE aliases
 # ===========================================================================
 
-class TestParseCsvKdeAliases:
 
+class TestParseCsvKdeAliases:
     def test_harvest_date_alias_goes_to_kdes(self):
         csv = "cte_type,tlc,harvest_date\nharvesting,LOT-1,2026-01-01\n"
         events = _parse_csv_to_events(csv)
@@ -237,10 +227,7 @@ class TestParseCsvKdeAliases:
         # Note: the csv above has LOT-B trailing; it will NOT be treated as a
         # new column because csv.DictReader packs extras into None key.
         # Use a quoted form instead for clarity:
-        csv = (
-            'cte_type,tlc,input_tlcs\n'
-            'transformation,LOT-MEGA,"LOT-A,LOT-B"\n'
-        )
+        csv = 'cte_type,tlc,input_tlcs\ntransformation,LOT-MEGA,"LOT-A,LOT-B"\n'
         events = _parse_csv_to_events(csv)
         assert events[0]["kdes"]["input_traceability_lot_codes"] == ["LOT-A", "LOT-B"]
 
@@ -271,8 +258,8 @@ class TestParseCsvKdeAliases:
 # _parse_csv_to_events — unknown columns
 # ===========================================================================
 
-class TestParseCsvUnknownColumns:
 
+class TestParseCsvUnknownColumns:
     def test_unknown_column_goes_into_kdes_as_is(self):
         """Unrecognized columns must be preserved, not dropped."""
         csv = "cte_type,tlc,custom_field\nharvesting,LOT-1,custom-value\n"
@@ -290,33 +277,36 @@ class TestParseCsvUnknownColumns:
 # _parse_csv_to_events — CTE type value normalization
 # ===========================================================================
 
-class TestParseCsvCteTypeNormalization:
 
-    @pytest.mark.parametrize("raw,canonical", [
-        ("harvest", "harvesting"),
-        ("harvested", "harvesting"),
-        ("pick", "harvesting"),
-        ("h", "harvesting"),
-        ("cool", "cooling"),
-        ("cooled", "cooling"),
-        ("precool", "cooling"),
-        ("pack", "initial_packing"),
-        ("packed", "initial_packing"),
-        ("ip", "initial_packing"),
-        ("flbr", "first_land_based_receiving"),
-        ("first_receiver", "first_land_based_receiving"),
-        ("dock", "first_land_based_receiving"),
-        ("ship", "shipping"),
-        ("shipped", "shipping"),
-        ("dispatch", "shipping"),
-        ("receive", "receiving"),
-        ("received", "receiving"),
-        ("receipt", "receiving"),
-        ("rcv", "receiving"),
-        ("transform", "transformation"),
-        ("process", "transformation"),
-        ("mfg", "transformation"),
-    ])
+class TestParseCsvCteTypeNormalization:
+    @pytest.mark.parametrize(
+        "raw,canonical",
+        [
+            ("harvest", "harvesting"),
+            ("harvested", "harvesting"),
+            ("pick", "harvesting"),
+            ("h", "harvesting"),
+            ("cool", "cooling"),
+            ("cooled", "cooling"),
+            ("precool", "cooling"),
+            ("pack", "initial_packing"),
+            ("packed", "initial_packing"),
+            ("ip", "initial_packing"),
+            ("flbr", "first_land_based_receiving"),
+            ("first_receiver", "first_land_based_receiving"),
+            ("dock", "first_land_based_receiving"),
+            ("ship", "shipping"),
+            ("shipped", "shipping"),
+            ("dispatch", "shipping"),
+            ("receive", "receiving"),
+            ("received", "receiving"),
+            ("receipt", "receiving"),
+            ("rcv", "receiving"),
+            ("transform", "transformation"),
+            ("process", "transformation"),
+            ("mfg", "transformation"),
+        ],
+    )
     def test_cte_type_alias_normalizes(self, raw, canonical):
         csv = f"cte_type,tlc\n{raw},LOT-1\n"
         events = _parse_csv_to_events(csv)
@@ -360,8 +350,8 @@ class TestParseCsvCteTypeNormalization:
 # _parse_csv_to_events — track_normalizations
 # ===========================================================================
 
-class TestParseCsvTrackNormalizations:
 
+class TestParseCsvTrackNormalizations:
     def _extract(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return events[0].get("__normalizations__", []) if events else []
 
@@ -383,15 +373,10 @@ class TestParseCsvTrackNormalizations:
 
     def test_header_alias_deduped(self):
         """Same alias seen on multiple rows logged only once."""
-        csv = (
-            "event_type,tlc\n"
-            "harvesting,LOT-1\n"
-            "shipping,LOT-2\n"
-        )
+        csv = "event_type,tlc\nharvesting,LOT-1\nshipping,LOT-2\n"
         events = _parse_csv_to_events(csv, track_normalizations=True)
         norms = self._extract(events)
-        cte_type_aliases = [n for n in norms
-                            if n["field"] == "cte_type" and n["action_type"] == "header_alias"]
+        cte_type_aliases = [n for n in norms if n["field"] == "cte_type" and n["action_type"] == "header_alias"]
         assert len(cte_type_aliases) == 1
 
     def test_canonical_column_name_not_logged(self):
@@ -406,18 +391,14 @@ class TestParseCsvTrackNormalizations:
         csv = "cte_type,tlc,bol\nshipping,LOT-1,BOL-123\n"
         events = _parse_csv_to_events(csv, track_normalizations=True)
         norms = self._extract(events)
-        kde_aliases = [n for n in norms
-                       if n["action_type"] == "header_alias"
-                       and n["field"] == "reference_document"]
+        kde_aliases = [n for n in norms if n["action_type"] == "header_alias" and n["field"] == "reference_document"]
         assert kde_aliases
 
     def test_kde_canonical_column_not_logged(self):
         csv = "cte_type,tlc,reference_document\nshipping,LOT-1,BOL-123\n"
         events = _parse_csv_to_events(csv, track_normalizations=True)
         norms = self._extract(events)
-        kde_aliases = [n for n in norms
-                       if n["action_type"] == "header_alias"
-                       and n["field"] == "reference_document"]
+        kde_aliases = [n for n in norms if n["action_type"] == "header_alias" and n["field"] == "reference_document"]
         assert kde_aliases == []
 
     def test_cte_type_value_normalization_logged(self):
@@ -441,8 +422,8 @@ class TestParseCsvTrackNormalizations:
         csv = (
             "cte_type,tlc\n"
             "harvesting,LOT-1\n"  # canonical, not logged
-            "receipt,LOT-2\n"     # normalized: row 1
-            "ship,LOT-3\n"        # normalized: row 2
+            "receipt,LOT-2\n"  # normalized: row 1
+            "ship,LOT-3\n"  # normalized: row 2
         )
         events = _parse_csv_to_events(csv, track_normalizations=True)
         norms = self._extract(events)
@@ -461,8 +442,8 @@ class TestParseCsvTrackNormalizations:
 # _parse_csv_to_events — ERP presets
 # ===========================================================================
 
-class TestParseCsvErpPresets:
 
+class TestParseCsvErpPresets:
     def test_produce_pro_preset_maps_trans_type(self):
         csv = "trans_type,item_no,qty_shipped\nshipping,LOT-1,100\n"
         events = _parse_csv_to_events(csv, erp_preset="produce_pro")
@@ -520,8 +501,8 @@ class TestParseCsvErpPresets:
 # _collect_value_normalizations
 # ===========================================================================
 
-class TestCollectValueNormalizations:
 
+class TestCollectValueNormalizations:
     def test_empty_inputs_return_empty(self):
         assert _collect_value_normalizations([], []) == []
 
@@ -617,7 +598,7 @@ class TestCollectValueNormalizations:
     def test_event_index_correct_across_rows(self):
         raw = [
             {"cte_type": "harvesting", "unit_of_measure": "kilos"},  # index 0
-            {"cte_type": "receipt", "unit_of_measure": "lbs"},        # index 1
+            {"cte_type": "receipt", "unit_of_measure": "lbs"},  # index 1
         ]
         canonical = [
             {"event_type": "harvesting", "unit_of_measure": "kg"},
@@ -634,8 +615,8 @@ class TestCollectValueNormalizations:
 # _normalize_for_rules
 # ===========================================================================
 
-class TestNormalizeForRules:
 
+class TestNormalizeForRules:
     def test_returns_dict_with_uuid_event_id(self):
         result = _normalize_for_rules({"cte_type": "harvesting"})
         assert "event_id" in result

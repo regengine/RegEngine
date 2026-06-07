@@ -74,6 +74,7 @@ class TestF3StorageErrorOpaque:
     def test_webhook_compat_does_not_leak_sqlalchemy_str(self):
         """Same opaqueness invariant for the parallel webhook_compat path."""
         import app.webhook_compat as wc  # noqa: F401
+
         # Importing the module should succeed and the symbol set is preserved.
         assert hasattr(wc, "ingest_events")
 
@@ -112,10 +113,7 @@ class TestF5HmacSkipObservability:
             for args, kwargs in calls
         )
         # structlog passes the event as the first positional arg.
-        assert found or any(
-            args and "webhook_hmac_verification_skipped" in str(args[0])
-            for args, kwargs in calls
-        )
+        assert found or any(args and "webhook_hmac_verification_skipped" in str(args[0]) for args, kwargs in calls)
 
     def test_warn_log_is_rate_limited(self, monkeypatch):
         """Five skips back-to-back emit only one WARN line."""
@@ -136,13 +134,12 @@ class TestF5HmacSkipObservability:
             )
 
         skip_calls = [
-            (a, k) for a, k in calls
+            (a, k)
+            for a, k in calls
             if (a and "webhook_hmac_verification_skipped" in str(a[0]))
             or k.get("event") == "webhook_hmac_verification_skipped"
         ]
-        assert len(skip_calls) == 1, (
-            f"WARN was not rate-limited; got {len(skip_calls)} entries"
-        )
+        assert len(skip_calls) == 1, f"WARN was not rate-limited; got {len(skip_calls)} entries"
 
     def test_rate_limit_window_resets(self, monkeypatch):
         """Manually rewinding the gate re-arms the WARN."""
@@ -168,10 +165,7 @@ class TestF5HmacSkipObservability:
             )
         )
 
-        skip_calls = [
-            (a, k) for a, k in calls
-            if a and "webhook_hmac_verification_skipped" in str(a[0])
-        ]
+        skip_calls = [(a, k) for a, k in calls if a and "webhook_hmac_verification_skipped" in str(a[0])]
         assert len(skip_calls) == 2
 
     def test_metric_counter_increments_on_skip(self, monkeypatch):
@@ -229,7 +223,7 @@ class TestF5HmacSkipObservability:
 
 class TestF6IntegrationWebhookStub:
     def test_endpoint_raises_not_implemented(self):
-        from app.integration_webhook import receive_webhook, WebhookPayload
+        from app.integration_webhook import WebhookPayload, receive_webhook
 
         async def _run():
             return await receive_webhook(
@@ -247,9 +241,7 @@ class TestF6IntegrationWebhookStub:
         if not main_path.exists():
             pytest.skip("main.py not found")
         src = main_path.read_text()
-        assert "integration_webhook" not in src, (
-            "F-6 regression: integration_webhook is mounted in main.py"
-        )
+        assert "integration_webhook" not in src, "F-6 regression: integration_webhook is mounted in main.py"
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +306,7 @@ class TestF8OpaqueProdSignatureFailure:
         assert "scheme" not in detail
         assert "md5" not in str(detail)
 
-    def test_unsupported_scheme_in_dev_keeps_message_but_no_scheme_echo(
-        self, monkeypatch
-    ):
+    def test_unsupported_scheme_in_dev_keeps_message_but_no_scheme_echo(self, monkeypatch):
         hmac_key = "fixture-hmac-key"
         monkeypatch.setenv("WEBHOOK_HMAC_SECRET", hmac_key)
         monkeypatch.setattr(wr, "_is_production", lambda: False)

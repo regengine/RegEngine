@@ -41,6 +41,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 import pytest
+
 from tests.integration_requirements import sqlalchemy_session_or_skip
 
 # Skip if no database configured
@@ -54,6 +55,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def db_session():
@@ -81,6 +83,7 @@ def tenant_id():
 def workflow(db_session):
     """Create a RequestWorkflow instance."""
     from shared.request_workflow import RequestWorkflow
+
     return RequestWorkflow(db_session)
 
 
@@ -88,6 +91,7 @@ def workflow(db_session):
 def rules_engine(db_session):
     """Create a RulesEngine instance."""
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
 
 
@@ -95,6 +99,7 @@ def rules_engine(db_session):
 def canonical_store(db_session):
     """Create a CanonicalEventStore instance."""
     from shared.canonical_persistence import CanonicalEventStore
+
     return CanonicalEventStore(db_session)
 
 
@@ -224,6 +229,7 @@ def _make_events(tenant_id: str) -> List[Dict]:
 # The Test: Full Closed-Loop Execution
 # ---------------------------------------------------------------------------
 
+
 class TestFDARequestE2E:
     """Prove the system works end-to-end under realistic conditions."""
 
@@ -232,13 +238,12 @@ class TestFDARequestE2E:
         """Ensure DB session is clean before each test."""
         try:
             from sqlalchemy import text
+
             db_session.execute(text("SELECT 1"))
         except Exception:
             db_session.rollback()
 
-    def test_01_ingest_events_to_canonical_store(
-        self, db_session, tenant_id, canonical_store
-    ):
+    def test_01_ingest_events_to_canonical_store(self, db_session, tenant_id, canonical_store):
         """Step 1: Ingest messy events into canonical store."""
         from shared.canonical_event import TraceabilityEvent
 
@@ -293,16 +298,22 @@ class TestFDARequestE2E:
         for event in events:
             event_data = {"event_id": str(event["event_id"]), "event_type": event["event_type"]}
             # Fetch full event for evaluation
-            full = db_session.execute(
-                text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
-                {"eid": str(event["event_id"]), "tid": tenant_id},
-            ).mappings().fetchone()
+            full = (
+                db_session.execute(
+                    text("SELECT * FROM fsma.traceability_events WHERE event_id = :eid AND tenant_id = :tid"),
+                    {"eid": str(event["event_id"]), "tid": tenant_id},
+                )
+                .mappings()
+                .fetchone()
+            )
             if full:
                 event_dict = dict(full)
                 if event_dict.get("kdes") and isinstance(event_dict["kdes"], str):
                     event_dict["kdes"] = json.loads(event_dict["kdes"])
                 summary = rules_engine.evaluate_event(
-                    event_dict, persist=True, tenant_id=tenant_id,
+                    event_dict,
+                    persist=True,
+                    tenant_id=tenant_id,
                 )
                 total_failures += summary.failed
 
@@ -333,7 +344,8 @@ class TestFDARequestE2E:
 
         # Update scope (advances to scoping)
         workflow.update_scope(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             scope_description="All romaine lettuce lots from Salinas Valley region, 30-day window",
         )
 
@@ -361,15 +373,15 @@ class TestFDARequestE2E:
 
         # Must have blockers (critical rule failures, missing signoffs)
         assert not check["can_submit"], (
-            f"Expected submission to be BLOCKED but can_submit=True. "
-            f"Blockers: {check['blockers']}"
+            f"Expected submission to be BLOCKED but can_submit=True. Blockers: {check['blockers']}"
         )
         assert check["blocker_count"] > 0
 
         # Verify submit_package raises (either due to blockers or wrong status)
         with pytest.raises(ValueError):
             workflow.submit_package(
-                tenant_id, case_id,
+                tenant_id,
+                case_id,
                 package_id="fake-pkg-id",
                 submitted_by="test@example.com",
             )
@@ -379,7 +391,8 @@ class TestFDARequestE2E:
         case_id = self.__class__._case_id
 
         workflow.add_signoff(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             signoff_type="scope_approval",
             signed_by="qa_lead@company.com",
             notes="Scope confirmed — all Salinas Valley romaine lots included.",
@@ -390,7 +403,8 @@ class TestFDARequestE2E:
         case_id = self.__class__._case_id
 
         package = workflow.assemble_response_package(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             generated_by="compliance_officer@company.com",
         )
 
@@ -403,9 +417,7 @@ class TestFDARequestE2E:
         if isinstance(contents, str):
             contents = json.loads(contents)
         contents_for_hash = {k: v for k, v in contents.items() if k != "package_hash"}
-        recomputed = hashlib.sha256(
-            json.dumps(contents_for_hash, sort_keys=True, default=str).encode()
-        ).hexdigest()
+        recomputed = hashlib.sha256(json.dumps(contents_for_hash, sort_keys=True, default=str).encode()).hexdigest()
         assert recomputed == package["package_hash"], "Package hash must be reproducible"
 
         self.__class__._package_id = package["package_id"]
@@ -416,7 +428,8 @@ class TestFDARequestE2E:
         package_id = self.__class__._package_id
 
         workflow.add_signoff(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             signoff_type="final_approval",
             signed_by="vp_quality@company.com",
             notes="Approved for FDA submission.",
@@ -425,7 +438,8 @@ class TestFDARequestE2E:
         # Now submit — force=True to bypass any remaining rule failures
         # (in production, those would need exception waivers first)
         result = workflow.submit_package(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             package_id=package_id,
             submitted_by="vp_quality@company.com",
             submitted_to="FDA",
@@ -443,7 +457,8 @@ class TestFDARequestE2E:
         case_id = self.__class__._case_id
 
         amendment = workflow.create_amendment(
-            tenant_id, case_id,
+            tenant_id,
+            case_id,
             generated_by="compliance_officer@company.com",
         )
 

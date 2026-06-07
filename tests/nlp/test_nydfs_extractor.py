@@ -7,15 +7,13 @@ for NYDFS Part 500 regulatory text.
 
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
-from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-pytestmark = pytest.mark.skip(
-    reason="NYDFS extractor requires full NLP pipeline and is skipped in unit test suite"
-)
+pytestmark = pytest.mark.skip(reason="NYDFS extractor requires full NLP pipeline and is skipped in unit test suite")
 
 # Defer these imports so pytest can still COLLECT this file when the
 # nydfs_extractor module is absent (it was removed as part of the NLP
@@ -102,13 +100,10 @@ class TestNYDFSExtractor:
 
         # Should detect "annually" threshold
         assert len(ext.thresholds) > 0
-        annual_threshold = next(
-            (t for t in ext.thresholds if t.context == 'annually'),
-            None
-        )
+        annual_threshold = next((t for t in ext.thresholds if t.context == "annually"), None)
         assert annual_threshold is not None
         assert annual_threshold.value == 1.0
-        assert annual_threshold.unit == 'years'
+        assert annual_threshold.unit == "years"
 
     def test_extract_incident_notification_timeframe(self, extractor, document_id, tenant_id):
         """Test extraction of time-bound incident notification requirement."""
@@ -125,13 +120,10 @@ class TestNYDFSExtractor:
 
         # Should detect 72 hours threshold
         assert len(ext.thresholds) > 0
-        time_threshold = next(
-            (t for t in ext.thresholds if t.unit == 'hours'),
-            None
-        )
+        time_threshold = next((t for t in ext.thresholds if t.unit == "hours"), None)
         assert time_threshold is not None
         assert time_threshold.value == 72.0
-        assert time_threshold.operator == '<='
+        assert time_threshold.operator == "<="
 
     def test_obligation_classification_must(self, extractor, document_id, tenant_id):
         """Test that 'shall' language is classified as MUST."""
@@ -168,12 +160,8 @@ class TestNYDFSExtractor:
         Each Covered Entity shall maintain a cybersecurity program.
         """
 
-        extractions_with = extractor.extract_obligations(
-            text_with_section, document_id, tenant_id
-        )
-        extractions_without = extractor.extract_obligations(
-            text_without_section, document_id, tenant_id
-        )
+        extractions_with = extractor.extract_obligations(text_with_section, document_id, tenant_id)
+        extractions_without = extractor.extract_obligations(text_without_section, document_id, tenant_id)
 
         # Both should extract, but with-section should have higher confidence
         if extractions_with and extractions_without:
@@ -215,8 +203,8 @@ class TestNYDFSExtractor:
         assert len(thresholds) > 0
         threshold = thresholds[0]
         assert threshold.value == 30.0
-        assert threshold.unit == 'days'
-        assert threshold.operator == '<='
+        assert threshold.unit == "days"
+        assert threshold.operator == "<="
 
     def test_threshold_extraction_years(self, extractor):
         """Test extraction of year-based thresholds."""
@@ -227,7 +215,7 @@ class TestNYDFSExtractor:
         assert len(thresholds) > 0
         threshold = thresholds[0]
         assert threshold.value == 5.0
-        assert threshold.unit == 'years'
+        assert threshold.unit == "years"
 
     def test_threshold_extraction_quarterly(self, extractor):
         """Test extraction of quarterly requirement."""
@@ -237,9 +225,9 @@ class TestNYDFSExtractor:
 
         assert len(thresholds) > 0
         threshold = thresholds[0]
-        assert threshold.context == 'quarterly'
+        assert threshold.context == "quarterly"
         assert threshold.value == 4.0
-        assert threshold.unit == 'per_year'
+        assert threshold.unit == "per_year"
 
     def test_multiple_extractions_from_long_text(self, extractor, document_id, tenant_id):
         """Test that multiple provisions are extracted from longer text."""
@@ -297,6 +285,7 @@ class TestNYDFSExtractor:
 
 
 # Integration tests
+
 
 class TestNYDFSIntegration:
     """Integration tests for end-to-end NYDFS extraction workflow."""

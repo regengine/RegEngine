@@ -1,11 +1,25 @@
+import sys
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import neo4j.exceptions
 import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from pydantic import BaseModel
+from shared.auth import require_api_key
+from shared.fsma_validation import (
+    validate_gln,
+    validate_gtin,
+    validate_tlc,
+)
+
+# Add shared utilities (portable path resolution)
+from shared.middleware import get_current_tenant_id
+from shared.rate_limit import limiter
 
 from ...audit_failure_policy import handle_audit_failure
 from ...fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log
@@ -17,32 +31,16 @@ from ...fsma_utils import (
     trace_backward,
     trace_forward,
 )
-from ...neo4j_utils import Neo4jClient
-from ...traceability_linker import TraceabilityLinker
-from neo4j.exceptions import Neo4jError, ServiceUnavailable
-from shared.auth import require_api_key
 from ...models.fsma_nodes import (
     CTEType,
-    TraceEvent,
-    Lot,
-    Facility,
     Document,
+    Facility,
     FSMARelationships,
+    Lot,
+    TraceEvent,
 )
-from shared.fsma_validation import (
-    validate_gln,
-    validate_gtin,
-    validate_tlc,
-)
-
-import uuid
-import sys
-from pathlib import Path
-
-# Add shared utilities (portable path resolution)
-from shared.middleware import get_current_tenant_id
-
-from shared.rate_limit import limiter
+from ...neo4j_utils import Neo4jClient
+from ...traceability_linker import TraceabilityLinker
 
 router = APIRouter(tags=["Traceability"])
 logger = structlog.get_logger("fsma-traceability")
@@ -59,12 +57,24 @@ logger = structlog.get_logger("fsma-traceability")
                         "lot_id": "LOT-2026-04-A1",
                         "direction": "forward",
                         "facilities": [
-                            {"gln": "0614141000012", "name": "Distribution Center Alpha", "type": "distribution_center"},
+                            {
+                                "gln": "0614141000012",
+                                "name": "Distribution Center Alpha",
+                                "type": "distribution_center",
+                            },
                             {"gln": "0614141000029", "name": "Metro Fresh Market", "type": "retail"},
                         ],
                         "events": [
-                            {"cte_type": "shipping", "location": "Distribution Center Alpha", "timestamp": "2026-04-12T16:00:00Z"},
-                            {"cte_type": "receiving", "location": "Metro Fresh Market", "timestamp": "2026-04-13T08:30:00Z"},
+                            {
+                                "cte_type": "shipping",
+                                "location": "Distribution Center Alpha",
+                                "timestamp": "2026-04-12T16:00:00Z",
+                            },
+                            {
+                                "cte_type": "receiving",
+                                "location": "Metro Fresh Market",
+                                "timestamp": "2026-04-13T08:30:00Z",
+                            },
                         ],
                         "downstream_lots": ["LOT-2026-04-B2"],
                         "total_quantity": 500,
@@ -83,9 +93,7 @@ async def trace_forward_endpoint(
     request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
-    enforce_time_arrow: bool = Query(
-        True, description="Enforce temporal ordering (Physics Engine)"
-    ),
+    enforce_time_arrow: bool = Query(True, description="Enforce temporal ordering (Physics Engine)"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -107,9 +115,7 @@ async def trace_forward_endpoint(
     client = Neo4jClient(database=db_name)
 
     try:
-        result = await trace_forward(
-            client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow
-        )
+        result = await trace_forward(client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow)
         await client.close()
 
         # Record metrics
@@ -183,9 +189,21 @@ async def trace_forward_endpoint(
                             {"gln": "0614141000036", "name": "Salinas Valley Farm", "type": "grower"},
                         ],
                         "events": [
-                            {"cte_type": "receiving", "location": "Distribution Center Alpha", "timestamp": "2026-04-12T14:30:00Z"},
-                            {"cte_type": "shipping", "location": "Port of Long Beach", "timestamp": "2026-04-11T08:00:00Z"},
-                            {"cte_type": "harvesting", "location": "Salinas Valley Farm", "timestamp": "2026-04-10T06:00:00Z"},
+                            {
+                                "cte_type": "receiving",
+                                "location": "Distribution Center Alpha",
+                                "timestamp": "2026-04-12T14:30:00Z",
+                            },
+                            {
+                                "cte_type": "shipping",
+                                "location": "Port of Long Beach",
+                                "timestamp": "2026-04-11T08:00:00Z",
+                            },
+                            {
+                                "cte_type": "harvesting",
+                                "location": "Salinas Valley Farm",
+                                "timestamp": "2026-04-10T06:00:00Z",
+                            },
                         ],
                         "source_lots": [],
                         "total_quantity": 500,
@@ -320,6 +338,8 @@ async def lot_timeline_endpoint(
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.error("endpoint_error", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/traceability/regulations")
 async def get_governing_regulations_endpoint(
     lot_tlc: str,
@@ -329,11 +349,7 @@ async def get_governing_regulations_endpoint(
     """Find all regulations governing a specific Lot."""
     from ...config import settings
 
-    linker = TraceabilityLinker(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password
-    )
+    linker = TraceabilityLinker(uri=settings.neo4j_uri, user=settings.neo4j_user, password=settings.neo4j_password)
     try:
         regulations = await linker.get_governing_regulations(lot_tlc, str(tenant_id))
         await linker.close()
@@ -353,11 +369,7 @@ async def get_impacted_lots_endpoint(
     """Find all lots impacted by a specific regulatory obligation."""
     from ...config import settings
 
-    linker = TraceabilityLinker(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password
-    )
+    linker = TraceabilityLinker(uri=settings.neo4j_uri, user=settings.neo4j_user, password=settings.neo4j_password)
     try:
         lots = await linker.get_impacted_lots(obligation_id, str(tenant_id))
         await linker.close()
@@ -377,11 +389,7 @@ async def link_obligation_endpoint(
     """Trigger automated linking of a regulation to supply chain events."""
     from ...config import settings
 
-    linker = TraceabilityLinker(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password
-    )
+    linker = TraceabilityLinker(uri=settings.neo4j_uri, user=settings.neo4j_user, password=settings.neo4j_password)
     try:
         links = await linker.link_obligation_to_traceability(obligation_id, str(tenant_id))
         await linker.close()
@@ -514,6 +522,7 @@ async def search_traceability_events(
 # MOBILE FIELD CAPTURE ENDPOINTS
 # ============================================================================
 
+
 class TraceabilityEventRequest(BaseModel):
     model_config = {
         "json_schema_extra": {
@@ -617,7 +626,9 @@ async def log_traceability_event(
                 gln=payload.location_identifier,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties)
+            await session.run(
+                Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties
+            )
 
             # Link Relationships
             # #1284: pass tenant_id so the MATCH clauses don't walk cross-tenant
@@ -641,12 +652,12 @@ async def log_traceability_event(
                 document = Document(
                     document_id=doc_id,
                     document_type="BOL",
-                    # In a production environment, we would upload to S3. 
+                    # In a production environment, we would upload to S3.
                     # For this pilot, we store the Base64 as the raw_content.
                     source_uri=f"base64://{doc_id}",
                     raw_content=payload.image_data,
                     extraction_timestamp=datetime.now().isoformat(),
-                    tenant_id=str(tenant_id)
+                    tenant_id=str(tenant_id),
                 )
                 await session.run(Document.merge_cypher(), document_id=doc_id, properties=document.node_properties)
                 # Link Document to Event — tenant-scoped to prevent cross-tenant
@@ -665,20 +676,22 @@ async def log_traceability_event(
         # FDA export, compliance scoring, and the canonical records API.
         try:
             from shared.canonical_event import (
-                TraceabilityEvent as CanonicalTraceabilityEvent,
                 CTEType as CanonicalCTEType,
                 IngestionSource,
                 ProvenanceMetadata,
+                TraceabilityEvent as CanonicalTraceabilityEvent,
             )
             from shared.canonical_persistence import CanonicalEventStore
             from shared.database import SessionLocal
 
             # Map graph CTEType to canonical CTEType
             _cte_map = {
-                "HARVESTING": "harvesting", "COOLING": "cooling",
+                "HARVESTING": "harvesting",
+                "COOLING": "cooling",
                 "INITIAL_PACKING": "initial_packing",
                 "FIRST_LAND_BASED_RECEIVING": "first_land_based_receiving",
-                "SHIPPING": "shipping", "RECEIVING": "receiving",
+                "SHIPPING": "shipping",
+                "RECEIVING": "receiving",
                 "TRANSFORMATION": "transformation",
             }
             cte_val = payload.event_type.value if hasattr(payload.event_type, "value") else str(payload.event_type)

@@ -16,10 +16,10 @@ import hashlib
 import json
 import logging
 import os
-import sys
 import secrets
-import subprocess
 import string
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,11 +31,8 @@ import yaml
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('orchestrator.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("orchestrator.log"), logging.StreamHandler(sys.stdout)],
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 class OrchestrationMode(Enum):
     """Orchestration execution modes"""
+
     FULL_LAUNCH = "full_launch"
     SALES_ONLY = "sales_only"
     INFRA_ONLY = "infra_only"
@@ -51,6 +49,7 @@ class OrchestrationMode(Enum):
 
 class OrchestrationPhase(Enum):
     """Phases of orchestration execution"""
+
     INIT = "initialization"
     PUBLIC_SURFACE = "public_surface_deployment"
     SALES_GTM = "sales_gtm_generation"
@@ -63,6 +62,7 @@ class OrchestrationPhase(Enum):
 @dataclass
 class OrchestrationEvent:
     """Individual orchestration event for audit trail"""
+
     timestamp: datetime
     phase: OrchestrationPhase
     action: str
@@ -74,6 +74,7 @@ class OrchestrationEvent:
 @dataclass
 class OrchestrationResult:
     """Result of orchestration execution"""
+
     mode: OrchestrationMode
     start_time: datetime
     end_time: Optional[datetime] = None
@@ -82,8 +83,14 @@ class OrchestrationResult:
     errors: List[str] = field(default_factory=list)
     success: bool = True
 
-    def add_event(self, phase: OrchestrationPhase, action: str, status: str,
-                  details: Optional[Dict[str, Any]] = None, error: Optional[str] = None):
+    def add_event(
+        self,
+        phase: OrchestrationPhase,
+        action: str,
+        status: str,
+        details: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+    ):
         """Add an event to the audit trail"""
         event = OrchestrationEvent(
             timestamp=datetime.now(timezone.utc),
@@ -91,7 +98,7 @@ class OrchestrationResult:
             action=action,
             status=status,
             details=details or {},
-            error=error
+            error=error,
         )
         self.events.append(event)
 
@@ -106,10 +113,10 @@ class OrchestrationResult:
     def add_artifact(self, name: str, content_or_path: str):
         """Add an artifact with content hash"""
         if os.path.exists(content_or_path):
-            with open(content_or_path, 'rb') as f:
+            with open(content_or_path, "rb") as f:
                 content = f.read()
         else:
-            content = content_or_path.encode('utf-8')
+            content = content_or_path.encode("utf-8")
 
         artifact_hash = hashlib.sha256(content).hexdigest()
         self.artifacts[name] = artifact_hash
@@ -129,12 +136,12 @@ class OrchestrationResult:
                     "action": e.action,
                     "status": e.status,
                     "details": e.details,
-                    "error": e.error
+                    "error": e.error,
                 }
                 for e in self.events
             ],
             "artifacts": self.artifacts,
-            "errors": self.errors
+            "errors": self.errors,
         }
 
 
@@ -156,11 +163,11 @@ class LaunchOrchestrator:
         logger.info(f"Loading configuration from {self.config_path}")
 
         try:
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, "r") as f:
                 config = yaml.safe_load(f)
 
             # Basic validation
-            required_keys = ['orchestrator', 'environment']
+            required_keys = ["orchestrator", "environment"]
             for key in required_keys:
                 if key not in config:
                     raise ValueError(f"Missing required config key: {key}")
@@ -176,7 +183,7 @@ class LaunchOrchestrator:
         """Validate required environment variables and secrets"""
         logger.info("Validating environment...")
 
-        required_vars = self.config['environment'].get('required_env_vars', [])
+        required_vars = self.config["environment"].get("required_env_vars", [])
         missing_vars = []
 
         for var in required_vars:
@@ -189,15 +196,12 @@ class LaunchOrchestrator:
                 "validate_environment",
                 "failure",
                 details={"missing_vars": missing_vars},
-                error=f"Missing environment variables: {', '.join(missing_vars)}"
+                error=f"Missing environment variables: {', '.join(missing_vars)}",
             )
             return False
 
         self.result.add_event(
-            OrchestrationPhase.INIT,
-            "validate_environment",
-            "success",
-            details={"validated_vars": len(required_vars)}
+            OrchestrationPhase.INIT, "validate_environment", "success", details={"validated_vars": len(required_vars)}
         )
         return True
 
@@ -232,12 +236,7 @@ class LaunchOrchestrator:
 
         except Exception as e:
             logger.exception("Orchestration failed with exception")
-            self.result.add_event(
-                OrchestrationPhase.SUMMARY,
-                "orchestration_execution",
-                "failure",
-                error=str(e)
-            )
+            self.result.add_event(OrchestrationPhase.SUMMARY, "orchestration_execution", "failure", error=str(e))
 
         return self._finalize_result()
 
@@ -246,42 +245,36 @@ class LaunchOrchestrator:
         logger.info("=== Phase: Public Surface Deployment ===")
         phase = OrchestrationPhase.PUBLIC_SURFACE
 
-        public_config = self.config.get('public_surface', {})
+        public_config = self.config.get("public_surface", {})
 
         # Deploy marketing site
-        marketing = public_config.get('marketing_site', {})
+        marketing = public_config.get("marketing_site", {})
         if marketing:
             self._execute_deployment(
                 phase,
                 "deploy_marketing_site",
-                marketing.get('deploy_command', 'echo "No deploy command"'),
-                {
-                    "target_url": marketing.get('target_url'),
-                    "features": marketing.get('features', [])
-                }
+                marketing.get("deploy_command", 'echo "No deploy command"'),
+                {"target_url": marketing.get("target_url"), "features": marketing.get("features", [])},
             )
 
         # Publish API docs
-        api_docs = public_config.get('api_docs', {})
+        api_docs = public_config.get("api_docs", {})
         if api_docs:
             self._execute_deployment(
                 phase,
                 "publish_api_docs",
-                api_docs.get('publish_command', 'echo "No publish command"'),
-                {
-                    "target_url": api_docs.get('target_url'),
-                    "format": api_docs.get('specification_format')
-                }
+                api_docs.get("publish_command", 'echo "No publish command"'),
+                {"target_url": api_docs.get("target_url"), "format": api_docs.get("specification_format")},
             )
 
         # Configure status page
-        status_page = public_config.get('status_page', {})
+        status_page = public_config.get("status_page", {})
         if status_page:
             self.result.add_event(
                 phase,
                 "configure_status_page",
                 "success" if self.dry_run else "skipped",
-                details={"components": [c['name'] for c in status_page.get('components', [])]}
+                details={"components": [c["name"] for c in status_page.get("components", [])]},
             )
 
     def _generate_sales_gtm(self):
@@ -289,23 +282,23 @@ class LaunchOrchestrator:
         logger.info("=== Phase: Sales & GTM Generation ===")
         phase = OrchestrationPhase.SALES_GTM
 
-        sales_config = self.config.get('sales', {})
+        sales_config = self.config.get("sales", {})
 
         # Generate persona-specific collateral
-        personas = sales_config.get('personas', [])
+        personas = sales_config.get("personas", [])
         for persona in personas:
-            persona_id = persona['id']
+            persona_id = persona["id"]
             self._generate_persona_collateral(phase, persona)
 
         # Initialize outbound campaigns
-        campaigns = sales_config.get('outbound_campaigns', {}).get('sequences', [])
+        campaigns = sales_config.get("outbound_campaigns", {}).get("sequences", [])
         for campaign in campaigns:
             self._initialize_outbound_sequence(phase, campaign)
 
     def _generate_persona_collateral(self, phase: OrchestrationPhase, persona: Dict[str, Any]):
         """Generate collateral for a specific persona"""
-        persona_id = persona['id']
-        persona_title = persona['title']
+        persona_id = persona["id"]
+        persona_title = persona["title"]
 
         # Generate one-pager
         one_pager_path = self.base_dir / "generated" / f"{persona_id}_one_pager.md"
@@ -313,7 +306,7 @@ class LaunchOrchestrator:
 
         if not self.dry_run:
             one_pager_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(one_pager_path, 'w') as f:
+            with open(one_pager_path, "w") as f:
                 f.write(one_pager_content)
 
         self.result.add_artifact(f"{persona_id}_one_pager", one_pager_content)
@@ -321,18 +314,18 @@ class LaunchOrchestrator:
             phase,
             f"generate_one_pager_{persona_id}",
             "success",
-            details={"persona": persona_title, "path": str(one_pager_path)}
+            details={"persona": persona_title, "path": str(one_pager_path)},
         )
 
     def _create_one_pager(self, persona: Dict[str, Any]) -> str:
         """Create a one-pager for a persona"""
-        return f"""# RegEngine One-Pager: {persona['title']}
+        return f"""# RegEngine One-Pager: {persona["title"]}
 
 ## Pain Points
-{chr(10).join(f"- {pain}" for pain in persona.get('pains', []))}
+{chr(10).join(f"- {pain}" for pain in persona.get("pains", []))}
 
 ## What RegEngine Delivers
-{chr(10).join(f"- {outcome}" for outcome in persona.get('desired_outcomes', []))}
+{chr(10).join(f"- {outcome}" for outcome in persona.get("desired_outcomes", []))}
 
 ## Next Steps
 1. Schedule a 20-minute demo: [calendly link]
@@ -344,9 +337,9 @@ Contact: sales@regengine.ai
 
     def _initialize_outbound_sequence(self, phase: OrchestrationPhase, campaign: Dict[str, Any]):
         """Initialize an outbound email/LinkedIn sequence"""
-        sequence_id = campaign['id']
-        persona = campaign['persona']
-        steps = campaign.get('steps', [])
+        sequence_id = campaign["id"]
+        persona = campaign["persona"]
+        steps = campaign.get("steps", [])
 
         # In production, this would integrate with SendGrid, Apollo, or similar
         self.result.add_event(
@@ -357,8 +350,8 @@ Contact: sales@regengine.ai
                 "sequence_id": sequence_id,
                 "persona": persona,
                 "num_steps": len(steps),
-                "channels": list(set(step['channel'] for step in steps))
-            }
+                "channels": list(set(step["channel"] for step in steps)),
+            },
         )
 
     def _provision_design_partners(self):
@@ -366,49 +359,46 @@ Contact: sales@regengine.ai
         logger.info("=== Phase: Design Partner Provisioning ===")
         phase = OrchestrationPhase.DESIGN_PARTNERS
 
-        dp_config = self.config.get('design_partner_program', {})
-        max_partners = dp_config.get('max_partners', 5)
+        dp_config = self.config.get("design_partner_program", {})
+        max_partners = dp_config.get("max_partners", 5)
 
         # Generate legal agreement
-        legal_template = self.base_dir / dp_config.get('legal_template_ref', '')
+        legal_template = self.base_dir / dp_config.get("legal_template_ref", "")
         if legal_template.exists():
             self.result.add_artifact("design_partner_agreement", str(legal_template))
             self.result.add_event(
-                phase,
-                "validate_legal_template",
-                "success",
-                details={"template_path": str(legal_template)}
+                phase, "validate_legal_template", "success", details={"template_path": str(legal_template)}
             )
 
         # Pre-provision sandboxes
-        sandbox_config = dp_config.get('sandbox', {})
+        sandbox_config = dp_config.get("sandbox", {})
         for i in range(max_partners):
-            self._provision_sandbox(phase, f"dp-sandbox-{i+1}", sandbox_config)
+            self._provision_sandbox(phase, f"dp-sandbox-{i + 1}", sandbox_config)
 
     def _provision_sandbox(self, phase: OrchestrationPhase, sandbox_id: str, config: Dict[str, Any]):
         """Provision a single sandbox environment"""
         logger.info(f"Provisioning sandbox: {sandbox_id}")
-        
+
         # Generate API Key
-        api_key = "sk_test_" + ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-        
+        api_key = "sk_test_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+
         # Create tenant config
         tenant_config = {
             "tenant_id": sandbox_id,
             "api_key": api_key,
-            "max_docs": config.get('max_docs_per_partner', 100),
-            "jurisdictions": config.get('jurisdictions', {}).get('default', ["US-NY"]),
-            "rate_limit_rpm": config.get('rate_limits', {}).get('rpm_per_api_key', 60),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "max_docs": config.get("max_docs_per_partner", 100),
+            "jurisdictions": config.get("jurisdictions", {}).get("default", ["US-NY"]),
+            "rate_limit_rpm": config.get("rate_limits", {}).get("rpm_per_api_key", 60),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        
+
         output_dir = self.base_dir / "generated" / "tenants"
         if not self.dry_run:
             output_dir.mkdir(parents=True, exist_ok=True)
             config_path = output_dir / f"{sandbox_id}.json"
             with open(config_path, "w") as f:
                 json.dump(tenant_config, f, indent=2)
-            
+
             # Also append to a master keys file for easy access
             keys_file = self.base_dir / "generated" / "sandbox_keys.txt"
             with open(keys_file, "a") as f:
@@ -421,8 +411,8 @@ Contact: sales@regengine.ai
             details={
                 "sandbox_id": sandbox_id,
                 "api_key_prefix": api_key[:12] + "...",
-                "config_path": str(output_dir / f"{sandbox_id}.json")
-            }
+                "config_path": str(output_dir / f"{sandbox_id}.json"),
+            },
         )
 
     def _prepare_investor_materials(self):
@@ -430,38 +420,28 @@ Contact: sales@regengine.ai
         logger.info("=== Phase: Investor Readiness ===")
         phase = OrchestrationPhase.INVESTOR_READINESS
 
-        investor_config = self.config.get('investor_readiness', {})
+        investor_config = self.config.get("investor_readiness", {})
 
         # Validate investor memo
-        memo_path = self.base_dir / investor_config.get('memo_template_ref', '')
+        memo_path = self.base_dir / investor_config.get("memo_template_ref", "")
         if memo_path.exists():
             self.result.add_artifact("investor_memo", str(memo_path))
-            self.result.add_event(
-                phase,
-                "validate_investor_memo",
-                "success",
-                details={"memo_path": str(memo_path)}
-            )
+            self.result.add_event(phase, "validate_investor_memo", "success", details={"memo_path": str(memo_path)})
 
         # Validate required slides
-        required_slides = investor_config.get('slides_required', [])
-        self.result.add_event(
-            phase,
-            "validate_pitch_slides",
-            "success",
-            details={"required_slides": required_slides}
-        )
+        required_slides = investor_config.get("slides_required", [])
+        self.result.add_event(phase, "validate_pitch_slides", "success", details={"required_slides": required_slides})
 
     def _deploy_infrastructure(self):
         """Deploy infrastructure via Terraform"""
         logger.info("=== Phase: Infrastructure Deployment ===")
         phase = OrchestrationPhase.INFRA
 
-        infra_config = self.config.get('infrastructure', {})
-        terraform_config = infra_config.get('terraform', {})
+        infra_config = self.config.get("infrastructure", {})
+        terraform_config = infra_config.get("terraform", {})
 
-        root_module = terraform_config.get('root_module_path', 'infra/terraform')
-        workspaces = terraform_config.get('workspaces', ['demo', 'sandbox', 'production'])
+        root_module = terraform_config.get("root_module_path", "infra/terraform")
+        workspaces = terraform_config.get("workspaces", ["demo", "sandbox", "production"])
 
         for workspace in workspaces:
             self._deploy_terraform_workspace(phase, root_module, workspace)
@@ -504,12 +484,18 @@ Contact: sales@regengine.ai
         try:
             # Use shlex.split instead of shell=True to prevent command injection
             import shlex
+
             result = subprocess.run(shlex.split(command), check=True, capture_output=True, text=True)
             self.result.add_event(
                 phase,
                 action,
                 "success",
-                details={**details, "command": command, "stdout": result.stdout.strip(), "stderr": result.stderr.strip()},
+                details={
+                    **details,
+                    "command": command,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
             )
         except subprocess.CalledProcessError as exc:
             self.result.add_event(
@@ -530,15 +516,10 @@ Contact: sales@regengine.ai
             "successful_events": sum(1 for e in self.result.events if e.status == "success"),
             "failed_events": sum(1 for e in self.result.events if e.status == "failure"),
             "artifacts_generated": len(self.result.artifacts),
-            "errors": len(self.result.errors)
+            "errors": len(self.result.errors),
         }
 
-        self.result.add_event(
-            phase,
-            "generate_summary",
-            "success",
-            details=summary
-        )
+        self.result.add_event(phase, "generate_summary", "success", details=summary)
 
         logger.info("=== Orchestration Summary ===")
         logger.info(f"Total events: {summary['total_events']}")
@@ -561,7 +542,7 @@ Contact: sales@regengine.ai
 
         # Write result to file
         result_file = self.base_dir / "orchestration_result.json"
-        with open(result_file, 'w') as f:
+        with open(result_file, "w") as f:
             json.dump(self.result.to_dict(), f, indent=2)
 
         logger.info(f"Result written to: {result_file}")
@@ -573,23 +554,16 @@ def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="RegEngine Launch Orchestrator")
     parser.add_argument(
-        '--mode',
+        "--mode",
         type=str,
         choices=[m.value for m in OrchestrationMode],
         default=OrchestrationMode.DRY_RUN.value,
-        help="Orchestration mode"
+        help="Orchestration mode",
     )
     parser.add_argument(
-        '--config',
-        type=str,
-        default='launch_orchestrator_spec.yaml',
-        help="Path to orchestrator configuration file"
+        "--config", type=str, default="launch_orchestrator_spec.yaml", help="Path to orchestrator configuration file"
     )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help="Simulate execution without making external calls"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Simulate execution without making external calls")
 
     args = parser.parse_args()
 
@@ -601,5 +575,5 @@ def main():
     sys.exit(0 if result.success else 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

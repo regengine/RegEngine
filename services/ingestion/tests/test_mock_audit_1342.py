@@ -16,26 +16,24 @@ Issue: #1342
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import mock_audit as ma
 from app.mock_audit import (
+    FDA_SCENARIOS,
     DrillGrade,
     DrillResponse,
     DrillStatus,
-    FDA_SCENARIOS,
     StartDrillRequest,
     _active_drills,
     _get_real_tlc,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -54,7 +52,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app, default_tenant="t1")
     return app
@@ -77,6 +77,7 @@ class TestGetRealTlc:
         fake_session.close = MagicMock()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
 
         assert _get_real_tlc("tenant-1") == "TLC-ABC"
@@ -88,6 +89,7 @@ class TestGetRealTlc:
         fake_session.close = MagicMock()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
 
         assert _get_real_tlc("tenant-1") is None
@@ -98,6 +100,7 @@ class TestGetRealTlc:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         assert _get_real_tlc("tenant-1") is None
@@ -109,6 +112,7 @@ class TestGetRealTlc:
         fake_session.close = MagicMock()
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: fake_session)
 
         assert _get_real_tlc("tenant-1") is None
@@ -161,9 +165,13 @@ class TestPydanticModels:
 
     def test_drill_grade_required_fields(self):
         g = DrillGrade(
-            drill_id="d1", grade="A", score=95,
-            time_to_respond="2h 0m", passed=True,
-            feedback=["nice"], breakdown={"x": {"score": 20}},
+            drill_id="d1",
+            grade="A",
+            score=95,
+            time_to_respond="2h 0m",
+            passed=True,
+            feedback=["nice"],
+            breakdown={"x": {"score": 20}},
         )
         assert g.passed is True
 
@@ -297,8 +305,11 @@ class TestGetDrillStatus:
 
     def test_completed_drill_surfaces_grade(self, client, monkeypatch):
         drill_id = self._seed_active_drill(
-            monkeypatch, started_hours_ago=2,
-            status="completed", grade="A", score=95,
+            monkeypatch,
+            started_hours_ago=2,
+            status="completed",
+            grade="A",
+            score=95,
         )
         r = client.get(f"/api/v1/audit/drill/{drill_id}")
         body = r.json()
@@ -415,7 +426,7 @@ class TestSubmitDrillResponse:
         drill_id = _seed_drill(1.0)
         payload = _all_true_payload(drill_id)
         # Need 60: true for 20,20,15 (55), partial EPCIS (+5) = 60
-        payload["has_all_kdes"] = False   # partial +5
+        payload["has_all_kdes"] = False  # partial +5
         payload["has_chain_verification"] = False  # 0
         payload["has_epcis_export"] = False  # partial +5
         # 20 + 20 + 15 + 5 + 0 + 5 = 65 → D

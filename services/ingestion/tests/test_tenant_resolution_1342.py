@@ -26,12 +26,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
 from app.shared import tenant_resolution
 from app.shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from fastapi import HTTPException
 from shared.api_key_store import api_key_hash_candidates
-
 
 # ===========================================================================
 # Test fixtures
@@ -80,7 +78,6 @@ def _install_db(monkeypatch, db):
 
 
 class TestExplicitTenantIdWins:
-
     def test_explicit_used_when_only_explicit_given(self, monkeypatch):
         """Legacy/master callers can still pass an explicit tenant."""
         db = _FakeDb(fetch_row=_FakeRow("from-api-key"))
@@ -119,7 +116,6 @@ class TestExplicitTenantIdWins:
 
 
 class TestXTenantHeaderFallback:
-
     def test_header_used_when_explicit_is_none(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow("from-api-key"))
         _install_db(monkeypatch, db)
@@ -158,7 +154,6 @@ class TestXTenantHeaderFallback:
 
 
 class TestApiKeyLookupHappyPath:
-
     def test_api_key_resolves_via_db(self, monkeypatch):
         db = _FakeDb(fetch_row=_FakeRow("tenant-xyz"))
         _install_db(monkeypatch, db)
@@ -171,9 +166,7 @@ class TestApiKeyLookupHappyPath:
         assert db.closed is True
         # The query is parameterized and receives only API-key digests;
         # the raw key is neither interpolated nor sent to the database.
-        assert db.executed[0]["params"] == {
-            "key_hashes": api_key_hash_candidates("secret-key")
-        }
+        assert db.executed[0]["params"] == {"key_hashes": api_key_hash_candidates("secret-key")}
         sql = db.executed[0]["statement"]
         assert "api_keys" in sql
         assert "secret-key" not in sql  # never in the SQL text
@@ -229,7 +222,6 @@ class TestRequestedTenantConflicts:
 
 
 class TestApiKeyLookupMisses:
-
     def test_api_key_no_row_returns_none(self, monkeypatch):
         db = _FakeDb(fetch_row=None)
         _install_db(monkeypatch, db)
@@ -259,7 +251,6 @@ class TestApiKeyLookupMisses:
 
 
 class TestNoIdentifiersAtAll:
-
     def test_all_none_returns_none(self):
         assert resolve_tenant_id(None, None, None) is None
 
@@ -283,16 +274,10 @@ class TestNoIdentifiersAtAll:
 
 class TestResolvePrincipalTenantId:
     def test_principal_tenant_is_authoritative(self):
-        assert (
-            resolve_principal_tenant_id(None, None, "principal-tenant")
-            == "principal-tenant"
-        )
+        assert resolve_principal_tenant_id(None, None, "principal-tenant") == "principal-tenant"
 
     def test_principal_tenant_allows_matching_request(self):
-        assert (
-            resolve_principal_tenant_id("principal-tenant", None, "principal-tenant")
-            == "principal-tenant"
-        )
+        assert resolve_principal_tenant_id("principal-tenant", None, "principal-tenant") == "principal-tenant"
 
     def test_principal_tenant_rejects_mismatched_request(self):
         with pytest.raises(HTTPException) as exc:
@@ -322,10 +307,7 @@ class TestResolvePrincipalTenantId:
 
 
 class TestDbFailurePath:
-
-    def test_db_execute_exception_logged_and_returns_none(
-        self, monkeypatch, caplog
-    ):
+    def test_db_execute_exception_logged_and_returns_none(self, monkeypatch, caplog):
         db = _FakeDb(raise_on_execute=RuntimeError("connection refused"))
         _install_db(monkeypatch, db)
 
@@ -344,11 +326,7 @@ class TestDbFailurePath:
     def test_db_execute_integrity_error_swallowed(self, monkeypatch):
         from sqlalchemy.exc import OperationalError
 
-        db = _FakeDb(
-            raise_on_execute=OperationalError(
-                "SELECT", {}, Exception("db gone")
-            )
-        )
+        db = _FakeDb(raise_on_execute=OperationalError("SELECT", {}, Exception("db gone")))
         _install_db(monkeypatch, db)
         out = resolve_tenant_id(None, None, "key")
         assert out is None
@@ -374,17 +352,16 @@ class TestDbFailurePath:
 
 
 class TestPriorityOrderPairs:
-
     @pytest.mark.parametrize(
         "explicit,header,api_key,expected",
         [
-            ("A", "A", None, "A"),        # matching explicit/header
-            ("A", None, None, "A"),       # explicit alone
-            (None, "B", None, "B"),       # header alone
-            (None, None, None, None),     # nothing
-            ("", "B", None, "B"),         # explicit falsy → header
-            ("", "", "C", None),          # both falsy + api_key miss
-            ("", None, None, None),       # explicit falsy alone
+            ("A", "A", None, "A"),  # matching explicit/header
+            ("A", None, None, "A"),  # explicit alone
+            (None, "B", None, "B"),  # header alone
+            (None, None, None, None),  # nothing
+            ("", "B", None, "B"),  # explicit falsy → header
+            ("", "", "C", None),  # both falsy + api_key miss
+            ("", None, None, None),  # explicit falsy alone
         ],
     )
     def test_priority_pairs(self, monkeypatch, explicit, header, api_key, expected):
@@ -401,13 +378,15 @@ class TestPriorityOrderPairs:
 
 
 class TestModuleSurface:
-
     def test_resolve_tenant_id_is_exported(self):
         import app.shared.tenant_resolution as m
+
         assert callable(m.resolve_tenant_id)
 
     def test_logger_is_module_level(self):
         import logging
+
         import app.shared.tenant_resolution as m
+
         assert isinstance(m.logger, logging.Logger)
         assert m.logger.name == "app.shared.tenant_resolution"

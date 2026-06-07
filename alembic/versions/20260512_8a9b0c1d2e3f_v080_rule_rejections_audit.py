@@ -23,7 +23,6 @@ from typing import Sequence, Union
 
 from alembic import op
 
-
 revision: str = "8a9b0c1d2e3f"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "267d8053ced5"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -81,9 +80,7 @@ def upgrade() -> None:
 
     # Row-level security — match the pattern used by
     # fsma.rule_evaluations in V053 (tenant_isolation_rule_evals).
-    op.execute(
-        "ALTER TABLE fsma.rule_rejections ENABLE ROW LEVEL SECURITY"
-    )
+    op.execute("ALTER TABLE fsma.rule_rejections ENABLE ROW LEVEL SECURITY")
     op.execute(
         """
         DROP POLICY IF EXISTS tenant_isolation_rule_rejections

@@ -20,6 +20,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.env import is_production
+from shared.pagination import PaginationParams
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -35,11 +38,8 @@ from .sandbox.evaluators import _evaluate_event_stateless
 from .sandbox.models import EventEvaluationResponse, RuleResultResponse, SandboxResponse
 from .sandbox.validation import _validate_kdes
 from .shared.tenant_resolution import resolve_principal_tenant_id
-from .webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 from .webhook_compat import ingest_events
-from shared.database import get_db_safe
-from shared.env import is_production
-from shared.pagination import PaginationParams
+from .webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 
 logger = logging.getLogger("supplier-portal")
 
@@ -95,7 +95,11 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
                 },
             )
         except Exception as exc:
-            if "supplier_email" not in str(exc) and "allowed_cte_types" not in str(exc) and "integration_profile_id" not in str(exc):
+            if (
+                "supplier_email" not in str(exc)
+                and "allowed_cte_types" not in str(exc)
+                and "integration_profile_id" not in str(exc)
+            ):
                 raise
             db.rollback()
             db.execute(
@@ -191,7 +195,11 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
                 "created_at": row[7].isoformat() if row[7] else None,
             }
         except Exception as exc:
-            if "supplier_email" not in str(exc) and "allowed_cte_types" not in str(exc) and "integration_profile_id" not in str(exc):
+            if (
+                "supplier_email" not in str(exc)
+                and "allowed_cte_types" not in str(exc)
+                and "integration_profile_id" not in str(exc)
+            ):
                 raise
             row = db.execute(
                 # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
@@ -328,12 +336,12 @@ def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str
 
 class CreatePortalLinkRequest(BaseModel):
     """Request to create a supplier portal link."""
+
     tenant_id: str = Field(..., description="Customer's tenant ID")
     supplier_name: str = Field(..., description="Supplier business name")
     supplier_email: Optional[str] = Field(None, description="Supplier contact email")
     allowed_cte_types: list[str] = Field(
-        default=["shipping"],
-        description="CTE types the supplier can submit (default: shipping only)"
+        default=["shipping"], description="CTE types the supplier can submit (default: shipping only)"
     )
     integration_profile_id: Optional[str] = Field(
         default=None,
@@ -344,6 +352,7 @@ class CreatePortalLinkRequest(BaseModel):
 
 class PortalLinkResponse(BaseModel):
     """Response with the generated portal link."""
+
     portal_id: str
     portal_url: str
     supplier_name: str
@@ -355,6 +364,7 @@ class PortalLinkResponse(BaseModel):
 
 class SupplierSubmission(BaseModel):
     """Data submitted by a supplier through the portal."""
+
     traceability_lot_code: str = Field(..., description="TLC for shipped product", min_length=3)
     product_description: str = Field(..., description="Product name/description", min_length=1)
     quantity: float = Field(..., description="Quantity shipped", gt=0)
@@ -372,6 +382,7 @@ class SupplierSubmission(BaseModel):
 
 class SubmissionResult(BaseModel):
     """Result of a supplier submission."""
+
     status: str  # "accepted" or "error"
     event_id: Optional[str] = None
     sha256_hash: Optional[str] = None
@@ -382,6 +393,7 @@ class SubmissionResult(BaseModel):
 
 class SupplierPreflightResult(BaseModel):
     """Validate supplier-submitted data before committing it."""
+
     status: str
     message: str
     supplier_name: str
@@ -630,16 +642,18 @@ async def list_portal_links(
                 # Auto-expire links past their expiry
                 if status == "active" and expires_at and expires_at <= datetime.now(timezone.utc):
                     status = "expired"
-                links.append({
-                    "portal_id": row[3],
-                    "portal_url": f"https://regengine.co/portal/{row[3]}",
-                    "supplier_name": row[2],
-                    "tenant_id": str(row[1]),
-                    "status": status,
-                    "created_at": row[5].isoformat() if row[5] else None,
-                    "expires_at": expires_at.isoformat() if expires_at else None,
-                    "integration_profile_id": str(integration_profile_id) if integration_profile_id else None,
-                })
+                links.append(
+                    {
+                        "portal_id": row[3],
+                        "portal_url": f"https://regengine.co/portal/{row[3]}",
+                        "supplier_name": row[2],
+                        "tenant_id": str(row[1]),
+                        "status": status,
+                        "created_at": row[5].isoformat() if row[5] else None,
+                        "expires_at": expires_at.isoformat() if expires_at else None,
+                        "integration_profile_id": str(integration_profile_id) if integration_profile_id else None,
+                    }
+                )
         except Exception as exc:
             logger.warning("list_portal_links_db_failed error=%s", str(exc))
         finally:
@@ -663,16 +677,18 @@ async def list_portal_links(
                         status = "expired"
                 except ValueError:
                     pass
-            links.append({
-                "portal_id": token,
-                "portal_url": f"https://regengine.co/portal/{token}",
-                "supplier_name": entry.get("supplier_name", "Unknown"),
-                "tenant_id": tenant_id,
-                "status": status,
-                "created_at": entry.get("created_at"),
-                "expires_at": expires_at_raw,
-                "integration_profile_id": entry.get("integration_profile_id"),
-            })
+            links.append(
+                {
+                    "portal_id": token,
+                    "portal_url": f"https://regengine.co/portal/{token}",
+                    "supplier_name": entry.get("supplier_name", "Unknown"),
+                    "tenant_id": tenant_id,
+                    "status": status,
+                    "created_at": entry.get("created_at"),
+                    "expires_at": expires_at_raw,
+                    "integration_profile_id": entry.get("integration_profile_id"),
+                }
+            )
 
     total = len(links)
     links = links[pagination.skip : pagination.skip + pagination.limit]

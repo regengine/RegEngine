@@ -84,14 +84,13 @@ def db() -> Session:
     ]
     for t in tables:
         t.create(bind=engine)
-    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False,
-                      expire_on_commit=False, future=True)
+    SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=USER_ID, email="u@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
-    session.add(UserModel(id=OTHER_USER_ID, email="other@example.com",
-                          password_hash="x", status="active", is_sysadmin=False))
+    session.add(UserModel(id=USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False))
+    session.add(
+        UserModel(id=OTHER_USER_ID, email="other@example.com", password_hash="x", status="active", is_sysadmin=False)
+    )
     session.commit()
     try:
         yield session
@@ -108,22 +107,30 @@ def _make_facility(
     supplier_user_id: UUID = USER_ID,
 ) -> SupplierFacilityModel:
     f = SupplierFacilityModel(
-        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
-        name=name, street="1 Main St", city="Salinas",
-        state="CA", postal_code="93901", roles=["Grower"],
+        tenant_id=TENANT_ID,
+        supplier_user_id=supplier_user_id,
+        name=name,
+        street="1 Main St",
+        city="Salinas",
+        state="CA",
+        postal_code="93901",
+        roles=["Grower"],
     )
     db.add(f)
     db.flush()
     return f
 
 
-def _make_ftl_category(db: Session, facility_id: UUID,
-                       category_id: str = "1", required_ctes=None) -> None:
-    db.add(SupplierFacilityFTLCategoryModel(
-        tenant_id=TENANT_ID, facility_id=facility_id,
-        category_id=category_id, category_name="Leafy Greens",
-        required_ctes=required_ctes or ["harvesting"],
-    ))
+def _make_ftl_category(db: Session, facility_id: UUID, category_id: str = "1", required_ctes=None) -> None:
+    db.add(
+        SupplierFacilityFTLCategoryModel(
+            tenant_id=TENANT_ID,
+            facility_id=facility_id,
+            category_id=category_id,
+            category_name="Leafy Greens",
+            required_ctes=required_ctes or ["harvesting"],
+        )
+    )
     db.flush()
 
 
@@ -134,9 +141,12 @@ def _make_lot(
     supplier_user_id: UUID = USER_ID,
 ) -> SupplierTraceabilityLotModel:
     lot = SupplierTraceabilityLotModel(
-        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
-        facility_id=facility_id, tlc_code=tlc_code,
-        product_description="Spinach", status="active",
+        tenant_id=TENANT_ID,
+        supplier_user_id=supplier_user_id,
+        facility_id=facility_id,
+        tlc_code=tlc_code,
+        product_description="Spinach",
+        status="active",
     )
     db.add(lot)
     db.flush()
@@ -146,20 +156,29 @@ def _make_lot(
 _event_seq = [0]
 
 
-def _make_event(db: Session, facility_id: UUID, lot_id: UUID,
-                cte_type: str = "harvesting",
-                event_time: datetime | None = None,
-                supplier_user_id: UUID = USER_ID) -> SupplierCTEEventModel:
-    import hashlib, json
+def _make_event(
+    db: Session,
+    facility_id: UUID,
+    lot_id: UUID,
+    cte_type: str = "harvesting",
+    event_time: datetime | None = None,
+    supplier_user_id: UUID = USER_ID,
+) -> SupplierCTEEventModel:
+    import hashlib
+    import json
+
     _event_seq[0] += 1
     event_time = event_time or datetime.now(timezone.utc)
     payload = {"cte_type": cte_type, "seq": _event_seq[0]}
     payload_sha256 = hashlib.sha256(json.dumps(payload).encode()).hexdigest()
     merkle_hash = hashlib.sha256(f"merkle-{_event_seq[0]}".encode()).hexdigest()
     e = SupplierCTEEventModel(
-        tenant_id=TENANT_ID, supplier_user_id=supplier_user_id,
-        facility_id=facility_id, lot_id=lot_id,
-        cte_type=cte_type, event_time=event_time,
+        tenant_id=TENANT_ID,
+        supplier_user_id=supplier_user_id,
+        facility_id=facility_id,
+        lot_id=lot_id,
+        cte_type=cte_type,
+        event_time=event_time,
         payload_sha256=payload_sha256,
         merkle_hash=merkle_hash,
         merkle_prev_hash=None,
@@ -177,12 +196,14 @@ def _make_event(db: Session, facility_id: UUID, lot_id: UUID,
 
 
 class TestComputeSupplierCompliance:
-
     def test_no_facilities_returns_zero_score(self, db: Session):
         """Line 347: when no facilities match, return early with score=0."""
         score, gaps = _compute_supplier_compliance(
-            db, tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None, lookback_days=30,
+            db,
+            tenant_id=TENANT_ID,
+            supplier_user_id=USER_ID,
+            facility_id=None,
+            lookback_days=30,
         )
         assert score["score"] == 0
         assert score["coverage_ratio"] == 0.0
@@ -193,13 +214,15 @@ class TestComputeSupplierCompliance:
         Only one entry for 'harvesting' regardless of how many times it appears."""
         f = _make_facility(db)
         # Two categories both requiring 'harvesting' → only counted once per facility
-        _make_ftl_category(db, f.id, category_id="1",
-                           required_ctes=["harvesting", "harvesting", "harvesting"])
+        _make_ftl_category(db, f.id, category_id="1", required_ctes=["harvesting", "harvesting", "harvesting"])
         db.commit()
 
         score, gaps = _compute_supplier_compliance(
-            db, tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None, lookback_days=30,
+            db,
+            tenant_id=TENANT_ID,
+            supplier_user_id=USER_ID,
+            facility_id=None,
+            lookback_days=30,
         )
         # One unique required CTE ('harvesting'), no events → 1 gap
         assert score["required_ctes"] == 1
@@ -212,8 +235,11 @@ class TestComputeSupplierCompliance:
         db.commit()
 
         score, gaps = _compute_supplier_compliance(
-            db, tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None, lookback_days=30,
+            db,
+            tenant_id=TENANT_ID,
+            supplier_user_id=USER_ID,
+            facility_id=None,
+            lookback_days=30,
         )
         assert score["required_ctes"] == 1  # empty string skipped
 
@@ -226,8 +252,11 @@ class TestComputeSupplierCompliance:
         db.commit()
 
         score, gaps = _compute_supplier_compliance(
-            db, tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None, lookback_days=30,
+            db,
+            tenant_id=TENANT_ID,
+            supplier_user_id=USER_ID,
+            facility_id=None,
+            lookback_days=30,
         )
         # 'harvesting' is required, no valid event covered it
         assert score["covered_ctes"] == 0
@@ -243,8 +272,11 @@ class TestComputeSupplierCompliance:
         db.commit()
 
         score, gaps = _compute_supplier_compliance(
-            db, tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None, lookback_days=30,
+            db,
+            tenant_id=TENANT_ID,
+            supplier_user_id=USER_ID,
+            facility_id=None,
+            lookback_days=30,
         )
         stale_gaps = [g for g in gaps if g["severity"] == "medium"]
         assert len(stale_gaps) == 1
@@ -259,17 +291,19 @@ class TestComputeSupplierCompliance:
 
 
 class TestComputeFunnelSummary:
-
     def test_funnel_event_with_empty_step_skipped(self, db: Session):
         """Line 588: FunnelEvent with empty/None step is skipped in step aggregation."""
-        db.add(SupplierFunnelEventModel(
-            tenant_id=TENANT_ID, supplier_user_id=USER_ID,
-            facility_id=None,
-            event_name="step_viewed",
-            step=None,  # empty step → skip
-            status=None,
-            metadata={},
-        ))
+        db.add(
+            SupplierFunnelEventModel(
+                tenant_id=TENANT_ID,
+                supplier_user_id=USER_ID,
+                facility_id=None,
+                event_name="step_viewed",
+                step=None,  # empty step → skip
+                status=None,
+                metadata={},
+            )
+        )
         db.commit()
 
         result = _compute_funnel_summary(db, tenant_id=TENANT_ID)
@@ -285,7 +319,6 @@ class TestComputeFunnelSummary:
 
 
 class TestStringValue:
-
     def test_none_returns_empty_string(self):
         """Line 649: _string_value(None) → ''."""
         assert _string_value(None) == ""
@@ -305,9 +338,7 @@ class TestStringValue:
 
 
 class TestBuildFdaExportRows:
-
-    def _base_export_kwargs(self, facility_id=None, tlc_code=None,
-                            start_time=None, end_time=None):
+    def _base_export_kwargs(self, facility_id=None, tlc_code=None, start_time=None, end_time=None):
         return dict(
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
@@ -326,9 +357,7 @@ class TestBuildFdaExportRows:
         _make_event(db, f.id, lot2.id, cte_type="harvesting")
         db.commit()
 
-        rows = _build_fda_export_rows(
-            db, **self._base_export_kwargs(tlc_code="TLC-A")
-        )
+        rows = _build_fda_export_rows(db, **self._base_export_kwargs(tlc_code="TLC-A"))
         assert len(rows) == 1
         assert rows[0]["tlc_code"] == "TLC-A"
 
@@ -362,9 +391,7 @@ class TestBuildFdaExportRows:
         db.commit()
 
         cutoff = datetime(2025, 6, 1, tzinfo=timezone.utc)
-        rows = _build_fda_export_rows(
-            db, **self._base_export_kwargs(start_time=cutoff)
-        )
+        rows = _build_fda_export_rows(db, **self._base_export_kwargs(start_time=cutoff))
         # Only the 2026 event is after the cutoff
         assert len(rows) == 1
 
@@ -379,9 +406,7 @@ class TestBuildFdaExportRows:
         db.commit()
 
         cutoff = datetime(2025, 6, 1, tzinfo=timezone.utc)
-        rows = _build_fda_export_rows(
-            db, **self._base_export_kwargs(end_time=cutoff)
-        )
+        rows = _build_fda_export_rows(db, **self._base_export_kwargs(end_time=cutoff))
         # Only the 2025 event is before the cutoff
         assert len(rows) == 1
 
@@ -392,7 +417,6 @@ class TestBuildFdaExportRows:
 
 
 class TestXlsxColumnName:
-
     def test_first_column_is_A(self):
         """Line 749-754: index 1 → 'A'."""
         assert _xlsx_column_name(1) == "A"
@@ -416,7 +440,6 @@ class TestXlsxColumnName:
 
 
 class TestXmlEscape:
-
     def test_escapes_all_special_chars(self):
         """Line 758: all five special XML characters are escaped."""
         raw = """<a>&"'</a>"""
@@ -440,10 +463,11 @@ class TestXmlEscape:
 
 
 class TestRenderFdaExportXlsxFallback:
-
     def test_empty_rows_returns_valid_xlsx_bytes(self):
         """Lines 768-848: no data rows → valid ZIP/xlsx bytes."""
-        import zipfile, io
+        import io
+        import zipfile
+
         result = _render_fda_export_xlsx_fallback([])
         assert isinstance(result, bytes)
         assert len(result) > 0
@@ -455,7 +479,9 @@ class TestRenderFdaExportXlsxFallback:
 
     def test_row_with_data_included(self):
         """Lines 781-789: data rows are included in the worksheet XML."""
-        import zipfile, io
+        import io
+        import zipfile
+
         rows = [{"tlc_code": "TLC-001", "cte_type": "harvesting"}]
         result = _render_fda_export_xlsx_fallback(rows)
         with zipfile.ZipFile(io.BytesIO(result)) as zf:
@@ -465,7 +491,9 @@ class TestRenderFdaExportXlsxFallback:
 
     def test_special_chars_in_data_are_escaped(self):
         """Lines 785, 758 combined: XML special chars in data are escaped."""
-        import zipfile, io
+        import io
+        import zipfile
+
         rows = [{"tlc_code": "<test>&'\"</test>"}]
         result = _render_fda_export_xlsx_fallback(rows)
         with zipfile.ZipFile(io.BytesIO(result)) as zf:

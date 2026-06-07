@@ -13,7 +13,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-
 AGENT_ARTIFACT_VERSION = "agent-artifact.v1"
 HUMAN_REVIEW_CONFIDENCE_THRESHOLD = 0.85
 
@@ -97,12 +96,7 @@ class AgentArtifactContext(StrictArtifactModel):
     def validate_traceability_context(self) -> "AgentArtifactContext":
         """Require a real evidence anchor and coherent rule version metadata."""
 
-        has_anchor = bool(
-            self.evidence_ids
-            or self.canonical_event_ids
-            or self.ingestion_run_id
-            or self.source_hashes
-        )
+        has_anchor = bool(self.evidence_ids or self.canonical_event_ids or self.ingestion_run_id or self.source_hashes)
         if not has_anchor:
             raise ValueError(
                 "agent artifact context must include at least one traceability anchor: "
@@ -219,48 +213,28 @@ def _agent_artifact_schema_extra(schema: dict[str, Any]) -> None:
                     "required": ["artifact_type"],
                     "properties": {"artifact_type": {"const": "identity_match_suggestion"}},
                 },
-                "then": {
-                    "properties": {
-                        "payload": {
-                            "required": ["candidate_entity_ids", "match_type", "rationale"]
-                        }
-                    }
-                },
+                "then": {"properties": {"payload": {"required": ["candidate_entity_ids", "match_type", "rationale"]}}},
             },
             {
                 "if": {
                     "required": ["artifact_type"],
                     "properties": {"artifact_type": {"const": "validation_explanation"}},
                 },
-                "then": {
-                    "properties": {
-                        "payload": {"required": ["rule_result", "explanation"]}
-                    }
-                },
+                "then": {"properties": {"payload": {"required": ["rule_result", "explanation"]}}},
             },
             {
                 "if": {
                     "required": ["artifact_type"],
                     "properties": {"artifact_type": {"const": "review_routing_suggestion"}},
                 },
-                "then": {
-                    "properties": {
-                        "payload": {
-                            "required": ["review_queue_name", "priority", "review_reason"]
-                        }
-                    }
-                },
+                "then": {"properties": {"payload": {"required": ["review_queue_name", "priority", "review_reason"]}}},
             },
             {
                 "if": {
                     "required": ["artifact_type"],
                     "properties": {"artifact_type": {"const": "export_readiness_summary"}},
                 },
-                "then": {
-                    "properties": {
-                        "payload": {"required": ["exportable"]}
-                    }
-                },
+                "then": {"properties": {"payload": {"required": ["exportable"]}}},
             },
         ]
     )
@@ -298,8 +272,7 @@ class AgentArtifact(StrictArtifactModel):
         expected_payload_type = _PAYLOAD_TYPE_BY_ARTIFACT_TYPE[self.artifact_type]
         if not isinstance(self.payload, expected_payload_type):
             raise ValueError(
-                f"payload for artifact_type={self.artifact_type!r} must be "
-                f"{expected_payload_type.__name__}"
+                f"payload for artifact_type={self.artifact_type!r} must be {expected_payload_type.__name__}"
             )
 
         return self

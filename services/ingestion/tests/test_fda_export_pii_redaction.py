@@ -40,9 +40,6 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 import shared.cte_persistence as shared_cte_persistence
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export.router import router as fda_router
@@ -55,7 +52,8 @@ from app.fda_export_service import (
     _redact_extra_kde_pii,
     _redact_location_value,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ─────────────────────────────────────────────────────────────────────
 # Direct unit tests for the redaction helper
@@ -70,10 +68,7 @@ def test_redact_location_value_redacts_pii_columns_by_default():
         "Immediate Previous Source",
         "Receiving Location",
     ):
-        assert (
-            _redact_location_value("Valley Fresh Farms", col, include_pii=False)
-            == PII_REDACTION_PLACEHOLDER
-        )
+        assert _redact_location_value("Valley Fresh Farms", col, include_pii=False) == PII_REDACTION_PLACEHOLDER
 
 
 def test_redact_location_value_passes_through_when_include_pii_true():
@@ -84,10 +79,7 @@ def test_redact_location_value_passes_through_when_include_pii_true():
         "Immediate Previous Source",
         "Receiving Location",
     ):
-        assert (
-            _redact_location_value("Valley Fresh Farms", col, include_pii=True)
-            == "Valley Fresh Farms"
-        )
+        assert _redact_location_value("Valley Fresh Farms", col, include_pii=True) == "Valley Fresh Farms"
 
 
 def test_redact_location_value_does_not_touch_non_pii_columns():
@@ -101,10 +93,7 @@ def test_redact_location_value_does_not_touch_non_pii_columns():
         "Product Description",
         "Traceability Lot Code (TLC)",
     ):
-        assert (
-            _redact_location_value("0614141000005", col, include_pii=False)
-            == "0614141000005"
-        )
+        assert _redact_location_value("0614141000005", col, include_pii=False) == "0614141000005"
 
 
 def test_redact_location_value_preserves_empty_strings():
@@ -123,7 +112,7 @@ def test_redact_extra_kde_pii_redacts_address_and_contact_keys():
         "consignee_phone": "+1-555-0100",
         "owner_email": "ops@example.com",
         "temperature_recorded": 38.2,  # number — stays
-        "truck_id": "TRK-1234",        # not PII-keyed — stays
+        "truck_id": "TRK-1234",  # not PII-keyed — stays
     }
     redacted = _redact_extra_kde_pii(extras)
     assert redacted["facility_address"] == PII_REDACTION_PLACEHOLDER
@@ -471,10 +460,7 @@ def test_endpoint_audit_log_captures_pii_included_false(monkeypatch, caplog):
         },
     )
     assert resp.status_code == 200
-    audit_records = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_audit"
-    ]
+    audit_records = [r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_audit"]
     assert audit_records
     assert getattr(audit_records[0], "pii_included", None) is False
 
@@ -495,18 +481,12 @@ def test_endpoint_audit_log_captures_pii_included_true(monkeypatch, caplog):
     assert resp.status_code == 200
     # Both the authorization audit line AND the main export audit line
     # should carry pii_included.
-    pii_audit = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_pii_included"
-    ]
+    pii_audit = [r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_pii_included"]
     assert pii_audit, "expected fda_export_pii_included audit line"
     assert getattr(pii_audit[0], "pii_included", None) is True
     assert getattr(pii_audit[0], "user_id", None) == "test-user-key-abc123"
 
-    main_audit = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_audit"
-    ]
+    main_audit = [r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_audit"]
     assert main_audit
     assert getattr(main_audit[0], "pii_included", None) is True
 
@@ -526,10 +506,7 @@ def test_endpoint_denied_attempt_logs_warning(monkeypatch, caplog):
         },
     )
     assert resp.status_code == 403
-    denied = [
-        r for r in caplog.records
-        if r.name == "fda-export" and r.msg == "fda_export_pii_access_denied"
-    ]
+    denied = [r for r in caplog.records if r.name == "fda-export" and r.msg == "fda_export_pii_access_denied"]
     assert denied
     assert denied[0].levelno == logging.WARNING
     assert getattr(denied[0], "user_id", None) == "test-user-key-abc123"

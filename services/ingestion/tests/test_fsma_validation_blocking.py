@@ -12,10 +12,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from fastapi import HTTPException
-
 from app.epcis import persistence as persist_mod
-
+from fastapi import HTTPException
 
 # ---------------------------------------------------------------------------
 # _fsma_strict_mode default
@@ -39,9 +37,7 @@ def test_strict_mode_off_when_explicitly_false(monkeypatch):
 def test_strict_mode_various_truthy_values(monkeypatch):
     for value in ("1", "true", "yes", "on", "strict", "TRUE"):
         monkeypatch.setenv("FSMA_STRICT_MODE", value)
-        assert persist_mod._fsma_strict_mode() is True, (
-            f"FSMA_STRICT_MODE={value!r} should enable strict mode"
-        )
+        assert persist_mod._fsma_strict_mode() is True, f"FSMA_STRICT_MODE={value!r} should enable strict mode"
 
 
 # ---------------------------------------------------------------------------
@@ -128,9 +124,7 @@ def test_fallback_persistence_passes_through_valid_event(monkeypatch):
     event = _base_event("TLC-003", 14)
 
     # Valid -> return any truthy dict
-    with patch.object(
-        persist_mod, "_validate_as_fsma_event", return_value={"ok": True}
-    ):
+    with patch.object(persist_mod, "_validate_as_fsma_event", return_value={"ok": True}):
         payload, status = persist_mod._ingest_single_event_fallback(TEST_TENANT_A, event)
 
     assert status == 201
@@ -152,9 +146,7 @@ def test_fallback_store_tenant_isolation(monkeypatch):
     event_a = _base_event("TLC-A", 10)
     event_b = _base_event("TLC-B", 11)
 
-    with patch.object(
-        persist_mod, "_validate_as_fsma_event", return_value={"ok": True}
-    ):
+    with patch.object(persist_mod, "_validate_as_fsma_event", return_value={"ok": True}):
         payload_a, _ = persist_mod._ingest_single_event_fallback(TEST_TENANT_A, event_a)
         payload_b, _ = persist_mod._ingest_single_event_fallback(TEST_TENANT_B, event_b)
 
@@ -177,16 +169,12 @@ def test_fallback_store_per_tenant_fifo_cap(monkeypatch):
     persist_mod._epcis_store.clear()
     persist_mod._epcis_idempotency_index.clear()
 
-    with patch.object(
-        persist_mod, "_validate_as_fsma_event", return_value={"ok": True}
-    ):
+    with patch.object(persist_mod, "_validate_as_fsma_event", return_value={"ok": True}):
         for i in range(5):
             event = _base_event(f"TLC-A-{i}", 1 + i)
             persist_mod._ingest_single_event_fallback(TEST_TENANT_A, event)
         # Other tenant stays untouched.
-        persist_mod._ingest_single_event_fallback(
-            TEST_TENANT_B, _base_event("TLC-B", 8)
-        )
+        persist_mod._ingest_single_event_fallback(TEST_TENANT_B, _base_event("TLC-B", 8))
 
     store_a = persist_mod._epcis_store[TEST_TENANT_A]
     store_b = persist_mod._epcis_store[TEST_TENANT_B]

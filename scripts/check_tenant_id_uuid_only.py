@@ -33,6 +33,7 @@ Exit code 0 = clean. Non-zero = drift detected in a non-grandfathered file.
 Usage:
     python scripts/check_tenant_id_uuid_only.py
 """
+
 from __future__ import annotations
 
 import re

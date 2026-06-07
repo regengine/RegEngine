@@ -58,9 +58,7 @@ def _make_starlette_request(headers: dict | None = None) -> "_StarletteRequest":
         "http_version": "1.1",
         "root_path": "",
         "state": {},
-        "app": SimpleNamespace(
-            state=SimpleNamespace(limiter=None, rate_limit_exceeded_handler=None)
-        ),
+        "app": SimpleNamespace(state=SimpleNamespace(limiter=None, rate_limit_exceeded_handler=None)),
     }
 
     async def receive():
@@ -71,6 +69,7 @@ def _make_starlette_request(headers: dict | None = None) -> "_StarletteRequest":
 
 # ── pyotp stub (shared with test_mfa_verification.py) ───────────────
 if "pyotp" not in sys.modules:  # pragma: no cover - test env bootstrap
+
     class _FakeTOTP:
         def __init__(self, secret):
             self._secret = secret
@@ -100,6 +99,7 @@ if str(_ADMIN_DIR) not in sys.path:
 
 def test_recovery_code_normalize_strips_dash_and_lowercases():
     from services.admin.app.mfa import normalize_recovery_code
+
     assert normalize_recovery_code("abcd-efgh") == "ABCDEFGH"
     assert normalize_recovery_code("ABCD-EFGH") == "ABCDEFGH"
     assert normalize_recovery_code("  abcd efgh ") == "ABCDEFGH"
@@ -109,6 +109,7 @@ def test_recovery_code_normalize_strips_dash_and_lowercases():
 
 def test_recovery_code_generator_only_emits_alnum_codes():
     from services.admin.app.mfa import generate_recovery_codes, normalize_recovery_code
+
     codes = generate_recovery_codes(100)
     allowed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     for code in codes:
@@ -131,6 +132,7 @@ def test_recovery_code_hash_matches_despite_formatting():
     via verify_recovery_code, which normalizes both sides before comparing.
     """
     from services.admin.app.mfa import hash_recovery_code, verify_recovery_code
+
     canonical = "ABCD-EFGH"
     stored = hash_recovery_code(canonical)
     for variant in ["abcd-efgh", "ABCDEFGH", "abcdefgh", " abcd-efgh ", "AbCd-EfGh"]:
@@ -139,6 +141,7 @@ def test_recovery_code_hash_matches_despite_formatting():
 
 def test_recovery_code_verify_uses_constant_time():
     from services.admin.app.mfa import hash_recovery_code, verify_recovery_code
+
     stored = hash_recovery_code("ABCD-EFGH")
     assert verify_recovery_code("abcd-efgh", stored) is True
     assert verify_recovery_code("XXXX-XXXX", stored) is False
@@ -151,9 +154,11 @@ def test_recovery_code_verify_uses_constant_time():
 
 def test_encrypt_decrypt_mfa_secret_roundtrip(monkeypatch):
     from cryptography.fernet import Fernet
+
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("MFA_ENCRYPTION_KEY", key)
-    from services.admin.app.mfa import encrypt_mfa_secret, decrypt_mfa_secret
+    from services.admin.app.mfa import decrypt_mfa_secret, encrypt_mfa_secret
+
     plaintext = "JBSWY3DPEHPK3PXP"
     ciphertext = encrypt_mfa_secret(plaintext)
     assert ciphertext is not None
@@ -164,14 +169,17 @@ def test_encrypt_decrypt_mfa_secret_roundtrip(monkeypatch):
 def test_encrypt_mfa_secret_returns_none_without_key(monkeypatch):
     monkeypatch.delenv("MFA_ENCRYPTION_KEY", raising=False)
     from services.admin.app.mfa import encrypt_mfa_secret
+
     assert encrypt_mfa_secret("anything") is None
 
 
 def test_resolve_user_mfa_secret_prefers_ciphertext(monkeypatch):
     from cryptography.fernet import Fernet
+
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("MFA_ENCRYPTION_KEY", key)
     from services.admin.app.mfa import encrypt_mfa_secret, resolve_user_mfa_secret
+
     ciphertext = encrypt_mfa_secret("FROM_CIPHERTEXT")
     user = SimpleNamespace(
         id=uuid.uuid4(),
@@ -184,6 +192,7 @@ def test_resolve_user_mfa_secret_prefers_ciphertext(monkeypatch):
 def test_resolve_user_mfa_secret_falls_back_to_plaintext(monkeypatch):
     monkeypatch.delenv("MFA_ENCRYPTION_KEY", raising=False)
     from services.admin.app.mfa import resolve_user_mfa_secret
+
     user = SimpleNamespace(
         id=uuid.uuid4(),
         mfa_secret="LEGACY_PLAINTEXT",
@@ -194,9 +203,11 @@ def test_resolve_user_mfa_secret_falls_back_to_plaintext(monkeypatch):
 
 def test_store_mfa_secret_prefers_encryption(monkeypatch):
     from cryptography.fernet import Fernet
+
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("MFA_ENCRYPTION_KEY", key)
-    from services.admin.app.mfa import store_mfa_secret_on_user, decrypt_mfa_secret
+    from services.admin.app.mfa import decrypt_mfa_secret, store_mfa_secret_on_user
+
     user = SimpleNamespace(mfa_secret=None, mfa_secret_ciphertext=None)
     store_mfa_secret_on_user(user, "PLAINSECRET")
     assert user.mfa_secret is None
@@ -207,6 +218,7 @@ def test_store_mfa_secret_prefers_encryption(monkeypatch):
 def test_store_mfa_secret_falls_back_to_plaintext_without_key(monkeypatch):
     monkeypatch.delenv("MFA_ENCRYPTION_KEY", raising=False)
     from services.admin.app.mfa import store_mfa_secret_on_user
+
     user = SimpleNamespace(mfa_secret=None, mfa_secret_ciphertext="stale")
     store_mfa_secret_on_user(user, "DEV_ONLY_SECRET")
     assert user.mfa_secret == "DEV_ONLY_SECRET"
@@ -220,6 +232,7 @@ def test_store_mfa_secret_falls_back_to_plaintext_without_key(monkeypatch):
 
 def test_role_rank_basics():
     from shared.permissions import role_rank
+
     assert role_rank("Owner", []) > role_rank("Admin", [])
     assert role_rank("Admin", []) > role_rank("Manager", [])
     assert role_rank("Manager", []) > role_rank("Viewer", [])
@@ -229,6 +242,7 @@ def test_role_rank_basics():
 
 def test_can_invite_role_admin_cannot_invite_owner():
     from shared.permissions import can_invite_role
+
     # Admin with users.invite but no grant_owner permission
     admin_perms = ["users.invite", "users.read"]
     owner_perms = ["*"]
@@ -237,6 +251,7 @@ def test_can_invite_role_admin_cannot_invite_owner():
 
 def test_can_invite_role_admin_can_invite_admin_or_below():
     from shared.permissions import can_invite_role
+
     admin_perms = ["users.invite", "users.read"]
     # Same tier
     assert can_invite_role("Admin", admin_perms, "Admin", ["users.read"]) is True
@@ -246,12 +261,14 @@ def test_can_invite_role_admin_can_invite_admin_or_below():
 
 def test_can_invite_role_owner_can_invite_owner():
     from shared.permissions import can_invite_role
+
     assert can_invite_role("Owner", ["*"], "Owner", ["*"]) is True
 
 
 def test_can_invite_role_grant_owner_permission_allows_escalation():
     """An Admin with the explicit users.invite.grant_owner permission may issue Owner invites."""
     from shared.permissions import can_invite_role
+
     privileged_admin = ["users.invite", "users.invite.grant_owner"]
     assert can_invite_role("Admin", privileged_admin, "Owner", ["*"]) is True
 
@@ -260,6 +277,7 @@ def test_can_invite_role_wildcard_target_detected():
     """A role named 'ReadOnly' whose permissions accidentally include '*' must
     still be treated as Owner-tier, not matched on name."""
     from shared.permissions import can_invite_role
+
     wildcard_target = ["*"]
     assert can_invite_role("Admin", ["users.invite"], "ReadOnly", wildcard_target) is False
 
@@ -308,8 +326,9 @@ async def test_accept_invite_existing_user_without_password_refused(monkeypatch)
     """#1337 Path B — holder of token alone cannot attach a membership to
     an existing account."""
     from fastapi import HTTPException
-    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
+
     from services.admin.app.auth_utils import get_password_hash
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="alice@acme.com")
     existing_user = SimpleNamespace(
@@ -339,8 +358,8 @@ async def test_accept_invite_existing_user_without_password_refused(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_accept_invite_existing_user_with_correct_password_succeeds(monkeypatch):
-    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
     from services.admin.app.auth_utils import get_password_hash
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="alice@acme.com")
     existing_user = SimpleNamespace(
@@ -351,9 +370,9 @@ async def test_accept_invite_existing_user_with_correct_password_succeeds(monkey
     )
     db = MagicMock()
     db.execute.side_effect = [
-        _FakeResult(invite),       # invite lookup
+        _FakeResult(invite),  # invite lookup
         _FakeResult(existing_user),  # user lookup
-        _FakeResult(None),         # membership lookup — no existing
+        _FakeResult(None),  # membership lookup — no existing
     ]
     # AuditLogger.log_event is idempotent for our purposes
     monkeypatch.setattr(
@@ -374,8 +393,8 @@ async def test_accept_invite_existing_user_with_correct_password_succeeds(monkey
 
 @pytest.mark.asyncio
 async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatch):
-    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
     from services.admin.app.auth_utils import get_password_hash
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="alice@acme.com")
     invite.expires_at = datetime.utcnow() + timedelta(days=1)
@@ -411,7 +430,8 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
 async def test_accept_invite_inactive_user_refused(monkeypatch):
     """#1337 — do not reinstate suspended/erased users via invite."""
     from fastapi import HTTPException
-    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
+
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="inactive@example.com")
     inactive_user = SimpleNamespace(
@@ -437,26 +457,42 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
 async def test_accept_invite_uniform_400_for_all_unusable():
     """Expired, revoked, and already-accepted all return the same 400 body."""
     from fastapi import HTTPException
-    from services.admin.app.invite_routes import accept_invite, AcceptInviteRequest
+
+    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     cases = [
         # expired
         SimpleNamespace(
-            id=uuid.uuid4(), email="x@e", token_hash="h", role_id=uuid.uuid4(),
-            tenant_id=uuid.uuid4(), expires_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
-            revoked_at=None, accepted_at=None,
+            id=uuid.uuid4(),
+            email="x@e",
+            token_hash="h",
+            role_id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            expires_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+            revoked_at=None,
+            accepted_at=None,
         ),
         # revoked
         SimpleNamespace(
-            id=uuid.uuid4(), email="x@e", token_hash="h", role_id=uuid.uuid4(),
-            tenant_id=uuid.uuid4(), expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
-            revoked_at=datetime.now(timezone.utc), accepted_at=None,
+            id=uuid.uuid4(),
+            email="x@e",
+            token_hash="h",
+            role_id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
+            revoked_at=datetime.now(timezone.utc),
+            accepted_at=None,
         ),
         # already accepted
         SimpleNamespace(
-            id=uuid.uuid4(), email="x@e", token_hash="h", role_id=uuid.uuid4(),
-            tenant_id=uuid.uuid4(), expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
-            revoked_at=None, accepted_at=datetime.now(timezone.utc),
+            id=uuid.uuid4(),
+            email="x@e",
+            token_hash="h",
+            role_id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            expires_at=datetime(2100, 1, 1, tzinfo=timezone.utc),
+            revoked_at=None,
+            accepted_at=datetime.now(timezone.utc),
         ),
     ]
 
@@ -490,28 +526,26 @@ def test_auth_confirm_has_rate_limit_decorator():
     of the ``__wrapped__`` attribute plus the limit string in the module
     source (which can't be renamed without editing the file).
     """
-    import services.admin.app.auth_routes as ar
     import services.admin.app.auth.confirm_router as _confirm
+    import services.admin.app.auth_routes as ar
 
     # Evidence 1: SlowAPI replaced the function with its async wrapper.
     # ``ar.confirm_password`` is re-exported from the confirm sub-module
     # (Phase 1 split — see ``services/admin/app/auth/confirm_router.py``).
-    assert hasattr(ar.confirm_password, "__wrapped__"), (
-        "/auth/confirm lost its SlowAPI wrapper — decorator missing"
-    )
+    assert hasattr(ar.confirm_password, "__wrapped__"), "/auth/confirm lost its SlowAPI wrapper — decorator missing"
 
     # Evidence 2: confirm_router source defines a 5/minute limit right above
     # confirm_password. After the Phase 1 split the route body lives in the
     # sub-module, not in auth_routes.py — inspect the sub-module instead.
     import inspect
+
     module_src = inspect.getsource(_confirm)
     # Find the @limiter.limit decorator that precedes the confirm_password route.
     idx = module_src.find("async def confirm_password(")
     assert idx != -1
-    window = module_src[max(0, idx - 300):idx]
-    assert "@limiter.limit(\"5/minute\")" in window or "limiter.limit('5/minute')" in window, (
-        "Expected @limiter.limit(\"5/minute\") immediately above confirm_password (#1340). "
-        f"Window: {window!r}"
+    window = module_src[max(0, idx - 300) : idx]
+    assert '@limiter.limit("5/minute")' in window or "limiter.limit('5/minute')" in window, (
+        f'Expected @limiter.limit("5/minute") immediately above confirm_password (#1340). Window: {window!r}'
     )
 
 
@@ -523,6 +557,7 @@ def test_auth_confirm_has_rate_limit_decorator():
 def test_password_reset_routes_has_no_conflicting_change_password():
     """#1374 — the dead duplicate route in password_reset_routes must be gone."""
     from services.admin.app import password_reset_routes
+
     paths = {getattr(r, "path", None) for r in password_reset_routes.router.routes}
     assert "/auth/change-password" not in paths
 
@@ -534,6 +569,7 @@ def test_password_reset_routes_has_no_conflicting_change_password():
 
 def test_create_access_token_embeds_tv_claim():
     from services.admin.app.auth_utils import create_access_token, decode_access_token
+
     tok = create_access_token({"sub": "abc", "tv": 7})
     payload = decode_access_token(tok)
     assert payload["tv"] == 7
@@ -543,6 +579,7 @@ def test_create_access_token_embeds_tv_claim():
 def test_create_access_token_respects_provided_jti():
     """Elevation flow pre-allocates jti so it can store-then-hand-out."""
     from services.admin.app.auth_utils import create_access_token, decode_access_token
+
     my_jti = "fixed-jti-12345"
     tok = create_access_token({"sub": "abc", "tv": 1, "jti": my_jti})
     payload = decode_access_token(tok)
@@ -558,7 +595,7 @@ def test_create_access_token_respects_provided_jti():
 
 @pytest.mark.asyncio
 async def test_refresh_preserves_original_tenant_id(monkeypatch):
-    from services.admin.app.auth_routes import refresh_session, RefreshRequest
+    from services.admin.app.auth_routes import RefreshRequest, refresh_session
     from services.admin.app.auth_utils import create_access_token, decode_access_token
     from services.admin.app.session_store import SessionData
 
@@ -567,11 +604,13 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
     tenant_b = uuid.uuid4()
     # Old access token claims tenant_a. Our fix must re-issue with tenant_a
     # even though memberships include both A and B in arbitrary order.
-    old_access = create_access_token({
-        "sub": str(user_id),
-        "tenant_id": str(tenant_a),
-        "tv": 0,
-    })
+    old_access = create_access_token(
+        {
+            "sub": str(user_id),
+            "tenant_id": str(tenant_a),
+            "tv": 0,
+        }
+    )
 
     session_store = MagicMock()
     session_store.claim_session_by_token = AsyncMock(
@@ -611,6 +650,7 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
 
     def _db_get(model, id_):
         from services.admin.app.sqlalchemy_models import RoleModel, TenantModel, UserModel
+
         if model is UserModel:
             return user
         if model is TenantModel:
@@ -635,26 +675,27 @@ async def test_refresh_preserves_original_tenant_id(monkeypatch):
         session_store=session_store,
     )
     issued = decode_access_token(result.access_token)
-    assert issued["tenant_id"] == str(tenant_a), (
-        f"Expected tenant_a preserved, got {issued['tenant_id']!r}"
-    )
+    assert issued["tenant_id"] == str(tenant_a), f"Expected tenant_a preserved, got {issued['tenant_id']!r}"
 
 
 @pytest.mark.asyncio
 async def test_refresh_rejects_when_no_longer_member_of_original_tenant():
     from fastapi import HTTPException
-    from services.admin.app.auth_routes import refresh_session, RefreshRequest
+
+    from services.admin.app.auth_routes import RefreshRequest, refresh_session
     from services.admin.app.auth_utils import create_access_token
     from services.admin.app.session_store import SessionData
 
     user_id = uuid.uuid4()
     tenant_a = uuid.uuid4()
     other_tenant = uuid.uuid4()
-    old_access = create_access_token({
-        "sub": str(user_id),
-        "tenant_id": str(tenant_a),
-        "tv": 0,
-    })
+    old_access = create_access_token(
+        {
+            "sub": str(user_id),
+            "tenant_id": str(tenant_a),
+            "tv": 0,
+        }
+    )
 
     session_store = MagicMock()
     session_store.claim_session_by_token = AsyncMock(
@@ -682,7 +723,10 @@ async def test_refresh_rejects_when_no_longer_member_of_original_tenant():
 
     with pytest.raises(HTTPException) as exc:
         await refresh_session.__wrapped__(
-            payload=payload, request=request, db=db, session_store=session_store,
+            payload=payload,
+            request=request,
+            db=db,
+            session_store=session_store,
         )
     assert exc.value.status_code == 403
 
@@ -694,10 +738,12 @@ async def test_refresh_rejects_when_no_longer_member_of_original_tenant():
 
 @pytest.mark.asyncio
 async def test_require_reauth_rejects_missing_tenant():
+    from datetime import timedelta
+
     from fastapi import HTTPException
+
     from services.admin.app.auth_routes import require_reauth
     from services.admin.app.auth_utils import create_access_token
-    from datetime import timedelta
 
     user_id = uuid.uuid4()
     # elevation token MISSING tenant_id
@@ -716,10 +762,12 @@ async def test_require_reauth_rejects_missing_tenant():
 
 @pytest.mark.asyncio
 async def test_require_reauth_rejects_stale_tv():
+    from datetime import timedelta
+
     from fastapi import HTTPException
+
     from services.admin.app.auth_routes import require_reauth
     from services.admin.app.auth_utils import create_access_token
-    from datetime import timedelta
 
     user_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
@@ -735,9 +783,7 @@ async def test_require_reauth_rejects_stale_tv():
         expires_delta=timedelta(minutes=5),
     )
     # Access header echoes same tenant so tenant check passes.
-    access = create_access_token(
-        {"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 1}
-    )
+    access = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 1})
     request = MagicMock()
     request.headers = {
         "X-Elevation-Token": elevation,
@@ -756,10 +802,12 @@ async def test_require_reauth_rejects_stale_tv():
 
 @pytest.mark.asyncio
 async def test_require_reauth_rejects_cross_tenant():
+    from datetime import timedelta
+
     from fastapi import HTTPException
+
     from services.admin.app.auth_routes import require_reauth
     from services.admin.app.auth_utils import create_access_token
-    from datetime import timedelta
 
     user_id = uuid.uuid4()
     tenant_a = uuid.uuid4()
@@ -794,10 +842,12 @@ async def test_require_reauth_rejects_cross_tenant():
 
 @pytest.mark.asyncio
 async def test_require_reauth_rejects_revoked_jti():
+    from datetime import timedelta
+
     from fastapi import HTTPException
+
     from services.admin.app.auth_routes import require_reauth
     from services.admin.app.auth_utils import create_access_token
-    from datetime import timedelta
 
     user_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
@@ -838,8 +888,9 @@ async def test_require_reauth_rejects_revoked_jti():
 async def test_get_current_user_rejects_stale_tv_claim(monkeypatch):
     """A token minted with tv=0 after the user bumped to tv=1 must be rejected."""
     from fastapi import HTTPException
-    from services.admin.app.auth_utils import create_access_token
+
     from services.admin.app import dependencies
+    from services.admin.app.auth_utils import create_access_token
 
     user_id = uuid.uuid4()
     # Supabase disabled for this path so we go through local JWT.
@@ -866,8 +917,8 @@ async def test_get_current_user_rejects_stale_tv_claim(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_current_user_accepts_matching_tv(monkeypatch):
-    from services.admin.app.auth_utils import create_access_token
     from services.admin.app import dependencies
+    from services.admin.app.auth_utils import create_access_token
 
     user_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
@@ -901,6 +952,7 @@ async def test_get_current_user_accepts_matching_tv(monkeypatch):
 async def test_get_current_user_rejects_stale_supabase_tv_claim(monkeypatch):
     """Supabase-authenticated requests must enforce app_metadata tv too."""
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
 
     user_id = uuid.uuid4()
@@ -910,9 +962,7 @@ async def test_get_current_user_rejects_stale_supabase_tv_claim(monkeypatch):
         id=str(user_id),
         app_metadata={"tenant_id": str(tenant_id), "tv": 0},
     )
-    sb = SimpleNamespace(
-        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
-    )
+    sb = SimpleNamespace(auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user))))
     monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
 
     user = SimpleNamespace(
@@ -942,9 +992,7 @@ async def test_get_current_user_accepts_matching_supabase_tv_claim(monkeypatch):
         id=str(user_id),
         app_metadata={"tenant_id": str(tenant_id), "token_version": 3},
     )
-    sb = SimpleNamespace(
-        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
-    )
+    sb = SimpleNamespace(auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user))))
     monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
 
     user = SimpleNamespace(
@@ -968,6 +1016,7 @@ async def test_get_current_user_accepts_matching_supabase_tv_claim(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_current_user_rejects_missing_supabase_tv_after_bump(monkeypatch):
     from fastapi import HTTPException
+
     from services.admin.app import dependencies
 
     user_id = uuid.uuid4()
@@ -977,9 +1026,7 @@ async def test_get_current_user_rejects_missing_supabase_tv_after_bump(monkeypat
         id=str(user_id),
         app_metadata={"tenant_id": str(tenant_id)},
     )
-    sb = SimpleNamespace(
-        auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user)))
-    )
+    sb = SimpleNamespace(auth=SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(user=sb_user))))
     monkeypatch.setattr(dependencies, "get_supabase", lambda: sb)
 
     user = SimpleNamespace(
@@ -1067,6 +1114,7 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
 @pytest.mark.asyncio
 async def test_refresh_rejects_stale_session_token_version():
     from fastapi import HTTPException
+
     from services.admin.app.auth_routes import RefreshRequest, refresh_session
     from services.admin.app.session_store import SessionData
 

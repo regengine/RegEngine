@@ -36,9 +36,7 @@ class ComplianceServiceSync:
     def get_status(self, tenant_id: UUID) -> Dict[str, Any]:
         """Get current compliance status for a tenant."""
         result = self.session.execute(
-            select(TenantComplianceStatusModel).where(
-                TenantComplianceStatusModel.tenant_id == tenant_id
-            )
+            select(TenantComplianceStatusModel).where(TenantComplianceStatusModel.tenant_id == tenant_id)
         )
         status = result.scalar_one_or_none()
 
@@ -83,23 +81,17 @@ class ComplianceServiceSync:
         limit: int = 50,
     ) -> List[ComplianceAlertModel]:
         """Get alerts for a tenant."""
-        query = select(ComplianceAlertModel).where(
-            ComplianceAlertModel.tenant_id == tenant_id
-        )
+        query = select(ComplianceAlertModel).where(ComplianceAlertModel.tenant_id == tenant_id)
 
         if status_filter:
             query = query.where(ComplianceAlertModel.status == status_filter)
 
-        query = query.order_by(
-            desc(ComplianceAlertModel.created_at)
-        ).limit(limit)
+        query = query.order_by(desc(ComplianceAlertModel.created_at)).limit(limit)
 
         result = self.session.execute(query)
         return result.scalars().all()
 
-    def get_alert(
-        self, alert_id: UUID, tenant_id: UUID
-    ) -> Optional[ComplianceAlertModel]:
+    def get_alert(self, alert_id: UUID, tenant_id: UUID) -> Optional[ComplianceAlertModel]:
         """Get a single alert by ID, scoped to ``tenant_id``.
 
         #1405: defense-in-depth against the compliance-IDOR class of
@@ -165,9 +157,7 @@ class ComplianceServiceSync:
     def _recalculate_status(self, tenant_id: UUID) -> None:
         """Recalculate tenant compliance status."""
         result = self.session.execute(
-            select(TenantComplianceStatusModel).where(
-                TenantComplianceStatusModel.tenant_id == tenant_id
-            )
+            select(TenantComplianceStatusModel).where(TenantComplianceStatusModel.tenant_id == tenant_id)
         )
         status = result.scalar_one_or_none()
 
@@ -257,9 +247,7 @@ class ComplianceServiceSync:
     def get_product_profile(self, tenant_id: UUID) -> Optional[TenantProductProfileModel]:
         """Get tenant's product profile."""
         result = self.session.execute(
-            select(TenantProductProfileModel).where(
-                TenantProductProfileModel.tenant_id == tenant_id
-            )
+            select(TenantProductProfileModel).where(TenantProductProfileModel.tenant_id == tenant_id)
         )
         return result.scalar_one_or_none()
 

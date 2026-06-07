@@ -9,7 +9,6 @@ import os
 
 import redis
 from fastapi import HTTPException, Request
-
 from shared.circuit_breaker import CircuitOpenError, redis_circuit
 
 logger = logging.getLogger(__name__)

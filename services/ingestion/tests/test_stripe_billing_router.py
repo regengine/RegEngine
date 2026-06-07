@@ -11,8 +11,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.authz as authz
-from app.authz import IngestionPrincipal, get_ingestion_principal
 from app import stripe_billing
+from app.authz import IngestionPrincipal, get_ingestion_principal
 
 
 class _FakeRedis:

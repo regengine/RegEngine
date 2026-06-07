@@ -17,20 +17,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-V079_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260513_c1d2e3f4a5b6_v079_ingestion_run_receipts.py"
-)
-V080_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20260513_d2e3f4a5b6c7_v080_agent_artifact_operator_persistence.py"
-)
+V079_PATH = REPO_ROOT / "alembic" / "versions" / "20260513_c1d2e3f4a5b6_v079_ingestion_run_receipts.py"
+V080_PATH = REPO_ROOT / "alembic" / "versions" / "20260513_d2e3f4a5b6c7_v080_agent_artifact_operator_persistence.py"
 SHA256 = "a" * 64
 
 
@@ -85,7 +74,8 @@ def persistence_schema(pg_engine: Engine):
         conn.execute(text("DROP SCHEMA IF EXISTS fsma CASCADE"))
         conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
         conn.execute(text("CREATE SCHEMA fsma"))
-        conn.execute(text("""
+        conn.execute(
+            text("""
             DO $$
             BEGIN
                 IF NOT EXISTS (
@@ -94,8 +84,10 @@ def persistence_schema(pg_engine: Engine):
                     CREATE ROLE regengine NOLOGIN;
                 END IF;
             END$$;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION get_tenant_context()
             RETURNS uuid
             LANGUAGE plpgsql
@@ -113,8 +105,10 @@ def persistence_schema(pg_engine: Engine):
                 RETURN tid::uuid;
             END;
             $$;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             CREATE TABLE fsma.ingestion_runs (
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 tenant_id uuid NOT NULL,
@@ -139,7 +133,8 @@ def persistence_schema(pg_engine: Engine):
                 id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 tenant_id uuid NOT NULL
             );
-        """))
+        """)
+        )
         conn.execute(text(v079._INGESTION_RUN_RECEIPTS_SQL))
         conn.execute(text(v080._AGENT_ARTIFACT_OPERATOR_PERSISTENCE_SQL))
     yield
@@ -183,8 +178,9 @@ def _insert_artifact(conn, *, tenant_id, run_id, artifact_id=None, source_hash=S
         "context": {"ingestion_run_id": str(run_id), "source_hashes": [source_hash]},
         "payload": {"source_field": "Supplier TLC"},
     }
-    return conn.execute(
-        text("""
+    return (
+        conn.execute(
+            text("""
             INSERT INTO fsma.agent_artifacts (
                 artifact_id, tenant_id, artifact_version, artifact_type,
                 created_at, agent_name, agent_version, model_name, suggestion,
@@ -201,14 +197,17 @@ def _insert_artifact(conn, *, tenant_id, run_id, artifact_id=None, source_hash=S
             )
             RETURNING artifact_id, artifact_hash
         """),
-        {
-            "artifact_id": artifact_id,
-            "tenant_id": tenant_id,
-            "run_id": run_id,
-            "source_hash": source_hash,
-            "artifact": __import__("json").dumps(artifact_json),
-        },
-    ).mappings().one()
+            {
+                "artifact_id": artifact_id,
+                "tenant_id": tenant_id,
+                "run_id": run_id,
+                "source_hash": source_hash,
+                "artifact": __import__("json").dumps(artifact_json),
+            },
+        )
+        .mappings()
+        .one()
+    )
 
 
 def test_agent_artifacts_are_hashed_and_append_only(pg_engine: Engine, persistence_schema):
@@ -223,10 +222,7 @@ def test_agent_artifacts_are_hashed_and_append_only(pg_engine: Engine, persisten
     with pg_engine.begin() as conn:
         with pytest.raises(DBAPIError):
             conn.execute(
-                text(
-                    "UPDATE fsma.agent_artifacts "
-                    "SET suggestion = 'changed' WHERE artifact_id = :artifact_id"
-                ),
+                text("UPDATE fsma.agent_artifacts SET suggestion = 'changed' WHERE artifact_id = :artifact_id"),
                 {"artifact_id": artifact["artifact_id"]},
             )
 
@@ -289,8 +285,9 @@ def test_agent_reviews_link_to_artifact_run_and_receipt_by_tenant(
             {"tid": tenant_id},
         ).scalar_one()
 
-        review = conn.execute(
-            text("""
+        review = (
+            conn.execute(
+                text("""
                 INSERT INTO fsma.agent_artifact_reviews (
                     tenant_id, artifact_id, ingestion_run_id, advisory_receipt_id,
                     status, reviewed_by, reviewed_at, review_reason, operator_notes,
@@ -303,14 +300,17 @@ def test_agent_reviews_link_to_artifact_run_and_receipt_by_tenant(
                 )
                 RETURNING review_id, status
             """),
-            {
-                "tenant_id": tenant_id,
-                "artifact_id": artifact_id,
-                "run_id": run_id,
-                "receipt_id": receipt_id,
-                "reviewer_id": reviewer_id,
-            },
-        ).mappings().one()
+                {
+                    "tenant_id": tenant_id,
+                    "artifact_id": artifact_id,
+                    "run_id": run_id,
+                    "receipt_id": receipt_id,
+                    "reviewer_id": reviewer_id,
+                },
+            )
+            .mappings()
+            .one()
+        )
 
         assert review["status"] == "accepted"
 
@@ -362,15 +362,19 @@ def test_agent_reviews_require_terminal_reviewer_metadata(
 
 def test_agent_operator_tables_force_rls(pg_engine: Engine, persistence_schema):
     with pg_engine.connect() as conn:
-        rows = conn.execute(
-            text("""
+        rows = (
+            conn.execute(
+                text("""
                 SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
                 FROM pg_class c
                 JOIN pg_namespace n ON c.relnamespace = n.oid
                 WHERE n.nspname = 'fsma'
                   AND c.relname IN ('agent_artifacts', 'agent_artifact_reviews')
             """)
-        ).mappings().all()
+            )
+            .mappings()
+            .all()
+        )
 
     assert {row["relname"] for row in rows} == {
         "agent_artifacts",

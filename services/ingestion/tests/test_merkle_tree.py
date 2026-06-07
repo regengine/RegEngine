@@ -12,8 +12,8 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import hashlib
-import pytest
 
+import pytest
 from shared.merkle_tree import MerkleTree, compute_merkle_root, generate_proof, verify_proof
 
 
@@ -177,6 +177,7 @@ class TestMerkleTreeEdgeCases:
 
     def test_proof_step_serialization(self):
         from shared.merkle_tree import MerkleProofStep
+
         step = MerkleProofStep(position="left", hash="abc123")
         d = step.to_dict()
         assert d == {"position": "left", "hash": "abc123"}

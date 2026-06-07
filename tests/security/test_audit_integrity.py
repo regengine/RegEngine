@@ -11,14 +11,14 @@ Tests:
 
 import hashlib
 import json
-import uuid
-from datetime import datetime, timezone
-
-import pytest
 
 # Import the modules under test
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 # Add the admin service to path for imports
 _admin_dir = Path(__file__).parent.parent.parent / "services" / "admin"
@@ -135,9 +135,7 @@ class TestComputeIntegrityHash:
 class TestVerifyChain:
     """Test the chain verification logic."""
 
-    def _make_entry(
-        self, entry_id, tenant_id, timestamp, event_type, action, resource_id, metadata, prev_hash
-    ):
+    def _make_entry(self, entry_id, tenant_id, timestamp, event_type, action, resource_id, metadata, prev_hash):
         """Build an entry in the export format with a correct integrity hash."""
         integrity_hash = compute_integrity_hash(
             prev_hash=prev_hash,

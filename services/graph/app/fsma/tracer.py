@@ -11,10 +11,9 @@ import time
 from typing import Any, Dict, List, Optional
 
 import structlog
+from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
 
 from ..neo4j_utils import Neo4jClient
-from shared.fsma_rules import TraceEvent as SharedTraceEvent, TimeArrowRule
-
 from .types import TraceResult
 
 logger = structlog.get_logger("fsma-utils")
@@ -230,12 +229,8 @@ async def trace_forward(
                     expected_tenant=tenant_id,
                     facility_tenant=fac_tenant,
                 )
-                raise ValueError(
-                    f"trace_forward facility invariant violation: tenant={fac_tenant!r}"
-                )
-            if fac and fac not in [
-                f for f in facilities if f.get("gln") == fac.get("gln")
-            ]:
+                raise ValueError(f"trace_forward facility invariant violation: tenant={fac_tenant!r}")
+            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
                 facilities.append(
                     {
                         "gln": fac.get("gln"),
@@ -262,12 +257,14 @@ async def trace_forward(
         for idx, e in enumerate(events):
             if e.get("event_id") and e.get("event_date"):
                 try:
-                    parseable_events.append(SharedTraceEvent(
-                        event_id=e["event_id"],
-                        tlc=tlc,
-                        event_date=e["event_date"],
-                        event_type=e.get("type"),
-                    ))
+                    parseable_events.append(
+                        SharedTraceEvent(
+                            event_id=e["event_id"],
+                            tlc=tlc,
+                            event_date=e["event_date"],
+                            event_type=e.get("type"),
+                        )
+                    )
                     parseable_indices.append(idx)
                 except (ValueError, TypeError) as err:
                     logger.warning(
@@ -285,14 +282,16 @@ async def trace_forward(
                 violating_ids: set = set()
                 for v in validation.violations:
                     details = v.details or {}
-                    time_violations.append({
-                        "violation_type": "TIME_ARROW",
-                        "description": v.description,
-                        "prev_event_id": v.event_ids[0] if v.event_ids else None,
-                        "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
-                        "prev_event_date": details.get("upstream_date"),
-                        "curr_event_date": details.get("downstream_date"),
-                    })
+                    time_violations.append(
+                        {
+                            "violation_type": "TIME_ARROW",
+                            "description": v.description,
+                            "prev_event_id": v.event_ids[0] if v.event_ids else None,
+                            "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
+                            "prev_event_date": details.get("upstream_date"),
+                            "curr_event_date": details.get("downstream_date"),
+                        }
+                    )
                     # The *downstream* event is the one that violates causality
                     if len(v.event_ids) > 1:
                         violating_ids.add(v.event_ids[1])
@@ -300,10 +299,7 @@ async def trace_forward(
                 # Strip violating events from the result set so callers
                 # never see causally-impossible paths.
                 if violating_ids:
-                    events = [
-                        e for e in events
-                        if e.get("event_id") not in violating_ids
-                    ]
+                    events = [e for e in events if e.get("event_id") not in violating_ids]
                     logger.info(
                         "time_arrow_events_stripped",
                         tlc=tlc,
@@ -489,12 +485,8 @@ async def trace_backward(
                     expected_tenant=tenant_id,
                     facility_tenant=fac_tenant,
                 )
-                raise ValueError(
-                    f"trace_backward facility invariant violation: tenant={fac_tenant!r}"
-                )
-            if fac and fac not in [
-                f for f in facilities if f.get("gln") == fac.get("gln")
-            ]:
+                raise ValueError(f"trace_backward facility invariant violation: tenant={fac_tenant!r}")
+            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
                 facilities.append(
                     {
                         "gln": fac.get("gln"),

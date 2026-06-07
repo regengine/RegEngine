@@ -14,20 +14,18 @@ This test pins the correct behavior at :59, at every 10-minute
 boundary (sanity), and at the new year midnight boundary (roll over
 year, month, day, hour, minute simultaneously).
 """
+
 from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
-
 from shared.api_key_store import DatabaseAPIKeyStore
 
 
 def _make_store(monkeypatch):
     """Build a DatabaseAPIKeyStore without opening real DB or Redis."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h:6543/d")
-    with patch("shared.api_key_store.create_async_engine") as _e, patch(
-        "shared.api_key_store.sessionmaker"
-    ) as _s:
+    with patch("shared.api_key_store.create_async_engine") as _e, patch("shared.api_key_store.sessionmaker") as _s:
         _e.return_value = object()
         _s.return_value = lambda: None
         return DatabaseAPIKeyStore()
@@ -55,8 +53,12 @@ async def test_reset_at_rolls_over_correctly(monkeypatch, now_str, expected_rese
     store = _make_store(monkeypatch)
 
     class _FakePipeline:
-        def incr(self, key): pass
-        def expire(self, key, sec): pass
+        def incr(self, key):
+            pass
+
+        def expire(self, key, sec):
+            pass
+
         async def execute(self):
             # Simulated counter: return below limit so allowed=True
             return [1, True]
@@ -91,12 +93,18 @@ async def test_reset_at_is_tz_aware(monkeypatch):
     store = _make_store(monkeypatch)
 
     class _FakePipeline:
-        def incr(self, key): pass
-        def expire(self, key, sec): pass
-        async def execute(self): return [1, True]
+        def incr(self, key):
+            pass
+
+        def expire(self, key, sec):
+            pass
+
+        async def execute(self):
+            return [1, True]
 
     class _FakeRedis:
-        def pipeline(self): return _FakePipeline()
+        def pipeline(self):
+            return _FakePipeline()
 
     store._redis = _FakeRedis()
 

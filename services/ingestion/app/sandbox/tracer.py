@@ -98,17 +98,16 @@ def _trace_in_memory(
             if parent_idx is not None and parent_idx != evt_idx:
                 ev = raw_events[evt_idx]
                 tlc = (ev.get("traceability_lot_code") or "").strip()
-                edge_exists = any(
-                    e.from_event_index == parent_idx and e.to_event_index == evt_idx
-                    for e in edges
-                )
+                edge_exists = any(e.from_event_index == parent_idx and e.to_event_index == evt_idx for e in edges)
                 if not edge_exists:
-                    edges.append(TraceEdge(
-                        from_event_index=parent_idx,
-                        to_event_index=evt_idx,
-                        link_type=link_type,
-                        lot_code=tlc,
-                    ))
+                    edges.append(
+                        TraceEdge(
+                            from_event_index=parent_idx,
+                            to_event_index=evt_idx,
+                            link_type=link_type,
+                            lot_code=tlc,
+                        )
+                    )
             continue
 
         visited.add(evt_idx)
@@ -152,12 +151,14 @@ def _trace_in_memory(
 
         # Add edge from parent
         if parent_idx is not None and parent_idx != evt_idx:
-            edges.append(TraceEdge(
-                from_event_index=parent_idx,
-                to_event_index=evt_idx,
-                link_type=link_type,
-                lot_code=tlc,
-            ))
+            edges.append(
+                TraceEdge(
+                    from_event_index=parent_idx,
+                    to_event_index=evt_idx,
+                    link_type=link_type,
+                    lot_code=tlc,
+                )
+            )
 
         if depth >= max_depth:
             continue

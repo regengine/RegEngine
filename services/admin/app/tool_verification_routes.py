@@ -14,12 +14,11 @@ import secrets
 import time
 from datetime import datetime, timezone
 
+import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
-import redis.asyncio as aioredis
-
-from shared.blocked_email_domains import is_personal_email, extract_domain
+from shared.blocked_email_domains import extract_domain, is_personal_email
 from shared.env import is_production
 from shared.pii import mask_email
 from shared.rate_limit import limiter
@@ -90,7 +89,10 @@ async def _get_redis() -> aioredis.Redis | None:
         try:
             url = os.getenv("REDIS_URL", "rediss://redis:6379/0")
             _redis_client = aioredis.from_url(
-                url, encoding="utf-8", decode_responses=True, max_connections=5,
+                url,
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=5,
             )
             await _redis_client.ping()
             _redis_available = True
@@ -395,9 +397,7 @@ async def request_lead_erasure(request: Request, payload: LeadErasureRequest):
 
 @router.post("/lead-erasure/confirm", status_code=200)
 @limiter.limit("10/minute")
-async def confirm_lead_erasure(
-    request: Request, payload: ConfirmLeadErasureRequest
-):
+async def confirm_lead_erasure(request: Request, payload: ConfirmLeadErasureRequest):
     """Step 2 -- submit the 6-digit code. On success, DELETE tool_leads row."""
     email = payload.email.strip().lower()
     code = payload.code.strip()
@@ -405,17 +405,16 @@ async def confirm_lead_erasure(
     ok, err = await _check_erasure_code(email, code)
     if not ok:
         status = 429 if "Too many" in err else 400
-        raise HTTPException(
-            status_code=status, detail=err or "Invalid or expired code"
-        )
+        raise HTTPException(status_code=status, detail=err or "Invalid or expired code")
 
     # Proof of email control established -- erase the lead row. LOWER()
     # catches any cased variant that slipped past the original insert's
     # .lower(). The statement runs even when no row exists; we do not
     # return DELETE rowcount -- exposing "0 deleted" would reintroduce
     # the enumeration oracle the /request endpoint is careful to avoid.
-    from .database import SessionLocal
     from sqlalchemy import text
+
+    from .database import SessionLocal
 
     session = SessionLocal()
     try:
@@ -464,13 +463,9 @@ async def _send_erasure_email(email: str, code: str) -> None:
                     status=resp.status_code,
                     body=resp.text,
                 )
-                raise HTTPException(
-                    status_code=500, detail="Failed to send erasure email"
-                )
+                raise HTTPException(status_code=500, detail="Failed to send erasure email")
     else:
-        logger.warning(
-            "dev_mode_erasure_code", email=mask_email(email), code=code
-        )
+        logger.warning("dev_mode_erasure_code", email=mask_email(email), code=code)
 
 
 def _build_erasure_email_html(code: str) -> str:
@@ -531,8 +526,9 @@ def decode_tool_access_token(token: str) -> dict:
 # ---------------------------------------------------------------------------
 def _save_lead(email: str, domain: str, tool_name: str) -> None:
     """Insert or update a tool lead row. Uses the Admin DB sync session."""
-    from .database import SessionLocal
     from sqlalchemy import text
+
+    from .database import SessionLocal
 
     session = SessionLocal()
     try:

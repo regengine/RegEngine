@@ -7,8 +7,8 @@ from typing import Any, Optional
 
 import stripe
 import structlog
-from shared.resilient_http import resilient_client
 from fastapi import HTTPException
+from shared.resilient_http import resilient_client
 
 from .helpers import _stripe_get
 from .state import _get_subscription_mapping, _store_subscription_mapping

@@ -10,17 +10,17 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
+from shared.tenant_settings import get_tenant_data, set_tenant_data
 from sqlalchemy import text
 
 from .webhook_compat import require_tenant_context
-from shared.database import get_db_safe
-from shared.tenant_settings import get_tenant_data, set_tenant_data
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("supplier-validation")
 
@@ -37,6 +37,7 @@ router = APIRouter(
 
 class ValidationCheck(BaseModel):
     """A single validation check result."""
+
     name: str
     passed: bool
     details: str
@@ -45,6 +46,7 @@ class ValidationCheck(BaseModel):
 
 class SupplierValidationResult(BaseModel):
     """Validation result for a single supplier."""
+
     supplier_id: str
     supplier_name: str
     status: str = Field(..., description="compliant | partial | non_compliant")
@@ -56,6 +58,7 @@ class SupplierValidationResult(BaseModel):
 
 class TenantSupplierReport(BaseModel):
     """Aggregate validation report for all tenant suppliers."""
+
     tenant_id: str
     total_suppliers: int
     compliant_count: int
@@ -95,6 +98,7 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
         return None
     try:
         import json
+
         rows = db.execute(
             text(
                 "SELECT id, name, contact_email, portal_link_id, portal_status, "
@@ -105,18 +109,20 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
         ).fetchall()
         suppliers = []
         for row in rows:
-            suppliers.append({
-                "id": row[0],
-                "name": row[1],
-                "contact_email": row[2],
-                "portal_link_id": row[3],
-                "portal_status": row[4],
-                "submissions_count": row[5],
-                "last_submission": row[6],
-                "compliance_status": row[7],
-                "missing_kdes": json.loads(row[8]) if row[8] else [],
-                "products": json.loads(row[9]) if row[9] else [],
-            })
+            suppliers.append(
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "contact_email": row[2],
+                    "portal_link_id": row[3],
+                    "portal_status": row[4],
+                    "submissions_count": row[5],
+                    "last_submission": row[6],
+                    "compliance_status": row[7],
+                    "missing_kdes": json.loads(row[8]) if row[8] else [],
+                    "products": json.loads(row[9]) if row[9] else [],
+                }
+            )
         return suppliers
     except Exception as exc:
         logger.warning("db_read_failed error=%s", str(exc))
@@ -164,35 +170,41 @@ def _validate_supplier(supplier: dict, tenant_id: str) -> SupplierValidationResu
         except (ValueError, TypeError):
             pass
 
-    checks.append(ValidationCheck(
-        name="recent_submission",
-        passed=has_recent_submission,
-        details="Submitted within last 30 days" if has_recent_submission else "No submission in 30+ days",
-        severity="critical",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="recent_submission",
+            passed=has_recent_submission,
+            details="Submitted within last 30 days" if has_recent_submission else "No submission in 30+ days",
+            severity="critical",
+        )
+    )
     if not has_recent_submission:
         missing.append("Submission within last 30 days required")
 
     # 2. Portal status check (critical)
     portal_active = supplier.get("portal_status") == "active"
-    checks.append(ValidationCheck(
-        name="portal_status",
-        passed=portal_active,
-        details=f"Portal status: {supplier.get('portal_status', 'unknown')}",
-        severity="critical",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="portal_status",
+            passed=portal_active,
+            details=f"Portal status: {supplier.get('portal_status', 'unknown')}",
+            severity="critical",
+        )
+    )
     if not portal_active:
         missing.append("Active portal link required")
 
     # 3. Valid contact email (warning)
     email = supplier.get("contact_email", "")
     email_valid = bool(email and _EMAIL_RE.match(email))
-    checks.append(ValidationCheck(
-        name="valid_contact_email",
-        passed=email_valid,
-        details=f"Email: {email}" if email_valid else "Missing or invalid contact email",
-        severity="warning",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="valid_contact_email",
+            passed=email_valid,
+            details=f"Email: {email}" if email_valid else "Missing or invalid contact email",
+            severity="warning",
+        )
+    )
     if not email_valid:
         missing.append("Valid contact email required")
 
@@ -224,16 +236,18 @@ def _validate_supplier(supplier: dict, tenant_id: str) -> SupplierValidationResu
         required_ctes = set(_REQUIRED_CTE_TYPES["default"])
 
     cte_coverage = required_ctes.issubset(submitted_cte_types) if submitted_cte_types else False
-    checks.append(ValidationCheck(
-        name="cte_type_coverage",
-        passed=cte_coverage,
-        details=(
-            f"Covers all required CTEs: {sorted(required_ctes)}"
-            if cte_coverage
-            else f"Missing CTE types: {sorted(required_ctes - submitted_cte_types)}"
-        ),
-        severity="warning",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="cte_type_coverage",
+            passed=cte_coverage,
+            details=(
+                f"Covers all required CTEs: {sorted(required_ctes)}"
+                if cte_coverage
+                else f"Missing CTE types: {sorted(required_ctes - submitted_cte_types)}"
+            ),
+            severity="warning",
+        )
+    )
     if not cte_coverage:
         missing_ctes = sorted(required_ctes - submitted_cte_types)
         missing.append(f"CTE type submissions needed: {', '.join(missing_ctes)}")
@@ -241,22 +255,26 @@ def _validate_supplier(supplier: dict, tenant_id: str) -> SupplierValidationResu
     # 5. KDE completeness (warning)
     avg_kde = (sum(kde_scores) / len(kde_scores)) if kde_scores else 0.0
     kde_ok = avg_kde >= 80.0
-    checks.append(ValidationCheck(
-        name="kde_completeness",
-        passed=kde_ok,
-        details=f"Average KDE completeness: {avg_kde:.1f}%" if kde_scores else "No KDE data available",
-        severity="warning",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="kde_completeness",
+            passed=kde_ok,
+            details=f"Average KDE completeness: {avg_kde:.1f}%" if kde_scores else "No KDE data available",
+            severity="warning",
+        )
+    )
     if not kde_ok:
         missing.append("KDE completeness must be >= 80%")
 
     # 6. Valid GLN on file (info)
-    checks.append(ValidationCheck(
-        name="valid_gln",
-        passed=has_gln,
-        details="GLN on file" if has_gln else "No GLN associated with submissions",
-        severity="info",
-    ))
+    checks.append(
+        ValidationCheck(
+            name="valid_gln",
+            passed=has_gln,
+            details="GLN on file" if has_gln else "No GLN associated with submissions",
+            severity="info",
+        )
+    )
     if not has_gln:
         missing.append("GLN (Global Location Number) recommended")
 
@@ -314,7 +332,7 @@ def _build_report(tenant_id: str, results: list[SupplierValidationResult]) -> Te
 
     # Write-through to DB for persistence across restarts
     try:
-        report_data = report.model_dump() if hasattr(report, 'model_dump') else report.__dict__
+        report_data = report.model_dump() if hasattr(report, "model_dump") else report.__dict__
         set_tenant_data(tenant_id, "supplier_reports", tenant_id, report_data)
     except Exception as exc:
         logger.warning("supplier_report_db_write_failed tenant=%s error=%s", tenant_id, str(exc))
@@ -348,7 +366,9 @@ async def validate_all_suppliers(
     report = _build_report(tenant_id, results)
     logger.info(
         "validation_complete tenant=%s total=%d compliant=%d",
-        tenant_id, report.total_suppliers, report.compliant_count,
+        tenant_id,
+        report.total_suppliers,
+        report.compliant_count,
     )
     return report
 
@@ -376,7 +396,9 @@ async def validate_single_supplier(
             result = _validate_supplier(s, tenant_id)
             logger.info(
                 "single_validation_complete supplier=%s score=%d status=%s",
-                supplier_id, result.score, result.status,
+                supplier_id,
+                result.score,
+                result.status,
             )
             return result
 

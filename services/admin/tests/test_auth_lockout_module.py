@@ -5,6 +5,7 @@ The broader auth route tests intentionally import these helpers through
 module path directly so future auth_routes.py splits do not break callers
 that use the extracted lockout module.
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -63,4 +64,3 @@ async def test_direct_check_account_lockout_uses_delay_ttl():
 
     assert exc.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
     assert exc.value.headers["Retry-After"] == "42"
-

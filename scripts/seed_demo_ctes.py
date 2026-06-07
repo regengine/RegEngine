@@ -7,17 +7,15 @@ Usage:
 Defaults to the production ingestion service URL.
 Uses REGENGINE_API_KEY env var if no CLI arg, then falls back to preshared key.
 """
+
+import json
 import os
 import ssl
 import sys
-import json
 import urllib.request
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "https://believable-respect-production-2fb3.up.railway.app"
-API_KEY = (
-    sys.argv[2] if len(sys.argv) > 2
-    else os.getenv("REGENGINE_API_KEY", "")
-)
+API_KEY = sys.argv[2] if len(sys.argv) > 2 else os.getenv("REGENGINE_API_KEY", "")
 if not API_KEY:
     print("Error: No API key. Pass as 2nd arg or set REGENGINE_API_KEY env var.")
     sys.exit(1)

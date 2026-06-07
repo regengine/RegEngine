@@ -7,18 +7,20 @@ POST /api/v1/labels/generate-batch — batch from seed data
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from typing import Optional
 
-from regengine.labels import LabelData, generate_label_png, generate_label_zpl, generate_label_pdf
+from regengine.labels import LabelData, generate_label_pdf, generate_label_png, generate_label_zpl
 
 router = APIRouter(prefix="/api/v1/labels", tags=["labels"])
 
 
 class LabelRequest(BaseModel):
     """Request body for label generation."""
+
     traceability_lot_code: str = Field(..., description="TLC to encode")
     product_description: str = Field(..., description="Product name")
     quantity: int = Field(100, description="Lot quantity")
@@ -34,6 +36,7 @@ class LabelRequest(BaseModel):
 
 class BatchRequest(BaseModel):
     """Request for generating sequential labels."""
+
     tlc_prefix: str = Field(..., description="TLC prefix for sequential generation")
     product_description: str
     count: int = Field(10, ge=1, le=1000)
@@ -98,15 +101,17 @@ async def generate_batch(req: BatchRequest) -> Response:
     labels = []
     for i in range(req.count):
         tlc = f"{req.tlc_prefix}-{i + 1:04d}"
-        labels.append(LabelData(
-            traceability_lot_code=tlc,
-            product_description=req.product_description,
-            quantity=req.quantity_per,
-            unit_of_measure=req.unit_of_measure,
-            location_gln=req.location_gln,
-            location_name=req.location_name,
-            lot_date=req.lot_date,
-        ))
+        labels.append(
+            LabelData(
+                traceability_lot_code=tlc,
+                product_description=req.product_description,
+                quantity=req.quantity_per,
+                unit_of_measure=req.unit_of_measure,
+                location_gln=req.location_gln,
+                location_name=req.location_name,
+                lot_date=req.lot_date,
+            )
+        )
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:

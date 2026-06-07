@@ -7,6 +7,7 @@ Exposes:
   _enforce_recovery_token_scope   — re-exported for source guardrail tests
   _claim_recovery_token_single_use — re-exported for source guardrail tests
 """
+
 from __future__ import annotations
 
 import os
@@ -18,6 +19,9 @@ import jwt as _jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from shared.pii import mask_email
+from shared.rate_limit import limiter
+from shared.supabase_client import get_supabase
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,13 +29,10 @@ from ..auth_utils import get_password_hash
 from ..database import get_session
 from ..dependencies import get_session_store
 from ..models import ResetPasswordResponse
-from ..password_policy import validate_password, PasswordPolicyError
+from ..password_policy import PasswordPolicyError, validate_password
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
-from shared.pii import mask_email
-from shared.rate_limit import limiter
-from shared.supabase_client import get_supabase
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -69,7 +70,9 @@ def _parse_supabase_token_claims(token: str) -> dict:
     which would then need to be rotated in lockstep with Supabase.
     """
     try:
-        return _jwt.decode(token, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+        return _jwt.decode(
+            token, options={"verify_signature": False}
+        )  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
     except _jwt.PyJWTError:
         return {}
 
@@ -118,9 +121,7 @@ def _enforce_recovery_token_scope(
             "reset_password_wrong_token_scope",
             user_id=user_id,
             amr_methods=[
-                entry.get("method")
-                for entry in (amr if isinstance(amr, list) else [])
-                if isinstance(entry, dict)
+                entry.get("method") for entry in (amr if isinstance(amr, list) else []) if isinstance(entry, dict)
             ],
         )
         raise HTTPException(
@@ -349,9 +350,7 @@ async def reset_password(
 
     # 4. Find the user in the RegEngine DB (the authoritative store for login)
     normalized_email = email.strip().lower()
-    user = db.execute(
-        select(UserModel).where(UserModel.email == normalized_email)
-    ).scalar_one_or_none()
+    user = db.execute(select(UserModel).where(UserModel.email == normalized_email)).scalar_one_or_none()
 
     if not user:
         logger.warning("reset_password_user_not_found", email=mask_email(normalized_email))

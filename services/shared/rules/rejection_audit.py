@@ -28,6 +28,7 @@ audit row we still hold an exception-log trail.
 The helper is idempotent on ``(tenant_id, event_id, rule_id, created_at)``
 via the table's UNIQUE constraint so retries do not duplicate rows.
 """
+
 from __future__ import annotations
 
 import json
@@ -116,8 +117,10 @@ def record_rejection(
                 "rule_version": rule_version,
                 "reasons": reasons_json,
                 "source": source,
-                "enforcement_mode": enforcement_mode or os.getenv(
-                    "RULES_ENGINE_ENFORCE", "off",
+                "enforcement_mode": enforcement_mode
+                or os.getenv(
+                    "RULES_ENGINE_ENFORCE",
+                    "off",
                 ),
             },
         )
@@ -131,7 +134,9 @@ def record_rejection(
             pass
         logger.error(
             "rule_rejection_audit_failed tenant=%s rule=%s err=%s",
-            tenant_id, rule_id, err,
+            tenant_id,
+            rule_id,
+            err,
         )
         _capture_sentry(
             "rule_rejection_audit_failed",
@@ -172,9 +177,15 @@ def reasons_from_summary(summary: Any) -> list[dict]:
     refactor doesn't break the audit row.
     """
     out: list[dict] = []
-    results = getattr(summary, "critical_failures", None) or getattr(
-        summary, "results", None,
-    ) or []
+    results = (
+        getattr(summary, "critical_failures", None)
+        or getattr(
+            summary,
+            "results",
+            None,
+        )
+        or []
+    )
     for r in results:
         result_value = getattr(r, "result", None)
         if result_value not in ("fail", "error"):

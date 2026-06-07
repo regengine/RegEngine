@@ -23,10 +23,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.graph_outbox import (
     GraphOutboxDrainer,
     OutboxHealth,
@@ -34,7 +30,9 @@ from app.graph_outbox import (
     enqueue_graph_write,
     reconcile_graph_outbox,
 )
-
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # ---------------------------------------------------------------------------
 # Fixtures — SQLite in-memory graph_outbox table mirroring the migration
@@ -49,7 +47,8 @@ def session() -> Session:
         poolclass=StaticPool,
     )
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE graph_outbox (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 tenant_id       TEXT NULL,
@@ -65,7 +64,8 @@ def session() -> Session:
                 next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 dedupe_key      TEXT NULL
             )
-        """))
+        """)
+        )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     s = SessionLocal()
     yield s
@@ -239,15 +239,23 @@ def test_drainer_runs_rows_oldest_first(session):
     """Two rows enqueued, the older one must drain first."""
     tenant = str(uuid.uuid4())
     enqueue_graph_write(
-        session, tenant_id=tenant, operation="first",
-        cypher="MERGE (x:Y {tenant_id: $tenant_id})", params={}, dedupe_key="k1",
+        session,
+        tenant_id=tenant,
+        operation="first",
+        cypher="MERGE (x:Y {tenant_id: $tenant_id})",
+        params={},
+        dedupe_key="k1",
     )
     session.commit()
     # Force the second row's next_attempt_at to be later.
     time.sleep(0.01)
     enqueue_graph_write(
-        session, tenant_id=tenant, operation="second",
-        cypher="MERGE (x:Y {tenant_id: $tenant_id})", params={}, dedupe_key="k2",
+        session,
+        tenant_id=tenant,
+        operation="second",
+        cypher="MERGE (x:Y {tenant_id: $tenant_id})",
+        params={},
+        dedupe_key="k2",
     )
     session.commit()
 
@@ -262,9 +270,7 @@ def test_drainer_runs_rows_oldest_first(session):
     rendered = [s[1] for s in sink]  # params
     # Either by timestamp or by id, "first" must drain before "second".
     # We confirm by checking the sink row count and the row ids.
-    rows = session.execute(
-        text("SELECT id, operation FROM graph_outbox ORDER BY id ASC")
-    ).mappings().all()
+    rows = session.execute(text("SELECT id, operation FROM graph_outbox ORDER BY id ASC")).mappings().all()
     assert [r["operation"] for r in rows] == ["first", "second"]
 
 
@@ -276,8 +282,11 @@ def test_drainer_runs_rows_oldest_first(session):
 def test_drainer_reschedules_transient_failure(session):
     tenant = str(uuid.uuid4())
     enqueue_graph_write(
-        session, tenant_id=tenant, operation="op",
-        cypher="MERGE (x:Y {tenant_id: $tenant_id})", params={},
+        session,
+        tenant_id=tenant,
+        operation="op",
+        cypher="MERGE (x:Y {tenant_id: $tenant_id})",
+        params={},
     )
     session.commit()
 
@@ -303,8 +312,11 @@ def test_drainer_reschedules_transient_failure(session):
 def test_drainer_marks_failed_after_max_attempts(session):
     tenant = str(uuid.uuid4())
     enqueue_graph_write(
-        session, tenant_id=tenant, operation="op",
-        cypher="MERGE (x:Y {tenant_id: $tenant_id})", params={},
+        session,
+        tenant_id=tenant,
+        operation="op",
+        cypher="MERGE (x:Y {tenant_id: $tenant_id})",
+        params={},
         max_attempts=2,
     )
     session.commit()
@@ -316,9 +328,9 @@ def test_drainer_marks_failed_after_max_attempts(session):
     drainer.drain_once(batch_size=10)
 
     # Reset next_attempt_at so we immediately try again.
-    session.execute(text(
-        "UPDATE graph_outbox SET next_attempt_at = :now"
-    ), {"now": datetime.now(timezone.utc).isoformat()})
+    session.execute(
+        text("UPDATE graph_outbox SET next_attempt_at = :now"), {"now": datetime.now(timezone.utc).isoformat()}
+    )
     session.commit()
 
     # Second run: raises again -> now attempts == max_attempts, should flip.

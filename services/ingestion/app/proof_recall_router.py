@@ -55,7 +55,6 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
-
 from shared.rate_limit import limiter
 
 logger = logging.getLogger("proof-recall")

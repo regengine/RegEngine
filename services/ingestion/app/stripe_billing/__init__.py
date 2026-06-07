@@ -17,24 +17,34 @@ for RegEngine's FSMA-first pricing tiers.
 import stripe  # noqa: F401 — tests monkeypatch stripe_billing.stripe.*
 from shared.funnel_events import emit_funnel_event  # noqa: F401 — tests monkeypatch stripe_billing.emit_funnel_event
 
-from . import customers as _customers_mod  # noqa: F401
-from . import helpers as _helpers_mod  # noqa: F401
-from . import plans as _plans_mod  # noqa: F401
-from . import routes as _routes_mod  # noqa: F401
-from . import state as _state_mod  # noqa: F401
-from . import webhooks as _webhooks_mod  # noqa: F401
-
-from .routes import (
-    router,
-    create_checkout,
-    create_portal_session_for_tenant,
-    create_portal_session_legacy,
-    get_invoice_pdf,
-    get_subscription,
-    list_invoices,
-    list_plans,
-    stripe_webhook_legacy,
-    stripe_webhooks,
+from . import (
+    customers as _customers_mod,  # noqa: F401
+    helpers as _helpers_mod,  # noqa: F401
+    plans as _plans_mod,  # noqa: F401
+    routes as _routes_mod,  # noqa: F401
+    state as _state_mod,  # noqa: F401
+    webhooks as _webhooks_mod,  # noqa: F401
+)
+from .customers import (
+    _create_customer_for_tenant,
+    _create_portal_session,
+    _create_tenant_via_admin,
+    _ensure_customer_mapping,
+    _get_existing_customer_id,
+    _record_checkout_session_hint,
+)
+from .helpers import (
+    _coerce_int,
+    _coerce_optional_int,
+    _configure_stripe,
+    _enforce_admin_or_operator,
+    _extract_invoice_period_end,
+    _extract_paid_at,
+    _format_period_end,
+    _normalize_scope,
+    _principal_role,
+    _resolve_tenant_context,
+    _stripe_get,
 )
 from .models import (
     BillingPortalRequest,
@@ -50,11 +60,23 @@ from .plans import (
     DEFAULT_CANCEL_URL,
     DEFAULT_PORTAL_RETURN_URL,
     DEFAULT_SUCCESS_URL,
-    PLANS,
     PLAN_ALIASES,
+    PLANS,
     _normalize_billing_period,
     _normalize_plan_id,
     _resolve_price_id,
+)
+from .routes import (
+    create_checkout,
+    create_portal_session_for_tenant,
+    create_portal_session_legacy,
+    get_invoice_pdf,
+    get_subscription,
+    list_invoices,
+    list_plans,
+    router,
+    stripe_webhook_legacy,
+    stripe_webhooks,
 )
 from .state import (
     _buffer_pending_subscription_update,
@@ -70,27 +92,6 @@ from .state import (
     _store_subscription_mapping,
     _subscription_lookup_key,
     _tenant_subscription_key,
-)
-from .helpers import (
-    _coerce_int,
-    _coerce_optional_int,
-    _configure_stripe,
-    _enforce_admin_or_operator,
-    _extract_invoice_period_end,
-    _extract_paid_at,
-    _format_period_end,
-    _normalize_scope,
-    _principal_role,
-    _resolve_tenant_context,
-    _stripe_get,
-)
-from .customers import (
-    _create_customer_for_tenant,
-    _create_portal_session,
-    _create_tenant_via_admin,
-    _ensure_customer_mapping,
-    _get_existing_customer_id,
-    _record_checkout_session_hint,
 )
 from .webhooks import (
     _handle_checkout_completed,
@@ -250,6 +251,7 @@ class _PatchableModule(_types.ModuleType):
         # webhooks.py call it through that module, so patch it there too.
         if name == "emit_funnel_event":
             from shared import funnel_events as _fe_mod
+
             setattr(_fe_mod, name, value)
 
 

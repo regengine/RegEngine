@@ -12,12 +12,10 @@ THRESHOLD_PATTERN = re.compile(
     r"(?P<value>\d+(?:\.\d+)?)\s?(?P<unit>%|percent|basis points|bps|USD|US\$|\$|€|eur|units?)",
     re.I,
 )
-JURISDICTION_HINTS = re.compile(
-    r"\b(United States|US|USA|European Union|EU|California|New York|San Francisco)\b"
-)
+JURISDICTION_HINTS = re.compile(r"\b(United States|US|USA|European Union|EU|California|New York|San Francisco)\b")
 ORGANIZATION_PATTERN = re.compile(
     r"\b([A-Z][\w&'\.]+(?:\s+[A-Z][\w&'\.]+)*)\s+(Inc\.?|LLC|Corp\.?|Co\.?|Company|Ltd\.?|Group|Holdings|Foods|Farms|Grocery)\b",
-    re.M | re.I
+    re.M | re.I,
 )
 
 UNIT_NORMALIZATION = {
@@ -93,8 +91,14 @@ def infer_obligation_type(text: str) -> dict:
 
     # --- Phase 1: explicit negated-modal phrases (highest priority) ----------
     _PROHIBITED_PHRASES = [
-        "shall not", "must not", "may not", "is not required",
-        "not required", "no obligation", "exempt from", "does not require",
+        "shall not",
+        "must not",
+        "may not",
+        "is not required",
+        "not required",
+        "no obligation",
+        "exempt from",
+        "does not require",
         "does not need",
     ]
     for phrase in _PROHIBITED_PHRASES:
@@ -143,9 +147,7 @@ def extract_entities(text: str) -> List[Dict]:
     if text is None:
         raise TypeError("extract_entities received None; caller must pass a str")
     if not isinstance(text, str):
-        raise TypeError(
-            f"extract_entities requires str, got {type(text).__name__}"
-        )
+        raise TypeError(f"extract_entities requires str, got {type(text).__name__}")
 
     ents: List[Dict] = []
     for match in OBLIGATION_PATTERN.finditer(text):
@@ -230,10 +232,7 @@ def extract_fsma_facts(text: str) -> List[Dict]:
     # Regex for "January 20, 2026" or "July 20, 2028"
 
     # Broad pattern for the date itself
-    _ALL_MONTHS = (
-        "January|February|March|April|May|June|"
-        "July|August|September|October|November|December"
-    )
+    _ALL_MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
     date_pattern = re.compile(rf"\b({_ALL_MONTHS})\s+\d{{1,2}},\s+\d{{4}}\b", re.I)
 
     # Context pattern to ensure it's a compliance date
@@ -258,24 +257,26 @@ def extract_fsma_facts(text: str) -> List[Dict]:
                 cue_distance = dist if cue_distance is None else min(cue_distance, dist)
 
         if cue_distance is not None:
-            facts.append({
-                "type": "REGULATORY_DATE",
-                "text": match.group(0),
-                "start": match.start(),
-                "end": match.end(),
-                "attrs": {
-                    "key": "Compliance Date",
-                    "value": match.group(0),
-                    "context": "FDA enforcement posture",
-                    # Provenance is hint-only; downstream scoring must not
-                    # trust this label unless the ingestion pipeline signed
-                    # the document (#1206).
-                    "provenance": "FSMA Rule Text",
-                    # Record the proximity distance so the scorer can reward
-                    # tighter matches. Previously all matches were rewarded
-                    # equally (100-char window).
-                    "context_distance": cue_distance,
+            facts.append(
+                {
+                    "type": "REGULATORY_DATE",
+                    "text": match.group(0),
+                    "start": match.start(),
+                    "end": match.end(),
+                    "attrs": {
+                        "key": "Compliance Date",
+                        "value": match.group(0),
+                        "context": "FDA enforcement posture",
+                        # Provenance is hint-only; downstream scoring must not
+                        # trust this label unless the ingestion pipeline signed
+                        # the document (#1206).
+                        "provenance": "FSMA Rule Text",
+                        # Record the proximity distance so the scorer can reward
+                        # tighter matches. Previously all matches were rewarded
+                        # equally (100-char window).
+                        "context_distance": cue_distance,
+                    },
                 }
-            })
+            )
 
     return facts

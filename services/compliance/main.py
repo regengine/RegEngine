@@ -13,6 +13,7 @@ if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.paths import ensure_shared_importable
+
 ensure_shared_importable()
 # ------------------------------
 
@@ -30,26 +31,28 @@ require_env("DATABASE_URL")
 
 # Sentry error tracking (must be before app creation)
 from shared.error_handling import init_sentry
+
 init_sentry()
 
 # Production Hardening
-from shared.logging_config import configure_logging  # (#556) shared structured JSON logging
-from shared.middleware.security import add_security
-from shared.rate_limit import add_rate_limiting
-from shared.observability import add_observability
-from shared.observability.fastapi_metrics import install_metrics
 from shared.error_handling import install_exception_handlers
-from shared.observability.health import HealthCheck, install_health_router
+from shared.logging_config import configure_logging  # (#556) shared structured JSON logging
 from shared.middleware import RequestIDMiddleware
+from shared.middleware.security import add_security
+from shared.observability import add_observability
 from shared.observability.correlation import CorrelationIdMiddleware
+from shared.observability.fastapi_metrics import install_metrics
+from shared.observability.health import HealthCheck, install_health_router
+from shared.rate_limit import add_rate_limiting
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 # Initialize structured JSON logging before app/middleware creation
 configure_logging(service_name="compliance-service")
 
+from shared.env import is_production
+
 from services.compliance.app.routes import router as fsma_router
 
-from shared.env import is_production
 _is_prod = is_production()
 
 app = FastAPI(
@@ -78,12 +81,20 @@ app.add_middleware(
     allow_origins=get_allowed_origins(),
     allow_credentials=should_allow_credentials(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Request-ID", "X-Tenant-ID", "X-Correlation-ID"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-RegEngine-API-Key",
+        "X-Request-ID",
+        "X-Tenant-ID",
+        "X-Correlation-ID",
+    ],
 )
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 
@@ -96,6 +107,7 @@ install_exception_handlers(app)
 install_metrics(app, service_name="compliance-service")
 
 from shared.auth import validate_auth_config
+
 validate_auth_config()
 
 

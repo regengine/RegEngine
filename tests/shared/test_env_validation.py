@@ -9,7 +9,6 @@ silently serving from a partial router surface.
 from __future__ import annotations
 
 import pytest
-
 from shared.env_validation import assert_legacy_entrypoint_not_in_production
 
 

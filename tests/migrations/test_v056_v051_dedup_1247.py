@@ -24,19 +24,16 @@ verified by ``test_rls_hardening.py`` and ``test_rls_coverage.py``
 Run via:
     pytest tests/migrations/test_v056_v051_dedup_1247.py -v
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 V056_PATH = REPO_ROOT / "alembic" / "versions" / "20260415_v056_rls_hardening.py"
-V051_PATH = (
-    REPO_ROOT / "alembic" / "versions"
-    / "20260331_rls_tenant_feature_tables_v051.py"
-)
+V051_PATH = REPO_ROOT / "alembic" / "versions" / "20260331_rls_tenant_feature_tables_v051.py"
 
 
 @pytest.fixture(scope="module")
@@ -59,15 +56,13 @@ def test_v056_docstring_references_1247_and_overlap(v056_source: str) -> None:
     # triple-quotes.
     first = v056_source.index('"""')
     second = v056_source.index('"""', first + 3)
-    docstring = v056_source[first:second + 3]
+    docstring = v056_source[first : second + 3]
     assert "#1247" in docstring, (
         "v056 docstring must reference issue #1247 — the known duplication "
         "with v051. Without this pointer, a future reader may delete what "
         "they think is a duplicate Part 1 and break the fresh-DB path."
     )
-    assert "v051" in docstring, (
-        "v056 docstring must name v051 as the source of the overlap."
-    )
+    assert "v051" in docstring, "v056 docstring must name v051 as the source of the overlap."
 
 
 def test_v056_drop_function_cascade_is_guarded(v056_source: str) -> None:
@@ -87,13 +82,10 @@ def test_v056_drop_function_cascade_is_guarded(v056_source: str) -> None:
         re.DOTALL,
     )
     cascade_blocks = [
-        blk for blk in execute_blocks
-        if "DROP FUNCTION" in blk and "get_tenant_context" in blk
-        and "CASCADE" in blk
+        blk for blk in execute_blocks if "DROP FUNCTION" in blk and "get_tenant_context" in blk and "CASCADE" in blk
     ]
     assert cascade_blocks, (
-        "Expected at least one block mentioning "
-        "DROP FUNCTION ... get_tenant_context ... CASCADE in v056."
+        "Expected at least one block mentioning DROP FUNCTION ... get_tenant_context ... CASCADE in v056."
     )
     for blk in cascade_blocks:
         # The guard must include a DO $...$ block wrapping the DROP+CREATE.
@@ -104,9 +96,7 @@ def test_v056_drop_function_cascade_is_guarded(v056_source: str) -> None:
             f"Block was:\n{blk[:400]}..."
         )
         # The guard must check the function's return type before dropping.
-        assert (
-            "typname" in blk.lower() or "pg_type" in blk.lower()
-        ), (
+        assert "typname" in blk.lower() or "pg_type" in blk.lower(), (
             "DROP FUNCTION ... CASCADE guard must check the existing "
             "function's return type via pg_type / typname so it only "
             "fires when the signature truly differs. #1247 guard.\n"
@@ -122,9 +112,7 @@ def test_v051_part2_comment_cross_references_v056(v051_source: str) -> None:
         "v051 should reference #1247 in comments to flag the known "
         "overlap with v056 for anyone reading v051 in isolation."
     )
-    assert "v056" in v051_source, (
-        "v051 should mention v056 so a reader lands on the full picture."
-    )
+    assert "v056" in v051_source, "v051 should mention v056 so a reader lands on the full picture."
 
 
 def test_v056_part1_creates_use_idempotency_guards(v056_source: str) -> None:
@@ -134,6 +122,7 @@ def test_v056_part1_creates_use_idempotency_guards(v056_source: str) -> None:
     or whether both ran on the same DB."""
     # Slice out Part 1 (from function start through the Part 2 marker).
     import re
+
     part1_match = re.search(
         r"# Part 1:.*?(?=# ={5,}|# Part 2)",
         v056_source,
@@ -149,10 +138,9 @@ def test_v056_part1_creates_use_idempotency_guards(v056_source: str) -> None:
         # paired with an IF NOT EXISTS somewhere on the same logical
         # statement (within 80 chars).
         for match in re.finditer(creation_kind, part1):
-            snippet = part1[match.start():match.start() + 160]
+            snippet = part1[match.start() : match.start() + 160]
             assert "IF NOT EXISTS" in snippet, (
-                f"{creation_kind} in v056 Part 1 is missing IF NOT EXISTS. "
-                f"Context:\n{snippet}"
+                f"{creation_kind} in v056 Part 1 is missing IF NOT EXISTS. Context:\n{snippet}"
             )
 
     # Every CREATE FUNCTION / CREATE ROLE in Part 1 must be inside a
@@ -162,7 +150,7 @@ def test_v056_part1_creates_use_idempotency_guards(v056_source: str) -> None:
         for match in re.finditer(statement_kind, part1):
             # Look backwards up to ~300 chars for either OR REPLACE on the
             # same statement OR a DO $$ wrapper.
-            window = part1[max(0, match.start() - 300):match.start() + 80]
+            window = part1[max(0, match.start() - 300) : match.start() + 80]
             has_or_replace = "OR REPLACE" in window
             has_do_block = "DO $" in window
             assert has_or_replace or has_do_block, (

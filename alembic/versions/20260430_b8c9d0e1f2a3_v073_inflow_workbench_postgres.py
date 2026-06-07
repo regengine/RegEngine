@@ -10,10 +10,10 @@ Revision ID: b8c9d0e1f2a3
 Revises: 71e79e111c5d
 Create Date: 2026-04-30
 """
+
 from typing import Sequence, Union
 
 from alembic import op
-
 
 revision: str = "b8c9d0e1f2a3"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "71e79e111c5d"
@@ -141,17 +141,13 @@ def upgrade() -> None:
         "CREATE INDEX IF NOT EXISTS idx_inflow_fix_items_tenant_status "
         "ON fsma.inflow_workbench_fix_items (tenant_id, status, created_at DESC)"
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_inflow_fix_items_run "
-        "ON fsma.inflow_workbench_fix_items (run_id)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS idx_inflow_fix_items_run ON fsma.inflow_workbench_fix_items (run_id)")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_inflow_commit_decisions_tenant_created "
         "ON fsma.inflow_workbench_commit_decisions (tenant_id, created_at DESC)"
     )
     op.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS ux_inflow_runs_tenant_run "
-        "ON fsma.inflow_workbench_runs (tenant_id, run_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_inflow_runs_tenant_run ON fsma.inflow_workbench_runs (tenant_id, run_id)"
     )
 
     op.execute(

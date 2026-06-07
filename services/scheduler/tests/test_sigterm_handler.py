@@ -24,6 +24,7 @@ def test_install_graceful_shutdown_handlers_registers_sigterm():
     if threading.current_thread() is not threading.main_thread():
         # signal.signal() only works on the main thread; skip if we're not there.
         import pytest
+
         pytest.skip("signal.signal() requires main thread")
 
     import main as scheduler_main
@@ -38,14 +39,14 @@ def test_install_graceful_shutdown_handlers_registers_sigterm():
         # function (not SIG_DFL / SIG_IGN / the original).
         new_sigterm = signal.getsignal(signal.SIGTERM)
         assert callable(new_sigterm), (
-            "#1255: SIGTERM must be handled by a callable after "
-            "_install_graceful_shutdown_handlers runs"
+            "#1255: SIGTERM must be handled by a callable after _install_graceful_shutdown_handlers runs"
         )
         assert new_sigterm is not signal.SIG_DFL
         assert new_sigterm is not signal.SIG_IGN
 
         # Handler must translate into KeyboardInterrupt.
         import pytest
+
         with pytest.raises(KeyboardInterrupt):
             new_sigterm(signal.SIGTERM, None)
     finally:

@@ -4,6 +4,7 @@ Existing active users can request a short-lived confirmation code by email,
 then exchange that code for the same RegEngine access/refresh tokens issued by
 the password login route.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,12 +18,11 @@ from datetime import datetime, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from shared.env import is_production
 from shared.pii import mask_email
 from shared.rate_limit import limiter
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from ..audit import AuditLogger
 from ..auth_utils import (
@@ -173,7 +173,9 @@ def _load_user_by_email(db: Session, normalized_email: str) -> UserModel | None:
     return db.execute(select(UserModel).where(UserModel.email == normalized_email)).scalar_one_or_none()
 
 
-def _load_membership_context(db: Session, user: UserModel) -> tuple[
+def _load_membership_context(
+    db: Session, user: UserModel
+) -> tuple[
     list[dict],
     uuid.UUID | None,
     str | None,

@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timezone
 from uuid import UUID
 
+import pytest
 from shared.schemas import (
-    ObligationType,
-    Threshold,
     ExtractionPayload,
     GraphEvent,
+    ObligationType,
     ReviewItem,
+    Threshold,
 )
 
 
@@ -54,9 +54,7 @@ class TestExtractionPayload:
             action="must maintain",
             object="capital reserves",
             obligation_type=ObligationType.MUST,
-            thresholds=[
-                Threshold(value=8.0, unit="percent", operator="gte")
-            ],
+            thresholds=[Threshold(value=8.0, unit="percent", operator="gte")],
             confidence_score=0.92,
             source_text="Financial institutions must maintain capital reserves of at least 8%",
             source_offset=1024,

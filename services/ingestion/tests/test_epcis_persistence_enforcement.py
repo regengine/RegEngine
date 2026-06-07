@@ -10,6 +10,7 @@ The test reuses the hermetic fakes already established by
 CanonicalEventStore, normalize_epcis_event — all swapped at the module
 level so the lazy imports inside the function under test pick them up).
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -20,10 +21,10 @@ from fastapi import HTTPException
 
 from services.shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
+
 
 class _FakeCTEPersistence:
     last_called = False
@@ -74,11 +75,13 @@ class _FakeEngine:
         return _FakeEngine.summary_to_return
 
     def persist_summary(self, summary: Any, *, tenant_id: str, event_id=None) -> None:
-        _FakeEngine.persist_summary_calls.append({
-            "summary": summary,
-            "tenant_id": tenant_id,
-            "event_id": event_id,
-        })
+        _FakeEngine.persist_summary_calls.append(
+            {
+                "summary": summary,
+                "tenant_id": tenant_id,
+                "event_id": event_id,
+            }
+        )
 
 
 def _fake_normalize_epcis_event(event: Any, tenant_id: str) -> Any:
@@ -108,9 +111,9 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeEngine.evaluate_event_persist_true_count = 0
     _FakeEngine.persist_summary_calls = []
 
-    import shared.cte_persistence as _cte_mod
     import shared.canonical_event as _canon_mod
     import shared.canonical_persistence as _store_mod
+    import shared.cte_persistence as _cte_mod
     import shared.rules_engine as _rules_mod
 
     monkeypatch.setattr(_cte_mod, "CTEPersistence", _FakeCTEPersistence)
@@ -123,23 +126,34 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 # Summary factories
 # ---------------------------------------------------------------------------
 
+
 def _critical_summary() -> EvaluationSummary:
     crit = RuleEvaluationResult(
-        rule_id="CTE_REQ_HARVEST_DATE", severity="critical",
-        result="fail", why_failed="harvest_date missing",
+        rule_id="CTE_REQ_HARVEST_DATE",
+        severity="critical",
+        result="fail",
+        why_failed="harvest_date missing",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[crit], critical_failures=[crit],
+        total_rules=1,
+        failed=1,
+        results=[crit],
+        critical_failures=[crit],
     )
 
 
 def _warning_only_summary() -> EvaluationSummary:
     warn = RuleEvaluationResult(
-        rule_id="R_WARN", severity="warning",
-        result="fail", why_failed="non-critical",
+        rule_id="R_WARN",
+        severity="warning",
+        result="fail",
+        why_failed="non-critical",
     )
     return EvaluationSummary(
-        total_rules=1, failed=1, results=[warn], critical_failures=[],
+        total_rules=1,
+        failed=1,
+        results=[warn],
+        critical_failures=[],
     )
 
 
@@ -149,7 +163,8 @@ def _no_verdict_summary() -> EvaluationSummary:
 
 def _compliant_summary() -> EvaluationSummary:
     return EvaluationSummary(
-        total_rules=1, passed=1,
+        total_rules=1,
+        passed=1,
         results=[RuleEvaluationResult(rule_id="R_OK", severity="info", result="pass")],
     )
 
@@ -182,6 +197,7 @@ def _make_prepared() -> dict:
 # OFF mode — pre-eval is short-circuited, primary store still called
 # ---------------------------------------------------------------------------
 
+
 class TestEnforceOff:
     @pytest.fixture(autouse=True)
     def _off(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -195,8 +211,11 @@ class TestEnforceOff:
         and may still invoke it later, which is fine)."""
         _FakeEngine.summary_to_return = _critical_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
@@ -206,6 +225,7 @@ class TestEnforceOff:
 # CTE_ONLY mode — critical failure → 422, store_event NOT called
 # ---------------------------------------------------------------------------
 
+
 class TestEnforceCteOnly:
     @pytest.fixture(autouse=True)
     def _cte_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,9 +234,12 @@ class TestEnforceCteOnly:
     def test_critical_failure_raises_422(self) -> None:
         _FakeEngine.summary_to_return = _critical_summary()
         from app.epcis import persistence as persistence_mod
+
         with pytest.raises(HTTPException) as exc_info:
             persistence_mod._persist_prepared_event_in_session(
-                db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+                db_session=MagicMock(),
+                tenant_id="t-1",
+                prepared=_make_prepared(),
             )
         assert exc_info.value.status_code == 422
         detail = exc_info.value.detail
@@ -230,8 +253,11 @@ class TestEnforceCteOnly:
     def test_warning_only_accepts(self) -> None:
         _FakeEngine.summary_to_return = _warning_only_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
@@ -242,8 +268,11 @@ class TestEnforceCteOnly:
         rules and for non-FTL products."""
         _FakeEngine.summary_to_return = _no_verdict_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
@@ -251,8 +280,11 @@ class TestEnforceCteOnly:
     def test_compliant_accepts(self) -> None:
         _FakeEngine.summary_to_return = _compliant_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
@@ -273,12 +305,16 @@ class TestEnforceCteOnly:
             raise RuntimeError("canonical broken")
 
         import shared.canonical_event as _canon_mod
+
         monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _raise)
 
         from app.epcis import persistence as persistence_mod
+
         with pytest.raises(HTTPException) as exc:
             persistence_mod._persist_prepared_event_in_session(
-                db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+                db_session=MagicMock(),
+                tenant_id="t-1",
+                prepared=_make_prepared(),
             )
         assert exc.value.status_code == 500
         detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
@@ -292,6 +328,7 @@ class TestEnforceCteOnly:
 # ALL mode
 # ---------------------------------------------------------------------------
 
+
 class TestEnforceAll:
     @pytest.fixture(autouse=True)
     def _all(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -302,9 +339,12 @@ class TestEnforceAll:
         ALSO reject."""
         _FakeEngine.summary_to_return = _warning_only_summary()
         from app.epcis import persistence as persistence_mod
+
         with pytest.raises(HTTPException) as exc_info:
             persistence_mod._persist_prepared_event_in_session(
-                db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+                db_session=MagicMock(),
+                tenant_id="t-1",
+                prepared=_make_prepared(),
             )
         assert exc_info.value.status_code == 422
         assert "R_WARN" in exc_info.value.detail["reason"]
@@ -313,8 +353,11 @@ class TestEnforceAll:
     def test_compliant_accepts(self) -> None:
         _FakeEngine.summary_to_return = _compliant_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeCTEPersistence.last_called is True
@@ -324,6 +367,7 @@ class TestEnforceAll:
 # Threaded post-commit block — uses pre-computed summary instead of
 # re-evaluating. This is the actual fix for the double-eval regression.
 # ---------------------------------------------------------------------------
+
 
 class TestThreadedBlockReusesPreComputedSummary:
     """Under enforcement, the post-commit threaded canonical block must
@@ -354,8 +398,11 @@ class TestThreadedBlockReusesPreComputedSummary:
         """
         _FakeEngine.summary_to_return = _compliant_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeEngine.evaluate_event_call_count == 1, (
@@ -368,8 +415,7 @@ class TestThreadedBlockReusesPreComputedSummary:
             f"{_FakeEngine.evaluate_event_persist_true_count} times"
         )
         assert len(_FakeEngine.persist_summary_calls) == 1, (
-            f"expected 1 persist_summary call, "
-            f"got {len(_FakeEngine.persist_summary_calls)}"
+            f"expected 1 persist_summary call, got {len(_FakeEngine.persist_summary_calls)}"
         )
 
     def test_warning_only_uses_persist_summary_not_reevaluate(self) -> None:
@@ -377,8 +423,11 @@ class TestThreadedBlockReusesPreComputedSummary:
         block uses persist_summary. Same single-eval pattern as compliant."""
         _FakeEngine.summary_to_return = _warning_only_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         assert _FakeEngine.evaluate_event_persist_true_count == 0
@@ -396,8 +445,11 @@ class TestThreadedBlockReusesPreComputedSummary:
         """
         _FakeEngine.summary_to_return = _compliant_summary()
         from app.epcis import persistence as persistence_mod
+
         persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert len(_FakeEngine.persist_summary_calls) == 1
         call = _FakeEngine.persist_summary_calls[0]
@@ -419,8 +471,11 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "off")
         _FakeEngine.summary_to_return = _compliant_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         # Pre-eval skipped (OFF short-circuit), threaded block evaluated once.
@@ -439,8 +494,11 @@ class TestThreadedBlockFallbackWhenNoPreComputedSummary:
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", "cte_only")
         _FakeEngine.summary_to_return = _no_verdict_summary()
         from app.epcis import persistence as persistence_mod
+
         payload, status = persistence_mod._persist_prepared_event_in_session(
-            db_session=MagicMock(), tenant_id="t-1", prepared=_make_prepared(),
+            db_session=MagicMock(),
+            tenant_id="t-1",
+            prepared=_make_prepared(),
         )
         assert status in (200, 201)
         # Pre-eval ran (1 call) + threaded block re-evaluated to write rows.

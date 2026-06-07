@@ -12,12 +12,12 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 # Configure pytest-asyncio
-pytest_plugins = ('pytest_asyncio',)
+pytest_plugins = ("pytest_asyncio",)
 
 # Test with SQLite for simplicity (aiosqlite driver)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -150,9 +150,7 @@ class TestKeyGeneration:
         ).hexdigest()
 
         assert DatabaseAPIKeyStore._hash_key(raw_key) == expected
-        assert DatabaseAPIKeyStore._hash_key(raw_key) != hashlib.sha256(
-            raw_key.encode("utf-8")
-        ).hexdigest()
+        assert DatabaseAPIKeyStore._hash_key(raw_key) != hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
     def test_hash_candidates_include_legacy_when_peppered(self, monkeypatch):
         """Validation can accept legacy rows long enough to migrate them."""
@@ -181,6 +179,7 @@ class TestDatabaseAPIKeyStoreInit:
     def test_init_with_env_var(self):
         """Should use DATABASE_URL env var if not provided."""
         import os
+
         from shared.api_key_store import DatabaseAPIKeyStore
 
         old_val = os.environ.get("DATABASE_URL")
@@ -405,7 +404,7 @@ class TestRateLimiting:
 
         # Mock Redis
         mock_redis = AsyncMock()
-        mock_pipe = MagicMock() # Sync methods like incr, expire
+        mock_pipe = MagicMock()  # Sync methods like incr, expire
         mock_pipe.execute = AsyncMock(return_value=[5, True])  # 5 requests
         mock_redis.pipeline = MagicMock(return_value=mock_pipe)
         store._redis = mock_redis
@@ -440,7 +439,7 @@ class TestKeyRotation:
     @pytest.mark.asyncio
     async def test_rotate_key_creates_new_key(self):
         """rotate_key should create a new key with same settings."""
-        from shared.api_key_store import DatabaseAPIKeyStore, APIKeyModel
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore
 
         store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
 
@@ -500,8 +499,8 @@ class TestMigration:
     @pytest.mark.asyncio
     async def test_migrate_from_memory_store(self):
         """Should migrate keys from in-memory to database store."""
-        from shared.auth import APIKey, APIKeyStore
         from shared.api_key_store import DatabaseAPIKeyStore, migrate_from_memory_store
+        from shared.auth import APIKey, APIKeyStore
 
         # Create in-memory store with test key
         memory_store = APIKeyStore()
@@ -556,11 +555,12 @@ class TestSecurityFeatures:
     def test_constant_time_comparison_used(self):
         """Validation should use hmac.compare_digest."""
         import hmac
-        from shared.api_key_store import DatabaseAPIKeyStore
 
         # This is tested by code inspection - the actual function uses hmac.compare_digest
         # We verify the hash comparison is used by checking it's imported
         import shared.api_key_store as module
+        from shared.api_key_store import DatabaseAPIKeyStore
+
         assert hasattr(module, "hmac")
 
 

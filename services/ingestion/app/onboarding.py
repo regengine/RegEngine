@@ -19,11 +19,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from shared.tenant_context import TenantContext
+from shared.tenant_settings import get_jsonb, set_jsonb
 from sqlalchemy import text
 
 from .webhook_compat import require_tenant_context
-from shared.tenant_context import TenantContext
-from shared.tenant_settings import get_jsonb, set_jsonb
 
 logger = logging.getLogger("onboarding")
 
@@ -32,6 +32,7 @@ def _seed_obligations_if_needed(tenant_id: str):
     """Seed FSMA 204 obligations for new tenant (idempotent)."""
     try:
         from shared.database import SessionLocal
+
         db = SessionLocal()
         try:
             db.execute(text("SELECT seed_obligations_for_tenant(:tid::uuid)"), {"tid": tenant_id})
@@ -41,6 +42,7 @@ def _seed_obligations_if_needed(tenant_id: str):
             db.close()
     except Exception as exc:
         logger.warning("obligation_seeding_failed tenant_id=%s error=%s", tenant_id, str(exc))
+
 
 router = APIRouter(prefix="/api/v1/onboarding", tags=["Onboarding"])
 
@@ -57,6 +59,7 @@ def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
 def _db_save_onboarding(tenant_id: str, progress: dict) -> bool:
     """Insert or update onboarding progress in database via shared helper."""
     return set_jsonb(tenant_id, "tenant_onboarding", "state", progress)
+
 
 ONBOARDING_STEPS = [
     {
@@ -99,6 +102,7 @@ ONBOARDING_STEPS = [
 
 class OnboardingProfile(BaseModel):
     """Step 1: Company profile."""
+
     company_name: str
     company_type: str = Field(..., description="grower, manufacturer, distributor, retailer, importer")
     contact_name: str
@@ -107,6 +111,7 @@ class OnboardingProfile(BaseModel):
 
 class OnboardingFacility(BaseModel):
     """Step 2: First facility."""
+
     facility_name: str
     address: str
     gln: Optional[str] = None
@@ -114,12 +119,14 @@ class OnboardingFacility(BaseModel):
 
 class OnboardingProduct(BaseModel):
     """Step 3: FTL product."""
+
     product_name: str
     product_category: str = Field(..., description="e.g. Leafy Greens, Fresh-Cut Fruits, Finfish")
 
 
 class OnboardingCTE(BaseModel):
     """Step 4: First CTE."""
+
     cte_type: str = Field("shipping", description="CTE type")
     tlc: str = Field(..., description="Traceability Lot Code")
     quantity: int
@@ -129,6 +136,7 @@ class OnboardingCTE(BaseModel):
 
 class OnboardingProgress(BaseModel):
     """Current onboarding progress."""
+
     tenant_id: str
     current_step: int
     completed_steps: list[str]
@@ -168,12 +176,15 @@ async def get_progress(
     else:
         # Fall back to memory or default
         with _onboarding_lock:
-            state = _onboarding_store.get(tenant_id, {
-                "current_step": 1,
-                "completed_steps": [],
-                "started_at": datetime.now(timezone.utc).isoformat(),
-                "first_cte_at": None,
-            })
+            state = _onboarding_store.get(
+                tenant_id,
+                {
+                    "current_step": 1,
+                    "completed_steps": [],
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "first_cte_at": None,
+                },
+            )
 
     completed_count = len(state["completed_steps"])
     total = len(ONBOARDING_STEPS)
@@ -256,15 +267,20 @@ async def complete_step(
         with _onboarding_lock:
             _onboarding_store[tenant_id] = state
 
-    logger.info("onboarding_step_completed", extra={
-        "tenant_id": tenant_id,
-        "step_id": step_id,
-        "is_complete": is_complete,
-    })
+    logger.info(
+        "onboarding_step_completed",
+        extra={
+            "tenant_id": tenant_id,
+            "step_id": step_id,
+            "is_complete": is_complete,
+        },
+    )
 
     return {
         "step_id": step_id,
         "completed": True,
         "onboarding_complete": is_complete,
-        "next_step": ONBOARDING_STEPS[state["current_step"] - 1] if state["current_step"] <= len(ONBOARDING_STEPS) else None,
+        "next_step": ONBOARDING_STEPS[state["current_step"] - 1]
+        if state["current_step"] <= len(ONBOARDING_STEPS)
+        else None,
     }

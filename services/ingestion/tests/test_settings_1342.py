@@ -37,8 +37,8 @@ from app.settings import (  # noqa: E402
     _default_settings,
     router,
 )
-from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
+from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -61,6 +61,7 @@ def client(monkeypatch):
 
     # Bypass the API-key dependency — we test router logic, not auth.
     from app.webhook_compat import _verify_api_key
+
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app)
     return TestClient(app)
@@ -142,16 +143,13 @@ class TestDataRetentionDefaults:
 
 class TestIntegrationStatus:
     def test_required_fields(self):
-        integ = IntegrationStatus(
-            id="sensitech", name="Sensitech", category="iot", status="connected"
-        )
+        integ = IntegrationStatus(id="sensitech", name="Sensitech", category="iot", status="connected")
         assert integ.id == "sensitech"
         assert integ.last_sync is None
 
     def test_last_sync_accepts_iso_string(self):
         integ = IntegrationStatus(
-            id="x", name="y", category="iot", status="connected",
-            last_sync="2026-04-17T00:00:00+00:00"
+            id="x", name="y", category="iot", status="connected", last_sync="2026-04-17T00:00:00+00:00"
         )
         assert integ.last_sync == "2026-04-17T00:00:00+00:00"
 
@@ -221,9 +219,7 @@ class TestDbGetSettings:
         # Seed the fake DB with a minimal but valid payload. The function
         # always injects ``tenant_id`` from the query arg, so the stored
         # row doesn't need it.
-        stubbed_jsonb["db"]["tenant-42"] = _default_settings(
-            "ignored-in-storage"
-        ).model_dump(exclude={"tenant_id"})
+        stubbed_jsonb["db"]["tenant-42"] = _default_settings("ignored-in-storage").model_dump(exclude={"tenant_id"})
 
         result = _db_get_settings("tenant-42")
         assert isinstance(result, SettingsResponse)
@@ -261,12 +257,8 @@ class TestDbSaveSettings:
 
 
 class TestGetSettingsEndpoint:
-    def test_db_hit_returns_settings_and_warms_cache(
-        self, client, stubbed_jsonb
-    ):
-        stubbed_jsonb["db"]["tenant-42"] = _default_settings(
-            "tenant-42"
-        ).model_dump(exclude={"tenant_id"})
+    def test_db_hit_returns_settings_and_warms_cache(self, client, stubbed_jsonb):
+        stubbed_jsonb["db"]["tenant-42"] = _default_settings("tenant-42").model_dump(exclude={"tenant_id"})
 
         resp = client.get("/api/v1/settings/tenant-42")
         assert resp.status_code == 200
@@ -275,9 +267,7 @@ class TestGetSettingsEndpoint:
         # Cache was primed for subsequent fallback reads.
         assert "tenant-42" in s._settings_store
 
-    def test_db_miss_and_empty_cache_returns_defaults(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_and_empty_cache_returns_defaults(self, client, stubbed_jsonb):
         resp = client.get("/api/v1/settings/tenant-new")
         assert resp.status_code == 200
         body = resp.json()
@@ -286,9 +276,7 @@ class TestGetSettingsEndpoint:
         # Defaults were cached so the next call is stable.
         assert "tenant-new" in s._settings_store
 
-    def test_db_miss_uses_cached_settings_when_present(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_uses_cached_settings_when_present(self, client, stubbed_jsonb):
         # Pre-seed the cache with a custom company name, then confirm
         # the GET returns *that* value rather than re-computing defaults.
         custom = _default_settings("tenant-cached")
@@ -299,16 +287,18 @@ class TestGetSettingsEndpoint:
         assert resp.status_code == 200
         assert resp.json()["profile"]["company_name"] == "CachedCorp"
 
-    def test_response_shape_matches_settings_response(
-        self, client, stubbed_jsonb
-    ):
+    def test_response_shape_matches_settings_response(self, client, stubbed_jsonb):
         resp = client.get("/api/v1/settings/tenant-1")
         assert resp.status_code == 200
         body = resp.json()
         # Top-level keys match SettingsResponse schema.
         assert set(body.keys()) == {
-            "tenant_id", "profile", "data_retention",
-            "integrations", "api_keys", "plan",
+            "tenant_id",
+            "profile",
+            "data_retention",
+            "integrations",
+            "api_keys",
+            "plan",
         }
 
 
@@ -319,9 +309,7 @@ class TestGetSettingsEndpoint:
 
 class TestUpdateProfileEndpoint:
     def test_db_hit_applies_update_and_saves(self, client, stubbed_jsonb):
-        stubbed_jsonb["db"]["tenant-42"] = _default_settings(
-            "tenant-42"
-        ).model_dump(exclude={"tenant_id"})
+        stubbed_jsonb["db"]["tenant-42"] = _default_settings("tenant-42").model_dump(exclude={"tenant_id"})
 
         resp = client.put(
             "/api/v1/settings/tenant-42/profile",
@@ -335,14 +323,9 @@ class TestUpdateProfileEndpoint:
         assert saved_payload["profile"]["company_name"] == "UpdatedCorp"
         assert saved_payload["profile"]["fei_number"] == "FEI-XX"
         # Memory cache was kept in sync.
-        assert (
-            s._settings_store["tenant-42"].profile.company_name
-            == "UpdatedCorp"
-        )
+        assert s._settings_store["tenant-42"].profile.company_name == "UpdatedCorp"
 
-    def test_db_miss_and_empty_cache_creates_defaults_then_saves(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_and_empty_cache_creates_defaults_then_saves(self, client, stubbed_jsonb):
         resp = client.put(
             "/api/v1/settings/tenant-new/profile",
             json={"company_name": "BrandNew", "company_type": "processor"},
@@ -350,18 +333,10 @@ class TestUpdateProfileEndpoint:
         assert resp.status_code == 200
         # Defaults materialized, update applied, save succeeded.
         assert "tenant-new" in stubbed_jsonb["db"]
-        assert (
-            stubbed_jsonb["db"]["tenant-new"]["profile"]["company_name"]
-            == "BrandNew"
-        )
-        assert (
-            stubbed_jsonb["db"]["tenant-new"]["profile"]["company_type"]
-            == "processor"
-        )
+        assert stubbed_jsonb["db"]["tenant-new"]["profile"]["company_name"] == "BrandNew"
+        assert stubbed_jsonb["db"]["tenant-new"]["profile"]["company_type"] == "processor"
 
-    def test_db_miss_with_existing_cache_updates_cached_settings(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_with_existing_cache_updates_cached_settings(self, client, stubbed_jsonb):
         # Cache is populated, DB has nothing → update reads cache, writes
         # to DB via set_jsonb.
         base = _default_settings("tenant-cached")
@@ -373,14 +348,9 @@ class TestUpdateProfileEndpoint:
             json={"company_name": "AfterUpdate"},
         )
         assert resp.status_code == 200
-        assert (
-            s._settings_store["tenant-cached"].profile.company_name
-            == "AfterUpdate"
-        )
+        assert s._settings_store["tenant-cached"].profile.company_name == "AfterUpdate"
 
-    def test_db_save_failure_falls_back_to_memory_and_logs(
-        self, client, stubbed_jsonb, caplog
-    ):
+    def test_db_save_failure_falls_back_to_memory_and_logs(self, client, stubbed_jsonb, caplog):
         stubbed_jsonb["set_fail_for"].add("tenant-42")
 
         with caplog.at_level(logging.ERROR, logger="settings"):
@@ -394,15 +364,11 @@ class TestUpdateProfileEndpoint:
         # Memory cache reflects the pending update even though DB write
         # failed — operators need the change available until storage
         # recovers.
-        assert (
-            s._settings_store["tenant-42"].profile.company_name
-            == "FallbackCorp"
-        )
+        assert s._settings_store["tenant-42"].profile.company_name == "FallbackCorp"
         # Fallback MUST be logged at ERROR — silent memory-only writes
         # are an audit-trail regression.
         assert any(
-            "db_write_failed_fallback_to_memory" in r.getMessage()
-            and "endpoint=update_profile" in r.getMessage()
+            "db_write_failed_fallback_to_memory" in r.getMessage() and "endpoint=update_profile" in r.getMessage()
             for r in caplog.records
         )
 
@@ -414,9 +380,7 @@ class TestUpdateProfileEndpoint:
 
 class TestUpdateRetentionEndpoint:
     def test_db_hit_applies_update_and_saves(self, client, stubbed_jsonb):
-        stubbed_jsonb["db"]["tenant-42"] = _default_settings(
-            "tenant-42"
-        ).model_dump(exclude={"tenant_id"})
+        stubbed_jsonb["db"]["tenant-42"] = _default_settings("tenant-42").model_dump(exclude={"tenant_id"})
 
         resp = client.put(
             "/api/v1/settings/tenant-42/retention",
@@ -435,9 +399,7 @@ class TestUpdateRetentionEndpoint:
         assert saved["audit_log_retention_days"] == 3650
         assert saved["auto_archive"] is False
 
-    def test_db_miss_and_empty_cache_materializes_defaults(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_and_empty_cache_materializes_defaults(self, client, stubbed_jsonb):
         resp = client.put(
             "/api/v1/settings/tenant-fresh/retention",
             json={
@@ -448,22 +410,12 @@ class TestUpdateRetentionEndpoint:
             },
         )
         assert resp.status_code == 200
-        assert (
-            stubbed_jsonb["db"]["tenant-fresh"]["data_retention"][
-                "cte_retention_days"
-            ]
-            == 2000
-        )
+        assert stubbed_jsonb["db"]["tenant-fresh"]["data_retention"]["cte_retention_days"] == 2000
         # The profile section still carries the defaults so the row is
         # self-consistent.
-        assert (
-            stubbed_jsonb["db"]["tenant-fresh"]["profile"]["company_type"]
-            == "distributor"
-        )
+        assert stubbed_jsonb["db"]["tenant-fresh"]["profile"]["company_type"] == "distributor"
 
-    def test_db_miss_with_existing_cache_updates_cached_settings(
-        self, client, stubbed_jsonb
-    ):
+    def test_db_miss_with_existing_cache_updates_cached_settings(self, client, stubbed_jsonb):
         base = _default_settings("tenant-cached")
         s._settings_store["tenant-cached"] = base
         assert base.data_retention.cte_retention_days == 1095
@@ -478,14 +430,9 @@ class TestUpdateRetentionEndpoint:
             },
         )
         assert resp.status_code == 200
-        assert (
-            s._settings_store["tenant-cached"].data_retention.cte_retention_days
-            == 5000
-        )
+        assert s._settings_store["tenant-cached"].data_retention.cte_retention_days == 5000
 
-    def test_db_save_failure_falls_back_to_memory_and_logs(
-        self, client, stubbed_jsonb, caplog
-    ):
+    def test_db_save_failure_falls_back_to_memory_and_logs(self, client, stubbed_jsonb, caplog):
         stubbed_jsonb["set_fail_for"].add("tenant-42")
 
         with caplog.at_level(logging.ERROR, logger="settings"):
@@ -501,14 +448,10 @@ class TestUpdateRetentionEndpoint:
 
         assert resp.status_code == 200
         assert resp.json() == {"updated": True}
-        assert (
-            s._settings_store["tenant-42"].data_retention.cte_retention_days
-            == 2555
-        )
+        assert s._settings_store["tenant-42"].data_retention.cte_retention_days == 2555
         # The endpoint tag in the log line is how audit tools bucket the
         # fallback events — pin it so we notice if someone renames it.
         assert any(
-            "db_write_failed_fallback_to_memory" in r.getMessage()
-            and "endpoint=update_retention" in r.getMessage()
+            "db_write_failed_fallback_to_memory" in r.getMessage() and "endpoint=update_retention" in r.getMessage()
             for r in caplog.records
         )

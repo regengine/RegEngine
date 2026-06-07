@@ -29,15 +29,15 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-
-from ..authz import IngestionPrincipal, require_permission
-from ..export_models import ExportHistoryResponse, ExportVerifyResponse
 from shared.fda_export import (
-    ExportWindowError,
     MAX_EXPORT_WINDOW_DAYS,
+    ExportWindowError,
     validate_export_window,
 )
 from shared.permissions import has_permission as _has_permission
+
+from ..authz import IngestionPrincipal, require_permission
+from ..export_models import ExportHistoryResponse, ExportVerifyResponse
 from ..fda_export_service import (
     _build_chain_verification_payload,
     _build_completeness_summary,
@@ -49,7 +49,7 @@ from ..fda_export_service import (
 )
 from ..subscription_gate import require_active_subscription
 from ..webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
-
+from .coverage import _enforce_kde_coverage_gate
 from .formatters import (
     build_compliance_headers,
     build_csv_response,
@@ -60,8 +60,7 @@ from .formatters import (
     make_timestamp,
     safe_filename_token,
 )
-from .coverage import _enforce_kde_coverage_gate
-from .merkle import get_merkle_root_handler, get_merkle_proof_handler
+from .merkle import get_merkle_proof_handler, get_merkle_root_handler
 from .queries import (
     AuditLogWriteError,
     build_recall_where_clause,
@@ -174,17 +173,16 @@ def _audit_identity(
     return {
         "user_id": getattr(principal, "key_id", None),
         "user_email": getattr(principal, "user_email", None),
-        "request_id": request.headers.get("X-Request-ID")
-        or request.headers.get("X-Correlation-ID"),
+        "request_id": request.headers.get("X-Request-ID") or request.headers.get("X-Correlation-ID"),
         "user_agent": request.headers.get("User-Agent"),
-        "source_ip": request.headers.get("X-Forwarded-For", client_ip)
-        or client_ip,
+        "source_ip": request.headers.get("X-Forwarded-For", client_ip) or client_ip,
     }
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/export",
@@ -265,8 +263,8 @@ async def export_fda_spreadsheet(
 
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
@@ -280,10 +278,7 @@ async def export_fda_spreadsheet(
         )
 
         if not events:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No traceability records found for TLC '{tlc}'"
-            )
+            raise HTTPException(status_code=404, detail=f"No traceability records found for TLC '{tlc}'")
 
         # Generate CSV as canonical export evidence. The ``include_pii``
         # flag flows from the query string → authorization gate → CSV
@@ -310,9 +305,7 @@ async def export_fda_spreadsheet(
         # FSMA-204 chain-of-custody even if the schema hasn't been
         # migrated to add columns for user_id/request_id yet.
         generated_by = f"user:{identity['user_id']}" + (
-            f":request:{identity['request_id']}"
-            if identity["request_id"]
-            else ""
+            f":request:{identity['request_id']}" if identity["request_id"] else ""
         )
         try:
             persistence.log_export(
@@ -508,10 +501,7 @@ async def export_all_events(
     tenant_id: str = Query(..., description="Tenant identifier"),
     allow_incomplete: bool = Query(
         default=False,
-        description=(
-            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
-            "recorded in the audit trail."
-        ),
+        description=("Acknowledge KDE coverage <80% and proceed. Every bypass is recorded in the audit trail."),
     ),
     include_pii: bool = Query(
         default=False,
@@ -529,10 +519,7 @@ async def export_all_events(
     if not identity["user_id"]:
         raise HTTPException(
             status_code=401,
-            detail=(
-                "FDA export requires an authenticated principal with a "
-                "resolvable key_id."
-            ),
+            detail=("FDA export requires an authenticated principal with a resolvable key_id."),
         )
 
     # EPIC-L (#1655): the ``/export/all`` path is the full-tenant-dump
@@ -555,8 +542,8 @@ async def export_all_events(
 
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
@@ -574,7 +561,7 @@ async def export_all_events(
         tlcs = list({evt["traceability_lot_code"] for evt in events})
         full_events = []
         for tlc_batch_start in range(0, len(tlcs), 50):
-            tlc_batch = tlcs[tlc_batch_start:tlc_batch_start + 50]
+            tlc_batch = tlcs[tlc_batch_start : tlc_batch_start + 50]
             for tlc in tlc_batch:
                 full = persistence.query_events_by_tlc(
                     tenant_id=tenant_id,
@@ -599,8 +586,7 @@ async def export_all_events(
             raise HTTPException(
                 status_code=404,
                 detail=(
-                    "No traceability records found for the requested "
-                    "window. Widen the date range or verify tenant_id."
+                    "No traceability records found for the requested window. Widen the date range or verify tenant_id."
                 ),
             )
 
@@ -619,9 +605,7 @@ async def export_all_events(
         )
 
         generated_by = f"user:{identity['user_id']}" + (
-            f":request:{identity['request_id']}"
-            if identity["request_id"]
-            else ""
+            f":request:{identity['request_id']}" if identity["request_id"] else ""
         )
         try:
             persistence.log_export(
@@ -691,8 +675,7 @@ async def export_all_events(
         }
         if total > _EXPORT_LIMIT:
             compliance_headers["X-Truncated"] = (
-                f"Result set truncated to {_EXPORT_LIMIT} events out of {total}. "
-                "Use date filters to narrow the query."
+                f"Result set truncated to {_EXPORT_LIMIT} events out of {total}. Use date filters to narrow the query."
             )
         if kde_coverage < 0.80:
             compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
@@ -796,6 +779,7 @@ async def export_history(
     db_session = None
     try:
         from shared.database import SessionLocal
+
         db_session = SessionLocal()
 
         rows = fetch_export_log_history(db_session, tenant_id, limit)
@@ -843,10 +827,7 @@ async def export_recall_filtered(
     ),
     allow_incomplete: bool = Query(
         default=False,
-        description=(
-            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
-            "recorded in the audit trail."
-        ),
+        description=("Acknowledge KDE coverage <80% and proceed. Every bypass is recorded in the audit trail."),
     ),
     include_pii: bool = Query(
         default=False,
@@ -863,10 +844,7 @@ async def export_recall_filtered(
     if not identity["user_id"]:
         raise HTTPException(
             status_code=401,
-            detail=(
-                "FDA recall export requires an authenticated principal "
-                "with a resolvable key_id."
-            ),
+            detail=("FDA recall export requires an authenticated principal with a resolvable key_id."),
         )
 
     # Authorize PII access (issue #1219). Recall exports are especially
@@ -925,6 +903,7 @@ async def verify_export(
 # V2 Export — Canonical Model (fsma.traceability_events + rule evaluations)
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/export/v2",
     summary="Generate FDA export from canonical model (v2)",
@@ -958,10 +937,7 @@ async def export_fda_spreadsheet_v2(
     ),
     allow_incomplete: bool = Query(
         default=False,
-        description=(
-            "Acknowledge KDE coverage <80% and proceed. Every bypass is "
-            "recorded in the audit trail."
-        ),
+        description=("Acknowledge KDE coverage <80% and proceed. Every bypass is recorded in the audit trail."),
     ),
     include_pii: bool = Query(
         default=False,
@@ -978,10 +954,7 @@ async def export_fda_spreadsheet_v2(
     if not identity["user_id"]:
         raise HTTPException(
             status_code=401,
-            detail=(
-                "FDA v2 export requires an authenticated principal "
-                "with a resolvable key_id."
-            ),
+            detail=("FDA v2 export requires an authenticated principal with a resolvable key_id."),
         )
 
     exact_tlc_filter = bool(tlc and tlc.strip() and "%" not in tlc)
@@ -1006,8 +979,8 @@ async def export_fda_spreadsheet_v2(
     )
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
@@ -1065,12 +1038,10 @@ async def export_fda_spreadsheet_v2(
         # ----- Compute compliance summary stats -----
         total_events = len(events)
         events_passing = sum(
-            1 for e in events
-            if e.get("rule_results") and all(r.get("passed") for r in e["rule_results"])
+            1 for e in events if e.get("rule_results") and all(r.get("passed") for r in e["rule_results"])
         )
         events_failing = sum(
-            1 for e in events
-            if e.get("rule_results") and any(not r.get("passed") for r in e["rule_results"])
+            1 for e in events if e.get("rule_results") and any(not r.get("passed") for r in e["rule_results"])
         )
         events_no_rules = total_events - events_passing - events_failing
 
@@ -1151,9 +1122,7 @@ async def export_fda_spreadsheet_v2(
                 extra_headers={
                     "X-Export-Version": "2.0",
                     "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
-                    "X-Compliance-Rate": str(
-                        round(events_passing / total_events, 4) if total_events else 0
-                    ),
+                    "X-Compliance-Rate": str(round(events_passing / total_events, 4) if total_events else 0),
                 },
                 chain_payload_extras=chain_payload_extras,
                 include_pii=include_pii,
@@ -1170,9 +1139,7 @@ async def export_fda_spreadsheet_v2(
             extra_headers={
                 "X-Export-Version": "2.0",
                 "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
-                "X-Compliance-Rate": str(
-                    round(events_passing / total_events, 4) if total_events else 0
-                ),
+                "X-Compliance-Rate": str(round(events_passing / total_events, 4) if total_events else 0),
             },
             include_pii=include_pii,
         )
@@ -1249,6 +1216,7 @@ async def get_merkle_proof(
 # Transformation trace graph
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/trace/{tlc}",
     summary="Trace transformation graph for a TLC",
@@ -1270,8 +1238,8 @@ async def trace_transformation_graph(
     """Return the transformation graph rooted at a given TLC."""
     db_session = None
     try:
-        from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
+        from shared.database import SessionLocal
 
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)

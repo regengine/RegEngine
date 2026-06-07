@@ -11,6 +11,7 @@ The fix routes both call sites through
 wiring: pointing the safe wrapper at the cloud metadata IP / an RFC
 1918 host raises before any network call is made.
 """
+
 from __future__ import annotations
 
 import asyncio

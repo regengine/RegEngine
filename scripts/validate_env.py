@@ -24,7 +24,6 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Known insecure dev defaults that must never appear in production
 # ---------------------------------------------------------------------------
@@ -131,9 +130,7 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
     if is_production:
         for var in _PRODUCTION_REQUIRED:
             if not env.get(var):
-                result.errors.append(
-                    f"[production] Required variable not set: {var}"
-                )
+                result.errors.append(f"[production] Required variable not set: {var}")
 
     # ── 3. Check for known weak defaults in credential variables ────────────
     for var in _CREDENTIAL_VARS:
@@ -144,7 +141,7 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
             msg = (
                 f"Insecure default value detected for {var}: '{value}'. "
                 f"Generate a strong secret with: "
-                f"python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                f'python -c "import secrets; print(secrets.token_urlsafe(64))"'
             )
             if is_production:
                 result.errors.append(f"[production] {msg}")

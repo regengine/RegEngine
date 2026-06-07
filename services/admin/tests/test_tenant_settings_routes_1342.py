@@ -77,8 +77,10 @@ def _fake_user(user_id=USER_ID, is_sysadmin=False):
 
 def _fake_membership(role_id=OWNER_ROLE_ID, is_active=True):
     return SimpleNamespace(
-        user_id=USER_ID, tenant_id=TENANT_ID,
-        role_id=role_id, is_active=is_active,
+        user_id=USER_ID,
+        tenant_id=TENANT_ID,
+        role_id=role_id,
+        is_active=is_active,
     )
 
 
@@ -214,7 +216,8 @@ class TestRequireTenantAdmin_MissingTenant_1342:
     """
 
     def test_update_settings_404_when_tenant_missing_but_role_ok(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ) -> None:
         mod = _load_routes(monkeypatch)
         membership = _fake_membership(role_id=OWNER_ROLE_ID)

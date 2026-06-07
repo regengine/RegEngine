@@ -23,7 +23,6 @@ from services.ingestion.app.regulation_loader import (
     _obligation_id_from_text,
 )
 
-
 # ---------------------------------------------------------------------------
 # Empty password fails fast (#1351 part 3)
 # ---------------------------------------------------------------------------
@@ -57,9 +56,7 @@ class TestEmptyPasswordRejected:
                 password=credential_value,
             )
             assert loader.driver is not None
-            gdb.driver.assert_called_once_with(
-                "bolt://localhost:7687", auth=("neo4j", credential_value)
-            )
+            gdb.driver.assert_called_once_with("bolt://localhost:7687", auth=("neo4j", credential_value))
 
 
 # ---------------------------------------------------------------------------
@@ -99,9 +96,7 @@ class TestLoadTenantScopedWrite:
             gdb.driver.return_value = mock_driver
 
             credential_value = "fixture-password"
-            loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password=credential_value
-            )
+            loader = RegulationLoader(uri="bolt://x", user="neo4j", password=credential_value)
         return loader, mock_session
 
     def test_tenant_id_None_skips_regulatory_obligation_write(self):
@@ -123,9 +118,9 @@ class TestLoadTenantScopedWrite:
 
         # With tenant_id=None we expect ONE session.run (the legacy shape).
         cypher_calls = [str(c.args[0]) for c in mock_session.run.call_args_list]
-        assert not any(
-            "RegulatoryObligation" in c for c in cypher_calls
-        ), "RegulatoryObligation nodes should only be written when tenant_id is provided"
+        assert not any("RegulatoryObligation" in c for c in cypher_calls), (
+            "RegulatoryObligation nodes should only be written when tenant_id is provided"
+        )
 
     def test_tenant_id_supplied_writes_regulatory_obligation(self):
         loader, mock_session = self._build_loader_with_mock_driver()
@@ -145,10 +140,9 @@ class TestLoadTenantScopedWrite:
         loader._load_sync(sections, "21 CFR 1", "1.0", "tenant-xyz")
 
         cypher_calls = [str(c.args[0]) for c in mock_session.run.call_args_list]
-        assert any(
-            "(ro:RegulatoryObligation" in c and "tenant_id" in c
-            for c in cypher_calls
-        ), "Expected RegulatoryObligation MERGE with tenant_id parameter"
+        assert any("(ro:RegulatoryObligation" in c and "tenant_id" in c for c in cypher_calls), (
+            "Expected RegulatoryObligation MERGE with tenant_id parameter"
+        )
 
     def test_tenant_scoped_rows_carry_stable_obligation_id(self):
         loader, mock_session = self._build_loader_with_mock_driver()
@@ -168,10 +162,7 @@ class TestLoadTenantScopedWrite:
         loader._load_sync(sections, "21 CFR 1", "1.0", "tenant-xyz")
 
         # Find the call that writes RegulatoryObligation nodes.
-        target = next(
-            c for c in mock_session.run.call_args_list
-            if "RegulatoryObligation" in str(c.args[0])
-        )
+        target = next(c for c in mock_session.run.call_args_list if "RegulatoryObligation" in str(c.args[0]))
         rows = target.kwargs["rows"]
         assert len(rows) == 2
         # Same text → same id. Stable across runs.
@@ -193,9 +184,7 @@ class TestLoadUsesToThread:
         with patch("services.ingestion.app.regulation_loader.GraphDatabase") as gdb:
             gdb.driver.return_value = MagicMock()
             credential_value = "fixture-password"
-            loader = RegulationLoader(
-                uri="bolt://x", user="neo4j", password=credential_value
-            )
+            loader = RegulationLoader(uri="bolt://x", user="neo4j", password=credential_value)
 
         # Patch the parser so we don't try to import langchain / hit disk.
         fake_sections: List[Dict[str, Any]] = [
@@ -211,19 +200,18 @@ class TestLoadUsesToThread:
                 "content_hash": "h",
             }
         ]
-        with patch(
-            "services.ingestion.app.regulation_loader.RegulationParser"
-        ) as mock_parser_cls, patch(
-            "services.ingestion.app.regulation_loader.asyncio.to_thread",
-            new=AsyncMock(return_value=None),
-        ) as mock_to_thread:
+        with (
+            patch("services.ingestion.app.regulation_loader.RegulationParser") as mock_parser_cls,
+            patch(
+                "services.ingestion.app.regulation_loader.asyncio.to_thread",
+                new=AsyncMock(return_value=None),
+            ) as mock_to_thread,
+        ):
             mock_parser = MagicMock()
             mock_parser.parse = AsyncMock(return_value=fake_sections)
             mock_parser_cls.return_value = mock_parser
 
-            result = await loader.load(
-                "source.pdf", "pdf", "FSMA", tenant_id="t-1"
-            )
+            result = await loader.load("source.pdf", "pdf", "FSMA", tenant_id="t-1")
 
             assert result == 1
             assert mock_to_thread.called

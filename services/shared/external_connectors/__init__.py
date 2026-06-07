@@ -5,7 +5,7 @@ RegEngine to food safety platforms, ERPs, retailer networks, and
 IoT sensor providers.
 """
 
-from .base import IntegrationConnector, ConnectorConfig, SyncResult, ConnectionStatus
+from .base import ConnectionStatus, ConnectorConfig, IntegrationConnector, SyncResult
 
 __all__ = [
     "IntegrationConnector",

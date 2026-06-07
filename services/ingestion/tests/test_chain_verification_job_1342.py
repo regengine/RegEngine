@@ -25,9 +25,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from app import chain_verification_job as cvj
 from app.chain_verification_job import (
     VerificationJobResponse,
@@ -39,7 +36,8 @@ from app.chain_verification_job import (
     _verification_jobs,
     router,
 )
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -60,7 +58,9 @@ def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     from app.webhook_compat import _verify_api_key
+
     from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
     bypass = lambda: None
     app.dependency_overrides[_verify_api_key] = bypass
     install_tenant_context_override(app)
@@ -74,6 +74,7 @@ def client():
 
 class _FakeThread:
     """Runs the target synchronously so tests don't need to wait."""
+
     def __init__(self, target=None, args=(), daemon=False, **_kwargs):
         self._target = target
         self._args = args
@@ -90,6 +91,7 @@ class _FakeThreading:
     Only exposes what the module touches (Thread + Lock). Leaves the global
     `threading` module untouched so starlette's ThreadPoolExecutor still works.
     """
+
     Thread = _FakeThread
     Lock = threading.Lock
 
@@ -121,13 +123,19 @@ class TestPydanticModels:
 
     def test_verification_job_response(self):
         r = VerificationJobResponse(
-            job_id="j1", tenant_id="t", status="running", started_at="now",
+            job_id="j1",
+            tenant_id="t",
+            status="running",
+            started_at="now",
         )
         assert r.status == "running"
 
     def test_verification_result_response_defaults(self):
         r = VerificationResultResponse(
-            job_id="j1", tenant_id="t", status="running", started_at="now",
+            job_id="j1",
+            tenant_id="t",
+            status="running",
+            started_at="now",
         )
         assert r.completed_at is None
         assert r.chain_valid is None
@@ -173,14 +181,18 @@ class TestRunVerification:
         _seed_job("j1", "t1")
         db = MagicMock()
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: db)
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, chain_length=100, errors=None)
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
 
         # Suppress audit log side effects
@@ -199,16 +211,22 @@ class TestRunVerification:
         _seed_job("j1", "t1")
         db = MagicMock()
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: db)
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(
-                    valid=False, chain_length=10, errors=["block 3 tampered"],
+                    valid=False,
+                    chain_length=10,
+                    errors=["block 3 tampered"],
                 )
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
         monkeypatch.setattr(cvj, "_log_verification_audit", lambda *a, **k: None)
 
@@ -227,6 +245,7 @@ class TestRunVerification:
             raise RuntimeError("DB gone")
 
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
 
         _run_verification("j1", "t1")
@@ -255,11 +274,13 @@ class TestLogVerificationAudit:
             @classmethod
             def get_instance(cls):
                 return cls()
+
             def log(self, **kwargs):
                 return _coro()
 
         # Patch the shared.audit_logging import target
         import shared.audit_logging as al
+
         monkeypatch.setattr(al, "AuditLogger", _FakeAudit)
 
         def _fake_run(c):
@@ -283,10 +304,12 @@ class TestLogVerificationAudit:
             @classmethod
             def get_instance(cls):
                 return cls()
+
             def log(self, **kwargs):
                 return _coro()
 
         import shared.audit_logging as al
+
         monkeypatch.setattr(al, "AuditLogger", _FakeAudit)
 
         class _FakeLoop:
@@ -349,14 +372,18 @@ class TestStartChainVerification:
 
         db = MagicMock()
         import shared.database as db_mod
+
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: db)
 
         class _Persistence:
-            def __init__(self, s): pass
+            def __init__(self, s):
+                pass
+
             def verify_chain(self, tid):
                 return SimpleNamespace(valid=True, chain_length=7, errors=[])
 
         import shared.cte_persistence as cte_pkg
+
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
         monkeypatch.setattr(cvj, "_log_verification_audit", lambda *a, **k: None)
 
@@ -392,14 +419,16 @@ class TestGetVerificationResult:
 
     def test_completed_job_surfaces_fields(self, client):
         _seed_job("j1", "t1")
-        _verification_jobs["j1"].update({
-            "status": "completed",
-            "completed_at": "2026-01-01T01:00:00Z",
-            "chain_valid": True,
-            "chain_length": 50,
-            "errors": [],
-            "message": "ok",
-        })
+        _verification_jobs["j1"].update(
+            {
+                "status": "completed",
+                "completed_at": "2026-01-01T01:00:00Z",
+                "chain_valid": True,
+                "chain_length": 50,
+                "errors": [],
+                "message": "ok",
+            }
+        )
 
         r = client.get("/api/v1/chain/verify-all/j1")
         body = r.json()

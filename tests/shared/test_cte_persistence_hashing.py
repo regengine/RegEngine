@@ -14,12 +14,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-
 from shared.cte_persistence.hashing import (
     compute_event_hash,
     compute_idempotency_key,
 )
-
 
 BASE_KEY_ARGS: dict = {
     "event_type": "shipping",
@@ -59,12 +57,8 @@ class TestComputeIdempotencyKey_Issue1313:
     def test_stable_across_python_key_insertion_order(self):
         """Changing dict insertion order must not change the key
         (``sort_keys=True`` guarantees this)."""
-        k1 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"a": 1, "b": Decimal("2")}
-        )
-        k2 = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"b": Decimal("2"), "a": 1}
-        )
+        k1 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"a": 1, "b": Decimal("2")})
+        k2 = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"b": Decimal("2"), "a": 1})
         assert k1 == k2, "key must be order-independent"
 
     def test_matches_compute_event_hash_behaviour_for_datetime(self):
@@ -85,9 +79,7 @@ class TestComputeIdempotencyKey_Issue1313:
         )
         # Neither helper should raise.
         compute_event_hash(**event_args)
-        compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"recorded_at": ts}
-        )
+        compute_idempotency_key(**BASE_KEY_ARGS, kdes={"recorded_at": ts})
 
     def test_explicit_isoformat_normalization_not_str_coercion(self):
         """The hashing path now uses an explicit type-dispatch normalizer
@@ -104,25 +96,18 @@ class TestComputeIdempotencyKey_Issue1313:
         ``isoformat`` uses ``"T"``).
         """
         ts = datetime(2026, 4, 18, tzinfo=timezone.utc)
-        key_with_dt = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": ts}
-        )
+        key_with_dt = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": ts})
         # After #1313's explicit normalization, the datetime is serialized
         # via ``isoformat()`` — so passing the ISO-string explicitly must
         # reproduce the same key.
-        key_with_iso = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": ts.isoformat()}
-        )
+        key_with_iso = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": ts.isoformat()})
         assert key_with_dt == key_with_iso, (
-            "datetime KDE must normalize to isoformat() under the new "
-            "explicit type-dispatch in _normalize_for_hashing"
+            "datetime KDE must normalize to isoformat() under the new explicit type-dispatch in _normalize_for_hashing"
         )
         # And passing ``str(dt)`` (which uses a space separator) must NOT
         # produce the same key — guards against accidental regression to
         # ``default=str``.
-        key_with_str = compute_idempotency_key(
-            **BASE_KEY_ARGS, kdes={"t": str(ts)}
-        )
+        key_with_str = compute_idempotency_key(**BASE_KEY_ARGS, kdes={"t": str(ts)})
         assert key_with_dt != key_with_str, (
             "str(datetime) uses a space separator and must no longer be "
             "the canonical form; if this passes, _normalize_for_hashing "

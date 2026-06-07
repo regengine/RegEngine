@@ -10,27 +10,17 @@ from __future__ import annotations
 
 import csv
 import io
+import sys
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
-from ...exporters import csv_safe, header_filename, xml_escape
-from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
-from ...neo4j_utils import Neo4jClient
-from ...neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
-from shared.rate_limit import limiter
-
-import uuid
-import sys
-from pathlib import Path
-
-# Add shared utilities (portable path resolution)
-from shared.middleware import get_current_tenant_id
 from shared.fsma_plan_builder import (
     FirmInfo,
     FirmType,
@@ -42,6 +32,14 @@ from shared.fsma_plan_builder import (
     export_plan_markdown,
 )
 
+# Add shared utilities (portable path resolution)
+from shared.middleware import get_current_tenant_id
+from shared.rate_limit import limiter
+
+from ...exporters import csv_safe, header_filename, xml_escape
+from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
+from ...neo4j_utils import Neo4jClient
+
 router = APIRouter(tags=["Compliance"])
 logger = structlog.get_logger("fsma-compliance")
 
@@ -49,6 +47,7 @@ logger = structlog.get_logger("fsma-compliance")
 # ============================================================================
 # COVERAGE CARD ENDPOINT
 # ============================================================================
+
 
 @router.get("/coverage")
 @limiter.limit("10/minute")
@@ -59,7 +58,7 @@ async def get_coverage_card(
 ):
     """
     Get the FSMA 204 Regulatory Coverage Card.
-    
+
     Provides real-time status of the regulatory authority, monitoring sources,
     and enforcement timelines.
     """
@@ -67,14 +66,15 @@ async def get_coverage_card(
         "authority": "FDA FSMA 204 (21 CFR Part 1 Subpart S)",
         "sources_monitored": [
             "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods",
-            "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S"
+            "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S",
         ],
         "check_interval": "24 hours",
         "enforcement_status": "FDA not enforcing before July 20, 2028 (Congressional directive)",
         # last_request_at reflects the time of this API call, not an actual verification event
         "last_request_at": datetime.now(timezone.utc).isoformat(),
-        "compliance_deadline": "2028-07-20"
+        "compliance_deadline": "2028-07-20",
     }
+
 
 # ============================================================================
 # FDA SPREADSHEET EXPORT ENDPOINTS
@@ -93,64 +93,66 @@ async def export_fda_request_sheet(
 ):
     """
     Generate the official FDA Electronic Sortable Spreadsheet (24-hour request mode).
-    
+
     This exports ALL CTEs (Critical Tracking Events) within the requested time range
     formatted exactly according to the FDA's Excel template columns:
     [Traceability Lot Code, Product, Quantity, Unit, Location, Date, Time, ...]
-    
+
     Required by FSMA 204 Section 1.1455(b)(3) - must be provided within 24 hours.
     """
     logger.info("fda_request_export_initiated", start=start_date, end=end_date)
-    
+
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     client = Neo4jClient(database=db_name)
 
     try:
         from ...fsma_utils import query_events_by_range
-        
+
         events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
         await client.close()
-        
+
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
-        
+
         # FDA Sortable Spreadsheet Columns (Simplified for CSV)
-        writer.writerow([
-            "Traceability Lot Code",
-            "Traceability Lot Code Description",
-            "Product Description",
-            "Quantity",
-            "Unit of Measure",
-            "Location Description",
-            "Location Identifier (GLN)",
-            "Date",
-            "Time",
-            "Reference Document Type",
-            "Reference Document Number",
-        ])
-        
+        writer.writerow(
+            [
+                "Traceability Lot Code",
+                "Traceability Lot Code Description",
+                "Product Description",
+                "Quantity",
+                "Unit of Measure",
+                "Location Description",
+                "Location Identifier (GLN)",
+                "Date",
+                "Time",
+                "Reference Document Type",
+                "Reference Document Number",
+            ]
+        )
+
         for event in events:
             # RE-SEC-002: every cell goes through csv_safe() to neutralize
             # Excel formula prefixes from tenant-stored values.
-            writer.writerow([
-                csv_safe(event.get("tlc", "")),
-                "", # Description of the code itself (optional)
-                csv_safe(event.get("product_description", "")),
-                csv_safe(event.get("quantity", "")),
-                csv_safe(event.get("unit_of_measure", "")),
-                csv_safe(event.get("location_description", "")),
-                csv_safe(event.get("location_gln", "")),
-                csv_safe(event.get("event_date", "")),
-                csv_safe(event.get("event_time", "")),
-                csv_safe(event.get("reference_doc_type", "")),
-                csv_safe(event.get("reference_doc_num", "")),
-            ])
-            
+            writer.writerow(
+                [
+                    csv_safe(event.get("tlc", "")),
+                    "",  # Description of the code itself (optional)
+                    csv_safe(event.get("product_description", "")),
+                    csv_safe(event.get("quantity", "")),
+                    csv_safe(event.get("unit_of_measure", "")),
+                    csv_safe(event.get("location_description", "")),
+                    csv_safe(event.get("location_gln", "")),
+                    csv_safe(event.get("event_date", "")),
+                    csv_safe(event.get("event_time", "")),
+                    csv_safe(event.get("reference_doc_type", "")),
+                    csv_safe(event.get("reference_doc_num", "")),
+                ]
+            )
+
         csv_content = csv_buffer.getvalue()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = header_filename(
-            f"fda_sortable_spreadsheet_{start_date}_{end_date}_{timestamp}.csv"
-        )
+        filename = header_filename(f"fda_sortable_spreadsheet_{start_date}_{end_date}_{timestamp}.csv")
 
         logger.info("fda_request_export_completed", count=len(events))
 
@@ -159,10 +161,11 @@ async def export_fda_request_sheet(
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
-        
+
     except Exception as e:
         logger.exception("fda_request_export_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -183,14 +186,14 @@ async def export_epcis(
 ):
     """
     Export traceability data in GS1 EPCIS 2.0 format.
-    
+
     This enables automated data exchange with major retailers (Walmart, Kroger)
     who mandate GS1 standards for supply chain visibility.
-    
+
     Formats:
     - json-ld: EPCIS 2.0 JSON-LD (recommended)
     - xml: EPCIS 2.0 XML
-    
+
     Event Types Mapped:
     - CREATION → epcis:ObjectEvent (bizStep: commissioning)
     - RECEIVING → epcis:ObjectEvent (bizStep: receiving)
@@ -198,16 +201,16 @@ async def export_epcis(
     - TRANSFORMATION → epcis:TransformationEvent
     """
     logger.info("epcis_export_initiated", start=start_date, end=end_date, format=format)
-    
+
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     client = Neo4jClient(database=db_name)
-    
+
     try:
         from ...fsma_utils import query_events_by_range
-        
+
         events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
         await client.close()
-        
+
         # Map CTE types to EPCIS bizStep
         BIZ_STEP_MAP = {
             "CREATION": "urn:epcglobal:cbv:bizstep:commissioning",
@@ -215,40 +218,44 @@ async def export_epcis(
             "SHIPPING": "urn:epcglobal:cbv:bizstep:shipping",
             "TRANSFORMATION": "urn:epcglobal:cbv:bizstep:transforming",
         }
-        
+
         # Build EPCIS document
         epcis_events = []
-        
+
         for event in events:
             event_type = event.get("type", "").upper()
-            
+
             # Build EPC URN from TLC
             tlc = event.get("tlc", "")
             # Convert TLC to EPC URN format (simplified)
             epc_urn = f"urn:epc:id:sgtin:{tlc}" if tlc else None
-            
+
             # Build location URN from GLN
             gln = event.get("location_gln", event.get("facility_gln", ""))
             read_point = f"urn:epc:id:sgln:{gln}" if gln else None
-            
+
             if event_type == "TRANSFORMATION":
                 # TransformationEvent for TRANSFORMATION CTEs
                 epcis_event = {
                     "type": "TransformationEvent",
                     "eventTime": f"{event.get('event_date', '')}T{event.get('event_time', '00:00:00')}Z",
                     "eventTimeZoneOffset": "-08:00",
-                    "inputEPCList": [f"urn:epc:id:sgtin:{event.get('input_tlc', '')}"] if event.get("input_tlc") else [],
+                    "inputEPCList": [f"urn:epc:id:sgtin:{event.get('input_tlc', '')}"]
+                    if event.get("input_tlc")
+                    else [],
                     "outputEPCList": [epc_urn] if epc_urn else [],
                     "transformationID": f"urn:epc:id:gdti:{event.get('event_id', '')}",
                     "bizStep": BIZ_STEP_MAP.get(event_type, ""),
                     "readPoint": {"id": read_point} if read_point else None,
                     "extension": {
-                        "quantityList": [{
-                            "epcClass": epc_urn,
-                            "quantity": event.get("quantity", 0),
-                            "uom": event.get("unit_of_measure", event.get("unit", "EA"))
-                        }]
-                    }
+                        "quantityList": [
+                            {
+                                "epcClass": epc_urn,
+                                "quantity": event.get("quantity", 0),
+                                "uom": event.get("unit_of_measure", event.get("unit", "EA")),
+                            }
+                        ]
+                    },
                 }
             else:
                 # ObjectEvent for CREATION, RECEIVING, SHIPPING
@@ -259,55 +266,57 @@ async def export_epcis(
                     "epcList": [epc_urn] if epc_urn else [],
                     "action": "ADD" if event_type in ["CREATION", "RECEIVING"] else "OBSERVE",
                     "bizStep": BIZ_STEP_MAP.get(event_type, ""),
-                    "disposition": "urn:epcglobal:cbv:disp:in_transit" if event_type == "SHIPPING" else "urn:epcglobal:cbv:disp:in_progress",
+                    "disposition": "urn:epcglobal:cbv:disp:in_transit"
+                    if event_type == "SHIPPING"
+                    else "urn:epcglobal:cbv:disp:in_progress",
                     "readPoint": {"id": read_point} if read_point else None,
                     "bizLocation": {"id": read_point} if read_point else None,
                     "extension": {
-                        "quantityList": [{
-                            "epcClass": epc_urn,
-                            "quantity": event.get("quantity", 0),
-                            "uom": event.get("unit_of_measure", event.get("unit", "EA"))
-                        }],
+                        "quantityList": [
+                            {
+                                "epcClass": epc_urn,
+                                "quantity": event.get("quantity", 0),
+                                "uom": event.get("unit_of_measure", event.get("unit", "EA")),
+                            }
+                        ],
                         "sourceList": [
-                            {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": f"urn:epc:id:sgln:{event.get('ship_from_gln', '')}"}
-                        ] if event.get("ship_from_gln") else [],
+                            {
+                                "type": "urn:epcglobal:cbv:sdt:possessing_party",
+                                "source": f"urn:epc:id:sgln:{event.get('ship_from_gln', '')}",
+                            }
+                        ]
+                        if event.get("ship_from_gln")
+                        else [],
                         "destinationList": [
-                            {"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": f"urn:epc:id:sgln:{event.get('ship_to_gln', '')}"}
-                        ] if event.get("ship_to_gln") else []
-                    }
+                            {
+                                "type": "urn:epcglobal:cbv:sdt:possessing_party",
+                                "destination": f"urn:epc:id:sgln:{event.get('ship_to_gln', '')}",
+                            }
+                        ]
+                        if event.get("ship_to_gln")
+                        else [],
+                    },
                 }
-            
+
             epcis_events.append(epcis_event)
-        
+
         # Build full EPCIS document
         epcis_document = {
-            "@context": [
-                "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"
-            ],
+            "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
             "type": "EPCISDocument",
             "schemaVersion": "2.0",
             "creationDate": datetime.now(timezone.utc).isoformat(),
-            "epcisBody": {
-                "eventList": epcis_events
-            },
-            "sender": {
-                "type": "Organization",
-                "name": "RegEngine FSMA 204 Platform"
-            },
-            "receiver": {
-                "type": "Organization", 
-                "name": "FDA / Retailer"
-            }
+            "epcisBody": {"eventList": epcis_events},
+            "sender": {"type": "Organization", "name": "RegEngine FSMA 204 Platform"},
+            "receiver": {"type": "Organization", "name": "FDA / Retailer"},
         }
-        
+
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        
+
         if format == "xml":
             # Convert to XML format
             xml_content = _epcis_to_xml(epcis_document)
-            filename = header_filename(
-                f"epcis_export_{start_date}_{end_date}_{timestamp}.xml"
-            )
+            filename = header_filename(f"epcis_export_{start_date}_{end_date}_{timestamp}.xml")
 
             logger.info("epcis_xml_export_completed", count=len(epcis_events))
 
@@ -319,10 +328,9 @@ async def export_epcis(
         else:
             # JSON-LD format (default)
             import json
+
             json_content = json.dumps(epcis_document, indent=2)
-            filename = header_filename(
-                f"epcis_export_{start_date}_{end_date}_{timestamp}.jsonld"
-            )
+            filename = header_filename(f"epcis_export_{start_date}_{end_date}_{timestamp}.jsonld")
 
             logger.info("epcis_jsonld_export_completed", count=len(epcis_events))
 
@@ -331,10 +339,11 @@ async def export_epcis(
                 media_type="application/ld+json",
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
-        
+
     except Exception as e:
         logger.exception("epcis_export_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _epcis_to_xml(epcis_doc: dict) -> str:
@@ -356,28 +365,28 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
         if event_type == "ObjectEvent":
             events_xml.append(f"""
     <ObjectEvent>
-      <eventTime>{xml_escape(event.get('eventTime', ''))}</eventTime>
-      <eventTimeZoneOffset>{xml_escape(event.get('eventTimeZoneOffset', '-08:00'))}</eventTimeZoneOffset>
+      <eventTime>{xml_escape(event.get("eventTime", ""))}</eventTime>
+      <eventTimeZoneOffset>{xml_escape(event.get("eventTimeZoneOffset", "-08:00"))}</eventTimeZoneOffset>
       <epcList>
-        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('epcList', []))}
+        {"".join(f"<epc>{xml_escape(epc)}</epc>" for epc in event.get("epcList", []))}
       </epcList>
-      <action>{xml_escape(event.get('action', 'OBSERVE'))}</action>
-      <bizStep>{xml_escape(event.get('bizStep', ''))}</bizStep>
-      <disposition>{xml_escape(event.get('disposition', ''))}</disposition>
-      <readPoint><id>{xml_escape((event.get('readPoint') or {}).get('id', ''))}</id></readPoint>
+      <action>{xml_escape(event.get("action", "OBSERVE"))}</action>
+      <bizStep>{xml_escape(event.get("bizStep", ""))}</bizStep>
+      <disposition>{xml_escape(event.get("disposition", ""))}</disposition>
+      <readPoint><id>{xml_escape((event.get("readPoint") or {}).get("id", ""))}</id></readPoint>
     </ObjectEvent>""")
         elif event_type == "TransformationEvent":
             events_xml.append(f"""
     <TransformationEvent>
-      <eventTime>{xml_escape(event.get('eventTime', ''))}</eventTime>
-      <eventTimeZoneOffset>{xml_escape(event.get('eventTimeZoneOffset', '-08:00'))}</eventTimeZoneOffset>
+      <eventTime>{xml_escape(event.get("eventTime", ""))}</eventTime>
+      <eventTimeZoneOffset>{xml_escape(event.get("eventTimeZoneOffset", "-08:00"))}</eventTimeZoneOffset>
       <inputEPCList>
-        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('inputEPCList', []))}
+        {"".join(f"<epc>{xml_escape(epc)}</epc>" for epc in event.get("inputEPCList", []))}
       </inputEPCList>
       <outputEPCList>
-        {''.join(f'<epc>{xml_escape(epc)}</epc>' for epc in event.get('outputEPCList', []))}
+        {"".join(f"<epc>{xml_escape(epc)}</epc>" for epc in event.get("outputEPCList", []))}
       </outputEPCList>
-      <bizStep>{xml_escape(event.get('bizStep', ''))}</bizStep>
+      <bizStep>{xml_escape(event.get("bizStep", ""))}</bizStep>
     </TransformationEvent>""")
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -385,10 +394,10 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
   xmlns:epcis="urn:epcglobal:epcis:xsd:2"
   xmlns:cbv="urn:epcglobal:cbv:xsd"
   schemaVersion="2.0"
-  creationDate="{xml_escape(epcis_doc.get('creationDate', ''))}">
+  creationDate="{xml_escape(epcis_doc.get("creationDate", ""))}">
   <EPCISBody>
     <EventList>
-      {''.join(events_xml)}
+      {"".join(events_xml)}
     </EventList>
   </EPCISBody>
 </epcis:EPCISDocument>"""
@@ -500,9 +509,7 @@ async def export_trace_csv(
 
         # Generate filename — RE-SEC-003: encode for Content-Disposition.
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filename = header_filename(
-            f"fsma_trace_{direction}_{tlc}_{timestamp}.csv"
-        )
+        filename = header_filename(f"fsma_trace_{direction}_{tlc}_{timestamp}.csv")
 
         logger.info(
             "csv_export_generated",
@@ -519,7 +526,8 @@ async def export_trace_csv(
 
     except Exception as e:
         logger.exception("csv_export_error", tlc=tlc, error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/export/recall-contacts/{tlc}")
@@ -599,7 +607,8 @@ async def export_recall_contacts(
 
     except Exception as e:
         logger.exception("recall_contacts_error", tlc=tlc, error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -631,26 +640,21 @@ async def get_compliance_gaps(
             "total_gaps": len(gaps),
             "events_with_gaps": gaps,
             "summary": {
-                "missing_date": len(
-                    [g for g in gaps if "missing_date" in g.get("gaps", [])]
-                ),
-                "missing_lot": len(
-                    [g for g in gaps if "missing_lot" in g.get("gaps", [])]
-                ),
+                "missing_date": len([g for g in gaps if "missing_date" in g.get("gaps", [])]),
+                "missing_lot": len([g for g in gaps if "missing_lot" in g.get("gaps", [])]),
             },
         }
     except Exception as e:
         logger.exception("gap_analysis_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/gaps/orphans")
 @limiter.limit("10/minute")
 async def get_orphaned_lots(
     request: Request,
-    days_stagnant: int = Query(
-        30, ge=1, le=365, description="Days without outbound activity"
-    ),
+    days_stagnant: int = Query(30, ge=1, le=365, description="Days without outbound activity"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -689,18 +693,14 @@ async def get_orphaned_lots(
                 for o in orphans
             ],
             "summary": {
-                "avg_stagnant_days": (
-                    round(sum(o.stagnant_days for o in orphans) / len(orphans), 1)
-                    if orphans
-                    else 0
-                ),
+                "avg_stagnant_days": (round(sum(o.stagnant_days for o in orphans) / len(orphans), 1) if orphans else 0),
                 "total_quantity_at_risk": sum(o.quantity or 0 for o in orphans),
             },
         }
     except Exception as e:
         logger.exception("orphan_detection_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
-
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/export/gaps")
@@ -759,7 +759,8 @@ async def export_gaps_csv(
 
     except Exception as e:
         logger.exception("gaps_export_error", error=str(e))
-        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+        logger.exception("endpoint_error", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -892,8 +893,7 @@ def generate_traceability_plan(
                 # RE-SEC-003: plan_id is server-generated (uuid), but route
                 # filename through header_filename anyway — defense in depth.
                 "Content-Disposition": (
-                    "attachment; filename="
-                    + header_filename(f"traceability_plan_{plan.plan_id[:8]}.md")
+                    "attachment; filename=" + header_filename(f"traceability_plan_{plan.plan_id[:8]}.md")
                 )
             },
         )
@@ -928,6 +928,7 @@ def get_plan_template(
 # ============================================================================
 # Phase 29 — Compliance Score Endpoint
 # ============================================================================
+
 
 class ComplianceScoreResponse(BaseModel):
     model_config = {
@@ -1044,6 +1045,7 @@ async def get_compliance_score(
 
         # Geometric mean of the three dimensions (each 0-100)
         import math
+
         dims = [max(0.01, obligation_coverage), max(0.01, control_effectiveness), max(0.01, evidence_freshness)]
         overall = round(math.pow(dims[0] * dims[1] * dims[2], 1 / 3), 1)
 

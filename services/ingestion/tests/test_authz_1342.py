@@ -22,10 +22,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
-
 from app import authz
 from app.authz import (
     IngestionPrincipal,
@@ -45,8 +41,10 @@ from app.authz import (
     get_ingestion_principal,
     require_permission,
 )
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from shared.api_key_store import api_key_hash_candidates
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -75,7 +73,9 @@ def _clear_rate_limit_override_cache():
 def _strip_env(monkeypatch):
     """Remove env vars that drive branching inside authz."""
     for var in (
-        "REGENGINE_ENV", "ENV", "DATABASE_URL",
+        "REGENGINE_ENV",
+        "ENV",
+        "DATABASE_URL",
         "INGESTION_RBAC_RATE_LIMITS",
         "INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM",
         "INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS",
@@ -275,9 +275,7 @@ class TestRateLimitOverrides:
         assert _rate_limit_overrides() == {"fda.export": 60}
 
     def test_multiple_overrides(self, _strip_env, monkeypatch):
-        monkeypatch.setenv(
-            "INGESTION_RBAC_RATE_LIMITS", "fda.export=60,exchange.read=240"
-        )
+        monkeypatch.setenv("INGESTION_RBAC_RATE_LIMITS", "fda.export=60,exchange.read=240")
         assert _rate_limit_overrides() == {"fda.export": 60, "exchange.read": 240}
 
     def test_normalizes_scope(self, _strip_env, monkeypatch):
@@ -456,9 +454,7 @@ class TestRequestedTenantContext:
 
 class TestPrincipalFromApiKey:
     def test_maps_all_fields(self):
-        api_key = SimpleNamespace(
-            key_id="k-1", scopes=["fda.export"], tenant_id="t-1"
-        )
+        api_key = SimpleNamespace(key_id="k-1", scopes=["fda.export"], tenant_id="t-1")
         p = _principal_from_api_key(api_key)  # type: ignore[arg-type]
         assert p.key_id == "k-1"
         assert p.scopes == ["fda.export"]
@@ -505,6 +501,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k-id", "t-id", ["fda.read"], True, None)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         result = _lookup_scoped_key_from_db("raw-key")
         assert result is not None
@@ -540,6 +537,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k", "t", [], False, None)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         assert _lookup_scoped_key_from_db("raw") is None
 
@@ -548,6 +546,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k", "t", [], True, expired)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         assert _lookup_scoped_key_from_db("raw") is None
 
@@ -556,6 +555,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k", "t", ["x"], True, future)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         result = _lookup_scoped_key_from_db("raw")
         assert result is not None
@@ -565,6 +565,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k", None, ["*"], True, None)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         result = _lookup_scoped_key_from_db("raw")
         assert result.tenant_id is None
@@ -573,6 +574,7 @@ class TestLookupScopedKeyFromDb:
         row = ("k", "t", None, True, None)
         factory = _SessionFactory(row)
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", factory)
         result = _lookup_scoped_key_from_db("raw")
         assert result.scopes == []
@@ -580,7 +582,9 @@ class TestLookupScopedKeyFromDb:
     def test_exception_returns_none(self, monkeypatch):
         def _boom():
             raise RuntimeError("DB down")
+
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", _boom)
         assert _lookup_scoped_key_from_db("raw") is None
 
@@ -588,13 +592,16 @@ class TestLookupScopedKeyFromDb:
         class _ExplodingSession:
             def __init__(self):
                 self.closed = False
+
             def execute(self, *a, **k):
                 raise RuntimeError("bad query")
+
             def close(self):
                 self.closed = True
 
         session = _ExplodingSession()
         import shared.database as shared_db
+
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: session)
         assert _lookup_scoped_key_from_db("raw") is None
         assert session.closed is True
@@ -622,12 +629,14 @@ def _build_app(dep=None):
 
 def _dep_default(dep):
     from fastapi import Depends
+
     return Depends(dep or get_ingestion_principal)
 
 
 class TestGetIngestionPrincipal:
     def test_legacy_master_key_accepted(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
         app = _build_app()
@@ -643,6 +652,7 @@ class TestGetIngestionPrincipal:
 
     def test_legacy_master_key_binds_valid_tenant_header(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         tenant_id = "11111111-1111-1111-1111-111111111111"
         monkeypatch.setenv("API_KEY", "master-secret")
@@ -659,10 +669,9 @@ class TestGetIngestionPrincipal:
         assert resp.json()["auth_mode"] == "legacy_master"
         assert resp.json()["tenant_id"] == tenant_id
 
-    def test_missing_header_with_api_key_returns_401(
-        self, _strip_env, monkeypatch
-    ):
+    def test_missing_header_with_api_key_returns_401(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
         app = _build_app()
@@ -672,10 +681,9 @@ class TestGetIngestionPrincipal:
         # Failure was recorded
         assert len(authz._auth_failures.get("testclient", [])) == 1
 
-    def test_invalid_header_falls_through_to_require_then_db_then_401(
-        self, _strip_env, monkeypatch
-    ):
+    def test_invalid_header_falls_through_to_require_then_db_then_401(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
 
@@ -692,6 +700,7 @@ class TestGetIngestionPrincipal:
 
     def test_scoped_key_accepted(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
 
@@ -713,6 +722,7 @@ class TestGetIngestionPrincipal:
 
     def test_require_raises_but_db_fallback_succeeds(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
 
@@ -736,10 +746,9 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "scoped_key_db_fallback"
 
-    def test_no_api_key_configured_no_header_dev_open(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_configured_no_header_dev_open(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         # API_KEY stripped via _strip_env
         monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
@@ -749,10 +758,9 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "dev_open"
 
-    def test_no_api_key_configured_no_header_production_401(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_configured_no_header_production_401(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setattr(authz, "_is_dev_env", lambda: False)
         app = _build_app()
@@ -760,31 +768,25 @@ class TestGetIngestionPrincipal:
         resp = client.get("/whoami")
         assert resp.status_code == 401
 
-    def test_no_api_key_header_present_scoped_key_works(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_header_present_scoped_key_works(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
         async def _fake_require(request, x_regengine_api_key):
-            return SimpleNamespace(
-                key_id="s-1", scopes=["fda.read"], tenant_id="t"
-            )
+            return SimpleNamespace(key_id="s-1", scopes=["fda.read"], tenant_id="t")
 
         monkeypatch.setattr(authz, "require_api_key", _fake_require)
         app = _build_app()
         client = TestClient(app)
-        resp = client.get(
-            "/whoami", headers={"X-RegEngine-API-Key": "scoped-xyz"}
-        )
+        resp = client.get("/whoami", headers={"X-RegEngine-API-Key": "scoped-xyz"})
         assert resp.status_code == 200
         assert resp.json()["key_id"] == "s-1"
 
-    def test_no_api_key_header_present_require_fails_db_fallback(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_header_present_require_fails_db_fallback(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
@@ -796,7 +798,9 @@ class TestGetIngestionPrincipal:
             authz,
             "_lookup_scoped_key_from_db",
             lambda raw: IngestionPrincipal(
-                key_id="db-x", scopes=["fda.read"], tenant_id="t",
+                key_id="db-x",
+                scopes=["fda.read"],
+                tenant_id="t",
                 auth_mode="scoped_key_db_fallback",
             ),
         )
@@ -806,10 +810,9 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "scoped_key_db_fallback"
 
-    def test_no_api_key_header_present_both_fail_dev_open(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_header_present_both_fail_dev_open(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setattr(authz, "_is_dev_env", lambda: True)
 
@@ -825,10 +828,9 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "dev_open"
 
-    def test_no_api_key_header_present_both_fail_production_401(
-        self, _strip_env, monkeypatch
-    ):
+    def test_no_api_key_header_present_both_fail_production_401(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setattr(authz, "_is_dev_env", lambda: False)
 
@@ -845,6 +847,7 @@ class TestGetIngestionPrincipal:
 
     def test_blocked_ip_returns_429(self, _strip_env, monkeypatch):
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
 
@@ -861,6 +864,7 @@ class TestGetIngestionPrincipal:
     def test_client_none_uses_unknown_host(self, _strip_env, monkeypatch):
         """Hit the `request.client is None → 'unknown'` branch directly."""
         from app import config as cfg
+
         cfg.get_settings.cache_clear()
         monkeypatch.setenv("API_KEY", "master-secret")
 
@@ -872,9 +876,8 @@ class TestGetIngestionPrincipal:
         req = MagicMock(spec=Request)
         req.client = None
         import asyncio
-        result = asyncio.run(
-            get_ingestion_principal(req, x_regengine_api_key="anything")
-        )
+
+        result = asyncio.run(get_ingestion_principal(req, x_regengine_api_key="anything"))
         assert result.key_id == "k"
 
 
@@ -895,6 +898,7 @@ class TestRequirePermission:
         app.dependency_overrides[get_ingestion_principal] = _stub_principal
 
         consumed: list = []
+
         def _consume(*, tenant_id, bucket_suffix, limit, window):
             consumed.append((tenant_id, bucket_suffix, limit, window))
             return (allowed, limit - 1 if allowed else 0)
@@ -942,9 +946,7 @@ class TestRequirePermission:
 
     def test_cross_tenant_403(self, monkeypatch):
         # Principal tenant t-a but ?tenant_id=t-b, no wildcard
-        p = IngestionPrincipal(
-            key_id="k", scopes=["fda.export"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["fda.export"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-b")
@@ -952,9 +954,7 @@ class TestRequirePermission:
         assert "Tenant mismatch" in resp.json()["detail"]
 
     def test_cross_tenant_header_403(self, monkeypatch):
-        p = IngestionPrincipal(
-            key_id="k", scopes=["fda.export"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["fda.export"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected", headers={"X-RegEngine-Tenant-ID": "t-b"})
@@ -962,9 +962,7 @@ class TestRequirePermission:
         assert "Tenant mismatch" in resp.json()["detail"]
 
     def test_conflicting_query_and_header_400(self, monkeypatch):
-        p = IngestionPrincipal(
-            key_id="k", scopes=["fda.export"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["fda.export"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-a", headers={"X-Tenant-ID": "t-b"})
@@ -977,9 +975,7 @@ class TestRequirePermission:
         breadth, not tenant breadth. Regression for the 2026-05 audit
         finding (authz.py:385). Internal master/dev callers are unaffected
         because they carry ``tenant_id=None``."""
-        p = IngestionPrincipal(
-            key_id="k", scopes=["*"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["*"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-b")
@@ -989,9 +985,7 @@ class TestRequirePermission:
     def test_same_tenant_wildcard_still_works(self, monkeypatch):
         """Regression guard: removing the wildcard bypass must not break
         same-tenant access for ``*``-scope principals."""
-        p = IngestionPrincipal(
-            key_id="k", scopes=["*"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["*"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-a")
@@ -1003,7 +997,9 @@ class TestRequirePermission:
         ``principal.tenant_id`` guard, not via the wildcard short-circuit
         that the audit removed."""
         p = IngestionPrincipal(
-            key_id="legacy-master", scopes=["*"], tenant_id=None,
+            key_id="legacy-master",
+            scopes=["*"],
+            tenant_id=None,
             auth_mode="legacy_master",
         )
         app, _ = self._app_with(p, monkeypatch)
@@ -1012,9 +1008,7 @@ class TestRequirePermission:
         assert resp.status_code == 200
 
     def test_same_tenant_query_ok(self, monkeypatch):
-        p = IngestionPrincipal(
-            key_id="k", scopes=["fda.export"], tenant_id="t-a"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["fda.export"], tenant_id="t-a")
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)
         resp = client.get("/protected?tenant_id=t-a")
@@ -1029,9 +1023,7 @@ class TestRequirePermission:
         assert resp.status_code == 200
 
     def test_rate_limit_exceeded_429(self, monkeypatch):
-        p = IngestionPrincipal(
-            key_id="k", scopes=["fda.export"], tenant_id="t"
-        )
+        p = IngestionPrincipal(key_id="k", scopes=["fda.export"], tenant_id="t")
         app, _ = self._app_with(p, monkeypatch, allowed=False)
         client = TestClient(app)
         resp = client.get("/protected")

@@ -15,6 +15,7 @@ extracts.
 ``from services.admin.app.auth_routes import _slugify_tenant_name``
 imports continue to resolve unchanged.
 """
+
 from __future__ import annotations
 
 import re

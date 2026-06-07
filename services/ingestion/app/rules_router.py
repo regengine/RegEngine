@@ -21,11 +21,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-
-from .authz import require_permission, IngestionPrincipal
-from .tenant_validation import validate_tenant_id, resolve_tenant
-from shared.pagination import PaginationParams
 from shared.database import get_db_session
+from shared.pagination import PaginationParams
+
+from .authz import IngestionPrincipal, require_permission
+from .tenant_validation import resolve_tenant, validate_tenant_id
 
 # Backwards-compat alias: tests and older callers override this private name
 # via ``app.dependency_overrides[_get_db_session]``. Keep it pointing at the
@@ -45,17 +45,18 @@ def _get_engine(db_session):
     if db_session is None:
         _db_unavailable()
     from shared.rules_engine import RulesEngine
+
     return RulesEngine(db_session)
-
-
 
 
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
 
+
 class EvaluateEventRequest(BaseModel):
     """Event data to evaluate against compliance rules."""
+
     event_id: str
     event_type: str
     traceability_lot_code: str
@@ -91,6 +92,7 @@ class EvaluationResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "",
@@ -295,6 +297,7 @@ async def get_event_evaluations(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     from sqlalchemy import text
+
     query = """
         SELECT e.evaluation_id, e.rule_id, e.rule_version, e.result,
                e.why_failed, e.evidence_fields_inspected, e.confidence,
@@ -345,6 +348,7 @@ async def seed_rules(
         _db_unavailable()
     try:
         from shared.rules_engine import seed_rule_definitions
+
         count = seed_rule_definitions(db_session)
     except RuntimeError:
         _db_unavailable()

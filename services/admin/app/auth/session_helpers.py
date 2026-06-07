@@ -13,6 +13,7 @@ when the handler extractions land in subsequent sprints.
 ``ar._persist_session(...)`` calls from ``test_auth_routes_1333.py``
 continue to work unchanged.
 """
+
 from __future__ import annotations
 
 import asyncio

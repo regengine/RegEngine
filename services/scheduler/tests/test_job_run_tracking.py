@@ -79,15 +79,17 @@ class TestJobRunListener:
     def _mk_scheduler_with_listener(self):
         import main as scheduler_main
 
-        with patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()), \
-             patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()), \
-             patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()), \
-             patch.object(scheduler_main, "StateManager", return_value=MagicMock()), \
-             patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()), \
-             patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()), \
-             patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()), \
-             patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()), \
-             patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()):
+        with (
+            patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
+            patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
+            patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
+            patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
+            patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
+            patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
+            patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
+            patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
+            patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+        ):
             svc = scheduler_main.SchedulerService()
         svc.scheduler = MagicMock()
         return svc

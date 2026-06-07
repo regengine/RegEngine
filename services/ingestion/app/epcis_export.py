@@ -16,18 +16,19 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from shared.database import get_db_safe
+from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
 from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from .webhook_compat import require_tenant_context
-from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
 
 logger = logging.getLogger("epcis-export")
 
 
-
-def _query_tenant_events(tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None) -> list[dict]:
+def _query_tenant_events(
+    tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
+) -> list[dict]:
     """Query real CTE events from fsma.cte_events for export."""
     db = get_db_safe()
     try:
@@ -71,7 +72,7 @@ def _query_tenant_events(tenant_id: str, lot_code: str | None, date_from: str | 
                 LEFT JOIN fsma.cte_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
                 LEFT JOIN fsma.cte_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
                 LEFT JOIN fsma.cte_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
-                WHERE {' AND '.join(where)}
+                WHERE {" AND ".join(where)}
                 ORDER BY e.event_timestamp DESC
                 LIMIT 5000
             """),
@@ -94,6 +95,7 @@ _CTE_TO_BIZSTEP = {
     "cooling": "urn:epcglobal:cbv:bizstep:storing",
     "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:landing",
 }
+
 
 def _validate_epcis_document(doc: dict) -> list[str]:
     """Validate an EPCIS 2.0 JSON-LD document structure.
@@ -121,7 +123,13 @@ def _validate_epcis_document(doc: dict) -> list[str]:
     if not event_list:
         errors.append("epcisBody.eventList is empty or missing")
 
-    valid_event_types = {"ObjectEvent", "AggregationEvent", "TransactionEvent", "TransformationEvent", "AssociationEvent"}
+    valid_event_types = {
+        "ObjectEvent",
+        "AggregationEvent",
+        "TransactionEvent",
+        "TransformationEvent",
+        "AssociationEvent",
+    }
     valid_actions = {"ADD", "OBSERVE", "DELETE"}
     bizstep_prefix = "urn:epcglobal:cbv:bizstep:"
 
@@ -147,6 +155,7 @@ router = APIRouter(prefix="/api/v1/export", tags=["EPCIS & FDA Export"])
 
 class ExportRequest(BaseModel):
     """Request for data export."""
+
     tenant_id: str = Field(..., description="Tenant ID")
     format: str = Field("epcis", description="Export format: epcis, fda, csv")
     lot_code: Optional[str] = Field(None, description="Filter by specific TLC")
@@ -167,13 +176,15 @@ SAMPLE_EPCIS_EVENTS = [
         "readPoint": {"id": "urn:epc:id:sgln:0614141.00000.0"},
         "bizLocation": {"id": "urn:epc:id:sgln:0614141.00000.0"},
         "extension": {
-            "quantityList": [{
-                "epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001",
-                "quantity": 200,
-                "uom": "CS"
-            }],
-            "sourceList": [{"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}],
-            "destinationList": [{"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}],
+            "quantityList": [
+                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
+            ],
+            "sourceList": [
+                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}
+            ],
+            "destinationList": [
+                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}
+            ],
         },
         "regengine:sha256": "a3f8c1d2e4b5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
         "regengine:chainHash": "b4c9e2c7d5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
@@ -189,15 +200,10 @@ SAMPLE_EPCIS_EVENTS = [
         "readPoint": {"id": "urn:epc:id:sgln:0614141.00001.0"},
         "bizLocation": {"id": "urn:epc:id:sgln:0614141.00001.0"},
         "extension": {
-            "quantityList": [{
-                "epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001",
-                "quantity": 200,
-                "uom": "CS"
-            }],
-            "ilmd": {
-                "regengine:temperatureCelsius": 3.2,
-                "regengine:inspectionResult": "PASS"
-            }
+            "quantityList": [
+                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
+            ],
+            "ilmd": {"regengine:temperatureCelsius": 3.2, "regengine:inspectionResult": "PASS"},
         },
         "regengine:sha256": "c5dae3d8e6f7a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4",
         "regengine:chainHash": "d6ebf4e9f7a8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5",
@@ -234,14 +240,17 @@ async def export_epcis(
                 "eventTime": ts.isoformat() if ts else now.isoformat(),
                 "eventTimeZoneOffset": "-08:00",
                 "action": r["epcis_action"] or "OBSERVE",
-                "bizStep": r["epcis_biz_step"] or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
+                "bizStep": r["epcis_biz_step"]
+                or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
                 "readPoint": {"id": f"urn:epc:id:sgln:{r['location_gln'] or '0000000000000'}.0"},
                 "extension": {
-                    "quantityList": [{
-                        "epcClass": f"urn:epc:class:lgtin:0000000.000000.{r['traceability_lot_code'] or 'UNKNOWN'}",
-                        "quantity": r["quantity"] or 0,
-                        "uom": r["unit_of_measure"] or "EA",
-                    }],
+                    "quantityList": [
+                        {
+                            "epcClass": f"urn:epc:class:lgtin:0000000.000000.{r['traceability_lot_code'] or 'UNKNOWN'}",
+                            "quantity": r["quantity"] or 0,
+                            "uom": r["unit_of_measure"] or "EA",
+                        }
+                    ],
                 },
                 "regengine:sha256": r["sha256_hash"] or "",
             }
@@ -252,7 +261,7 @@ async def export_epcis(
     epcis_document = {
         "@context": [
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
-            {"regengine": "https://regengine.co/ns/"}
+            {"regengine": "https://regengine.co/ns/"},
         ],
         "id": f"urn:uuid:regengine-export-{tenant_id}-{now.strftime('%Y%m%d')}",
         "type": "EPCISDocument",
@@ -270,7 +279,7 @@ async def export_epcis(
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
             **({"regengine:disclaimer": SAMPLE_EXPORT_DISCLAIMER} if data_source == "sample" else {}),
-        }
+        },
     }
 
     if validate:
@@ -282,6 +291,7 @@ async def export_epcis(
         }
 
     from shared.fda_export import safe_filename
+
     response_headers = {
         "Content-Disposition": (
             'attachment; filename="'
@@ -300,10 +310,7 @@ async def export_epcis(
     if validate:
         response_headers["X-RegEngine-Schema-Valid"] = "true" if not validation_errors else "false"
 
-    return JSONResponse(
-        content=epcis_document,
-        headers=response_headers
-    )
+    return JSONResponse(content=epcis_document, headers=response_headers)
 
 
 @router.post(
@@ -327,27 +334,33 @@ async def export_fda(
 
     if rows:
         # Build CSV from real data
-        lines = ["CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"]
+        lines = [
+            "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
+        ]
         for r in rows:
             ts = r["event_timestamp"]
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
             time_str = ts.strftime("%H:%M:%SZ") if ts else ""
-            lines.append(",".join([
-                str(r["event_type"] or "").upper(),
-                str(r["traceability_lot_code"] or ""),
-                str(r["product_description"] or "").replace(",", ";"),
-                str(r["quantity"] or ""),
-                str(r["unit_of_measure"] or ""),
-                date_str,
-                time_str,
-                str(r["ship_from"] or r["location_name"] or "").replace(",", ";"),
-                str(r["ship_from_gln"] or r["location_gln"] or ""),
-                str(r["ship_to"] or "").replace(",", ";"),
-                str(r["ship_to_gln"] or ""),
-                str(r["carrier"] or "").replace(",", ";"),
-                str(r["temperature_c"] or ""),
-                str(r["sha256_hash"] or ""),
-            ]))
+            lines.append(
+                ",".join(
+                    [
+                        str(r["event_type"] or "").upper(),
+                        str(r["traceability_lot_code"] or ""),
+                        str(r["product_description"] or "").replace(",", ";"),
+                        str(r["quantity"] or ""),
+                        str(r["unit_of_measure"] or ""),
+                        date_str,
+                        time_str,
+                        str(r["ship_from"] or r["location_name"] or "").replace(",", ";"),
+                        str(r["ship_from_gln"] or r["location_gln"] or ""),
+                        str(r["ship_to"] or "").replace(",", ";"),
+                        str(r["ship_to_gln"] or ""),
+                        str(r["carrier"] or "").replace(",", ";"),
+                        str(r["temperature_c"] or ""),
+                        str(r["sha256_hash"] or ""),
+                    ]
+                )
+            )
         csv_content = "\n".join(lines) + "\n"
         event_count = len(rows)
     else:
@@ -365,6 +378,7 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
     # EPIC-L (#1655): route filename through the shared safe_filename
     # builder so tenant_id can't carry CRLF / quotes into the header value.
     from shared.fda_export import safe_filename
+
     fda_headers: dict[str, str] = {
         "Content-Disposition": (
             'attachment; filename="'

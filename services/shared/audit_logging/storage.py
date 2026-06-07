@@ -117,15 +117,9 @@ class InMemoryAuditStorage(AuditStorageBackend):
                 continue
             if actor_id and event.actor.actor_id != actor_id:
                 continue
-            if resource_type and (
-                not event.resource or
-                event.resource.resource_type != resource_type
-            ):
+            if resource_type and (not event.resource or event.resource.resource_type != resource_type):
                 continue
-            if resource_id and (
-                not event.resource or
-                event.resource.resource_id != resource_id
-            ):
+            if resource_id and (not event.resource or event.resource.resource_id != resource_id):
                 continue
             if tenant_id and event.actor.tenant_id != tenant_id:
                 continue
@@ -134,7 +128,7 @@ class InMemoryAuditStorage(AuditStorageBackend):
 
             results.append(event)
 
-        return results[offset:offset + limit]
+        return results[offset : offset + limit]
 
     async def get_by_id(self, event_id: str) -> Optional[AuditEvent]:
         """Get event by ID."""

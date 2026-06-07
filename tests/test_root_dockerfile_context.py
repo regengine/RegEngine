@@ -4,7 +4,6 @@ import shlex
 import subprocess
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 
@@ -26,11 +25,7 @@ def _copy_sources_from_root_dockerfile() -> list[str]:
         if any(part.startswith("--from=") for part in parts[1:]):
             continue
 
-        paths = [
-            part
-            for part in parts[1:]
-            if not part.startswith("--")
-        ]
+        paths = [part for part in parts[1:] if not part.startswith("--")]
         sources.extend(paths[:-1])
 
     return sources
@@ -50,7 +45,4 @@ def test_root_dockerfile_copy_sources_exist_in_head_archive():
         if result.returncode != 0:
             missing.append(source)
 
-    assert missing == [], (
-        "Root Dockerfile references paths that are not present in the clean "
-        f"HEAD archive: {missing}"
-    )
+    assert missing == [], f"Root Dockerfile references paths that are not present in the clean HEAD archive: {missing}"

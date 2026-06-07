@@ -15,12 +15,11 @@ from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import bindparam, text
-
 from shared.api_key_store import APIKeyResponse, api_key_hash_candidates
 from shared.auth import APIKey, require_api_key
 from shared.permissions import has_permission
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+from sqlalchemy import bindparam, text
 
 logger = logging.getLogger("authz")
 
@@ -29,7 +28,7 @@ logger = logging.getLogger("authz")
 # Auth failure rate limiting — blocks IPs after repeated failed auth attempts
 # ---------------------------------------------------------------------------
 _AUTH_FAIL_WINDOW = 300  # 5-minute window
-_AUTH_FAIL_MAX = 15      # max failures before blocking
+_AUTH_FAIL_MAX = 15  # max failures before blocking
 _auth_failures: dict[str, list[float]] = {}
 _auth_failures_lock = threading.Lock()
 
@@ -104,10 +103,7 @@ def _principal_rate_limit_role(principal: IngestionPrincipal) -> str:
     normalized_scopes = [_normalize_permission(scope) for scope in principal.scopes]
     if has_permission(normalized_scopes, "*") or any(scope.startswith("admin") for scope in normalized_scopes):
         return "admin"
-    if any(
-        scope.endswith((".write", ".ingest", ".export", ".verify"))
-        for scope in normalized_scopes
-    ):
+    if any(scope.endswith((".write", ".ingest", ".export", ".verify")) for scope in normalized_scopes):
         return "operator"
     return "viewer"
 
@@ -238,11 +234,7 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
 
 def _tenant_id_from_master_header(request: Request) -> Optional[str]:
     """Return a validated X-Tenant-ID for legacy master-key callers, if present."""
-    tenant_id = (
-        request.headers.get("X-Tenant-ID")
-        or request.headers.get("x-tenant-id")
-        or ""
-    ).strip()
+    tenant_id = (request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id") or "").strip()
     if not tenant_id:
         return None
     try:
@@ -430,11 +422,7 @@ def require_permission(required_permission: str):
             # Fixes the wildcard-bypass finding in the 2026-05 audit
             # (services/ingestion/app/authz.py:385).
             requested_tenant = _requested_tenant_context(request)
-            if (
-                requested_tenant
-                and principal.tenant_id
-                and requested_tenant != principal.tenant_id
-            ):
+            if requested_tenant and principal.tenant_id and requested_tenant != principal.tenant_id:
                 raise HTTPException(
                     status_code=403,
                     detail="Tenant mismatch: your API key does not have access to this tenant.",

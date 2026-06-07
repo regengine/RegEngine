@@ -29,6 +29,7 @@ if str(_REPO_ADMIN) not in sys.path:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _stub_request():
     """Build a minimal starlette Request for use when calling handlers directly."""
     try:
@@ -56,6 +57,7 @@ def _stub_request():
 def disable_slowapi(monkeypatch):
     try:
         import slowapi.extension as _se
+
         monkeypatch.setattr(_se.Limiter, "_check_request_limit", lambda *a, **k: None)
     except Exception:
         pass
@@ -109,15 +111,15 @@ def _make_role():
 def _make_db(user=None, memberships=None, sessions=None, recovery_code_count=0, audit_rows=None):
     """Return a mock SQLAlchemy Session pre-configured with test data."""
     from app.sqlalchemy_models import (
+        AuditLogModel,
         MembershipModel,
         MFARecoveryCodeModel,
         RoleModel,
         SessionModel,
-        AuditLogModel,
-        SupplierFacilityModel,
-        SupplierTraceabilityLotModel,
         SupplierCTEEventModel,
+        SupplierFacilityModel,
         SupplierFunnelEventModel,
+        SupplierTraceabilityLotModel,
         UserModel,
     )
 
@@ -174,11 +176,13 @@ def _make_db(user=None, memberships=None, sessions=None, recovery_code_count=0, 
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestExportPersonalData:
     """Unit tests for the export_personal_data endpoint handler."""
 
     def _get_handler(self):
         import app.data_export_routes as m
+
         return m.export_personal_data
 
     @pytest.mark.asyncio
@@ -198,8 +202,9 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_response_does_not_contain_password_hash(self):
         """password_hash must never appear anywhere in the export payload."""
-        from app.data_export_routes import _build_user_export
         import json
+
+        from app.data_export_routes import _build_user_export
 
         db = _make_db()
         data = _build_user_export(db, str(_USER_ID))
@@ -211,8 +216,9 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_response_does_not_contain_totp_secret(self):
         """mfa_secret / mfa_secret_ciphertext must never appear in the export."""
-        from app.data_export_routes import _build_user_export
         import json
+
+        from app.data_export_routes import _build_user_export
 
         user = _make_user(mfa_secret="SUPER_SECRET_TOTP", mfa_secret_ciphertext=None)
         db = _make_db(user=user)
@@ -231,6 +237,7 @@ class TestExportPersonalData:
     async def test_rate_limit_decorator_applied(self):
         """The endpoint must carry the @limiter.limit('1/day') decorator."""
         import app.data_export_routes as m
+
         handler = m.export_personal_data
         # slowapi stores the rate limit string in the handler's __dict__
         # or as _rate_limits attribute on the decorated function.
@@ -241,9 +248,7 @@ class TestExportPersonalData:
         # rate limit annotation exists on the handler.
         rate_annotations = getattr(handler, "_rate_limits", None)
         if rate_annotations is not None:
-            assert any("1/day" in str(r) for r in rate_annotations), (
-                f"Expected 1/day limit, got: {rate_annotations}"
-            )
+            assert any("1/day" in str(r) for r in rate_annotations), f"Expected 1/day limit, got: {rate_annotations}"
         else:
             # Some slowapi versions store limits differently; just assert
             # the handler is defined in the correct module with the right name.
@@ -260,12 +265,15 @@ class TestExportPersonalData:
         db = _make_db()
         request = _stub_request()
 
-        with patch.object(
-            m.TenantContext, "get_tenant_context", return_value=_TENANT_ID
-        ), patch.object(
-            m, "_build_user_export",
-            return_value={"account": {"email": "user@example.com"}, "memberships": []},
-        ), patch.object(m.AuditLogger, "log_event") as mock_log:
+        with (
+            patch.object(m.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
+            patch.object(
+                m,
+                "_build_user_export",
+                return_value={"account": {"email": "user@example.com"}, "memberships": []},
+            ),
+            patch.object(m.AuditLogger, "log_event") as mock_log,
+        ):
             mock_log.return_value = 42
             await m.export_personal_data(
                 request=request,
@@ -322,8 +330,9 @@ class TestExportPersonalData:
     @pytest.mark.asyncio
     async def test_sessions_exclude_refresh_tokens(self):
         """Session data must not include refresh_token_hash."""
-        from app.data_export_routes import _build_user_export
         import json
+
+        from app.data_export_routes import _build_user_export
 
         session = MagicMock()
         session.id = uuid.uuid4()

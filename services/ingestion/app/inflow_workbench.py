@@ -7,11 +7,11 @@ and explicit commit-gate decisions between sandbox/staging/evidence modes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
 import uuid
-import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -20,10 +20,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from .sandbox.models import SandboxResponse
 from .authz import IngestionPrincipal, require_permission
+from .sandbox.models import SandboxResponse
 from .shared.tenant_resolution import resolve_principal_tenant_id
-
 
 router = APIRouter(prefix="/api/v1/inflow-workbench", tags=["Inflow Workbench"])
 require_inflow_read = require_permission("inflow.read")
@@ -294,18 +293,22 @@ def _db_list_scenarios(tenant_id: str) -> Optional[list[WorkbenchScenario]]:
         return None
     try:
         _set_tenant_context(db, tenant_id)
-        rows = db.execute(
-            text(
-                """
+        rows = (
+            db.execute(
+                text(
+                    """
                 SELECT scenario_id, tenant_id::text AS tenant_id, name, outcome,
                        record_count_label, csv_text, created_at, built_in
                 FROM fsma.inflow_workbench_scenarios
                 WHERE tenant_id = CAST(:tenant_id AS uuid)
                 ORDER BY created_at DESC
                 """
-            ),
-            {"tenant_id": tenant_id},
-        ).mappings().all()
+                ),
+                {"tenant_id": tenant_id},
+            )
+            .mappings()
+            .all()
+        )
         return [
             WorkbenchScenario(
                 id=row["scenario_id"],
@@ -496,9 +499,10 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
         return None
     try:
         _set_tenant_context(db, tenant_uuid)
-        row = db.execute(
-            text(
-                """
+        row = (
+            db.execute(
+                text(
+                    """
                 SELECT run_id, tenant_id::text AS tenant_id, source, csv_text,
                        result_payload, readiness_payload, commit_gate_payload,
                        input_hash, result_hash, saved_at,
@@ -513,9 +517,12 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
                 FROM fsma.inflow_workbench_runs
                 WHERE tenant_id = CAST(:tenant_id AS uuid) AND run_id = :run_id
                 """
-            ),
-            {"run_id": run_id, "tenant_id": tenant_uuid},
-        ).mappings().first()
+                ),
+                {"run_id": run_id, "tenant_id": tenant_uuid},
+            )
+            .mappings()
+            .first()
+        )
         if not row:
             return None
         fix_queue = _db_list_fix_queue(tenant_uuid, run_id=run_id) or []
@@ -537,31 +544,39 @@ def _db_list_fix_queue(tenant_id: str, run_id: Optional[str] = None) -> Optional
     try:
         _set_tenant_context(db, tenant_uuid)
         if run_id:
-            rows = db.execute(
-                text(
-                    """
+            rows = (
+                db.execute(
+                    text(
+                        """
                     SELECT item_id, run_id, tenant_id::text AS tenant_id, title, owner,
                            status, severity, impact, source, created_at, updated_at
                     FROM fsma.inflow_workbench_fix_items
                     WHERE tenant_id = CAST(:tenant_id AS uuid) AND run_id = :run_id
                     ORDER BY created_at DESC
                     """
-                ),
-                {"tenant_id": tenant_uuid, "run_id": run_id},
-            ).mappings().all()
+                    ),
+                    {"tenant_id": tenant_uuid, "run_id": run_id},
+                )
+                .mappings()
+                .all()
+            )
         else:
-            rows = db.execute(
-                text(
-                    """
+            rows = (
+                db.execute(
+                    text(
+                        """
                     SELECT item_id, run_id, tenant_id::text AS tenant_id, title, owner,
                            status, severity, impact, source, created_at, updated_at
                     FROM fsma.inflow_workbench_fix_items
                     WHERE tenant_id = CAST(:tenant_id AS uuid)
                     ORDER BY created_at DESC
                     """
-                ),
-                {"tenant_id": tenant_uuid},
-            ).mappings().all()
+                    ),
+                    {"tenant_id": tenant_uuid},
+                )
+                .mappings()
+                .all()
+            )
         return [
             FixQueueItem(
                 id=row["item_id"],
@@ -625,9 +640,10 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
         return None
     try:
         _set_tenant_context(db, tenant_uuid)
-        row = db.execute(
-            text(
-                """
+        row = (
+            db.execute(
+                text(
+                    """
                 SELECT run_id, tenant_id::text AS tenant_id, readiness_payload,
                        commit_gate_payload, saved_at, source
                 FROM fsma.inflow_workbench_runs
@@ -635,22 +651,28 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
                 ORDER BY saved_at DESC
                 LIMIT 1
                 """
-            ),
-            {"tenant_id": tenant_uuid},
-        ).mappings().first()
+                ),
+                {"tenant_id": tenant_uuid},
+            )
+            .mappings()
+            .first()
+        )
         if not row:
             return WorkbenchReadinessSnapshot(tenant_id=tenant_uuid)
-        unresolved = db.execute(
-            text(
-                """
+        unresolved = (
+            db.execute(
+                text(
+                    """
                 SELECT count(*) AS total
                 FROM fsma.inflow_workbench_fix_items
                 WHERE tenant_id = CAST(:tenant_id AS uuid)
                   AND status IN ('open', 'waiting')
                 """
-            ),
-            {"tenant_id": tenant_uuid},
-        ).scalar() or 0
+                ),
+                {"tenant_id": tenant_uuid},
+            ).scalar()
+            or 0
+        )
         readiness = ReadinessSummary(**_json_value(row["readiness_payload"]))
         gate = CommitGateDecision(**_json_value(row["commit_gate_payload"]))
         return WorkbenchReadinessSnapshot(
@@ -673,11 +695,7 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
 def _file_readiness_snapshot(tenant_id: str) -> WorkbenchReadinessSnapshot:
     with _STORE_LOCK:
         store = _read_store()
-    runs = [
-        WorkbenchRun(**run)
-        for run in store["runs"].values()
-        if run.get("tenant_id") == tenant_id
-    ]
+    runs = [WorkbenchRun(**run) for run in store["runs"].values() if run.get("tenant_id") == tenant_id]
     if not runs:
         return WorkbenchReadinessSnapshot(tenant_id=tenant_id)
     latest = max(runs, key=lambda run: run.saved_at)
@@ -722,7 +740,11 @@ def build_readiness_summary(result: SandboxResponse) -> ReadinessSummary:
     kde_score = max(0, 100 - min(100, counts["kde_errors"] * 12))
     rule_score = max(0, 100 - min(100, counts["rule_failures"] * 18))
     duplicate_score = max(0, 100 - min(100, counts["warnings"] * 10))
-    export_score = 100 if not result.submission_blocked and counts["non_compliant"] == 0 else max(0, 70 - counts["blocking"] * 35 - counts["non_compliant"] * 8)
+    export_score = (
+        100
+        if not result.submission_blocked and counts["non_compliant"] == 0
+        else max(0, 70 - counts["blocking"] * 35 - counts["non_compliant"] * 8)
+    )
     score = round(pass_rate * 0.3 + kde_score * 0.25 + rule_score * 0.25 + duplicate_score * 0.1 + export_score * 0.1)
 
     if score >= 90:
@@ -738,11 +760,36 @@ def build_readiness_summary(result: SandboxResponse) -> ReadinessSummary:
         score=max(0, min(100, score)),
         label=label,
         components=[
-            ReadinessComponent(id="kde_completeness", label="KDE completeness", score=kde_score, detail=f"{counts['kde_errors']} KDE fixes found"),
-            ReadinessComponent(id="rule_pass_rate", label="Rule pass rate", score=rule_score, detail=f"{counts['rule_failures']} rule failures found"),
-            ReadinessComponent(id="cte_lifecycle", label="CTE lifecycle coverage", score=pass_rate, detail=f"{counts['compliant']} of {counts['events']} events compliant"),
-            ReadinessComponent(id="duplicate_risk", label="Duplicate/idempotency risk", score=duplicate_score, detail=f"{counts['warnings']} duplicate or entity warnings"),
-            ReadinessComponent(id="export_readiness", label="Export readiness", score=export_score, detail="Blocked submissions cannot support FDA export"),
+            ReadinessComponent(
+                id="kde_completeness",
+                label="KDE completeness",
+                score=kde_score,
+                detail=f"{counts['kde_errors']} KDE fixes found",
+            ),
+            ReadinessComponent(
+                id="rule_pass_rate",
+                label="Rule pass rate",
+                score=rule_score,
+                detail=f"{counts['rule_failures']} rule failures found",
+            ),
+            ReadinessComponent(
+                id="cte_lifecycle",
+                label="CTE lifecycle coverage",
+                score=pass_rate,
+                detail=f"{counts['compliant']} of {counts['events']} events compliant",
+            ),
+            ReadinessComponent(
+                id="duplicate_risk",
+                label="Duplicate/idempotency risk",
+                score=duplicate_score,
+                detail=f"{counts['warnings']} duplicate or entity warnings",
+            ),
+            ReadinessComponent(
+                id="export_readiness",
+                label="Export readiness",
+                score=export_score,
+                detail="Blocked submissions cannot support FDA export",
+            ),
         ],
     )
 
@@ -753,11 +800,7 @@ def build_fix_queue(result: SandboxResponse, tenant_id: str, run_id: str) -> lis
 
     for event in result.events:
         defects = list(event.kde_errors or [])
-        defects.extend(
-            defect.rule_title
-            for defect in event.blocking_defects
-            if defect.result == "fail"
-        )
+        defects.extend(defect.rule_title for defect in event.blocking_defects if defect.result == "fail")
         if not defects and event.compliant:
             continue
         first_defect = defects[0] if defects else "failed rule evaluation"
@@ -828,7 +871,8 @@ def decide_commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
             mode=payload.mode,
             allowed=allowed,
             export_eligible=False,
-            reasons=reasons or (["Ready to request authenticated production commit."] if allowed else ["Active fixes remain open."]),
+            reasons=reasons
+            or (["Ready to request authenticated production commit."] if allowed else ["Active fixes remain open."]),
             next_state="production_evidence" if allowed else "preflight",
         )
 
@@ -864,11 +908,7 @@ async def list_scenarios(
 
     with _STORE_LOCK:
         store = _read_store()
-    custom = [
-        item
-        for item in store["scenarios"]
-        if item.get("tenant_id") in {tenant_id, "system"}
-    ]
+    custom = [item for item in store["scenarios"] if item.get("tenant_id") in {tenant_id, "system"}]
     return [WorkbenchScenario(**item) for item in [*BUILT_IN_SCENARIOS, *custom]]
 
 
@@ -1014,11 +1054,7 @@ async def list_fix_queue(
 
     with _STORE_LOCK:
         store = _read_store()
-    items = [
-        FixQueueItem(**item)
-        for item in store["fix_queue"].values()
-        if item.get("tenant_id") == tenant_id
-    ]
+    items = [FixQueueItem(**item) for item in store["fix_queue"].values() if item.get("tenant_id") == tenant_id]
     return sorted(items, key=lambda item: item.created_at, reverse=True)
 
 

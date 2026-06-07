@@ -154,11 +154,8 @@ cd services/ingestion
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Optional: lightweight test-only bootstrap for focused API tests
-pip install -r requirements-dev.txt
+# Install dependencies from the root lockfile (single source of truth)
+pip install --require-hashes -r ../../requirements.lock
 
 # Install Tesseract (macOS)
 brew install tesseract
@@ -196,7 +193,7 @@ If you only need to run the focused simulation + EPCIS API tests locally, you ca
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r services/ingestion/requirements-dev.txt
+python -m pip install --require-hashes -r requirements.lock
 
 python -m pytest \
   services/ingestion/tests/test_recall_simulations_api.py \

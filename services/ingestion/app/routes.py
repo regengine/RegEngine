@@ -19,19 +19,6 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access  # n
 
 from .config import get_settings
 from .pipeline import ScraperPipeline
-from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
-
-# --- State adaptor imports (scaffold) ---
-from .scrapers.state_adaptors.base import (  # noqa: F401  (re-exported for back-compat)
-    FetchedItem,
-    Source,
-)
-from .scrapers.state_adaptors.base import StateRegistryScraper as AdaptorRegistryScraper
-from .scrapers.state_adaptors.cppa import CPPAScraper
-from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
-from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
-from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
-from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
 # NOTE: /v1/ingest/* (regulation, direct, file, url) and their helpers
 # (_process_and_emit, _fetch, _validate_url, _resolve_and_validate,
@@ -65,6 +52,19 @@ from .routes_ingest import (  # noqa: F401
     ingest_url,
     process_regulation_ingestion,
 )
+
+# --- State adaptor imports (scaffold) ---
+from .scrapers.state_adaptors.base import (  # noqa: F401  (re-exported for back-compat)
+    FetchedItem,
+    Source,
+    StateRegistryScraper as AdaptorRegistryScraper,
+)
+from .scrapers.state_adaptors.cppa import CPPAScraper
+from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
+from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
+from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
+from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
+from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
 
 logger = structlog.get_logger("ingestion")
 router = APIRouter(prefix="/api/v1/regulatory", tags=["regulatory-pipeline"], include_in_schema=False)

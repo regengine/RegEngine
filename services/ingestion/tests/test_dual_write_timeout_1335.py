@@ -26,7 +26,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Mirror the production pattern: daemon thread + join(timeout=)
 # ---------------------------------------------------------------------------
@@ -90,6 +89,7 @@ class TestCanonicalWriteTimeoutIsolation:
 
     def test_slow_canonical_write_times_out_and_does_not_block(self):
         """join(timeout=0.1) must return in ~0.1s even if the thread sleeps 10s."""
+
         def slow_work():
             time.sleep(10)  # far longer than timeout
 

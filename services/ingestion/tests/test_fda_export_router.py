@@ -25,6 +25,7 @@ import shared.cte_persistence as shared_cte_persistence
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export.router import router as fda_router
 from app.fda_export_service import _generate_csv
+
 from services.ingestion.tests.authz_overrides import (
     install_active_subscription_override,
     install_ingestion_principal_override,
@@ -429,6 +430,5 @@ def test_export_denied_cross_tenant_via_header(monkeypatch: pytest.MonkeyPatch) 
     # acceptable — both refuse cross-tenant access. The important negative
     # is that the request MUST NOT produce a 200 with tenant B's data.
     assert response.status_code in (400, 403), (
-        f"Conflicting tenant context must be rejected but got {response.status_code}: "
-        f"{response.text}"
+        f"Conflicting tenant context must be rejected but got {response.status_code}: {response.text}"
     )

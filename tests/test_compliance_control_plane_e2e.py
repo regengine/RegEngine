@@ -14,33 +14,31 @@ Runs without database (pure Python logic tests). For live DB tests,
 see the integration test suite with Docker Compose.
 """
 
-import json
 import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import pytest
-
 from shared.canonical_event import (
+    SCHEMA_VERSION,
     CTEType,
     EventStatus,
     IngestionSource,
     ProvenanceMetadata,
     TraceabilityEvent,
-    normalize_webhook_event,
-    normalize_epcis_event,
     normalize_csv_row,
-    SCHEMA_VERSION,
+    normalize_epcis_event,
+    normalize_webhook_event,
 )
 from shared.rules_engine import (
+    FSMA_RULE_SEEDS,
+    EvaluationSummary,
     RuleDefinition,
     RuleEvaluationResult,
-    EvaluationSummary,
     _evaluate_field_presence,
     _evaluate_multi_field_presence,
-    FSMA_RULE_SEEDS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test Data — a realistic 4-event supply chain
@@ -52,6 +50,7 @@ NOW = datetime.now(timezone.utc)
 
 class MockEvent:
     """Simulates an IngestEvent from webhook_models.py."""
+
     def __init__(self, **kwargs):
         self.cte_type = kwargs.get("cte_type", "receiving")
         self.traceability_lot_code = kwargs.get("traceability_lot_code", "00614141000001LOT2026Q1")
@@ -151,6 +150,7 @@ def _build_supply_chain():
 # E2E Test: Full Compliance Loop
 # ---------------------------------------------------------------------------
 
+
 class TestComplianceControlPlaneE2E:
     """
     End-to-end test proving the full compliance loop:
@@ -213,9 +213,10 @@ class TestComplianceControlPlaneE2E:
 
         # Evaluate against receiving-specific rules
         receiving_rules = [
-            r for r in FSMA_RULE_SEEDS
+            r
+            for r in FSMA_RULE_SEEDS
             if "receiving" in (r.get("applicability_conditions", {}).get("cte_types", []))
-               or not r.get("applicability_conditions", {}).get("cte_types", [])
+            or not r.get("applicability_conditions", {}).get("cte_types", [])
         ]
 
         # Check each rule manually
@@ -283,19 +284,18 @@ class TestComplianceControlPlaneE2E:
         }
 
         # Find the "Receiving: Immediate Previous Source Required" rule
-        ips_rule_data = next(
-            r for r in FSMA_RULE_SEEDS
-            if "Immediate Previous Source" in r["title"]
-        )
+        ips_rule_data = next(r for r in FSMA_RULE_SEEDS if "Immediate Previous Source" in r["title"])
         rule = RuleDefinition(
-            rule_id=str(uuid4()), rule_version=1,
+            rule_id=str(uuid4()),
+            rule_version=1,
             title=ips_rule_data["title"],
             description=ips_rule_data.get("description"),
             severity=ips_rule_data["severity"],
             category=ips_rule_data["category"],
             applicability_conditions=ips_rule_data.get("applicability_conditions", {}),
             citation_reference=ips_rule_data.get("citation_reference"),
-            effective_date="2026-01-01", retired_date=None,
+            effective_date="2026-01-01",
+            retired_date=None,
             evaluation_logic=ips_rule_data["evaluation_logic"],
             failure_reason_template=ips_rule_data["failure_reason_template"],
             remediation_suggestion=ips_rule_data.get("remediation_suggestion"),
@@ -325,26 +325,32 @@ class TestComplianceControlPlaneE2E:
             warned=0,
             results=[
                 RuleEvaluationResult(
-                    rule_id="rule-1", rule_version=1,
+                    rule_id="rule-1",
+                    rule_version=1,
                     rule_title="Receiving: TLC Source Reference Required",
-                    severity="critical", result="fail",
+                    severity="critical",
+                    result="fail",
                     why_failed="Receiving event missing tlc source reference required by 21 CFR §1.1345(b)(7)",
                     citation_reference="21 CFR §1.1345(b)(7)",
                     remediation_suggestion="Request the TLC source reference from your immediate supplier",
                     category="kde_presence",
                 ),
                 RuleEvaluationResult(
-                    rule_id="rule-2", rule_version=1,
+                    rule_id="rule-2",
+                    rule_version=1,
                     rule_title="Reference Document Required",
-                    severity="warning", result="fail",
+                    severity="warning",
+                    result="fail",
                     why_failed="Event missing reference document",
                     category="source_reference",
                     remediation_suggestion="Record the BOL or invoice number",
                 ),
                 RuleEvaluationResult(
-                    rule_id="rule-3", rule_version=1,
+                    rule_id="rule-3",
+                    rule_version=1,
                     rule_title="Shipping: TLC Source Reference Required",
-                    severity="warning", result="fail",
+                    severity="warning",
+                    result="fail",
                     why_failed="Shipping event missing TLC source reference",
                     category="lot_linkage",
                     remediation_suggestion="Record who assigned the lot code",
@@ -563,18 +569,28 @@ class TestComplianceControlPlaneE2E:
             cte_types = rule.get("applicability_conditions", {}).get("cte_types", [])
             if not cte_types:
                 # Universal rule — covers all types
-                cte_types_covered.update([
-                    "harvesting", "cooling", "initial_packing",
-                    "first_land_based_receiving", "shipping", "receiving",
-                    "transformation",
-                ])
+                cte_types_covered.update(
+                    [
+                        "harvesting",
+                        "cooling",
+                        "initial_packing",
+                        "first_land_based_receiving",
+                        "shipping",
+                        "receiving",
+                        "transformation",
+                    ]
+                )
             else:
                 cte_types_covered.update(cte_types)
 
         # All 7 FSMA CTE types must be covered by at least one rule
         required_types = {
-            "harvesting", "cooling", "initial_packing",
-            "first_land_based_receiving", "shipping", "receiving",
+            "harvesting",
+            "cooling",
+            "initial_packing",
+            "first_land_based_receiving",
+            "shipping",
+            "receiving",
             "transformation",
         }
         assert required_types.issubset(cte_types_covered), (

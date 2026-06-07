@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import sys
 
-from fastapi import Request
-
 from app.webhook_compat import require_tenant_context
+from fastapi import Request
 from shared.tenant_context import TenantContext, assert_tenant_claim_matches
 
 

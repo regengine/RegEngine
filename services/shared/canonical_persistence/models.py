@@ -9,8 +9,13 @@ class CanonicalStoreResult:
     """Result of persisting a canonical event."""
 
     __slots__ = (
-        "success", "event_id", "sha256_hash", "chain_hash",
-        "idempotent", "errors", "legacy_event_id",
+        "success",
+        "event_id",
+        "sha256_hash",
+        "chain_hash",
+        "idempotent",
+        "errors",
+        "legacy_event_id",
     )
 
     def __init__(self, **kwargs):

@@ -13,11 +13,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from app.subscription_gate import require_active_subscription
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-
-from app.subscription_gate import require_active_subscription
-
 
 app = FastAPI()
 
@@ -58,8 +56,10 @@ def client():
 @pytest.mark.asyncio
 async def test_missing_key_returns_402(client, fresh_circuit):
     """New tenant with no billing key must get 402, not a free pass."""
-    with patch("app.subscription_gate.os.getenv") as getenv_mock, \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv") as getenv_mock,
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         getenv_mock.side_effect = lambda key, default=None: {
             "REDIS_URL": "redis://localhost:6379",
             "SUBSCRIPTION_GATE_FAIL_OPEN": "",
@@ -84,8 +84,10 @@ async def test_redis_error_returns_503_first_call(client, fresh_circuit):
     """Even a single Redis ConnectionError must 503 — no fail-open window."""
     import redis as redis_lib
 
-    with patch("app.subscription_gate.os.getenv") as getenv_mock, \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv") as getenv_mock,
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         getenv_mock.side_effect = lambda key, default=None: {
             "REDIS_URL": "redis://localhost:6379",
             "SUBSCRIPTION_GATE_FAIL_OPEN": "",
@@ -102,8 +104,10 @@ async def test_redis_error_returns_503_first_call(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_no_redis_url_configured_returns_503(client, fresh_circuit):
     """REDIS_URL unset means we cannot check billing -> 503, not 200."""
-    with patch("app.subscription_gate.os.getenv") as getenv_mock, \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv") as getenv_mock,
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         getenv_mock.side_effect = lambda key, default=None: {
             "REDIS_URL": None,
             "SUBSCRIPTION_GATE_FAIL_OPEN": "",
@@ -121,8 +125,10 @@ async def test_no_redis_url_configured_returns_503(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_fail_open_flag_bypasses_gate(client, fresh_circuit):
     """SUBSCRIPTION_GATE_FAIL_OPEN=true skips Redis entirely (incident escape hatch)."""
-    with patch("app.subscription_gate.os.getenv") as getenv_mock, \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv") as getenv_mock,
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         getenv_mock.side_effect = lambda key, default=None: {
             "REDIS_URL": "redis://localhost:6379",
             "SUBSCRIPTION_GATE_FAIL_OPEN": "true",
@@ -139,8 +145,10 @@ async def test_fail_open_flag_bypasses_gate(client, fresh_circuit):
 @pytest.mark.asyncio
 async def test_fail_open_flag_off_by_default(client, fresh_circuit):
     """Default config is fail-closed — matches test above without flag."""
-    with patch("app.subscription_gate.os.getenv") as getenv_mock, \
-         patch("app.subscription_gate.redis_circuit", fresh_circuit):
+    with (
+        patch("app.subscription_gate.os.getenv") as getenv_mock,
+        patch("app.subscription_gate.redis_circuit", fresh_circuit),
+    ):
         getenv_mock.side_effect = lambda key, default=None: {
             "REDIS_URL": "redis://localhost:6379",
             # No fail-open flag set.

@@ -35,6 +35,7 @@ Rollback playbook (when rotating a HIGH key):
   5. Log the change in your security/access-control runbook with the
      old key_id, new key_id, scope diff, and ticket/justification.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -74,15 +75,13 @@ def fetch_keys(database_url: str) -> list[dict]:
         try:
             import psycopg2 as psycopg  # type: ignore
         except ImportError:
-            sys.exit(
-                "ERROR: install psycopg or psycopg2-binary to run this script."
-            )
+            sys.exit("ERROR: install psycopg or psycopg2-binary to run this script.")
 
     # asyncpg-style URL won't work with psycopg — strip the +asyncpg.
     sync_url = database_url
     for pattern in ("postgresql+asyncpg://", "postgres+asyncpg://"):
         if sync_url.startswith(pattern):
-            sync_url = "postgresql://" + sync_url[len(pattern):]
+            sync_url = "postgresql://" + sync_url[len(pattern) :]
 
     rows: list[dict] = []
     with psycopg.connect(sync_url) as conn:  # type: ignore[arg-type]
@@ -142,9 +141,7 @@ def render_table(records: list[dict]) -> str:
             ]
         )
 
-    widths = [
-        max(len(str(r[i])) for r in [headers] + rows) for i in range(len(headers))
-    ]
+    widths = [max(len(str(r[i])) for r in [headers] + rows) for i in range(len(headers))]
     fmt = "  ".join(f"{{:<{w}}}" for w in widths)
     out = [fmt.format(*headers), fmt.format(*("-" * w for w in widths))]
     out.extend(fmt.format(*r) for r in rows)

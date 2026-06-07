@@ -28,6 +28,7 @@ script specific ``pg_locks`` query results, asserting:
 8. No on_leadership_lost callback → heartbeat logs and exits.
 9. Recovery resets the consecutive-failure counter.
 """
+
 from __future__ import annotations
 
 import threading
@@ -36,12 +37,10 @@ from typing import List
 from unittest.mock import MagicMock
 
 import pytest
-
 from app.distributed import (
     SCHEDULER_LEADER_LOCK_ID,
     DistributedContext,
 )
-
 
 # ---------------------------------------------------------------------------
 # Scripted engine — per-connect response sequence + invocation tracking.
@@ -81,11 +80,11 @@ class _ScriptedEngine:
     # --- heartbeat scripting ---------------------------------------------
     def queue_heartbeat_probes(self, results: List) -> None:
         """Each entry becomes one heartbeat probe result:
-          - int 1   → lock still held
-          - int 0   → lock missing (counts as failure)
-          - Exception instance → connect raises (counts as failure)
-          - "hang" → connect returns a conn whose scalar never completes
-                    (not used in these tests but reserved)
+        - int 1   → lock still held
+        - int 0   → lock missing (counts as failure)
+        - Exception instance → connect raises (counts as failure)
+        - "hang" → connect returns a conn whose scalar never completes
+                  (not used in these tests but reserved)
         """
         self._heartbeat_scripts.extend(results)
 
@@ -284,13 +283,15 @@ class TestHeartbeatTransientFailure_Issue1142:
         engine = _ScriptedEngine()
         engine.queue_main_session([True, 12345, None])
         # First probe fails, next two succeed, rest healthy.
-        engine.queue_heartbeat_probes([
-            RuntimeError("transient DB blip"),
-            1,
-            1,
-            1,
-            1,
-        ])
+        engine.queue_heartbeat_probes(
+            [
+                RuntimeError("transient DB blip"),
+                1,
+                1,
+                1,
+                1,
+            ]
+        )
 
         ctx = _make_ctx(engine)
 
@@ -310,20 +311,19 @@ class TestHeartbeatTransientFailure_Issue1142:
             heartbeat_max_failures=3,
         )
 
-        assert loss_calls == [], (
-            "one transient heartbeat failure followed by recovery should NOT "
-            "trigger shutdown"
-        )
+        assert loss_calls == [], "one transient heartbeat failure followed by recovery should NOT trigger shutdown"
 
     def test_persistent_db_errors_trigger_shutdown(self):
         engine = _ScriptedEngine()
         engine.queue_main_session([True, 12345, None])
-        engine.queue_heartbeat_probes([
-            RuntimeError("db down 1"),
-            RuntimeError("db down 2"),
-            RuntimeError("db down 3"),
-            RuntimeError("db down 4"),
-        ])
+        engine.queue_heartbeat_probes(
+            [
+                RuntimeError("db down 1"),
+                RuntimeError("db down 2"),
+                RuntimeError("db down 3"),
+                RuntimeError("db down 4"),
+            ]
+        )
 
         ctx = _make_ctx(engine)
 
@@ -342,9 +342,7 @@ class TestHeartbeatTransientFailure_Issue1142:
             heartbeat_max_failures=3,
         )
 
-        assert shutdown_event.is_set(), (
-            "3 consecutive heartbeat query errors must trigger shutdown"
-        )
+        assert shutdown_event.is_set(), "3 consecutive heartbeat query errors must trigger shutdown"
 
 
 class TestHeartbeatCleanShutdown_Issue1142:
@@ -403,8 +401,7 @@ class TestHeartbeatNoCallback_Issue1142:
 
         # Heartbeat cleared the flag even without a shutdown callback.
         assert lost_detected.is_set(), (
-            "Without on_leadership_lost, the heartbeat should still clear "
-            "_is_leader so readers see the right state"
+            "Without on_leadership_lost, the heartbeat should still clear _is_leader so readers see the right state"
         )
 
 
@@ -414,16 +411,18 @@ class TestHeartbeatRecoveryResetsCounter_Issue1142:
         engine.queue_main_session([True, 12345, None])
         # Two failures, then recovery, then two more failures —
         # should NOT trigger shutdown because the counter reset.
-        engine.queue_heartbeat_probes([
-            RuntimeError("blip1"),
-            RuntimeError("blip2"),
-            1,  # recovery
-            RuntimeError("blip3"),
-            RuntimeError("blip4"),
-            1,  # healthy again
-            1,
-            1,
-        ])
+        engine.queue_heartbeat_probes(
+            [
+                RuntimeError("blip1"),
+                RuntimeError("blip2"),
+                1,  # recovery
+                RuntimeError("blip3"),
+                RuntimeError("blip4"),
+                1,  # healthy again
+                1,
+                1,
+            ]
+        )
 
         ctx = _make_ctx(engine)
 
@@ -442,7 +441,4 @@ class TestHeartbeatRecoveryResetsCounter_Issue1142:
             heartbeat_max_failures=3,
         )
 
-        assert loss_calls == [], (
-            "recovery between failure bursts should keep the counter under "
-            "the threshold"
-        )
+        assert loss_calls == [], "recovery between failure bursts should keep the counter under the threshold"
