@@ -284,6 +284,30 @@ if _unknown_router_flags:
         valid=sorted(_VALID_ROUTER_NAMES),
     )
 
+# Compliance-critical routers that must not be silently disabled (#979).
+# Mirrors services/ingestion/main.py — keep the two sets in sync.
+_COMPLIANCE_ROUTERS = {
+    "canonical_records",
+    "rules",
+    "exceptions",
+    "fda_export",
+    "chain_verification",
+}
+_disabled_compliance = _DISABLED_ROUTERS & _COMPLIANCE_ROUTERS
+if _disabled_compliance:
+    _allow_disable = os.getenv("ALLOW_DISABLE_COMPLIANCE_ROUTERS", "").lower() == "true"
+    if not _allow_disable:
+        raise RuntimeError(
+            f"CRITICAL: Compliance-critical routers disabled without "
+            f"ALLOW_DISABLE_COMPLIANCE_ROUTERS=true: {sorted(_disabled_compliance)}. "
+            f"This violates FSMA 204 requirements."
+        )
+    logger.critical(
+        "compliance_routers_disabled",
+        disabled=sorted(_disabled_compliance),
+        hint="ALLOW_DISABLE_COMPLIANCE_ROUTERS is set. System running in degraded compliance mode.",
+    )
+
 
 def _router_enabled(name: str) -> bool:
     router_name = name.lower()
