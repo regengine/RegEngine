@@ -1,3 +1,5 @@
+> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level).
+
 # Neo4j Disaster Recovery (DR) Runbook
 
 ## Service Information
@@ -24,7 +26,7 @@ Neo4j Causal Clustering provides real-time replication. If one node fails, other
 ## Failover & Recovery Scenarios
 
 ### Scenario A: Single Node Failure
-**Symptoms:** 
+**Symptoms:**
 - Kubernetes Pod `neo4j-core-X` restarts or is stuck in `Pending`.
 - Alert: `Neo4jClusterUnhealthy`.
 
@@ -36,13 +38,13 @@ Neo4j Causal Clustering provides real-time replication. If one node fails, other
    ```
 
 ### Scenario B: Region/Cluster Loss (Total Outage)
-**Symptoms:** 
+**Symptoms:**
 - All Neo4j endpoints unreachable. 503 Service Unavailable.
 
 **Action (DR Activation):**
 1. **Provision Infrastructure:**
    Deploy `infrastructure/neo4j/cluster.yaml` to DR region (e.g., us-east-2).
-   
+
 2. **Restore Data:**
    Use the `restore-backup` job:
    ```bash
@@ -55,7 +57,7 @@ Neo4j Causal Clustering provides real-time replication. If one node fails, other
    ```bash
    # Check basic counts
    kubectl exec neo4j-core-0 -- bin/cypher-shell "MATCH (n) RETURN count(n)"
-   
+
    # Run Time Arrow validation
    python3 -m app.verify_integrity --strict
    ```
