@@ -2,66 +2,113 @@
 
 All background work in RegEngine. If it runs without a user clicking a button, it's listed here.
 
-## Scheduler Service (port 8600)
+Production topology: a single consolidated FastAPI monolith (`server/main.py`, one Docker
+image on Railway) plus a Next.js frontend on Vercel. There are no separately deployed
+worker services. Everything below runs inside (or is enqueued for) the monolith process.
 
-Uses APScheduler with BlockingScheduler. All jobs protected by distributed leadership election
-(only one replica executes per interval) and circuit breakers (5 failures → 300s recovery).
+## PostgreSQL Task Queue (the async backbone)
 
-| Job | Interval | What It Does | Idempotent? | On Failure |
-|-----|----------|-------------|-------------|------------|
-| FDA Warning Letters | 60 min | Polls FDA openFDA API for new warning letters | Yes (dedup via StateManager) | Logs warning, circuit opens after 5 failures |
-| FDA Import Alerts | 120 min | Polls FDA for import alert updates | Yes | Same as above |
-| FDA Recalls | 30 min | Polls FDA for recall announcements | Yes | Same as above |
-| FSMA Nightly Sync | Daily 02:00 UTC | POST to `/v1/ingest/all-regulations` on ingestion service | Yes (dedup) | HTTP retry; logs error; continues next day |
-| Regulatory Discovery | 1440 min (daily) | Bulk sync of regulatory sources | Yes | 300s timeout; logs error; continues |
-| Deadline Monitor | 5 min | Checks approaching compliance deadlines | Yes (read-only) | Logs error; continues |
-| State Cleanup | 24 hr | Prunes stale state entries | Yes | Logs warning; continues |
-| Inactive Account Sweep | 24 hr | Flags inactive tenant accounts | Yes | Logs error; continues |
-| KDE Retention Enforcement | 24 hr | Enforces data retention policies on KDE records | Yes | Logs error; continues |
-| Data Archival | 24 hr | Archives old records per retention policy | Yes | Logs error; continues |
+Background work is driven by polling the `fsma.task_queue` table — not Kafka. Two workers
+start in the FastAPI lifespan (`server/main.py`) and stop on graceful shutdown:
 
-**Config:** `services/scheduler/app/config.py` — intervals, thresholds, timeouts.
-**Entry point:** `services/scheduler/main.py:SchedulerService.start()`.
+### 1. `server/workers/task_processor.py`
 
-### Safety mechanisms
+Daemon thread that polls `fsma.task_queue` every 500 ms (`TASK_POLL_INTERVAL`) using
+`SELECT ... FOR UPDATE SKIP LOCKED`. Polling-only by design (#1185) — the LISTEN/NOTIFY
+trigger was removed in migration v059.
 
-- **Circuit breaker:** Per-scraper. 5 failures → OPEN for 300s → half-open probe.
-  State stored in Redis (`services/scheduler/app/circuit_breaker.py`).
-- **Distributed leadership:** Only one scheduler replica runs jobs.
-  `services/scheduler/app/distributed.py`.
-- **Coalesce:** Multiple missed executions roll into one (APScheduler `coalesce=True`).
-- **Misfire grace:** 1 hour window before a missed job is skipped entirely.
+| Task type | Handler | Visibility timeout | Replaces (Kafka era) |
+|-----------|---------|--------------------|----------------------|
+| `nlp_extraction` | `_handle_nlp_extraction` → `services.nlp.app.extractor.extract_entities` | 300s | topic `documents.ingested` |
+| `review_item` | `_handle_review_item` → admin HallucinationTracker | 30s | topic `nlp.needs_review` |
+| `graph_update` | **No handler registered** — a timeout (120s) is configured, but `TASK_HANDLERS` registers only `nlp_extraction` and `review_item`; an enqueued `graph_update` row sits unclaimed | 120s | topic `graph.update` |
 
-## Kafka Consumers
+(Extraction-path hardening for the pg pipeline, including the `review_item` handler, is
+in flight on a sibling branch — treat the handler details above as the pre-fix baseline.)
 
-| Consumer | Topic | Service | What It Does | Error Handling |
-|----------|-------|---------|-------------|----------------|
-| NLP Entity Extractor | `ingest.normalized` | nlp | Extracts entities from normalized events, classifies, routes to `graph.update` or `nlp.needs_review` | Schema validation → DLQ (`nlp.extracted.dlq`); retry 3x with exponential backoff; poison pill detection |
-| Review Consumer | `nlp.needs_review` | admin | Records low-confidence extractions via HallucinationTracker for human review | Retry 3x exponential backoff; failed → `nlp.needs_review.dlq` |
-| FSMA Graph Consumer | `fsma.events.extracted` | graph | Ingests FSMA trace events into Neo4j graph | `services/graph/app/consumers/fsma_consumer.py` |
+Mechanics:
 
-**DLQ pattern:** Failed messages routed to `<topic>.dlq`. DLQManager is a thread-safe singleton
-with lazy producer initialization (`services/shared/kafka_consumer_base.py`).
+- **Atomic claim** — `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)`,
+  filtered to registered handler types and `scheduled_at <= NOW()`; steals rows whose
+  `locked_until` expired.
+- **Heartbeat** — a per-task daemon thread extends `locked_until` every 60s while the
+  handler runs; extension is refused if another worker stole the lock.
+- **Retries** — exponential backoff `60 * 2^(n-1)` capped at 3600s (#1181); after
+  `max_attempts` the row goes to status `dead` with `last_error`.
+- **Graceful drain** — on shutdown (30s budget, matches gunicorn graceful-timeout) an
+  in-flight row is flipped back to `pending` and its attempt is refunded.
+- **`NON_WORKER_TASK_TYPES`** — `{recall_drill, recall}` rows are state/history for the
+  recall engine and are never claimed (#1199).
+- Disable with `DISABLE_TASK_WORKER` (e.g. for tests).
 
-**Retry tracking:** TTLCache-based counter per message_id prevents unbounded retry memory growth.
+### 2. `shared.task_queue.TaskWorker`
 
-**Graceful shutdown:** Consumers commit pending offsets, DLQ producer flushes, then exit.
+A second, parallel worker started in the same lifespan for ingestion and agent-bridge
+task handlers. It polls the same `fsma.task_queue` table with a disjoint set of task
+types. Producer side: ingestion routes call `shared.task_queue.enqueue_task` (note:
+`task_processor.enqueue_task` is a different function with no production callers).
+
+## Event Backbone: Postgres by default, Kafka opt-in
+
+`services/shared/event_backbone.py` defaults `EVENT_BACKBONE=pg`. `kafka_enabled()`
+returns `True` only when `EVENT_BACKBONE=kafka` is set explicitly (#1159 split-brain
+guard). In the default Railway deployment **no Kafka consumers run**:
+
+- The NLP Kafka consumer pipeline (`services/nlp/app/consumer/`) is deprecated; its
+  consumer thread starts only from the legacy standalone `services/nlp/main.py` with
+  `EVENT_BACKBONE=kafka` — neither condition holds in production.
+- The graph `fsma_consumer` (`services/graph/app/consumers/fsma_consumer.py`) is a
+  manual `__main__` entrypoint, not in any deployment config.
+- `shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
+  opt-in path. Opt-in-alive, not deleted — but vestigial for the default deployment.
+
+## Scheduler: not currently running in production (in-process wiring in flight)
+
+`services/scheduler/` (APScheduler jobs: FDA warning-letter/import-alert/recall scraping,
+recall→tenant alerting, deadline monitoring, retention/archival, nightly FSMA sync) is
+**not wired into the production monolith**. Its standalone entrypoint
+(`services/scheduler/main.py`, stdlib health server on port 8600) refuses to run in
+production via `assert_legacy_entrypoint_not_in_production('scheduler')`. As of this
+writing its jobs run nowhere in the Railway deployment.
+
+**In progress:** a separate workstream is wiring the scheduler to run in-process in the
+monolith — APScheduler started from the `server/main.py` lifespan, with PostgreSQL
+advisory-lock leader election so only one Railway replica executes jobs. Until that
+lands, do not assume any scheduler job (including the 02:00 UTC FSMA nightly sync)
+actually fires.
+
+The scheduler's safety mechanisms (advisory-lock leadership in
+`services/scheduler/app/distributed.py`, per-scraper circuit breakers, APScheduler
+`coalesce=True` + 1h misfire grace) are real code and carry over to the in-process
+design. Note: the circuit breaker in `services/scheduler/app/circuit_breaker.py` is
+**in-memory**, not Redis-backed.
+
+## Other runtime background paths
+
+- **Neo4j supplier sync** — `services/admin/app/supplier_graph_sync.py` mirrors supplier
+  onboarding into Neo4j at runtime behind a circuit breaker; webhook ingest can enqueue
+  CTE events to a Redis `neo4j-sync` list when enabled (the draining worker,
+  `services/graph/scripts/fsma_sync_worker.py`, is not deployed).
+- **Hidden dependency:** the monolith `/readiness` probe pings Neo4j when `NEO4J_URI` is
+  set — a down Neo4j can fail the Railway healthcheck.
 
 ## Health Checks
 
-| Endpoint | Port | What It Monitors |
-|----------|------|-----------------|
-| Scheduler HTTP | 8600 | APScheduler alive, seconds since last poll, circuit breaker states |
-| Kafka Consumer health | per-service | Consumer liveness, stale threshold detection |
+| Endpoint | Where | What It Monitors |
+|----------|-------|------------------|
+| `GET /health` | monolith | Liveness; always 200 |
+| `GET /readiness` | monolith | Postgres (required; 503 if down), Redis, Neo4j (when configured) — Railway healthcheckPath |
 
-All services expose `/health` via FastAPI. Railway uses these for liveness probes.
+There is no port-8600 scheduler health endpoint in production (standalone mode only).
 
 ## What Is NOT Background Work
 
 These look async but are synchronous request-response:
 
 - **Canonical persistence dual-write** (`canonical_persistence/writer.py:persist_event`) —
-  writes to both canonical table and legacy table within the same request. Not async,
-  but the Neo4j graph sync (`migration.publish_graph_sync`) is fire-and-forget via Kafka.
+  writes to both the canonical table and the legacy table within the same request.
 - **Identity resolution** — triggered synchronously during ingestion, not scheduled.
 - **FDA export generation** — on-demand via API request, not pre-generated.
+- **CTE lot tracing** — recursive SQL in `services/shared/cte_persistence/queries.py`,
+  executed per request. (`server/workers/lot_tracing.py` looks like a worker module but
+  is dead code with zero importers.)

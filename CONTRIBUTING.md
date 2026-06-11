@@ -13,9 +13,11 @@ Thank you for your interest in contributing to RegEngine.
 ## Development Setup
 
 ```bash
-# Backend services
-cd services/<service>
-pip install -r requirements.txt
+# Backend (one venv at the repo root — per-service requirements.txt are deprecated, #1429)
+python3 -m venv venv
+source venv/bin/activate
+pip install --require-hashes -r requirements.lock
+pre-commit install
 pytest tests/ -v
 
 # Frontend
@@ -24,9 +26,14 @@ npm install
 npm run dev
 ```
 
+Dependency changes go in `requirements.in`, then regenerate the lock with
+`pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in`
+(CI fails if `requirements.lock` is stale).
+
 ## Code Guidelines
 
-- **Python**: Follow existing patterns. Use type hints. Run `flake8` before submitting.
+- **Python**: Follow existing patterns. Use type hints. Lint/format with `ruff`
+  (runs via pre-commit; CI enforces a `ruff check --select E9,F63,F7,F82` bug-class gate).
 - **TypeScript/React**: Follow existing patterns. Run `npm run lint` and `npm run build`.
 - **Commits**: Use conventional commit prefixes (`fix:`, `feat:`, `chore:`, `docs:`).
 - **Tests**: Add tests for new functionality. Don't reduce coverage.
@@ -35,7 +42,7 @@ npm run dev
 ## PR Process
 
 1. Fill out the PR template completely
-2. Ensure CI passes (tests, lint, build)
+2. Ensure CI passes — the blocking check is the "CI Status Gate" summary job (backend + frontend)
 3. Request review from a maintainer
 4. Address feedback promptly
 
