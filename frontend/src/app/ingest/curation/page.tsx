@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import {
     ShieldCheck,
     Search,
@@ -29,6 +31,19 @@ interface DiscoveryItem {
 }
 
 export default function CurationDashboard() {
+    if (!experimentalFeaturesEnabled()) {
+        return (
+            <FeatureNotEnabled
+                featureName="Curation queue"
+                backHref="/ingest"
+                backLabel="Back to ingestion"
+            />
+        );
+    }
+    return <CurationDashboardContent />;
+}
+
+function CurationDashboardContent() {
     const { isAuthenticated, isHydrated } = useAuth();
     const [items, setItems] = useState<DiscoveryItem[]>([]);
     const [loading, setLoading] = useState(true);

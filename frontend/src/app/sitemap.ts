@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { EXPERIMENTAL_TOOL_SLUGS, experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
 /**
  * XML sitemap.
@@ -40,7 +41,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'readiness-assessment',
         'fsma-unified',
-    ].map((tool) => ({
+    ]
+        .filter((tool) => experimentalFeaturesEnabled() || !EXPERIMENTAL_TOOL_SLUGS.has(tool))
+        .map((tool) => ({
         url: `${baseUrl}/tools/${tool}`,
         changeFrequency: 'monthly' as const,
         priority: 0.7,

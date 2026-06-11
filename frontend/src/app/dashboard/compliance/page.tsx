@@ -32,6 +32,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
+import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
 
@@ -149,7 +150,7 @@ function ComplianceSetupPanel({ title = 'No compliance score yet' }: { title?: s
                             </div>
                         </div>
                         <div className="mt-5 grid gap-3 md:grid-cols-3">
-                            {COMPLIANCE_SETUP_STEPS.map((step) => (
+                            {filterExperimentalLinks(COMPLIANCE_SETUP_STEPS).map((step) => (
                                 <div key={step.title} className="rounded-xl border border-[var(--re-border-default)] bg-background p-3">
                                     <step.icon className="h-4 w-4 text-[var(--re-brand)]" />
                                     <p className="mt-3 text-sm font-semibold text-foreground">{step.title}</p>
@@ -422,11 +423,13 @@ export default function ComplianceDashboardPage() {
                                     If this workspace is new, there may not be enough records yet. You can keep this page open, or jump directly to the setup paths below.
                                 </p>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <Link href="/dashboard/inflow-lab">
-                                        <Button variant="outline" size="sm" className="h-8 text-xs">
-                                            Open Inflow Lab
-                                        </Button>
-                                    </Link>
+                                    {experimentalFeaturesEnabled() && (
+                                        <Link href="/dashboard/inflow-lab">
+                                            <Button variant="outline" size="sm" className="h-8 text-xs">
+                                                Open Inflow Lab
+                                            </Button>
+                                        </Link>
+                                    )}
                                     <Link href="/dashboard/receiving">
                                         <Button variant="outline" size="sm" className="h-8 text-xs">
                                             Start receiving
@@ -544,11 +547,13 @@ export default function ComplianceDashboardPage() {
                                             </span>
                                         </div>
                                     </div>
-                                    <Link href="/dashboard/inflow-lab">
-                                        <Button variant="outline" className="w-full h-9 rounded-xl text-xs">
-                                            Open Workbench <ArrowRight className="ml-1 h-3 w-3" />
-                                        </Button>
-                                    </Link>
+                                    {experimentalFeaturesEnabled() && (
+                                        <Link href="/dashboard/inflow-lab">
+                                            <Button variant="outline" className="w-full h-9 rounded-xl text-xs">
+                                                Open Workbench <ArrowRight className="ml-1 h-3 w-3" />
+                                            </Button>
+                                        </Link>
+                                    )}
                                 </CardContent>
                             </Card>
 
