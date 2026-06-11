@@ -17,8 +17,23 @@ import {
 } from 'lucide-react';
 import { AlertCard } from './alert-card';
 import { AlertFilters } from './alert-filters';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
 export default function AdminAlertsPage() {
+    if (!experimentalFeaturesEnabled()) {
+        return (
+            <FeatureNotEnabled
+                featureName="Alert Center"
+                backHref="/admin"
+                backLabel="Back to admin"
+            />
+        );
+    }
+    return <AdminAlertsContent />;
+}
+
+function AdminAlertsContent() {
     const { data: alertsData, isLoading } = useDriftAlerts();
     const acknowledge = useAcknowledgeAlert();
 

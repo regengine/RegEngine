@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { RelatedTools } from "@/components/layout/related-tools";
 import { FREE_TOOLS } from "@/lib/fsma-tools-data";
+import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
 import {
     CheckCircle2,
     XCircle,
@@ -1085,7 +1086,9 @@ export function FTLCheckerClient() {
                                             <CheckCircle2 size={28} className="mb-3" />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Good News!</h3>
                                             <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 16px' }}>None of your selected categories are currently on the Food Traceability List.</p>
-                                            <Link href="/fsma" style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: '8px', background: '#fff', color: T.accent, fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>Learn About Retailer Requirements</Link>
+                                            {experimentalFeaturesEnabled() && (
+                                                <Link href="/fsma" style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: '8px', background: '#fff', color: T.accent, fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>Learn About Retailer Requirements</Link>
+                                            )}
                                         </>
                                     )}
                                 </div>
