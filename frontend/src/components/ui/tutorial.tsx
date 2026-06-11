@@ -277,33 +277,6 @@ export function useTutorial(storageKey: string) {
 }
 
 // Preset tutorials for common pages
-export const ingestTutorialSteps: TutorialStep[] = [
-  {
-    target: '[data-tutorial="api-key-input"]',
-    title: 'Enter Your API Key',
-    content: 'Your API key starts with "rge_". If you completed the setup wizard, it\'s already saved and will auto-fill here.',
-    position: 'bottom',
-  },
-  {
-    target: '[data-tutorial="url-input"]',
-    title: 'Document URL',
-    content: 'Enter a publicly accessible URL to a regulatory document. We support PDF, HTML, XML, and JSON formats.',
-    position: 'bottom',
-  },
-  {
-    target: '[data-tutorial="example-urls"]',
-    title: 'Try an Example',
-    content: 'Click one of these example URLs to see how the system works with real regulatory documents.',
-    position: 'top',
-  },
-  {
-    target: '[data-tutorial="submit-button"]',
-    title: 'Submit for Processing',
-    content: 'Click here to start the ingestion process. The document will be fetched, parsed, and entities extracted automatically.',
-    position: 'top',
-  },
-];
-
 export const reviewTutorialSteps: TutorialStep[] = [
   {
     target: '[data-tutorial="review-queue"]',
