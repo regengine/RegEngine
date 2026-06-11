@@ -3,7 +3,14 @@
 **Purpose:** The mental map that only the founder carries, made visible.
 A new technical leader should read this before touching anything.
 
-Last updated: 2026-04-14.
+Last updated: 2026-04-14. Topology language corrected 2026-06-10.
+
+> **Topology note:** parts of this doc were written against the retired 6-Railway-service
+> topology. Production today is a **single consolidated FastAPI monolith**
+> (`server/main.py`, one Docker image on Railway) plus the Next.js frontend on Vercel.
+> Where this doc says "the X service", read "the X router domain inside the monolith"
+> unless noted otherwise. The gotchas themselves remain accurate. See
+> `docs/CODEBASE_MAP.md` (project level) for the verified map.
 
 ---
 
@@ -18,13 +25,13 @@ Last updated: 2026-04-14.
   deploys outside of recognized cloud providers, the default is "development"
   which **enables auth bypass**.
 
-- `AUTH_SECRET_KEY` (JWT signing) **must be identical** between the admin service
+- `AUTH_SECRET_KEY` (JWT signing) **must be identical** between the backend monolith
   (Railway) and the frontend (Vercel). If they differ, users authenticate
   successfully but every subsequent API call fails with 401. This is the #1
   cause of "login works but nothing loads" reports.
 
-- The admin service uses `ADMIN_DATABASE_URL` (not `DATABASE_URL`). If you
-  set up a new environment and only configure `DATABASE_URL`, the admin service
+- The admin domain uses `ADMIN_DATABASE_URL` (not `DATABASE_URL`). If you
+  set up a new environment and only configure `DATABASE_URL`, the admin code path
   will derive its connection string differently and may connect to the wrong
   database or fail silently.
 
@@ -50,11 +57,16 @@ Last updated: 2026-04-14.
 
 ### Scheduler Assumptions
 
-- The scheduler service uses leader election — only one instance processes jobs.
-  If you scale to multiple scheduler instances, only the elected leader runs
+- **The scheduler is not running in production at all.** Its standalone entrypoint
+  (`services/scheduler/main.py`) is blocked in production, and `server/main.py` does
+  not mount or start it — so none of its jobs (FDA scraping, deadline monitoring,
+  nightly sync, retention) currently fire on Railway. In-process wiring into the
+  monolith lifespan (APScheduler + advisory-lock leader election) is in flight.
+- The scheduler uses leader election — only one instance processes jobs.
+  If multiple instances run, only the elected leader runs
   APScheduler jobs. The others idle.
-- The FSMA nightly sync job fires at 02:00 UTC daily and calls the ingestion
-  service over HTTP. If the ingestion service is down at that time, the sync
+- The FSMA nightly sync job (when running) fires at 02:00 UTC daily and calls the
+  ingestion HTTP endpoint. If that endpoint is down at that time, the sync
   silently fails (logged, but no retry until the next 02:00 UTC run).
 - The in-memory webhook DLQ in `scheduler/app/notifications.py` is **volatile** —
   lost on service restart. The persistent DLQ in `shared/webhook_dlq.py`
@@ -156,9 +168,11 @@ There are 144+ env vars in `.env.example`. Here is what actually matters:
 ### Railway Shared Variables
 
 Railway requires you to click the SHARE button per service for shared variables.
-Setting a variable on one service does NOT propagate to others. Each of the 6
-services needs its own copy of `DATABASE_URL`, `REGENGINE_INTERNAL_SECRET`, etc.
-For the Inflow Workbench, verify the ingestion/monolith service sees `DATABASE_URL`
+Setting a variable on one service does NOT propagate to others. Production is now a
+single monolith service, so this mostly bites when adding a second Railway service
+(e.g. a worker or preview environment) — it needs its own copy of `DATABASE_URL`,
+`REGENGINE_INTERNAL_SECRET`, etc.
+For the Inflow Workbench, verify the monolith service sees `DATABASE_URL`
 and has run Alembic v073. `REGENGINE_INFLOW_WORKBENCH_PATH` is optional after
 v073 and should not be treated as production storage.
 
@@ -187,13 +201,14 @@ v073 and should not be treated as production storage.
 | `services/shared/` (56 modules) | Lightweight shared utilities | A hidden monolith — contains core domain logic, persistence, identity resolution, rules engine, and audit |
 | `fsma.cte_events` table | The canonical event store | Legacy table being replaced by `fsma.traceability_events`. Still written to (dual-write) and read from (exports, graph sync). |
 | Graph service compliance router | Compliance evaluation | Neo4j-based graph queries + CSV export. Separate from the actual rules engine in `shared/rules/`. |
-| `services/scheduler` | Simple cron runner | Leader-elected orchestrator with 7 APScheduler jobs, Kafka producer, webhook delivery, and FDA scraping |
+| `services/scheduler` | Simple cron runner | Leader-elected orchestrator with APScheduler jobs, Kafka producer, webhook delivery, and FDA scraping — and it does NOT run in production (in-process wiring into the monolith is in flight) |
 
 ---
 
 ## FSMA 204 Is the Only Vertical
 
-- The frontend middleware (`frontend/src/middleware.ts`) blocks non-FSMA verticals.
+- The frontend proxy (`frontend/src/proxy.ts` — Next 16 proxy convention; there is no
+  `middleware.ts`) blocks non-FSMA verticals.
   `ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204']`.
 - `DEFAULT_VERTICAL = "food-safety"` is hardcoded in `frontend/src/lib/api-config.ts`.
 - The backend has no vertical isolation — all tables, rules, and logic are FSMA-specific.
