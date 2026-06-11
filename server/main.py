@@ -146,12 +146,28 @@ async def lifespan(app: FastAPI):
         logger.warning("ingestion_task_worker_start_failed", error=str(exc))
         app.state.ingestion_worker = None
 
+    # Run scheduler jobs in-process: FDA scrapers, recall→tenant alerting,
+    # deadline monitoring, retention/archival, nightly FSMA sync. Production
+    # has no other home for these — the standalone scheduler entrypoint is
+    # prod-blocked and this is the only deployed container. A Postgres
+    # advisory lock keeps execution single-flight across gunicorn workers
+    # and replicas (see server/workers/embedded_scheduler.py).
+    try:
+        from server.workers.embedded_scheduler import start_embedded_scheduler
+
+        app.state.embedded_scheduler = start_embedded_scheduler()
+    except Exception as exc:
+        logger.warning("embedded_scheduler_start_failed", error=str(exc))
+        app.state.embedded_scheduler = None
+
     yield
 
     # Shutdown
     stop_task_worker()
     if getattr(app.state, "ingestion_worker", None):
         app.state.ingestion_worker.stop()
+    if getattr(app.state, "embedded_scheduler", None):
+        app.state.embedded_scheduler.stop()
     logger.info("regengine_shutdown")
 
 

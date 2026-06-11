@@ -2,26 +2,37 @@
 
 All background work in RegEngine. If it runs without a user clicking a button, it's listed here.
 
-## Scheduler Service (port 8600)
+## Scheduler (embedded in the monolith)
 
-Uses APScheduler with BlockingScheduler. All jobs protected by distributed leadership election
-(only one replica executes per interval) and circuit breakers (5 failures → 300s recovery).
+Uses APScheduler with BlockingScheduler. In production the scheduler runs
+INSIDE `server.main:app` (started from the FastAPI lifespan via
+`server/workers/embedded_scheduler.py`); the standalone entrypoint
+`services/scheduler/main.py` (port 8600) is local-debug only. All jobs are
+protected by distributed leadership election (a Postgres advisory lock —
+only one gunicorn worker/replica executes jobs) and circuit breakers
+(5 failures → 300s recovery).
 
 | Job | Interval | What It Does | Idempotent? | On Failure |
 |-----|----------|-------------|-------------|------------|
 | FDA Warning Letters | 60 min | Polls FDA openFDA API for new warning letters | Yes (dedup via StateManager) | Logs warning, circuit opens after 5 failures |
 | FDA Import Alerts | 120 min | Polls FDA for import alert updates | Yes | Same as above |
-| FDA Recalls | 30 min | Polls FDA for recall announcements | Yes | Same as above |
-| FSMA Nightly Sync | Daily 02:00 UTC | POST to `/v1/ingest/all-regulations` on ingestion service | Yes (dedup) | HTTP retry; logs error; continues next day |
-| Regulatory Discovery | 1440 min (daily) | Bulk sync of regulatory sources | Yes | 300s timeout; logs error; continues |
+| FDA Recalls | 30 min | Polls FDA for recall announcements; matches recalls to tenant product profiles (compliance alerts) | Yes | Same as above |
+| FSMA Nightly Sync | Daily 02:00 UTC | Runs the `/v1/ingest/all-regulations` sweep in-process (`run_all_regulations_ingest`) | Yes (dedup) | Logs error; continues next day |
 | Deadline Monitor | 5 min | Checks approaching compliance deadlines | Yes (read-only) | Logs error; continues |
 | State Cleanup | 24 hr | Prunes stale state entries | Yes | Logs warning; continues |
 | Inactive Account Sweep | 24 hr | Flags inactive tenant accounts | Yes | Logs error; continues |
 | KDE Retention Enforcement | 24 hr | Enforces data retention policies on KDE records | Yes | Logs error; continues |
 | Data Archival | 24 hr | Archives old records per retention policy | Yes | Logs error; continues |
+| Task Queue Purge | 24 hr | Deletes completed/dead `fsma.task_queue` rows older than 30 days | Yes | Logs error; continues |
+
+(The former "Regulatory Discovery" job was removed — it duplicated the FSMA
+Nightly Sync against the same endpoint with credentials the API never
+accepted.)
 
 **Config:** `services/scheduler/app/config.py` — intervals, thresholds, timeouts.
-**Entry point:** `services/scheduler/main.py:SchedulerService.start()`.
+**Enable gate:** `SCHEDULER_EMBEDDED` (default: on in production, off elsewhere).
+**Service logic:** `services/scheduler/service.py:SchedulerService`.
+**Standalone entry point (dev only):** `services/scheduler/main.py`.
 
 ### Safety mechanisms
 
