@@ -6,6 +6,8 @@ import { Zap, ArrowRight, AlertTriangle, Check, Clock, Database } from 'lucide-r
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
 // Types
 interface QueryResult {
@@ -326,6 +328,19 @@ const examples = [
 ];
 
 export default function AskPage() {
+  if (!experimentalFeaturesEnabled()) {
+    return (
+      <FeatureNotEnabled
+        featureName="Traceability Query Engine"
+        backHref="/tools"
+        backLabel="Back to free tools"
+      />
+    );
+  }
+  return <AskPageContent />;
+}
+
+function AskPageContent() {
   const [query, setQuery] = useState<string>('');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);

@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress';
 
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -58,6 +60,19 @@ interface AuditSummary {
 }
 
 export default function AuditReviewPage() {
+  if (!experimentalFeaturesEnabled()) {
+    return (
+      <FeatureNotEnabled
+        featureName="Audit review"
+        backHref="/dashboard"
+        backLabel="Back to dashboard"
+      />
+    );
+  }
+  return <AuditReviewContent />;
+}
+
+function AuditReviewContent() {
   const { isAuthenticated, tenantId } = useAuth();
   const tid = tenantId || '';
 

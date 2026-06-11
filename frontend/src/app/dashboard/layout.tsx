@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
 import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 import { useAuth } from '@/lib/auth-context';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import {
     BarChart3,
     Archive,
@@ -46,6 +47,8 @@ interface NavItem {
     href: string;
     icon: React.ComponentType<{ className?: string }>;
     sysadminOnly?: boolean;
+    /** Hidden unless NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES is set (backend router auto-disabled in prod) */
+    experimental?: boolean;
 }
 
 interface CollapsibleSection {
@@ -61,7 +64,7 @@ interface CollapsibleSection {
 /** Always-visible top-level items (max 5) */
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
-    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical },
+    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimental: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
     { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
@@ -92,7 +95,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
             { label: 'Products', href: '/dashboard/products', icon: Package },
             { label: 'Receiving', href: '/dashboard/receiving', icon: Truck },
-            { label: 'Scan', href: '/dashboard/scan', icon: Scan },
+            { label: 'Scan', href: '/dashboard/scan', icon: Scan, experimental: true },
         ],
     },
     {
@@ -108,7 +111,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
             { label: 'QA Health', href: '/dashboard/qa-health', icon: ShieldAlert, sysadminOnly: true },
             { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
-            { label: 'Readiness', href: '/fsma', icon: ShieldCheck },
+            { label: 'Readiness', href: '/fsma', icon: ShieldCheck, experimental: true },
             { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },
             { label: 'Controls', href: '/compliance/profile', icon: FileText },
         ],
@@ -127,6 +130,12 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
 
 /** Mobile nav — the 5 always-visible items only */
 const MOBILE_NAV_ITEMS = TOP_ITEMS;
+
+function isNavItemVisible(item: NavItem, isSysadmin: boolean): boolean {
+    if (item.sysadminOnly && !isSysadmin) return false;
+    if (item.experimental && !experimentalFeaturesEnabled()) return false;
+    return true;
+}
 
 // ---------------------------------------------------------------------------
 // localStorage helpers for expansion state
@@ -159,7 +168,7 @@ function saveExpandedSections(state: Record<string, boolean>) {
 function visibleSections(isSysadmin: boolean): CollapsibleSection[] {
     return COLLAPSIBLE_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => !item.sysadminOnly || isSysadmin),
+        items: section.items.filter((item) => isNavItemVisible(item, isSysadmin)),
     }));
 }
 
@@ -420,7 +429,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                     {/* Always-visible top items */}
                     <div className="px-2.5 space-y-0.5" role="list">
-                        {TOP_ITEMS.map((item) => {
+                        {TOP_ITEMS.filter((item) => isNavItemVisible(item, isSysadmin)).map((item) => {
                             const Icon = item.icon;
                             const isActive = isNavItemActive(pathname, item.href);
                             return (
@@ -496,7 +505,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Mobile top nav — limited to 5 always-visible items */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-[var(--re-sticky-bg)] border-b border-[var(--re-surface-border)] shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <nav aria-label="Dashboard quick navigation" className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar scrollbar-none">
-                    {MOBILE_NAV_ITEMS.map((item) => {
+                    {MOBILE_NAV_ITEMS.filter((item) => isNavItemVisible(item, isSysadmin)).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
                         return (
