@@ -10,6 +10,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -49,6 +50,33 @@ def _check_in_memory(client_ip: str, now: float) -> int:
 _redis_client = None
 _redis_failed = False
 
+# Atomic sliding-window check, evaluated server-side so the trim → count →
+# admit/reject → add sequence cannot interleave across concurrent requests
+# (the previous non-atomic zcard-then-zadd allowed burst overshoot above the
+# limit). A unique member per request avoids same-timestamp collisions that
+# would otherwise undercount. Returns 0 if admitted, else Retry-After seconds.
+_RATE_LIMIT_LUA = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+local count = redis.call('ZCARD', key)
+if count >= limit then
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local remaining = 1
+  if oldest[2] then
+    remaining = math.ceil(window - (now - tonumber(oldest[2])))
+    if remaining < 1 then remaining = 1 end
+  end
+  return remaining
+end
+redis.call('ZADD', key, now, member)
+redis.call('EXPIRE', key, window + 1)
+return 0
+"""
+
 
 def _get_redis():
     global _redis_client, _redis_failed
@@ -82,23 +110,18 @@ def _check_redis(client_ip: str, now: float) -> int:
         return _check_in_memory(client_ip, now)
 
     key = f"stripe_webhook:rate:{client_ip}"
+    member = f"{now}:{uuid.uuid4().hex}"
     try:
-        pipe = r.pipeline()
-        pipe.zremrangebyscore(key, 0, now - _WEBHOOK_WINDOW)
-        pipe.zcard(key)
-        pipe.execute()
-
-        count = r.zcard(key)
-        if count >= _WEBHOOK_RATE_LIMIT:
-            oldest = r.zrange(key, 0, 0, withscores=True)
-            if oldest:
-                remaining = int(_WEBHOOK_WINDOW - (now - oldest[0][1]))
-                return max(remaining, 1)
-            return 1
-
-        r.zadd(key, {f"{now}": now})
-        r.expire(key, _WEBHOOK_WINDOW + 1)
-        return 0
+        remaining = r.eval(
+            _RATE_LIMIT_LUA,
+            1,
+            key,
+            now,
+            _WEBHOOK_WINDOW,
+            _WEBHOOK_RATE_LIMIT,
+            member,
+        )
+        return int(remaining)
     except Exception:
         logger.debug("Redis error in stripe webhook rate limit check, falling back to in-memory")
         return _check_in_memory(client_ip, now)
