@@ -9,6 +9,9 @@ one ever sees.
 The fix keeps the emit-then-ack invariant (#1136) and adds:
   - Prometheus counter ``scheduler_kafka_emit_failures_total{source_type, failure_mode}``
   - Counter is bumped on both ``hard_exception`` and ``partial_batch``
+
+These tests set ``EVENT_BACKBONE=kafka`` because #1159 gates Kafka
+emission off entirely in the default (pg) backbone.
 """
 
 from __future__ import annotations
@@ -17,7 +20,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-from app.models import EnforcementItem, EnforcementSeverity, SourceType
+
+from services.scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 
 
 def _item(source_id: str = "fda_recall:x") -> EnforcementItem:
@@ -32,33 +36,38 @@ def _item(source_id: str = "fda_recall:x") -> EnforcementItem:
 
 
 def _svc():
-    import main as scheduler_main
+    from services.scheduler import service as scheduler_service
 
     with (
-        patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
-        patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
-        patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
-        patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+        patch.object(scheduler_service, "get_kafka_producer", return_value=MagicMock()),
+        patch.object(scheduler_service, "WebhookNotifier", return_value=MagicMock()),
+        patch.object(scheduler_service, "DistributedContext", return_value=MagicMock()),
+        patch.object(scheduler_service, "StateManager", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDAImportAlertsScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDARecallsScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDAWarningLettersScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "BlockingScheduler", return_value=MagicMock()),
     ):
-        svc = scheduler_main.SchedulerService()
+        svc = scheduler_service.SchedulerService()
     return svc
+
+
+@pytest.fixture(autouse=True)
+def kafka_backbone(monkeypatch):
+    """Opt these tests into the legacy Kafka emission path (#1159)."""
+    monkeypatch.setenv("EVENT_BACKBONE", "kafka")
 
 
 class TestKafkaEmitFailureMetric:
     def test_hard_exception_bumps_counter(self):
-        import main as scheduler_main
+        from services.scheduler import service as scheduler_service
 
         svc = _svc()
         svc.kafka_producer.emit_batch.side_effect = ConnectionError("broker down")
         svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
+        with patch.object(scheduler_service.metrics, "record_kafka_emit_failure") as record:
             svc._process_new_items([_item("a"), _item("b")], SourceType.FDA_RECALL)
 
         record.assert_called()
@@ -68,14 +77,14 @@ class TestKafkaEmitFailureMetric:
         assert kwargs["count"] == 2
 
     def test_partial_failure_bumps_counter_with_failure_count(self):
-        import main as scheduler_main
+        from services.scheduler import service as scheduler_service
 
         svc = _svc()
         svc.kafka_producer.emit_batch.return_value = (8, 2)
         svc.kafka_producer.emit_fsma_batch.return_value = (0, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
+        with patch.object(scheduler_service.metrics, "record_kafka_emit_failure") as record:
             items = [_item(f"r-{i}") for i in range(10)]
             svc._process_new_items(items, SourceType.FDA_RECALL)
 
@@ -85,14 +94,14 @@ class TestKafkaEmitFailureMetric:
         assert kwargs["count"] == 2
 
     def test_successful_emit_does_not_bump_counter(self):
-        import main as scheduler_main
+        from services.scheduler import service as scheduler_service
 
         svc = _svc()
         svc.kafka_producer.emit_batch.return_value = (2, 0)
         svc.kafka_producer.emit_fsma_batch.return_value = (2, 0)
         svc.notifier.notify.return_value = []
 
-        with patch.object(scheduler_main.metrics, "record_kafka_emit_failure") as record:
+        with patch.object(scheduler_service.metrics, "record_kafka_emit_failure") as record:
             svc._process_new_items([_item("a"), _item("b")], SourceType.FDA_RECALL)
 
         assert record.call_count == 0

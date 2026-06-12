@@ -2,14 +2,15 @@
 
 Before the fix, `services/scheduler/app/jobs.py` defined
 `fsma_nightly_sync_job` (02:00 UTC daily) on its own module-level
-`BlockingScheduler()` that was never started. The entry point
-`main.py` instantiated its own scheduler and never imported
-`app.jobs`, so the job fired nowhere — despite being documented as a
-"Phase 29" compliance feature.
+`BlockingScheduler()` that was never started, so the job fired nowhere —
+despite being documented as a "Phase 29" compliance feature.
 
-The fix re-homes the job onto the real scheduler via
+The job now lives on the real scheduler via
 `SchedulerService.run_fsma_nightly_sync` and a `CronTrigger(hour=2)`
-registered in `schedule_jobs`.
+registered in `schedule_jobs`. It runs the ingestion sweep IN-PROCESS
+(``services.ingestion.app.routes_scraping.run_all_regulations_ingest``):
+the old HTTP POST authenticated with ``REGENGINE_INTERNAL_SECRET``, which
+``shared.auth.require_api_key`` never accepted, so it could only 401.
 """
 
 from __future__ import annotations
@@ -21,20 +22,19 @@ import pytest
 
 def _build_scheduler_service_without_init():
     """Construct SchedulerService with heavy dependencies stubbed."""
-    import main as scheduler_main
+    from services.scheduler import service as scheduler_service
 
     with (
-        patch.object(scheduler_main, "get_kafka_producer", return_value=MagicMock()),
-        patch.object(scheduler_main, "WebhookNotifier", return_value=MagicMock()),
-        patch.object(scheduler_main, "DistributedContext", return_value=MagicMock()),
-        patch.object(scheduler_main, "StateManager", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDAImportAlertsScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDARecallsScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "FDAWarningLettersScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "InternalDiscoveryScraper", return_value=MagicMock()),
-        patch.object(scheduler_main, "BlockingScheduler", return_value=MagicMock()),
+        patch.object(scheduler_service, "get_kafka_producer", return_value=MagicMock()),
+        patch.object(scheduler_service, "WebhookNotifier", return_value=MagicMock()),
+        patch.object(scheduler_service, "DistributedContext", return_value=MagicMock()),
+        patch.object(scheduler_service, "StateManager", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDAImportAlertsScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDARecallsScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "FDAWarningLettersScraper", return_value=MagicMock()),
+        patch.object(scheduler_service, "BlockingScheduler", return_value=MagicMock()),
     ):
-        svc = scheduler_main.SchedulerService()
+        svc = scheduler_service.SchedulerService()
     return svc
 
 
@@ -69,53 +69,67 @@ class TestNightlyFsmaSyncRegistered:
                 return
         pytest.fail("fsma_nightly_sync job not found in schedule_jobs()")
 
+    def test_regulatory_discovery_duplicate_is_gone(self):
+        """The old regulatory_discovery job POSTed the same
+        /v1/ingest/all-regulations sweep with credentials require_api_key
+        never accepted. fsma_nightly_sync is the single daily sync."""
+        svc = _build_scheduler_service_without_init()
+        svc.scheduler = MagicMock()
+        svc.schedule_jobs()
+
+        scheduled_ids = [call.kwargs.get("id") for call in svc.scheduler.add_job.call_args_list]
+        assert "regulatory_discovery" not in scheduled_ids
+
 
 class TestNightlyFsmaSyncExecution:
-    """The sync method itself — auth, endpoint, error paths."""
+    """The sync method itself — in-process invocation and error paths."""
 
-    def test_run_fsma_nightly_sync_skips_on_missing_secret(self, monkeypatch):
-        """#1063 — do not POST an empty API key; log and return."""
-        monkeypatch.delenv("REGENGINE_INTERNAL_SECRET", raising=False)
-
+    def test_run_fsma_nightly_sync_calls_ingestion_in_process(self):
         svc = _build_scheduler_service_without_init()
 
-        with patch("httpx.post") as post:
+        async def _fake_ingest():
+            return {
+                "sources_attempted": 5,
+                "ingested": 2,
+                "unchanged": 3,
+                "failed": 0,
+            }
+
+        with patch(
+            "services.ingestion.app.routes_scraping.run_all_regulations_ingest",
+            side_effect=_fake_ingest,
+        ) as ingest:
+            svc.run_fsma_nightly_sync()
+
+        ingest.assert_called_once_with()
+
+    def test_run_fsma_nightly_sync_swallows_ingest_errors(self):
+        """A failing sweep must not crash the APScheduler job thread."""
+        svc = _build_scheduler_service_without_init()
+
+        async def _boom():
+            raise RuntimeError("source exploded")
+
+        with patch(
+            "services.ingestion.app.routes_scraping.run_all_regulations_ingest",
+            side_effect=_boom,
+        ):
+            svc.run_fsma_nightly_sync()  # must not raise
+
+    def test_run_fsma_nightly_sync_does_not_use_http(self):
+        """The HTTP-to-self path is gone — no POST, no internal secret."""
+        svc = _build_scheduler_service_without_init()
+
+        async def _fake_ingest():
+            return {"sources_attempted": 0, "ingested": 0, "unchanged": 0, "failed": 0}
+
+        with (
+            patch(
+                "services.ingestion.app.routes_scraping.run_all_regulations_ingest",
+                side_effect=_fake_ingest,
+            ),
+            patch("shared.safe_http.safe_httpx_post_sync") as post,
+        ):
             svc.run_fsma_nightly_sync()
 
         post.assert_not_called()
-
-    def test_run_fsma_nightly_sync_skips_on_empty_secret(self, monkeypatch):
-        monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "   ")
-
-        svc = _build_scheduler_service_without_init()
-
-        # RE-SCH-001: scheduler now routes through safe_httpx_post_sync.
-        with patch("shared.safe_http.safe_httpx_post_sync") as post:
-            svc.run_fsma_nightly_sync()
-
-        post.assert_not_called()
-
-    def test_run_fsma_nightly_sync_posts_when_secret_set(self, monkeypatch):
-        monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "secret-123")
-        monkeypatch.setenv("INGESTION_SERVICE_URL", "http://ingestion.test")
-
-        svc = _build_scheduler_service_without_init()
-
-        fake_response = MagicMock()
-        fake_response.raise_for_status = MagicMock()
-        fake_response.content = b'{"sources_attempted": 5}'
-        fake_response.json.return_value = {
-            "sources_attempted": 5,
-            "ingested": 2,
-            "unchanged": 3,
-            "failed": 0,
-        }
-
-        # RE-SCH-001: patch safe_httpx_post_sync (was httpx.post before).
-        with patch("shared.safe_http.safe_httpx_post_sync", return_value=fake_response) as post:
-            svc.run_fsma_nightly_sync()
-
-        post.assert_called_once()
-        call_kwargs = post.call_args.kwargs
-        assert call_kwargs["headers"]["X-RegEngine-API-Key"] == "secret-123"
-        assert post.call_args.args[0].endswith("/v1/ingest/all-regulations")
