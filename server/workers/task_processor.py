@@ -156,6 +156,8 @@ def _run_hardened_extraction(
     from services.nlp.app.consumer.thresholds import _current_thresholds
     from services.nlp.app.extractor import extract_entities
 
+    # pg task envelope, not an HTTP body: written only by in-process producers (see module docstring).
+    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body
     doc_hash = payload.get("document_hash") or payload.get("content_hash") or doc_id
     source_url = payload.get("source_url", "unknown")
 
@@ -385,7 +387,8 @@ def _handle_review_item(payload: Dict[str, Any], tenant_id: Optional[str] = None
         if isinstance(extraction, dict):
             extractor = (extraction.get("attributes") or {}).get("extractor") or "unknown"
         tracker.record_hallucination(
-            tenant_id=tenant_id,
+            # pg task envelope, not an HTTP body: written only by in-process producers (see module docstring).
+            tenant_id=payload.get("tenant_id"),  # nosemgrep: tenant-id-from-request-body
             document_id=document_id or "unknown",
             doc_hash=payload.get("doc_hash") or document_id or "unknown",
             extractor=extractor,
