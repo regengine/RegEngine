@@ -187,47 +187,29 @@ class TestSchedulerServiceContextPropagation:
 
     def _make_scheduler_service(self):
         """Build a SchedulerService with all heavy dependencies mocked out."""
+        from services.scheduler import service as scheduler_service
+
         with (
-            patch("shared.env_validation.require_env"),
-            patch("shared.error_handling.init_sentry"),
-            patch("shared.observability.setup_standalone_observability"),
-            patch("app.config.get_settings") as mock_settings,
-            patch("app.state.StateManager"),
-            patch("app.notifications.WebhookNotifier"),
-            patch("app.kafka_producer.get_kafka_producer"),
-            patch("app.distributed.DistributedContext"),
-            patch("app.circuit_breaker.circuit_registry"),
-            patch("app.scrapers.FDAWarningLettersScraper"),
-            patch("app.scrapers.FDAImportAlertsScraper"),
-            patch("app.scrapers.FDARecallsScraper"),
-            patch("app.scrapers.InternalDiscoveryScraper"),
+            patch.object(scheduler_service, "get_settings") as mock_settings,
+            patch.object(scheduler_service, "StateManager"),
+            patch.object(scheduler_service, "WebhookNotifier"),
+            patch.object(scheduler_service, "get_kafka_producer"),
+            patch.object(scheduler_service, "DistributedContext"),
+            patch.object(scheduler_service, "circuit_registry"),
+            patch.object(scheduler_service, "FDAWarningLettersScraper"),
+            patch.object(scheduler_service, "FDAImportAlertsScraper"),
+            patch.object(scheduler_service, "FDARecallsScraper"),
         ):
             settings = MagicMock()
             settings.webhook_outbox_path = None
             settings.fda_warning_letters_interval = 60
             settings.fda_import_alerts_interval = 120
             settings.fda_recalls_interval = 30
-            settings.regulatory_discovery_interval = 1440
             settings.circuit_breaker_failure_threshold = 3
             settings.circuit_breaker_recovery_timeout = 300
             mock_settings.return_value = settings
 
-            # Import here so sys.path set up by conftest is used.
-            import sys
-            from pathlib import Path
-
-            _svc_dir = Path(__file__).resolve().parent.parent
-            _svcs_dir = _svc_dir.parent
-            for d in (str(_svc_dir), str(_svcs_dir)):
-                if d not in sys.path:
-                    sys.path.insert(0, d)
-            from shared.paths import ensure_shared_importable
-
-            ensure_shared_importable()
-
-            from main import SchedulerService
-
-            return SchedulerService()
+            return scheduler_service.SchedulerService()
 
     def test_add_tracked_job_wraps_callable(self):
         """_add_tracked_job stores a wrapper (not the raw fn) on the scheduler."""
