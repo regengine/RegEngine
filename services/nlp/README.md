@@ -1,5 +1,22 @@
 # NLP Service
 
+## Deployment Reality
+
+NLP is **not a separately deployed service**. It is a router domain mounted into the
+consolidated monolith (`server/main.py`) at `/api/v1`:
+
+- `nlp` is in `_EXPERIMENTAL_ROUTERS`, so the entire NLP router surface (including
+  `POST /api/v1/query/traceability` and the frontend `/api/nlp/ask` proxy) is
+  **auto-disabled in production** unless `ENABLE_EXPERIMENTAL_ROUTERS` is truthy.
+- The standalone entrypoint `services/nlp/main.py` is local-debug only —
+  `assert_legacy_entrypoint_not_in_production` blocks it in production.
+- The Kafka consumer pipeline (`app/consumer/`) is deprecated; it only starts from the
+  standalone entrypoint with `EVENT_BACKBONE=kafka` (default is `pg`).
+- The production extraction path is the PostgreSQL task queue:
+  `server/workers/task_processor.py` handles `nlp_extraction` rows by calling
+  `services.nlp.app.extractor.extract_entities` (the regex backstop extractor — the
+  LLM extractor described below is only wired into the deprecated Kafka path).
+
 ## Request Correlation
 
 - Header `X-Request-ID`: Provide a UUID to correlate logs across ingestion → NLP → graph. If omitted, services generate one and echo it back.

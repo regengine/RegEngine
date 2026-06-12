@@ -407,4 +407,11 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS set_admin_context(boolean)")
     op.execute("DROP FUNCTION IF EXISTS audit.log_sysadmin_access()")
     op.execute("DROP TABLE IF EXISTS audit.sysadmin_access_log")
-    op.execute("DROP SCHEMA IF EXISTS audit")
+    # Later migrations add objects to the audit schema (v078:
+    # rls_policy_restoration_log, append-only trigger functions) and
+    # their downgrades are non-destructive no-ops, so those objects are
+    # still present here and a plain DROP SCHEMA fails with "cannot
+    # drop schema audit because other objects depend on it". Below v056
+    # the audit schema should not exist at all — CASCADE removes
+    # whatever later revisions left behind.
+    op.execute("DROP SCHEMA IF EXISTS audit CASCADE")

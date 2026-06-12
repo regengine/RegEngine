@@ -5,6 +5,7 @@ import {
     validateProxySession,
     getServerApiKey,
     validateUuid,
+    enforceTenantMatch,
 } from '@/lib/api-proxy';
 import {
     allowDevComplianceSnapshotFallback,
@@ -50,6 +51,10 @@ export async function GET(
             { status: 400 },
         );
     }
+
+    // Cross-tenant authorization: bind this request to the caller's own tenant.
+    const tenantError = enforceTenantMatch(request, tenantId);
+    if (tenantError) return tenantError;
 
     const COMPLIANCE_URL = getComplianceUrl();
     const headers: Record<string, string> = {
@@ -112,6 +117,10 @@ export async function POST(
             { status: 400 },
         );
     }
+
+    // Cross-tenant authorization: bind this request to the caller's own tenant.
+    const tenantError = enforceTenantMatch(request, tenantId);
+    if (tenantError) return tenantError;
     const body = await request.json().catch(() => ({}));
     const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
 

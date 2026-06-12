@@ -83,6 +83,17 @@ class TestForgotPwRateLimit:
         store = _make_session_store(counter=0)
         await prr._check_forgot_pw_rate_limit(store, "fresh@example.com")
 
+    @pytest.mark.asyncio
+    async def test_redis_failure_fails_closed(self):
+        # If Redis is unreachable we must NOT silently drop the per-email cap
+        # (that would re-enable reset-email flooding). Fail closed with 429.
+        store = MagicMock()
+        store._get_client = AsyncMock(side_effect=ConnectionError("redis down"))
+        with pytest.raises(HTTPException) as exc_info:
+            await prr._check_forgot_pw_rate_limit(store, "user@example.com")
+        assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        assert "Retry-After" in exc_info.value.headers
+
 
 # ---------------------------------------------------------------------------
 # Integration-style tests via TestClient (handles SlowAPI decorator)

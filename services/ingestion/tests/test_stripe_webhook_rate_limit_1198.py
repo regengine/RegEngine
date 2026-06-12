@@ -106,6 +106,53 @@ def test_rate_limit_uses_x_forwarded_for_when_peer_trusted(
     assert "203.0.113.10" in rl._rate_buckets
 
 
+def test_redis_path_uses_atomic_eval(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Redis branch must use a single atomic EVAL (no separate
+    zcard-then-zadd race) and return its result verbatim."""
+    captured: dict = {}
+
+    class _FakeRedis:
+        def eval(self, script, numkeys, key, *args):  # noqa: A003 - mirror redis-py
+            captured["script"] = script
+            captured["numkeys"] = numkeys
+            captured["key"] = key
+            captured["args"] = args
+            return 0  # admitted
+
+    monkeypatch.setattr(rl, "_get_redis", lambda: _FakeRedis())
+
+    assert rl._check_redis("9.9.9.9", now=1000.0) == 0
+    assert captured["numkeys"] == 1
+    assert captured["key"] == "stripe_webhook:rate:9.9.9.9"
+    # Atomicity markers: trim/count/admit/add all live in the Lua body.
+    assert "ZADD" in captured["script"] and "ZCARD" in captured["script"]
+
+
+def test_redis_eval_block_returns_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-zero EVAL result (seconds remaining) becomes a 429."""
+    monkeypatch.setattr(rl, "_get_redis", lambda: type("R", (), {"eval": lambda self, *a: 7})())
+
+    req = _make_request("8.8.8.8")
+    with pytest.raises(HTTPException) as exc_info:
+        rl._check_stripe_webhook_rate_limit(req)
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.headers["Retry-After"] == "7"
+
+
+def test_redis_eval_error_falls_back_to_in_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If EVAL raises, the limiter must fall back to the in-memory window."""
+
+    class _BoomRedis:
+        def eval(self, *a, **k):
+            raise RuntimeError("redis exploded")
+
+    monkeypatch.setattr(rl, "_get_redis", lambda: _BoomRedis())
+    monkeypatch.setattr(rl, "_rate_buckets", {})
+
+    assert rl._check_redis("7.7.7.7", now=2000.0) == 0
+    assert "7.7.7.7" in rl._rate_buckets
+
+
 def test_xff_ignored_when_peer_not_trusted(monkeypatch: pytest.MonkeyPatch) -> None:
     """Untrusted peer cannot mint fresh buckets by rotating X-Forwarded-For.
 

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTenant } from '@/lib/tenant-context';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import {
     Copy,
     Check,
@@ -72,6 +74,19 @@ function useIsMobile() {
 const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
 
 export default function ScanPage() {
+    if (!experimentalFeaturesEnabled()) {
+        return (
+            <FeatureNotEnabled
+                featureName="Field Capture"
+                backHref="/dashboard"
+                backLabel="Back to dashboard"
+            />
+        );
+    }
+    return <ScanPageContent />;
+}
+
+function ScanPageContent() {
     const isMobile = useIsMobile();
     const { tenantId } = useTenant();
     const safeTenantId = SAFE_SCAN_TENANT_ID.test(tenantId) ? tenantId : null;

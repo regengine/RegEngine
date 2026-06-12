@@ -96,11 +96,209 @@ WORKER_ID = f"worker-{os.getpid()}"
 
 # ── Task handlers ────────────────────────────────────────────────
 
+# Lazy FSMAExtractor singleton, mirroring the consumer-side wiring
+# (services/nlp/app/consumer._get_fsma_extractor). Instantiation is
+# deferred so worker startup does not pay the import/threshold cost
+# when no nlp_extraction task ever arrives, and tests can patch this
+# function to inject a stub extractor.
+_fsma_extractor = None
+_fsma_extractor_lock = threading.Lock()
+
+
+def _get_fsma_extractor():
+    global _fsma_extractor
+    if _fsma_extractor is None:
+        with _fsma_extractor_lock:
+            if _fsma_extractor is None:
+                from services.nlp.app.extractors import FSMAExtractor
+
+                _fsma_extractor = FSMAExtractor()
+    return _fsma_extractor
+
+
+def _run_hardened_extraction(payload: Dict[str, Any], doc_id: str, text: str) -> Dict[str, Any]:
+    """Run the hardened extraction pipeline ported from the Kafka consumer.
+
+    Reuses the consumer pipeline modules (services/nlp/app/consumer) so the
+    pg task path and the (deprecated, EVENT_BACKBONE=kafka) consumer loop
+    share one implementation:
+
+      1. FSMAExtractor pass — KDE-minimum gating + HITL routing (#1194).
+         Requires tenant scoping (#1122); skipped with a warning when the
+         task payload carries no ``tenant_id`` (the Kafka path DLQs
+         tenantless messages before extraction).
+      2. Legacy regex ``extract_entities`` → canonical ExtractionPayload
+         conversion with the 0.60 confidence cap (#1202) and negation-aware
+         obligation typing (#1299).
+      3. Three-tier confidence routing (#1258): review-tier extractions are
+         enqueued as ``review_item`` tasks — the pg replacement for the
+         ``nlp.needs_review`` topic. High-tier results auto-approve to
+         ``graph.update`` on the Kafka backbone, but the pg worker registers
+         no ``graph_update`` handler (an enqueued row would sit unclaimed
+         forever), so they are logged loudly instead.
+
+    Kafka-only stages (HMAC signing/verification, DLQ topics, offset
+    commits, inbound schema validation) have no pg analog: the task queue
+    is written only by in-process producers and retry/dead-lettering is
+    handled by the worker loop itself (``_fail_task``). ``sign_event`` in
+    particular requires Kafka signing keys that pg deployments do not set,
+    which is why ``_route_extraction`` is not reused verbatim here.
+
+    Raises on any pipeline failure — the caller falls back to the bare
+    legacy regex extractor so a pipeline regression never fails the task.
+    """
+    from services.nlp.app.consumer.conversion import _convert_entities_to_extraction
+    from services.nlp.app.consumer.review_routing import _build_review_reasons
+    from services.nlp.app.consumer.thresholds import _current_thresholds
+    from services.nlp.app.extractor import extract_entities
+
+    # pg task envelope, not an HTTP body: written only by in-process producers (see module docstring).
+    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body
+    doc_hash = payload.get("document_hash") or payload.get("content_hash") or doc_id
+    source_url = payload.get("source_url", "unknown")
+
+    summary: Dict[str, Any] = {
+        "fsma_cte_count": 0,
+        "fsma_routed": None,
+        "review_items_enqueued": 0,
+        "high_confidence": 0,
+    }
+
+    # --- FSMA structured pass (#1194) ---
+    if tenant_id:
+        extractor = _get_fsma_extractor()
+        result = extractor.extract(text, doc_id, tenant_id=str(tenant_id))
+        routing = extractor.route_extraction(result)
+        summary["fsma_cte_count"] = len(result.ctes)
+        summary["fsma_routed"] = routing["topic"]
+        if result.review_required:
+            doc_confidence = min((cte.confidence for cte in result.ctes), default=0.0)
+            fsma_review_payload = {
+                # Legacy review_item contract keys — byte-compatible with
+                # what _handle_review_item already reads.
+                "document_id": doc_id,
+                "entity_type": "FSMA_EXTRACTION",
+                "confidence": doc_confidence,
+                "text": result.raw_text or "",
+                # Additive fields consumed by the persistence path.
+                "tenant_id": str(tenant_id),
+                "doc_hash": doc_hash,
+                "extraction": {
+                    "source_text": result.raw_text or "",
+                    "attributes": {
+                        "document_id": doc_id,
+                        "source_url": source_url,
+                        "extractor": "fsma_extractor",
+                        # Full routing envelope (to_graph_event) so the
+                        # reviewer sees CTEs/KDEs/warnings, mirroring the
+                        # payload the Kafka path puts on nlp.needs_review.
+                        "fsma_envelope": routing["payload"],
+                    },
+                },
+                "provenance": {
+                    "source_url": source_url,
+                    "source_document_id": doc_id,
+                    "confidence": doc_confidence,
+                },
+            }
+            task_id = enqueue_task(
+                "review_item",
+                fsma_review_payload,
+                tenant_id=str(tenant_id),
+                priority=1,
+                idempotency_key=f"review_item:{doc_id}:FSMA_EXTRACTION",
+            )
+            if task_id is not None:
+                summary["review_items_enqueued"] += 1
+        else:
+            # High-confidence FSMA result. On the Kafka backbone this is
+            # emitted to graph.update; the pg worker has no graph sink, so
+            # log loudly until a pg graph_update handler exists.
+            logger.warning(
+                "fsma_high_confidence_no_graph_sink",
+                document_id=doc_id,
+                tenant_id=str(tenant_id),
+                cte_count=len(result.ctes),
+            )
+    else:
+        logger.warning(
+            "fsma_extractor_skipped_no_tenant",
+            document_id=doc_id,
+            error_code="E_MISSING_TENANT_ID",
+        )
+
+    # --- Legacy regex pass + canonical conversion (#1202/#1299) ---
+    entities = extract_entities(text)
+    extractions = _convert_entities_to_extraction(entities, doc_id, source_url)
+    summary["extraction_count"] = len(extractions)
+
+    # --- Three-tier confidence routing (#1258) ---
+    high_threshold, medium_threshold = _current_thresholds()
+    for extraction in extractions:
+        confidence = extraction.confidence_score
+        if confidence >= high_threshold:
+            # Kafka path auto-approves to graph.update — no pg sink (see
+            # docstring). Unreachable for the regex path in practice: its
+            # confidence is capped at 0.60 (#1202), below the 0.95 gate.
+            summary["high_confidence"] += 1
+            logger.warning(
+                "nlp_high_confidence_no_graph_sink",
+                document_id=doc_id,
+                confidence=confidence,
+            )
+            continue
+        tier = "medium" if confidence >= medium_threshold else "low"
+        priority = "low" if tier == "medium" else "high"
+        reasons = _build_review_reasons(extraction, tier)
+        entity_type = "REGULATORY_DATE" if extraction.attributes.get("fact_type") == "compliance_date" else "OBLIGATION"
+        review_payload = {
+            # Legacy review_item contract keys (byte-compatible).
+            "document_id": doc_id,
+            "entity_type": entity_type,
+            "confidence": confidence,
+            "text": extraction.source_text,
+            # Additive fields mirroring the Kafka review payload (#1368).
+            "tenant_id": str(tenant_id) if tenant_id else None,
+            "doc_hash": doc_hash,
+            "extraction": extraction.model_dump(mode="json"),
+            "confidence_tier": tier,
+            "priority": priority,
+            "review_reasons": reasons,
+            "provenance": {
+                "source_url": source_url,
+                "source_document_id": doc_id,
+                "source_offset": extraction.source_offset,
+                "confidence": confidence,
+            },
+        }
+        # The docstring-recommended key f"review_item:{doc_id}:{entity_type}"
+        # would collapse distinct extractions of the same type from one
+        # document; the source offset disambiguates them while keeping
+        # re-runs of the same document idempotent.
+        task_id = enqueue_task(
+            "review_item",
+            review_payload,
+            tenant_id=str(tenant_id) if tenant_id else None,
+            priority=1 if priority == "high" else 0,
+            idempotency_key=f"review_item:{doc_id}:{entity_type}:{extraction.source_offset}",
+        )
+        if task_id is not None:
+            summary["review_items_enqueued"] += 1
+
+    return summary
+
 
 def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
     """Extract entities from an ingested document.
 
     Replaces Kafka topic: documents.ingested
+
+    Runs the hardened extraction pipeline shared with the Kafka consumer
+    (FSMA KDE gating, capped-confidence regex conversion, three-tier
+    review routing — see :func:`_run_hardened_extraction`). On ANY
+    pipeline failure it falls back to the bare legacy regex extractor
+    with a structured warning, so a pipeline regression can never fail
+    the task.
     """
     try:
         from services.nlp.app.extractor import extract_entities
@@ -110,8 +308,32 @@ def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
         if not doc_id or not text:
             logger.warning("nlp_extraction_skip_empty", payload_keys=list(payload.keys()))
             return
-        result = extract_entities(text)
-        logger.info("nlp_extraction_complete", document_id=doc_id, entities=len(result))
+        try:
+            summary = _run_hardened_extraction(payload, doc_id, text)
+        except Exception as exc:
+            logger.warning(
+                "nlp_hardened_pipeline_failed",
+                document_id=doc_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+                fallback="legacy_regex",
+                exc_info=True,
+            )
+            result = extract_entities(text)
+            logger.info(
+                "nlp_extraction_complete",
+                document_id=doc_id,
+                entities=len(result),
+                pipeline="legacy_regex_fallback",
+            )
+            return
+        logger.info(
+            "nlp_extraction_complete",
+            document_id=doc_id,
+            entities=summary.pop("extraction_count", 0),
+            pipeline="hardened",
+            **summary,
+        )
     except ImportError:
         logger.debug("nlp_extractor_unavailable", exc_info=True)
     except Exception:
@@ -123,16 +345,45 @@ def _handle_review_item(payload: Dict[str, Any]) -> None:
     """Record a low-confidence extraction for human review.
 
     Replaces Kafka topic: nlp.needs_review
+
+    Persists via ``HallucinationTracker.record_hallucination`` — the
+    previous ``tracker.record(...)`` call targeted a method that does not
+    exist on HallucinationTracker, so every review_item task died with
+    AttributeError after exhausting retries. The legacy payload contract
+    (``document_id``/``entity_type``/``confidence``/``text``) is still
+    honored; the richer fields produced by ``_run_hardened_extraction``
+    (``tenant_id``/``doc_hash``/``extraction``/``provenance``) are used
+    when present.
     """
     try:
         from services.admin.app.metrics import get_hallucination_tracker
+        from services.admin.app.text_sanitize import sanitize_source_text_for_store
 
         tracker = get_hallucination_tracker()
-        tracker.record(
-            document_id=payload.get("document_id", ""),
-            entity_type=payload.get("entity_type", "unknown"),
-            confidence=payload.get("confidence", 0.0),
-            extracted_text=payload.get("text", ""),
+        document_id = payload.get("document_id", "")
+        # #1390 — sanitize the untrusted source span before DB store,
+        # mirroring the Kafka review consumer (_extract_and_record).
+        sanitized_text = sanitize_source_text_for_store(payload.get("text", ""))
+        extraction = payload.get("extraction") or {
+            "source_text": sanitized_text,
+            "attributes": {"entity_type": payload.get("entity_type", "unknown")},
+        }
+        if isinstance(extraction, dict) and "source_text" in extraction:
+            extraction = dict(extraction)
+            extraction["source_text"] = sanitize_source_text_for_store(extraction.get("source_text"))
+        extractor = "unknown"
+        if isinstance(extraction, dict):
+            extractor = (extraction.get("attributes") or {}).get("extractor") or "unknown"
+        tracker.record_hallucination(
+            # pg task envelope, not an HTTP body: written only by in-process producers (see module docstring).
+            tenant_id=payload.get("tenant_id"),  # nosemgrep: tenant-id-from-request-body
+            document_id=document_id or "unknown",
+            doc_hash=payload.get("doc_hash") or document_id or "unknown",
+            extractor=extractor,
+            confidence_score=payload.get("confidence", 0.0),
+            extraction=extraction,
+            provenance=payload.get("provenance") or {},
+            text_raw=sanitized_text,
         )
         logger.info("review_item_recorded", document_id=payload.get("document_id"))
     except ImportError:

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { JSONLD } from '@/components/seo/json-ld';
 import { RelatedTools } from '@/components/tools/RelatedTools';
+import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 
 export const metadata: Metadata = {
     title: 'GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine',
@@ -38,7 +39,7 @@ export default function ScanLayout({ children }: { children: React.ReactNode }) 
         <>
             <JSONLD data={jsonLd} />
             {children}
-            <RelatedTools tools={relatedTools} />
+            <RelatedTools tools={filterExperimentalToolLinks(relatedTools)} />
         </>
     );
 }

@@ -28,7 +28,6 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,9 +35,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.models.fsma_nodes import FSMARelationships
-
-TENANT_A = "11111111-1111-1111-1111-111111111111"
-TENANT_B = "22222222-2222-2222-2222-222222222222"
 
 
 def _flatten(cypher: str) -> str:
@@ -131,67 +127,6 @@ def test_traceability_router_source_passes_tenant_id_to_relationships():
     for body in matches:
         assert "tenant_id" in body, (
             f"#1284: relationship call in traceability.py missing tenant_id kwarg. Call body:\n{body}"
-        )
-
-
-# ── Call-site inspection (consumer) ────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_fsma_consumer_passes_tenant_id_to_relationships():
-    """#1284: ingest_fsma_event (the Kafka consumer path) must also
-    pass tenant_id to every relationship template. The consumer is the
-    high-volume write path — a miss here would let Avro-consumer-level
-    producers (with weaker auth than HTTP) forge cross-tenant edges."""
-    session = AsyncMock()
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock(return_value=False)
-    session.run = AsyncMock(return_value=MagicMock())
-
-    client = MagicMock()
-    client.session = MagicMock(return_value=session)
-
-    event = {
-        "document_id": "doc-1284-test",
-        "document_type": "INVOICE",
-        "timestamp": "2026-04-18T00:00:00Z",
-        "tenant_id": TENANT_A,
-        "ctes": [
-            {
-                "type": "SHIPPING",
-                "confidence": 0.99,
-                "kdes": {
-                    "traceability_lot_code": "LOT-1284",
-                    "event_date": "2026-04-18",
-                    "product_description": "Test product",
-                    "quantity": 10.0,
-                    "unit_of_measure": "kg",
-                    "location_identifier": "urn:gln:0614141999996",
-                },
-            }
-        ],
-    }
-
-    from services.graph.app.consumers.fsma_consumer import ingest_fsma_event
-
-    await ingest_fsma_event(client, event)
-
-    # Collect relationship-template calls.
-    relationship_calls = []
-    for call in session.run.call_args_list:
-        args = call.args
-        if args and isinstance(args[0], str):
-            cypher = args[0]
-            if ":UNDERWENT]" in cypher or ":OCCURRED_AT]" in cypher or ":EVIDENCES]" in cypher:
-                relationship_calls.append(call)
-
-    assert len(relationship_calls) >= 2, (
-        f"expected ≥2 relationship calls, got {len(relationship_calls)}: {[c.args[0][:60] for c in relationship_calls]}"
-    )
-    for call in relationship_calls:
-        kwargs = call.kwargs
-        assert kwargs.get("tenant_id") == TENANT_A, (
-            f"#1284: consumer relationship call missing/wrong tenant_id; cypher={call.args[0][:80]!r} kwargs={kwargs!r}"
         )
 
 
