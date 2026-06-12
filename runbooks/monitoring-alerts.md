@@ -1,3 +1,5 @@
+> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level).
+
 # Monitoring & Alerts Runbook
 
 ## Service Information

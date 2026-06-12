@@ -1,3 +1,5 @@
+> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level).
+
 # Rollback Procedure Runbook
 
 ## Service Information
@@ -240,4 +242,3 @@ curl -s https://api.regengine.co/health | jq .
 3. Fix underlying issue before re-deploying
 4. Test fix in staging environment
 5. Schedule post-mortem if critical
-

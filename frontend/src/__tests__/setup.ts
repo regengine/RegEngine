@@ -29,3 +29,7 @@ vi.mock('next/navigation', () => ({
 
 // Mock environment variables
 process.env.NEXT_PUBLIC_API_URL = 'http://localhost:8002'
+// Existing page tests exercise experimental surfaces (audit, curation,
+// inflow-lab, /fsma nav) as if enabled; gate-off behaviour is covered by
+// __tests__/pages/experimental-gating.test.tsx via vi.stubEnv.
+process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES = 'true'
