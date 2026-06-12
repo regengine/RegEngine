@@ -35,6 +35,7 @@ from app.shared.upload_limits import (
     MAX_FILE_SIZE_BYTES,
     MAX_IMAGE_FILE_SIZE_BYTES,
     MAX_REGULATION_FILE_SIZE_BYTES,
+    read_request_body_with_limit,
     read_upload_with_limit,
     regulation_upload_type,
     sanitize_upload_filename,
@@ -56,6 +57,41 @@ def _make_upload(data: bytes, filename: str = "test.bin") -> UploadFile:
 def _run(coro):
     """Run an async coroutine from a sync test."""
     return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.run(coro)
+
+
+class _FakeStreamRequest:
+    """Minimal stand-in for a Starlette Request exposing only .stream()."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    async def stream(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+class TestReadRequestBodyWithLimit:
+    """`read_request_body_with_limit` closes the chunked-upload DoS gap —
+    RequestSizeLimitMiddleware only checks Content-Length, so a streamed body
+    must be capped here while consuming the stream."""
+
+    def test_under_cap_joins_chunks_in_order(self):
+        req = _FakeStreamRequest([b"ab", b"cd", b"ef"])
+        out = _run(read_request_body_with_limit(req, max_bytes=1024))
+        assert out == b"abcdef"
+
+    def test_empty_stream_returns_empty_bytes(self):
+        req = _FakeStreamRequest([])
+        assert _run(read_request_body_with_limit(req, max_bytes=1024)) == b""
+
+    def test_over_cap_raises_413(self):
+        # 3 MB across chunks with a 1 MB cap → must abort mid-stream.
+        chunks = [b"x" * (512 * 1024)] * 6
+        req = _FakeStreamRequest(chunks)
+        with pytest.raises(HTTPException) as exc_info:
+            _run(read_request_body_with_limit(req, max_bytes=1024 * 1024, label="EPCIS XML"))
+        assert exc_info.value.status_code == 413
+        assert "EPCIS XML" in exc_info.value.detail
 
 
 # ===========================================================================

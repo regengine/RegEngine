@@ -119,6 +119,22 @@ def _v31_present() -> bool:
     return bind.execute(text("SELECT to_regclass(:t)"), {"t": _V31_CANARY}).scalar() is not None
 
 
+def _v31_helper_fn_present() -> bool:
+    """True iff ``fsma.current_org_id()`` exists — the Flyway V29/V31
+    helper referenced by every policy this downgrade recreates.
+
+    The table canary alone is not sufficient on the downgrade path:
+    v078 forward-ports ``fsma.products`` onto Alembic-only environments
+    (and its downgrade intentionally leaves it in place), so post-v078
+    the canary exists everywhere.  The helper function, by contrast,
+    only ever exists on Flyway-managed databases — its absence
+    identifies an environment where this migration's upgrade no-op'd
+    and the V31 policies must not (and cannot) be restored.
+    """
+    bind = op.get_bind()
+    return bind.execute(text("SELECT to_regprocedure('fsma.current_org_id()')")).scalar() is not None
+
+
 # ---------------------------------------------------------------------------
 # Upgrade helpers
 # ---------------------------------------------------------------------------
@@ -318,11 +334,13 @@ def downgrade() -> None:
     # so the restored policies will silently deny all reads for regular
     # roles — the same behaviour as before this migration.
 
-    if not _v31_present():
-        # Mirror the upgrade-side guard.  If V31 wasn't present we
-        # never altered anything, so there's nothing to revert.
+    if not _v31_present() or not _v31_helper_fn_present():
+        # Mirror the upgrade-side guard.  If V31 wasn't present at
+        # upgrade time we never altered anything, so there's nothing to
+        # revert.  See _v31_helper_fn_present for why the table canary
+        # alone misfires on Alembic-only environments after v078.
         op.execute(
-            "DO $$ BEGIN RAISE NOTICE 'v069 downgrade: Flyway V31 tables not present — nothing to revert'; END $$;"
+            "DO $$ BEGIN RAISE NOTICE 'v069 downgrade: Flyway V31 schema not present — nothing to revert'; END $$;"
         )
         return
 

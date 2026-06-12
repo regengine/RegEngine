@@ -23,6 +23,8 @@ import { DriftAlertsWidget } from '@/components/fsma/drift-alerts';
 
 // Hooks
 import { useAuth } from '@/lib/auth-context';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import {
   useFSMADashboard,
   useRecallDrills,
@@ -61,6 +63,21 @@ import {
 const EMPTY_FACILITIES: Facility[] = [];
 
 export default function FSMADashboardPage() {
+  if (!experimentalFeaturesEnabled()) {
+    return (
+      <DashboardLayout>
+        <FeatureNotEnabled
+          featureName="FSMA readiness dashboard"
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+        />
+      </DashboardLayout>
+    );
+  }
+  return <FSMADashboardContent />;
+}
+
+function FSMADashboardContent() {
   const { isAuthenticated } = useAuth();
   const [tlcQuery, setTlcQuery] = useState('');
   const [activeTlc, setActiveTlc] = useState<string | null>(null);

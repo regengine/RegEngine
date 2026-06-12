@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from shared.tenant_context import TenantContext
 
 from ..shared.tenant_resolution import resolve_tenant_id
+from ..shared.upload_limits import MAX_FILE_SIZE_BYTES, read_request_body_with_limit
 from ..webhook_compat import require_tenant_context
 from .normalization import (
     _normalize_epcis_to_cte,
@@ -329,7 +330,12 @@ async def ingest_epcis_xml(
 
     resolved_tenant = ctx.tenant_id
 
-    raw_body = await request.body()
+    # Stream the body with a hard cap. RequestSizeLimitMiddleware only enforces
+    # the Content-Length header, so a chunked upload would otherwise buffer an
+    # unbounded XML document into memory here before parsing (DoS).
+    raw_body = await read_request_body_with_limit(
+        request, max_bytes=MAX_FILE_SIZE_BYTES, label="EPCIS XML"
+    )
     if not raw_body:
         raise HTTPException(status_code=400, detail="Empty XML payload")
 

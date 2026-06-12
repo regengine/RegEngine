@@ -32,6 +32,7 @@ import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { fetchWorkbenchReadinessSummary, type WorkbenchReadinessSnapshot } from '@/lib/api-hooks';
 import type {
     SupplierFacility,
@@ -433,14 +434,16 @@ export default function SupplierDashboardPage() {
                                 >
                                     {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
                                 </Badge>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
-                                    onClick={() => { window.location.href = '/dashboard/inflow-lab'; }}
-                                >
-                                    Open Workbench <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                                </Button>
+                                {experimentalFeaturesEnabled() && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
+                                        onClick={() => { window.location.href = '/dashboard/inflow-lab'; }}
+                                    >
+                                        Open Workbench <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>

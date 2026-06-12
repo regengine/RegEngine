@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 import { SharedSandboxResult } from './SharedSandboxResult';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -21,6 +23,16 @@ async function fetchSharedResult(id: string) {
 
 export default async function SharedResultPage({ params }: Props) {
   const { id } = await params;
+
+  if (!experimentalFeaturesEnabled()) {
+    return (
+      <FeatureNotEnabled
+        featureName="Shared sandbox results"
+        backHref="/"
+        backLabel="Back to home"
+      />
+    );
+  }
 
   if (!id || id.length > 20) notFound();
 

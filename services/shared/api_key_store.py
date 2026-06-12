@@ -124,7 +124,7 @@ class APIKeyModel(Base):
     # NULL for non-partner keys (internal admin keys, regular customer
     # API keys). Populated for keys issued to partners; the partner
     # gateway reads this column to scope queries to the partner's own
-    # client tenants. See ``services/shared/partner_auth.py``.
+    # client tenants.
     # Stored as the partner's internal id (matches ``partners.id``) —
     # NOT a UUID by convention because partner ids are short slugs.
     partner_id = Column(String(64), nullable=True, index=True)

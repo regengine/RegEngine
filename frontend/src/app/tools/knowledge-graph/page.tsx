@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
+import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "Supply Chain Knowledge Graph | FSMA 204 Network Mapper | RegEngine",
@@ -66,6 +68,15 @@ function KnowledgeGraphFallback() {
 }
 
 export default function KnowledgeGraphPage() {
+    if (!experimentalFeaturesEnabled()) {
+        return (
+            <FeatureNotEnabled
+                featureName="Supply Chain Knowledge Graph"
+                backHref="/tools"
+                backLabel="Back to free tools"
+            />
+        );
+    }
     return (
         <>
             <Suspense fallback={<KnowledgeGraphFallback />}>

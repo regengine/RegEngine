@@ -5,6 +5,7 @@ import {
     validateProxySession,
     getServerApiKey,
     validateUuid,
+    enforceTenantMatch,
 } from '@/lib/api-proxy';
 
 function getComplianceUrl(): string {
@@ -40,6 +41,10 @@ export async function GET(
             { status: 400 },
         );
     }
+
+    // Cross-tenant authorization: bind this request to the caller's own tenant.
+    const tenantError = enforceTenantMatch(request, tenantId);
+    if (tenantError) return tenantError;
     const searchParams = request.nextUrl.searchParams;
     const detailed = searchParams.get('detailed') === 'true';
 
