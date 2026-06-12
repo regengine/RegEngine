@@ -252,6 +252,30 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop the no-cast policy first so the column type can change.
     op.execute(_DROP_POLICY_SQL)
+    # Later migrations may add their own policies referencing these
+    # columns (v078's _tenant_rls creates tenant_isolation_audit_logs)
+    # and their downgrades are non-destructive no-ops, so the policies
+    # are still in place when this downgrade runs. PostgreSQL rejects
+    # ALTER COLUMN TYPE on a column referenced by any active policy —
+    # drop whatever is left; the canonical cast policy is recreated
+    # below.
+    op.execute(
+        """
+        DO $$
+        DECLARE pol record;
+        BEGIN
+            IF to_regclass('public.audit_logs') IS NULL THEN
+                RETURN;
+            END IF;
+            FOR pol IN
+                SELECT policyname FROM pg_policies
+                WHERE schemaname = 'public' AND tablename = 'audit_logs'
+            LOOP
+                EXECUTE format('DROP POLICY %I ON public.audit_logs', pol.policyname);
+            END LOOP;
+        END$$;
+        """
+    )
     for column, _ in _COLUMNS_TO_FIX:
         op.execute(_alter_column_uuid_to_text(column))
     # Re-issue the v056 policy with the ``::uuid`` cast for the now-text

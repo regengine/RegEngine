@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
+import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 import { Zap } from 'lucide-react';
 
 interface FreeToolPageShellProps {
@@ -25,8 +26,8 @@ export function FreeToolPageShell({
     relatedToolIds,
     children,
 }: FreeToolPageShellProps) {
-    const relatedTools = FREE_TOOLS.filter((t) =>
-        relatedToolIds.includes(t.id)
+    const relatedTools = filterExperimentalToolLinks(
+        FREE_TOOLS.filter((t) => relatedToolIds.includes(t.id))
     );
 
     return (

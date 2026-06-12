@@ -13,6 +13,7 @@ Usage (FastAPI):
 
 from __future__ import annotations
 
+import hmac
 import os
 
 from fastapi import HTTPException, Security
@@ -25,5 +26,5 @@ _api_key_header = APIKeyHeader(name="X-Metrics-Key", auto_error=False)
 
 def require_metrics_key(key: str | None = Security(_api_key_header)) -> None:
     """Raise 403 unless the request carries a valid metrics API key."""
-    if not _METRICS_API_KEY or key != _METRICS_API_KEY:
+    if not _METRICS_API_KEY or not key or not hmac.compare_digest(key, _METRICS_API_KEY):
         raise HTTPException(status_code=403, detail="Forbidden")

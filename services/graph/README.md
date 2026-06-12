@@ -2,6 +2,25 @@
 
 Graph analytics service using Neo4j for relationship mapping, opportunity detection, and compliance arbitrage analysis.
 
+## Deployment Reality
+
+Graph is **not a separately deployed service**. It is a router domain mounted into the
+consolidated monolith (`server/main.py`) at `/api/v1`:
+
+- `graph` is in `_EXPERIMENTAL_ROUTERS`, so all graph routers are **auto-disabled in
+  production** unless `ENABLE_EXPERIMENTAL_ROUTERS` is truthy.
+- The standalone entrypoint `services/graph/app/main.py` is local-debug only —
+  `assert_legacy_entrypoint_not_in_production` blocks it in production. The per-service
+  Dockerfile/requirements.txt and dedicated ports (8003/8200) below describe the retired
+  standalone era; only the repo-root monolith image is built and deployed (#1429).
+- Neo4j itself is optional but not runtime-dead even with the routers disabled: admin's
+  supplier onboarding mirrors into Neo4j behind a circuit breaker, and the monolith
+  `/readiness` probe pings Neo4j when `NEO4J_URI` is set.
+- The framework-arbitrage content below (SOC2/ISO27001/NIST mapping) is from the
+  pre-FSMA product generation. The current domain is FSMA 204 traceability
+  (`app/routers/fsma/` — trace, compliance, recall, science, metrics), with a planned
+  Neo4j→PostgreSQL consolidation flagged in `app/routers/fsma/compliance.py`.
+
 ## Overview
 
 The Graph service provides graph-based analytics for the RegEngine platform, enabling:

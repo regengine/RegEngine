@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
 import type {
     CreateIntegrationProfileRequest,
     IntegrationProfile,
@@ -339,7 +340,7 @@ export default function DashboardIntegrationsPage() {
                     </div>
                     <div className={styles.cardContent}>
                         <div className={styles.factGrid}>
-                            {ROUTE_GUIDANCE.map((route) => (
+                            {filterExperimentalLinks(ROUTE_GUIDANCE).map((route) => (
                                 <Link key={route.href} href={route.href} className={styles.factCard}>
                                     <div className={styles.connectorHeading}>
                                         <route.icon className={styles.inlineIcon} />
@@ -594,12 +595,14 @@ export default function DashboardIntegrationsPage() {
                                 </div>
 
                                 <div className={styles.actionRow}>
-                                    <Button asChild className={styles.primaryAction}>
-                                        <Link href="/dashboard/inflow-lab">
-                                            <FlaskConical className={styles.buttonIcon} />
-                                            Open Inflow Lab
-                                        </Link>
-                                    </Button>
+                                    {experimentalFeaturesEnabled() && (
+                                        <Button asChild className={styles.primaryAction}>
+                                            <Link href="/dashboard/inflow-lab">
+                                                <FlaskConical className={styles.buttonIcon} />
+                                                Open Inflow Lab
+                                            </Link>
+                                        </Button>
+                                    )}
                                     <Button asChild className={styles.primaryAction}>
                                         <Link href="/docs/connectors/inflow-lab">
                                             <Terminal className={styles.buttonIcon} />

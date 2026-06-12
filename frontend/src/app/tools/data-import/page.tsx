@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Data Import Hub | Upload CSV, IoT & Webhook Traceability Data | RegEngine",
@@ -52,11 +53,11 @@ export default function DataImportPage() {
                 <JSONLD data={jsonLd} />
                 <DataImportClient />
             </Suspense>
-            <RelatedTools tools={[
+            <RelatedTools tools={filterExperimentalToolLinks([
                 { href: "/tools/scan", title: "GS1 Barcode Scanner", description: "Scan barcodes to decode GTIN and lot codes directly into FSMA 204 traceability records." },
                 { href: "/tools/label-scanner", title: "AI Label Scanner", description: "Upload a food label and AI extracts lot code, GTIN, and FSMA 204 KDEs automatically." },
                 { href: "/tools/export", title: "FDA Export Generator", description: "Generate a verifiable SHA-256 compliance package from your traceability records." },
-            ]} />
+            ])} />
             </>
         </EmailGate>
     );

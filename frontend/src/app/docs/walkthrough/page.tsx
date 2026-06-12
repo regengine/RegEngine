@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Terminal } from 'lucide-react';
+import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 import { CodeBlock } from '@/components/ui/code-block';
 
 export const metadata: Metadata = {
@@ -254,11 +255,11 @@ head -20 lot-export.csv`}
         <section>
           <h2 className="text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">Where to go from here</h2>
           <div className="grid gap-3">
-            {[
+            {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
               { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
               { title: 'Set up EPCIS or EDI', desc: 'Replace manual curl with your existing system-of-record', href: '/docs/connectors/inflow-lab' },
-            ].map(({ title, desc, href }) => (
+            ]).map(({ title, desc, href }) => (
               <Link key={href} href={href} className="no-underline">
                 <div className="px-5 py-4 rounded-lg flex items-center gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)]">
                   <div className="flex-1">
