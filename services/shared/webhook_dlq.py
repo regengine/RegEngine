@@ -55,7 +55,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy import (
     Column,
@@ -133,16 +133,27 @@ class WebhookDLQ:
     - Query DLQ status
     """
 
-    def __init__(self, db_session, tenant_id: Optional[str] = None):
+    def __init__(
+        self,
+        db_session,
+        tenant_id: Optional[str] = None,
+        delivery_callback: Optional[Callable[[dict[str, Any]], bool]] = None,
+    ):
         """
         Initialize WebhookDLQ.
 
         Args:
             db_session: SQLAlchemy session for database operations
             tenant_id: Optional tenant ID for multi-tenant isolation
+            delivery_callback: Optional callable invoked by ``process_retries``
+                to actually attempt delivery of a pending webhook entry. It
+                receives the entry dict and returns True on success. When None,
+                ``process_retries`` leaves entries pending instead of burning
+                their retry budget (see that method).
         """
         self.db_session = db_session
         self.tenant_id = tenant_id
+        self._delivery_callback = delivery_callback
         logger.debug(
             "dlq_initialized",
             tenant_id=tenant_id,
@@ -446,6 +457,7 @@ class WebhookDLQ:
             "succeeded": 0,
             "failed": 0,
             "dead": 0,
+            "deferred": 0,
         }
 
         try:
@@ -456,13 +468,27 @@ class WebhookDLQ:
                 stats["processed"] += 1
 
                 try:
-                    # Attempt delivery (placeholder — this would be implemented
-                    # by the caller or by delegating to a retry service)
-                    # For now, we just reschedule.
-                    success = False
-                    error_msg = "Retry processing deferred to application layer"
+                    if self._delivery_callback is None:
+                        # No delivery function wired. Do NOT synthesize a
+                        # failure + mark_retry_attempt here — that silently
+                        # burned the retry budget and marched every entry to
+                        # 'dead' purely by the passage of time. Leave the entry
+                        # pending; the active outbound path is webhook_outbox.py.
+                        # Inject ``delivery_callback`` to enable real retries.
+                        stats["deferred"] = stats.get("deferred", 0) + 1
+                        continue
 
-                    if not success:
+                    try:
+                        success = bool(self._delivery_callback(webhook_entry))
+                        error_msg = "" if success else "delivery_callback reported failure"
+                    except Exception as cb_exc:
+                        success = False
+                        error_msg = f"delivery_callback raised: {cb_exc}"
+
+                    if success:
+                        self.delete_webhook(webhook_id)
+                        stats["succeeded"] += 1
+                    else:
                         # Failed — mark for retry or dead
                         marked = self.mark_retry_attempt(webhook_id, error_msg)
                         if marked:
@@ -478,8 +504,6 @@ class WebhookDLQ:
                                 stats["failed"] += 1
                         else:
                             stats["failed"] += 1
-                    else:
-                        stats["succeeded"] += 1
 
                 except Exception as e:
                     logger.error(

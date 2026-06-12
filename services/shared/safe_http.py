@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import socket
 import ssl
+from ipaddress import ip_address
 from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import urlparse, urlunparse
 
 import httpx
 import structlog
-from shared.url_validation import SSRFError, validate_url
+from shared.url_validation import BLOCKED_NETWORKS, SSRFError, validate_url
 
 logger = structlog.get_logger("safe-http")
 
@@ -118,11 +119,21 @@ def _validate_and_pin(url: str) -> tuple[str, str]:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
         raise SSRFError(f"Could not resolve hostname: {host}") from exc
-    # Take the first address; validate_url has already rejected if any are bad.
+    # Re-validate the exact address we are about to pin. validate_url checked
+    # the addresses from an earlier resolution, but DNS can rebind between the
+    # two lookups; pinning an unvalidated addr would reopen the SSRF window.
     for info in infos:
         addr = info[4][0]
-        if addr:
-            return addr, host
+        if not addr:
+            continue
+        try:
+            resolved = ip_address(addr)
+        except ValueError:
+            continue
+        for network in BLOCKED_NETWORKS:
+            if resolved in network:
+                raise SSRFError(f"Resolved IP {resolved} is in blocked network {network}")
+        return addr, host
     raise SSRFError(f"No addresses for host: {host}")
 
 
