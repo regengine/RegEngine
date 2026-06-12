@@ -300,6 +300,30 @@ if _unknown_router_flags:
         valid=sorted(_VALID_ROUTER_NAMES),
     )
 
+# Compliance-critical routers that must not be silently disabled (#979).
+# Mirrors services/ingestion/main.py — keep the two sets in sync.
+_COMPLIANCE_ROUTERS = {
+    "canonical_records",
+    "rules",
+    "exceptions",
+    "fda_export",
+    "chain_verification",
+}
+_disabled_compliance = _DISABLED_ROUTERS & _COMPLIANCE_ROUTERS
+if _disabled_compliance:
+    _allow_disable = os.getenv("ALLOW_DISABLE_COMPLIANCE_ROUTERS", "").lower() == "true"
+    if not _allow_disable:
+        raise RuntimeError(
+            f"CRITICAL: Compliance-critical routers disabled without "
+            f"ALLOW_DISABLE_COMPLIANCE_ROUTERS=true: {sorted(_disabled_compliance)}. "
+            f"This violates FSMA 204 requirements."
+        )
+    logger.critical(
+        "compliance_routers_disabled",
+        disabled=sorted(_disabled_compliance),
+        hint="ALLOW_DISABLE_COMPLIANCE_ROUTERS is set. System running in degraded compliance mode.",
+    )
+
 
 def _router_enabled(name: str) -> bool:
     router_name = name.lower()
@@ -728,7 +752,12 @@ async def health():
 async def readiness():
     """Deep readiness probe — verifies critical dependencies.
 
-    Returns 200 if all dependencies are reachable, 503 otherwise.
+    Postgres is required: missing or down returns 503. Redis and Neo4j are
+    optional dependencies — failures are reported per-component in the
+    ``checks`` payload with overall status ``degraded`` but still return 200,
+    so a down optional mirror cannot fail the Railway healthcheck
+    (railway.toml healthcheckPath=/readiness) and block deploys.
+
     Use this for load balancer health checks so traffic isn't routed
     to instances that can't actually serve requests.
     """
@@ -767,7 +796,10 @@ async def readiness():
     except Exception as exc:
         checks["redis"] = {"status": "error", "error": str(exc)[:200]}
 
-    # --- Neo4j ---
+    # --- Neo4j (optional graph mirror — never fatal to readiness) ---
+    # Bounded timeouts: the driver defaults to a 30s connect / 60s acquisition
+    # timeout, so without them an unreachable Neo4j hangs the probe long enough
+    # to fail the Railway healthcheck even though the response would be 200.
     try:
         from neo4j import GraphDatabase
 
@@ -779,9 +811,13 @@ async def readiness():
                     os.getenv("NEO4J_USER", "neo4j"),
                     os.getenv("NEO4J_PASSWORD", ""),
                 ),
+                connection_timeout=2.0,
+                connection_acquisition_timeout=2.0,
             )
-            driver.verify_connectivity()
-            driver.close()
+            try:
+                driver.verify_connectivity()
+            finally:
+                driver.close()
             checks["neo4j"] = {"status": "ok"}
         else:
             checks["neo4j"] = {"status": "not_configured"}
@@ -792,6 +828,9 @@ async def readiness():
     # Postgres is required for the consolidated API to serve production traffic.
     # Missing DATABASE_URL must fail readiness so deploy health checks do not
     # route requests to an instance that can only satisfy liveness.
+    # Redis and Neo4j are optional (Neo4j is a best-effort mirror already
+    # guarded by shared.circuit_breaker.neo4j_circuit at runtime) — their
+    # failures degrade the payload but must never return 503.
     pg_ok = checks.get("postgres", {}).get("status") == "ok"
     all_ok = all(c.get("status") != "error" for c in checks.values())
 

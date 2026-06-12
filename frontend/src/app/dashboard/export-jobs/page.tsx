@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { filterExperimentalLinks } from '@/lib/experimental-features';
 
 export default function ExportJobsPage() {
     const { isAuthenticated } = useAuth();
@@ -94,7 +95,7 @@ export default function ExportJobsPage() {
         createJobMutation.mutate();
     }
 
-    const exportPrereqs = [
+    const exportPrereqs = filterExperimentalLinks([
         {
             title: 'Connect source data',
             detail: 'Use Inflow Lab or import tools so export jobs have accepted records to package.',
@@ -116,7 +117,7 @@ export default function ExportJobsPage() {
             action: 'Review settings',
             icon: Upload,
         },
-    ];
+    ]);
 
     return (
         <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">

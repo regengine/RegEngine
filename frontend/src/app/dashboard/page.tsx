@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -423,15 +424,17 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <Link href="/dashboard/inflow-lab" className="w-full xl:w-auto">
-                      <Button
-                        variant="outline"
-                        className="min-h-[44px] w-full xl:w-auto active:scale-[0.98] transition-transform"
-                      >
-                        Open Inflow Lab
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </Link>
+                    {experimentalFeaturesEnabled() && (
+                      <Link href="/dashboard/inflow-lab" className="w-full xl:w-auto">
+                        <Button
+                          variant="outline"
+                          className="min-h-[44px] w-full xl:w-auto active:scale-[0.98] transition-transform"
+                        >
+                          Open Inflow Lab
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -506,6 +509,7 @@ export default function DashboardPage() {
           </Link>
 
           {/* FSMA 204 Deadline Banner */}
+          {experimentalFeaturesEnabled() && (
           <Card className="border-[var(--re-brand)] bg-[var(--re-surface-card)]">
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
@@ -534,6 +538,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </PageContainer>
     </div>
