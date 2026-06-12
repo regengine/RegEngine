@@ -161,3 +161,33 @@ def auth_headers(tenant_id, user_id):
         "X-Tenant-ID": str(tenant_id),
         "X-User-ID": str(user_id),
     }
+
+
+@pytest.fixture(autouse=True)
+def _clear_admin_brute_force_state():
+    """Clear ``admin_auth:*`` brute-force counters in local Redis before each test.
+
+    ``BruteForceLimiter(namespace="admin_auth")`` in services/admin/app/routes.py
+    is Redis-backed whenever a reachable Redis URL is in the environment (the
+    contract suite exports ``REDIS_URL=redis://localhost:6379/0`` into the
+    process env). Failure counts for ip="testclient" persist across pytest
+    processes, so runs within the 60s window poison each other with 429s.
+
+    Only localhost is flushed -- a remote REDIS_URL must never be touched, and
+    production stays Redis-backed (#1392).
+    """
+    try:
+        import redis
+
+        client = redis.Redis.from_url(
+            "redis://localhost:6379/0",
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
+        keys = list(client.scan_iter("admin_auth:*"))
+        if keys:
+            client.delete(*keys)
+    except Exception:
+        # No local Redis -> the limiter falls back to in-memory and each
+        # pytest process starts clean; nothing to clear.
+        pass

@@ -16,6 +16,29 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 _AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
+def _build_fsma_router():
+    """Aggregate the live FSMA sub-routers under /v1/fsma.
+
+    Replaces the deleted ``services.graph.app.fsma_routes`` aggregator so the
+    tests keep exercising the same route paths against the live routers.
+    """
+    from fastapi import APIRouter
+
+    from services.graph.app.routers.fsma import (
+        compliance_router,
+        metrics_router,
+        science_router,
+        trace_router,
+    )
+
+    router = APIRouter(prefix="/v1/fsma", tags=["FSMA 204"])
+    router.include_router(trace_router)
+    router.include_router(science_router)
+    router.include_router(compliance_router)
+    router.include_router(metrics_router)
+    return router
+
+
 @pytest.fixture
 def mock_neo4j_client():
     """Mock Neo4j client at all route module locations."""
@@ -185,7 +208,7 @@ class TestTraceForwardEndpoint:
         """Test successful forward trace."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -220,7 +243,7 @@ class TestTraceForwardEndpoint:
         """Test forward trace with custom max_depth."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -254,7 +277,7 @@ class TestTraceBackwardEndpoint:
         """Test successful backward trace."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -291,7 +314,7 @@ class TestTimelineEndpoint:
         """Test lot timeline retrieval."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -330,7 +353,7 @@ class TestExportEndpoints:
         """Test trace CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -367,7 +390,7 @@ class TestExportEndpoints:
         """Test recall contacts CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -406,7 +429,7 @@ class TestGapAnalysisEndpoints:
         """Test gap analysis retrieval."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -438,7 +461,7 @@ class TestGapAnalysisEndpoints:
         """Test gaps CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)
@@ -476,7 +499,7 @@ class TestHealthEndpoint:
         """Test FSMA health endpoint (no auth required)."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
+        fsma_router = _build_fsma_router()
 
         app = FastAPI()
         app.include_router(fsma_router)

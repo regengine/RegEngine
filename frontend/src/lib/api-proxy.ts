@@ -56,6 +56,53 @@ export function validateUuid(value: string | undefined | null): string | null {
   return value.toLowerCase();
 }
 
+/**
+ * Cross-tenant authorization guard for `[tenantId]` proxy routes.
+ *
+ * The path `tenantId` is attacker-controlled and the proxy injects a
+ * privileged first-party API key regardless of caller, so without this check
+ * any logged-in user could read/export another tenant's data by guessing its
+ * UUID (IDOR). We bind the request to the caller's authoritative tenant:
+ *  - RegEngine JWT (`re_access_token`): the `tenant_id` claim is authoritative
+ *    (issuer/audience/exp already checked by `decodeRegEngineClaims`). A
+ *    tenant-unbound principal — no claim, i.e. master/sysadmin/dev — is
+ *    legitimately cross-tenant capable and is allowed through.
+ *  - Otherwise fall back to the `re_tenant_id` cookie, the same
+ *    defense-in-depth signal `validateProxySession` already relies on.
+ *
+ * Returns a 403 `NextResponse` on mismatch, or `null` when access is allowed.
+ * Callers must still run `requireProxyAuth` + `validateProxySession` first.
+ */
+export function enforceTenantMatch(
+  request: NextRequest,
+  pathTenantId: string,
+): NextResponse | null {
+  const mismatch = NextResponse.json(
+    { error: 'Tenant context does not match authenticated session' },
+    { status: 403 },
+  );
+
+  const regengineToken = request.cookies.get('re_access_token')?.value;
+  if (isUsableCallerCredential(regengineToken)) {
+    const payload = decodeRegEngineClaims(regengineToken);
+    if (payload) {
+      const tokenTenantId = extractRegEngineTenantId(payload);
+      // No tenant claim => tenant-unbound principal (master/sysadmin/dev),
+      // which is legitimately cross-tenant capable.
+      if (tokenTenantId && tokenTenantId !== pathTenantId) {
+        return mismatch;
+      }
+      return null;
+    }
+  }
+
+  const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
+  if (cookieTenantId && cookieTenantId !== pathTenantId) {
+    return mismatch;
+  }
+  return null;
+}
+
 /** Percent-encode a path segment after validating it is URL-safe.
  *  Rejects segments with slashes, control chars, nulls, or `..` traversal. */
 export function safeSegment(value: string | undefined | null): string | null {

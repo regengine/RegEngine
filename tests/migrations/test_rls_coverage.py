@@ -57,6 +57,12 @@ TABLES_EXEMPT: Set[str] = {
     # Global rules catalog and its change log are shared regulatory metadata.
     "rule_definitions",
     "rule_audit_log",
+    # Migration-internal quarantine log from the v059 cte_kdes JSONB
+    # conversion (forward-ported by v078). Written only while v078 runs;
+    # no application read/write path, rows carry no tenant_id. v081
+    # locks it down instead: FORCE RLS with no policy (deny-all) and
+    # REVOKE ALL FROM PUBLIC.
+    "cte_kdes_backfill_log_v059",
 }
 
 

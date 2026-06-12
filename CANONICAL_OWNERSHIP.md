@@ -3,7 +3,13 @@
 **Purpose:** For each truth-bearing concept, one obvious answer to
 "what is the canonical representation of X?"
 
-Last updated: 2026-04-14.
+Last updated: 2026-04-14. Topology language corrected 2026-06-10.
+
+> **Topology note:** the "Who writes / Who reads" rows below use pre-consolidation
+> service names (ingestion, admin, compliance, graph...). Production is a **single
+> consolidated FastAPI monolith** (`server/main.py` on Railway); those names refer to
+> router domains and code paths inside that one process, not separate deployments.
+> The data-model content itself is current. See `docs/CODEBASE_MAP.md` (project level).
 
 ---
 

@@ -2,6 +2,23 @@
 
 A production-grade job scheduler for automated regulatory change monitoring.
 
+## Deployment Reality
+
+The scheduler is **not deployed and contributes no routers to the monolith**. Unlike the
+nlp/graph domains it is not mounted into `server/main.py` at all:
+
+- The standalone entrypoint (`main.py`, health server on port 8600) is blocked in
+  production by `assert_legacy_entrypoint_not_in_production('scheduler')`. As of this
+  writing its jobs (FDA scraping, recall alerting, deadline monitoring,
+  retention/archival, nightly FSMA sync) run **nowhere** in the Railway deployment.
+- **In progress:** a separate workstream is wiring the scheduler to run in-process in
+  the monolith — APScheduler started from the `server/main.py` lifespan with
+  PostgreSQL advisory-lock leader election.
+- `api.py` (the FastAPI management API) is dead code: never mounted, never served.
+- The circuit breaker (`app/circuit_breaker.py`) is **in-memory**, not Redis-backed.
+- Kafka emission only applies to the undeployed standalone mode; the production event
+  backbone defaults to `EVENT_BACKBONE=pg`.
+
 ## Features
 
 - **FDA Warning Letters**: Automated scraping from FDA RSS feeds
@@ -41,7 +58,7 @@ scheduler/
 Environment variables:
 - `DATABASE_URL`: PostgreSQL connection string
 - `KAFKA_BOOTSTRAP_SERVERS`: Kafka broker addresses
-- `REDIS_URL`: Redis for circuit breaker state
+- `REDIS_URL`: Redis connection (circuit breaker state itself is in-memory)
 - `WEBHOOK_URLS`: Comma-separated webhook endpoints
 - `FDA_SCRAPE_INTERVAL_MINUTES`: Polling interval (default: 60)
 

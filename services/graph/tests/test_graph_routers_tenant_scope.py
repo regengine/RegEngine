@@ -1,6 +1,8 @@
 """Tenant scoping tests for graph-service routers.
 
-Covers issues #1236 (audit), #1242 (drift/suppliers), #1244 (recall).
+Covers issue #1244 (recall). The #1236 (audit) and #1242 (drift) tests
+were removed together with the unreachable routers/fsma/audit.py and
+fsma_drift.py modules (dead-code sweep).
 
 Each endpoint must derive `tenant_id` from the authenticated request
 context (via `Depends(get_current_tenant_id)`), never from the query
@@ -24,20 +26,8 @@ from fastapi import HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from services.graph.app.fsma_audit import (
-    FSMAAuditAction,
-    FSMAAuditEntry,
-    get_audit_log,
-    reset_audit_log,
-)
-from services.graph.app.fsma_drift import (
-    AlertSeverity,
-    AlertType,
-    DriftAlert,
-    get_drift_detector,
-    reset_drift_detector,
-)
-from services.graph.app.routers.fsma import audit as audit_router, recall as recall_router
+from services.graph.app.fsma_audit import reset_audit_log
+from services.graph.app.routers.fsma import recall as recall_router
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -45,179 +35,10 @@ TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
 
 @pytest.fixture(autouse=True)
 def _reset_singletons():
-    """Reset audit log and drift detector so tests are independent."""
+    """Reset the audit log so tests are independent."""
     reset_audit_log()
-    reset_drift_detector()
     yield
     reset_audit_log()
-    reset_drift_detector()
-
-
-# ── #1236 — audit endpoints must source tenant from auth ─────────────────────
-
-
-class TestAuditTenantScope:
-    """#1236 — audit endpoints must not accept query-param tenant_id."""
-
-    def test_get_full_audit_log_signature_rejects_query_tenant_id(self):
-        """The endpoint signature must not accept `tenant_id` as a query param."""
-        import inspect
-
-        sig = inspect.signature(audit_router.get_full_audit_log)
-        tenant_param = sig.parameters.get("tenant_id")
-        assert tenant_param is not None
-        default = tenant_param.default
-        assert hasattr(default, "dependency"), "tenant_id must be Depends(get_current_tenant_id), not Query(...)"
-        assert default.dependency.__name__ == "get_current_tenant_id"
-
-    def test_get_audit_trail_signature_has_tenant_dependency(self):
-        import inspect
-
-        sig = inspect.signature(audit_router.get_audit_trail)
-        assert "tenant_id" in sig.parameters
-        default = sig.parameters["tenant_id"].default
-        assert hasattr(default, "dependency")
-        assert default.dependency.__name__ == "get_current_tenant_id"
-
-    def test_get_audit_verify_signature_has_tenant_dependency(self):
-        import inspect
-
-        sig = inspect.signature(audit_router.verify_audit_integrity)
-        assert "tenant_id" in sig.parameters
-        default = sig.parameters["tenant_id"].default
-        assert hasattr(default, "dependency")
-
-    def test_get_full_audit_log_returns_only_caller_tenant(self):
-        """Entries belonging to other tenants must not be returned."""
-        log = get_audit_log()
-        log.log(
-            actor="tenant_a_user",
-            action=FSMAAuditAction.EXTRACTED,
-            target_type="Lot",
-            target_id="LOT-A",
-            tenant_id=str(TENANT_A),
-        )
-        log.log(
-            actor="tenant_b_user",
-            action=FSMAAuditAction.EXTRACTED,
-            target_type="Lot",
-            target_id="LOT-B",
-            tenant_id=str(TENANT_B),
-        )
-
-        resp = audit_router.get_full_audit_log(action=None, tenant_id=TENANT_A, api_key="test-key")
-        for entry in resp["audit_trail"]:
-            assert entry["tenant_id"] in (None, "", str(TENANT_A)), f"cross-tenant entry leaked: {entry}"
-
-    def test_get_audit_trail_raises_on_cross_tenant_leak(self):
-        """If the store returns a cross-tenant entry, raise 500 (invariant)."""
-        entry = FSMAAuditEntry(
-            actor="attacker",
-            action=FSMAAuditAction.EXTRACTED,
-            target_type="Lot",
-            target_id="LOT-X",
-            tenant_id=str(TENANT_B),
-        )
-        fake_log = MagicMock()
-        fake_log.get_by_target.return_value = [entry]
-
-        with patch.object(audit_router, "get_audit_log", return_value=fake_log):
-            with pytest.raises(HTTPException) as exc_info:
-                audit_router.get_audit_trail(target_id="LOT-X", tenant_id=TENANT_A, api_key="test-key")
-            assert exc_info.value.status_code == 500
-            assert "invariant violation" in exc_info.value.detail
-
-
-# ── #1242 — drift and supplier health must scope per tenant ─────────────────
-
-
-class TestDriftTenantScope:
-    """#1242 — drift alerts and supplier health must be tenant-scoped."""
-
-    def test_drift_status_signature_has_tenant_dependency(self):
-        import inspect
-
-        for fn_name in (
-            "drift_monitoring_status",
-            "analyze_drift",
-            "get_drift_alerts",
-            "get_supplier_health",
-            "acknowledge_drift_alert",
-            "resolve_drift_alert",
-        ):
-            fn = getattr(audit_router, fn_name)
-            sig = inspect.signature(fn)
-            assert "tenant_id" in sig.parameters, f"{fn_name} missing tenant_id"
-            default = sig.parameters["tenant_id"].default
-            assert hasattr(default, "dependency"), f"{fn_name}: tenant_id must be Depends(...), got {default!r}"
-
-    def test_get_drift_alerts_filters_by_tenant(self):
-        detector = get_drift_detector()
-        alert_a = DriftAlert(
-            alert_type=AlertType.KDE_COMPLETENESS_DROP,
-            severity=AlertSeverity.WARNING,
-            tenant_id=str(TENANT_A),
-            message="tenant A alert",
-        )
-        alert_b = DriftAlert(
-            alert_type=AlertType.KDE_COMPLETENESS_DROP,
-            severity=AlertSeverity.WARNING,
-            tenant_id=str(TENANT_B),
-            message="tenant B alert",
-        )
-        with detector._lock:
-            detector._alerts.append(alert_a)
-            detector._alerts.append(alert_b)
-
-        resp = audit_router.get_drift_alerts(
-            status=None,
-            severity=None,
-            supplier_gln=None,
-            limit=100,
-            tenant_id=TENANT_A,
-            api_key="test-key",
-        )
-        tenant_ids = {a["tenant_id"] for a in resp["alerts"]}
-        assert str(TENANT_B) not in tenant_ids
-        assert tenant_ids <= {str(TENANT_A), None, ""}
-
-    def test_acknowledge_rejects_cross_tenant_alert(self):
-        detector = get_drift_detector()
-        alert_b = DriftAlert(
-            alert_id="alert-cross-tenant",
-            alert_type=AlertType.KDE_COMPLETENESS_DROP,
-            severity=AlertSeverity.WARNING,
-            tenant_id=str(TENANT_B),
-        )
-        with detector._lock:
-            detector._alerts.append(alert_b)
-
-        with pytest.raises(HTTPException) as exc_info:
-            audit_router.acknowledge_drift_alert(
-                alert_id="alert-cross-tenant",
-                tenant_id=TENANT_A,
-                api_key="test-key",
-            )
-        assert exc_info.value.status_code == 404
-
-    def test_resolve_rejects_cross_tenant_alert(self):
-        detector = get_drift_detector()
-        alert_b = DriftAlert(
-            alert_id="alert-cross-tenant-resolve",
-            alert_type=AlertType.KDE_COMPLETENESS_DROP,
-            severity=AlertSeverity.WARNING,
-            tenant_id=str(TENANT_B),
-        )
-        with detector._lock:
-            detector._alerts.append(alert_b)
-
-        with pytest.raises(HTTPException) as exc_info:
-            audit_router.resolve_drift_alert(
-                alert_id="alert-cross-tenant-resolve",
-                tenant_id=TENANT_A,
-                api_key="test-key",
-            )
-        assert exc_info.value.status_code == 404
 
 
 # ── #1244 — recall history/drill endpoints must source tenant from auth ─────

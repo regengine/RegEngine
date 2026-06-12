@@ -122,11 +122,15 @@ def scrape_registry(
     return {"adaptor": adaptor, "count": len(results), "sources": results}
 
 
-@router.post("/v1/ingest/all-regulations", response_model=IngestAllRegulationsResponse)
-async def ingest_all_regulations(
-    api_key: APIKey = Depends(require_api_key),
-):
-    """Trigger an FDA-scoped, idempotent regulatory ingestion run."""
+async def run_all_regulations_ingest() -> dict:
+    """Run the FDA-scoped, idempotent regulatory ingestion sweep.
+
+    Shared by the HTTP route below and the scheduler's nightly
+    ``fsma_nightly_sync`` job, which calls it in-process (see
+    ``services/scheduler/service.py``) — the consolidated monolith has no
+    internal credential that ``require_api_key`` accepts, so the old
+    HTTP-to-self call could never authenticate.
+    """
     job_id = str(uuid.uuid4())
     started_at = time.time()
 
@@ -134,7 +138,6 @@ async def ingest_all_regulations(
         "fsma_ingestion_triggered",
         job_id=job_id,
         sources=len(FSMA_SOURCES),
-        tenant_id=api_key.tenant_id,
     )
 
     tasks = [
@@ -179,3 +182,12 @@ async def ingest_all_regulations(
         "duration_ms": duration_ms,
         **summary,
     }
+
+
+@router.post("/v1/ingest/all-regulations", response_model=IngestAllRegulationsResponse)
+async def ingest_all_regulations(
+    api_key: APIKey = Depends(require_api_key),
+):
+    """Trigger an FDA-scoped, idempotent regulatory ingestion run."""
+    logger.info("fsma_ingestion_requested", tenant_id=api_key.tenant_id)
+    return await run_all_regulations_ingest()
