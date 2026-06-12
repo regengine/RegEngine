@@ -116,7 +116,9 @@ def _get_fsma_extractor():
     return _fsma_extractor
 
 
-def _run_hardened_extraction(payload: Dict[str, Any], doc_id: str, text: str) -> Dict[str, Any]:
+def _run_hardened_extraction(
+    payload: Dict[str, Any], doc_id: str, text: str, tenant_id: Optional[str]
+) -> Dict[str, Any]:
     """Run the hardened extraction pipeline ported from the Kafka consumer.
 
     Reuses the consumer pipeline modules (services/nlp/app/consumer) so the
@@ -125,8 +127,10 @@ def _run_hardened_extraction(payload: Dict[str, Any], doc_id: str, text: str) ->
 
       1. FSMAExtractor pass — KDE-minimum gating + HITL routing (#1194).
          Requires tenant scoping (#1122); skipped with a warning when the
-         task payload carries no ``tenant_id`` (the Kafka path DLQs
-         tenantless messages before extraction).
+         task row carries no ``tenant_id`` (the Kafka path DLQs
+         tenantless messages before extraction). ``tenant_id`` is the
+         claimed queue row's column — written at enqueue time from the
+         authenticated principal — never the payload blob (EPIC-A #1651).
       2. Legacy regex ``extract_entities`` → canonical ExtractionPayload
          conversion with the 0.60 confidence cap (#1202) and negation-aware
          obligation typing (#1299).
@@ -288,10 +292,14 @@ def _run_hardened_extraction(payload: Dict[str, Any], doc_id: str, text: str) ->
     return summary
 
 
-def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
+def _handle_nlp_extraction(payload: Dict[str, Any], tenant_id: Optional[str] = None) -> None:
     """Extract entities from an ingested document.
 
     Replaces Kafka topic: documents.ingested
+
+    ``tenant_id`` is the claimed task row's ``tenant_id`` column (set by
+    ``enqueue_task`` from the authenticated principal), not the payload —
+    the payload blob is not a tenant authority (EPIC-A #1651).
 
     Runs the hardened extraction pipeline shared with the Kafka consumer
     (FSMA KDE gating, capped-confidence regex conversion, three-tier
@@ -309,7 +317,7 @@ def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
             logger.warning("nlp_extraction_skip_empty", payload_keys=list(payload.keys()))
             return
         try:
-            summary = _run_hardened_extraction(payload, doc_id, text)
+            summary = _run_hardened_extraction(payload, doc_id, text, tenant_id)
         except Exception as exc:
             logger.warning(
                 "nlp_hardened_pipeline_failed",
@@ -341,10 +349,14 @@ def _handle_nlp_extraction(payload: Dict[str, Any]) -> None:
         raise
 
 
-def _handle_review_item(payload: Dict[str, Any]) -> None:
+def _handle_review_item(payload: Dict[str, Any], tenant_id: Optional[str] = None) -> None:
     """Record a low-confidence extraction for human review.
 
     Replaces Kafka topic: nlp.needs_review
+
+    ``tenant_id`` is the claimed task row's ``tenant_id`` column (set by
+    ``enqueue_task`` from the authenticated principal), not the payload —
+    the payload blob is not a tenant authority (EPIC-A #1651).
 
     Persists via ``HallucinationTracker.record_hallucination`` — the
     previous ``tracker.record(...)`` call targeted a method that does not
@@ -393,7 +405,7 @@ def _handle_review_item(payload: Dict[str, Any]) -> None:
         raise
 
 
-TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any]], None]] = {
+TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any], Optional[str]], None]] = {
     "nlp_extraction": _handle_nlp_extraction,
     "review_item": _handle_review_item,
 }
@@ -473,7 +485,8 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
                 FOR UPDATE SKIP LOCKED
             )
             RETURNING id, task_type, payload, attempts, max_attempts,
-                      COALESCE(visibility_timeout_seconds, :default_timeout)
+                      COALESCE(visibility_timeout_seconds, :default_timeout),
+                      tenant_id
         """),
         {
             "now": now,
@@ -495,6 +508,11 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
             "attempts": row[3],
             "max_attempts": row[4],
             "visibility_timeout_seconds": int(timeout),
+            # The row column is the tenant authority (EPIC-A #1651): it is
+            # written by enqueue_task from the authenticated principal and
+            # scopes the (tenant_id, idempotency_key) index. Handlers must
+            # use it instead of any tenant_id embedded in the payload blob.
+            "tenant_id": str(row[6]) if row[6] is not None else None,
         }
     return None
 
@@ -544,10 +562,11 @@ def _run_handler_with_heartbeat(
     db_factory,
     task_id: int,
     timeout_seconds: int,
-    handler: Callable[[Dict[str, Any]], None],
+    handler: Callable[[Dict[str, Any], Optional[str]], None],
     payload: Dict[str, Any],
     stop_event: Optional[threading.Event] = None,
     attempts: int = 0,
+    tenant_id: Optional[str] = None,
 ) -> None:
     """Execute ``handler`` while a background thread extends the task lock.
 
@@ -600,7 +619,7 @@ def _run_handler_with_heartbeat(
         _current_task_id = task_id
         _current_task_attempts = attempts
     try:
-        handler(payload)
+        handler(payload, tenant_id)
     finally:
         stop.set()
         heartbeat_thread.join(timeout=HEARTBEAT_INTERVAL_SECONDS + 5)
@@ -728,6 +747,7 @@ def _worker_loop() -> None:
                     handler=handler,
                     payload=task["payload"],
                     attempts=task["attempts"],
+                    tenant_id=task.get("tenant_id"),
                 )
                 _complete_task(db, task["id"])
                 logger.debug("task_completed", task_id=task["id"], task_type=task_type)

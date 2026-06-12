@@ -1260,9 +1260,7 @@ greenlet==3.5.1 \
     --hash=sha256:f16ba1efc0715b680a18b8123d90dad887c6112ae3555b4b5c32c149540c6b4e \
     --hash=sha256:fa4f98af3a528f0c3fd592a26df7f376f93329c8f4d987f6bb979057af8bf5e2 \
     --hash=sha256:ffea73584b216150eab159b6d12348fb253e68757974de1e2c40d8a318ac89ed
-    # via
-    #   -r requirements.in
-    #   sqlalchemy
+    # via -r requirements.in
 groq==0.37.1 \
     --hash=sha256:7353d6dfb60834fd7aacbb86af106e2dc2aeaff6d0edd65fb2fd0f16bd39314c \
     --hash=sha256:b49f8c8898c55eaec9f71f1342f3fcacc9560d67a08ce5f35fbfb84e8dacd3da

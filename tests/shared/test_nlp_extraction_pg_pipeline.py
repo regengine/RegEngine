@@ -96,7 +96,7 @@ class TestHardenedHappyPath:
             patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(_payload())
+            task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
         # FSMA pass ran with the required tenant scoping (#1122).
         extractor.extract.assert_called_once()
@@ -117,7 +117,7 @@ class TestHardenedHappyPath:
             patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(_payload())
+            task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
         review_calls = _review_item_calls(enqueue)
         # FSMA was high-confidence (no review) — only the regex extraction routes.
@@ -157,7 +157,7 @@ class TestHardenedHappyPath:
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
             # Text with no obligations → regex pass yields nothing.
-            task_processor._handle_nlp_extraction(_payload(text="hello world"))
+            task_processor._handle_nlp_extraction(_payload(text="hello world"), TENANT_ID)
 
         assert _review_item_calls(enqueue) == []
 
@@ -165,14 +165,16 @@ class TestHardenedHappyPath:
         get_extractor = MagicMock()
         enqueue = MagicMock(return_value=1)
 
+        # The payload still carries a tenant_id, but the task ROW has none —
+        # the row column is the only tenant authority (EPIC-A #1651), so the
+        # payload value must be ignored and the FSMA pass skipped.
         payload = _payload()
-        del payload["tenant_id"]
 
         with (
             patch.object(task_processor, "_get_fsma_extractor", get_extractor),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(payload)
+            task_processor._handle_nlp_extraction(payload, tenant_id=None)
 
         # FSMAExtractor requires tenant scoping (#1122) — never invoked.
         get_extractor.assert_not_called()
@@ -206,7 +208,7 @@ class TestFallbackOnException:
             patch.object(task_processor, "logger", log),
         ):
             # Must NOT raise — the task must not fail on a pipeline regression.
-            task_processor._handle_nlp_extraction(_payload())
+            task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
         # Structured warning emitted for the fallback.
         warning_events = [c.args[0] for c in log.warning.call_args_list if c.args]
@@ -234,7 +236,7 @@ class TestFallbackOnException:
             side_effect=TypeError("regex extractor broken"),
         ):
             with pytest.raises(TypeError):
-                task_processor._handle_nlp_extraction(_payload())
+                task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
 
 # ---------------------------------------------------------------------------
@@ -260,13 +262,16 @@ class TestReviewItemSchemaCompatibility:
             patch.object(task_processor, "_get_fsma_extractor", return_value=extractor),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(_payload())
+            task_processor._handle_nlp_extraction(_payload(), TENANT_ID)
 
-        review_payload = _review_item_calls(enqueue)[0].args[1]
+        review_call = _review_item_calls(enqueue)[0]
+        review_payload = review_call.args[1]
 
         tracker, fake_metrics = _stub_admin_metrics()
         with patch.dict(sys.modules, {"services.admin.app.metrics": fake_metrics}):
-            task_processor._handle_review_item(review_payload)
+            # The worker passes the claimed row's tenant_id column — mirror
+            # that here with the tenant the enqueue call stamped on the row.
+            task_processor._handle_review_item(review_payload, review_call.kwargs["tenant_id"])
 
         tracker.record_hallucination.assert_called_once()
         kwargs = tracker.record_hallucination.call_args.kwargs
