@@ -16,6 +16,7 @@ Public recall-drill endpoint. Coverage:
 
 from __future__ import annotations
 
+import os
 import sys
 from itertools import count
 
@@ -67,9 +68,13 @@ def _reset_limiter_state() -> None:
 @pytest.fixture
 def client() -> TestClient:
     # Reset the shared slowapi limiter state between tests so the
-    # 5/min limit doesn't leak across test cases.
+    # 5/min limit doesn't leak across test cases. The host must be
+    # unique per *process*, not just per test: ``count`` restarts at 1
+    # in every pytest process, so without the pid the rate-limit key
+    # collides across back-to-back runs whenever the limiter storage
+    # is shared (e.g. RATELIMIT_STORAGE_URL pointing at Redis).
     _reset_limiter_state()
-    host = f"proof-recall-test-{next(_client_counter)}"
+    host = f"proof-recall-test-{os.getpid()}-{next(_client_counter)}"
     return TestClient(_build_app(), client=(host, 50000))
 
 
