@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from typing import BinaryIO
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 
 # Default limits
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -46,6 +46,33 @@ async def read_upload_with_limit(
         chunk = await file.read(UPLOAD_CHUNK_SIZE_BYTES)
         if not chunk:
             break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"{label} too large (max {max_bytes // (1024 * 1024)} MB)",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def read_request_body_with_limit(
+    request: Request,
+    max_bytes: int = MAX_FILE_SIZE_BYTES,
+    label: str = "request body",
+) -> bytes:
+    """Read a raw request body with a streaming size cap.
+
+    Unlike ``request.body()``, this never buffers more than ``max_bytes`` in
+    memory. It closes the chunked/streaming-upload gap left by
+    ``RequestSizeLimitMiddleware``, which only enforces the ``Content-Length``
+    header and lets bodies without it (``Transfer-Encoding: chunked``) through.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        if not chunk:
+            continue
         total += len(chunk)
         if total > max_bytes:
             raise HTTPException(
