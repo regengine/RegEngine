@@ -36,6 +36,12 @@ RegEngine handles tenant-scoped food traceability data. The security model is bu
 - Integrations must not bypass tenant isolation.
 - Prototype or non-FSMA integrations must remain outside the production surface until promoted.
 
+### B2B exchange (downstream KDE sharing)
+
+- `POST /api/v1/exchange/send` shares a sender's **own** shipping KDE evidence with a sender-chosen destination tenant. A sender can never read or transmit another tenant's data; `/exchange/receive` is scoped to the caller's own tenant.
+- The destination (`receiver_tenant_id`) is **format-validated** (1–64 alphanumeric/hyphen/underscore) but is intentionally **not consent-gated** and **not existence-checked**. An existence check is deliberately avoided because it would expose a tenant-enumeration oracle.
+- **Accepted risk:** a sender may stage a package addressed to a tenant that has not opted in; that tenant only ever observes it by polling `/exchange/receive`, and no cross-tenant *read* is possible. A receiver consent/opt-in model is a future product decision, not a current control.
+
 ## Operational Boundary
 
 - Health and readiness probes may be public only when they expose no tenant data or secrets.

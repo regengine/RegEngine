@@ -498,9 +498,10 @@ async def send_exchange_package(
     # Validate the caller-supplied destination's format (1-64 alnum/-/_).
     # This is input hygiene only — it bounds the value space and rejects
     # empty/garbage/oversized receiver ids. It is deliberately NOT an
-    # existence check: probing whether a receiver tenant exists would leak a
-    # tenant-enumeration oracle. A full consent/opt-in model for who may
-    # receive a package remains a separate product decision (#2449).
+    # existence check (that would leak a tenant-enumeration oracle) and there
+    # is intentionally no receiver consent gate. This is an accepted,
+    # documented boundary — see SECURITY_BOUNDARIES.md "B2B exchange": a sender
+    # only ever shares its own data, and /receive is scoped to the caller.
     validate_tenant_id(request.receiver_tenant_id)
 
     sender_tenant_id = _resolve_principal_tenant_id(
