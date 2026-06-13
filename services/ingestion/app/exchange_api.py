@@ -25,6 +25,7 @@ from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
 from .shared.tenant_resolution import resolve_principal_tenant_id, resolve_tenant_id
+from .tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("b2b-exchange")
 
@@ -494,6 +495,14 @@ async def send_exchange_package(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     principal: IngestionPrincipal = Depends(require_permission("exchange.write")),
 ):
+    # Validate the caller-supplied destination's format (1-64 alnum/-/_).
+    # This is input hygiene only — it bounds the value space and rejects
+    # empty/garbage/oversized receiver ids. It is deliberately NOT an
+    # existence check: probing whether a receiver tenant exists would leak a
+    # tenant-enumeration oracle. A full consent/opt-in model for who may
+    # receive a package remains a separate product decision (#2449).
+    validate_tenant_id(request.receiver_tenant_id)
+
     sender_tenant_id = _resolve_principal_tenant_id(
         request.sender_tenant_id or tenant_id,
         x_tenant_id,
