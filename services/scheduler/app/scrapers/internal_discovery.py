@@ -6,13 +6,12 @@ from shared.observability.context import logger
 from shared.resilient_http import resilient_client
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
 
-from app.config import get_settings
-
-settings = get_settings()
+from ..config import get_settings
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=1, max=10))
 async def run_regulatory_discovery():
+    settings = get_settings()
     regulatory_discovery_runs_total.inc()
     async with resilient_client(
         timeout=settings.discovery_timeout_seconds,
@@ -47,7 +46,7 @@ class InternalDiscoveryScraper:
         asyncio.run(run_regulatory_discovery())
         # items[] is empty because internal discovery delegates to the ingestion
         # service and does not collect individual items locally.
-        from app.models import ScrapeResult, SourceType
+        from ..models import ScrapeResult, SourceType
 
         items: list = []
         return ScrapeResult(

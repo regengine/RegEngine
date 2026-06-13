@@ -27,6 +27,9 @@ interface ContactPayload {
   email?: string;
   company?: string;
   message?: string;
+  // Honeypot — humans never see or fill this; bots that auto-fill every field
+  // trip it. Rendered as a visually-hidden input by the contact form.
+  website?: string;
 }
 
 // Pragmatic email regex — rejects obvious garbage, accepts anything that
@@ -35,12 +38,49 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const DESTINATION = 'chris@regengine.co';
 
+// Best-effort in-memory per-IP throttle. On serverless this is per-instance
+// (not shared across Vercel function instances), so it dampens bursts rather
+// than enforcing a hard global cap — a durable store (Vercel KV / Upstash)
+// would be the real fix. Combined with the honeypot it raises abuse cost.
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const _hits = new Map<string, number[]>();
+
+function clientIp(request: Request): string {
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0].trim();
+  return request.headers.get('x-real-ip') || 'unknown';
+}
+
+function isRateLimited(ip: string, now: number): boolean {
+  const recent = (_hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT) {
+    _hits.set(ip, recent);
+    return true;
+  }
+  recent.push(now);
+  _hits.set(ip, recent);
+  return false;
+}
+
 export async function POST(request: Request) {
   let payload: ContactPayload;
   try {
     payload = await request.json();
   } catch {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  }
+
+  // Honeypot: pretend success so we don't reveal the trap, but drop it.
+  if ((payload.website ?? '').trim() !== '') {
+    return NextResponse.json({ ok: true });
+  }
+
+  if (isRateLimited(clientIp(request), Date.now())) {
+    return NextResponse.json(
+      { error: 'rate_limited', detail: 'Too many submissions. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': '600' } },
+    );
   }
 
   const name = payload.name?.trim() ?? '';

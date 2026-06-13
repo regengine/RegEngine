@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
 import {
   ArrowRight,
   ClipboardCheck,
@@ -192,9 +193,11 @@ export default function ProductPage() {
             RegEngine is built around one simple operating rule: supplier data is useful only after it is mapped, checked, fixed, persisted, and explicitly committed.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/tools/inflow-lab" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]">
-              Preflight a supplier file <ArrowRight className="h-4 w-4" />
-            </Link>
+            {experimentalFeaturesEnabled() && (
+              <Link href="/tools/inflow-lab" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]">
+                Preflight a supplier file <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
             <Link href="/security" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-text-primary)]">
               Verify security
             </Link>

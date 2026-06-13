@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { EXPERIMENTAL_TOOL_SLUGS, experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import {
     ArrowRight,
     BarChart3,
@@ -44,7 +45,8 @@ const TOOLS = [
 
 export function ToolsLandingClient() {
     const [activeCategory, setActiveCategory] = useState<Category>('all');
-    const filtered = activeCategory === 'all' ? TOOLS : TOOLS.filter((tool) => tool[4] === activeCategory);
+    const visibleTools = TOOLS.filter((tool) => experimentalFeaturesEnabled() || !EXPERIMENTAL_TOOL_SLUGS.has(tool[0]));
+    const filtered = activeCategory === 'all' ? visibleTools : visibleTools.filter((tool) => tool[4] === activeCategory);
 
     return (
         <main className="re-page min-h-screen text-[var(--re-text-secondary)]">

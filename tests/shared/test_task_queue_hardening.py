@@ -221,7 +221,7 @@ class TestClaimTaskRespectsBackoff:
         `row[5]` is always a usable int.
         """
         db = MagicMock()
-        # Simulate a real claim — 6 columns incl. timeout.
+        # Simulate a real claim — 7 columns incl. timeout and tenant_id.
         db.execute.return_value.fetchone.return_value = (
             42,  # id
             "nlp_extraction",  # task_type
@@ -229,11 +229,14 @@ class TestClaimTaskRespectsBackoff:
             1,  # attempts
             3,  # max_attempts
             180,  # visibility_timeout_seconds
+            "11111111-2222-3333-4444-555555555555",  # tenant_id (row column)
         )
         claimed = task_processor._claim_task(db)
         assert claimed is not None
         assert claimed["id"] == 42
         assert claimed["visibility_timeout_seconds"] == 180
+        # EPIC-A #1651 — the row column is the tenant authority for handlers.
+        assert claimed["tenant_id"] == "11111111-2222-3333-4444-555555555555"
 
     def test_claim_sql_returns_six_columns(self):
         """Guard the column count in RETURNING against silent regressions."""

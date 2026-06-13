@@ -19,4 +19,21 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     GRANT ALL PRIVILEGES ON DATABASE energy TO regengine;
 EOSQL
 
+# get_tenant_context() is referenced by V002 (baseline) RLS policies but no
+# migration defines it — production Supabase has it from pre-baseline state.
+# Seed it on every local DB so `alembic upgrade head` works from a clean
+# container. Reads `app.tenant_id` session variable (set via `SET LOCAL`).
+for db in regengine regengine_admin energy; do
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$db" <<-EOSQL
+        CREATE OR REPLACE FUNCTION get_tenant_context()
+        RETURNS UUID AS \$fn\$
+        BEGIN
+            RETURN current_setting('app.tenant_id', true)::uuid;
+        EXCEPTION WHEN OTHERS THEN
+            RETURN NULL;
+        END;
+        \$fn\$ LANGUAGE plpgsql STABLE;
+EOSQL
+done
+
 echo "✅ Additional databases initialized"
