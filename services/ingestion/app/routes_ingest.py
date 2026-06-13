@@ -476,7 +476,10 @@ def _process_and_emit(
         normalized, document_id, _ = normalize_document(raw_json, raw_bytes, url_str, content_type)
     except (ValueError, KeyError, TypeError) as e:
         logger.error("normalization_failed", url=url_str, error=str(e))
-        raise HTTPException(status_code=422, detail=f"Document parsing/normalization failed: {str(e)}")
+        raise HTTPException(
+            status_code=422,
+            detail="Document parsing/normalization failed. Check server logs for details.",
+        )
 
     # 5. Enrich with metadata
     normalized["parsed_text"] = parsed_text

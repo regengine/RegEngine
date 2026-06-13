@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Mail, MessageSquare, Clock, Send, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function ContactPage() {
-  const [form, setForm] = useState({ name: '', email: '', company: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
   const update = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -23,7 +23,7 @@ export default function ContactPage() {
       });
       if (!res.ok) throw new Error(`API responded ${res.status}`);
       setStatus('success');
-      setForm({ name: '', email: '', company: '', message: '' });
+      setForm({ name: '', email: '', company: '', message: '', website: '' });
     } catch {
       setStatus('error');
     }
@@ -77,6 +77,18 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+                {/* Honeypot — hidden from humans; bots that auto-fill it are
+                    dropped server-side (/api/contact). */}
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  value={form.website}
+                  onChange={update('website')}
+                  style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="contact-name" className="sr-only">Name</label>

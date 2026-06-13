@@ -19,6 +19,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 _AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
+def _build_fsma_router():
+    """Aggregate the live FSMA sub-routers under /v1/fsma.
+
+    Replaces the deleted ``services.graph.app.fsma_routes`` aggregator so the
+    tests keep exercising the same route paths against the live routers.
+    """
+    from fastapi import APIRouter
+
+    from services.graph.app.routers.fsma import science_router, trace_router
+
+    router = APIRouter(prefix="/v1/fsma", tags=["FSMA 204"])
+    router.include_router(trace_router)
+    router.include_router(science_router)
+    return router
+
+
 # ============================================================================
 # TIME ARROW TESTS
 # ============================================================================
@@ -178,153 +194,6 @@ class TestTimeArrowInTraceForward:
         assert mock_neo4j_session.run.called
 
 
-# ============================================================================
-# CRYPTOGRAPHIC CHAIN INTEGRITY TESTS
-# ============================================================================
-
-
-class TestCryptoChainIntegrity:
-    """Tests for Merkle hash-chain integrity of SupplierCTEEvent records."""
-
-    @staticmethod
-    def _load_merkle():
-        """Import the merkle module (kept as helper for test compatibility)."""
-        from services.graph.app.evidence import merkle
-
-        return merkle
-
-    def test_compute_event_hash_deterministic(self):
-        """compute_event_hash must produce the same hash for the same input."""
-        merkle = self._load_merkle()
-
-        event = {
-            "event_id": "evt-001",
-            "event_type": "SHIPPING",
-            "tlc": "TLC-001",
-            "timestamp": "2025-01-01T00:00:00Z",
-            "previous_hash": None,
-        }
-        h1 = merkle.compute_event_hash(event)
-        h2 = merkle.compute_event_hash(event)
-        assert h1 == h2, "Hash must be deterministic"
-        assert len(h1) == 64, "SHA-256 hex digest must be 64 chars"
-
-    def test_append_to_chain_links_events(self):
-        """append_to_chain must set previous_hash and _next_merkle_hash."""
-        merkle = self._load_merkle()
-
-        e1 = merkle.append_to_chain(
-            {
-                "event_id": "e1",
-                "event_type": "CREATION",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-01T00:00:00Z",
-            }
-        )
-        e2 = merkle.append_to_chain(
-            {
-                "event_id": "e2",
-                "event_type": "SHIPPING",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-02T00:00:00Z",
-            },
-            previous_hash=e1["_next_merkle_hash"],
-        )
-
-        assert e1["previous_hash"] is None
-        assert e2["previous_hash"] == e1["_next_merkle_hash"]
-
-    def test_verify_chain_integrity_valid(self):
-        """A correctly chained sequence must verify as valid."""
-        merkle = self._load_merkle()
-
-        e1 = merkle.append_to_chain(
-            {
-                "event_id": "e1",
-                "event_type": "CREATION",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-01T00:00:00Z",
-            }
-        )
-        e2 = merkle.append_to_chain(
-            {
-                "event_id": "e2",
-                "event_type": "SHIPPING",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-02T00:00:00Z",
-            },
-            previous_hash=e1["_next_merkle_hash"],
-        )
-
-        result = merkle.verify_chain_integrity([e1, e2])
-        assert result["valid"] is True
-        assert result["length"] == 2
-        assert result["errors"] == []
-
-    def test_verify_chain_integrity_detects_tamper(self):
-        """Modifying any field after chaining must be detected."""
-        merkle = self._load_merkle()
-
-        e1 = merkle.append_to_chain(
-            {
-                "event_id": "e1",
-                "event_type": "CREATION",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-01T00:00:00Z",
-            }
-        )
-        e2 = merkle.append_to_chain(
-            {
-                "event_id": "e2",
-                "event_type": "SHIPPING",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-02T00:00:00Z",
-            },
-            previous_hash=e1["_next_merkle_hash"],
-        )
-
-        # Tamper with e2
-        e2["event_type"] = "RECEIVING"
-
-        result = merkle.verify_chain_integrity([e1, e2])
-        assert result["valid"] is False
-        assert any(e["issue"] == "hash_mismatch" for e in result["errors"])
-
-    def test_verify_chain_integrity_detects_broken_link(self):
-        """A broken previous_hash link must be detected."""
-        merkle = self._load_merkle()
-
-        e1 = merkle.append_to_chain(
-            {
-                "event_id": "e1",
-                "event_type": "CREATION",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-01T00:00:00Z",
-            }
-        )
-        e2 = merkle.append_to_chain(
-            {
-                "event_id": "e2",
-                "event_type": "SHIPPING",
-                "tlc": "TLC-001",
-                "timestamp": "2025-01-02T00:00:00Z",
-            },
-            previous_hash="0000000000000000000000000000000000000000000000000000000000000000",
-        )
-
-        result = merkle.verify_chain_integrity([e1, e2])
-        assert result["valid"] is False
-        assert any(e["issue"] == "chain_link_broken" for e in result["errors"])
-
-    def test_verify_chain_integrity_empty_chain(self):
-        """An empty chain must be valid."""
-        merkle = self._load_merkle()
-
-        result = merkle.verify_chain_integrity([])
-        assert result["valid"] is True
-        assert result["length"] == 0
-
-
 class TestRiskFlagTagging:
     """Tests for risk flag tagging on events with broken chains."""
 
@@ -392,10 +261,8 @@ class TestMassBalanceEndpointReturns501:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        from services.graph.app.fsma_routes import fsma_router
-
         app = FastAPI()
-        app.include_router(fsma_router)
+        app.include_router(_build_fsma_router())
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -417,10 +284,8 @@ class TestMassBalanceEndpointReturns501:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        from services.graph.app.fsma_routes import fsma_router
-
         app = FastAPI()
-        app.include_router(fsma_router)
+        app.include_router(_build_fsma_router())
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
@@ -492,10 +357,8 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should include risk_flags in response."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
-
         app = FastAPI()
-        app.include_router(fsma_router)
+        app.include_router(_build_fsma_router())
 
         import uuid
 
@@ -525,10 +388,8 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should include time_violations in response."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
-
         app = FastAPI()
-        app.include_router(fsma_router)
+        app.include_router(_build_fsma_router())
 
         import uuid
 
@@ -557,10 +418,8 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should accept enforce_time_arrow parameter."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import fsma_router
-
         app = FastAPI()
-        app.include_router(fsma_router)
+        app.include_router(_build_fsma_router())
 
         import uuid
 

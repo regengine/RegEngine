@@ -5,6 +5,7 @@ import {
     validateProxySession,
     getServerApiKey,
     validateUuid,
+    enforceTenantMatch,
 } from '@/lib/api-proxy';
 import {
     allowDevComplianceSnapshotFallback,
@@ -46,6 +47,10 @@ export async function POST(
             { status: 400 },
         );
     }
+
+    // Cross-tenant authorization: bind this request to the caller's own tenant.
+    const tenantError = enforceTenantMatch(request, tenantId);
+    if (tenantError) return tenantError;
 
     const rawBody = await request.text();
     let parsedBody: Record<string, unknown> = {};
