@@ -39,6 +39,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.database import get_db_session
 from shared.pagination import PaginationParams
+from shared.tenant_context import set_tenant_guc_if_uuid
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -119,6 +120,7 @@ async def list_incidents(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     # Use JSONB storage in a general-purpose table for incident data
     # This avoids adding another migration — incidents are stored as JSONB
@@ -188,6 +190,7 @@ async def open_incident(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     _ensure_incidents_table(db_session)
 
     incident_id = str(uuid4())
@@ -242,6 +245,7 @@ async def get_incident(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     _ensure_incidents_table(db_session)
 
     row = db_session.execute(
@@ -275,6 +279,7 @@ async def update_status(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     data["status"] = body.status
@@ -308,6 +313,7 @@ async def add_action(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     action_id = str(uuid4())
@@ -356,6 +362,7 @@ async def update_action(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     action = next((a for a in data.get("actions", []) if a["id"] == action_id), None)
@@ -392,6 +399,7 @@ async def post_update(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     update_id = str(uuid4())
@@ -424,6 +432,7 @@ async def impact_assessment(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     affected_lots = data.get("affected_lots", [])
@@ -502,6 +511,7 @@ async def close_incident(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     data = _get_incident_data(db_session, incident_id, tid)
 
     now = datetime.now(timezone.utc).isoformat()

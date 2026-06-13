@@ -167,13 +167,13 @@ class TestMetricsCollector:
     """Test MetricsCollector without requiring prometheus_client."""
 
     def test_collector_init(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         assert hasattr(collector, "enabled")
 
     def test_record_scrape_no_error(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         # Should not raise even if prometheus is available or not
@@ -186,7 +186,7 @@ class TestMetricsCollector:
         )
 
     def test_record_webhook_no_error(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         collector.record_webhook(
@@ -196,13 +196,13 @@ class TestMetricsCollector:
         )
 
     def test_record_kafka_event_no_error(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         collector.record_kafka_event(topic="alerts.regulatory", success=True)
 
     def test_record_circuit_state_no_error(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         collector.record_circuit_state(name="fda_scraper", state="closed")
@@ -210,13 +210,13 @@ class TestMetricsCollector:
         collector.record_circuit_state(name="fda_scraper", state="half_open")
 
     def test_set_info_no_error(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         collector.set_info(version="1.0.0", environment="test")
 
     def test_get_metrics_returns_bytes(self):
-        from app.metrics import MetricsCollector
+        from services.scheduler.app.metrics import MetricsCollector
 
         collector = MetricsCollector()
         result = collector.get_metrics()

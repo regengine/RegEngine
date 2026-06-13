@@ -1,3 +1,5 @@
+> **LEGACY:** this runbook describes the retired k8s/6-service topology. Production is a single Railway monolith + Vercel frontend — see `docs/CODEBASE_MAP.md` (project level).
+
 # Scaling Guide Runbook
 
 ## Service Information
@@ -314,4 +316,3 @@ aws elasticache modify-cache-cluster --cache-node-type cache.t3.micro
 | DB connections | < 80% | > 90% for 5 min |
 
 Check Grafana dashboard: `https://monitoring.regengine.internal/d/main`
-

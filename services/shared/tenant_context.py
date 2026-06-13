@@ -418,6 +418,27 @@ def set_tenant_guc(session: Any, tenant_id: str) -> None:
     )
 
 
+def set_tenant_guc_if_uuid(session: Any, tenant_id: Any) -> Any:
+    """Best-effort RLS backstop: set the tenant GUC only for UUID tenant ids.
+
+    ``set_tenant_guc`` requires a UUID because the ``app.tenant_id`` GUC is
+    cast ``::uuid`` by the RLS policies. Some callers (e.g. the ingestion read
+    routers) carry non-UUID slug tenant ids, for which the GUC can't be set;
+    rather than raise, we skip — the app-level ``WHERE tenant_id`` predicate
+    still scopes those queries. For UUID tenants this adds the RLS backstop so
+    isolation is enforced at the DB layer even if a WHERE clause is ever
+    omitted.
+
+    Returns the ``session.execute(...)`` result when the GUC was set (which the
+    caller may need to ``await`` for async sessions), or ``None`` when skipped.
+    """
+    try:
+        _uuid.UUID(str(tenant_id))
+    except (ValueError, AttributeError, TypeError):
+        return None
+    return set_tenant_guc(session, tenant_id)
+
+
 def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
     """Apply a resolved ``TenantContext`` to a DB session.
 

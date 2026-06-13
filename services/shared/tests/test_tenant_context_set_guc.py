@@ -33,6 +33,7 @@ from services.shared.tenant_context import (  # noqa: E402
     TenantContext,
     apply_tenant_context,
     set_tenant_guc,
+    set_tenant_guc_if_uuid,
 )
 
 # ---------------------------------------------------------------------------
@@ -173,6 +174,37 @@ class TestSetTenantGucValidation:
         session = _RecordingSession()
         set_tenant_guc(session, "11111111-AAAA-1111-1111-111111111111")
         assert len(session.calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# set_tenant_guc_if_uuid — best-effort RLS backstop
+# ---------------------------------------------------------------------------
+
+
+class TestSetTenantGucIfUuid:
+    """Used by the ingestion read routers, whose tenant ids may be non-UUID
+    slugs. For UUID tenants it sets the GUC (RLS backstop); for non-UUID
+    tenants it must SKIP rather than raise, so those endpoints keep working
+    on app-level ``WHERE tenant_id`` alone."""
+
+    def test_uuid_sets_the_guc(self):
+        session = _RecordingSession()
+        tid = "11111111-1111-1111-1111-111111111111"
+        set_tenant_guc_if_uuid(session, tid)
+        assert len(session.calls) == 1
+        assert session.calls[0][1] == {"tid": tid}
+
+    @pytest.mark.parametrize("slug", ["tenant-inc-1", "tenant-alpha", "demo", ""])
+    def test_non_uuid_is_a_silent_noop(self, slug: str):
+        session = _RecordingSession()
+        result = set_tenant_guc_if_uuid(session, slug)
+        assert result is None
+        assert session.calls == [], "non-UUID tenant must not touch the session"
+
+    def test_none_is_a_silent_noop(self):
+        session = _RecordingSession()
+        assert set_tenant_guc_if_uuid(session, None) is None
+        assert session.calls == []
 
 
 # ---------------------------------------------------------------------------

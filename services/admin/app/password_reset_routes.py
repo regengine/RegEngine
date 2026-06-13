@@ -69,8 +69,18 @@ async def _check_forgot_pw_rate_limit(session_store: RedisSessionStore, email: s
             )
     except HTTPException:
         raise
-    except Exception as exc:  # pragma: no cover — Redis unavailable: fail open
-        logger.warning("forgot_password_rate_limit_redis_error", error=str(exc))
+    except Exception as exc:  # Redis unavailable: fail CLOSED, not open.
+        # If we cannot consult the per-email limiter we must not silently drop
+        # the cap — that would re-enable reset-email flooding / harassment. The
+        # same Redis backs the session store, so an outage already degrades
+        # auth; returning 429 here leaks nothing about whether the email is
+        # registered (enumeration resistance is preserved).
+        logger.error("forgot_password_rate_limit_redis_error", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Password-reset is temporarily unavailable. Please try again later.",
+            headers={"Retry-After": "60"},
+        ) from exc
 
 
 async def _record_forgot_pw_attempt(session_store: RedisSessionStore, email: str) -> None:

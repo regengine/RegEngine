@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -198,12 +199,14 @@ export default function IngestPage() {
                 </p>
               </div>
             </div>
-            <Link href="/ingest/curation">
-              <Button variant="outline">
-                <ClipboardCheck className="h-4 w-4 mr-2" />
-                Open Curation Queue
-              </Button>
-            </Link>
+            {experimentalFeaturesEnabled() && (
+              <Link href="/ingest/curation">
+                <Button variant="outline">
+                  <ClipboardCheck className="h-4 w-4 mr-2" />
+                  Open Curation Queue
+                </Button>
+              </Link>
+            )}
           </div>
 
           <Card className="mb-8 border-re-info/30 bg-re-info-muted/40 dark:bg-re-info/10">
@@ -218,21 +221,23 @@ export default function IngestPage() {
                     Use this page for customer documents, CSV, XML, spreadsheets, and file uploads that need parsing.
                   </p>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 font-semibold text-sm">
-                    <FlaskConical className="h-4 w-4 text-re-brand" />
-                    Inflow Lab
+                {experimentalFeaturesEnabled() && (
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-sm">
+                      <FlaskConical className="h-4 w-4 text-re-brand" />
+                      Inflow Lab
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
+                    </p>
+                    <Link href="/dashboard/inflow-lab">
+                      <Button size="sm" variant="outline" className="mt-3">
+                        Open Inflow Lab
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
-                  </p>
-                  <Link href="/dashboard/inflow-lab">
-                    <Button size="sm" variant="outline" className="mt-3">
-                      Open Inflow Lab
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2 font-semibold text-sm">
                     <ClipboardCheck className="h-4 w-4 text-re-warning" />
@@ -327,12 +332,14 @@ export default function IngestPage() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <Link href="/ingest/curation">
-                        <Button variant="outline">
-                          <ClipboardCheck className="h-4 w-4 mr-2" />
-                          Open Curation Queue
-                        </Button>
-                      </Link>
+                      {experimentalFeaturesEnabled() && (
+                        <Link href="/ingest/curation">
+                          <Button variant="outline">
+                            <ClipboardCheck className="h-4 w-4 mr-2" />
+                            Open Curation Queue
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         type="button"
                         variant="outline"

@@ -1,20 +1,23 @@
+# LEGACY: this file describes the retired k8s/6-service topology. Production is a
+# single Railway monolith + Vercel frontend — see docs/CODEBASE_MAP.md (project level).
+
 service: fsma-graph
 slos:
   trace_latency:
     description: "Forward/backward trace query response time"
-    target: 
+    target:
       p50: 500ms
       p95: 2000ms
       p99: 5000ms
     measurement: prometheus_histogram
     alert_threshold: p95 > 3000ms for 5m
-    
+
   availability:
     description: "Service availability during business hours (6am-10pm PT)"
     target: 99.9%
     measurement: uptime_checks
     window: rolling_30d
-    
+
   ingestion_throughput:
     description: "Kafka event processing rate"
     target: 10000 events/minute sustained
