@@ -27,6 +27,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from shared.database import get_db_session
+from shared.tenant_context import set_tenant_guc_if_uuid
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -68,6 +69,7 @@ async def audit_summary(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     # Total canonical events
     event_count = (
@@ -189,6 +191,7 @@ async def audit_events(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     where = ["e.tenant_id = :tid", "e.status = 'active'"]
     params: Dict[str, Any] = {"tid": tid, "lim": limit, "off": offset}
@@ -275,6 +278,7 @@ async def audit_event_detail(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     from shared.canonical_persistence import CanonicalEventStore
 
@@ -377,6 +381,7 @@ async def audit_rules(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     rows = db.execute(
         text("""
@@ -429,6 +434,7 @@ async def audit_exceptions(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     rows = db.execute(
         text("""
@@ -478,6 +484,7 @@ async def audit_requests(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     rows = db.execute(
         text("""
@@ -530,6 +537,7 @@ async def audit_chain(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     from shared.cte_persistence import CTEPersistence
 
@@ -559,6 +567,7 @@ async def audit_export_log(
 ):
     db = _require_db(db_session)
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     rows = db.execute(
         text("""
