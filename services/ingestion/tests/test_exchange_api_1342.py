@@ -945,6 +945,42 @@ class TestSendEndpointDbSuccessPath:
         assert "No shipping CTEs" in response.json()["detail"]
 
 
+class TestSendReceiverValidation:
+    """The destination ``receiver_tenant_id`` is caller-supplied. Validate its
+    format (1-64 alnum/-/_) before any work — rejects empty/garbage/oversized
+    values. Deliberately a format check, not an existence check (#2449), so it
+    never touches the DB and leaks no tenant-enumeration oracle."""
+
+    @pytest.mark.parametrize(
+        "bad_receiver",
+        [
+            "",  # empty
+            "has space",  # space not allowed
+            "drop;table",  # punctuation not allowed
+            "x" * 65,  # over the 64-char cap
+        ],
+    )
+    def test_malformed_receiver_rejected_with_400(
+        self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch, bad_receiver: str
+    ) -> None:
+        # If validation runs first, get_db_safe must never be called.
+        def _boom():
+            raise AssertionError("DB accessed before receiver validation")
+
+        monkeypatch.setattr(exchange_api, "get_db_safe", _boom)
+
+        with TestClient(app_with_scopes) as client:
+            response = client.post(
+                "/api/v1/exchange/send",
+                params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+                json={"receiver_tenant_id": bad_receiver, "traceability_lot_code": "LOT-X"},
+            )
+
+        # Empty string fails Pydantic's required-field/`str` handling differently
+        # from a present-but-malformed value; both are client errors (422 or 400).
+        assert response.status_code in (400, 422)
+
+
 class TestReceiveEndpointDbSuccessPath:
     def test_receive_uses_db_when_healthy(self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
         row = _db_row(package_id="pkg-db", status="pending")
