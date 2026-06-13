@@ -15,11 +15,12 @@ keys.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
+from uuid import UUID
 
 import redis.asyncio as redis
 import structlog
@@ -40,6 +41,56 @@ logger = structlog.get_logger("idempotency")
 IDEMPOTENCY_KEY_PREFIX = "idempotency:"
 IDEMPOTENCY_TTL_SECONDS = 86400  # 24 hours
 _ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
+
+
+def _tenant_value_to_str(value: Any) -> Optional[str]:
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return None
+
+
+def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
+    """Resolve a scoped API key to its tenant before route dependencies run.
+
+    The production monolith installs this middleware outside FastAPI route
+    dependencies, so ``request.state.principal`` is not available yet for
+    API-key-authenticated requests. This best-effort lookup uses the same key
+    hash candidates as the auth path and only returns enabled, unexpired keys.
+    """
+    try:
+        from shared.api_key_store import api_key_hash_candidates
+        from shared.database import SessionLocal
+        from sqlalchemy import bindparam, text
+
+        key_hashes = api_key_hash_candidates(raw_api_key)
+        db_session = SessionLocal()
+        try:
+            stmt = text(
+                """
+                SELECT tenant_id, enabled, expires_at
+                FROM api_keys
+                WHERE key_hash IN :key_hashes
+                LIMIT 1
+                """
+            ).bindparams(bindparam("key_hashes", expanding=True))
+            row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
+        finally:
+            db_session.close()
+
+        if not row:
+            return None
+        tenant_id, enabled, expires_at = row
+        if enabled is False:
+            return None
+        if expires_at and expires_at < datetime.now(timezone.utc):
+            return None
+        return str(tenant_id) if tenant_id else None
+    except Exception as exc:  # pragma: no cover - environment-specific fallback
+        logger.debug("idempotency_api_key_tenant_lookup_failed", error=str(exc))
+        return None
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -99,18 +150,27 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     def _resolve_tenant_id(self, request: Request) -> Optional[str]:
         """Resolve tenant from authenticated context — never from body.
 
-        Order: RBAC principal (set by auth middleware) > X-Tenant-ID
-        header. The request body is NOT consulted: if we did, an
-        attacker could include ``tenant_id`` in their JSON payload and
-        spoof the cache namespace.
+        Order: RBAC principal (when an outer auth middleware set it) >
+        request.state.tenant_id > X-Tenant-ID header > scoped API-key
+        lookup. The request body is NOT consulted: if we did, an attacker
+        could include ``tenant_id`` in their JSON payload and spoof the
+        cache namespace.
         """
         principal = getattr(request.state, "principal", None)
         principal_tenant = getattr(principal, "tenant_id", None) if principal else None
-        if principal_tenant:
-            return str(principal_tenant)
+        tenant = _tenant_value_to_str(principal_tenant)
+        if tenant:
+            return tenant
+        state_tenant = getattr(request.state, "tenant_id", None)
+        tenant = _tenant_value_to_str(state_tenant)
+        if tenant:
+            return tenant
         header_tenant = request.headers.get("X-Tenant-ID")
         if header_tenant:
             return header_tenant.strip()
+        raw_api_key = request.headers.get("X-RegEngine-API-Key")
+        if raw_api_key:
+            return _lookup_tenant_id_for_api_key(raw_api_key)
         return None
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -128,6 +188,10 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         tenant_id = self._resolve_tenant_id(request)
+        if not tenant_id:
+            logger.info("idempotency_skipped_no_tenant", idempotency_key=idempotency_key)
+            return await call_next(request)
+
         cache_key = self._get_cache_key(idempotency_key, tenant_id)
         client = await self._get_client()
 

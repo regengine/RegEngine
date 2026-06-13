@@ -195,11 +195,37 @@ from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
+# Issue #2307: surface X-RateLimit-* headers on 2xx responses by mirroring
+# ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
+# rate-limit guards) onto the outbound response. Read-only: never consumes
+# the bucket, so no double-counting.
+from services.ingestion.app.middleware import RateLimitHeadersMiddleware
+
+app.add_middleware(RateLimitHeadersMiddleware)
 
 from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
 
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
 app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
+# #1232 — wire the shared IdempotencyMiddleware so webhook_router_v2
+# (and every other POST endpoint) de-duplicates retried requests via the
+# ``Idempotency-Key`` header. Cache keys are tenant-scoped (#1237) so
+# two tenants can safely pick the same key.
+from shared.idempotency import IdempotencyMiddleware
+
+app.add_middleware(IdempotencyMiddleware)
+
+# EPIC-I (#1316): correlation-id middleware. Registered last so Starlette's
+# reverse-LIFO middleware stack runs it FIRST — every downstream handler,
+# logger, and outbound call sees the X-Correlation-ID header value via
+# request.state.correlation_id. Not redundant with RequestIDMiddleware:
+# that one manages X-Request-ID / request_id_ctx (per-hop ID), while this
+# one manages X-Correlation-ID / correlation_id_ctx (end-to-end trace ID
+# consumed by kafka_propagation, Sentry scope hooks, and log_config).
+from shared.observability.correlation import CorrelationIdMiddleware
+
+app.add_middleware(CorrelationIdMiddleware)
 
 from shared.error_handling import install_exception_handlers
 
