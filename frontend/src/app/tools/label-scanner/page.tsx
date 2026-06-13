@@ -24,6 +24,8 @@ import {
 import { getServiceURL } from '@/lib/api-config';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { useAuth } from '@/lib/auth-context';
+import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
+import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -75,6 +77,19 @@ const DEMO_FIELDS: { key: keyof LabelResult; label: string; icon: typeof Package
 /*  Page component                                               */
 /* ────────────────────────────────────────────────────────────── */
 export default function LabelScannerPage() {
+    if (!experimentalFeaturesEnabled()) {
+        return (
+            <FeatureNotEnabled
+                featureName="AI Label Scanner"
+                backHref="/tools"
+                backLabel="Back to free tools"
+            />
+        );
+    }
+    return <LabelScannerContent />;
+}
+
+function LabelScannerContent() {
     const [image, setImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [analyzing, setAnalyzing] = useState(false);

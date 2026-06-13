@@ -71,7 +71,7 @@ class TestInFlightPublication_Issue1225:
         and cleared afterwards."""
         seen_ids = []
 
-        def _handler(_payload):
+        def _handler(_payload, _tenant_id):
             # Snapshot the in-flight marker as the drain path would see it.
             with task_processor._inflight_lock:
                 seen_ids.append(task_processor._current_task_id)
@@ -97,7 +97,7 @@ class TestInFlightPublication_Issue1225:
         can decrement-on-release correctly."""
         seen_attempts = []
 
-        def _handler(_payload):
+        def _handler(_payload, _tenant_id):
             with task_processor._inflight_lock:
                 seen_attempts.append(task_processor._current_task_attempts)
 
@@ -116,7 +116,7 @@ class TestInFlightPublication_Issue1225:
         """Even if the handler raises, the marker must be cleared so the
         NEXT task's handler can publish its own id."""
 
-        def _handler(_payload):
+        def _handler(_payload, _tenant_id):
             raise RuntimeError("boom")
 
         db_factory = MagicMock(return_value=MagicMock())

@@ -31,6 +31,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from shared.database import get_db_session
+from shared.tenant_context import set_tenant_guc_if_uuid
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -55,6 +56,7 @@ async def compliance_metrics(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
     # --- Product Metrics ---
 
