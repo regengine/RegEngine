@@ -245,6 +245,7 @@ class TestResolveTenantId:
     ) -> Request:
         request = MagicMock(spec=Request)
         request.state = MagicMock()
+        request.state.tenant_id = None
         if principal_tenant is None:
             # Principal attribute exists but holds None.
             request.state.principal = None
@@ -267,6 +268,14 @@ class TestResolveTenantId:
     def test_header_used_when_no_principal(self, middleware):
         req = self._request(header_tenant="from-header")
         assert middleware._resolve_tenant_id(req) == "from-header"
+
+    def test_api_key_lookup_used_when_no_principal_or_header(self, middleware, monkeypatch):
+        import shared.idempotency as idemp_mod
+
+        monkeypatch.setattr(idemp_mod, "_lookup_tenant_id_for_api_key", lambda raw: "tenant-from-key")
+        req = self._request()
+        req.headers = {"X-RegEngine-API-Key": "rge_test.secret"}
+        assert middleware._resolve_tenant_id(req) == "tenant-from-key"
 
     def test_header_stripped_of_whitespace(self, middleware):
         """Header value should be trimmed — otherwise ``" tenant"`` and
@@ -307,6 +316,7 @@ class TestResolveTenantId:
             pass
 
         request.state.principal = _PrincipalNoTenant()
+        request.state.tenant_id = None
         request.headers = {"X-Tenant-ID": "fallback"}
         assert middleware._resolve_tenant_id(request) == "fallback"
 
@@ -675,9 +685,14 @@ class TestDispatchCrossTenantIsolation:
         )
 
     @pytest.mark.asyncio
-    async def test_anonymous_request_namespaces_under_sentinel(self, monkeypatch):
-        """Requests with neither principal nor X-Tenant-ID land in the
-        anonymous namespace and never collide with real tenants."""
+    async def test_anonymous_request_is_not_cached(self, monkeypatch):
+        """Requests with neither principal nor tenant header are not cached.
+
+        The old anonymous namespace was safe for public traffic, but unsafe
+        once this middleware moved outside route-level auth in the production
+        monolith: principal-only API-key requests briefly looked anonymous and
+        could collide across tenants. No tenant, no cache.
+        """
         fake = _FakeAsyncRedis()
         _patched_middleware(monkeypatch, fake)
 
@@ -690,8 +705,7 @@ class TestDispatchCrossTenantIsolation:
                 content=b"x",
             )
 
-        stored = [k.decode() for k in fake.store]
-        assert any("_anonymous_" in k for k in stored)
+        assert fake.store == {}
 
 
 class TestDispatchCacheErrorResilience:

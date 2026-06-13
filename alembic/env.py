@@ -42,6 +42,34 @@ from services.admin.app.sqlalchemy_models import Base  # noqa: E402
 target_metadata = Base.metadata
 
 
+def _guard_baseline_downgrade() -> None:
+    """Block destructive full-chain downgrades before any revision runs."""
+    args = sys.argv[1:]
+    if "downgrade" not in args:
+        return
+
+    downgrade_index = args.index("downgrade")
+    destinations = [arg for arg in args[downgrade_index + 1 :] if not arg.startswith("-")]
+    if not any(dest == "base" or dest.endswith(":base") for dest in destinations):
+        return
+
+    env = os.environ.get("REGENGINE_ENV", "unset").lower()
+    ack = os.environ.get("REGENGINE_ALLOW_BASELINE_DOWNGRADE", "0")
+    if env in {"development", "dev", "test", "ci"} and ack == "1":
+        return
+
+    raise RuntimeError(
+        "Baseline downgrade blocked (#1264). This migration path drops every "
+        "baseline FSMA table and must not run unless BOTH "
+        "REGENGINE_ENV=development and REGENGINE_ALLOW_BASELINE_DOWNGRADE=1 "
+        f"are set. Current: REGENGINE_ENV={env!r}, "
+        f"REGENGINE_ALLOW_BASELINE_DOWNGRADE={ack!r}"
+    )
+
+
+_guard_baseline_downgrade()
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
