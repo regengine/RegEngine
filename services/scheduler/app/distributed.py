@@ -50,8 +50,8 @@ class DistributedContext:
             pool_pre_ping=True,
             # We use a separate pool for the lock to ensure the connection
             # stays open as long as we hold leadership.
-            pool_size=1,
-            max_overflow=0,
+            pool_size=2,
+            max_overflow=1,
             connect_args={"keepalives": 1, "keepalives_idle": 30},
         )
         self._is_leader = False

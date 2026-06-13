@@ -1,6 +1,6 @@
 import functools
 
-from app.distributed import DistributedContext
+from .distributed import DistributedContext
 
 # Global context for leadership checks
 _dist_ctx = None

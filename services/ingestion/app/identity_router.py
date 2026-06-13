@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from shared.database import get_db_session
+from shared.tenant_context import set_tenant_guc_if_uuid
 
 from .authz import IngestionPrincipal, require_permission
 from .tenant_validation import resolve_tenant, validate_tenant_id
@@ -139,6 +140,7 @@ async def list_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     if search:
         entities = svc.find_potential_matches(tid, search, entity_type=entity_type)
@@ -180,6 +182,7 @@ async def register_entity(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     entity_id = svc.register_entity(
         tenant_id=tid,
@@ -212,6 +215,7 @@ async def get_entity(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     entity = svc.get_entity(tid, entity_id)
     if not entity:
@@ -232,6 +236,7 @@ async def add_alias(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     alias_id = svc.add_alias(
         tenant_id=tid,
@@ -256,6 +261,7 @@ async def lookup_by_alias(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     entities = svc.find_entity_by_alias(tid, alias_value, alias_type)
     return {"tenant_id": tid, "matches": entities, "total": len(entities)}
@@ -274,6 +280,7 @@ async def find_matches(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     matches = svc.find_potential_matches(
         tid,
@@ -295,6 +302,7 @@ async def merge_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     merge_id = svc.merge_entities(
         tenant_id=tid,
@@ -317,6 +325,7 @@ async def split_entities(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     svc.split_entity(tid, body.merge_id, body.performed_by)
     return {"merge_id": body.merge_id, "status": "split"}
@@ -332,6 +341,7 @@ async def list_reviews(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     reviews = svc.list_pending_reviews(tid)
     return {"tenant_id": tid, "reviews": reviews, "total": len(reviews)}
@@ -349,6 +359,7 @@ async def resolve_review(
     db_session=Depends(get_db_session),
 ):
     tid = resolve_tenant(tenant_id, principal)
+    set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     # Service takes ``resolution`` (not ``status``). The body field stays
     # ``status`` for API compatibility; we translate here.

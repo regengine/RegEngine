@@ -646,7 +646,10 @@ async def ingest_csv(
             if missing_kdes:
                 kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")
         except Exception as e:
-            parse_errors.append(f"Row {row_num}: {str(e)}")
+            # Log the detail server-side; return a generic per-row message so
+            # raw exception text (library internals) isn't echoed to callers.
+            logger.warning("csv_row_parse_failed row=%s error=%s", row_num, str(e))
+            parse_errors.append(f"Row {row_num}: could not be parsed (see server logs)")
 
     if not events and parse_errors:
         raise HTTPException(status_code=400, detail={"message": "No valid rows found", "errors": parse_errors})

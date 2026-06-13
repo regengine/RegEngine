@@ -58,6 +58,11 @@ logger = structlog.get_logger("api_key_store")
 
 Base = declarative_base()
 
+# How often (seconds) per-key usage stats (last_used_at / total_requests) are
+# flushed to the DB. Increments between flushes are buffered in-process so the
+# count stays accurate while the auth hot path avoids a per-request row write.
+_USAGE_FLUSH_INTERVAL_SECONDS = 10.0
+
 _API_KEY_HASH_PEPPER_ENVS = ("REGENGINE_API_KEY_HASH_PEPPER", "API_KEY_HASH_PEPPER")
 
 
@@ -119,7 +124,7 @@ class APIKeyModel(Base):
     # NULL for non-partner keys (internal admin keys, regular customer
     # API keys). Populated for keys issued to partners; the partner
     # gateway reads this column to scope queries to the partner's own
-    # client tenants. See ``services/shared/partner_auth.py``.
+    # client tenants.
     # Stored as the partner's internal id (matches ``partners.id``) —
     # NOT a UUID by convention because partner ids are short slugs.
     partner_id = Column(String(64), nullable=True, index=True)
@@ -323,6 +328,13 @@ class DatabaseAPIKeyStore:
             expire_on_commit=False,
         )
 
+        # In-process buffers for time-throttled API-key usage accounting.
+        # Mutated only synchronously (no await between read and write) so they
+        # need no lock under asyncio's single-threaded model. See
+        # _record_key_usage.
+        self._pending_usage: dict[str, int] = {}
+        self._last_usage_flush: dict[str, float] = {}
+
         # Optional Redis client for rate limiting
         self._redis = None
         if self._redis_url:
@@ -351,6 +363,43 @@ class DatabaseAPIKeyStore:
             raise
         finally:
             await session.close()
+
+    async def _record_key_usage(self, key_id: str, session: AsyncSession) -> None:
+        """Record API-key usage without writing on every request.
+
+        The previous implementation did an ORM read-modify-write of
+        ``last_used_at`` / ``total_requests`` on every authenticated request:
+        a per-request row write on the hot auth path, plus a lost-update race
+        on the counter under concurrency. Instead we buffer increments
+        in-process and flush them with a single atomic SQL UPDATE at most once
+        per ``_USAGE_FLUSH_INTERVAL_SECONDS`` per key. ``total_requests`` stays
+        accurate (the flush adds the buffered delta), while DB writes drop
+        sharply. The first request for a key flushes immediately so
+        ``last_used_at`` is set promptly.
+
+        Buffer reads/writes are synchronous (no ``await`` between them), so no
+        lock is needed under asyncio's single-threaded model.
+        """
+        now_mono = time.monotonic()
+        self._pending_usage[key_id] = self._pending_usage.get(key_id, 0) + 1
+        last = self._last_usage_flush.get(key_id)
+        if last is not None and now_mono - last < _USAGE_FLUSH_INTERVAL_SECONDS:
+            return
+        delta = self._pending_usage.pop(key_id, 0)
+        self._last_usage_flush[key_id] = now_mono
+        if delta <= 0:
+            return
+        await session.execute(
+            text(
+                """
+                UPDATE api_keys
+                SET total_requests = COALESCE(total_requests, 0) + :delta,
+                    last_used_at = :now
+                WHERE key_id = :kid
+                """
+            ),
+            {"delta": delta, "now": datetime.now(timezone.utc), "kid": key_id},
+        )
 
     @staticmethod
     def _hash_key(raw_key: str) -> str:
@@ -573,12 +622,12 @@ class DatabaseAPIKeyStore:
                 api_key.key_hash = current_hash
                 logger.info("api_key_hash_upgraded", key_id=key_id)
 
-            # Update usage stats
-            api_key.last_used_at = datetime.now(timezone.utc)
-            api_key.total_requests = (api_key.total_requests or 0) + 1
-            await session.flush()
-
-            return APIKeyResponse.model_validate(api_key)
+            # Record usage stats (time-throttled, atomic increment — see
+            # _record_key_usage). Build the response from the row as loaded;
+            # the buffered counter flush does not need to round-trip back here.
+            response = APIKeyResponse.model_validate(api_key)
+            await self._record_key_usage(key_id, session)
+            return response
 
     async def check_rate_limit(
         self,

@@ -13,10 +13,16 @@ type ApiKeyRow = {
 };
 
 function generateApiKey(): string {
+    // CSPRNG, not Math.random() — these are real credentials (hashed + stored).
+    // Rejection-sample to avoid modulo bias against the 62-char alphabet.
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const limit = 256 - (256 % chars.length); // discard bytes >= limit
     let result = 'rge_test_';
-    for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    const buf = new Uint8Array(1);
+    while (result.length < 'rge_test_'.length + 32) {
+        crypto.getRandomValues(buf);
+        if (buf[0] >= limit) continue;
+        result += chars[buf[0] % chars.length];
     }
     return result;
 }

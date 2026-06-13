@@ -21,6 +21,7 @@ from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
 from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
+from .shared.csv_safety import sanitize_cell
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("epcis-export")
@@ -346,16 +347,16 @@ async def export_fda(
                     [
                         str(r["event_type"] or "").upper(),
                         str(r["traceability_lot_code"] or ""),
-                        str(r["product_description"] or "").replace(",", ";"),
+                        sanitize_cell(str(r["product_description"] or "")).replace(",", ";"),
                         str(r["quantity"] or ""),
                         str(r["unit_of_measure"] or ""),
                         date_str,
                         time_str,
-                        str(r["ship_from"] or r["location_name"] or "").replace(",", ";"),
+                        sanitize_cell(str(r["ship_from"] or r["location_name"] or "")).replace(",", ";"),
                         str(r["ship_from_gln"] or r["location_gln"] or ""),
-                        str(r["ship_to"] or "").replace(",", ";"),
+                        sanitize_cell(str(r["ship_to"] or "")).replace(",", ";"),
                         str(r["ship_to_gln"] or ""),
-                        str(r["carrier"] or "").replace(",", ";"),
+                        sanitize_cell(str(r["carrier"] or "")).replace(",", ";"),
                         str(r["temperature_c"] or ""),
                         str(r["sha256_hash"] or ""),
                     ]
