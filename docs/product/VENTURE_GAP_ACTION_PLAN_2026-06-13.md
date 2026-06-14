@@ -1,12 +1,12 @@
 # Venture Gap Action Plan
 
-Last updated: June 13, 2026
+Last updated: June 14, 2026
 Owner: founder / product
 Status: active operating plan
 
 ## Purpose
 
-This plan converts the diligence critique in the June 2026 pasted review into the smallest proof-producing actions. The critique is directionally accurate: the repository proves product capability, but it does not yet prove customers, urgency, budget ownership, repeat usage, or procurement success.
+This plan converts the June 2026 diligence critique into the smallest proof-producing actions. The critique is directionally accurate: the repository proves product capability, but it does not yet prove customers, urgency, budget ownership, repeat usage, or procurement success.
 
 The current product wedge should be:
 
@@ -35,7 +35,7 @@ RegEngine should avoid selling a broad FSMA 204 platform until the design-partne
 
 1. Confirm the scheduling link and sender identity.
 2. Send the three ready prospects from `sales/local/manual_send_queue_2026-06-13.md`.
-3. Do not send Lakeside or Misionero until the unresolved contact-risk notes are closed.
+3. Do not send prospects flagged in local contact-risk notes until those notes are closed.
 4. Log every touch in `sales/local/design_partner_outreach_tracker.csv`.
 
 ### Day 1: Book And Qualify
