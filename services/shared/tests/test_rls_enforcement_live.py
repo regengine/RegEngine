@@ -72,9 +72,7 @@ def conn():
 class TestRlsSchemaConfig:
     def test_get_tenant_context_exists_and_returns_uuid(self, conn):
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT prorettype::regtype::text FROM pg_proc WHERE proname = 'get_tenant_context'"
-            )
+            cur.execute("SELECT prorettype::regtype::text FROM pg_proc WHERE proname = 'get_tenant_context'")
             rows = cur.fetchall()
         assert rows, "get_tenant_context() must exist — RLS policies depend on it"
         assert any(r[0] == "uuid" for r in rows)
@@ -151,9 +149,7 @@ class TestRlsEnforcesIsolation:
                 pytest.skip("connection role cannot CREATE ROLE — run enforcement check in CI as a privileged role")
 
             cur.execute("CREATE SCHEMA rls_probe_schema")
-            cur.execute(
-                "CREATE TABLE rls_probe_schema.t (id serial primary key, tenant_id uuid not null, val text)"
-            )
+            cur.execute("CREATE TABLE rls_probe_schema.t (id serial primary key, tenant_id uuid not null, val text)")
             cur.execute("ALTER TABLE rls_probe_schema.t ENABLE ROW LEVEL SECURITY")
             cur.execute("ALTER TABLE rls_probe_schema.t FORCE ROW LEVEL SECURITY")
             cur.execute(
