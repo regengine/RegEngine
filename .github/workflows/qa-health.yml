@@ -107,7 +107,8 @@ jobs:
         run: |
           cd frontend
           set +e
-          npm run test:e2e -- --reporter=json > ../.qa-health/playwright.json &
+          playwright_timeout="30m"
+          timeout "$playwright_timeout" npm run test:e2e -- --reporter=json > ../.qa-health/playwright.json &
           playwright_pid=$!
           while kill -0 "$playwright_pid" 2>/dev/null; do
             echo "Playwright E2E still running at $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -115,6 +116,18 @@ jobs:
           done
           wait "$playwright_pid"
           playwright_status=$?
+          if [[ "$playwright_status" -eq 124 ]]; then
+            cat > ../.qa-health/playwright.json <<JSON
+          {
+            "errors": [
+              {
+                "message": "Playwright E2E timed out after ${playwright_timeout} in QA Health"
+              }
+            ],
+            "suites": []
+          }
+          JSON
+          fi
           set -e
           exit "$playwright_status"
 
