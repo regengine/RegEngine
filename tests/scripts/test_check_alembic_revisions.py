@@ -78,10 +78,20 @@ class TestLooksSequential:
 # ---------------------------------------------------------------------------
 
 
-def _write_migration(tmp_path: Path, filename: str, rev_id: str) -> Path:
+def _write_migration(
+    tmp_path: Path,
+    filename: str,
+    rev_id: str,
+    down_revision: str = "None",
+) -> Path:
     """Write a minimal Alembic migration file with the given revision ID."""
     f = tmp_path / filename
-    f.write_text(f'revision: str = "{rev_id}"\ndown_revision = None\nbranch_labels = None\ndepends_on = None\n')
+    f.write_text(
+        f'revision: str = "{rev_id}"\n'
+        f"down_revision = {down_revision}\n"
+        "branch_labels = None\n"
+        "depends_on = None\n"
+    )
     return f
 
 
@@ -143,3 +153,26 @@ class TestCollectRevisions:
         out = capsys.readouterr().out
         assert "WARNING" in out
         assert "pre-existing" in out
+
+    def test_merge_revision_tuple_parents_are_not_reported_as_heads(self, tmp_path, monkeypatch, capsys):
+        """A merge migration points at both parents even when down_revision is a tuple."""
+        self._patch(monkeypatch, tmp_path)
+        base = "3f7a1c9e2b84"  # pragma: allowlist secret
+        left = "4a8c2f91d0b3"  # pragma: allowlist secret
+        right = "5b9d3a02c1e4"  # pragma: allowlist secret
+        merge = "6c0e4b13d2f5"  # pragma: allowlist secret
+
+        _write_migration(tmp_path, "001_base.py", base)
+        _write_migration(tmp_path, "002_left.py", left, f'"{base}"')
+        _write_migration(tmp_path, "003_right.py", right, f'"{base}"')
+        _write_migration(
+            tmp_path,
+            "004_merge.py",
+            merge,
+            f'("{left}", "{right}")',
+        )
+
+        result = _mod.main()
+        assert result == 0
+        out = capsys.readouterr().out
+        assert f"Head(s): {merge}" in out
