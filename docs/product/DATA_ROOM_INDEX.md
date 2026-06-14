@@ -75,6 +75,7 @@
 
 - [Product Overview](PRODUCT_OVERVIEW.md) -- What RegEngine is, core value, target market
 - [Product Roadmap](PRODUCT_ROADMAP.md) -- FSMA-first 90-day roadmap (March-June 2026)
+- [Venture Gap Action Plan](VENTURE_GAP_ACTION_PLAN_2026-06-13.md) -- Converts diligence gaps into design-partner proof actions and killer-metric candidates
 - [Design Partner Proof Checklist](DESIGN_PARTNER_PROOF_CHECKLIST.md) -- Measurable gates for design-partner traction, ROI, and trust proof
 - [Design Partner Sales Operating Kit](../../sales/README.md) -- Day-one operating sequence and proof templates
 - [Design Partner Feedback Scorecard](../../sales/design_partner_feedback_scorecard.md) -- Session-level proof capture template

@@ -135,7 +135,7 @@ A one-page summary containing:
 
 ## Demo-to-Feedback Loop Integration
 After every design-partner demo:
-1. Update `sales/design_partner_outreach_tracker_template.csv` row.
+1. Update the active local tracker row in `sales/local/design_partner_outreach_tracker.csv`.
 2. Complete `sales/design_partner_feedback_scorecard.md`.
 3. Start or update `sales/design_partner_evidence_packet_template.md` when real or production-like data was used.
 4. Send `sales/procurement_trust_packet_template.md` only when a buyer asks for security/procurement review; keep SOC 2, pentest, FDA, and SLA caveats intact.

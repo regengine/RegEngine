@@ -108,6 +108,7 @@ Use the following packet for buyer review. Mark each item as current, draft, or 
 ## Operating Templates
 
 - `sales/design_partner_outreach_tracker_template.csv` tracks prospects, stage, latest Workbench metrics, repeat usage, and procurement status.
+- Active tracker copies live under `sales/local/` because prospect notes can contain contact data.
 - `sales/design_partner_feedback_scorecard.md` captures each session against the proof gates.
 - `sales/design_partner_evidence_packet_template.md` rolls session evidence into one partner-level packet.
 - `sales/procurement_trust_packet_template.md` gives buyers a trust packet without SOC 2, pentest, FDA, or SLA overclaims.

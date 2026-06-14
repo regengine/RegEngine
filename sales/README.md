@@ -19,12 +19,21 @@ Use it with:
 | `design_partner_evidence_packet_template.md` | Partner-level evidence rollup for diligence |
 | `procurement_trust_packet_template.md` | Buyer/security packet with explicit caveats |
 
-Active prospect trackers and outreach drafts are local-only files because they can contain personal contact data. Keep them out of the public repository.
+Active prospect trackers, contact verification notes, send queues, and outreach drafts are local-only files because they can contain personal contact data. Keep them out of the public repository.
+
+Use `sales/local/` for that working material. The folder is ignored by git.
+
+Current local working files:
+
+- `sales/local/design_partner_outreach_tracker.csv`
+- `sales/local/contact_verification_notes_2026-06-13.md`
+- `sales/local/manual_send_queue_2026-06-13.md`
+- `sales/local/first_batch_outreach_drafts_2026-06-13.md`
 
 ## Today Sequence
 
 1. Pick one prospect from `docs/research/outreach-top-10-2026-05-14.md` or a warm founder contact.
-2. Create or update a local copy of `design_partner_outreach_tracker_template.csv`.
+2. Create or update a local copy of `design_partner_outreach_tracker_template.csv` in `sales/local/`.
 3. Send the relevant email or LinkedIn opener from a local draft or `docs/runbooks/inflow_workbench_design_partner_outreach.md`.
 4. If they agree to a session, run `docs/runbooks/inflow_workbench_design_partner_demo.md`.
 5. Within 1 hour, complete `design_partner_feedback_scorecard.md`.

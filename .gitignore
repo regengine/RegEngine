@@ -149,6 +149,9 @@ output/
 # Local sales/prospecting work may contain personal contact data.
 sales/design_partner_outreach_tracker.csv
 sales/first_batch_outreach_drafts_*.md
+sales/contact_verification_notes_*.md
+sales/manual_send_queue_*.md
+sales/local/
 
 # Working docs and drafts (auto-generated / ephemeral)
 briefings/
