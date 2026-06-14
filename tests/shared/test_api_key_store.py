@@ -331,7 +331,14 @@ class TestValidation:
         assert result is not None
         assert result.key_id == key_id
         assert model.key_hash == hash_api_key(raw_key)
-        assert model.total_requests == 1
+        usage_updates = [
+            call
+            for call in mock_session.execute.call_args_list
+            if call.args and "UPDATE api_keys" in str(call.args[0])
+        ]
+        assert len(usage_updates) == 1
+        assert usage_updates[0].args[1]["delta"] == 1
+        assert usage_updates[0].args[1]["kid"] == key_id
 
     @pytest.mark.asyncio
     async def test_validate_rejects_forged_secret_against_legacy_hash_when_peppered(self, monkeypatch):
