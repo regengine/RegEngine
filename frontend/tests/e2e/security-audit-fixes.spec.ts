@@ -7,6 +7,7 @@ import {
     hasAdminAuthenticatedE2E,
     hasAuthenticatedE2E,
 } from './auth-prereqs';
+import { fillPasswordLogin } from './support/ui-auth';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -243,8 +244,7 @@ test.describe('Security Audit Fixes', () => {
      */
     async function loginAsAdmin(page: Page) {
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', ADMIN_EMAIL);
-        await page.fill('input[type="password"]', ADMIN_PASSWORD);
+        await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
         // Login flow: API call to Railway → cookie set → redirect. Allow 15s for CI latency.
         await waitForAuthenticated(page);
@@ -256,8 +256,7 @@ test.describe('Security Audit Fixes', () => {
      */
     async function loginAsRegularUser(page: Page) {
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', REGULAR_USER_EMAIL);
-        await page.fill('input[type="password"]', REGULAR_USER_PASSWORD);
+        await fillPasswordLogin(page, REGULAR_USER_EMAIL, REGULAR_USER_PASSWORD);
         await page.click('button[type="submit"]');
         await waitForAuthenticated(page);
     }
@@ -867,8 +866,7 @@ test.describe('Security Audit Fixes', () => {
             const adminPage = await adminContext.newPage();
 
             await adminPage.goto('/login');
-            await adminPage.fill('input[type="email"]', ADMIN_EMAIL);
-            await adminPage.fill('input[type="password"]', ADMIN_PASSWORD);
+            await fillPasswordLogin(adminPage, ADMIN_EMAIL, ADMIN_PASSWORD);
             await adminPage.click('button[type="submit"]');
             await expect(adminPage).toHaveURL(/\/(dashboard|sysadmin)/);
             await adminPage.goto('/sysadmin');
@@ -885,8 +883,7 @@ test.describe('Security Audit Fixes', () => {
             const userPage = await userContext.newPage();
 
             await userPage.goto('/login');
-            await userPage.fill('input[type="email"]', REGULAR_USER_EMAIL);
-            await userPage.fill('input[type="password"]', REGULAR_USER_PASSWORD);
+            await fillPasswordLogin(userPage, REGULAR_USER_EMAIL, REGULAR_USER_PASSWORD);
             await userPage.click('button[type="submit"]');
             await expect(userPage).toHaveURL(/\/(dashboard|onboarding)/);
             await userPage.goto('/sysadmin');

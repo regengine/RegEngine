@@ -413,7 +413,10 @@ test.describe.serial('Authenticated core journeys', () => {
             const role = await getInviteRole(context);
             const invite = await createInvite(context, inviteEmail, role.id);
             inviteId = invite.id;
-            const token = new URL(`http://localhost${invite.invite_link}`).searchParams.get('token');
+            const inviteUrl = new URL(invite.invite_link, 'http://localhost');
+            const token =
+                inviteUrl.searchParams.get('token') ||
+                new URLSearchParams(inviteUrl.hash.slice(1)).get('token');
             expect(token).toBeTruthy();
 
             const outboxRecords = readInviteEmailOutbox(inviteEmail);

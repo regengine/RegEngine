@@ -733,6 +733,26 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.has('x-regengine-api-key')).toBe(false);
     });
 
+    it('browser-provided API keys cannot override the HTTP-only API-key cookie', () => {
+        const outgoing = new Headers({
+            'x-regengine-api-key': 'browser-visible-key',
+        });
+        const request = makeProxyRequest(
+            {
+                origin: 'https://regengine.co',
+                'x-regengine-api-key': 'browser-visible-key',
+            },
+            {
+                re_access_token: 'real-token',
+                re_api_key: 'real-api-key', // pragma: allowlist secret
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+
+        expect(outgoing.get('x-regengine-api-key')).toBe('real-api-key');
+    });
+
     it('injects a server API key for first-party service calls with a valid tenant cookie', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers();
@@ -787,6 +807,28 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.get('x-tenant-id')).toBe('22222222-2222-4222-8222-222222222222');
     });
 
+    it('preserves a cookie-managed API key for browser first-party service calls', () => {
+        process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
+        const outgoing = new Headers();
+        const request = makeProxyRequest(
+            {
+                origin: 'https://regengine.co',
+            },
+            {
+                re_access_token: 'real-token',
+                re_api_key: 'scoped-cookie-key', // pragma: allowlist secret
+                re_tenant_id: '11111111-1111-4111-8111-111111111111',
+            },
+        );
+
+        applyCookieCredentials(outgoing, request);
+        const error = applyFirstPartyServiceCredentials(outgoing, request);
+
+        expect(error).toBeNull();
+        expect(outgoing.get('x-regengine-api-key')).toBe('scoped-cookie-key');
+        expect(outgoing.get('x-tenant-id')).toBe('11111111-1111-4111-8111-111111111111');
+    });
+
     it('does not overwrite a real direct client API key during first-party service injection', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers({
@@ -802,7 +844,7 @@ describe('cookie-managed credential passthrough', () => {
         expect(outgoing.get('x-tenant-id')).toBe('33333333-3333-4333-8333-333333333333');
     });
 
-    it('overwrites browser-provided API keys with the server key for first-party calls', () => {
+    it('overwrites browser-provided API keys with the server key when there is no API-key cookie', () => {
         process.env.REGENGINE_API_KEY = 'server-side-key'; // pragma: allowlist secret
         const outgoing = new Headers({
             'x-regengine-api-key': 'browser-visible-key',

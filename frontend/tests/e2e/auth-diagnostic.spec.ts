@@ -11,6 +11,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
+import { fillPasswordLogin } from './support/ui-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
@@ -23,8 +24,7 @@ test.describe('Auth Smoke', () => {
 
         // Step 1: Login via browser (the real user flow)
         await page.goto('/login');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
+        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Step 2: Should reach an authenticated destination

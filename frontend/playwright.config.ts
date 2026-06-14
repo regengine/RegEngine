@@ -50,6 +50,8 @@ if (!externalBaseURL) {
     process.env.REGENGINE_API_KEY = process.env.REGENGINE_API_KEY || localRegEngineApiKey;
     process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
     process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
+        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
 }
 
 const forwardedEnv = { ...process.env };
@@ -146,6 +148,8 @@ export default defineConfig({
                     // Supabase config: intentionally omitted for JWT-only E2E mode.
                     NEXT_PUBLIC_SUPABASE_URL: '',
                     NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+                    NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES:
+                        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true',
                 },
             },
         ],

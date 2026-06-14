@@ -8,6 +8,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
+import { fillPasswordLogin } from './support/ui-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
@@ -18,8 +19,7 @@ function uniqueSnapshotName(prefix: string): string {
 
 async function loginAndWaitForDashboard(page: Page) {
     await page.goto('/login?next=/dashboard');
-    await page.fill('input[type="email"]', TEST_USER_EMAIL);
-    await page.fill('input[type="password"]', TEST_PASSWORD);
+    await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
     // Let the dashboard finish its initial background fetches before we

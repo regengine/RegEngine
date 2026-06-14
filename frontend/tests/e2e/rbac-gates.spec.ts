@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { adminAuthenticatedE2ESkipReason, hasAdminAuthenticatedE2E } from './auth-prereqs';
+import { fillPasswordLogin, selectPasswordLogin } from './support/ui-auth';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -50,6 +51,7 @@ test.describe('RBAC Gates', () => {
 
         // Login form should be visible
         await expect(page.getByRole('textbox', { name: /email address/i }).first()).toBeVisible();
+        await selectPasswordLogin(page);
         await expect(page.getByLabel(/password/i).first()).toBeVisible();
     });
 
@@ -80,8 +82,7 @@ test.describe('RBAC Gates', () => {
         // the test reliably lands on /dashboard regardless of the test user's
         // onboarding state.  Sysadmin accounts will still proceed normally.
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', ADMIN_EMAIL);
-        await page.fill('input[type="password"]', ADMIN_PASSWORD);
+        await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Wait for redirect to dashboard or sysadmin
@@ -104,8 +105,7 @@ test.describe('RBAC Gates', () => {
 
         // Login as admin — ?next=/dashboard/team to navigate directly to team page
         await page.goto('/login?next=/dashboard/team');
-        await page.fill('input[type="email"]', ADMIN_EMAIL);
-        await page.fill('input[type="password"]', ADMIN_PASSWORD);
+        await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         await waitForAuthenticated(page);
@@ -133,8 +133,7 @@ test.describe('RBAC Gates', () => {
 
         // Login — ?next=/dashboard bypasses the onboarding check
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', ADMIN_EMAIL);
-        await page.fill('input[type="password"]', ADMIN_PASSWORD);
+        await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         await waitForAuthenticated(page);
