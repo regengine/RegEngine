@@ -18,7 +18,6 @@ const localTestAdminEmail =
 const localTestAdminPassword =
     process.env.TEST_ADMIN_PASSWORD || 'Trace204!Playwright1';
 const localBackendBaseURL = 'http://localhost:8000';
-const localAdminServiceUrl = process.env.ADMIN_SERVICE_URL || localBackendBaseURL;
 const localAdminMasterKey =
     process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
 const localRegEngineApiKey =
@@ -38,11 +37,11 @@ if (!externalBaseURL) {
     process.env.TEST_PASSWORD = localTestPassword;
     process.env.TEST_ADMIN_EMAIL = localTestAdminEmail;
     process.env.TEST_ADMIN_PASSWORD = localTestAdminPassword;
-    process.env.ADMIN_SERVICE_URL = localAdminServiceUrl;
-    process.env.INGESTION_SERVICE_URL =
-        process.env.INGESTION_SERVICE_URL || localAdminServiceUrl;
-    process.env.COMPLIANCE_SERVICE_URL =
-        process.env.COMPLIANCE_SERVICE_URL || localAdminServiceUrl;
+    // Playwright local mode owns the backend webServer. Ignore externally
+    // provided service URLs so CI cannot accidentally mutate production.
+    process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
+    process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
+    process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
     process.env.ADMIN_MASTER_KEY = localAdminMasterKey;
     process.env.API_KEY = localRegEngineApiKey;
     process.env.REGENGINE_API_KEY = process.env.REGENGINE_API_KEY || localRegEngineApiKey;
@@ -138,11 +137,9 @@ export default defineConfig({
                     API_KEY: process.env.API_KEY || localRegEngineApiKey,
                     REGENGINE_API_KEY:
                         process.env.REGENGINE_API_KEY || localRegEngineApiKey,
-                    ADMIN_SERVICE_URL: process.env.ADMIN_SERVICE_URL || localAdminServiceUrl,
-                    INGESTION_SERVICE_URL:
-                        process.env.INGESTION_SERVICE_URL || localAdminServiceUrl,
-                    COMPLIANCE_SERVICE_URL:
-                        process.env.COMPLIANCE_SERVICE_URL || localAdminServiceUrl,
+                    ADMIN_SERVICE_URL: localBackendBaseURL,
+                    INGESTION_SERVICE_URL: localBackendBaseURL,
+                    COMPLIANCE_SERVICE_URL: localBackendBaseURL,
                     // Supabase config: intentionally omitted for JWT-only E2E mode.
                     NEXT_PUBLIC_SUPABASE_URL: '',
                     NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
