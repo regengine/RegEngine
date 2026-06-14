@@ -46,7 +46,7 @@ We built a new FSMA 204 readiness loop in RegEngine: Inflow prepares messy suppl
 - Prospect can name one supplier readiness problem RegEngine made clearer.
 - Prospect agrees to a second session or LOI discussion.
 - Session is captured in `sales/design_partner_feedback_scorecard.md`.
-- Prospect row is updated in `sales/design_partner_outreach_tracker_template.csv`.
+- Prospect row is updated in the active local tracker at `sales/local/design_partner_outreach_tracker.csv`.
 
 ## Launch Queue
 
