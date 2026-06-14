@@ -23,12 +23,12 @@ Active prospect trackers, contact verification notes, send queues, and outreach 
 
 Use `sales/local/` for that working material. The folder is ignored by git.
 
-Current local working files:
+Expected local working files:
 
 - `sales/local/design_partner_outreach_tracker.csv`
-- `sales/local/contact_verification_notes_2026-06-13.md`
-- `sales/local/manual_send_queue_2026-06-13.md`
-- `sales/local/first_batch_outreach_drafts_2026-06-13.md`
+- `sales/local/contact_verification_notes_<date>.md`
+- `sales/local/manual_send_queue_<date>.md`
+- `sales/local/first_batch_outreach_drafts_<date>.md`
 
 ## Today Sequence
 
