@@ -2,12 +2,36 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/venv/bin/python}"
+DEFAULT_PYTHON_BIN="$ROOT_DIR/venv/bin/python"
 
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  echo "Python runtime not found at $PYTHON_BIN" >&2
+resolve_python_bin() {
+  if [[ -n "${PYTHON_BIN:-}" ]]; then
+    if [[ -x "$PYTHON_BIN" ]] || command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+      printf '%s\n' "$PYTHON_BIN"
+      return 0
+    fi
+
+    echo "Python runtime not found at $PYTHON_BIN" >&2
+    return 1
+  fi
+
+  if [[ -x "$DEFAULT_PYTHON_BIN" ]]; then
+    printf '%s\n' "$DEFAULT_PYTHON_BIN"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "python3"
+    return 0
+  fi
+
+  echo "Python runtime not found at $DEFAULT_PYTHON_BIN and python3 is not on PATH" >&2
+  return 1
+}
+
+PYTHON_BIN="$(resolve_python_bin)" || {
   exit 1
-fi
+}
 
 shared_db_path="${PLAYWRIGHT_SHARED_DB_PATH:-/tmp/regengine-playwright-shared.db}"
 admin_db_path="${PLAYWRIGHT_ADMIN_DB_PATH:-/tmp/regengine-playwright-admin.db}"
