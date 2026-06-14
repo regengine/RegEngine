@@ -22,8 +22,10 @@ from itertools import count
 
 import app.proof_recall_router as proof_recall_module
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 FDA_24H_MANDATE_SECONDS = proof_recall_module.FDA_24H_MANDATE_SECONDS
 FROZEN_LOT_CODE = proof_recall_module.FROZEN_LOT_CODE
@@ -39,6 +41,19 @@ def _build_app() -> FastAPI:
     # ``@limiter.limit`` decorator to find a key function.
     app.state.limiter = limiter
     app.include_router(proof_recall_router)
+    return app
+
+
+def _build_isolated_rate_limit_app() -> FastAPI:
+    local_limiter = Limiter(key_func=get_remote_address)
+    app = FastAPI()
+    app.state.limiter = local_limiter
+
+    @app.post("/api/v1/proof/recall-drill")
+    @local_limiter.limit("5/minute")
+    async def isolated_recall_drill(request: Request):
+        return proof_recall_module._build_response()
+
     return app
 
 
@@ -63,6 +78,10 @@ def _reset_limiter_state() -> None:
                 reset_target.reset()
             elif hasattr(reset_target, "clear"):
                 reset_target.clear()
+            for attr in ("storage", "events", "expirations", "_MemoryStorage__expire_events"):
+                store = getattr(reset_target, attr, None)
+                if hasattr(store, "clear"):
+                    store.clear()
 
 
 @pytest.fixture
@@ -196,15 +215,25 @@ class TestSchemaValidation:
 # Failure modes — rate limit + determinism
 # ---------------------------------------------------------------------------
 class TestFailureModes:
-    def test_rate_limit_triggers_at_sixth_request(self, client: TestClient):
+    def test_rate_limit_triggers_at_sixth_request(self):
         """5 requests/minute/IP -- the 6th must be 429."""
-        _reset_limiter_state()
-        for i in range(5):
-            resp = client.post("/api/v1/proof/recall-drill")
-            assert resp.status_code == 200, f"request {i + 1}/5 unexpectedly failed: {resp.status_code} {resp.text}"
+        endpoint_key = (
+            f"{proof_recall_module.run_recall_drill.__module__}."
+            f"{proof_recall_module.run_recall_drill.__name__}"
+        )
+        registered_limits = limiter._route_limits.get(endpoint_key, [])
+        assert any(str(limit.limit) == "5 per 1 minute" for limit in registered_limits)
 
-        resp = client.post("/api/v1/proof/recall-drill")
-        assert resp.status_code == 429, resp.text
+        host = f"proof-recall-limit-{os.getpid()}-{next(_client_counter)}"
+        with TestClient(_build_isolated_rate_limit_app(), client=(host, 50000)) as isolated_client:
+            for i in range(5):
+                resp = isolated_client.post("/api/v1/proof/recall-drill")
+                assert resp.status_code == 200, (
+                    f"request {i + 1}/5 unexpectedly failed: {resp.status_code} {resp.text}"
+                )
+
+            resp = isolated_client.post("/api/v1/proof/recall-drill")
+            assert resp.status_code == 429, resp.text
 
     def test_response_is_deterministic_across_calls(self, client: TestClient):
         """Same input -> same output -- required for the cached

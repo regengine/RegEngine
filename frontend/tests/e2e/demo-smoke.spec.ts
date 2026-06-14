@@ -29,8 +29,10 @@ async function login(page: Page): Promise<{ tenantId: string }> {
     expect(loginResponse.access_token, 'admin login should return an access token').toEqual(expect.any(String));
     expect(loginResponse.tenant_id, 'admin login should return a tenant_id').toEqual(expect.any(String));
 
+    await page.request.get('/api/session');
     await expectJson<JsonObject>(
         await page.request.post('/api/session', {
+            headers: await csrfHeaders(page.context()),
             data: {
                 access_token: loginResponse.access_token,
                 tenant_id: loginResponse.tenant_id,
@@ -112,8 +114,10 @@ async function bootstrapApiKey(
     const apiKey = String(created.api_key || '');
     expect(apiKey, 'API key creation should return a raw key once').toBeTruthy();
 
+    await page.request.get('/api/session');
     await expectJson<JsonObject>(
         await page.request.post('/api/session', {
+            headers: await csrfHeaders(context),
             data: { api_key: apiKey },
         }),
         'api key cookie bootstrap',

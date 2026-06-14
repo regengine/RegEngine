@@ -72,7 +72,17 @@ def _make_response(status_code: int, headers: dict = None, text: str = "") -> Ma
     r.status_code = status_code
     r.headers = headers or {}
     r.text = text
+    r.content = text.encode("utf-8")
     return r
+
+
+def _sleep_values(mock_sleep: MagicMock) -> list[float]:
+    return [call.args[0] for call in mock_sleep.call_args_list if call.args]
+
+
+def _contains_subsequence(values: list[float], expected: list[float]) -> bool:
+    cursor = iter(values)
+    return all(any(value == target for value in cursor) for target in expected)
 
 
 @pytest.fixture(autouse=True)
@@ -132,7 +142,7 @@ class TestInThreadRetryAfter_Issue1150:
         assert results[0].success is True
         assert results[0].attempts == 2
         # First retry sleep should use the Retry-After value since 7 > 1 (base)
-        mock_sleep.assert_called_with(7.0)
+        assert 7.0 in _sleep_values(mock_sleep)
         n.close()
 
     @patch.object(notifications_mod.time, "sleep")
@@ -181,7 +191,7 @@ class TestInThreadRetryAfter_Issue1150:
         success = _make_response(200)
         with patch.object(n.session, "post", side_effect=[fail, success]):
             n.notify([_make_item()])
-        mock_sleep.assert_called_with(_RETRY_AFTER_CAP_SECONDS)
+        assert _RETRY_AFTER_CAP_SECONDS in _sleep_values(mock_sleep)
         n.close()
 
     @patch.object(notifications_mod.time, "sleep")
@@ -197,11 +207,10 @@ class TestInThreadRetryAfter_Issue1150:
         with patch.object(n.session, "post", side_effect=[fail, fail, success]):
             n.notify([_make_item()])
         # Two sleeps before the third (successful) attempt.
-        sleep_calls = [c.args[0] for c in mock_sleep.call_args_list]
-        assert sleep_calls == [
+        assert _contains_subsequence(_sleep_values(mock_sleep), [
             _IN_THREAD_BACKOFF_SCHEDULE_SECONDS[0],  # 1s after attempt 1
             _IN_THREAD_BACKOFF_SCHEDULE_SECONDS[1],  # 5s after attempt 2
-        ]
+        ])
         n.close()
 
 

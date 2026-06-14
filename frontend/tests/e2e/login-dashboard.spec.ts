@@ -13,6 +13,7 @@ import { createHmac } from 'node:crypto';
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
 import { loginViaApi, logoutViaApi } from './support/api-auth';
+import { fillPasswordLogin, selectPasswordLogin } from './support/ui-auth';
 
 /** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
 async function waitForAuthenticated(page: Page, timeout = 15000) {
@@ -124,8 +125,7 @@ test.describe('Login → Dashboard Flow', () => {
         await expect(page.getByRole('textbox', { name: /email address/i })).toBeVisible();
 
         // Fill in login form
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
+        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
 
         // Submit form
         await page.click('button[type="submit"]');
@@ -142,8 +142,7 @@ test.describe('Login → Dashboard Flow', () => {
         await page.goto('/login');
 
         // Enter invalid credentials
-        await page.fill('input[type="email"]', 'invalid@example.com');
-        await page.fill('input[type="password"]', 'wrongpassword');
+        await fillPasswordLogin(page, 'invalid@example.com', 'wrongpassword');
 
         // Submit form
         await page.click('button[type="submit"]');
@@ -159,6 +158,7 @@ test.describe('Login → Dashboard Flow', () => {
 
     test('login form has proper accessibility and autofill-friendly controls', async ({ page }) => {
         await page.goto('/login');
+        await selectPasswordLogin(page);
 
         const loginForm = page.locator('form').first();
         const emailInput = loginForm.locator('#email');
@@ -206,8 +206,7 @@ test.describe('Login → Dashboard Flow', () => {
 
         // Login first — use ?next=/dashboard to bypass onboarding redirect
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
+        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
         await page.click('button[type="submit"]');
         await waitForAuthenticated(page);
 
@@ -227,8 +226,7 @@ test.describe('Login → Dashboard Flow', () => {
         test.setTimeout(60000);
 
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
+        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
         await page.click('button[type="submit"]');
         await waitForAuthenticated(page);
 
@@ -256,10 +254,8 @@ test.describe('Login UI + protected deep links with mocked admin auth', () => {
             url.pathname === '/login' && url.searchParams.get('next') === '/reports/abc123',
         );
 
-        const loginForm = page.locator('form').first();
-        await loginForm.locator('#email').fill('playwright-login-ui@example.com');
-        await loginForm.locator('#password').fill('Trace204!Playwright1');
-        await loginForm.getByRole('button', { name: /^sign in$/i }).click();
+        await fillPasswordLogin(page, 'playwright-login-ui@example.com', 'Trace204!Playwright1');
+        await page.locator('form').first().getByRole('button', { name: /^sign in$/i }).click();
 
         await expect(page).toHaveURL((url) => url.pathname === '/reports/abc123', { timeout: 15000 });
     });
@@ -268,11 +264,10 @@ test.describe('Login UI + protected deep links with mocked admin auth', () => {
         await installMockedAdminLogin(page, { failNetwork: true });
 
         await page.goto('/login');
+        await fillPasswordLogin(page, 'network-fail@example.com', 'StillPresent123!');
         const loginForm = page.locator('form').first();
         const emailInput = loginForm.locator('#email');
         const passwordInput = loginForm.locator('#password');
-        await emailInput.fill('network-fail@example.com');
-        await passwordInput.fill('StillPresent123!');
         await loginForm.getByRole('button', { name: /^sign in$/i }).click();
 
         await expect(page.locator('#login-error')).toBeVisible();
@@ -285,9 +280,8 @@ test.describe('Login UI + protected deep links with mocked admin auth', () => {
         const loginCount = await installMockedAdminLogin(page, { delayMs: 1000 });
 
         await page.goto('/login');
+        await fillPasswordLogin(page, 'playwright-login-ui@example.com', 'Trace204!Playwright1');
         const loginForm = page.locator('form').first();
-        await loginForm.locator('#email').fill('playwright-login-ui@example.com');
-        await loginForm.locator('#password').fill('Trace204!Playwright1');
 
         const submitButton = loginForm.getByRole('button', { name: /^sign in$/i });
         const box = await submitButton.boundingBox();
@@ -334,8 +328,7 @@ test.describe('Dashboard Features', () => {
     test.beforeEach(async ({ page }) => {
         // Login before each test — use ?next=/dashboard to bypass onboarding redirect
         await page.goto('/login?next=/dashboard');
-        await page.fill('input[type="email"]', TEST_USER_EMAIL);
-        await page.fill('input[type="password"]', TEST_PASSWORD);
+        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
         await page.click('button[type="submit"]');
         await waitForAuthenticated(page);
     });

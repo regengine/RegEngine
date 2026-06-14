@@ -2,11 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
+import { csrfHeader } from './support/api-auth';
+import { fillPasswordLogin } from './support/ui-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
+const ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
 const VIEWER_PASSWORD = 'Trace204!Viewer1'; // pragma: allowlist secret
 const DEFAULT_ADMIN_DB = 'sqlite:////tmp/regengine-playwright-admin.db';
 
@@ -16,10 +19,58 @@ async function loginToDashboardInflowLab(page: Page) {
 
 async function loginAsUser(page: Page, email: string, password: string) {
     await page.goto('/login?next=/dashboard/inflow-lab');
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
+    await fillPasswordLogin(page, email, password);
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/dashboard\/inflow-lab/, { timeout: 15000 });
+}
+
+async function enableInflowWriteApiKey(page: Page) {
+    const loginResponse = await page.request.post('/api/admin/auth/login', {
+        data: { email: TEST_USER_EMAIL, password: TEST_PASSWORD },
+    });
+    expect(loginResponse.ok(), await loginResponse.text()).toBeTruthy();
+    const loginPayload = await loginResponse.json() as {
+        access_token?: string;
+        tenant_id?: string;
+        user?: unknown;
+    };
+    const tenantId = String(loginPayload.tenant_id || '');
+    expect(tenantId, 'Inflow write E2E requires an authenticated tenant').toBeTruthy();
+    expect(ADMIN_MASTER_KEY, 'Inflow write E2E requires ADMIN_MASTER_KEY to mint a scoped key').toBeTruthy();
+
+    const createdResponse = await page.request.post('/api/admin/v1/admin/keys', {
+        headers: {
+            'Content-Type': 'application/json',
+            Origin: new URL(page.url()).origin,
+            'x-admin-key': ADMIN_MASTER_KEY,
+            ...(await csrfHeader(page.context())),
+        },
+        data: {
+            name: `inflow-dashboard-e2e-${Date.now()}`,
+            tenant_id: tenantId,
+            scopes: ['inflow.read', 'inflow.write'],
+        },
+    });
+    expect(createdResponse.ok(), await createdResponse.text()).toBeTruthy();
+    const created = await createdResponse.json() as { api_key?: string };
+    const apiKey = String(created.api_key || '');
+    expect(apiKey, 'Admin API should return the scoped API key once').toBeTruthy();
+
+    await page.request.get('/api/session');
+    const response = await page.request.post('/api/session', {
+        headers: {
+            'Content-Type': 'application/json',
+            Origin: new URL(page.url()).origin,
+            ...(await csrfHeader(page.context())),
+        },
+        data: {
+            access_token: loginPayload.access_token,
+            api_key: apiKey,
+            tenant_id: tenantId,
+            user: loginPayload.user,
+        },
+    });
+    expect(response.ok(), await response.text()).toBeTruthy();
 }
 
 function resolveAdminSqlitePath() {
@@ -78,6 +129,7 @@ test.describe('Dashboard Inflow Lab', () => {
 
     test('records a saved workbench run only after the explicit save action', async ({ page }) => {
         await loginToDashboardInflowLab(page);
+        await enableInflowWriteApiKey(page);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
@@ -130,6 +182,7 @@ test.describe('Dashboard Inflow Lab', () => {
     });
     test('reloads the latest saved workbench run after a successful save', async ({ page }) => {
         await loginToDashboardInflowLab(page);
+        await enableInflowWriteApiKey(page);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(

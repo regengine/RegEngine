@@ -1,6 +1,7 @@
 
 import { test, expect } from '@playwright/test';
 import { adminAuthenticatedE2ESkipReason, hasAdminAuthenticatedE2E } from './auth-prereqs';
+import { fillPasswordLogin } from './support/ui-auth';
 
 // Invite flow requires an org admin account that can create invite tokens.
 // Use dedicated admin credentials if available; fall back to the test user
@@ -30,8 +31,7 @@ test.describe('User Invite Flow', () => {
         console.log('Logging in as Admin...');
         await page.goto('/login');
 
-        await page.fill('input[type="email"]', ADMIN_EMAIL);
-        await page.fill('input[type="password"]', ADMIN_PASSWORD);
+        await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Regular tenant owners may land on onboarding before they reach the
@@ -112,8 +112,8 @@ test.describe('User Invite Flow', () => {
 
         await page2.click('button:has-text("Create Account")');
 
-        // Verify Success Step "Welcome Aboard!"
-        await expect(page2.getByText('Welcome Aboard!')).toBeVisible();
+        // Verify success step after account creation.
+        await expect(page2.getByRole('heading', { name: /welcome aboard/i })).toBeVisible();
         await page2.click('button:has-text("Go to Login")');
 
         // Verify Redirect to Login
@@ -121,8 +121,7 @@ test.describe('User Invite Flow', () => {
         console.log('Registration complete. Logging in...');
 
         // Login
-        await page2.fill('input[type="email"]', inviteEmail);
-        await page2.fill('input[type="password"]', testPassword);
+        await fillPasswordLogin(page2, inviteEmail, testPassword);
         await page2.click('button[type="submit"]');
 
         // Verify the invited user reaches an authenticated area. New users can

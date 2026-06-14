@@ -455,6 +455,7 @@ export function applyCookieCredentials(
     request: NextRequest,
     options: { respectExistingAuthHeader?: boolean } = {},
 ): Headers {
+    const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
     const cookieAccessToken = request.cookies.get('re_access_token')?.value;
     const headerAuth = headers.get('authorization');
     if (headerAuth && isCookieManagedCredentialHeader('authorization', headerAuth)) {
@@ -471,11 +472,15 @@ export function applyCookieCredentials(
         headers.set('authorization', `Bearer ${cookieAccessToken}`);
     }
 
-    const existingApiKey = headers.get('x-regengine-api-key');
-    if (existingApiKey && isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey)) {
+    let existingApiKey = headers.get('x-regengine-api-key');
+    if (
+        existingApiKey &&
+        (isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) || isBrowserRequest)
+    ) {
         headers.delete('x-regengine-api-key');
+        existingApiKey = null;
     }
-    if (!existingApiKey || isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey)) {
+    if (!existingApiKey) {
         const cookieApiKey = request.cookies.get('re_api_key')?.value;
         if (isUsableCallerCredential(cookieApiKey)) {
             headers.set('x-regengine-api-key', cookieApiKey);
@@ -514,7 +519,14 @@ export function applyFirstPartyServiceCredentials(
     request: NextRequest,
 ): NextResponse | null {
     const existingApiKey = headers.get('x-regengine-api-key');
+    const cookieApiKey = request.cookies.get('re_api_key')?.value;
+    const hasCookieManagedApiKey = Boolean(
+        isUsableCallerCredential(cookieApiKey) && existingApiKey === cookieApiKey,
+    );
     const isBrowserRequest = Boolean(request.headers.get('origin') || request.headers.get('referer'));
+    if (hasCookieManagedApiKey) {
+        return null;
+    }
     if (
         existingApiKey &&
         !isCookieManagedCredentialHeader('x-regengine-api-key', existingApiKey) &&
