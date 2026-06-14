@@ -32,6 +32,7 @@ Usage:
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from collections import defaultdict
@@ -42,12 +43,6 @@ VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 
 # Regex to extract the revision ID from a migration file.
 _REV_RE = re.compile(r"""revision(?::\s*str)?\s*=\s*['"]([0-9a-fA-F]+)['"]""")
-
-# Regex to extract the down_revision.  Accepts a single string, ``None``,
-# or a tuple.  We only use the single-string form for orphan detection —
-# tuple down_revisions (merge migrations) are rare in this codebase and
-# the parse below extracts the first string if present.
-_DOWN_RE = re.compile(r"""down_revision(?::[^=]+)?\s*=\s*(None|['"]([0-9a-fA-F]+)['"]|\(.*?\))""")
 
 # Known-handcrafted revision IDs grandfathered from pre-2026-04-20 migrations
 # still present in alembic/versions/ after the #1855 consolidation.
@@ -111,32 +106,61 @@ def collect_revisions() -> dict[str, list[Path]]:
     return rev_map
 
 
-def collect_down_revisions() -> list[tuple[Path, str, str | None]]:
-    """Return [(path, revision_id, down_revision_id_or_None)] for each file.
+def _literal_assignment(text: str, name: str) -> object:
+    """Return a module-level literal assignment value.
 
-    ``down_revision_id_or_None`` is the single string form.  Tuple form
-    (merge migrations) is not supported by this check — it returns None
-    for those, which is fine because a merge is a legitimate structure.
+    Alembic merge revisions use tuple/list ``down_revision`` values.  Use
+    Python's parser instead of regex so multiline annotated assignments are
+    handled the same way Alembic handles them.
     """
-    out: list[tuple[Path, str, str | None]] = []
+    try:
+        module = ast.parse(text)
+    except SyntaxError:
+        return None
+
+    for node in module.body:
+        value_node = None
+        if isinstance(node, ast.Assign):
+            if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+                value_node = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == name:
+                value_node = node.value
+
+        if value_node is None:
+            continue
+        try:
+            return ast.literal_eval(value_node)
+        except (SyntaxError, ValueError):
+            return None
+
+    return None
+
+
+def _down_revision_ids(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value.lower(),)
+    if isinstance(value, (tuple, list)):
+        return tuple(item.lower() for item in value if isinstance(item, str))
+    return ()
+
+
+def collect_down_revisions() -> list[tuple[Path, str, tuple[str, ...]]]:
+    """Return [(path, revision_id, down_revision_ids)] for each file.
+
+    ``down_revision_ids`` is empty for base migrations, one item for normal
+    migrations, and multiple items for Alembic merge migrations.
+    """
+    out: list[tuple[Path, str, tuple[str, ...]]] = []
     for path in sorted(VERSIONS_DIR.glob("*.py")):
         text = path.read_text(encoding="utf-8", errors="ignore")
         rev_m = _REV_RE.search(text)
         if not rev_m:
             continue
         rev_id = rev_m.group(1).lower()
-        dr_m = _DOWN_RE.search(text)
-        if dr_m is None:
-            out.append((path, rev_id, None))
-            continue
-        raw = dr_m.group(1)
-        if raw == "None":
-            out.append((path, rev_id, None))
-        elif dr_m.group(2):
-            out.append((path, rev_id, dr_m.group(2).lower()))
-        else:
-            # Tuple form — treat as None (merge migration, not a single parent)
-            out.append((path, rev_id, None))
+        out.append((path, rev_id, _down_revision_ids(_literal_assignment(text, "down_revision"))))
     return out
 
 
@@ -163,18 +187,19 @@ def main() -> int:
     # revision ID that does not exist in the versions directory.  This is
     # what triggered the 2026-04-20 incident (``v073 -> v072`` orphan).
     all_revs = set(rev_map.keys())
-    for path, rev_id, down_id in down_rows:
-        if down_id is not None and down_id not in all_revs:
-            failures.append(
-                f"ORPHAN down_revision '{down_id}' in {rel(path)} "
-                f"(revision={rev_id}) — no migration declares that revision"
-            )
+    for path, rev_id, down_ids in down_rows:
+        for down_id in down_ids:
+            if down_id not in all_revs:
+                failures.append(
+                    f"ORPHAN down_revision '{down_id}' in {rel(path)} "
+                    f"(revision={rev_id}) — no migration declares that revision"
+                )
 
     # Check 3: multiple heads — a revision that is not referenced by any
     # other migration's down_revision is a "head".  There must be exactly
     # one.  Multiple heads make ``alembic upgrade head`` ambiguous and
     # every deploy fails.
-    pointed_at = {d for _, _, d in down_rows if d is not None}
+    pointed_at = {down_id for _, _, down_ids in down_rows for down_id in down_ids}
     heads = sorted(rev for rev in all_revs if rev not in pointed_at)
     if len(heads) > 1:
         files_per_head = {h: ", ".join(rel(p) for p in rev_map[h]) for h in heads}
