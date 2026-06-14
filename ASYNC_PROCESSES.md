@@ -62,26 +62,44 @@ guard). In the default Railway deployment **no Kafka consumers run**:
 - `shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
   opt-in path. Opt-in-alive, not deleted — but vestigial for the default deployment.
 
-## Scheduler: not currently running in production (in-process wiring in flight)
+## Scheduler (embedded in the monolith)
 
-`services/scheduler/` (APScheduler jobs: FDA warning-letter/import-alert/recall scraping,
-recall→tenant alerting, deadline monitoring, retention/archival, nightly FSMA sync) is
-**not wired into the production monolith**. Its standalone entrypoint
-(`services/scheduler/main.py`, stdlib health server on port 8600) refuses to run in
-production via `assert_legacy_entrypoint_not_in_production('scheduler')`. As of this
-writing its jobs run nowhere in the Railway deployment.
+`services/scheduler/` runs **in-process in the monolith**: the `server/main.py` lifespan
+starts a daemon thread via `server/workers/embedded_scheduler.py`, and PostgreSQL
+advisory-lock leader election (`services/scheduler/app/distributed.py`) ensures exactly
+one gunicorn worker across all workers/replicas executes jobs — the rest standby-poll and
+re-enter election on leadership loss. The standalone entrypoint
+(`services/scheduler/main.py`, stdlib health server on port 8600) is local-debug only and
+refuses to run in production via `assert_legacy_entrypoint_not_in_production('scheduler')`.
 
-**In progress:** a separate workstream is wiring the scheduler to run in-process in the
-monolith — APScheduler started from the `server/main.py` lifespan, with PostgreSQL
-advisory-lock leader election so only one Railway replica executes jobs. Until that
-lands, do not assume any scheduler job (including the 02:00 UTC FSMA nightly sync)
-actually fires.
+| Job | Interval | What It Does | Idempotent? | On Failure |
+|-----|----------|-------------|-------------|------------|
+| FDA Warning Letters | 60 min | Polls FDA openFDA API for new warning letters | Yes (dedup via StateManager) | Logs warning, circuit opens after 5 failures |
+| FDA Import Alerts | 120 min | Polls FDA for import alert updates | Yes | Same as above |
+| FDA Recalls | 30 min | Polls FDA for recall announcements; matches recalls to tenant product profiles (compliance alerts) | Yes | Same as above |
+| FSMA Nightly Sync | Daily 02:00 UTC | Runs the `/v1/ingest/all-regulations` sweep in-process (`run_all_regulations_ingest`) | Yes (dedup) | Logs error; continues next day |
+| Deadline Monitor | 5 min | Checks approaching compliance deadlines | Yes (read-only) | Logs error; continues |
+| State Cleanup | 24 hr | Prunes stale state entries | Yes | Logs warning; continues |
+| Inactive Account Sweep | 24 hr | Flags inactive tenant accounts | Yes | Logs error; continues |
+| KDE Retention Enforcement | 24 hr | Enforces data retention policies on KDE records | Yes | Logs error; continues |
+| Data Archival | 24 hr | Archives old records per retention policy | Yes | Logs error; continues |
+| Task Queue Purge | 24 hr | Deletes completed/dead `fsma.task_queue` rows older than 30 days | Yes | Logs error; continues |
 
-The scheduler's safety mechanisms (advisory-lock leadership in
-`services/scheduler/app/distributed.py`, per-scraper circuit breakers, APScheduler
-`coalesce=True` + 1h misfire grace) are real code and carry over to the in-process
-design. Note: the circuit breaker in `services/scheduler/app/circuit_breaker.py` is
-**in-memory**, not Redis-backed.
+(The former "Regulatory Discovery" job was removed — it duplicated the FSMA Nightly Sync
+against the same endpoint with credentials the API never accepted. Kafka emission from
+scrape results is gated on `EVENT_BACKBONE=kafka`; in the default pg backbone, items are
+acked after webhook + compliance processing.)
+
+**Enable gate:** `SCHEDULER_EMBEDDED` (default: on in production, off elsewhere).
+**Config:** `services/scheduler/app/config.py` — intervals, thresholds, timeouts. If
+`REGENGINE_ENV=production` is set, `SCHEDULER_API_KEY` must also be set or the scheduler
+refuses to construct (the API keeps serving).
+**Service logic:** `services/scheduler/service.py:SchedulerService`.
+
+The scheduler's safety mechanisms: advisory-lock leadership with heartbeat loss detection,
+per-scraper circuit breakers, APScheduler `coalesce=True` + 1h misfire grace. Note: the
+circuit breaker in `services/scheduler/app/circuit_breaker.py` is **in-memory**, not
+Redis-backed.
 
 ## Other runtime background paths
 

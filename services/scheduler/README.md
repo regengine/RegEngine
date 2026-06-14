@@ -4,20 +4,21 @@ A production-grade job scheduler for automated regulatory change monitoring.
 
 ## Deployment Reality
 
-The scheduler is **not deployed and contributes no routers to the monolith**. Unlike the
-nlp/graph domains it is not mounted into `server/main.py` at all:
+The scheduler runs **embedded in the production monolith**. It contributes no routers;
+its jobs (FDA scraping, recall alerting, deadline monitoring, retention/archival,
+nightly FSMA sync) are started from the `server/main.py` lifespan via
+`server/workers/embedded_scheduler.py`, with PostgreSQL advisory-lock leader election
+(`app/distributed.py`) keeping execution single-flight across gunicorn workers and
+replicas. Enable gate: `SCHEDULER_EMBEDDED` (default on in production, off elsewhere).
 
-- The standalone entrypoint (`main.py`, health server on port 8600) is blocked in
-  production by `assert_legacy_entrypoint_not_in_production('scheduler')`. As of this
-  writing its jobs (FDA scraping, recall alerting, deadline monitoring,
-  retention/archival, nightly FSMA sync) run **nowhere** in the Railway deployment.
-- **In progress:** a separate workstream is wiring the scheduler to run in-process in
-  the monolith — APScheduler started from the `server/main.py` lifespan with
-  PostgreSQL advisory-lock leader election.
+- The standalone entrypoint (`main.py`, health server on port 8600) is local-debug
+  only — blocked in production by `assert_legacy_entrypoint_not_in_production('scheduler')`.
+  The service logic lives in `service.py:SchedulerService`, shared by both modes.
 - `api.py` (the FastAPI management API) is dead code: never mounted, never served.
 - The circuit breaker (`app/circuit_breaker.py`) is **in-memory**, not Redis-backed.
-- Kafka emission only applies to the undeployed standalone mode; the production event
-  backbone defaults to `EVENT_BACKBONE=pg`.
+- Kafka emission is gated on `EVENT_BACKBONE=kafka` (#1159); under the production
+  default (`pg`) emission is skipped and scraped items are acked after webhook +
+  compliance-alert processing.
 
 ## Features
 
@@ -33,7 +34,8 @@ nlp/graph domains it is not mounted into `server/main.py` at all:
 
 ```
 scheduler/
-├── main.py              # Entry point and APScheduler setup
+├── service.py           # SchedulerService — jobs + APScheduler setup (both modes)
+├── main.py              # Standalone local-debug entry point (health server, signals)
 ├── app/
 │   ├── __init__.py
 │   ├── config.py        # Configuration management
