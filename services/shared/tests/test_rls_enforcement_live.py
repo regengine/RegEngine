@@ -54,9 +54,29 @@ def _connect():
     return conn
 
 
+def _rls_schema_present(c) -> bool:
+    """True only if the DB has had the RLS migrations applied.
+
+    The CI "Test shared" job runs against an empty Postgres service that never
+    runs ``alembic upgrade head``, so ``get_tenant_context()`` and the ``fsma.*``
+    policies don't exist there. These are live-RLS-config assertions — they are
+    only meaningful against a migrated database, so we skip rather than fail
+    when the schema is absent (mirrors how the suite already skips without
+    DATABASE_URL).
+    """
+    with c.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_proc WHERE proname = 'get_tenant_context' LIMIT 1")
+        present = cur.fetchone() is not None
+    c.rollback()  # clear the probe transaction
+    return present
+
+
 @pytest.fixture()
 def conn():
     c = _connect()
+    if not _rls_schema_present(c):
+        c.close()
+        pytest.skip("RLS schema not migrated (get_tenant_context absent) — live RLS test needs a migrated DB")
     try:
         yield c
     finally:
