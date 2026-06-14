@@ -29,10 +29,12 @@ def _load_json_artifact(path: Path) -> Any | None:
         return None
     if not raw:
         return None
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return None
+    for candidate in _json_candidates(raw):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+    return None
 
 
 def parse_junit(path: Path | None) -> dict[str, float | int] | None:
@@ -101,6 +103,8 @@ def parse_playwright(path: Path | None) -> dict[str, float | int] | None:
     if data is None:
         return None
     stats = data.get("stats") if isinstance(data, dict) else None
+    top_level_errors = data.get("errors") if isinstance(data, dict) else None
+    error_count = len(top_level_errors) if isinstance(top_level_errors, list) else 0
     if isinstance(stats, dict):
         passed = int(stats.get("expected") or stats.get("passed") or 0)
         failed = int(stats.get("unexpected") or stats.get("failed") or 0)
@@ -108,12 +112,12 @@ def parse_playwright(path: Path | None) -> dict[str, float | int] | None:
         return {
             "passed": passed,
             "failed": failed,
-            "errors": 0,
+            "errors": error_count,
             "skipped": skipped,
             "duration_seconds": _coerce_duration(stats.get("duration")),
         }
 
-    counts = {"passed": 0, "failed": 0, "skipped": 0, "errors": 0}
+    counts = {"passed": 0, "failed": 0, "skipped": 0, "errors": error_count}
     for status in _walk_playwright_statuses(data):
         if status in {"passed", "expected"}:
             counts["passed"] += 1
@@ -124,6 +128,14 @@ def parse_playwright(path: Path | None) -> dict[str, float | int] | None:
         else:
             counts["errors"] += 1
     return {**counts, "duration_seconds": None}
+
+
+def _json_candidates(raw: str) -> list[str]:
+    candidates = [raw]
+    for index, char in enumerate(raw):
+        if char in "{[":
+            candidates.append(raw[index:])
+    return candidates
 
 
 def build_summary(args: argparse.Namespace) -> dict[str, Any]:
