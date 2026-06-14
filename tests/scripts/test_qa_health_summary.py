@@ -72,6 +72,45 @@ def test_parse_playwright_stats(tmp_path: Path) -> None:
     }
 
 
+def test_parse_playwright_ignores_npm_preamble(tmp_path: Path) -> None:
+    report = tmp_path / "playwright.json"
+    report.write_text(
+        "\n> regengine-frontend@0.1.0 test:e2e\n"
+        "> env -u NO_COLOR playwright test --reporter=json\n\n"
+        + json.dumps({"stats": {"expected": 2, "unexpected": 0, "skipped": 1}}),
+        encoding="utf-8",
+    )
+
+    counts = _MODULE.parse_playwright(report)
+
+    assert counts["passed"] == 2
+    assert counts["failed"] == 0
+    assert counts["skipped"] == 1
+
+
+def test_parse_playwright_counts_top_level_errors(tmp_path: Path) -> None:
+    report = tmp_path / "playwright.json"
+    report.write_text(
+        json.dumps(
+            {
+                "errors": [{"message": "web server URL is already used"}],
+                "stats": {"expected": 0, "unexpected": 0, "skipped": 0, "duration": 1000},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    counts = _MODULE.parse_playwright(report)
+
+    assert counts == {
+        "passed": 0,
+        "failed": 0,
+        "errors": 1,
+        "skipped": 0,
+        "duration_seconds": 1000,
+    }
+
+
 def test_parsers_tolerate_non_utf8_artifacts(tmp_path: Path) -> None:
     """A non-UTF8 / binary-garbage artifact must be treated as absent, not crash."""
     junk = b"\xff\xfe\x00\x01garbage\x80\x81"

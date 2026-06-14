@@ -17,7 +17,8 @@ const localTestAdminEmail =
     process.env.TEST_ADMIN_EMAIL || 'playwright-sysadmin@example.com';
 const localTestAdminPassword =
     process.env.TEST_ADMIN_PASSWORD || 'Trace204!Playwright1';
-const localAdminServiceUrl = process.env.ADMIN_SERVICE_URL || 'http://localhost:8000';
+const localBackendBaseURL = 'http://localhost:8000';
+const localAdminServiceUrl = process.env.ADMIN_SERVICE_URL || localBackendBaseURL;
 const localAdminMasterKey =
     process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
 const localRegEngineApiKey =
@@ -27,10 +28,7 @@ const localRegEngineApiKey =
 const localEmailOutboxPath =
     process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
     '/tmp/regengine-playwright-email-outbox.jsonl';
-const localAdminHealthUrl = new URL(
-    '/health',
-    localAdminServiceUrl.endsWith('/') ? localAdminServiceUrl : `${localAdminServiceUrl}/`
-).toString();
+const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
 
 if (!externalBaseURL) {
     process.env.JWT_SIGNING_KEY = localJwtSigningKey;
