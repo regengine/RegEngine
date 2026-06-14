@@ -47,4 +47,3 @@ RegEngine handles tenant-scoped food traceability data. The security model is bu
 - Health and readiness probes may be public only when they expose no tenant data or secrets.
 - Metrics and observability must not emit secrets.
 - Logs must not contain API keys, passwords, raw tokens, or cross-tenant data leakage.
-
