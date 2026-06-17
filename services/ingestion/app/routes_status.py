@@ -100,7 +100,9 @@ async def get_job_status(job_id: str, api_key: APIKey = Depends(require_api_key)
         raise HTTPException(status_code=503, detail="Audit database not available")
 
     try:
-        job = db_manager.get_job(job_id)
+        # Scope to the caller's tenant — a job owned by another tenant reads
+        # as not-found (IDOR fix, audit/ingestion-service-audit.md Finding 1).
+        job = db_manager.get_job(job_id, api_key.tenant_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         return job
@@ -116,7 +118,9 @@ async def get_job_logs(job_id: str, limit: int = 100, api_key: APIKey = Depends(
         raise HTTPException(status_code=503, detail="Audit database not available")
 
     try:
-        logs = db_manager.get_audit_log(job_id, limit=limit)
+        # Scope to the caller's tenant — entries for another tenant's job are
+        # filtered out (IDOR fix, audit/ingestion-service-audit.md Finding 2).
+        logs = db_manager.get_audit_log(job_id, api_key.tenant_id, limit=limit)
         return {"job_id": job_id, "entries": logs}
     finally:
         db_manager.close()

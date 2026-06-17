@@ -68,6 +68,29 @@ def client():
     return TestClient(_app())
 
 
+def _client_for_tenant(tenant_id: str) -> TestClient:
+    """Build a TestClient whose stubbed API key belongs to ``tenant_id``.
+
+    Used to exercise cross-tenant access: a caller from one tenant hitting
+    another tenant's job id.
+    """
+    app = FastAPI()
+    app.include_router(router)
+    from shared.auth import APIKey, require_api_key
+
+    def _key():
+        return APIKey(
+            key_id="k1",
+            key_hash="h",
+            name="test",
+            created_at=datetime.now(timezone.utc),
+            tenant_id=tenant_id,
+        )
+
+    app.dependency_overrides[require_api_key] = _key
+    return TestClient(app)
+
+
 class _FakeRedis:
     """Minimal Redis stub — pre-seed a dict of {key: bytes-or-None}."""
 
@@ -225,6 +248,8 @@ class TestGetJobStatus:
         r = client.get("/v1/audit/jobs/j1")
         assert r.status_code == 404
         assert r.json()["detail"] == "Job not found"
+        # lookup scoped to the caller's tenant
+        db.get_job.assert_called_once_with("j1", TENANT)
         # finally: db.close() still called on 404
         assert db.close.called
 
@@ -239,6 +264,23 @@ class TestGetJobStatus:
         # are accepted but not echoed back by the response_model filter.
         # What we care about is that the handler ran without error and
         # that the db was closed.
+        # lookup scoped to the caller's tenant
+        db.get_job.assert_called_once_with("j1", TENANT)
+        assert db.close.called
+
+    def test_cross_tenant_job_is_404(self, monkeypatch):
+        """A caller from another tenant cannot read this job (IDOR fix).
+
+        The DB stub mimics the SQL tenant predicate: it returns the row only
+        for the owning tenant. A caller from OTHER_TENANT sees not-found.
+        """
+        db = MagicMock()
+        db.get_job.side_effect = lambda jid, tid: {"job_id": jid, "status": "completed"} if tid == TENANT else None
+        monkeypatch.setattr(rs, "get_db_manager", lambda: db)
+
+        r = _client_for_tenant(OTHER_TENANT).get("/v1/audit/jobs/j1")
+        assert r.status_code == 404
+        db.get_job.assert_called_once_with("j1", OTHER_TENANT)
         assert db.close.called
 
 
@@ -266,8 +308,8 @@ class TestGetJobLogs:
         body = r.json()
         assert body["job_id"] == "j1"
         assert len(body["entries"]) == 2
-        # db_manager.get_audit_log called with the limit we passed
-        db.get_audit_log.assert_called_once_with("j1", limit=50)
+        # called with the caller's tenant (scoping) and the limit we passed
+        db.get_audit_log.assert_called_once_with("j1", TENANT, limit=50)
         assert db.close.called
 
     def test_default_limit_is_100(self, client, monkeypatch):
@@ -276,7 +318,25 @@ class TestGetJobLogs:
         monkeypatch.setattr(rs, "get_db_manager", lambda: db)
 
         client.get("/v1/audit/logs/j1")
-        db.get_audit_log.assert_called_once_with("j1", limit=100)
+        db.get_audit_log.assert_called_once_with("j1", TENANT, limit=100)
+
+    def test_cross_tenant_logs_are_empty(self, monkeypatch):
+        """A caller from another tenant gets no audit entries (IDOR fix).
+
+        get_audit_log joins audit_log -> jobs on tenant, so a non-owning
+        tenant's query returns []. The handler returns 200 with empty
+        entries (not 404) — same shape as an owned job with no entries yet,
+        so there's no existence oracle.
+        """
+        db = MagicMock()
+        db.get_audit_log.side_effect = lambda jid, tid, limit=100: [{"event": "ingest_start"}] if tid == TENANT else []
+        monkeypatch.setattr(rs, "get_db_manager", lambda: db)
+
+        r = _client_for_tenant(OTHER_TENANT).get("/v1/audit/logs/j1")
+        assert r.status_code == 200
+        assert r.json()["entries"] == []
+        db.get_audit_log.assert_called_once_with("j1", OTHER_TENANT, limit=100)
+        assert db.close.called
 
 
 # ---------------------------------------------------------------------------

@@ -103,6 +103,9 @@ class IngestionJob:
     vertical: str
     source_type: str
 
+    # Tenant scoping (owner of the job — required for tenant-isolated reads)
+    tenant_id: Optional[str] = None
+
     # Status
     status: JobStatus = JobStatus.PENDING
     started_at: Optional[datetime] = None
