@@ -259,12 +259,12 @@ class DatabaseManager:
             cur.execute(
                 """
                 INSERT INTO ingestion.jobs (
-                    job_id, vertical, source_type, status,
+                    job_id, tenant_id, vertical, source_type, status,
                     created_at, started_at, completed_at, updated_at,
                     documents_processed, documents_succeeded, documents_failed, documents_skipped,
                     config, error_message, error_details
                 ) VALUES (
-                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, %s, %s
@@ -272,6 +272,7 @@ class DatabaseManager:
             """,
                 (
                     UUID(job.job_id),
+                    UUID(job.tenant_id) if isinstance(job.tenant_id, str) and job.tenant_id else job.tenant_id,
                     job.vertical,
                     job.source_type,
                     job.status.value,
@@ -327,23 +328,24 @@ class DatabaseManager:
                 ),
             )
 
-    def get_job(self, job_id: str) -> Optional[dict]:
+    def get_job(self, job_id: str, tenant_id: str) -> Optional[dict]:
         """
-        Retrieve job by ID.
+        Retrieve job by ID, scoped to the owning tenant.
 
         Args:
             job_id: Job identifier
+            tenant_id: Tenant identifier (required for isolation)
 
         Returns:
-            Job dict or None
+            Job dict or None (None when the job belongs to another tenant)
         """
         with self.conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT * FROM ingestion.jobs
-                WHERE job_id = %s
+                WHERE job_id = %s AND tenant_id = %s
             """,
-                (UUID(job_id),),
+                (UUID(job_id), tenant_id),
             )
             return cur.fetchone()
 
@@ -379,12 +381,17 @@ class DatabaseManager:
                 ),
             )
 
-    def get_audit_log(self, job_id: str, limit: int = 100) -> List[dict]:
+    def get_audit_log(self, job_id: str, tenant_id: str, limit: int = 100) -> List[dict]:
         """
-        Get audit log entries for a job.
+        Get audit log entries for a job, scoped to the owning tenant.
+
+        ``ingestion.audit_log`` has no ``tenant_id`` column, so tenant
+        ownership is enforced by joining to ``ingestion.jobs`` (which does).
+        A job owned by another tenant yields no rows.
 
         Args:
             job_id: Job identifier
+            tenant_id: Tenant identifier (required for isolation)
             limit: Maximum entries
 
         Returns:
@@ -393,11 +400,12 @@ class DatabaseManager:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT * FROM ingestion.audit_log
-                WHERE job_id = %s
-                ORDER BY timestamp DESC
+                SELECT a.* FROM ingestion.audit_log a
+                JOIN ingestion.jobs j ON a.job_id = j.job_id
+                WHERE a.job_id = %s AND j.tenant_id = %s
+                ORDER BY a.timestamp DESC
                 LIMIT %s
             """,
-                (UUID(job_id), limit),
+                (UUID(job_id), tenant_id, limit),
             )
             return cur.fetchall()

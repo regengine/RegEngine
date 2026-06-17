@@ -612,6 +612,7 @@ async def ingest_direct(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=payload.vertical or "unknown",
             source_type="direct",
             status=JobStatus.RUNNING,
@@ -689,6 +690,7 @@ async def ingest_file(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=vertical or "unknown",
             source_type="file_upload",
             status=JobStatus.RUNNING,
@@ -778,6 +780,7 @@ async def ingest_url(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=payload.vertical or "unknown",
             source_type="url",
             status=JobStatus.RUNNING,
@@ -859,6 +862,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
 
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=vertical,
             source_type=source_system,
             status=JobStatus.RUNNING,
