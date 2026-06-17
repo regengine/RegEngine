@@ -241,6 +241,11 @@ async def process_regulation_ingestion(
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
 
+    # Tenant-isolation marker read by routes_status to scope status/result
+    # lookups to the owning tenant (audit/ingestion-service-audit.md).
+    if tenant_id:
+        r.setex(f"ingest:owner:{job_id}", 7200, tenant_id)
+
     # Retrieve content from Redis
     content = r.get(f"ingest:job:{job_id}")
     if not content:
@@ -355,6 +360,10 @@ async def ingest_regulation(
     try:
         r = redis.from_url(settings.redis_url)
         r.setex(f"ingest:status:{job_id}", 7200, "queued")
+        # Tenant-isolation marker for routes_status status/result reads
+        # (audit/ingestion-service-audit.md).
+        if api_key.tenant_id:
+            r.setex(f"ingest:owner:{job_id}", 7200, api_key.tenant_id)
     except (redis.RedisError, ConnectionError):
         pass  # Status key is best-effort; task queue durability is in Postgres
 
@@ -603,6 +612,7 @@ async def ingest_direct(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=payload.vertical or "unknown",
             source_type="direct",
             status=JobStatus.RUNNING,
@@ -680,6 +690,7 @@ async def ingest_file(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=vertical or "unknown",
             source_type="file_upload",
             status=JobStatus.RUNNING,
@@ -769,6 +780,7 @@ async def ingest_url(
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=payload.vertical or "unknown",
             source_type="url",
             status=JobStatus.RUNNING,
@@ -850,6 +862,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
 
         job = IngestionJob(
             job_id=job_id,
+            tenant_id=tenant_id,
             vertical=vertical,
             source_type=source_system,
             status=JobStatus.RUNNING,
