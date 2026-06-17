@@ -812,6 +812,16 @@ async def root():
     }
 
 
+# ── Scheduler diagnostic ─────────────────────────────────────────
+# #1255: restore the standalone scheduler's X-Metrics-Key-gated /status
+# surface (circuit breakers + per-source last-scrape state). Mounted
+# unconditionally — the embedded scheduler runs in-process, not behind a
+# router feature flag.
+from server.routes_scheduler_status import router as scheduler_status_router
+
+app.include_router(scheduler_status_router)
+
+
 # ── Health check ─────────────────────────────────────────────────
 @app.get("/health", tags=["system"], operation_id="root_liveness_health")
 async def health():
