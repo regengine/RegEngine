@@ -56,6 +56,11 @@ async def _process_regulation_from_file(
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
 
+    # Tenant-isolation marker read by routes_status to scope status/result
+    # lookups to the owning tenant (audit/ingestion-service-audit.md).
+    if tenant_id:
+        r.setex(f"ingest:owner:{job_id}", 7200, tenant_id)
+
     content = None
     try:
         with open(file_path, "rb") as fh:

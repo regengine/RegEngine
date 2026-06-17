@@ -310,20 +310,23 @@ class TestProcessRegulationHappyPath:
             webhook=None,
         )
 
-        # Redis writes: processing, completed, result
+        # Redis writes: owner (tenant marker), processing, completed, result
         keys = [c[0] for c in fake_redis.calls]
         assert keys == [
+            "ingest:owner:j1",
             "ingest:status:j1",
             "ingest:status:j1",
             "ingest:result:j1",
         ]
         # TTL 7200 (2 hrs) on every key so stale entries age out.
         assert all(c[1] == 7200 for c in fake_redis.calls)
+        # Owner marker carries the tenant so status/result reads stay scoped.
+        assert fake_redis.calls[0][2] == "tenant-42"
         # Values for status flow
-        assert fake_redis.calls[0][2] == "processing"
-        assert fake_redis.calls[1][2] == "completed"
+        assert fake_redis.calls[1][2] == "processing"
+        assert fake_redis.calls[2][2] == "completed"
         # Result is JSON with sections + name + tenant_id
-        result_body = json.loads(fake_redis.calls[2][2])
+        result_body = json.loads(fake_redis.calls[3][2])
         assert result_body == {
             "sections": 42,
             "name": "FDA FSMA 204",
@@ -432,10 +435,11 @@ class TestStagingFileMissing:
             )
         )
 
-        # Only one Redis write — and it's the failure status — because
-        # the function returns before the processing-status write.
-        assert len(fake_redis.calls) == 1
-        assert fake_redis.calls[0] == (
+        # Two Redis writes: the tenant owner marker (written up front), then
+        # the failure status — the function returns before the processing write.
+        assert len(fake_redis.calls) == 2
+        assert fake_redis.calls[0] == ("ingest:owner:j-missing", 7200, "t")
+        assert fake_redis.calls[1] == (
             "ingest:status:j-missing",
             7200,
             "failed: staging file not found",
