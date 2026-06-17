@@ -75,6 +75,23 @@ def _env_flag(name: str, default: bool = False) -> bool:
 async def lifespan(app: FastAPI):
     logger.info("regengine_startup", mode="monolith")
 
+    # #2348: warn at boot if document-storage credentials are absent —
+    # /v1/ingest/{url,file,direct,regulation} return 503 until configured.
+    # Best-effort: a probe failure must never abort monolith startup. NOTE the
+    # fully-qualified import path (the standalone ingestion entrypoint uses the
+    # service-relative ``app.s3_utils``; the monolith must not).
+    try:
+        from services.ingestion.app.s3_utils import is_object_storage_configured
+
+        if not is_object_storage_configured():
+            logger.warning(
+                "object_storage_disabled",
+                detail="/v1/ingest/* endpoints will return 503; set "
+                "OBJECT_STORAGE_ACCESS_KEY_ID and OBJECT_STORAGE_SECRET_ACCESS_KEY to enable",
+            )
+    except Exception as exc:
+        logger.warning("object_storage_probe_failed", error=str(exc))
+
     # Initialize admin DB (RLS functions, no create_all)
     try:
         from services.admin.app.database import init_db
@@ -194,7 +211,11 @@ from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
-app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
+# default_rpm=100 matches the consolidated services (ingestion/compliance/nlp/
+# graph all use 100) and the documented production default. The monolith is the
+# union of those services, so the stricter ceiling is the correct floor.
+# Operators can still raise it per-deploy via TENANT_RATE_LIMIT_RPM.
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 # Issue #2307: surface X-RateLimit-* headers on 2xx responses by mirroring
 # ``request.state.rate_limit_*`` (populated by authz/routes_ingest/webhook
 # rate-limit guards) onto the outbound response. Read-only: never consumes
@@ -227,6 +248,19 @@ from shared.observability.correlation import CorrelationIdMiddleware
 
 app.add_middleware(CorrelationIdMiddleware)
 
+
+# Stamp the FSMA-204 traceability marker on every response. The standalone
+# admin service applied this via @app.middleware; per-app middleware does not
+# propagate through include_router, so admin routes mounted here would
+# otherwise drop the header. Added last → outermost → always applied on the
+# way out.
+@app.middleware("http")
+async def add_compliance_header(request, call_next):
+    response = await call_next(request)
+    response.headers["X-FSMA-204-Traceability"] = "true"
+    return response
+
+
 from shared.error_handling import install_exception_handlers
 
 install_exception_handlers(app)
@@ -234,6 +268,17 @@ install_exception_handlers(app)
 from shared.auth import validate_auth_config
 
 validate_auth_config()
+
+# #1325: mount Prometheus RED metrics on /metrics for the monolith. add_security/
+# add_observability above wire CORS + OTel tracing but NOT the Prometheus
+# endpoint — install_metrics is the single source of truth for /metrics across
+# every RegEngine app, and the monolith (the only deployed container) was the
+# lone entrypoint missing it. Auth-guarded (X-Metrics-Key / METRICS_API_KEY),
+# idempotent, and /metrics is TrustedHost-exempt. Called before include_router
+# to mirror the five per-service entrypoints.
+from shared.observability import install_metrics
+
+install_metrics(app, service_name="regengine")
 
 
 # ── Router feature flags ─────────────────────────────────────────
