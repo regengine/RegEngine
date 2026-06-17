@@ -34,8 +34,15 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 
 
+# Tenant the stubbed API key belongs to. Redis owner keys and DB tenant
+# filters are asserted against this value (tenant isolation —
+# audit/ingestion-service-audit.md).
+TENANT = "11111111-1111-1111-1111-111111111111"
+OTHER_TENANT = "22222222-2222-2222-2222-222222222222"
+
+
 def _stub_api_key():
-    """Stand-in APIKey dependency override — no real auth."""
+    """Stand-in APIKey dependency override — no real auth, fixed tenant."""
     from shared.auth import APIKey
 
     return APIKey(
@@ -43,6 +50,7 @@ def _stub_api_key():
         key_hash="h",
         name="test",
         created_at=datetime.now(timezone.utc),
+        tenant_id=TENANT,
     )
 
 
@@ -98,7 +106,7 @@ class TestGetIngestionStatus:
 
     def test_running_status_no_result_fetch(self, client, patch_redis):
         # status is not 'completed' → do not populate 'result'
-        patch_redis({"ingest:status:j1": b"running"})
+        patch_redis({"ingest:status:j1": b"running", "ingest:owner:j1": TENANT.encode()})
         r = client.get("/v1/ingest/status/j1")
         assert r.status_code == 200
         body = r.json()
@@ -110,6 +118,7 @@ class TestGetIngestionStatus:
             {
                 "ingest:status:j1": b"completed",
                 "ingest:result:j1": json.dumps({"sections": 12}).encode(),
+                "ingest:owner:j1": TENANT.encode(),
             }
         )
         r = client.get("/v1/ingest/status/j1")
@@ -120,10 +129,28 @@ class TestGetIngestionStatus:
 
     def test_completed_without_result_still_ok(self, client, patch_redis):
         """Completed but result key missing → no result field populated."""
-        patch_redis({"ingest:status:j1": b"completed"})
+        patch_redis({"ingest:status:j1": b"completed", "ingest:owner:j1": TENANT.encode()})
         r = client.get("/v1/ingest/status/j1")
         assert r.status_code == 200
         assert r.json()["result"] is None
+
+    def test_404_when_owned_by_other_tenant(self, client, patch_redis):
+        """Job exists but belongs to another tenant → 404 (no cross-tenant read)."""
+        patch_redis(
+            {
+                "ingest:status:j1": b"completed",
+                "ingest:result:j1": json.dumps({"sections": 12}).encode(),
+                "ingest:owner:j1": OTHER_TENANT.encode(),
+            }
+        )
+        r = client.get("/v1/ingest/status/j1")
+        assert r.status_code == 404
+
+    def test_404_when_owner_key_absent(self, client, patch_redis):
+        """Status present but no owner marker → fail closed (404)."""
+        patch_redis({"ingest:status:j1": b"completed"})
+        r = client.get("/v1/ingest/status/j1")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +170,7 @@ class TestGetDocumentAnalysis:
             {
                 "ingest:status:d1": b"completed",
                 "ingest:result:d1": json.dumps({"sections": 42}).encode(),
+                "ingest:owner:d1": TENANT.encode(),
             }
         )
         r = client.get("/v1/ingest/documents/d1/analysis")
@@ -157,12 +185,24 @@ class TestGetDocumentAnalysis:
 
     def test_analysis_without_result_defaults_to_zero(self, client, patch_redis):
         """When no result blob exists, obligations_count defaults to 0."""
-        patch_redis({"ingest:status:d1": b"processing"})
+        patch_redis({"ingest:status:d1": b"processing", "ingest:owner:d1": TENANT.encode()})
         r = client.get("/v1/ingest/documents/d1/analysis")
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "processing"
         assert body["obligations_count"] == 0
+
+    def test_404_when_owned_by_other_tenant(self, client, patch_redis):
+        """Analysis for another tenant's document → 404 (no cross-tenant read)."""
+        patch_redis(
+            {
+                "ingest:status:d1": b"completed",
+                "ingest:result:d1": json.dumps({"sections": 42}).encode(),
+                "ingest:owner:d1": OTHER_TENANT.encode(),
+            }
+        )
+        r = client.get("/v1/ingest/documents/d1/analysis")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +305,8 @@ class TestListDocuments:
         body = r.json()
         assert body["count"] == 2
         assert len(body["documents"]) == 2
-        db.search_documents.assert_called_once_with("food", "fda", 10, 5)
+        # tenant is the required first positional arg — scopes the search
+        db.search_documents.assert_called_once_with(TENANT, "food", "fda", 10, 5)
         assert db.close.called
 
     def test_default_paging(self, client, monkeypatch):
@@ -274,7 +315,7 @@ class TestListDocuments:
         monkeypatch.setattr(rs, "get_db_manager", lambda: db)
 
         client.get("/v1/ingest/documents")
-        db.search_documents.assert_called_once_with(None, None, 100, 0)
+        db.search_documents.assert_called_once_with(TENANT, None, None, 100, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +363,8 @@ class TestVerifyDocument:
         }
         # verified_at is a valid ISO-8601 timestamp
         assert "T" in body["verified_at"]
+        # lookup scoped to the caller's tenant
+        db.get_document.assert_called_once_with("d1", TENANT)
         assert db.close.called
 
 
