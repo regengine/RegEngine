@@ -11,6 +11,9 @@ const localJwtSigningKey =
     process.env.JWT_SIGNING_KEY ||
     process.env.AUTH_SECRET_KEY ||
     'playwright-local-jwt-signing-key-2026';
+const localOtpHmacSecret =
+    process.env.AUTH_OTP_HMAC_SECRET ||
+    'playwright-local-otp-hmac-secret-2026-minimum-32-bytes';
 const localTestUserEmail = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
 const localTestPassword = process.env.TEST_PASSWORD || 'Trace204!Playwright1';
 const localTestAdminEmail =
@@ -27,11 +30,17 @@ const localRegEngineApiKey =
 const localEmailOutboxPath =
     process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
     '/tmp/regengine-playwright-email-outbox.jsonl';
+const localSharedDatabaseUrl =
+    process.env.DATABASE_URL || 'sqlite:////tmp/regengine-playwright-shared.db';
+const localAdminDatabaseUrl =
+    process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
 const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
 
 if (!externalBaseURL) {
+    process.env.REGENGINE_ENV = process.env.REGENGINE_ENV || 'development';
     process.env.JWT_SIGNING_KEY = localJwtSigningKey;
     process.env.AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY || localJwtSigningKey;
+    process.env.AUTH_OTP_HMAC_SECRET = localOtpHmacSecret;
     process.env.CSRF_SECRET = process.env.CSRF_SECRET || localJwtSigningKey;
     process.env.TEST_USER_EMAIL = localTestUserEmail;
     process.env.TEST_PASSWORD = localTestPassword;
@@ -47,6 +56,14 @@ if (!externalBaseURL) {
     process.env.REGENGINE_API_KEY = process.env.REGENGINE_API_KEY || localRegEngineApiKey;
     process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
     process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.DATABASE_URL = localSharedDatabaseUrl;
+    process.env.ADMIN_FALLBACK_SQLITE = localAdminDatabaseUrl;
+    process.env.WEBAUTHN_EXPECTED_ORIGIN =
+        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL;
+    process.env.WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+    process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
+    process.env.ALLOW_INMEMORY_SESSION_STORE =
+        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
     process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
         process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
 }
@@ -73,7 +90,9 @@ export default defineConfig({
     reporter: 'html',
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
-        /* Base URL — override with PLAYWRIGHT_BASE_URL for staging/prod runs */
+        /* Base URL — localhost is a secure context in Chromium, so Secure
+         * __Host-regengine_session cookies are accepted without local HTTPS.
+         * Override with PLAYWRIGHT_BASE_URL for staging/prod runs. */
         baseURL: externalBaseURL || localBaseURL,
 
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
@@ -98,6 +117,8 @@ export default defineConfig({
                     PORT: '8000',
                     AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
                     JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        process.env.AUTH_OTP_HMAC_SECRET || localOtpHmacSecret,
                     ADMIN_MASTER_KEY: process.env.ADMIN_MASTER_KEY || localAdminMasterKey,
                     API_KEY: process.env.API_KEY || localRegEngineApiKey,
                     REGENGINE_API_KEY:
@@ -105,11 +126,12 @@ export default defineConfig({
                     REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
                     REGENGINE_E2E_EMAIL_OUTBOX:
                         process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
-                    DATABASE_URL:
-                        process.env.DATABASE_URL || 'sqlite:////tmp/regengine-playwright-shared.db',
+                    DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
                     ADMIN_FALLBACK_SQLITE:
-                        process.env.ADMIN_FALLBACK_SQLITE ||
-                        'sqlite:////tmp/regengine-playwright-admin.db',
+                        process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
+                    WEBAUTHN_EXPECTED_ORIGIN:
+                        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL,
+                    WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || 'localhost',
                     DISABLE_TASK_WORKER: process.env.DISABLE_TASK_WORKER || 'true',
                     ALLOW_INMEMORY_SESSION_STORE:
                         process.env.ALLOW_INMEMORY_SESSION_STORE || 'true',
@@ -127,6 +149,8 @@ export default defineConfig({
                     JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
                     JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
                     AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        process.env.AUTH_OTP_HMAC_SECRET || localOtpHmacSecret,
                     CSRF_SECRET: process.env.CSRF_SECRET || localJwtSigningKey,
                     TEST_USER_EMAIL: process.env.TEST_USER_EMAIL || localTestUserEmail,
                     TEST_PASSWORD: process.env.TEST_PASSWORD || localTestPassword,

@@ -1,158 +1,176 @@
 'use client';
 
-/**
- * VerifyClient — token-hash password reset verification
- *
- * WHY THIS EXISTS:
- * Email clients (Gmail, Outlook SafeLinks, etc.) prefetch every link in an
- * email within seconds of delivery to scan for phishing. If the reset link
- * goes directly to Supabase's /auth/v1/verify endpoint, the prefetcher
- * consumes the one-time OTP before the user ever clicks — making the link
- * appear "expired" immediately.
- *
- * FIX:
- * The email links to THIS page (/auth/verify?token=HASH&type=recovery).
- * Email clients fetch the page and see static HTML with a button. Buttons
- * cannot be "prefetched" — only the user can click them. The actual
- * verifyOtp() API call is made from JavaScript on click, so the OTP token
- * is never consumed until the user deliberately acts.
- *
- * This also eliminates the PKCE code-verifier mismatch problem (user clicks
- * link on a different device than where they requested the reset), because
- * verifyOtp({ token_hash }) exchanges the token directly for a session
- * without needing a PKCE verifier stored in the browser.
- */
+import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, KeyRound, Loader2, Mail, RotateCcw } from 'lucide-react';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  clearOtpChallengeState,
+  loadOtpChallengeState,
+  seedPasswordlessClientUser,
+  type StoredOtpChallenge,
+  verifyEmailChallenge,
+} from '@/lib/passwordless-auth';
 
 type VerifyClientProps = {
-    tokenHash: string;
-    type: string;
+  initialEmail?: string;
+  initialChallengeId?: string;
 };
 
-export default function VerifyClient({ tokenHash, type }: VerifyClientProps) {
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const router = useRouter();
+export default function VerifyClient({ initialEmail = '', initialChallengeId = '' }: VerifyClientProps) {
+  const [state, setState] = useState<StoredOtpChallenge | null>(() => {
+    if (initialEmail) {
+      return {
+        email: initialEmail,
+        challengeId: initialChallengeId || null,
+        createdAt: Date.now(),
+      };
+    }
+    return null;
+  });
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleVerify = async () => {
-        setLoading(true);
-        setError(null);
+  useEffect(() => {
+    if (state) return;
+    setState(loadOtpChallengeState());
+  }, [state]);
 
-        const response = await fetch('/api/auth/supabase/verify-otp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-                token_hash: tokenHash,
-                type: type === 'recovery' ? 'recovery' : 'recovery',
-            }),
-        });
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedCode = code.trim();
 
-        if (!response.ok) {
-            // Token already used or expired
-            router.push('/forgot-password?error=link_expired');
-            return;
-        }
-
-        // Session is now active — send to the reset form
-        router.push('/reset-password');
-    };
-
-    if (!tokenHash) {
-        return (
-            <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-                <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                        <CardHeader className="space-y-1 pb-4">
-                            <div className="mb-3 flex justify-center">
-                                <div className="rounded-full border border-re-danger/30 bg-re-danger-muted0/10 p-3">
-                                    <AlertTriangle className="h-7 w-7 text-re-danger" />
-                                </div>
-                            </div>
-                            <h2 className="text-center text-2xl font-semibold text-[var(--re-text-primary)]">
-                                Invalid reset link
-                            </h2>
-                        </CardHeader>
-                        <CardContent className="space-y-4 text-center">
-                            <p className="text-sm text-[var(--re-text-muted)]">
-                                This link is missing required parameters. Please request a new reset link.
-                            </p>
-                            <Button className="w-full" onClick={() => router.push('/forgot-password')}>
-                                Request a new link
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </section>
-            </div>
-        );
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      setError('Enter the 6-digit code from your email.');
+      return;
     }
 
-    return (
-        <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -top-16 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[var(--re-brand)]/10 blur-3xl" />
-                <div className="absolute right-12 top-28 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
+    if (!state?.challengeId) {
+      setError('This sign-in attempt is missing its challenge. Request a new code to continue.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await verifyEmailChallenge(state.challengeId, normalizedCode);
+      seedPasswordlessClientUser(state.email);
+      clearOtpChallengeState();
+      window.location.assign('/dashboard');
+    } catch (err: unknown) {
+      const apiError = err as { response?: { status?: number }; message?: string };
+      if (apiError.response?.status === 401 || apiError.response?.status === 400) {
+        setError('That code is incorrect or expired. Check the code and try again.');
+      } else if (apiError.response?.status === 429) {
+        setError('Too many attempts. Please wait before trying again.');
+      } else {
+        setError(apiError.message || 'Unable to verify this code. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="re-compliance-os min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
+      <section className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-8 sm:px-6">
+        <Card className="w-full border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-lg">
+          <CardHeader className="px-5 pb-3 pt-6 sm:px-8 sm:pt-8">
+            <Link href="/" className="mb-8 inline-flex w-fit items-center text-[var(--re-text-primary)] no-underline">
+              <RegEngineWordmark size="md" />
+            </Link>
+            <div className="inline-flex w-fit items-center gap-2 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] px-3 py-1 text-xs font-medium text-[var(--re-info)]">
+              <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+              Email code
             </div>
+            <h1 className="mt-5 text-3xl font-semibold leading-tight text-[var(--re-text-primary)]">
+              Enter the 6-digit code sent to your email.
+            </h1>
+            <CardDescription className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">
+              {state?.email ? (
+                <span className="inline-flex items-center gap-2">
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  {state.email}
+                </span>
+              ) : (
+                'Use the same browser where you requested the sign-in code.'
+              )}
+            </CardDescription>
+          </CardHeader>
 
-            <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
-                    <CardHeader className="space-y-1 pb-4">
-                        <div className="mb-3 flex justify-center">
-                            <div className="rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 p-3">
-                                <ShieldCheck className="h-7 w-7 text-[var(--re-brand)]" />
-                            </div>
-                        </div>
-                        <h2 className="text-center text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">
-                            Reset your password
-                        </h2>
-                        <p className="text-center text-sm text-[var(--re-text-muted)]">
-                            Click below to open your password reset form
-                        </p>
-                    </CardHeader>
+          <CardContent className="px-5 pb-6 sm:px-8 sm:pb-8">
+            {!state?.challengeId && (
+              <div className="mb-4 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300" role="status">
+                We could not find a challenge ID for this code. Request a new code, then return here from the same browser.
+              </div>
+            )}
 
-                    <CardContent className="space-y-4">
-                        {error && (
-                            <div
-                                role="alert"
-                                className="rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
-                            >
-                                {error}
-                            </div>
-                        )}
+            {error && (
+              <div
+                id="otp-error"
+                role="alert"
+                aria-live="polite"
+                className="mb-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400"
+              >
+                {error}
+              </div>
+            )}
 
-                        <Button
-                            className="h-11 w-full"
-                            onClick={handleVerify}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Verifying…
-                                </>
-                            ) : (
-                                'Continue to reset password'
-                            )}
-                        </Button>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none text-[var(--re-text-secondary)]" htmlFor="otp-code">
+                  Verification code
+                </label>
+                <Input
+                  id="otp-code"
+                  name="code"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  disabled={isSubmitting}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'otp-error' : undefined}
+                  className="h-12 font-mono text-lg tracking-[0.24em]"
+                />
+              </div>
 
-                        <p className="text-center text-xs text-[var(--re-text-muted)]">
-                            This link expires in 1 hour.{' '}
-                            <a
-                                href="/forgot-password"
-                                className="underline underline-offset-2 hover:text-[var(--re-brand)]"
-                            >
-                                Request a new one
-                            </a>{' '}
-                            if it no longer works.
-                        </p>
-                    </CardContent>
-                </Card>
-            </section>
-        </div>
-    );
+              <Button className="h-12 w-full gap-2" type="submit" disabled={isSubmitting || !state?.challengeId}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    Verify and continue
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </>
+                )}
+              </Button>
+            </form>
+
+            <div className="mt-5 border-t border-[var(--re-border-subtle)] pt-5 text-center">
+              <Button asChild variant="ghost" className="gap-2">
+                <Link href="/login">
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Request a new code
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
 }

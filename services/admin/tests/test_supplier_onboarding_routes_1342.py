@@ -87,9 +87,9 @@ def db() -> Session:
     SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(UserModel(id=USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False))
+    session.add(UserModel(id=USER_ID, email="u@example.com", status="active", is_sysadmin=False))
     session.add(
-        UserModel(id=OTHER_USER_ID, email="other@example.com", password_hash="x", status="active", is_sysadmin=False)
+        UserModel(id=OTHER_USER_ID, email="other@example.com", status="active", is_sysadmin=False)
     )
     session.commit()
     try:

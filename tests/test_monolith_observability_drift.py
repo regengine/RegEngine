@@ -139,6 +139,15 @@ def test_scheduler_status_requires_auth(server_main):
     assert client.get("/v1/scheduler/status").status_code == 403
 
 
+def test_scheduler_status_rejects_wrong_metrics_key(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "wrong"})
+    assert resp.status_code == 403
+
+
 def test_scheduler_status_disabled_when_no_runner(server_main, monkeypatch):
     import shared.observability.metrics_auth as metrics_auth
 
@@ -160,6 +169,22 @@ def test_scheduler_status_standby_when_not_leader(server_main, monkeypatch):
     resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "standby"
+
+
+def test_scheduler_status_starting_when_leader_has_no_service(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setattr(
+        server_main.app.state,
+        "embedded_scheduler",
+        _FakeRunner(is_leader=True, current_service=None),
+        raising=False,
+    )
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    assert resp.json() == {"service": "scheduler", "status": "starting"}
 
 
 def test_scheduler_status_leader_returns_circuit_and_scrape_state(server_main, monkeypatch):

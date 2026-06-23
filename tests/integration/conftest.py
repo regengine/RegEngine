@@ -15,16 +15,13 @@ ENERGY_URL = os.getenv("TEST_ENERGY_URL", "http://localhost:8002")
 OPPORTUNITY_URL = os.getenv("TEST_OPPORTUNITY_URL", "http://localhost:8002")
 GRAPH_URL = os.getenv("TEST_GRAPH_URL", "http://localhost:8200")
 
-# Test credentials
-TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "integration@test.com")
-TEST_USER_PASSWORD = os.getenv("TEST_USER_PASSWORD", "testpass123")
+# Pre-provisioned tokens for environments that run live integration tests.
+TEST_AUTH_TOKEN = os.getenv("TEST_AUTH_TOKEN")
 
 # Alternative tenant users for isolation testing
-TEST_TENANT_A_EMAIL = os.getenv("TEST_TENANT_A_EMAIL", "tenant-a@test.com")
-TEST_TENANT_A_PASSWORD = os.getenv("TEST_TENANT_A_PASSWORD", "testpass")
+TEST_TENANT_A_AUTH_TOKEN = os.getenv("TEST_TENANT_A_AUTH_TOKEN")
 
-TEST_TENANT_B_EMAIL = os.getenv("TEST_TENANT_B_EMAIL", "tenant-b@test.com")
-TEST_TENANT_B_PASSWORD = os.getenv("TEST_TENANT_B_PASSWORD", "testpass")
+TEST_TENANT_B_AUTH_TOKEN = os.getenv("TEST_TENANT_B_AUTH_TOKEN")
 
 
 @pytest.fixture(scope="session")
@@ -36,20 +33,10 @@ async def http_client() -> AsyncGenerator[httpx.AsyncClient, None]:
 
 @pytest.fixture(scope="session")
 async def auth_token():
-    """Get authentication token - session scoped for performance"""
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                f"{ADMIN_URL}/auth/login", json={"email": TEST_USER_EMAIL, "password": TEST_USER_PASSWORD}
-            )
-
-            if response.status_code == 200:
-                return response.json()["access_token"]
-            else:
-                pytest.skip(f"Authentication failed: {response.status_code}")
-
-        except httpx.ConnectError:
-            pytest.skip("Admin service not available for integration tests")
+    """Return a pre-provisioned token for live integration tests."""
+    if not TEST_AUTH_TOKEN:
+        pytest.skip("TEST_AUTH_TOKEN is required for passwordless integration tests")
+    return TEST_AUTH_TOKEN
 
 
 @pytest.fixture
@@ -72,25 +59,13 @@ async def tenant_id(auth_token):
 @pytest.fixture
 async def tenant_a_token():
     """Authentication token for tenant A"""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{ADMIN_URL}/auth/login", json={"email": TEST_TENANT_A_EMAIL, "password": TEST_TENANT_A_PASSWORD}
-        )
-        if response.status_code == 200:
-            return response.json()["access_token"]
-        return None
+    return TEST_TENANT_A_AUTH_TOKEN
 
 
 @pytest.fixture
 async def tenant_b_token():
     """Authentication token for tenant B"""
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{ADMIN_URL}/auth/login", json={"email": TEST_TENANT_B_EMAIL, "password": TEST_TENANT_B_PASSWORD}
-        )
-        if response.status_code == 200:
-            return response.json()["access_token"]
-        return None
+    return TEST_TENANT_B_AUTH_TOKEN
 
 
 @pytest.fixture

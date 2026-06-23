@@ -209,8 +209,9 @@ async function checkSupabaseSession(request: NextRequest): Promise<{ user: Recor
  * Auth gate for app routes.
  *
  * Authentication strategy (checked in order):
- *   1. re_access_token HTTP-only cookie (custom JWT from /auth/login)
- *   2. Supabase session cookies (from Supabase Auth)
+ *   1. __Host-regengine_session opaque backend session cookie
+ *   2. re_access_token HTTP-only cookie (legacy custom JWT)
+ *   3. Supabase session cookies (from Supabase Auth)
  *
  * If neither is present, redirect to /login.
  *
@@ -221,7 +222,16 @@ async function checkSupabaseSession(request: NextRequest): Promise<{ user: Recor
 async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
-    // Strategy 1: Check custom RegEngine JWT cookie
+    // Strategy 1: Check opaque backend session cookie. The backend remains the
+    // source of truth for validity and authorization on every proxied API call;
+    // this middleware only prevents a logged-in browser from bouncing back to
+    // /login because the session is opaque to the edge runtime.
+    const opaqueSession = request.cookies.get('__Host-regengine_session')?.value;
+    if (opaqueSession) {
+        return NextResponse.next({ request: { headers: requestHeaders ?? request.headers } });
+    }
+
+    // Strategy 2: Check legacy custom RegEngine JWT cookie
     const reToken = request.cookies.get('re_access_token')?.value;
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
@@ -288,7 +298,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         return NextResponse.redirect(url);
     }
 
-    // Strategy 2: Check Supabase session
+    // Strategy 3: Check Supabase session
     const { user, response: supabaseResponse } = await checkSupabaseSession(request);
     if (user) {
         // #538 Check tenant_status in Supabase path — mirrors the JWT path check.

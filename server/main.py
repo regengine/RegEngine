@@ -59,7 +59,9 @@ from shared.env import is_production
 from shared.middleware.security import add_security
 from shared.observability import add_observability
 from shared.rate_limit import add_rate_limiting
+from services.admin.app.e2e_safety import assert_e2e_mode_allowed
 
+assert_e2e_mode_allowed()
 _is_prod = is_production()
 
 
@@ -718,9 +720,9 @@ if _router_enabled("admin"):
 
     app.include_router(auth_router, tags=["Auth"])
 
-    from services.admin.app.password_reset_routes import router as password_reset_router
+    from services.admin.app.admin.organizations_router import router as admin_organizations_router
 
-    app.include_router(password_reset_router, tags=["Auth"])
+    app.include_router(admin_organizations_router)
 
     from services.admin.app.invite_routes import router as invite_router
 

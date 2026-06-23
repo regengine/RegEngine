@@ -1,13 +1,4 @@
-"""Elevation-token constants and cross-handler helpers.
-
-Extracted from ``auth_routes.py`` so sessions_router, change_password, and
-reset_password can all import ``_revoke_all_elevation_tokens_for_user``
-without a circular dependency on auth_routes.
-
-``auth_routes.py`` re-imports and re-exports these names so existing
-callers/tests that reference ``ar._revoke_all_elevation_tokens_for_user``
-continue to work unchanged.
-"""
+"""Elevation-token constants and session helper utilities."""
 
 from __future__ import annotations
 
@@ -20,14 +11,14 @@ from ..session_store import RedisSessionStore
 logger = structlog.get_logger("auth")
 
 _ELEVATION_JTI_KEY_PREFIX = "elevation_jti:"
-_ELEVATION_TOKEN_TTL_SECONDS = 300  # 5 minutes — matches token exp_delta
+_ELEVATION_TOKEN_TTL_SECONDS = 300  # 5 minutes, matches elevation token lifetime.
 
 
 async def _revoke_all_elevation_tokens_for_user(session_store: RedisSessionStore, user_id: UUID) -> int:
     """Scan the elevation-jti keyspace and delete entries belonging to this user.
 
-    Called from password change / reset paths so that a 5-minute elevation token
-    minted at T+0 cannot outlive a password change at T+1 (#1380).
+    Called from broad session invalidation paths so a previously minted
+    elevation token cannot outlive an account-security revocation.
     """
     try:
         client = await session_store._get_client()

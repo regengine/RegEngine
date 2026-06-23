@@ -3,21 +3,22 @@ import type { Metadata } from 'next';
 import VerifyClient from './VerifyClient';
 
 export const metadata: Metadata = {
-    title: 'Reset your password — RegEngine',
+    title: 'Verify your sign-in code — RegEngine',
 };
 
 export default async function VerifyPage({
     searchParams,
 }: {
-    searchParams: Promise<{ token?: string; type?: string }>;
+    searchParams: Promise<{ email?: string; challenge_id?: string }>;
 }) {
     const params = await searchParams;
-    const tokenHash = params.token ?? '';
-    const type = params.type ?? 'recovery';
 
     return (
         <Suspense>
-            <VerifyClient tokenHash={tokenHash} type={type} />
+            <VerifyClient
+                initialEmail={params.email ?? ''}
+                initialChallengeId={params.challenge_id ?? ''}
+            />
         </Suspense>
     );
 }

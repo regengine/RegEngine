@@ -2,15 +2,40 @@
  * Playwright Global Setup
  *
  * Runs once before any tests. Provisions the E2E test user in the admin
- * service database so that login tests succeed.
+ * service database so that passwordless login tests succeed.
  *
- * WHY: The admin service has its own `users` table with bcrypt-hashed
- * passwords. Creating a user in the Supabase dashboard only adds them to
- * Supabase auth — NOT to the admin service DB. Login calls
- * POST /auth/login on the admin service, which looks up users in its own
- * table. This setup step calls POST /auth/signup to create the user in
- * both places idempotently.
+ * WHY: The admin service owns opaque passwordless sessions and global user
+ * identity. Local Playwright mode seeds that identity directly, then captures
+ * OTPs through an E2E-only outbox.
  */
+
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
+function seedPasswordlessUser(): void {
+    if (!isPasswordlessE2EMode()) {
+        return;
+    }
+
+    const repoRoot = path.resolve(process.cwd(), '..');
+    const configuredPython = process.env.PYTHON_BIN;
+    const repoPython = path.join(repoRoot, 'venv/bin/python');
+    const pythonBin = configuredPython || (existsSync(repoPython) ? repoPython : 'python3');
+    const script = path.join(repoRoot, 'scripts/seed_passwordless_e2e_user.py');
+
+    console.log('[globalSetup] Seeding passwordless E2E user...');
+    execFileSync(pythonBin, [script], {
+        cwd: repoRoot,
+        env: process.env,
+        stdio: 'inherit',
+    });
+    console.log('[globalSetup] ✓ Passwordless E2E user is ready');
+}
+
+function isPasswordlessE2EMode(): boolean {
+    return process.env.REGENGINE_E2E_MODE?.trim().toLowerCase() === 'true';
+}
 
 export default async function globalSetup() {
     // ── Preflight: verify JWT_SIGNING_KEY is configured ──────────────────
@@ -37,6 +62,11 @@ export default async function globalSetup() {
         return;
     }
     console.log('[globalSetup] ✓ JWT_SIGNING_KEY is configured');
+    seedPasswordlessUser();
+    if (isPasswordlessE2EMode()) {
+        console.log('[globalSetup] Passwordless E2E mode active — skipping removed password auth bootstrap');
+        return;
+    }
 
     const adminServiceUrl =
         process.env.ADMIN_SERVICE_URL ||

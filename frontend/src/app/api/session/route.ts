@@ -20,6 +20,9 @@ import { getAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targ
 import { decodeRegEngineClaims, extractRegEngineTenantId } from '@/lib/jwt-claims';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
+const AUTH_SESSION_COOKIE = '__Host-regengine_session';
+
+type AuthMethod = 'email_otp' | 'webauthn' | 'sso';
 
 type SessionUser = {
     id: string;
@@ -27,7 +30,17 @@ type SessionUser = {
     is_sysadmin: boolean;
     status: string;
     role_name?: string;
+    organization_id?: string | null;
+    auth_method?: AuthMethod;
     permissions?: string[];
+};
+
+type AuthMeResponse = {
+    user_id: string;
+    email: string;
+    organization_id: string | null;
+    role: string | null;
+    auth_method: AuthMethod;
 };
 
 function cookieOptionsFor(rememberSession: boolean) {
@@ -223,6 +236,85 @@ async function getSupabaseSessionInfo(request: NextRequest): Promise<{
     }
 }
 
+function isAuthMethod(value: unknown): value is AuthMethod {
+    return value === 'email_otp' || value === 'webauthn' || value === 'sso';
+}
+
+function parseAuthMeResponse(payload: unknown): AuthMeResponse | null {
+    if (!payload || typeof payload !== 'object') return null;
+    const body = payload as Record<string, unknown>;
+    if (typeof body.user_id !== 'string') return null;
+    if (typeof body.email !== 'string') return null;
+    if (!isAuthMethod(body.auth_method)) return null;
+
+    return {
+        user_id: body.user_id,
+        email: body.email,
+        organization_id: typeof body.organization_id === 'string' ? body.organization_id : null,
+        role: typeof body.role === 'string' ? body.role : null,
+        auth_method: body.auth_method,
+    };
+}
+
+async function getOpaqueSessionInfo(request: NextRequest): Promise<{
+    tenant_id: string | null;
+    auth_method: AuthMethod;
+    user: SessionUser;
+} | null> {
+    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+    if (!isUsableCredential(sessionToken)) return null;
+
+    const cookieHeader = `${AUTH_SESSION_COOKIE}=${sessionToken}`;
+
+    for (const target of getAdminTargets()) {
+        const baseUrl = target.replace(/\/+$/, '');
+        try {
+            const response = await fetch(`${baseUrl}/auth/me`, {
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    cookie: cookieHeader,
+                },
+                cache: 'no-store',
+            });
+
+            if (shouldRetryAdminProxyResponse(response, 'auth/me')) {
+                continue;
+            }
+            if (response.status === 401 || response.status === 403) {
+                return null;
+            }
+            if (!response.ok) {
+                continue;
+            }
+
+            const profile = parseAuthMeResponse(await response.json().catch(() => null));
+            if (!profile) {
+                return null;
+            }
+
+            return {
+                tenant_id: profile.organization_id,
+                auth_method: profile.auth_method,
+                user: {
+                    id: profile.user_id,
+                    email: profile.email,
+                    is_sysadmin: false,
+                    status: 'active',
+                    role_name: profile.role || undefined,
+                    organization_id: profile.organization_id,
+                    auth_method: profile.auth_method,
+                    permissions: [],
+                },
+            };
+        } catch {
+            // Try the next configured admin target.
+        }
+    }
+
+    return null;
+}
+
 export async function GET(request: NextRequest) {
     const access_token = request.cookies.get('re_access_token')?.value || null;
     const api_key = request.cookies.get('re_api_key')?.value || null;
@@ -239,28 +331,33 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const supabaseSession = access_token ? null : await getSupabaseSessionInfo(request);
-    const resolvedTenantId = tenant_id || supabaseSession?.tenant_id || null;
-    const resolvedUser = user || supabaseSession?.user || null;
-    const isAuthenticated = Boolean(access_token || supabaseSession);
+    const opaqueSession = access_token ? null : await getOpaqueSessionInfo(request);
+    const supabaseSession = access_token || opaqueSession ? null : await getSupabaseSessionInfo(request);
+    const resolvedTenantId = opaqueSession ? opaqueSession.tenant_id : tenant_id || supabaseSession?.tenant_id || null;
+    const resolvedUser = opaqueSession ? opaqueSession.user : user || supabaseSession?.user || null;
+    const resolvedAuthMethod = opaqueSession?.auth_method || null;
+    const isAuthenticated = Boolean(access_token || opaqueSession || supabaseSession);
 
     // NEVER return raw tokens/keys — only booleans indicating their presence
     const response = NextResponse.json({
         authenticated: isAuthenticated,
         has_api_key: !!api_key,
         has_admin_key: !!admin_key,
-        has_credentials: !!(access_token || api_key || admin_key || supabaseSession),
+        has_credentials: !!(access_token || opaqueSession || api_key || admin_key || supabaseSession),
         tenant_id: resolvedTenantId,
+        auth_method: resolvedAuthMethod,
         user: resolvedUser,
     });
 
-    if (!tenant_id && resolvedTenantId) {
+    if (resolvedTenantId && (opaqueSession?.tenant_id || !tenant_id)) {
         response.cookies.set('re_tenant_id', resolvedTenantId, {
             ...cookieOptionsFor(true),
             httpOnly: false,
         });
+    } else if (opaqueSession && tenant_id) {
+        response.cookies.delete('re_tenant_id');
     }
-    if (!userCookie && resolvedUser) {
+    if (opaqueSession?.user || (!userCookie && resolvedUser)) {
         response.cookies.set('re_user', JSON.stringify(resolvedUser), {
             ...cookieOptionsFor(true),
             httpOnly: false,
@@ -303,6 +400,7 @@ export async function DELETE(request: NextRequest) {
     response.cookies.delete('re_admin_key');
     response.cookies.delete('re_tenant_id');
     response.cookies.delete('re_user');
+    response.cookies.delete(AUTH_SESSION_COOKIE);
     response.cookies.delete(CSRF_COOKIE);
     response.cookies.delete(CSRF_SIG_COOKIE);
     return response;

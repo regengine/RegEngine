@@ -138,7 +138,6 @@ def db() -> Session:
         UserModel(
             id=USER_ID,
             email="sup@example.com",
-            password_hash="x",
             status="active",
             is_sysadmin=False,
         )
