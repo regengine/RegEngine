@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
 import time
 import uuid
@@ -22,6 +23,20 @@ from services.admin.app.auth.schemas import ChallengeCreateRequest, ChallengeVer
 from services.admin.app.e2e_safety import CriticalSecurityError
 from services.admin.app.rate_limit_service import RateLimitExceededException
 from services.admin.app.sqlalchemy_models import AuthChallengeModel, SessionModel
+
+
+class _DummyEmails:
+    last_payload = None
+
+    @staticmethod
+    def send(payload):
+        _DummyEmails.last_payload = payload
+        return SimpleNamespace(id="email_123")
+
+
+class _DummyResend:
+    api_key = None
+    Emails = _DummyEmails
 
 
 def _make_request(*, client_host: str = "203.0.113.50", cookie: str | None = None) -> Request:
@@ -855,14 +870,47 @@ async def test_db_failure_rolls_back_and_does_not_enqueue_or_set_cookie():
 
 
 def test_mock_dispatch_receives_but_does_not_log_plaintext_code(monkeypatch):
-    logger = SimpleNamespace(info=MagicMock())
+    fake_resend_token = "resend-fixture-value"
+    monkeypatch.setenv("RESEND_API_KEY", fake_resend_token)
+    monkeypatch.setenv("RESEND_FROM_EMAIL", "auth@regengine.test")
+    monkeypatch.setitem(sys.modules, "resend", _DummyResend)
+    _DummyEmails.last_payload = None
+    logger = SimpleNamespace(info=MagicMock(), warning=MagicMock(), error=MagicMock())
     monkeypatch.setattr(cr, "logger", logger)
 
     cr._dispatch_sign_in_code_email("user@example.com", "012345", uuid.uuid4())
 
-    _, kwargs = logger.info.call_args
-    assert "code" not in kwargs
-    assert "012345" not in repr(kwargs)
+    for log_method in (logger.info, logger.warning, logger.error):
+        for call in log_method.call_args_list:
+            assert "code" not in call.kwargs
+            assert "012345" not in repr(call.args)
+            assert "012345" not in repr(call.kwargs)
+
+
+def test_dispatch_sends_sign_in_code_with_resend_when_configured(monkeypatch):
+    challenge_id = uuid.uuid4()
+    fake_resend_token = "resend-fixture-value"
+    monkeypatch.setenv("RESEND_API_KEY", fake_resend_token)
+    monkeypatch.setenv("RESEND_FROM_EMAIL", "auth@regengine.test")
+    monkeypatch.setitem(sys.modules, "resend", _DummyResend)
+    _DummyEmails.last_payload = None
+    logger = SimpleNamespace(info=MagicMock(), warning=MagicMock(), error=MagicMock())
+    monkeypatch.setattr(cr, "logger", logger)
+
+    cr._dispatch_sign_in_code_email("user@example.com", "012345", challenge_id)
+
+    assert _DummyResend.api_key == fake_resend_token
+    assert _DummyEmails.last_payload == {
+        "from": "auth@regengine.test",
+        "to": "user@example.com",
+        "subject": "Your RegEngine sign-in code",
+        "html": _DummyEmails.last_payload["html"],
+    }
+    assert "012345" in _DummyEmails.last_payload["html"]
+    assert "012345" not in _DummyEmails.last_payload["subject"]
+    assert logger.info.call_args.args[0] == "auth_challenge_email_sent"
+    assert logger.info.call_args.kwargs["challenge_id"] == str(challenge_id)
+    assert logger.info.call_args.kwargs["resend_id"] == "email_123"
 
 
 def test_mock_dispatch_records_plaintext_code_only_in_e2e_outbox(monkeypatch, tmp_path):
