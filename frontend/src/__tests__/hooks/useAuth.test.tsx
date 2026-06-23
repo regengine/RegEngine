@@ -356,6 +356,50 @@ describe('useAuth Hook', () => {
             expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
         });
 
+        it('hydrates auth assurance from the server session profile', async () => {
+            const sessionUser = {
+                id: 'opaque-user',
+                email: 'owner@example.com',
+                organization_id: 'tenant-456',
+                role_name: 'owner',
+                is_sysadmin: false,
+                status: 'active',
+                auth_method: 'webauthn' as const,
+                permissions: ['admin:*'],
+            };
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: true,
+                            has_api_key: false,
+                            has_admin_key: false,
+                            has_credentials: true,
+                            tenant_id: 'tenant-456',
+                            auth_method: 'webauthn',
+                            user: sessionUser,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.authMethod).toBe('webauthn');
+            });
+
+            expect(result.current.isHighAssuranceSession).toBe(true);
+            expect(result.current.user?.auth_method).toBe('webauthn');
+            expect(result.current.tenantId).toBe('tenant-456');
+        });
+
         it('hydrates Supabase fallback sessions from /api/session instead of local browser auth state', async () => {
             const storedUser = {
                 id: 'stored-user',

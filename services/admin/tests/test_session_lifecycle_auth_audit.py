@@ -34,7 +34,6 @@ def _user(user_id: uuid.UUID | None = None, *, sysadmin: bool = True):
     return SimpleNamespace(
         id=user_id or uuid.uuid4(),
         email="alice@example.com",
-        password_hash="hashed",
         status="active",
         is_sysadmin=sysadmin,
         token_version=0,
@@ -90,49 +89,6 @@ def _session(user_id: uuid.UUID, *, session_id: uuid.UUID | None = None, **overr
     )
     data.update(overrides)
     return SessionData(**data)
-
-
-@pytest.mark.asyncio
-async def test_login_access_token_carries_sid_and_session_id(monkeypatch):
-    from services.admin.app.auth.login_router import login
-    from services.admin.app.auth_utils import decode_access_token
-    from services.admin.app.session_store import InMemorySessionStore
-
-    user = _user(sysadmin=False)
-    tenant = _tenant()
-    membership = _membership(user.id, tenant.id)
-    role = _role(membership.role_id)
-    store = InMemorySessionStore()
-
-    db = MagicMock()
-    db.commit.return_value = None
-
-    def _execute(_stmt):
-        result = MagicMock()
-        if not hasattr(_execute, "calls"):
-            _execute.calls = 0
-        if _execute.calls == 0:
-            result.scalar_one_or_none.return_value = user
-        else:
-            result.all.return_value = [(membership, tenant, role)]
-        _execute.calls += 1
-        return result
-
-    db.execute.side_effect = _execute
-    monkeypatch.setattr("services.admin.app.auth.login_router.verify_login", lambda *_: True)
-    monkeypatch.setattr(
-        "services.admin.app.auth.login_router.AuditLogger.log_event",
-        lambda *_, **__: None,
-    )
-
-    payload = SimpleNamespace(email="Alice@Example.com", password="correct")
-    result = await login.__wrapped__(payload, _request({"User-Agent": "pytest"}), db=db, session_store=store)
-    claims = decode_access_token(result.access_token)
-    sessions = await store.list_user_sessions(user.id)
-
-    assert len(sessions) == 1
-    assert claims["sid"] == str(sessions[0].id)
-    assert claims["session_id"] == str(sessions[0].id)
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,8 @@
 """GDPR Art. 15 / 20 — right-to-access and data portability.
 
 Provides GET /v1/account/export for authenticated users to obtain a
-structured, machine-readable copy of their personal data.  Secrets
-(password hashes, TOTP seeds, refresh tokens) are never included.
+structured, machine-readable copy of their personal data. Secrets
+(TOTP seeds, refresh tokens, session tokens) are never included.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _serialize(val: Any) -> Any:
 def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     """Collect all personal data for *user_id* and return a scrubbed dict.
 
-    Secrets (password_hash, mfa_secret, mfa_secret_ciphertext, refresh_token_hash)
+    Secrets (mfa_secret, mfa_secret_ciphertext, refresh_token_hash)
     are explicitly excluded from every query.
     """
     try:
@@ -63,7 +63,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid user identifier")
 
     # -------------------------------------------------------------------------
-    # 1. User account — exclude password_hash, mfa_secret*, token_version
+    # 1. User account — exclude mfa_secret*, token_version
     # -------------------------------------------------------------------------
     user: Optional[UserModel] = db.get(UserModel, user_uuid)
     if user is None:
@@ -301,7 +301,7 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     description=(
         "Returns a structured, machine-readable copy of your personal data per "
         "GDPR Art. 15 (right of access) and Art. 20 (data portability). "
-        "Secrets (password hash, TOTP seed, refresh tokens) are never returned. "
+        "Secrets (TOTP seed, refresh tokens, session tokens) are never returned. "
         "Rate-limited to 1 request per day."
     ),
 )

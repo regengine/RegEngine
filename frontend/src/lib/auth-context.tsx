@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { User } from '@/types/api';
+import type { User, SessionAuthMethod } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
@@ -16,6 +16,8 @@ interface AuthContextType {
   tenantId: string | null;
   hasTenantSession: boolean;
   hasAdminSession: boolean;
+  authMethod: SessionAuthMethod | null;
+  isHighAssuranceSession: boolean;
   isOnboarded: boolean;
   isHydrated: boolean;
   demoMode: boolean;
@@ -145,6 +147,7 @@ async function getSessionInfo(): Promise<{
   has_credentials: boolean;
   tenant_id: string | null;
   user: User | null;
+  auth_method?: SessionAuthMethod | null;
 } | null> {
   if (typeof window === 'undefined') return null;
   try {
@@ -163,6 +166,13 @@ function normalizeUserProfile(user: User | null | undefined): User | null {
     ...user,
     permissions: sanitizePermissions(user.permissions),
   };
+}
+
+function normalizeAuthMethod(value: unknown): SessionAuthMethod | null {
+  if (value === 'email_otp' || value === 'webauthn' || value === 'sso') {
+    return value;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [adminKey, setAdminKeyState] = useState<string | null>(null);
   const [tenantId, setTenantIdState] = useState<string | null>(null);
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
+  const [authMethod, setAuthMethodState] = useState<SessionAuthMethod | null>(null);
   const [user, setUserState] = useState<User | null>(null);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [demoMode, setDemoModeState] = useState(false);
@@ -238,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isAuthError) {
         Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
         clearSessionCookies();
+        setAuthMethodState(null);
         setIsHydrated(true);
         return;
       }
@@ -266,8 +278,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Step 3: Check cookie-based session for credentials
       const session = await getSessionInfo();
       if (session) {
-        if (session.tenant_id && !storedTenantId) {
+        const sessionAuthMethod = normalizeAuthMethod(session.auth_method);
+        setAuthMethodState(sessionAuthMethod);
+        if (session.tenant_id && session.tenant_id !== storedTenantId) {
           setTenantIdState(session.tenant_id);
+          localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
+        } else if (!session.tenant_id && session.auth_method && storedTenantId) {
+          setTenantIdState(null);
+          localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
         }
         if (session.user) {
           const normalizedSessionUser = normalizeUserProfile(session.user);
@@ -289,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // No cookie session — user is unauthenticated.
         // NEXT_PUBLIC_API_KEY fallback removed: proxy routes inject
         // server-side API keys; baking secrets into the JS bundle is unsafe.
+        setAuthMethodState(null);
       }
 
       setIsHydrated(true);
@@ -378,11 +397,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Set the HTTP-only cookie BEFORE updating React state.
     //
-    // React state updates below trigger a re-render which fires the useEffect
-    // in LoginClient. That effect calls getOnboardingStatus and then navigates
-    // to /dashboard (or the ?next= path). The middleware runs on that navigation
-    // and checks re_access_token — if the cookie isn't in the browser yet,
-    // middleware rejects and redirects back to /login?next=/dashboard.
+    // React state updates below can trigger navigation to /dashboard (or the
+    // ?next= path). The middleware runs on that navigation and checks
+    // re_access_token — if the cookie isn't in the browser yet, middleware
+    // rejects and redirects back to /login?next=/dashboard.
     //
     // Awaiting setSessionCookies first ensures the Set-Cookie response is
     // processed by the browser before any navigation can occur.
@@ -407,6 +425,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie is guaranteed to be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+    setAuthMethodState(null);
     setUserState(normalizedLoginUser);
     if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
@@ -416,6 +435,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAdminKeyState(null);
     setTenantIdState(null);
     setAccessTokenState(null);
+    setAuthMethodState(null);
     setUserState(null);
     setIsOnboarded(false);
     setDemoModeState(false);
@@ -445,6 +465,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     normalizedRoleName === 'admin' ||
     normalizedRoleName === 'owner',
   );
+  const isHighAssuranceSession = authMethod === 'webauthn' || authMethod === 'sso';
 
   return (
     <AuthContext.Provider
@@ -454,6 +475,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenantId,
         hasTenantSession,
         hasAdminSession,
+        authMethod,
+        isHighAssuranceSession,
         accessToken,
         user,
         isOnboarded,
