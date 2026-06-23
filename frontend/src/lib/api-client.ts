@@ -1,5 +1,6 @@
 import { getServiceURL } from './api-config';
 import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
+import { emitStepUpRequired } from './step-up-events';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -8,8 +9,6 @@ import type {
   ComplianceChecklist,
   Industry,
   TenantResponse,
-  LoginResponse,
-  SignupResponse,
   User,
   Role,
   Invite,
@@ -42,6 +41,8 @@ import type {
   BulkDiscoveryResponse,
   PortalLink,
   QAHealthResponse,
+  OrganizationSsoPolicyResponse,
+  OrganizationSsoPolicyUpdate,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -307,6 +308,9 @@ class APIClient {
           };
           error.isAxiosError = true;
           error.response = { data: responseData, headers: responseHeaders, status: response.status };
+          if (response.status === 403) {
+            emitStepUpRequired(responseData);
+          }
           throw error;
         }
 
@@ -598,59 +602,6 @@ class APIClient {
       notes: 'Rejected via web interface',
     }, {
       headers: credentialHeader('X-Admin-Key', adminKey)
-    });
-  }
-
-  // Auth API
-  async signup(email: string, password: string, tenantName: string, partnerTier?: string): Promise<SignupResponse> {
-    const body: Record<string, string> = { email, password, tenant_name: tenantName };
-    if (partnerTier) body.partner_tier = partnerTier;
-    const { data } = await this.adminClient.post('/auth/signup', body);
-    if (data.access_token) {
-      this.setAccessToken(data.access_token);
-      this.setUser(data.user);
-      if (data.tenant_id) {
-        this.setCurrentTenant(data.tenant_id);
-      }
-    }
-    return data;
-  }
-
-  async login(email: string, password: string): Promise<LoginResponse> {
-    const { data } = await this.adminClient.post('/auth/login', { email, password });
-    if (data.access_token) {
-      this.setAccessToken(data.access_token);
-      this.setUser(data.user);
-      if (data.tenant_id) {
-        this.setCurrentTenant(data.tenant_id);
-      }
-    }
-    return data;
-  }
-
-  async requestEmailLoginCode(email: string): Promise<{ status: string; detail: string }> {
-    const { data } = await this.adminClient.post('/auth/email-code/request', { email });
-    return data;
-  }
-
-  async confirmEmailLoginCode(email: string, code: string): Promise<LoginResponse> {
-    const { data } = await this.adminClient.post('/auth/email-code/confirm', { email, code });
-    if (data.access_token) {
-      this.setAccessToken(data.access_token);
-      this.setUser(data.user);
-      if (data.tenant_id) {
-        this.setCurrentTenant(data.tenant_id);
-      }
-    }
-    return data;
-  }
-
-  // --- Password Change ---
-
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.adminClient.post('/auth/change-password', {
-      current_password: currentPassword,
-      new_password: newPassword,
     });
   }
 
@@ -951,6 +902,17 @@ class APIClient {
     partner_tier?: string | null;
   }> {
     const { data } = await this.adminClient.get(`/v1/tenants/${tenantId}/onboarding`);
+    return data;
+  }
+
+  async updateOrganizationSsoPolicy(
+    organizationId: string,
+    payload: OrganizationSsoPolicyUpdate,
+  ): Promise<OrganizationSsoPolicyResponse> {
+    const { data } = await this.adminClient.put<OrganizationSsoPolicyResponse>(
+      `/admin/organizations/${encodeURIComponent(organizationId)}/sso-policy`,
+      payload,
+    );
     return data;
   }
 }

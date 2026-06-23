@@ -97,6 +97,26 @@ class EmbeddedSchedulerRunner:
             )
             self._stop_event.wait(self._REELECTION_DELAY_SECONDS)
 
+    @property
+    def current_service(self):
+        """The ``SchedulerService`` this worker constructed, or None.
+
+        NOTE: a non-None value does NOT imply this worker is the leader —
+        every worker constructs a service then blocks on the standby poll.
+        Use :pyattr:`is_leader` to tell whether the live circuit-breaker /
+        last-scrape state on the service is actually being driven here.
+        """
+        return self._service
+
+    @property
+    def is_leader(self) -> bool:
+        """True only when this worker holds the advisory lock and its
+        APScheduler is running (i.e. it is the one driving the jobs)."""
+        service = self._service
+        if service is None:
+            return False
+        return bool(getattr(getattr(service, "scheduler", None), "running", False))
+
     def stop(self) -> None:
         """Best-effort teardown on lifespan shutdown.
 

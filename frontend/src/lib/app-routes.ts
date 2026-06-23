@@ -31,8 +31,6 @@ const CHROMELESS_EXACT_ROUTES = new Set([
   "/mobile/capture",
   "/fsma/field-capture",
   "/login",
-  "/forgot-password",
-  "/reset-password",
   "/accept-invite",
   "/auth/verify",
 ]);

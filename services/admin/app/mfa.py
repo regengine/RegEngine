@@ -425,30 +425,28 @@ def hash_recovery_code(code: str) -> str:
     dashes/casing differences between generation and redemption don't produce
     different hashes.
 
-    Uses argon2id via the shared ``pwd_context`` (same cost parameters as
-    password hashing) rather than SHA-256. Recovery codes are auth credentials
-    and warrant the same protection — SHA-256 is a fast hash attackable at GPU
+    Uses argon2id rather than SHA-256. Recovery codes are auth credentials
+    and warrant memory-hard hashing; SHA-256 is a fast hash attackable at GPU
     speed (~2^47.6 for 8-char alphanum codes).
     """
-    from .auth_utils import pwd_context
+    from argon2 import PasswordHasher
+    from argon2.low_level import Type
 
     canonical = normalize_recovery_code(code)
-    return pwd_context.hash(canonical)
+    return PasswordHasher(type=Type.ID).hash(canonical)
 
 
 def verify_recovery_code(code: str, hashed_code: str) -> bool:
     """Verify a recovery code against its argon2 hash (#1041).
 
-    Returns False (not a crash) for legacy SHA-256 hashes — passlib cannot
-    identify them as a known argon2 hash and raises ValueError, which we catch
-    and treat as a failed verification so affected users are prompted to
-    regenerate their recovery codes.
+    Returns False (not a crash) for legacy SHA-256 hashes or malformed Argon2
+    strings so affected users are prompted to regenerate their recovery codes.
     """
-    from .auth_utils import pwd_context
+    from argon2 import PasswordHasher
 
     canonical = normalize_recovery_code(code)
     try:
-        return pwd_context.verify(canonical, hashed_code)
+        return PasswordHasher().verify(hashed_code, canonical)
     except Exception:
         # hashed_code is not a valid argon2 hash (e.g. legacy SHA-256 hex
         # digest). Treat as mismatch — callers will prompt the user to

@@ -27,7 +27,7 @@ const CHECKS = [
     args: [
       'eslint',
       'src/lib/jwt-claims.ts',
-      'src/app/login/LoginClient.tsx',
+      'src/app/login/PasswordlessEntryClient.tsx',
       'src/__tests__/api/proxy-sanitization.test.ts',
       'src/__tests__/auth/login.test.tsx',
     ],

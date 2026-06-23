@@ -127,7 +127,7 @@ def test_v071_allows_current_audit_logger_insert_shape(pg_engine, prod_like_audi
                     gen_random_uuid(), now(), gen_random_uuid(), NULL, NULL,
                     'pytest', 'user.login', 'authentication', 'session.create',
                     'info', 'session', gen_random_uuid()::text,
-                    'POST /auth/login', '{}'::jsonb, gen_random_uuid(),
+                    'POST /auth/challenges/verify', '{}'::jsonb, gen_random_uuid(),
                     NULL, 'hash'
                 )
                 RETURNING id

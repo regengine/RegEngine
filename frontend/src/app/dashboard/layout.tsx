@@ -469,6 +469,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Footer */}
                 <div className="p-3 border-t border-[var(--re-border-subtle)]">
+                    {user?.email && (
+                        <div
+                            aria-label="Signed in user"
+                            className="mb-2 truncate rounded-md border border-[var(--re-border-subtle)] bg-[var(--re-surface-base)] px-3 py-2 text-xs text-[var(--re-text-muted)]"
+                            title={user.email}
+                        >
+                            {user.email}
+                        </div>
+                    )}
                         <Link href="/dashboard/settings" className="block px-3 py-2.5 rounded-md bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] hover:border-[var(--re-border-strong)] hover:bg-[var(--re-surface-elevated)] transition-colors">
                         <div className="flex items-center justify-between">
                             <div>

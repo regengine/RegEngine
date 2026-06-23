@@ -65,7 +65,7 @@ def db_session() -> Session:
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
     session.add(
-        UserModel(id=TEST_USER_ID, email="u@example.com", password_hash="x", status="active", is_sysadmin=False)
+        UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
     )
     session.commit()
     try:

@@ -7,12 +7,15 @@ import uuid as uuid_module
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
+    Enum,
     Float,
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -88,15 +91,15 @@ class UserModel(Base):
     __tablename__ = "users"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    global_status = Column(String, nullable=False, default="active", server_default="active")
     email = Column(String, nullable=False, unique=True)
-    password_hash = Column(String, nullable=False)
     # Legacy plaintext TOTP seed — preserved for backward compat during the
     # encryption migration (#1376). New enrollments write mfa_secret_ciphertext;
     # the plaintext column is read only when the ciphertext column is NULL.
     mfa_secret = Column(String, nullable=True)
     # Fernet-encrypted TOTP seed — primary source once MFA_ENCRYPTION_KEY is set.
     mfa_secret_ciphertext = Column(String, nullable=True)
-    # Monotonic counter bumped on password reset / logout-all to invalidate
+    # Monotonic counter bumped on logout-all and account-security invalidation to reject
     # outstanding JWTs (#1349, #1375). Access tokens embed the value at mint
     # time; get_current_user rejects tokens whose claim no longer matches.
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
@@ -107,6 +110,168 @@ class UserModel(Base):
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("ix_users_email", "email"),)
+
+
+class UserEmailModel(Base):
+    """Verified and pending email addresses attached to a global user."""
+
+    __tablename__ = "user_emails"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    email = Column(String, nullable=False)
+    email_fingerprint = Column(String, nullable=True)
+    is_verified = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    __table_args__ = (
+        Index("ix_user_emails_user_id", "user_id"),
+        Index("ix_user_emails_email_fingerprint", "email_fingerprint", unique=True),
+        Index("ix_user_emails_user_verified", "user_id", "is_verified"),
+        Index("uq_user_emails_email_lower", func.lower(email), unique=True),
+    )
+
+
+class OrganizationModel(Base):
+    """Tenant container for the high-assurance passwordless auth model."""
+
+    __tablename__ = "organizations"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    name = Column(String, nullable=False)
+    domain_name = Column(String, nullable=True)
+    domain_verified = Column(Boolean, nullable=False, default=False, server_default="false")
+    enforced_auth_policy = Column(
+        Enum(
+            "standard",
+            "sso_only",
+            name="organization_auth_policy",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default="standard",
+        server_default="standard",
+    )
+
+    __table_args__ = (
+        Index("ix_organizations_name", "name"),
+        Index("ix_organizations_domain_name", "domain_name", unique=True),
+    )
+
+
+class OrganizationMembershipModel(Base):
+    """User-to-organization membership selected into authenticated sessions."""
+
+    __tablename__ = "organization_memberships"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(GUID(), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "organization_id", name="uq_organization_memberships_user_org"),
+        Index("ix_organization_memberships_user_id", "user_id"),
+        Index("ix_organization_memberships_organization_id", "organization_id"),
+    )
+
+
+class AuthChallengeModel(Base):
+    """Ephemeral OTP challenge state for email-code authentication."""
+
+    __tablename__ = "auth_challenges"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    purpose = Column(
+        Enum(
+            "sign_in",
+            "accept_invite",
+            "step_up",
+            name="auth_challenge_purpose",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+    email_fingerprint = Column(String, nullable=False)
+    code_digest = Column(String, nullable=False)
+    browser_binding_hash = Column(String, nullable=False)
+    status = Column(
+        Enum(
+            "queued",
+            "pending",
+            "consumed",
+            "locked",
+            "expired",
+            name="auth_challenge_status",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+        default="queued",
+        server_default="queued",
+    )
+    failed_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_auth_challenges_expires_at", "expires_at"),
+        Index("ix_auth_challenges_status_expires_at", "status", "expires_at"),
+        Index("ix_auth_challenges_email_purpose_status", "email_fingerprint", "purpose", "status"),
+        Index("ix_auth_challenges_browser_binding_hash", "browser_binding_hash"),
+    )
+
+
+class WebAuthnCredentialModel(Base):
+    """Stored public-key credentials for phishing-resistant passkey auth."""
+
+    __tablename__ = "webauthn_credentials"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    credential_id = Column(String, nullable=False)
+    public_key = Column(LargeBinary, nullable=False)
+    sign_count = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_webauthn_credentials_user_id", "user_id"),
+        Index("ix_webauthn_credentials_credential_id", "credential_id", unique=True),
+    )
+
+
+class WebAuthnChallengeModel(Base):
+    """Short-lived WebAuthn registration/authentication challenge state."""
+
+    __tablename__ = "webauthn_challenges"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    challenge = Column(String, nullable=False)
+    purpose = Column(
+        Enum(
+            "registration",
+            "authentication",
+            name="webauthn_challenge_purpose",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_webauthn_challenges_user_purpose", "user_id", "purpose"),
+        Index("ix_webauthn_challenges_challenge", "challenge", unique=True),
+        Index("ix_webauthn_challenges_expires_at", "expires_at"),
+    )
 
 
 class RoleModel(Base):
@@ -230,21 +395,6 @@ class InviteModel(Base):
         Index("ix_invites_token_hash", "token_hash", unique=True),
         Index("ix_invites_tenant_created", "tenant_id", "created_at"),
     )
-
-
-class PasswordResetTokenModel(Base):
-    """Time-limited tokens for password reset flow."""
-
-    __tablename__ = "password_reset_tokens"
-
-    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    token_hash = Column(String(64), nullable=False, unique=True)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    used_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    __table_args__ = (Index("ix_password_reset_tokens_user_id", "user_id"),)
 
 
 class SupplierFacilityModel(Base):
@@ -413,17 +563,27 @@ class SessionModel(Base):
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
     user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    active_membership_id = Column(GUID(), ForeignKey("organization_memberships.id"), nullable=True)
+    token_hash = Column(String, nullable=True)
+    auth_method = Column(String, nullable=False, default="email_otp", server_default="email_otp")
+    authenticated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     refresh_token_hash = Column(String, nullable=False, unique=True)
     family_id = Column(GUID(), nullable=False)
     is_revoked = Column(Boolean, nullable=False, default=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_used_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user_agent = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
 
     __table_args__ = (
+        CheckConstraint("auth_method IN ('email_otp', 'webauthn', 'sso')", name="ck_sessions_auth_method_values"),
         Index("ix_sessions_user_id", "user_id"),
+        Index("ix_sessions_active_membership_id", "active_membership_id"),
+        Index("ix_sessions_token_hash", "token_hash", unique=True),
+        Index("ix_sessions_auth_method", "auth_method"),
+        Index("ix_sessions_expires_at", "expires_at"),
         Index("ix_sessions_refresh_token_hash", "refresh_token_hash"),
         Index("ix_sessions_family_id", "family_id"),
     )
