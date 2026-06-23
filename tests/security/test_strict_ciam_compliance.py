@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from app.auth_utils import create_access_token, get_password_hash
+from app.auth_utils import create_access_token
 from app.sqlalchemy_models import AuditLogModel, InviteModel, MembershipModel, RoleModel, TenantModel, UserModel
 from httpx import AsyncClient
 from sqlalchemy import and_, create_engine, select
@@ -70,7 +70,6 @@ def admin_user(db: Session):
 
     user = UserModel(
         email=f"admin-{uuid4()}@example.com",
-        password_hash=get_password_hash("password"),
         is_sysadmin=True,
         status="active",
     )
@@ -101,7 +100,7 @@ def other_tenant_user(db: Session):
     db.add(tenant)
     db.commit()
 
-    user = UserModel(email=f"other-{uuid4()}@example.com", password_hash=get_password_hash("password"), status="active")
+    user = UserModel(email=f"other-{uuid4()}@example.com", status="active")
     db.add(user)
     db.commit()
 
@@ -230,7 +229,7 @@ class TestDeactivateReactivate:
     async def test_deactivate_reactivate_flow(self, async_client: AsyncClient, admin_user, db: Session):
         # Add a secondary user to deactivate
         user2_email = f"user2-{uuid4()}@example.com"
-        user2 = UserModel(email=user2_email, password_hash="hash", status="active")
+        user2 = UserModel(email=user2_email, status="active")
         db.add(user2)
         db.commit()
 
@@ -288,13 +287,13 @@ class TestInviteLifecycle:
 
         # 2. Accept
         resp_accept = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "password": "Pass123!", "name": "New Guy"}
+            "/v1/auth/accept-invite", json={"token": token, "name": "New Guy"}
         )
-        assert resp_accept.status_code == 200
+        assert resp_accept.status_code == 201
 
         # 3. Accept again (Fail)
         resp_again = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "password": "Pass123!", "name": "New Guy"}
+            "/v1/auth/accept-invite", json={"token": token, "name": "New Guy"}
         )
         assert resp_again.status_code == 400
 
@@ -313,7 +312,7 @@ class TestInviteLifecycle:
 
         # Accept Revoked (Fail)
         resp = await async_client.post(
-            "/v1/auth/accept-invite", json={"token": token, "password": "Pass", "name": "Revoked Guy"}
+            "/v1/auth/accept-invite", json={"token": token, "name": "Revoked Guy"}
         )
         # Could be 400 or 404 depending on implementation (checked: 400 "Invite invalid")
         assert resp.status_code == 400

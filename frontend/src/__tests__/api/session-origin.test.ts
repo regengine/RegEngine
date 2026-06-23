@@ -110,8 +110,8 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         // endpoint. If /api/session ever drifts back into CSRF_EXEMPT_PREFIXES,
         // this test fails and forces an explicit threat-model conversation.
         expect(isCsrfExempt('/api/session')).toBe(false);
-        // /api/auth/* still exempt (pre-auth callbacks) — sanity check.
-        expect(isCsrfExempt('/api/auth/callback')).toBe(true);
+        // Passwordless auth starts are still pre-auth — sanity check.
+        expect(isCsrfExempt('/api/admin/auth/challenges')).toBe(true);
     });
 
     it('GET /api/session sets re_csrf and re_csrf_sig cookies on first call', async () => {
@@ -142,6 +142,90 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         const names = setCookies.map((c: { name: string }) => c.name);
         expect(names).not.toContain('re_csrf');
         expect(names).not.toContain('re_csrf_sig');
+    });
+
+    it('GET /api/session hydrates opaque session profile data from backend /auth/me', async () => {
+        vi.stubEnv('NEXT_PUBLIC_ADMIN_URL', 'https://admin.regengine.test');
+        vi.stubEnv('CSRF_SECRET', 'test-secret-for-bootstrap');
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    user_id: '11111111-1111-4111-8111-111111111111',
+                    email: 'owner@example.com',
+                    organization_id: '22222222-2222-4222-8222-222222222222',
+                    role: 'owner',
+                    auth_method: 'webauthn',
+                }),
+                { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await GET(
+            makeRequest({
+                method: 'GET',
+                cookies: {
+                    '__Host-regengine_session': 'opaque-session-token',
+                    re_user: JSON.stringify({ id: 'stale-user', email: 'stale@example.com' }),
+                    re_tenant_id: 'stale-tenant',
+                },
+            }),
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith('https://admin.regengine.test/auth/me', {
+            method: 'GET',
+            headers: {
+                accept: 'application/json',
+                cookie: '__Host-regengine_session=opaque-session-token',
+            },
+            cache: 'no-store',
+        });
+        await expect(response.json()).resolves.toEqual({
+            authenticated: true,
+            has_api_key: false,
+            has_admin_key: false,
+            has_credentials: true,
+            tenant_id: '22222222-2222-4222-8222-222222222222',
+            auth_method: 'webauthn',
+            user: {
+                id: '11111111-1111-4111-8111-111111111111',
+                email: 'owner@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'owner',
+                organization_id: '22222222-2222-4222-8222-222222222222',
+                auth_method: 'webauthn',
+                permissions: [],
+            },
+        });
+        expect(response.cookies.get('re_tenant_id')?.value).toBe('22222222-2222-4222-8222-222222222222');
+        expect(response.cookies.get('re_user')?.value).toContain('owner@example.com');
+    });
+
+    it('GET /api/session rejects stale opaque cookies when backend /auth/me rejects them', async () => {
+        vi.stubEnv('NEXT_PUBLIC_ADMIN_URL', 'https://admin.regengine.test');
+        vi.stubEnv('CSRF_SECRET', 'test-secret-for-bootstrap');
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await GET(
+            makeRequest({
+                method: 'GET',
+                cookies: {
+                    '__Host-regengine_session': 'stale-session-token',
+                },
+            }),
+        );
+
+        await expect(response.json()).resolves.toEqual({
+            authenticated: false,
+            has_api_key: false,
+            has_admin_key: false,
+            has_credentials: false,
+            tenant_id: null,
+            auth_method: null,
+            user: null,
+        });
     });
 
     it('returns 500 when ALLOWED_ORIGINS is unset in production (fail-closed misconfig)', async () => {

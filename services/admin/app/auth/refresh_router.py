@@ -8,6 +8,7 @@ Exposes:
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -33,7 +34,6 @@ from ..database import get_session
 from ..dependencies import get_session_store
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
-from .lockout import _maybe_await
 from .schemas import TokenResponse
 
 router = APIRouter()
@@ -43,6 +43,13 @@ _DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = SESSION_IDLE_TIMEOUT_MINUTES
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+async def _maybe_await(result):
+    """Accept either a direct value or an awaitable from injected collaborators."""
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -169,7 +176,7 @@ async def refresh_session(
             raise HTTPException(status_code=401, detail="Session idle timeout")
 
     # Resolve the user and reject stale session generations BEFORE rotating.
-    # /logout-all and password reset bump users.token_version. get_current_user
+    # /logout-all and account-security invalidation bump users.token_version. get_current_user
     # already rejects stale ACCESS tokens, but without this check a still-valid
     # REFRESH token from a session issued before the bump could keep minting
     # fresh access tokens after the user logged out everywhere (SEL-12 gap).

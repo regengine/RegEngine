@@ -20,16 +20,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
-from .auth_utils import get_password_hash
 from .database import get_session
 from .dependencies import PermissionChecker, get_current_user
+from .e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
 from .models import TenantContext
-from .password_policy import PasswordPolicyError, validate_password
 from .sqlalchemy_models import InviteModel, MembershipModel, RoleModel, UserModel
 from .supplier_graph_sync import supplier_graph_sync
 
 router = APIRouter()
 logger = structlog.get_logger("invite_routes")
+assert_e2e_mode_allowed()
 
 
 def _get_invite_base_url() -> str:
@@ -49,7 +49,6 @@ def _build_invite_link(token: str) -> tuple[str, str]:
 def _record_e2e_invite_email(recipient_email: str, invite_link: str) -> bool:
     """Record an invite email in the Playwright-only outbox fixture."""
     outbox_path = os.getenv("REGENGINE_E2E_EMAIL_OUTBOX")
-    e2e_enabled = os.getenv("REGENGINE_E2E_MODE", "").strip().lower() == "true"
     environment = os.getenv("REGENGINE_ENV", "").strip().lower()
     cloud_deployment = any(
         os.getenv(marker)
@@ -69,7 +68,7 @@ def _record_e2e_invite_email(recipient_email: str, invite_link: str) -> bool:
     )
     if (
         not outbox_path
-        or not e2e_enabled
+        or not e2e_mode_enabled()
         or environment not in {"development", "dev", "test", "local"}
         or cloud_deployment
     ):
@@ -168,9 +167,8 @@ class InviteResponse(BaseModel):
 
 class AcceptInviteRequest(BaseModel):
     token: str
-    password: str
     name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check.
-    # Note: UserModel has no 'name' col in the viewed file (step 2800), only email/password_hash/mfa/sysadmin/status.
+    # Note: UserModel has no 'name' col in the viewed file, only email/status/sysadmin metadata.
     # So I will ignore name for now or assume it's metadata.
 
 
@@ -406,18 +404,6 @@ async def revoke_invite(
 # --- Public Endpoint ---
 
 
-class AcceptInviteExistingUserRequest(BaseModel):
-    """Acceptance payload used when the invited email matches an existing user.
-
-    The acceptor must re-authenticate with their current RegEngine password
-    before the new membership is granted (#1337 Path B). No password-set is
-    performed in this branch — the existing account is unchanged.
-    """
-
-    token: str
-    current_password: str
-
-
 @router.post("/auth/accept-invite", response_model=AcceptInviteResponse, status_code=201)
 @limiter.limit("10/minute")
 async def accept_invite(
@@ -427,20 +413,12 @@ async def accept_invite(
 ):
     """Accept an invite.
 
-    #1337 fix:
-      * Path A (new user): invite acts as proof-of-email, but we rate-limit
-        and fail-closed on any ambiguity. Password policy is enforced.
-      * Path B (existing user): a membership is NEVER granted silently. The
-        caller must supply either the existing account's password in
-        ``current_password``, or authenticate via the standard login flow and
-        accept from /v1/me. Holding the raw token alone is not enough.
+    The invite token is delivered to the invited mailbox and acts as
+    proof-of-email for account creation or membership attachment.
       * Deleted/erased users are not reinstated via invite.
       * All failure cases return a uniform 400 so an attacker cannot distinguish
-        expired / revoked / already-accepted from "invite belongs to existing
-        user with no password supplied".
+        expired / revoked / already-accepted from other unusable invite states.
     """
-    from .auth_utils import verify_password  # local import to avoid cycle
-
     generic_400 = HTTPException(status_code=400, detail="Invite is not usable")
 
     # Verify Token (hashed lookup; tokens stay opaque at rest).
@@ -463,8 +441,6 @@ async def accept_invite(
     user = db.execute(select(UserModel).where(UserModel.email == invite.email)).scalar_one_or_none()
 
     if user is not None:
-        # Path B — existing user. Require proof of ownership via the existing
-        # account password. If the caller only has the invite token, refuse.
         if user.status != "active":
             # Do not reinstate erased / suspended users via invite (#1337).
             logger.warning(
@@ -474,29 +450,10 @@ async def accept_invite(
             )
             raise generic_400
 
-        # The password field on AcceptInviteRequest doubles as the existing
-        # password when the email already has an account. We intentionally use
-        # the same field so the frontend can post the same payload shape.
-        supplied_password = payload.password or ""
-        if not supplied_password or not verify_password(supplied_password, user.password_hash):
-            logger.warning(
-                "accept_invite_existing_user_auth_failed",
-                email=mask_email(invite.email),
-            )
-            # Same generic 400 to avoid leaking "account exists" to token holders.
-            raise generic_400
-
     else:
-        # Path A — create new user with invite-supplied password.
-        # Enforce password policy FIRST so we don't flush half-constructed rows.
-        try:
-            validate_password(payload.password, user_context={"email": invite.email})
-        except PasswordPolicyError as e:
-            raise HTTPException(status_code=400, detail=e.message)
-
+        # Path A — create a passwordless user from an invite token.
         user = UserModel(
             email=invite.email,
-            password_hash=get_password_hash(payload.password),
             status="active",
             is_sysadmin=False,
         )

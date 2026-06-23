@@ -206,14 +206,20 @@ def init_db() -> None:
         # SQLite dev fallback doesn't support PostgreSQL ARRAY types.
         from .sqlalchemy_models import (
             AuditLogModel,
+            AuthChallengeModel,
             Base,
             InviteModel,
             MembershipModel,
+            OrganizationMembershipModel,
+            OrganizationModel,
             ReviewItemModel,
             RoleModel,
             SessionModel,
             TenantModel,
+            UserEmailModel,
             UserModel,
+            WebAuthnChallengeModel,
+            WebAuthnCredentialModel,
         )
 
         _core_tables = [
@@ -221,6 +227,12 @@ def init_db() -> None:
             for m in (
                 TenantModel,
                 UserModel,
+                UserEmailModel,
+                OrganizationModel,
+                OrganizationMembershipModel,
+                AuthChallengeModel,
+                WebAuthnCredentialModel,
+                WebAuthnChallengeModel,
                 RoleModel,
                 MembershipModel,
                 AuditLogModel,

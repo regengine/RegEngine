@@ -187,9 +187,10 @@ export function getAdminMasterKey(): string | undefined {
  *   1. re_api_key cookie
  *   2. re_admin_key cookie
  *   3. re_access_token cookie
- *   4. x-regengine-api-key header (direct API calls)
- *   5. x-admin-key header (direct API calls)
- *   6. x-api-key header (direct API calls)
+ *   4. __Host-regengine_session cookie
+ *   5. x-regengine-api-key header (direct API calls)
+ *   6. x-admin-key header (direct API calls)
+ *   7. x-api-key header (direct API calls)
  *
  * Server-side env keys are intentionally not caller credentials. They may be
  * injected later only after this preflight sees a real caller credential or
@@ -216,7 +217,12 @@ const PLACEHOLDER_CREDENTIAL_VALUES = new Set([
   'bearer null',
   'bearer undefined',
 ]);
-const CALLER_CREDENTIAL_COOKIES = ['re_api_key', 're_admin_key', 're_access_token'] as const;
+const CALLER_CREDENTIAL_COOKIES = [
+  're_api_key',
+  're_admin_key',
+  're_access_token',
+  '__Host-regengine_session',
+] as const;
 const CALLER_CREDENTIAL_HEADERS = [
   'authorization',
   'x-regengine-api-key',
@@ -308,15 +314,20 @@ function hasFreshAdminRole(body: {
   status?: unknown;
   is_sysadmin?: unknown;
   role_name?: unknown;
+  role?: unknown;
   permissions?: unknown;
 }): boolean {
-  if (body.status !== 'active') {
+  if (typeof body.status === 'string' && body.status !== 'active') {
     return false;
   }
   if (body.is_sysadmin === true) {
     return true;
   }
-  const roleName = typeof body.role_name === 'string' ? body.role_name.toLowerCase() : '';
+  const roleName = typeof body.role_name === 'string'
+    ? body.role_name.toLowerCase()
+    : typeof body.role === 'string'
+      ? body.role.toLowerCase()
+      : '';
   if (roleName === 'admin' || roleName === 'owner') {
     return true;
   }
@@ -411,6 +422,10 @@ export async function validateProxySession(
     // through to the Supabase check — stale `sb-*` cookies (e.g. leftover
     // PKCE `-code-verifier`) would otherwise fail Supabase validation and
     // 401 a request that already authenticated successfully.
+    return null;
+  }
+
+  if (isUsableCallerCredential(request.cookies.get('__Host-regengine_session')?.value)) {
     return null;
   }
 
