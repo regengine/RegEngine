@@ -1,4 +1,5 @@
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { seedClientSessionUser } from '@/lib/client-session-profile';
 
 export const OTP_CHALLENGE_STORAGE_KEY = 'regengine_passwordless_otp_challenge';
 
@@ -150,16 +151,7 @@ export async function registerPasskey(): Promise<void> {
 }
 
 export function seedPasswordlessClientUser(email: string): void {
-  if (typeof window === 'undefined') return;
-  const user = {
-    id: 'passwordless-session',
-    email,
-    is_sysadmin: false,
-    status: 'active',
-    role_name: 'member',
-    permissions: [],
-  };
-  window.localStorage.setItem('regengine_user', JSON.stringify(user));
+  seedClientSessionUser(email);
 }
 
 function toPublicKeyCreationOptions(options: Record<string, unknown>): PublicKeyCredentialCreationOptions {
