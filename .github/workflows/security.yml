@@ -301,10 +301,24 @@ jobs:
           #   TrustedHostMiddleware (shared add_trusted_host / add_security),
           #   rejecting the forged Host headers this advisory relies on. Revisit
           #   when prometheus-fastapi-instrumentator supports starlette 1.x.
+          # - CVE-2026-48818 / starlette: Windows-only StaticFiles UNC SSRF.
+          #   RegEngine production runs Linux containers; revisit once FastAPI
+          #   supports the Starlette 1.x fixed line.
+          # - CVE-2026-48817 / starlette: HTTPEndpoint non-standard method
+          #   dispatch. RegEngine does not register Starlette HTTPEndpoint
+          #   subclasses; revisit once FastAPI supports the fixed line.
+          # - CVE-2026-54282 and CVE-2026-54283 / starlette: request URL/form
+          #   parser hardening fixed in Starlette 1.x. FastAPI 0.136 still
+          #   resolves Starlette 0.52.x, so keep this explicit until the
+          #   framework dependency allows 1.x.
           pip_audit_ignores=(
             --ignore-vuln PYSEC-2025-183
             --ignore-vuln PYSEC-2024-278
             --ignore-vuln PYSEC-2026-161
+            --ignore-vuln CVE-2026-48818
+            --ignore-vuln CVE-2026-48817
+            --ignore-vuln CVE-2026-54282
+            --ignore-vuln CVE-2026-54283
           )
           # Include root requirements.lock (pip-compile output, #1139) alongside
           # any per-service requirements*.txt files still present.

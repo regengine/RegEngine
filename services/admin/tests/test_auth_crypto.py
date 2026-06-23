@@ -13,8 +13,8 @@ from services.admin.app import auth_crypto
 from services.admin.app.auth_crypto import AuthCryptoService
 
 
-TEST_SECRET = "test-auth-otp-hmac-secret-32-bytes-minimum"
-OTHER_SECRET = "other-auth-otp-hmac-secret-32-bytes-minimum"
+TEST_SECRET = "test-auth-otp-hmac-secret-32-bytes-minimum"  # pragma: allowlist secret
+OTHER_SECRET = "other-auth-otp-hmac-secret-32-bytes-minimum"  # pragma: allowlist secret
 
 
 def _service(secret: str = TEST_SECRET) -> AuthCryptoService:
@@ -196,4 +196,4 @@ def test_service_requires_hmac_secret_in_production(monkeypatch):
 
 def test_hmac_secret_must_be_at_least_32_bytes():
     with pytest.raises(ValueError, match="at least 32 bytes"):
-        AuthCryptoService(hmac_secret="too-short")
+        AuthCryptoService(hmac_secret="too-short")  # pragma: allowlist secret
