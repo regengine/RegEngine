@@ -295,13 +295,13 @@ jobs:
       REGENGINE_ENV: test
       REGENGINE_E2E_MODE: "true"
       REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
-      AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026
-      JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026
-      AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes
-      CSRF_SECRET: playwright-local-jwt-signing-key-2026
+      AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
+      JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
+      AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes # pragma: allowlist secret
+      CSRF_SECRET: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
       ADMIN_MASTER_KEY: playwright-local-admin-master-key-2026
-      API_KEY: playwright-local-regengine-api-key-2026
-      REGENGINE_API_KEY: playwright-local-regengine-api-key-2026
+      API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
+      REGENGINE_API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
       ALLOW_INMEMORY_SESSION_STORE: "true"
       DISABLE_TASK_WORKER: "true"
       NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES: "true"

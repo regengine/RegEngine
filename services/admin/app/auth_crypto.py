@@ -16,7 +16,7 @@ from typing import Any
 
 logger = logging.getLogger("auth_crypto")
 
-_HMAC_SECRET_ENV = "AUTH_OTP_HMAC_SECRET"
+_HMAC_SECRET_ENV = "AUTH_OTP_HMAC_SECRET"  # pragma: allowlist secret
 _MIN_SECRET_BYTES = 32
 _DEV_EPHEMERAL_HMAC_SECRET: str | None = None
 
