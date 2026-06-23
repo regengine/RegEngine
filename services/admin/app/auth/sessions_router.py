@@ -142,7 +142,7 @@ async def revoke_all_sessions(
     row, so outstanding access tokens kept working until their natural 60-min
     expiry. We now ALSO bump users.token_version so get_current_user rejects any
     access token minted before this call. The same mechanism is used by
-    /auth/reset-password (#1349).
+    logout-all and account-security invalidation flows.
     """
     # 1. Revoke Redis session rows (future /refresh attempts will 401).
     count = await session_store.revoke_all_user_sessions(current_user.id)

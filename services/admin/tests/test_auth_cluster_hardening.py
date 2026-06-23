@@ -2,9 +2,7 @@
 
 Covers:
   * #1337 — /auth/accept-invite existing-user lockout + new-user flow
-  * #1340 — /auth/confirm lockout integration (rate limit applied via decorator)
-  * #1349 — /auth/reset-password revokes sessions + bumps token_version
-  * #1374 — password_reset_routes.router registers no conflicting /change-password
+  * #1349 — token_version invalidation and refresh/session hardening
   * #1375 — /logout-all bumps token_version and revokes elevation tokens
   * #1376 — mfa_secret encryption-at-rest round trip
   * #1377 — recovery code normalization across casing/padding
@@ -322,50 +320,13 @@ def _make_invite(email="new@example.com"):
 
 
 @pytest.mark.asyncio
-async def test_accept_invite_existing_user_without_password_refused(monkeypatch):
-    """#1337 Path B — holder of token alone cannot attach a membership to
-    an existing account."""
-    from fastapi import HTTPException
-
-    from services.admin.app.auth_utils import get_password_hash
+async def test_accept_invite_existing_user_with_token_succeeds(monkeypatch):
     from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="alice@acme.com")
     existing_user = SimpleNamespace(
         id=uuid.uuid4(),
         email="alice@acme.com",
-        password_hash=get_password_hash("real-password"),
-        status="active",
-    )
-
-    # DB mock: first query → invite; second query → existing user; no membership.
-    db = MagicMock()
-    db.execute.side_effect = [
-        _FakeResult(invite),
-        _FakeResult(existing_user),
-    ]
-
-    req = AcceptInviteRequest(token="raw", password="attacker-supplied", name="x")
-    http_req = _make_starlette_request()
-
-    # Call __wrapped__ to bypass the SlowAPI decorator.
-    with pytest.raises(HTTPException) as exc:
-        await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
-    assert exc.value.status_code == 400
-    # Uniform error: no distinction between "expired" / "existing" / etc.
-    assert exc.value.detail == "Invite is not usable"
-
-
-@pytest.mark.asyncio
-async def test_accept_invite_existing_user_with_correct_password_succeeds(monkeypatch):
-    from services.admin.app.auth_utils import get_password_hash
-    from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
-
-    invite = _make_invite(email="alice@acme.com")
-    existing_user = SimpleNamespace(
-        id=uuid.uuid4(),
-        email="alice@acme.com",
-        password_hash=get_password_hash("real-password"),
         status="active",
     )
     db = MagicMock()
@@ -384,7 +345,7 @@ async def test_accept_invite_existing_user_with_correct_password_succeeds(monkey
         MagicMock(record_invite_accepted=MagicMock(return_value=None)),
     )
 
-    req = AcceptInviteRequest(token="raw", password="real-password", name="x")
+    req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
     out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert out["status"] == "success"
@@ -393,7 +354,6 @@ async def test_accept_invite_existing_user_with_correct_password_succeeds(monkey
 
 @pytest.mark.asyncio
 async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatch):
-    from services.admin.app.auth_utils import get_password_hash
     from services.admin.app.invite_routes import AcceptInviteRequest, accept_invite
 
     invite = _make_invite(email="alice@acme.com")
@@ -401,7 +361,6 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
     existing_user = SimpleNamespace(
         id=uuid.uuid4(),
         email="alice@acme.com",
-        password_hash=get_password_hash("real-password"),
         status="active",
     )
     db = MagicMock()
@@ -419,7 +378,7 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
         MagicMock(record_invite_accepted=MagicMock(return_value=None)),
     )
 
-    req = AcceptInviteRequest(token="raw", password="real-password", name="x")
+    req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
     out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert out["status"] == "success"
@@ -437,7 +396,6 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
     inactive_user = SimpleNamespace(
         id=uuid.uuid4(),
         email="inactive@example.com",
-        password_hash="x",
         status="erased",
     )
     db = MagicMock()
@@ -445,7 +403,7 @@ async def test_accept_invite_inactive_user_refused(monkeypatch):
         _FakeResult(invite),
         _FakeResult(inactive_user),
     ]
-    req = AcceptInviteRequest(token="raw", password="any", name="x")
+    req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
 
     with pytest.raises(HTTPException) as exc:
@@ -496,7 +454,7 @@ async def test_accept_invite_uniform_400_for_all_unusable():
         ),
     ]
 
-    req = AcceptInviteRequest(token="raw", password="StrongP@ss-1234", name="x")
+    req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
 
     details = []
@@ -509,57 +467,6 @@ async def test_accept_invite_uniform_400_for_all_unusable():
         details.append(exc.value.detail)
     # All three messages identical — no side-channel.
     assert len(set(details)) == 1
-
-
-# ─────────────────────────────────────────────────────────────────────
-# #1340 — /auth/confirm rate limit decorator present
-# ─────────────────────────────────────────────────────────────────────
-
-
-def test_auth_confirm_has_rate_limit_decorator():
-    """#1340 — /auth/confirm must carry a rate-limit decoration via SlowAPI.
-
-    SlowAPI's ``Limiter.limit`` decorator wraps the target function and the
-    underlying function becomes reachable via ``__wrapped__``. The wrapper
-    sets ``_rate_limit_exempt = False`` and raises on non-Request args at
-    runtime, but the durable signal we can check statically is the presence
-    of the ``__wrapped__`` attribute plus the limit string in the module
-    source (which can't be renamed without editing the file).
-    """
-    import services.admin.app.auth.confirm_router as _confirm
-    import services.admin.app.auth_routes as ar
-
-    # Evidence 1: SlowAPI replaced the function with its async wrapper.
-    # ``ar.confirm_password`` is re-exported from the confirm sub-module
-    # (Phase 1 split — see ``services/admin/app/auth/confirm_router.py``).
-    assert hasattr(ar.confirm_password, "__wrapped__"), "/auth/confirm lost its SlowAPI wrapper — decorator missing"
-
-    # Evidence 2: confirm_router source defines a 5/minute limit right above
-    # confirm_password. After the Phase 1 split the route body lives in the
-    # sub-module, not in auth_routes.py — inspect the sub-module instead.
-    import inspect
-
-    module_src = inspect.getsource(_confirm)
-    # Find the @limiter.limit decorator that precedes the confirm_password route.
-    idx = module_src.find("async def confirm_password(")
-    assert idx != -1
-    window = module_src[max(0, idx - 300) : idx]
-    assert '@limiter.limit("5/minute")' in window or "limiter.limit('5/minute')" in window, (
-        f'Expected @limiter.limit("5/minute") immediately above confirm_password (#1340). Window: {window!r}'
-    )
-
-
-# ─────────────────────────────────────────────────────────────────────
-# #1374 — password_reset_routes.router is empty
-# ─────────────────────────────────────────────────────────────────────
-
-
-def test_password_reset_routes_has_no_conflicting_change_password():
-    """#1374 — the dead duplicate route in password_reset_routes must be gone."""
-    from services.admin.app import password_reset_routes
-
-    paths = {getattr(r, "path", None) for r in password_reset_routes.router.routes}
-    assert "/auth/change-password" not in paths
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -728,154 +635,6 @@ async def test_refresh_rejects_when_no_longer_member_of_original_tenant():
             db=db,
             session_store=session_store,
         )
-    assert exc.value.status_code == 403
-
-
-# ─────────────────────────────────────────────────────────────────────
-# #1380 — require_reauth checks tenant + jti
-# ─────────────────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_require_reauth_rejects_missing_tenant():
-    from datetime import timedelta
-
-    from fastapi import HTTPException
-
-    from services.admin.app.auth_routes import require_reauth
-    from services.admin.app.auth_utils import create_access_token
-
-    user_id = uuid.uuid4()
-    # elevation token MISSING tenant_id
-    tok = create_access_token(
-        {"sub": str(user_id), "elevated": True, "tv": 0},
-        expires_delta=timedelta(minutes=5),
-    )
-    request = MagicMock()
-    request.headers = {"X-Elevation-Token": tok, "Authorization": ""}
-    current_user = SimpleNamespace(id=user_id, token_version=0)
-    session_store = MagicMock()
-    with pytest.raises(HTTPException) as exc:
-        await require_reauth(request=request, current_user=current_user, session_store=session_store)
-    assert exc.value.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_require_reauth_rejects_stale_tv():
-    from datetime import timedelta
-
-    from fastapi import HTTPException
-
-    from services.admin.app.auth_routes import require_reauth
-    from services.admin.app.auth_utils import create_access_token
-
-    user_id = uuid.uuid4()
-    tenant_id = uuid.uuid4()
-    # Elevation minted when tv=0; user has since bumped to tv=1.
-    elevation = create_access_token(
-        {
-            "sub": str(user_id),
-            "elevated": True,
-            "tenant_id": str(tenant_id),
-            "jti": "good-jti",
-            "tv": 0,
-        },
-        expires_delta=timedelta(minutes=5),
-    )
-    # Access header echoes same tenant so tenant check passes.
-    access = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 1})
-    request = MagicMock()
-    request.headers = {
-        "X-Elevation-Token": elevation,
-        "Authorization": f"Bearer {access}",
-    }
-    current_user = SimpleNamespace(id=user_id, token_version=1)
-    session_store = MagicMock()
-    client = MagicMock()
-    client.get = AsyncMock(return_value=str(user_id))  # jti exists
-    session_store._get_client = AsyncMock(return_value=client)
-
-    with pytest.raises(HTTPException) as exc:
-        await require_reauth(request=request, current_user=current_user, session_store=session_store)
-    assert exc.value.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_require_reauth_rejects_cross_tenant():
-    from datetime import timedelta
-
-    from fastapi import HTTPException
-
-    from services.admin.app.auth_routes import require_reauth
-    from services.admin.app.auth_utils import create_access_token
-
-    user_id = uuid.uuid4()
-    tenant_a = uuid.uuid4()
-    tenant_b = uuid.uuid4()
-    # Elevation minted while acting in tenant A, but caller is now acting in B.
-    elevation = create_access_token(
-        {
-            "sub": str(user_id),
-            "elevated": True,
-            "tenant_id": str(tenant_a),
-            "jti": "abc",
-            "tv": 0,
-        },
-        expires_delta=timedelta(minutes=5),
-    )
-    access = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_b), "tv": 0})
-    request = MagicMock()
-    request.headers = {
-        "X-Elevation-Token": elevation,
-        "Authorization": f"Bearer {access}",
-    }
-    current_user = SimpleNamespace(id=user_id, token_version=0)
-    session_store = MagicMock()
-    client = MagicMock()
-    client.get = AsyncMock(return_value=str(user_id))
-    session_store._get_client = AsyncMock(return_value=client)
-
-    with pytest.raises(HTTPException) as exc:
-        await require_reauth(request=request, current_user=current_user, session_store=session_store)
-    assert exc.value.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_require_reauth_rejects_revoked_jti():
-    from datetime import timedelta
-
-    from fastapi import HTTPException
-
-    from services.admin.app.auth_routes import require_reauth
-    from services.admin.app.auth_utils import create_access_token
-
-    user_id = uuid.uuid4()
-    tenant_id = uuid.uuid4()
-    elevation = create_access_token(
-        {
-            "sub": str(user_id),
-            "elevated": True,
-            "tenant_id": str(tenant_id),
-            "jti": "revoked-jti",
-            "tv": 0,
-        },
-        expires_delta=timedelta(minutes=5),
-    )
-    access = create_access_token({"sub": str(user_id), "tenant_id": str(tenant_id), "tv": 0})
-    request = MagicMock()
-    request.headers = {
-        "X-Elevation-Token": elevation,
-        "Authorization": f"Bearer {access}",
-    }
-    current_user = SimpleNamespace(id=user_id, token_version=0)
-    session_store = MagicMock()
-    client = MagicMock()
-    # jti NOT in Redis (revoked or expired)
-    client.get = AsyncMock(return_value=None)
-    session_store._get_client = AsyncMock(return_value=client)
-
-    with pytest.raises(HTTPException) as exc:
-        await require_reauth(request=request, current_user=current_user, session_store=session_store)
     assert exc.value.status_code == 403
 
 
@@ -1052,7 +811,7 @@ async def test_get_current_user_rejects_missing_supabase_tv_after_bump(monkeypat
 
 @pytest.mark.asyncio
 async def test_revoke_all_for_user_drops_token_hash_mapping():
-    """#1349 — after password reset, the refresh-token mapping must be gone
+    """#1349 — after account-security invalidation, the refresh-token mapping must be gone
     so a stolen refresh token can't be redeemed even within its TTL window."""
     from services.admin.app.session_store import RedisSessionStore, SessionData
 
@@ -1104,7 +863,7 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
 
 # ─────────────────────────────────────────────────────────────────────
 # SEL-12 gap — /refresh must reject a session generation issued before a
-# logout-all / password-reset token_version bump, even if the refresh
+# logout-all / account-security token_version bump, even if the refresh
 # token itself is otherwise valid and unexpired. get_current_user only
 # rejects stale ACCESS tokens; without this guard a still-valid REFRESH
 # token keeps minting fresh access tokens after "log out everywhere".
@@ -1140,7 +899,7 @@ async def test_refresh_rejects_stale_session_token_version():
         id=user_id,
         email="u@e",
         is_sysadmin=False,
-        token_version=1,  # user did logout-all / password reset since
+        token_version=1,  # user did logout-all / account-security invalidation since
     )
 
     with pytest.raises(HTTPException) as exc:

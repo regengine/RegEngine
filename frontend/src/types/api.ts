@@ -202,6 +202,19 @@ export interface ComplianceAlert {
 
 // Authentication
 
+export type SessionAuthMethod = 'email_otp' | 'webauthn' | 'sso';
+export type OrganizationAuthPolicy = 'standard' | 'sso_only';
+
+export interface OrganizationSsoPolicyUpdate {
+    domain_name: string;
+    domain_verified: boolean;
+    enforced_auth_policy: OrganizationAuthPolicy;
+}
+
+export interface OrganizationSsoPolicyResponse extends OrganizationSsoPolicyUpdate {
+    id: string;
+}
+
 export interface Role {
     id: string;
     name: string;
@@ -215,6 +228,8 @@ export interface User {
     status: string;
     role_id?: string;
     role_name?: string;
+    organization_id?: string | null;
+    auth_method?: SessionAuthMethod | null;
     permissions?: string[];
     created_at?: string;
 }
@@ -536,22 +551,6 @@ export interface MappingPreviewResponse {
     missing_fields: Record<string, string[]>;
     events: Record<string, unknown>[];
 }
-
-export interface LoginResponse {
-    access_token: string;
-    token_type: string;
-    refresh_token: string;
-    tenant_id?: string;
-    user: User;
-    available_tenants: Array<{ id: string; name: string; slug: string }>;
-}
-
-export interface SignupAcceptedResponse {
-    detail: string;
-}
-
-export type SignupResponse = LoginResponse | SignupAcceptedResponse;
-
 
 // Analysis Summary
 export interface AnalysisRisk {

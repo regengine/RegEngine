@@ -31,12 +31,12 @@ from shared.api_key_store import DatabaseAPIKeyStore
 from shared.auth import get_key_store
 from shared.funnel_events import get_funnel_stage_metrics
 
-from .auth.signup_helpers import _ensure_unique_tenant_slug
 from .config import get_settings
 from .database import get_session
 from .dependencies import PermissionChecker
 from .review_consumer import get_consumer_health
 from .sqlalchemy_models import TenantModel
+from .tenant_slug_helpers import _ensure_unique_tenant_slug
 
 # Health/metrics router at root level (operational endpoints)
 router = APIRouter()

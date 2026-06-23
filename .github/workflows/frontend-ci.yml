@@ -5,6 +5,17 @@ on:
     branches: [main, develop]
     paths:
       - 'frontend/**'
+      - 'services/admin/app/auth/**'
+      - 'services/admin/app/e2e_safety.py'
+      - 'services/admin/app/session_store.py'
+      - 'services/admin/app/rate_limit_service.py'
+      - 'services/admin/app/sqlalchemy_models.py'
+      - 'services/admin/tests/test_e2e_safety.py'
+      - 'services/admin/tests/test_webauthn_router.py'
+      - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/start-e2e-backend.sh'
+      - 'requirements.in'
+      - 'requirements.lock'
       - 'scripts/check_trust_safety_copy.py'
       - 'scripts/trust_safety_copy_allowlist.txt'
       - '.github/workflows/frontend-ci.yml'
@@ -12,6 +23,17 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'services/admin/app/auth/**'
+      - 'services/admin/app/e2e_safety.py'
+      - 'services/admin/app/session_store.py'
+      - 'services/admin/app/rate_limit_service.py'
+      - 'services/admin/app/sqlalchemy_models.py'
+      - 'services/admin/tests/test_e2e_safety.py'
+      - 'services/admin/tests/test_webauthn_router.py'
+      - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/start-e2e-backend.sh'
+      - 'requirements.in'
+      - 'requirements.lock'
       - 'scripts/check_trust_safety_copy.py'
       - 'scripts/trust_safety_copy_allowlist.txt'
       - '.github/workflows/frontend-ci.yml'
@@ -35,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -63,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -105,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -138,7 +160,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -163,7 +185,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -191,7 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -215,7 +237,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -238,7 +260,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [promise-audit, build, lint, test, smoke, security, production-readiness]
+    needs: [promise-audit, build, lint, test, smoke, security, production-readiness, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -250,26 +272,42 @@ jobs:
           echo "Smoke:    ${{ needs.smoke.result }}"
           echo "Security: ${{ needs.security.result }}"
           echo "Readiness:${{ needs.production-readiness.result }}"
-          echo "E2E:      advisory (runs separately)"
+          echo "E2E:      ${{ needs.e2e.result }}"
           if [[ "${{ needs.promise-audit.result }}" == "failure" \
              || "${{ needs.build.result }}" == "failure" \
              || "${{ needs.lint.result }}" == "failure" \
              || "${{ needs.test.result }}" == "failure" \
              || "${{ needs.smoke.result }}" == "failure" \
              || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.production-readiness.result }}" == "failure" ]]; then
-            echo "::error::Promise audit, build, lint, unit tests, deterministic smoke, security audit, or production readiness failed"
+             || "${{ needs.production-readiness.result }}" == "failure" \
+             || "${{ needs.e2e.result }}" == "failure" ]]; then
+            echo "::error::Promise audit, build, lint, unit tests, deterministic smoke, security audit, production readiness, or E2E failed"
             exit 1
           fi
           echo "All blocking frontend checks passed"
 
   # ── E2E Tests (Playwright) ───────────────────────────────
   e2e:
-    name: E2E Tests (Playwright)
+    name: Passwordless Auth E2E (Chromium)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      REGENGINE_ENV: test
+      REGENGINE_E2E_MODE: "true"
+      REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
+      AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026
+      JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026
+      AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes
+      CSRF_SECRET: playwright-local-jwt-signing-key-2026
+      ADMIN_MASTER_KEY: playwright-local-admin-master-key-2026
+      API_KEY: playwright-local-regengine-api-key-2026
+      REGENGINE_API_KEY: playwright-local-regengine-api-key-2026
+      ALLOW_INMEMORY_SESSION_STORE: "true"
+      DISABLE_TASK_WORKER: "true"
+      NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES: "true"
+      PYTHONDONTWRITEBYTECODE: 1
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6
@@ -278,34 +316,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Preflight — verify secrets and backend are ready
-        env:
-          # Production is a single consolidated monolith at this URL
-          # (Dockerfile at repo root → server/main.py, mounts all 6 former
-          # microservice routers). Point the preflight + tests at it so the
-          # health curl actually reaches something instead of localhost:8001.
-          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
         run: |
-          MISSING=()
-          [[ -z "$TEST_USER_EMAIL" ]]          && MISSING+=("TEST_USER_EMAIL")
-          [[ -z "$TEST_PASSWORD" ]]             && MISSING+=("TEST_PASSWORD")
-          [[ -z "$JWT_SIGNING_KEY" ]]          && MISSING+=("JWT_SIGNING_KEY")
-          if [[ ${#MISSING[@]} -gt 0 ]]; then
-            echo "::error::E2E signal missing because GitHub Secrets are not configured: ${MISSING[*]}"
-            echo "The deterministic smoke job is the fallback gate; missing E2E prerequisites must be visible."
-            exit 1
-          fi
-          echo "Checking admin service health at $ADMIN_SERVICE_URL..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$ADMIN_SERVICE_URL/health" || echo "000")
-          if [[ "$STATUS" != "200" ]]; then
-            echo "::error::E2E signal missing because admin service is unreachable (HTTP $STATUS): $ADMIN_SERVICE_URL"
-            echo "The deterministic smoke job is the fallback gate; unreachable E2E prerequisites must be visible."
-            exit 1
-          fi
-          echo "All preflight checks passed. Proceeding with E2E tests."
+          pip install --require-hashes -r requirements.lock
 
       - name: Install dependencies
         run: |
@@ -319,57 +337,14 @@ jobs:
 
       - name: Run E2E tests
         id: run_e2e
-        continue-on-error: true
-        env:
-          # NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT set here.
-          # The dev webServer runs on localhost:3001. Setting a production base URL
-          # causes the browser to make cross-origin requests (CORS blocked) instead
-          # of routing through the Next.js proxy rewrites. Individual service URLs
-          # are still set so next.config.js rewrites route correctly server-side.
-          #
-          # All three point to the same Railway monolith (root Dockerfile +
-          # server/main.py mounts every former microservice's routers). The
-          # earlier localhost:* defaults required a docker-compose step that
-          # never existed — preflight curled a dead port and bailed with 000.
-          INGESTION_SERVICE_URL: https://regengine-production.up.railway.app
-          COMPLIANCE_SERVICE_URL: https://regengine-production.up.railway.app
-          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          # Supabase env vars intentionally NOT set here.
-          # E2E tests use admin service JWT auth only. The playwright.config.ts
-          # sets NEXT_PUBLIC_SUPABASE_URL='' so middleware skips Supabase
-          # cross-validation (hasSomeSupabaseCookie returns true when Supabase
-          # is not configured). Production still enforces both auth systems.
-          # JWT signing key — MUST match the value set on the admin service (Railway).
-          # The Next.js middleware verifies re_access_token cookies with this key.
-          # Without it, every authenticated route redirects to login?error=session_expired.
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-          JWT_PREVIOUS_KEY: ${{ secrets.JWT_PREVIOUS_KEY }}
-          # Optional: dedicated sysadmin account for admin-only test flows.
-          # Falls back to TEST_USER_EMAIL if not set (works when test user has sysadmin role).
-          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
-          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
-          # Playwright base URL — set in Secrets to target staging; defaults to local dev server
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
         run: |
           cd frontend
-          npm run test:e2e
+          npm run test:e2e -- tests/e2e/auth-flow.spec.ts --project=chromium --reporter=list
 
       - name: Upload Playwright test results
-        if: steps.run_e2e.outcome == 'failure'
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: playwright-results
           path: frontend/test-results/
           retention-days: 14
-
-      - name: Report advisory E2E failure
-        if: steps.run_e2e.outcome == 'failure'
-        run: |
-          echo "::warning::Playwright E2E failed in advisory mode. Build, lint, unit tests, and security audit remain the gating checks."
-          {
-            echo "### Playwright E2E"
-            echo ""
-            echo "Playwright E2E failed in advisory mode. Download the uploaded playwright-results artifact for traces and screenshots."
-          } >> "$GITHUB_STEP_SUMMARY"

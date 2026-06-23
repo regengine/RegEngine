@@ -1,1021 +1,199 @@
-/**
- * Login Page Component Tests
- * 
- * Tests the authentication flow including:
- * - Form rendering and validation
- * - Successful login and redirect
- * - Error handling (401, 403, 500)
- * - Loading states
- * - Accessibility features
- */
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import VerifyClient from '@/app/auth/verify/VerifyClient';
 import LoginPage from '@/app/login/page';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth-context';
-import { apiClient } from '@/lib/api-client';
-import { isSupabaseConfigured } from '@/lib/supabase/config';
 
-// Mock Next.js router
+const mocks = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  routerRefresh: vi.fn(),
+  searchParamGet: vi.fn(),
+  startEmailChallenge: vi.fn(),
+  saveOtpChallengeState: vi.fn(),
+  performPasskeyLogin: vi.fn(),
+  seedPasswordlessClientUser: vi.fn(),
+  verifyEmailChallenge: vi.fn(),
+}));
+
 vi.mock('next/navigation', () => ({
-    useRouter: vi.fn(),
-    useSearchParams: vi.fn(),
+  useRouter: () => ({
+    push: mocks.routerPush,
+    refresh: mocks.routerRefresh,
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: mocks.searchParamGet,
+  }),
 }));
 
-// Mock auth context
 vi.mock('@/lib/auth-context', () => ({
-    useAuth: vi.fn(),
+  useAuth: () => ({
+    user: null,
+    isHydrated: true,
+  }),
 }));
 
-// Mock API client
-vi.mock('@/lib/api-client', () => ({
-    apiClient: {
-        login: vi.fn(),
-        requestEmailLoginCode: vi.fn(),
-        confirmEmailLoginCode: vi.fn(),
-        getOnboardingStatus: vi.fn(),
+vi.mock('@/lib/passwordless-auth', () => ({
+  isValidEmail: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()),
+  startEmailChallenge: mocks.startEmailChallenge,
+  saveOtpChallengeState: mocks.saveOtpChallengeState,
+  performPasskeyLogin: mocks.performPasskeyLogin,
+  seedPasswordlessClientUser: mocks.seedPasswordlessClientUser,
+  verifyEmailChallenge: mocks.verifyEmailChallenge,
+  clearOtpChallengeState: vi.fn(),
+  loadOtpChallengeState: vi.fn(() => null),
+}));
+
+function mockLocationAssign() {
+  const originalLocation = window.location;
+  const assign = vi.fn();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: {
+      ...originalLocation,
+      assign,
     },
-}));
+  });
+  return assign;
+}
 
-// Mock Supabase session sync so login tests stay local and deterministic.
-vi.mock('@/lib/supabase/config', () => ({
-    isSupabaseConfigured: vi.fn(() => true),
-}));
-
-const mockFetch = vi.fn();
-
-describe('LoginPage', () => {
-    const mockPush = vi.fn();
-    const mockReplace = vi.fn();
-    const mockRefresh = vi.fn();
-    const mockClearCredentials = vi.fn();
-    const mockSearchParamGet = vi.fn();
-
-    // Track the current auth state so mockLogin can trigger user update
-    let authState: { user: any; login: any; clearCredentials: any; isHydrated: boolean };
-    const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string, _options?: { remember?: boolean }) => {
-        // Simulate what the real login does: update user state
-        authState.user = user;
-        // useAuth mock will return updated user on next render
-        (useAuth as any).mockReturnValue({ ...authState });
+describe('passwordless login', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.searchParamGet.mockReturnValue(null);
+    mocks.startEmailChallenge.mockResolvedValue({
+      detail: 'If this address is eligible, a sign-in code is on its way.',
+      challenge_id: '11111111-1111-4111-8111-111111111111',
     });
+    mocks.performPasskeyLogin.mockResolvedValue(undefined);
+    mocks.verifyEmailChallenge.mockResolvedValue(undefined);
+  });
 
-    async function choosePasswordMode(user: ReturnType<typeof userEvent.setup>) {
-        await user.click(screen.getByRole('button', { name: /^password$/i }));
-    }
+  it('renders a single email entry point with passkey sign-in and no password field', () => {
+    render(<LoginPage />);
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        (useRouter as any).mockReturnValue({
-            push: mockPush,
-            replace: mockReplace,
-            refresh: mockRefresh,
-            back: vi.fn(),
-            forward: vi.fn(),
-            prefetch: vi.fn(),
-        });
-        mockSearchParamGet.mockReturnValue(null);
-        (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
-        authState = { clearCredentials: mockClearCredentials, login: mockLogin, user: null, isHydrated: true };
-        (useAuth as any).mockReturnValue(authState);
-        (apiClient.getOnboardingStatus as any).mockResolvedValue({ is_complete: true });
-        (apiClient.requestEmailLoginCode as any).mockResolvedValue({ status: 'code_sent', detail: 'If an account exists, we sent a confirmation code.' });
-        (apiClient.confirmEmailLoginCode as any).mockResolvedValue({
-            access_token: 'test-token',
-            user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-            tenant_id: 'tenant-123',
-        });
-        (isSupabaseConfigured as any).mockReturnValue(true);
-        mockFetch.mockImplementation((url: string) => {
-            if (url === '/api/auth/supabase/sign-in') {
-                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
-            }
-            return Promise.reject(new Error(`Unmocked fetch: ${url}`));
-        });
-        global.fetch = mockFetch;
-        if (typeof window !== 'undefined' && window.localStorage?.clear) {
-            window.localStorage.clear();
-        }
+    expect(screen.getByRole('heading', { name: /continue to regengine/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign in with passkey/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /create an account/i })).not.toBeInTheDocument();
+  });
+
+  it('starts an OTP challenge and routes to the verification screen', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText(/email address/i), 'User@Example.com');
+    await user.click(screen.getByRole('button', { name: /^continue/i }));
+
+    await waitFor(() => {
+      expect(mocks.startEmailChallenge).toHaveBeenCalledWith('user@example.com');
+      expect(mocks.saveOtpChallengeState).toHaveBeenCalledWith({
+        email: 'user@example.com',
+        challengeId: '11111111-1111-4111-8111-111111111111',
+        createdAt: expect.any(Number),
+      });
+      expect(mocks.routerPush).toHaveBeenCalledWith('/auth/verify');
     });
+  });
 
-    describe('Rendering', () => {
-        it('renders email-code login by default and keeps password available', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-
-            expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
-            expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-            expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /send code/i })).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /email code/i })).toHaveAttribute('aria-pressed', 'true');
-            expect(screen.getByRole('button', { name: /^password$/i })).toHaveAttribute('aria-pressed', 'false');
-
-            await choosePasswordMode(user);
-
-            expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
-            expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeChecked();
-            expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
-        });
-
-        it('has password-manager friendly field attributes', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            expect(emailInput).toHaveAttribute('id', 'email');
-            expect(emailInput).toHaveAttribute('name', 'email');
-            expect(emailInput).toHaveAttribute('autocomplete', 'email');
-
-            await choosePasswordMode(user);
-
-            const passwordInput = screen.getByLabelText(/^password$/i);
-
-            expect(passwordInput).toHaveAttribute('id', 'password');
-            expect(passwordInput).toHaveAttribute('name', 'password');
-            expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
-        });
-
-        it('does not show validation errors before user interaction or browser autofill', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            const passwordInput = screen.getByLabelText(/^password$/i);
-
-            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-            expect(emailInput).not.toHaveAttribute('aria-invalid', 'true');
-            expect(passwordInput).not.toHaveAttribute('aria-invalid', 'true');
-
-            await user.type(emailInput, 'autofilled@example.com');
-            await user.type(passwordInput, 'AutofilledPassword123!');
-
-            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-            expect(emailInput).not.toHaveAttribute('aria-invalid', 'true');
-            expect(passwordInput).not.toHaveAttribute('aria-invalid', 'true');
-        });
-
-        it('toggles password visibility without changing the password value', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const passwordInput = screen.getByLabelText(/^password$/i);
-
-            await user.type(passwordInput, 'VisibleToggle123!');
-            await user.click(screen.getByRole('button', { name: /show password/i }));
-
-            expect(passwordInput).toHaveAttribute('type', 'text');
-            expect(passwordInput).toHaveValue('VisibleToggle123!');
-
-            await user.click(screen.getByRole('button', { name: /hide password/i }));
-
-            expect(passwordInput).toHaveAttribute('type', 'password');
-            expect(passwordInput).toHaveValue('VisibleToggle123!');
-
-            fireEvent.keyDown(passwordInput, { key: 'p', altKey: true });
-
-            expect(passwordInput).toHaveAttribute('type', 'text');
-            expect(passwordInput).toHaveValue('VisibleToggle123!');
-        });
-
-        it('renders return to public site link', () => {
-            render(<LoginPage />);
-
-            const link = screen.getByRole('link', { name: /return to regengine\.co/i });
-            expect(link).toBeInTheDocument();
-            expect(link).toHaveAttribute('href', '/');
-        });
-
-        it('does not render hardcoded QA passwords in UI', () => {
-            render(<LoginPage />);
-
-            expect(screen.queryByText(/Trace204!User/i)).not.toBeInTheDocument();
-            expect(screen.queryByText(/Trace204!Apex/i)).not.toBeInTheDocument();
-        });
-
-        it('applies QA preset email without populating password', async () => {
-            const user = userEvent.setup();
-            mockSearchParamGet.mockImplementation((key: string) => {
-                if (key === 'qa') return '1';
-                return null;
-            });
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const passwordInput = screen.getByLabelText(/^password$/i);
-            await user.type(passwordInput, 'temporary-password');
-
-            await user.click(screen.getByRole('button', { name: /qa tester/i }));
-
-            expect(screen.getByLabelText(/email/i)).toHaveValue('test@example.com');
-            expect(screen.getByLabelText(/^password$/i)).toHaveValue('');
-        });
+  it('redirects immediately when the backend requires SSO', async () => {
+    const assign = mockLocationAssign();
+    mocks.startEmailChallenge.mockResolvedValueOnce({
+      message: 'Organization requires Single Sign-On.',
+      sso_redirect: true,
+      organization_id: 'org-123',
     });
+    const user = userEvent.setup();
+    render(<LoginPage />);
 
-    describe('Form Validation', () => {
-        it('requires email field', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
+    await user.type(screen.getByLabelText(/email address/i), 'person@sso.example');
+    await user.click(screen.getByRole('button', { name: /^continue/i }));
 
-            const submitButton = screen.getByRole('button', { name: /send code/i });
-            await user.click(submitButton);
-
-            const emailInput = screen.getByLabelText(/email/i) as HTMLInputElement;
-            expect(emailInput.validity.valid).toBe(false);
-        });
-
-        it('requires password field', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            await user.type(emailInput, 'test@example.com');
-
-            const submitButton = screen.getByRole('button', { name: /sign in/i });
-            await user.click(submitButton);
-
-            const passwordInput = screen.getByLabelText(/^password$/i) as HTMLInputElement;
-            expect(passwordInput.validity.valid).toBe(false);
-        });
-
-        it('accepts email input', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            await user.type(emailInput, 'test@example.com');
-
-            expect(emailInput).toHaveValue('test@example.com');
-        });
-
-        it('accepts password input', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const passwordInput = screen.getByLabelText(/^password$/i);
-            await user.type(passwordInput, 'SecurePassword123!');
-
-            expect(passwordInput).toHaveValue('SecurePassword123!');
-        });
-
-        it('accepts pasted password input', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const passwordInput = screen.getByLabelText(/^password$/i);
-            await user.click(passwordInput);
-            await user.paste('PastedPassword123!');
-
-            expect(passwordInput).toHaveValue('PastedPassword123!');
-        });
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalledWith('/auth/sso/mock?organization_id=org-123');
+      expect(mocks.saveOtpChallengeState).not.toHaveBeenCalled();
     });
+  });
 
-    describe('Email Code Login', () => {
-        it('requests a confirmation code for the entered email', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
+  it('prompts for email and starts passkey login', async () => {
+    const assign = mockLocationAssign();
+    const user = userEvent.setup();
+    render(<LoginPage />);
 
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.click(screen.getByRole('button', { name: /send code/i }));
+    await user.click(screen.getByRole('button', { name: /sign in with passkey/i }));
+    await user.type(screen.getByLabelText(/passkey email/i), 'passkey@example.com');
+    await user.click(screen.getByRole('button', { name: /use passkey/i }));
 
-            await waitFor(() => {
-                expect(apiClient.requestEmailLoginCode).toHaveBeenCalledWith('test@example.com');
-            });
-            expect(screen.getByRole('status')).toHaveTextContent(/6-digit code is on the way/i);
-            expect(screen.getByLabelText(/confirmation code/i)).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /confirm code/i })).toBeInTheDocument();
-        });
-
-        it('confirms a code and establishes a RegEngine session without password sync', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'email-code-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-            (apiClient.confirmEmailLoginCode as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.click(screen.getByRole('button', { name: /send code/i }));
-            await screen.findByLabelText(/confirmation code/i);
-            await user.type(screen.getByLabelText(/confirmation code/i), '123456');
-            await user.click(screen.getByRole('button', { name: /confirm code/i }));
-
-            await waitFor(() => {
-                expect(apiClient.confirmEmailLoginCode).toHaveBeenCalledWith('test@example.com', '123456');
-            });
-            await waitFor(() => {
-                expect(mockLogin).toHaveBeenCalledWith(
-                    'email-code-token',
-                    mockResponse.user,
-                    'tenant-123',
-                    { remember: true }
-                );
-            });
-            expect(mockFetch).not.toHaveBeenCalledWith('/api/auth/supabase/sign-in', expect.anything());
-        });
-
-        it('shows a clear error for invalid confirmation codes', async () => {
-            const user = userEvent.setup();
-            (apiClient.confirmEmailLoginCode as any).mockRejectedValueOnce({ response: { status: 401 } });
-
-            render(<LoginPage />);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.click(screen.getByRole('button', { name: /send code/i }));
-            await screen.findByLabelText(/confirmation code/i);
-            await user.type(screen.getByLabelText(/confirmation code/i), '123456');
-            await user.click(screen.getByRole('button', { name: /confirm code/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/invalid or expired confirmation code/i);
-            });
-        });
+    await waitFor(() => {
+      expect(mocks.performPasskeyLogin).toHaveBeenCalledWith('passkey@example.com');
+      expect(mocks.seedPasswordlessClientUser).toHaveBeenCalledWith('passkey@example.com');
+      expect(assign).toHaveBeenCalledWith('/dashboard');
     });
-
-    describe('Successful Login', () => {
-        it('calls API with correct credentials', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(apiClient.login).toHaveBeenCalledWith('test@example.com', 'password123');
-            });
-        });
-
-        it('updates auth context on successful login', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockLogin).toHaveBeenCalledWith(
-                    'test-token',
-                    mockResponse.user,
-                    'tenant-123',
-                    { remember: true }
-                );
-            });
-        });
-
-        it('passes unchecked remember-me choice to auth context', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('checkbox', { name: /remember me/i }));
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockLogin).toHaveBeenCalledWith(
-                    'test-token',
-                    mockResponse.user,
-                    'tenant-123',
-                    { remember: false }
-                );
-            });
-        });
-
-        it('does not require Supabase session sync when browser Supabase config is absent', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (isSupabaseConfigured as any).mockReturnValue(false);
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockLogin).toHaveBeenCalledWith(
-                    'test-token',
-                    mockResponse.user,
-                    'tenant-123',
-                    { remember: true }
-                );
-            });
-            expect(mockFetch).not.toHaveBeenCalledWith(
-                '/api/auth/supabase/sign-in',
-                expect.anything(),
-            );
-            expect(mockPush).toHaveBeenCalledWith('/dashboard');
-        });
-
-        it('submits on Enter from the email field', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByLabelText(/email/i));
-            await user.keyboard('{Enter}');
-
-            await waitFor(() => {
-                expect(apiClient.login).toHaveBeenCalledWith('test@example.com', 'password123');
-            });
-        });
-
-        it('submits on Enter from the password field', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123{Enter}');
-
-            await waitFor(() => {
-                expect(apiClient.login).toHaveBeenCalledWith('test@example.com', 'password123');
-            });
-        });
-
-        it('redirects to dashboard for regular users', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/dashboard');
-            });
-        });
-
-        it('redirects to provided safe next path for regular users', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            mockSearchParamGet.mockImplementation((key: string) => {
-                if (key === 'next') return '/dashboard/fsma';
-                return null;
-            });
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/dashboard/fsma');
-            });
-        });
-
-        it('redirects to a protected report deep link after login', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            mockSearchParamGet.mockImplementation((key: string) => {
-                if (key === 'next') return '/reports/abc123';
-                return null;
-            });
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/reports/abc123');
-            });
-        });
-
-        it('redirects to Inflow Lab when login was started from the dashboard Inflow Lab route', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            mockSearchParamGet.mockImplementation((key: string) => {
-                if (key === 'next') return '/dashboard/inflow-lab';
-                return null;
-            });
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/dashboard/inflow-lab');
-            });
-        });
-
-        it('falls back to dashboard when next path is unsafe', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-
-            mockSearchParamGet.mockImplementation((key: string) => {
-                if (key === 'next') return 'https://example.com/phish';
-                return null;
-            });
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password123');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/dashboard');
-            });
-        });
-
-        it('redirects to sysadmin dashboard for admin users', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'admin-token',
-                user: { id: '456', email: 'admin@example.com', is_sysadmin: true },
-                tenant_id: 'tenant-456',
-            };
-
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'admin@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'adminpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/sysadmin');
-            });
-        });
-
-        it('redirects authenticated users away from login on mount', async () => {
-            (useAuth as any).mockReturnValue({
-                login: mockLogin,
-                clearCredentials: mockClearCredentials,
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                isHydrated: true,
-            });
-
-            render(<LoginPage />);
-
-            await waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/dashboard');
-            });
-        });
+  });
+});
+
+describe('OTP verification', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.verifyEmailChallenge.mockResolvedValue(undefined);
+  });
+
+  it('rejects malformed codes before calling the API', async () => {
+    const user = userEvent.setup();
+    render(
+      <VerifyClient
+        initialEmail="user@example.com"
+        initialChallengeId="11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/verification code/i), '123');
+    await user.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/6-digit code/i);
+    expect(mocks.verifyEmailChallenge).not.toHaveBeenCalled();
+  });
+
+  it('verifies the OTP challenge and navigates to the dashboard', async () => {
+    const assign = mockLocationAssign();
+    const user = userEvent.setup();
+    render(
+      <VerifyClient
+        initialEmail="user@example.com"
+        initialChallengeId="11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/verification code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+    await waitFor(() => {
+      expect(mocks.verifyEmailChallenge).toHaveBeenCalledWith(
+        '11111111-1111-4111-8111-111111111111',
+        '123456',
+      );
+      expect(mocks.seedPasswordlessClientUser).toHaveBeenCalledWith('user@example.com');
+      expect(assign).toHaveBeenCalledWith('/dashboard');
     });
-
-    describe('Error Handling', () => {
-        it('shows error message for invalid credentials (401)', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 401 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/invalid email or password/i);
-            });
-        });
-
-        it('shows error message for disabled account (403)', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 403 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'disabled@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/account access disabled/i);
-            });
-        });
-
-        it('shows lockout message for 423 with backend detail when present', async () => {
-            const user = userEvent.setup();
-            const error = {
-                response: {
-                    status: 423,
-                    data: {
-                        detail: 'Account temporarily locked due to repeated failed login attempts. Contact support or wait 24 hours.',
-                    },
-                },
-            };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'locked@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/temporarily locked/i);
-            });
-        });
-
-        it('shows throttle message for 429 progressive cool-down', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 429 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'slowdown@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/too many sign-in attempts/i);
-            });
-        });
-
-        it('shows generic error for server errors (500)', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 500 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/unexpected error occurred/i);
-            });
-            expect(screen.getByLabelText(/email/i)).toHaveValue('test@example.com');
-            expect(screen.getByLabelText(/^password$/i)).toHaveValue('password');
-        });
-
-        it('shows string error detail when backend returns plain text', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 500, data: '  Upstream admin auth timeout  ' } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent('Upstream admin auth timeout');
-            });
-        });
-
-        it('shows generic error for network failures', async () => {
-            const user = userEvent.setup();
-            const error = new Error('Network error');
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            const passwordInput = screen.getByLabelText(/^password$/i);
-
-            await user.type(emailInput, 'test@example.com');
-            await user.type(passwordInput, 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(/unexpected error occurred/i);
-            });
-            expect(emailInput).toHaveValue('test@example.com');
-            expect(passwordInput).toHaveValue('password');
-        });
-
-        it('shows session establishment errors instead of the generic fallback', async () => {
-            const user = userEvent.setup();
-            const mockResponse = {
-                access_token: 'test-token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            };
-            mockLogin.mockRejectedValueOnce(new Error('Session could not be established. Please try again.'));
-            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent(
-                    'Session could not be established. Please try again.',
-                );
-            });
-        });
-
-        it('clears error when submitting again', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 401 } };
-
-            (apiClient.login as any)
-                .mockRejectedValueOnce(error)
-                .mockResolvedValueOnce({
-                    access_token: 'token',
-                    user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                    tenant_id: 'tenant-123',
-                });
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            // First attempt - fails
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('alert')).toBeInTheDocument();
-            });
-
-            // Second attempt - succeeds
-            await user.clear(screen.getByLabelText(/^password$/i));
-            await user.type(screen.getByLabelText(/^password$/i), 'correctpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-            });
-        });
-    });
-
-    describe('Loading States', () => {
-        it('shows loading state during login', async () => {
-            const user = userEvent.setup();
-            let resolveLogin!: (value: unknown) => void;
-            const loginPromise = new Promise((resolve) => {
-                resolveLogin = resolve;
-            });
-
-            (apiClient.login as any).mockReturnValue(loginPromise);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            // Check loading state
-            await waitFor(() => {
-                expect(screen.getByRole('button', { name: /securing session/i })).toBeInTheDocument();
-                expect(screen.getByRole('button', { name: /securing session/i })).toBeDisabled();
-            });
-
-            // Resolve login
-            resolveLogin({
-                access_token: 'token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            });
-
-            await waitFor(() => {
-                expect(screen.queryByRole('button', { name: /securing session/i })).not.toBeInTheDocument();
-            });
-        });
-
-        it('disables inputs during login', async () => {
-            const user = userEvent.setup();
-            let resolveLogin!: (value: unknown) => void;
-            const loginPromise = new Promise((resolve) => {
-                resolveLogin = resolve;
-            });
-
-            (apiClient.login as any).mockReturnValue(loginPromise);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            // Check inputs disabled
-            await waitFor(() => {
-                expect(screen.getByLabelText(/email/i)).toBeDisabled();
-                expect(screen.getByLabelText(/^password$/i)).toBeDisabled();
-            });
-
-            // Resolve login
-            resolveLogin({
-                access_token: 'token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            });
-        });
-
-        it('prevents duplicate login submissions while loading', async () => {
-            const user = userEvent.setup();
-            let resolveLogin!: (value: unknown) => void;
-            const loginPromise = new Promise((resolve) => {
-                resolveLogin = resolve;
-            });
-
-            (apiClient.login as any).mockReturnValue(loginPromise);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'password');
-            await user.dblClick(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByRole('button', { name: /securing session/i })).toBeDisabled();
-            });
-            await user.keyboard('{Enter}');
-            expect(apiClient.login).toHaveBeenCalledTimes(1);
-
-            resolveLogin({
-                access_token: 'token',
-                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
-                tenant_id: 'tenant-123',
-            });
-        });
-    });
-
-    describe('Accessibility', () => {
-        it('tabs from email to password to remember me to submit without traps', async () => {
-            const user = userEvent.setup();
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            const emailInput = screen.getByLabelText(/email/i);
-            const passwordInput = screen.getByLabelText(/^password$/i);
-            const rememberCheckbox = screen.getByRole('checkbox', { name: /remember me/i });
-            const submitButton = screen.getByRole('button', { name: /sign in/i });
-
-            emailInput.focus();
-            expect(emailInput).toHaveFocus();
-            await user.tab();
-            expect(passwordInput).toHaveFocus();
-            await user.tab();
-            expect(rememberCheckbox).toHaveFocus();
-            await user.tab();
-            expect(submitButton).toHaveFocus();
-        });
-
-        it('associates error with inputs via aria-invalid', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 401 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                expect(screen.getByLabelText(/email/i)).toHaveAttribute('aria-invalid', 'true');
-                expect(screen.getByLabelText(/^password$/i)).toHaveAttribute('aria-invalid', 'true');
-            });
-        });
-
-        it('announces errors to screen readers', async () => {
-            const user = userEvent.setup();
-            const error = { response: { status: 401 } };
-
-            (apiClient.login as any).mockRejectedValueOnce(error);
-
-            render(<LoginPage />);
-            await choosePasswordMode(user);
-
-            await user.type(screen.getByLabelText(/email/i), 'wrong@example.com');
-            await user.type(screen.getByLabelText(/^password$/i), 'wrongpass');
-            await user.click(screen.getByRole('button', { name: /sign in/i }));
-
-            await waitFor(() => {
-                const alert = screen.getByRole('alert');
-                expect(alert).toHaveAttribute('aria-live', 'polite');
-            });
-        });
-    });
+  });
+
+  it('shows inline errors for wrong or expired OTP codes', async () => {
+    mocks.verifyEmailChallenge.mockRejectedValueOnce({ response: { status: 401 } });
+    const user = userEvent.setup();
+    render(
+      <VerifyClient
+        initialEmail="user@example.com"
+        initialChallengeId="11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/verification code/i), '123456');
+    await user.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/incorrect or expired/i);
+  });
 });

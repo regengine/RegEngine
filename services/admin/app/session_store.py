@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
@@ -118,6 +119,9 @@ class InMemoryAsyncRedis:
         if ttl_seconds is None:
             return None
         return datetime.now(timezone.utc) + timedelta(seconds=max(int(ttl_seconds), 0))
+
+    def _expiry_ms(self, ttl_ms: int) -> datetime:
+        return datetime.now(timezone.utc) + timedelta(milliseconds=max(int(ttl_ms), 0))
 
     def _purge_expired_locked(self, key: str) -> None:
         item = self._store.get(key)
@@ -264,6 +268,121 @@ class InMemoryAsyncRedis:
             data, _ = self._ensure_type_locked(key, "hash")
             return dict(data)
 
+    async def eval(self, script: str, numkeys: int, *values: Any) -> list[int]:
+        """Evaluate the auth token-bucket Lua scripts for local/dev runs."""
+        keys = [str(value) for value in values[:numkeys]]
+        args = list(values[numkeys:])
+        async with self._lock:
+            if "for i = 1, #KEYS do" in script:
+                return self._eval_multi_token_bucket_locked(keys, args)
+            if 'redis.call("HMGET", key, "tokens", "updated_ms")' in script:
+                return self._eval_token_bucket_locked(keys, args)
+        raise NotImplementedError("InMemoryAsyncRedis only supports auth token-bucket scripts")
+
+    def _read_token_bucket_locked(
+        self,
+        *,
+        key: str,
+        limit: int,
+        window_ms: int,
+        now_ms: int,
+    ) -> tuple[int, int, int]:
+        capacity = limit * 1000
+        data, _ = self._ensure_type_locked(key, "hash")
+        try:
+            tokens = int(data.get("tokens"))
+            updated_ms = int(data.get("updated_ms"))
+        except (TypeError, ValueError):
+            tokens = capacity
+            updated_ms = now_ms
+
+        elapsed_ms = max(0, now_ms - updated_ms)
+        refill = math.floor(elapsed_ms * capacity / window_ms)
+        return min(capacity, tokens + refill), capacity, updated_ms
+
+    def _write_token_bucket_locked(
+        self,
+        *,
+        key: str,
+        tokens: int,
+        now_ms: int,
+        window_ms: int,
+    ) -> None:
+        data, _ = self._ensure_type_locked(key, "hash")
+        data["tokens"] = str(int(tokens))
+        data["updated_ms"] = str(int(now_ms))
+        self._store[key] = {
+            "type": "hash",
+            "value": dict(data),
+            "expires_at": self._expiry_ms(window_ms),
+        }
+
+    def _eval_token_bucket_locked(self, keys: list[str], args: list[Any]) -> list[int]:
+        if len(keys) != 1 or len(args) != 3:
+            raise ValueError("invalid token-bucket eval arguments")
+
+        key = keys[0]
+        limit = int(args[0])
+        window_ms = int(args[1]) * 1000
+        now_ms = int(args[2])
+        tokens, capacity, _updated_ms = self._read_token_bucket_locked(
+            key=key,
+            limit=limit,
+            window_ms=window_ms,
+            now_ms=now_ms,
+        )
+
+        if tokens < 1000:
+            self._write_token_bucket_locked(
+                key=key,
+                tokens=tokens,
+                now_ms=now_ms,
+                window_ms=window_ms,
+            )
+            retry_ms = math.ceil((1000 - tokens) * window_ms / capacity)
+            return [0, tokens, retry_ms]
+
+        remaining = tokens - 1000
+        self._write_token_bucket_locked(
+            key=key,
+            tokens=remaining,
+            now_ms=now_ms,
+            window_ms=window_ms,
+        )
+        return [1, remaining, 0]
+
+    def _eval_multi_token_bucket_locked(self, keys: list[str], args: list[Any]) -> list[int]:
+        if not keys or len(args) != 1 + (len(keys) * 2):
+            raise ValueError("invalid multi token-bucket eval arguments")
+
+        now_ms = int(args[0])
+        states: list[tuple[str, int, int, int]] = []
+        for index, key in enumerate(keys):
+            limit = int(args[1 + (index * 2)])
+            window_ms = int(args[2 + (index * 2)]) * 1000
+            tokens, capacity, _updated_ms = self._read_token_bucket_locked(
+                key=key,
+                limit=limit,
+                window_ms=window_ms,
+                now_ms=now_ms,
+            )
+            states.append((key, tokens, window_ms, capacity))
+            if tokens < 1000:
+                retry_ms = math.ceil((1000 - tokens) * window_ms / capacity)
+                return [0, index + 1, tokens, retry_ms]
+
+        response = [1]
+        for key, tokens, window_ms, _capacity in states:
+            remaining = tokens - 1000
+            self._write_token_bucket_locked(
+                key=key,
+                tokens=remaining,
+                now_ms=now_ms,
+                window_ms=window_ms,
+            )
+            response.append(remaining)
+        return response
+
     async def sadd(self, key: str, *values: Any) -> int:
         async with self._lock:
             data, expires_at = self._ensure_type_locked(key, "set")
@@ -353,7 +472,7 @@ class SessionData(BaseModel):
         description=(
             "User's token_version captured when this session generation was "
             "issued. /refresh rejects the session when the user's current "
-            "token_version has advanced past it (logout-all / password reset)."
+            "token_version has advanced past it (logout-all / account-security invalidation)."
         ),
     )
     is_revoked: bool = Field(default=False, description="Whether session is revoked")
@@ -817,8 +936,7 @@ class RedisSessionStore:
 
         Args:
             user_id: User to revoke sessions for
-            except_session_id: If provided, skip revoking this session (used by
-                password-change to keep the caller's own session alive — #1088).
+            except_session_id: If provided, skip revoking this session.
 
         Returns:
             Number of sessions revoked
@@ -853,7 +971,7 @@ class RedisSessionStore:
 
     # Alias kept for mission-brief compatibility and clarity at call sites.
     async def revoke_all_for_user(self, user_id: UUID) -> int:
-        """See :py:meth:`revoke_all_user_sessions`. Alias used by password-reset and logout-all flows."""
+        """See :py:meth:`revoke_all_user_sessions`. Alias used by account-security flows."""
         return await self.revoke_all_user_sessions(user_id)
 
     async def cleanup_expired_sessions(self, user_id: UUID) -> int:

@@ -11,6 +11,8 @@ the drift cannot silently reopen:
 * The boot-time object-storage probe is wired into the lifespan (#2348).
 * The ``X-FSMA-204-Traceability`` response header is stamped on every
   response (admin-route parity).
+* The embedded-scheduler ``/v1/scheduler/status`` diagnostic is restored,
+  auth-guarded and leader-only (#1255).
 """
 
 from __future__ import annotations
@@ -100,3 +102,135 @@ def test_fsma_traceability_header_on_responses(server_main):
     client = TestClient(server_main.app)
     resp = client.get("/health")
     assert resp.headers.get("X-FSMA-204-Traceability") == "true"
+
+
+# ---------------------------------------------------------------------------
+# #1255 — embedded-scheduler /status diagnostic (leader-only, auth-guarded)
+# ---------------------------------------------------------------------------
+
+
+class _FakeScrape:
+    def __init__(self, *, success, items_found, scraped_at, error_message=None, warnings=None):
+        self.success = success
+        self.items_found = items_found
+        self.scraped_at = scraped_at
+        self.error_message = error_message
+        self.warnings = warnings or []
+
+
+class _FakeSource:
+    def __init__(self, value):
+        self.value = value
+
+
+class _FakeService:
+    def __init__(self, last_results):
+        self.last_results = last_results
+
+
+class _FakeRunner:
+    def __init__(self, *, is_leader, current_service=None):
+        self.is_leader = is_leader
+        self.current_service = current_service
+
+
+def test_scheduler_status_requires_auth(server_main):
+    client = TestClient(server_main.app)
+    assert client.get("/v1/scheduler/status").status_code == 403
+
+
+def test_scheduler_status_rejects_wrong_metrics_key(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "wrong"})
+    assert resp.status_code == 403
+
+
+def test_scheduler_status_disabled_when_no_runner(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    # No runner on app.state (lifespan not entered) → disabled.
+    monkeypatch.setattr(server_main.app.state, "embedded_scheduler", None, raising=False)
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "disabled"
+
+
+def test_scheduler_status_standby_when_not_leader(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setattr(server_main.app.state, "embedded_scheduler", _FakeRunner(is_leader=False), raising=False)
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "standby"
+
+
+def test_scheduler_status_starting_when_leader_has_no_service(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setattr(
+        server_main.app.state,
+        "embedded_scheduler",
+        _FakeRunner(is_leader=True, current_service=None),
+        raising=False,
+    )
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    assert resp.json() == {"service": "scheduler", "status": "starting"}
+
+
+def test_scheduler_status_leader_returns_circuit_and_scrape_state(server_main, monkeypatch):
+    from datetime import datetime, timezone
+
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+
+    scraped = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    service = _FakeService(
+        {
+            _FakeSource("fda_recalls"): _FakeScrape(
+                success=True, items_found=7, scraped_at=scraped, warnings=["parser_mismatch_suspected"]
+            ),
+            _FakeSource("import_alerts"): _FakeScrape(
+                success=False, items_found=0, scraped_at=scraped, error_message="timeout"
+            ),
+        }
+    )
+    monkeypatch.setattr(
+        server_main.app.state,
+        "embedded_scheduler",
+        _FakeRunner(is_leader=True, current_service=service),
+        raising=False,
+    )
+
+    # The route imports circuit_registry lazily from this module at call time.
+    import services.scheduler.app.circuit_breaker as cb
+
+    class _FakeRegistry:
+        def get_all_status(self):
+            return {"fda_recalls": {"state": "closed"}}
+
+    monkeypatch.setattr(cb, "circuit_registry", _FakeRegistry())
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["circuit_breakers"] == {"fda_recalls": {"state": "closed"}}
+    assert body["last_scrapes"]["fda_recalls"] == {
+        "success": True,
+        "count": 7,
+        "scraped_at": scraped.isoformat(),
+        "error": None,
+        "warnings": ["parser_mismatch_suspected"],
+    }
+    assert body["last_scrapes"]["import_alerts"]["error"] == "timeout"

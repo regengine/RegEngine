@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 
-function ThrowSensitiveError() {
+function ThrowSensitiveError(): ReactNode {
     throw new Error('Database password leaked in stack details');
 }
 

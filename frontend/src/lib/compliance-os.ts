@@ -241,7 +241,7 @@ export const complianceRouteFamilies: Record<RouteFamily, RouteFamilyConfig> = {
   },
   authOnboarding: {
     label: "Auth and onboarding",
-    routes: ["/login", "/signup", "/onboarding", "/forgot-password", "/reset-password"],
+    routes: ["/login", "/signup", "/onboarding", "/auth/verify"],
     density: "low",
     shell: "Trust-first setup",
     rule: "Use low-density confidence cues, progress rails, and infrastructure setup language.",

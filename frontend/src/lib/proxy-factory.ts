@@ -202,7 +202,7 @@ export interface StreamProxyConfig {
     methods?: HttpMethod[];
     /** Should we retry this response against the next target base? */
     shouldRetry?: (response: Response, path: string) => boolean;
-    /** Optional: paths that skip the auth + session checks (used for admin/auth/login etc.). */
+    /** Optional: paths that skip the auth + session checks (used for passwordless auth starts). */
     isUnauthenticatedPath?: (path: string) => boolean;
     /** Maximum request body bytes buffered for retryable stream proxy forwarding. */
     maxBodyBytes?: number;
@@ -214,6 +214,7 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
     'cache-control',
     'x-fda-record-count',
 ];
+const AUTH_BROWSER_NONCE_COOKIE = 'regengine_auth_browser_nonce';
 
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 const SYSTEM_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -274,6 +275,28 @@ async function readRequestBodyWithLimit(
         offset += chunk.byteLength;
     }
     return merged.buffer;
+}
+
+function getSetCookieHeaders(headers: Headers): string[] {
+    const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+    const setCookies = withGetSetCookie.getSetCookie?.();
+    if (setCookies && setCookies.length > 0) {
+        return setCookies;
+    }
+
+    const singleHeader = headers.get('set-cookie');
+    return singleHeader ? [singleHeader] : [];
+}
+
+function rewriteProxiedSetCookie(cookie: string): string {
+    if (!cookie.trim().toLowerCase().startsWith(`${AUTH_BROWSER_NONCE_COOKIE.toLowerCase()}=`)) {
+        return cookie;
+    }
+
+    if (/;\s*path=/i.test(cookie)) {
+        return cookie.replace(/;\s*path=[^;]*/i, '; Path=/api/admin/auth');
+    }
+    return `${cookie}; Path=/api/admin/auth`;
 }
 
 export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
@@ -361,6 +384,9 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                         const value = response.headers.get(name);
                         if (value) outgoing.set(name, value);
                     }
+                    for (const cookie of getSetCookieHeaders(response.headers)) {
+                        outgoing.append('set-cookie', rewriteProxiedSetCookie(cookie));
+                    }
 
                     if (process.env.NODE_ENV !== 'production') {
                         console.warn(`[proxy/${config.serviceName}] ${method} ${path} → ${response.status}`);
@@ -446,9 +472,8 @@ export function passthroughRequestHeaders(
  *    - X-Tenant-ID: {re_tenant_id}
  *
  *  When `respectExistingAuthHeader` is true, an incoming Authorization header
- *  wins over the cookie — used by recovery flows (password reset) where the
- *  caller passes a Supabase token that must not be clobbered by a stale
- *  RegEngine session cookie.
+ *  wins over the cookie when a route explicitly needs to preserve a caller
+ *  supplied bearer token.
  */
 export function applyCookieCredentials(
     headers: Headers,
