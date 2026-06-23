@@ -25,6 +25,8 @@ UUID = postgresql.UUID(as_uuid=True)
 
 
 def upgrade() -> None:
+    op.execute("SET search_path TO public, fsma")
+
     op.add_column(
         "users",
         sa.Column("global_status", sa.String(), nullable=False, server_default="active"),
@@ -164,6 +166,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("SET search_path TO public, fsma")
+
     op.drop_index("ix_sessions_expires_at", table_name="sessions")
     op.drop_index("ix_sessions_auth_method", table_name="sessions")
     op.drop_index("ix_sessions_token_hash", table_name="sessions")
