@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import hmac
+import html
 import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-import hmac
 from pathlib import Path
 from typing import Protocol
 
@@ -30,8 +31,8 @@ from ..sqlalchemy_models import (
     UserEmailModel,
     UserModel,
 )
-from .session_auth import AUTH_SESSION_COOKIE, get_auth_crypto_service
 from .schemas import ChallengeCreateRequest, ChallengeCreateResponse, ChallengeVerifyRequest, ChallengeVerifyResponse
+from .session_auth import AUTH_SESSION_COOKIE, get_auth_crypto_service
 
 router = APIRouter()
 logger = structlog.get_logger("auth.challenges")
@@ -94,25 +95,85 @@ def _unauthorized_challenge() -> HTTPException:
 
 
 def _dispatch_sign_in_code_email(email: str, code: str, challenge_id: uuid.UUID) -> None:
-    """Mock worker handoff for sign-in code email delivery.
+    """Worker handoff for sign-in code email delivery.
 
     The plaintext code intentionally only crosses this worker boundary and is
     never persisted in the auth_challenges table.
     """
-    _record_e2e_sign_in_code(email=email, code=code, challenge_id=challenge_id)
-    logger.info(
-        "auth_challenge_email_dispatch_queued",
-        challenge_id=str(challenge_id),
-        email=mask_email(email),
-    )
-    del code
+    recorded_e2e_outbox = _record_e2e_sign_in_code(email=email, code=code, challenge_id=challenge_id)
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if not resend_api_key:
+        if recorded_e2e_outbox:
+            logger.info(
+                "auth_challenge_email_recorded_e2e_outbox",
+                challenge_id=str(challenge_id),
+                email=mask_email(email),
+            )
+        else:
+            logger.error(
+                "auth_challenge_email_skipped_missing_resend_api_key",
+                challenge_id=str(challenge_id),
+                email=mask_email(email),
+            )
+        return
+
+    try:
+        import resend
+    except ImportError:
+        logger.error(
+            "auth_challenge_email_skipped_resend_not_installed",
+            challenge_id=str(challenge_id),
+            email=mask_email(email),
+        )
+        return
+
+    resend.api_key = resend_api_key
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@regengine.co")
+    safe_code = html.escape(code, quote=True)
+
+    try:
+        response = resend.Emails.send(
+            {
+                "from": from_email,
+                "to": email,
+                "subject": "Your RegEngine sign-in code",
+                "html": (
+                    "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>"
+                    "<h2 style='color: #111827;'>Your RegEngine sign-in code</h2>"
+                    "<p style='color: #374151; line-height: 1.6;'>"
+                    "Enter this confirmation code to finish signing in:"
+                    "</p>"
+                    "<p style='font-size: 32px; letter-spacing: 6px; font-weight: 700; color: #111827;'>"
+                    f"{safe_code}"
+                    "</p>"
+                    "<p style='color: #6b7280; font-size: 13px;'>"
+                    "This code expires in 10 minutes. If you did not request it, you can ignore this email."
+                    "</p>"
+                    "</div>"
+                ),
+            }
+        )
+        response_id = getattr(response, "id", None) or (response.get("id") if isinstance(response, dict) else None)
+        logger.info(
+            "auth_challenge_email_sent",
+            challenge_id=str(challenge_id),
+            email=mask_email(email),
+            resend_id=response_id,
+        )
+    except Exception as exc:  # pragma: no cover - external SDK/network behavior
+        logger.warning(
+            "auth_challenge_email_send_failed",
+            challenge_id=str(challenge_id),
+            email=mask_email(email),
+            error=str(exc),
+        )
 
 
-def _record_e2e_sign_in_code(*, email: str, code: str, challenge_id: uuid.UUID) -> None:
+def _record_e2e_sign_in_code(*, email: str, code: str, challenge_id: uuid.UUID) -> bool:
     """Write the plaintext OTP to the Playwright-only outbox fixture."""
     outbox_path = os.getenv("REGENGINE_E2E_EMAIL_OUTBOX")
     if not outbox_path or not e2e_mode_enabled():
-        return
+        return False
 
     record = {
         "kind": "auth_challenge",
@@ -125,6 +186,7 @@ def _record_e2e_sign_in_code(*, email: str, code: str, challenge_id: uuid.UUID) 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as outbox:
         outbox.write(json.dumps(record, sort_keys=True) + "\n")
+    return True
 
 
 @router.post(
