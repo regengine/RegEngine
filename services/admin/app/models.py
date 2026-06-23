@@ -331,26 +331,6 @@ class RevokeAllSessionsResponse(BaseModel):
     revoked_count: int
 
 
-class RegisterAdminResponse(BaseModel):
-    """Response for initial admin registration."""
-
-    message: str
-    user_id: str
-    tenant_id: str
-
-
-class ChangePasswordResponse(BaseModel):
-    """Response for password change."""
-
-    status: str
-
-
-class ResetPasswordResponse(BaseModel):
-    """Response for password reset."""
-
-    status: str
-
-
 class TenantContext:
     """Helper class for managing tenant context in database sessions.
 

@@ -1,6 +1,6 @@
 /**
  * Tests for safeNextPath — the `next` query-param validator used by
- * /auth/callback and any other relative-redirect call sites.
+ * relative-redirect call sites.
  *
  * Closes RE-FE-AUDIT-002 / OQ-2 (next-param redirect hygiene).
  */
@@ -17,7 +17,6 @@ describe('safeNextPath', () => {
             '/foo/bar?x=y&z=1',
             '/foo#anchor',
             '/developer/portal',
-            '/reset-password',
             '/'.padEnd(256, 'a'), // exactly 256 chars — boundary
         ])('returns input for %s', (input) => {
             expect(safeNextPath(input, FALLBACK)).toBe(input);

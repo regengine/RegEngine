@@ -24,7 +24,7 @@ from .session_store import InMemorySessionStore, RedisSessionStore, redact_conne
 from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/email-code/confirm")
 
 logger = structlog.get_logger("auth_dependency")
 
@@ -177,7 +177,7 @@ async def get_current_user(
     local_session_id: Optional[UUID] = None
 
     # 1. Try Supabase Auth first. RegEngine also issues its own signed JWTs
-    # from /auth/login and /auth/email-code/confirm, so a Supabase "invalid
+    # from passwordless auth flows, so a Supabase "invalid
     # JWT" response is not final by itself; it may simply mean this is a
     # RegEngine session token. Infrastructure failures still fail closed in
     # production below.
@@ -321,7 +321,7 @@ async def get_current_user(
         )
 
     # SECURITY (#1860): enforce token_version. /auth/logout-all and
-    # /auth/reset-password bump user.token_version expecting this check;
+    # logout-all and account security events bump user.token_version expecting this check;
     # without it, stolen access tokens survive both for their full TTL.
     user_tv = _parse_token_version(getattr(user, "token_version", None)) or 0
     if token_version_claim is not None:

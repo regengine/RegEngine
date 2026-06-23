@@ -9,22 +9,24 @@ export const revalidate = 0;
 // 10K-row commits with SHA-256 hashing + Merkle tree can take 2-3 minutes.
 export const maxDuration = 300;
 
-// Auth endpoints are unauthenticated by design — login, signup, refresh, and
-// the bootstrap register route must be reachable before any credentials exist.
+// Auth endpoints are unauthenticated by design when they start or complete a
+// passwordless ceremony. Protected WebAuthn registration and admin routes use
+// the backend's opaque session cookie.
 const UNAUTHENTICATED_AUTH_PATHS = new Set([
-    'auth/login',
-    'auth/email-code/request',
-    'auth/email-code/confirm',
-    'auth/signup',
+    'auth/challenges',
+    'auth/webauthn/login/generate-options',
+    'auth/webauthn/login/verify',
     'auth/refresh',
     'auth/register',
-    'auth/forgot-password',
     'auth/accept-invite',
     'v1/auth/accept-invite',
-    // Password reset — caller passes a Supabase recovery token, not a RegEngine JWT.
-    // Backend validates it via sb.auth.get_user(); no RegEngine session required.
-    'auth/reset-password',
 ]);
+
+const AUTH_CHALLENGE_VERIFY_PATH = /^auth\/challenges\/[0-9a-fA-F-]{36}\/verify$/;
+const AUTH_COOKIES_TO_FORWARD = [
+    '__Host-regengine_session',
+    'regengine_auth_browser_nonce',
+] as const;
 
 function getAdminTargets(): string[] {
     const candidates = resolveAdminTargets(process.env);
@@ -41,11 +43,28 @@ function getAdminTargets(): string[] {
     return candidates;
 }
 
+function isUnauthenticatedAuthPath(path: string): boolean {
+    return UNAUTHENTICATED_AUTH_PATHS.has(path) || AUTH_CHALLENGE_VERIFY_PATH.test(path);
+}
+
+function appendSelectedCookies(headers: Headers, request: NextRequest): void {
+    const cookies = AUTH_COOKIES_TO_FORWARD
+        .map((name) => {
+            const value = request.cookies.get(name)?.value;
+            return value ? `${name}=${value}` : null;
+        })
+        .filter((cookie): cookie is string => cookie !== null);
+
+    if (cookies.length > 0) {
+        headers.set('cookie', cookies.join('; '));
+    }
+}
+
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'admin',
     resolveTargetBases: getAdminTargets,
     shouldRetry: shouldRetryAdminProxyResponse,
-    isUnauthenticatedPath: (path) => UNAUTHENTICATED_AUTH_PATHS.has(path),
+    isUnauthenticatedPath: isUnauthenticatedAuthPath,
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();
         const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
@@ -65,10 +84,8 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         ]);
 
         // Inject access token from HTTP-only cookie as Bearer token.
-        // Respect an existing Authorization header so recovery flows
-        // (auth/reset-password) pass a Supabase token that must not be
-        // overwritten by a stale RegEngine cookie.
         applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
+        appendSelectedCookies(headers, request);
 
         return headers;
     },
