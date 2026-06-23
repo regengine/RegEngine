@@ -27,6 +27,10 @@ assert_legacy_entrypoint_not_in_production("admin")
 
 require_env("ADMIN_DATABASE_URL")
 
+from app.e2e_safety import assert_e2e_mode_allowed
+
+assert_e2e_mode_allowed()
+
 # Sentry error tracking (must be before app creation)
 from shared.error_handling import init_sentry
 
@@ -87,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Continue - can fall back to static keys
 
     # Supabase credential check — warn loudly if missing so Railway logs surface the issue.
-    # Missing credentials cause /reset-password and token-validation to return 503.
+    # Missing credentials cause Supabase token-validation fallback paths to return 503.
     _sb_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
     _sb_key = (
         os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -101,7 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             detail=(
                 "SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and "
                 "SUPABASE_SERVICE_ROLE_KEY are not set. "
-                "Password reset and Supabase token validation will return 503. "
+                "Supabase token validation will return 503. "
                 "Set these variables in Railway → admin service → Variables."
             ),
         )
@@ -332,9 +336,9 @@ from app.auth_routes import router as auth_router
 
 app.include_router(auth_router)
 
-from app.password_reset_routes import router as password_reset_router
+from app.admin.organizations_router import router as admin_organizations_router
 
-app.include_router(password_reset_router)
+app.include_router(admin_organizations_router)
 
 from app.invite_routes import router as invite_router
 

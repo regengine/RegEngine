@@ -152,8 +152,8 @@ describe('API Security Tests', () => {
                 return url;
             };
 
-            expect(enforceHTTPS('http://api.example.com/api/auth/login'))
-                .toBe('https://api.example.com/api/auth/login');
+            expect(enforceHTTPS('http://api.example.com/api/admin/auth/challenges'))
+                .toBe('https://api.example.com/api/admin/auth/challenges');
         });
     });
 
@@ -181,16 +181,16 @@ describe('API Security Tests', () => {
 
             // Make requests up to limit
             for (let i = 0; i < RATE_LIMIT + 2; i++) {
-                await fetch('/api/auth/login', {
+                await fetch('/api/admin/auth/challenges', {
                     method: 'POST',
-                    body: JSON.stringify({ email: 'test@test.com', password: 'wrong' }),
+                    body: JSON.stringify({ email: 'test@test.com' }),
                 });
             }
 
             expect(requestCount).toBe(RATE_LIMIT + 2);
 
             // Verify last request was rate limited
-            const lastResponse = await fetch('/api/auth/login', { method: 'POST' });
+            const lastResponse = await fetch('/api/admin/auth/challenges', { method: 'POST' });
             expect(lastResponse.status).toBe(429);
         });
     });

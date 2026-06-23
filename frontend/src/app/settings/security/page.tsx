@@ -1,229 +1,234 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Shield, Lock, Key, Smartphone, ArrowLeft, Clock, Loader2, CheckCircle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { ArrowLeft, Clock, Fingerprint, Key, Loader2, Shield, ShieldCheck, Smartphone } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { registerPasskey } from '@/lib/passwordless-auth';
 
-const MIN_PASSWORD_LENGTH = 12;
-
-const PLANNED_FEATURES = [
-    {
-        icon: Smartphone,
-        title: 'Two-Factor Authentication (2FA)',
-        description:
-            'Add a second layer of protection with TOTP authenticator apps (Google Authenticator, Authy, 1Password) or hardware security keys via WebAuthn.',
-        eta: 'Q2 2026',
-    },
-    {
-        icon: Key,
-        title: 'Session Management',
-        description:
-            'View and revoke active sessions across all your devices. See login history with device type, location, and IP address.',
-        eta: 'Q3 2026',
-    },
-    {
-        icon: Shield,
-        title: 'Security Audit Log',
-        description:
-            'A detailed, searchable log of all security-relevant events on your account including logins, permission changes, and API key usage.',
-        eta: 'Q3 2026',
-    },
+const SECURITY_CAPABILITIES = [
+  {
+    icon: Fingerprint,
+    title: 'Passkey step-up',
+    description:
+      'Sensitive admin actions require WebAuthn or SSO-backed sessions. Email-code sessions are blocked until the user authenticates with a passkey.',
+    eta: 'Active',
+  },
+  {
+    icon: Key,
+    title: 'Session management',
+    description:
+      'Active sessions are stored server-side and can be revoked centrally as session management expands.',
+    eta: 'Next',
+  },
+  {
+    icon: Shield,
+    title: 'Security audit log',
+    description:
+      'Security-relevant events such as logins, policy changes, and session revocation will be surfaced here.',
+    eta: 'Planned',
+  },
 ];
 
 export default function SecuritySettingsPage() {
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState(false);
+  const { authMethod, isHighAssuranceSession, tenantId, user } = useAuth();
+  const [policyStatus, setPolicyStatus] = useState<string | null>(null);
+  const [passkeyStatus, setPasskeyStatus] = useState<string | null>(null);
+  const [isCheckingPolicy, setIsCheckingPolicy] = useState(false);
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
 
-    const handleChangePassword = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-        setSuccess(false);
+  const handleRegisterPasskey = async () => {
+    setIsRegisteringPasskey(true);
+    setPasskeyStatus(null);
+    try {
+      await registerPasskey();
+      setPasskeyStatus('Passkey registered. You can now use it for high-assurance actions.');
+    } catch (err: unknown) {
+      setPasskeyStatus(err instanceof Error ? err.message : 'Passkey registration failed.');
+    } finally {
+      setIsRegisteringPasskey(false);
+    }
+  };
 
-        if (newPassword !== confirmPassword) {
-            setError('New passwords do not match.');
-            return;
-        }
+  const handleAdminPolicyAccessCheck = async () => {
+    const domainName = user?.email?.split('@')[1]?.toLowerCase() || 'example.test';
+    if (!tenantId) {
+      setPolicyStatus('No active organization is available for this session.');
+      return;
+    }
 
-        if (newPassword.length < MIN_PASSWORD_LENGTH) {
-            setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-            return;
-        }
+    setIsCheckingPolicy(true);
+    setPolicyStatus(null);
+    try {
+      await apiClient.updateOrganizationSsoPolicy(tenantId, {
+        domain_name: domainName,
+        domain_verified: false,
+        enforced_auth_policy: 'standard',
+      });
+      setPolicyStatus('High-assurance organization policy access confirmed.');
+    } catch {
+      setPolicyStatus('Passkey authentication is required to change organization policy.');
+    } finally {
+      setIsCheckingPolicy(false);
+    }
+  };
 
-        setIsLoading(true);
-        try {
-            await apiClient.changePassword(currentPassword, newPassword);
-            setSuccess(true);
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-        } catch (err: unknown) {
-            const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
-            if (axiosError.response?.status === 401) {
-                setError('Current password is incorrect.');
-            } else if (axiosError.response?.data?.detail) {
-                setError(axiosError.response.data.detail);
-            } else if (axiosError.response?.status === 429) {
-                setError('Too many attempts. Please wait a moment and try again.');
-            } else {
-                setError('An unexpected error occurred. Please try again.');
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    };
+  return (
+    <div className="min-h-screen bg-[var(--re-surface-base)]">
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+        <Link
+          href="/dashboard/settings"
+          className="mb-6 inline-flex items-center text-sm text-muted-foreground hover:text-primary"
+        >
+          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+          Back to Settings
+        </Link>
 
-    return (
-        <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-                {/* Breadcrumb */}
-                <Link
-                    href="/dashboard/settings"
-                    className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6"
-                >
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    Back to Settings
-                </Link>
-
-                {/* Page Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl sm:text-4xl font-bold mb-2">Security Settings</h1>
-                    <p className="text-muted-foreground">
-                        Manage your password and security preferences
-                    </p>
-                </div>
-
-                {/* Change Password */}
-                <Card className="mb-8">
-                    <CardHeader>
-                        <div className="flex items-center gap-2">
-                            <Lock className="h-5 w-5 text-primary" />
-                            <CardTitle>Change Password</CardTitle>
-                        </div>
-                        <CardDescription>
-                            Update your account password.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-                            {error && (
-                                <div
-                                    role="alert"
-                                    className="rounded-md border border-re-danger bg-re-danger-muted p-3 text-sm text-re-danger dark:border-re-danger dark:bg-re-danger/10"
-                                >
-                                    {error}
-                                </div>
-                            )}
-
-                            {success && (
-                                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-re-success-muted p-3 text-sm text-re-success dark:border-green-800 dark:bg-re-success/10 dark:text-re-success">
-                                    <CheckCircle className="h-4 w-4" />
-                                    Password changed successfully.
-                                </div>
-                            )}
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none" htmlFor="currentPassword">
-                                    Current Password
-                                </label>
-                                <Input
-                                    id="currentPassword"
-                                    type="password"
-                                    value={currentPassword}
-                                    onChange={(e) => setCurrentPassword(e.target.value)}
-                                    disabled={isLoading}
-                                    required
-                                    autoComplete="current-password"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none" htmlFor="newPassword">
-                                    New Password
-                                </label>
-                                <Input
-                                    id="newPassword"
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    disabled={isLoading}
-                                    required
-                                    minLength={MIN_PASSWORD_LENGTH}
-                                    autoComplete="new-password"
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium leading-none" htmlFor="confirmPassword">
-                                    Confirm New Password
-                                </label>
-                                <Input
-                                    id="confirmPassword"
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    disabled={isLoading}
-                                    required
-                                    minLength={MIN_PASSWORD_LENGTH}
-                                    autoComplete="new-password"
-                                />
-                            </div>
-
-                            <p className="text-xs text-muted-foreground">
-                                At least {MIN_PASSWORD_LENGTH} characters with uppercase, lowercase, digit, and special character.
-                            </p>
-
-                            <Button type="submit" disabled={isLoading}>
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Changing...
-                                    </>
-                                ) : (
-                                    'Change Password'
-                                )}
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
-
-                {/* Planned Features */}
-                <div className="mb-6">
-                    <h2 className="text-lg font-semibold mb-1">Planned Security Features</h2>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        The following features are on our roadmap and will be available in upcoming releases.
-                    </p>
-                </div>
-
-                <div className="grid gap-4">
-                    {PLANNED_FEATURES.map((feature) => (
-                        <Card key={feature.title} className="border-dashed">
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <feature.icon className="h-5 w-5 text-muted-foreground" />
-                                        <CardTitle className="text-base">{feature.title}</CardTitle>
-                                    </div>
-                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                                        <Clock className="h-3 w-3" />
-                                        {feature.eta}
-                                    </span>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">{feature.description}</p>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            </div>
+        <div className="mb-8">
+          <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Security Settings</h1>
+          <p className="text-muted-foreground">
+            Manage high-assurance access for your RegEngine account.
+          </p>
         </div>
-    );
+
+        <Card className="mb-8 border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
+              <CardTitle>Passwordless authentication</CardTitle>
+            </div>
+            <CardDescription>
+              RegEngine now uses email codes, passkeys, and SSO routing instead of account passwords.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-4 text-sm leading-6 text-[var(--re-text-secondary)]">
+              Password changes are no longer available because passwords are no longer accepted for sign-in.
+              Use a passkey when prompted for high-assurance routes.
+            </div>
+            <Button asChild className="gap-2">
+              <Link href="/login">
+                <Smartphone className="h-4 w-4" aria-hidden="true" />
+                Manage sign-in from login
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={handleRegisterPasskey}
+              disabled={isRegisteringPasskey}
+            >
+              {isRegisteringPasskey ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Registering passkey...
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="h-4 w-4" aria-hidden="true" />
+                  Register Passkey
+                </>
+              )}
+            </Button>
+            {passkeyStatus && (
+              <div role="status" className="border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm text-[var(--re-text-secondary)]">
+                {passkeyStatus}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mb-8 border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Fingerprint className="h-5 w-5 text-primary" aria-hidden="true" />
+              <CardTitle>Enterprise policy access</CardTitle>
+            </div>
+            <CardDescription>
+              Organization SSO policy changes require a passkey or SSO-backed session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[var(--re-text-muted)]">
+                  Current assurance
+                </div>
+                <div className="mt-1 font-medium text-[var(--re-text-primary)]">
+                  {authMethod || 'Unknown'}
+                </div>
+              </div>
+              <div className="border border-[var(--re-border-subtle)] bg-[var(--re-surface-card)] p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-[var(--re-text-muted)]">
+                  Admin policy state
+                </div>
+                <div className="mt-1 font-medium text-[var(--re-text-primary)]">
+                  {isHighAssuranceSession ? 'Ready' : 'Step-up required'}
+                </div>
+              </div>
+            </div>
+
+            {policyStatus && (
+              <div role="status" className="border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm text-[var(--re-text-secondary)]">
+                {policyStatus}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              className="gap-2"
+              onClick={handleAdminPolicyAccessCheck}
+              disabled={isCheckingPolicy || !tenantId}
+            >
+              {isCheckingPolicy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Checking access...
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="h-4 w-4" aria-hidden="true" />
+                  Verify admin policy access
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <div className="mb-6">
+          <h2 className="mb-1 text-lg font-semibold">Security capabilities</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            The account security surface is shifting to passwordless, server-side sessions, and enterprise policy enforcement.
+          </p>
+        </div>
+
+        <div className="grid gap-4">
+          {SECURITY_CAPABILITIES.map((feature) => (
+            <Card key={feature.title} className="border-dashed">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <feature.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                    <CardTitle className="text-base">{feature.title}</CardTitle>
+                  </div>
+                  <span className="inline-flex items-center gap-1 bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                    <Clock className="h-3 w-3" aria-hidden="true" />
+                    {feature.eta}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{feature.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -25,6 +25,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Optional
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parent
 _SERVICES_DIR = _REPO_ROOT / "services"
 
@@ -281,6 +283,22 @@ def _ensure_default_event_loop() -> None:
 
     if loop.is_closed():
         asyncio.set_event_loop(asyncio.new_event_loop())
+
+
+@pytest.fixture(autouse=True)
+def _reset_in_process_tenant_rate_limit_bucket():
+    """Keep broad pytest runs from sharing anonymous TestClient rate buckets.
+
+    Individual rate-limit tests still exercise blocking behavior inside a
+    single test. This only clears state between tests, matching how isolated
+    test processes behaved before the full-suite runner was wired up.
+    """
+    try:
+        import shared.tenant_rate_limiting as tenant_rate_limiting
+
+        tenant_rate_limiting._bucket = tenant_rate_limiting._InMemoryBucket()
+    except Exception:
+        pass
 
 
 def pytest_collectstart(collector):  # type: ignore[no-untyped-def]

@@ -53,7 +53,7 @@ const TOC = [
 const SUBPROCESSORS = [
   {
     name: 'Supabase',
-    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement. Supabase Auth password-reset email is routed through Resend as the SMTP transport.',
+    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement for passwordless sessions.',
     location: 'United States (AWS us-east-2)',
     link: 'https://supabase.com/privacy',
   },
@@ -77,7 +77,7 @@ const SUBPROCESSORS = [
   },
   {
     name: 'Resend',
-    purpose: 'Transactional email delivery (account, billing, compliance alerts, team invites, and Supabase Auth password-reset email via SMTP transport).',
+    purpose: 'Transactional email delivery for account, billing, compliance alerts, team invites, and passwordless sign-in codes.',
     location: 'United States',
     link: 'https://resend.com/legal/privacy-policy',
   },

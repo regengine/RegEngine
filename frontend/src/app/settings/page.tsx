@@ -86,7 +86,7 @@ export default function SettingsPage() {
                             <div className="text-sm">
                                 <div className="font-medium mb-1">Password & Security</div>
                                 <p className="text-muted-foreground text-xs">
-                                    Change password and enable 2FA
+                                    Manage passkeys and sessions
                                 </p>
                             </div>
                             <Link href="/settings/security">

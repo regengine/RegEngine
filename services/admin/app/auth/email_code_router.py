@@ -1,8 +1,7 @@
 """Passwordless email-code login route.
 
 Existing active users can request a short-lived confirmation code by email,
-then exchange that code for the same RegEngine access/refresh tokens issued by
-the password login route.
+then exchange that code for RegEngine access/refresh tokens.
 """
 
 from __future__ import annotations
@@ -69,11 +68,14 @@ async def _store_email_code(
     session_store: RedisSessionStore,
     email: str,
     code: str,
+    *,
+    metadata: dict | None = None,
 ) -> None:
     client = await session_store._get_client()
     payload = {
         "code_hash": _hash_email_code(email, code),
         "attempts": EMAIL_CODE_ATTEMPTS,
+        **(metadata or {}),
     }
     await client.setex(_email_code_key(email), EMAIL_CODE_TTL_SECONDS, json.dumps(payload))
 
@@ -88,11 +90,19 @@ async def _check_email_code(
     email: str,
     code: str,
 ) -> bool:
+    return await _consume_email_code(session_store, email, code) is not None
+
+
+async def _consume_email_code(
+    session_store: RedisSessionStore,
+    email: str,
+    code: str,
+) -> dict | None:
     client = await session_store._get_client()
     key = _email_code_key(email)
     raw = await client.get(key)
     if not raw:
-        return False
+        return None
 
     try:
         payload = json.loads(raw)
@@ -100,11 +110,11 @@ async def _check_email_code(
         code_hash = str(payload["code_hash"])
     except (TypeError, ValueError, KeyError, json.JSONDecodeError):
         await client.delete(key)
-        return False
+        return None
 
     if attempts <= 0:
         await client.delete(key)
-        return False
+        return None
 
     candidate_hash = _hash_email_code(email, code)
     if not hmac.compare_digest(code_hash, candidate_hash):
@@ -114,10 +124,10 @@ async def _check_email_code(
         else:
             payload["attempts"] = attempts
             await client.setex(key, EMAIL_CODE_TTL_SECONDS, json.dumps(payload))
-        return False
+        return None
 
     await client.delete(key)
-    return True
+    return payload
 
 
 def _send_email_login_code(recipient_email: str, code: str) -> bool:
@@ -322,7 +332,12 @@ async def request_email_login_code(
 
     if user and user.status == "active":
         code = _make_email_code()
-        await _store_email_code(session_store, normalized_email, code)
+        await _store_email_code(
+            session_store,
+            normalized_email,
+            code,
+            metadata={"flow": "login"},
+        )
         if not _send_email_login_code(normalized_email, code):
             await _delete_email_code(session_store, normalized_email)
 
@@ -338,7 +353,8 @@ async def confirm_email_login_code(
     session_store: RedisSessionStore = Depends(get_session_store),
 ):
     normalized_email = str(payload.email).strip().lower()
-    if not await _check_email_code(session_store, normalized_email, payload.code.strip()):
+    code_payload = await _consume_email_code(session_store, normalized_email, payload.code.strip())
+    if code_payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=EMAIL_CODE_INVALID_DETAIL,
@@ -346,17 +362,18 @@ async def confirm_email_login_code(
         )
 
     user = _load_user_by_email(db, normalized_email)
+    if user and user.status == "active":
+        logger.info("email_code_login_success", user_id=str(user.id))
+        return await _issue_token_response_for_user(
+            user=user,
+            request=request,
+            db=db,
+            session_store=session_store,
+        )
+
     if not user or user.status != "active":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=EMAIL_CODE_INVALID_DETAIL,
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    logger.info("email_code_login_success", user_id=str(user.id))
-    return await _issue_token_response_for_user(
-        user=user,
-        request=request,
-        db=db,
-        session_store=session_store,
-    )

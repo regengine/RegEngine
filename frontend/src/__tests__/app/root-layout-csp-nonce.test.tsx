@@ -30,6 +30,10 @@ vi.mock('@/components/cookie-consent/CookieBanner', () => ({
     CookieBanner: () => <div>Cookie banner</div>,
 }));
 
+vi.mock('@/components/auth/StepUpModal', () => ({
+    StepUpModal: () => <div>Step-up modal</div>,
+}));
+
 vi.mock('@/components/seo/json-ld', () => ({
     JSONLD: () => <script type="application/ld+json" />,
 }));

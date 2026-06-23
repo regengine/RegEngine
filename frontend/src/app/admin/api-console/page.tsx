@@ -49,7 +49,8 @@ const endpoints: Endpoint[] = [
     { method: 'GET', path: '/metrics', description: 'System metrics', requiresAuth: true, category: 'Health & Metrics' },
 
     // Authentication
-    { method: 'POST', path: '/auth/login', description: 'User login', requiresAuth: false, category: 'Authentication' },
+    { method: 'POST', path: '/auth/challenges', description: 'Start email code sign-in', requiresAuth: false, category: 'Authentication' },
+    { method: 'POST', path: '/auth/webauthn/login/generate-options', description: 'Start passkey sign-in', requiresAuth: false, category: 'Authentication' },
     { method: 'POST', path: '/auth/register', description: 'Register initial admin', requiresAuth: false, category: 'Authentication' },
     { method: 'POST', path: '/auth/refresh', description: 'Refresh session token', requiresAuth: true, category: 'Authentication' },
     { method: 'GET', path: '/auth/me', description: 'Get current user info', requiresAuth: true, category: 'Authentication' },

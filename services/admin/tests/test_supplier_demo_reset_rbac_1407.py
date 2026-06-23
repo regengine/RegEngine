@@ -75,7 +75,6 @@ def _make_db(is_demo: bool) -> tuple[Session, list]:
         UserModel(
             id=TEST_USER_ID,
             email="supplier@example.com",
-            password_hash="hashed",
             status="active",
             is_sysadmin=False,
         )

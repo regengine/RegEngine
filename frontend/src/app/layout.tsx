@@ -4,6 +4,7 @@ import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
 import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
+import { StepUpModal } from '@/components/auth/StepUpModal'
 import { JSONLD } from '@/components/seo/json-ld'
 import type { Metadata, Viewport } from 'next'
 import { headers } from 'next/headers'
@@ -143,6 +144,7 @@ export default async function RootLayout({
             {children}
           </main>
           <AuthAwareFooter />
+          <StepUpModal />
         </Providers>
         <AccessibilityWidget />
         <CookieBanner enableAnalytics={enableVercelAnalytics} />
