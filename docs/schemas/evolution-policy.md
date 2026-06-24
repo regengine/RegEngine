@@ -1,7 +1,7 @@
 # Schema Evolution Policy
 
 ## 1. Compliance Standard
-All schemas must maintain **BACKWARD** compatibility mode in Confluent Schema Registry. This ensures that consumers using new schema versions can process data written with old schema versions.
+All schemas must maintain **BACKWARD** compatibility mode in Confluent Schema Registry. This allows consumers using new schema versions to process data written with old schema versions.
 
 ## 2. Evolution Rules
 

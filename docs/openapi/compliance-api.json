@@ -302,7 +302,7 @@
         "/fsma/audit/spreadsheet": {
             "get": {
                 "summary": "Get Fsma Audit Spreadsheet",
-                "description": "Generate FDA-compliant CSV spreadsheet for FSMA 204 audit.\n\nArgs:\n    tlc: Traceability Lot Code to trace\n    start_date: Start date filter (YYYY-MM-DD)\n    end_date: End date filter (YYYY-MM-DD)\n    \nReturns:\n    Downloadable CSV file",
+                "description": "Generate FDA-oriented CSV spreadsheet for FSMA 204 audit.\n\nArgs:\n    tlc: Traceability Lot Code to trace\n    start_date: Start date filter (YYYY-MM-DD)\n    end_date: End date filter (YYYY-MM-DD)\n    \nReturns:\n    Downloadable CSV file",
                 "operationId": "get_fsma_audit_spreadsheet_fsma_audit_spreadsheet_get",
                 "parameters": [
                     {

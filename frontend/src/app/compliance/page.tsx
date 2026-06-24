@@ -263,7 +263,7 @@ export default function CompliancePage() {
               <CardHeader>
                 <CardTitle>FSMA 204 Coverage</CardTitle>
                 <CardDescription>
-                  Pre-built checklists and KDE templates for all 16 FDA Food Traceability List categories
+                  Pre-built checklists and KDE templates for FDA Food Traceability List commodity groupings
                 </CardDescription>
               </CardHeader>
               <CardContent>

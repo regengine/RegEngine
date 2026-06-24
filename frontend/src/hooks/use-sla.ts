@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * React Query hooks for FDA 24-Hour SLA Tracking.
+ * React Query hooks for FDA 24-hour response-objective tracking.
  *
  * Connects to the ingestion service's /api/v1/sla/* endpoints
- * to manage FDA records requests and monitor compliance deadlines.
+ * to manage FDA records requests and monitor response deadlines.
  */
 
 import { useApiQuery, useApiMutate } from '@/hooks/use-api-query';
@@ -73,7 +73,7 @@ export function useSLARequests() {
   );
 }
 
-/** SLA compliance dashboard metrics for the current tenant. */
+/** Response-objective dashboard metrics for the current tenant. */
 export function useSLADashboard() {
   const { tenantId } = useTenant();
   return useApiQuery<SLADashboardData>(

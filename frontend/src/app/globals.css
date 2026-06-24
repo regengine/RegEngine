@@ -1759,3 +1759,31 @@ body,
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+@media (max-width: 640px) {
+    .re-a11y-fab {
+        top: auto !important;
+        right: 0 !important;
+        bottom: calc(env(safe-area-inset-bottom) + 5rem) !important;
+        width: 2.35rem !important;
+        height: 3rem !important;
+        border-radius: 9999px 0 0 9999px !important;
+        opacity: 0.92;
+        transform: none !important;
+    }
+
+    .re-a11y-fab:focus-visible,
+    .re-a11y-fab:hover {
+        opacity: 1;
+        transform: scale(1.02) !important;
+    }
+
+    .re-a11y-panel {
+        top: auto !important;
+        right: 1rem !important;
+        bottom: calc(env(safe-area-inset-bottom) + 8.75rem) !important;
+        width: calc(100vw - 2rem) !important;
+        max-height: min(70vh, 34rem) !important;
+        transform: none !important;
+    }
+}

@@ -69,7 +69,7 @@ export default async function RootLayout({
             name: 'RegEngine',
             url: 'https://regengine.co',
             logo: 'https://regengine.co/icon.png',
-            description: 'FSMA 204 food traceability compliance platform. Ingest supplier data, verify chain of custody, and export audit-ready records.',
+            description: 'FSMA 204 food traceability platform. Ingest supplier data, verify chain of custody, and export review-ready records.',
             sameAs: [],
           }}
         />
@@ -107,7 +107,7 @@ export default async function RootLayout({
             '@context': 'https://schema.org',
             '@type': 'Product',
             name: 'RegEngine FSMA 204 Compliance Platform',
-            description: 'FSMA 204 food traceability software. Ingest supplier data, hash-chain records, and produce §1.1455(c)-formatted audit exports. Your operation remains responsible for compliance.',
+            description: 'FSMA 204 food traceability software. Ingest supplier data, hash-chain records, and produce FDA-oriented sortable exports where configured data supports the request. Your operation remains responsible for compliance.',
             url: 'https://regengine.co',
             brand: {
               '@type': 'Brand',

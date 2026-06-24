@@ -40,7 +40,7 @@ Optional but supported in code:
 - Redis for rate limiting, queue/session helpers, and related runtime paths
 - Neo4j integrations for graph-oriented modules
 
-Do not assume Kafka/Redpanda, Terraform, or multi-service AWS infrastructure are part of the active checked-in deploy contract unless a separate environment explicitly adds them.
+Do not assume legacy event-broker, Terraform, or multi-service AWS infrastructure are part of the active checked-in deploy contract unless a separate environment explicitly adds them.
 
 ## Pre-Deployment Checklist
 
@@ -107,9 +107,9 @@ ingest -> preflight -> persist evidence -> evaluate rules -> export
 This deployment guide should not be used to claim:
 
 - six independent production backend services
-- GA maturity
+- launch maturity beyond the verified deployment posture
 - universal non-FSMA regulatory intelligence
-- infrastructure guarantees that are not backed by the current CI, config, and hosting setup
+- infrastructure commitments that are not backed by the current CI, config, and hosting setup
 
 ## Related Docs
 

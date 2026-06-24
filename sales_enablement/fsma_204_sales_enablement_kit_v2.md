@@ -32,7 +32,7 @@ Every other capability — partner gateway, white-label provisioning, revenue sh
 
 Target: mid-market fresh-cut QA leads and FLBR/importer compliance owners. Cadence shape preserved from v1.1; specific receiver-program claims removed unless the prospect first confirms the program applies to them.
 
-**Touch 1 — Call (Day 0).** "Hi [Name], I'm [X] from RegEngine. We help FSMA 204 covered operators get clean CTE/KDE data into a 24-hour FDA-ready export without a six-month integration project. Are you the person who'd own the response if FDA called tomorrow?" If yes: 30-second demo offer. If no: ask for the right name and exit.
+**Touch 1 — Call (Day 0).** "Hi [Name], I'm [X] from RegEngine. We help FSMA 204 covered operators turn CTE/KDE data into an FDA-oriented sortable export workflow without a six-month integration project. Are you the person who'd own the response if FDA called tomorrow?" If yes: 30-second demo offer. If no: ask for the right name and exit.
 
 **Touch 2 — LinkedIn voice note (Day 2).** 25 seconds. "Saw you own QA / compliance at [Company]. Quick question — when you run a mock recall today, can you produce the FDA sortable spreadsheet in under 24 hours? Most operators we talk to can't yet. Happy to show you what ours looks like — no slides, just the export."
 
@@ -73,10 +73,10 @@ Founding Design Partners: contact sales for pre-production pricing and roadmap i
 ## 6. What We Are Not
 
 1. **Not a Partner Gateway / white-label provisioning platform.** Routes are stubbed in production (`services/admin/main.py:350`). Partner outreach paused — see §7.
-2. **Not a multi-microservice mesh.** One container, one Postgres. No Kafka, no Redpanda, no Redis-as-bus.
+2. **Not a multi-microservice mesh.** One container, one Postgres. No legacy event-broker stack or Redis-as-bus.
 3. **Not a TMS, QMS, or ERP.** We sit downstream of those systems and consume their outputs.
 4. **Not an "EvidenceEnvelopeV3" platform.** That construct does not exist in the codebase.
-5. **Not GA / production-marketed.** Pre-production. Founding Design Partners only. No production SLAs offered.
+5. **Not generally available or production-marketed.** Pre-production. Founding Design Partners only. No public service-level commitments offered.
 
 ---
 

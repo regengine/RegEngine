@@ -12,7 +12,7 @@ Core value:
 - Preflight messy supplier data before it becomes compliance evidence.
 - Convert traceability events into durable, exportable records.
 - Keep records tamper-evident and tenant-scoped.
-- Produce FDA-ready exports and verification evidence inside the 24-hour response window.
+- Produce FDA-oriented sortable exports and verification evidence that help support time-bound FDA record requests where the configured workflow has complete data.
 
 ## 2) Who It Is For
 

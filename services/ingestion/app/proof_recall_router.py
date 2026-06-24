@@ -111,7 +111,7 @@ _FROZEN_STEPS: tuple[dict, ...] = (
         ),
     },
     {
-        "name": "Generating FDA-ready recall CSV",
+        "name": "Generating FDA-oriented recall CSV",
         "duration_ms": 1600,
         "status": "ok",
         "detail": (
@@ -189,8 +189,8 @@ async def run_recall_drill(request: Request) -> RecallDrillResponse:
 
     Takes no body. Returns a deterministic step list plus the
     wall-clock ``time_to_trace_seconds`` for the synthetic drill, the
-    FDA 24-hour mandate constant for client-side comparison, and the
-    URL of a pre-generated FDA-ready recall CSV.
+    FDA 24-hour response target for client-side comparison, and the
+    URL of a pre-generated FDA-oriented recall CSV.
 
     This endpoint MUST NOT read any tenant data: it operates entirely
     against module-level constants derived from

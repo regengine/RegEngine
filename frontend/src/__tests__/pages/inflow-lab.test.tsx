@@ -260,7 +260,7 @@ describe('Dashboard Inflow Lab', () => {
         const banner = screen.getByRole('status');
         expect(banner).toHaveTextContent('Sandbox preview only.');
         expect(banner).toHaveTextContent(
-            /Production FDA exports stay sealed and audit-ready — nothing here writes to them\./,
+            /Production FDA-oriented exports stay sealed and review-ready — nothing here writes to them\./,
         );
 
         expect(screen.queryByText('Mock environment')).not.toBeInTheDocument();

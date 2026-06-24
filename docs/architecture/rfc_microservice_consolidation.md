@@ -29,7 +29,7 @@ merged to reduce container count, simplify deployment, and lower maintenance ove
 | `ingestion-service` | PostgreSQL + Kafka | 1 | High | Document intake, NLP trigger |
 | `nlp-service` | PostgreSQL + Kafka | 1 | High | Entity extraction, classification |
 | `scheduler-service` | PostgreSQL | 1 | Medium | Job scheduling, leader election |
-| Infrastructure | — | 5 | — | PostgreSQL, Neo4j, Redis, Kafka, Redpanda Console |
+| Infrastructure | — | 5 | — | PostgreSQL, Neo4j, Redis, Kafka, legacy broker console |
 
 ---
 

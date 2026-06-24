@@ -321,7 +321,7 @@ def get_recall_sla(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
-    """Get 24-hour SLA compliance metrics. Tenant is sourced from auth (#1244)."""
+    """Get 24-hour response-objective metrics. Tenant is sourced from auth (#1244)."""
     engine = get_recall_engine()
     tenant_str = str(tenant_id)
     metrics = engine.get_sla_metrics(tenant_str)

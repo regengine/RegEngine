@@ -60,7 +60,7 @@ Current differentiators:
 - deterministic FSMA validation
 - tenant isolation and audit controls
 - readiness and fix-queue feedback
-- FDA-ready export support from validated records
+- FDA-oriented export support from validated records
 
 ## Slide 7: Who It Is For
 
@@ -89,7 +89,7 @@ Best-fit organizations:
 
 - complete compliance with no operator involvement
 - general-purpose regulatory intelligence across industries
-- GA-level platform claims beyond the current hardening stage
+- launch-maturity claims beyond the current hardening stage
 - replacement of every legacy food or GRC workflow on day one
 
 ## Slide 10: Current Stage And Ask

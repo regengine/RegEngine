@@ -272,7 +272,7 @@ export default function ExportPage() {
     <EmailGate toolName="export">
       <FreeToolPageShell
         title="FDA Export Package Generator"
-        subtitle="Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification."
+        subtitle="Generate a verifiable FSMA 204 records package to support 21 CFR 1.1455 record-availability workflows."
         relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
       >
       {/* Section 1: Package Overview */}
@@ -290,7 +290,7 @@ export default function ExportPage() {
               <div>
                 <h3 className="font-semibold mb-2">FDA Sortable Spreadsheet</h3>
                 <p className="text-sm text-re-text-disabled">
-                  21 CFR 1.1455 compliant CSV with all required KDEs. Sortable by TLC, date, product, and location.
+                  FDA-oriented sortable CSV organized around requested FSMA 204 records. Column mapping should be reviewed against the specific FDA request.
                 </p>
               </div>
             </div>

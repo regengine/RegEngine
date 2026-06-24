@@ -4,13 +4,13 @@ This is the source of truth. Every other surface — site, deck, kit, repo doc, 
 
 ## One-line description
 
-RegEngine is an FSMA 204 traceability evidence layer. It ingests supply-chain records, normalizes them into FDA-required CTE/KDE shape, persists them with a tamper-evident audit chain, and produces FDA- and retailer-ready exports.
+RegEngine is an FSMA 204 traceability evidence layer. It ingests supply-chain records, normalizes them into FDA-oriented CTE/KDE structures, persists them with a tamper-evident audit chain where configured, and produces FDA-oriented and retailer-review exports.
 
 ## Two-paragraph description
 
 RegEngine sits beside an ERP, not in place of one. The ERP remains system of record for inventory, orders, and finance. RegEngine is the evidence layer that turns existing supply-chain records into FDA-defensible traceability artifacts. It accepts three intake paths — webhook events, CSV uploads, and EPCIS 2.0 / EDI 856 documents — and runs them through Inflow Workbench, a preflight surface where suppliers and operators resolve identity, KDE, and CTE-completeness issues before commit. Nothing reaches the canonical store until the commit gate passes.
 
-Once committed, every record lands in Postgres with row-level security per tenant and a hash-chained audit trail. From that store, RegEngine produces the artifacts regulators and retailers actually ask for: a sortable spreadsheet matching FDA 21 CFR 1.1455, EPCIS 2.0 JSON-LD for partners on GS1 stack, and recall-drill simulations on demand. A public open-source verifier (`verify_chain.py`) lets anyone — auditor, retailer, FDA — independently confirm export integrity without trusting our infrastructure.
+Once committed through supported evidence workflows, records land in Postgres with row-level security per tenant and tamper-evident audit metadata where configured. From that store, RegEngine can produce FDA-oriented sortable spreadsheets aligned to 21 CFR 1.1455 where applicable, EPCIS 2.0 JSON-LD for partners on a GS1 stack, and recall-drill simulations on demand. A public verifier (`verify_chain.py`) can help reviewers independently confirm supported export-bundle integrity without trusting our infrastructure.
 
 ## What we are NOT
 

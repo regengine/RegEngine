@@ -19,14 +19,14 @@ RegEngine now preflights supplier traceability data, scores readiness, creates a
 
 ## Why This Matters
 
-Before this milestone, RegEngine could validate FSMA 204 events and export audit-ready records, but the supplier data intake loop still risked feeling like a simulator. Now the data path is operational:
+Before this milestone, RegEngine could validate FSMA 204 events and export review-ready records, but the supplier data intake loop still risked feeling like a simulator. Now the data path is operational:
 
 1. Inflow prepares the data.
 2. The Engine evaluates the data.
 3. The fix queue turns failures into work.
 4. The commit gate controls when evidence is allowed to persist.
 
-That gives design partners a concrete way to test whether their current supplier data can support FDA-ready traceability records.
+That gives design partners a concrete way to test whether their current supplier data can support FDA-oriented traceability records.
 
 ## What We Want To Learn With You
 
@@ -34,7 +34,7 @@ That gives design partners a concrete way to test whether their current supplier
 - Which fixes can be standardized into reusable supplier profiles?
 - How much does readiness improve after one remediation cycle?
 - Which records are blocked before `production_evidence`, and why?
-- What export evidence would satisfy an internal recall drill or retailer request?
+- What export evidence would support an internal recall drill or retailer request?
 
 ## Good Pilot Input
 

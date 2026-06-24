@@ -35,7 +35,7 @@ SERVICES = {
     "Redis": 6379,
     "Neo4j": 7687,
     "MinIO": 9000,
-    "Redpanda (Kafka)": 9092,
+    "Legacy event broker (Kafka-compatible)": 9092,
 }
 
 

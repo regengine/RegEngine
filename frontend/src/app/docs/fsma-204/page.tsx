@@ -85,7 +85,7 @@ export default function FSMA204GuidePage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-re-brand" />
-                        <span className="text-sm text-re-text-secondary">Enforcement: July 20, 2028</span>
+                        <span className="text-sm text-re-text-secondary">Earliest enforcement date: July 20, 2028</span>
                     </div>
                 </div>
             </div>
@@ -141,8 +141,8 @@ export default function FSMA204GuidePage() {
                             <div>
                                 <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Enforcement Delayed</p>
                                 <p className="text-re-text-secondary text-sm m-0">
-                                    The FDA announced an enforcement discretion period ending <strong>July 20, 2028</strong>.
-                                    RegEngine tracks FDA enforcement-discretion changes so your team isn&apos;t relying on stale dates.
+                                    FDA has proposed a 30-month extension and Congress directed FDA not to enforce before <strong>July 20, 2028</strong>.
+                                    RegEngine tracks FDA timing changes so your team isn&apos;t relying on stale dates.
                                 </p>
                             </div>
                         </div>

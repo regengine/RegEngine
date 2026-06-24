@@ -1921,7 +1921,7 @@
                     "compliance"
                 ],
                 "summary": "Create Snapshot",
-                "description": "Create a point-in-time compliance snapshot.\n\nCaptures the current compliance state with cryptographic hash.\nUse before audits to freeze what was true at a specific moment.\n\nThe content_hash ensures the snapshot cannot be tampered with.",
+                "description": "Create a point-in-time compliance snapshot.\n\nCaptures the current compliance state with cryptographic hash.\nUse before audits to freeze what was true at a specific moment.\n\nThe content_hash helps detect tampering with the snapshot.",
                 "operationId": "create_snapshot_v1_compliance_snapshots__tenant_id__post",
                 "parameters": [
                     {
@@ -2215,7 +2215,7 @@
                     "compliance"
                 ],
                 "summary": "Export Snapshot",
-                "description": "Export snapshot in audit-ready format.\n\nReturns a complete export package with:\n- Snapshot metadata\n- Compliance state at time of capture\n- All captured data (status, alerts, profile)\n- Integrity verification with hash",
+                "description": "Export snapshot in review-ready format.\n\nReturns an export package with:\n- Snapshot metadata\n- Compliance state at time of capture\n- Captured data (status, alerts, profile)\n- Integrity verification with hash",
                 "operationId": "export_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__export_get",
                 "parameters": [
                     {
@@ -2406,7 +2406,7 @@
                     "compliance"
                 ],
                 "summary": "Get Fda Response",
-                "description": "Generate a regulator-grade explanation for FDA response.\n\nReturns pre-formatted text that can be directly copied\ninto a regulatory response document.\n\nIncludes:\n- Formal header with snapshot ID and hash\n- Compliance status at time of capture\n- Alert details\n- Attestation information (if attested)\n- Cryptographic verification statement",
+                "description": "Generate draft FDA-response support text for internal review.\n\nReturns draft text with snapshot metadata, status, alerts,\nattestations, and verification details for operator review.\n\nIncludes:\n- Formal header with snapshot ID and hash\n- Compliance status at time of capture\n- Alert details\n- Attestation information (if attested)\n- Cryptographic verification statement",
                 "operationId": "get_fda_response_v1_compliance_snapshots__tenant_id___snapshot_id__fda_response_get",
                 "parameters": [
                     {

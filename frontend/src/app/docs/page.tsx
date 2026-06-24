@@ -37,11 +37,11 @@ const T = {
 export const metadata: Metadata = {
   title: 'API Documentation | RegEngine',
   description:
-    'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export §1.1455(c)-formatted audit packages.',
+    'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export FDA-oriented sortable records where configured data supports the request.',
   openGraph: {
     title: 'API Documentation | RegEngine',
     description:
-      'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export §1.1455(c)-formatted audit packages.',
+      'RegEngine API documentation for FSMA 204 food traceability. Ingest CTE/KDE records, run advisory rule evaluation, and export FDA-oriented sortable records where configured data supports the request.',
     type: 'website',
     url: 'https://regengine.co/docs',
     siteName: 'RegEngine',
@@ -254,7 +254,7 @@ export default function DocsHomePage() {
           </h1>
           <p className="text-[16px] max-w-[600px] mb-8 leading-relaxed" style={{ color: T.textMuted }}>
             Wire FSMA 204 traceability into any supply-chain system.
-            Preflight supplier data, surface gaps, fix missing KDEs, and commit records to a §1.1455(c)-formatted export pipeline. Your operation remains responsible for compliance.
+            Preflight supplier data, surface gaps, fix missing KDEs, and commit records to an FDA-oriented sortable export workflow. Your operation remains responsible for compliance.
           </p>
 
           {/* Quick start steps */}

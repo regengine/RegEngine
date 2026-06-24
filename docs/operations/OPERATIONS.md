@@ -20,7 +20,7 @@
 ```
 
 This script:
-1. Starts infrastructure (Postgres, Redis, Neo4j, Redpanda, LocalStack)
+1. Starts infrastructure (Postgres, Redis, Neo4j, legacy event broker service, LocalStack)
 2. Waits for databases to be ready
 3. Starts application services in dependency order
 4. Runs health verification
@@ -41,7 +41,7 @@ This script:
 
 Infrastructure:
   ✅ Neo4j
-  ✅ Redpanda
+  ✅ Legacy event broker service
 
 Application Services:
   ✅ Admin API
@@ -122,7 +122,7 @@ docker-compose up -d neo4j
 
 ---
 
-### Kafka/Redpanda Issues
+### Legacy Event Broker (`redpanda` service) Issues
 
 **Symptoms**: Events not flowing between services
 

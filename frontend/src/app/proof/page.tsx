@@ -35,8 +35,8 @@ const ARTIFACTS: Artifact[] = [
         icon: FileSpreadsheet,
         formatLabel: "CSV · sortable",
         summary:
-            "A complete recall lookback for one leafy-greens lot, exported in the FDA's preferred sortable layout.",
-        why: "FDA's 21 CFR 1.1455 demands a sortable spreadsheet within 24 hours of a recall request. This is the exact shape inspectors expect — every required KDE column populated for every CTE row.",
+            "A recall-lookback sample for one leafy-greens lot, exported in an FDA-oriented sortable layout.",
+        why: "FDA records requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies. This sample shows RegEngine's current column mapping and should be reviewed against the specific FDA request.",
     },
     {
         name: "EPCIS 2.0 JSON-LD export",

@@ -100,7 +100,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
         reositrak: 'Verify with vendor',
     },
     {
-        feature: '§1.1455(c)-Formatted Export',
+    feature: 'FDA-Oriented Sortable Export',
         regengine: true,
         foodlogiq: true,
         safetychain: true,
@@ -155,7 +155,7 @@ const DIFFERENTIATORS = [
         icon: Workflow,
         title: 'EPCIS 2.0 Native',
         description:
-            "FDA's preferred standard, baked in. No conversion layer between ingest and export, so EPCIS 2.0 stays end-to-end.",
+            "EPCIS 2.0 support for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
         detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
     },
     {
@@ -568,7 +568,7 @@ HTTP 201
                                 EPCIS 2.0 Native
                             </h3>
                             <p className="text-re-text-secondary mb-4 leading-relaxed">
-                                FDA's preferred format. RegEngine treats EPCIS 2.0 as the primary schema, so exports stay in EPCIS 2.0 end-to-end without a lossy conversion step.
+                                EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a supported schema where the enabled workflow and source data allow it.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
                                 Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
@@ -576,9 +576,9 @@ HTTP 201
                             <ul className="space-y-2">
                                 {[
                                     'EPCIS 2.0 XML + JSON serialization',
-                                    'FDA traceability event format',
+                                    'Traceability event export support',
                                     'No third-party conversion needed',
-                                    'Aligned with FDA\'s published EPCIS 2.0 direction',
+                                    'Designed for buyer and trading-partner interoperability checks',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
                                         <Check className="h-5 w-5 text-re-success flex-shrink-0" />
@@ -675,7 +675,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We are NOT a supply chain analytics platform',
-                                    detail: 'We focus on advisory compliance validation and §1.1455(c)-formatted exports. Advanced forecasting and sourcing tools live elsewhere.',
+                                    detail: 'We focus on advisory compliance validation and FDA-oriented sortable exports. Advanced forecasting and sourcing tools live elsewhere.',
                                 },
                                 {
                                     title: 'We do NOT promise 100% FDA audit success',
@@ -730,7 +730,7 @@ HTTP 201
                             {
                                 emoji: '⚖️',
                                 title: 'Compliance Officers',
-                                detail: 'You need per-CTE validation and §1.1455(c)-formatted exports. RegEngine gives you audit trails and supporting records.',
+                                detail: 'You need per-CTE validation and FDA-oriented sortable exports. RegEngine gives you audit trails and supporting records.',
                             },
                         ].map((item, idx) => (
                             <div

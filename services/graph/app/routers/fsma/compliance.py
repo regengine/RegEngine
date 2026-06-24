@@ -415,7 +415,7 @@ async def export_trace_csv(
     api_key=Depends(require_api_key),
 ):
     """
-    Export traceability data as FDA-compliant CSV spreadsheet.
+    Export traceability data as an FDA-oriented CSV spreadsheet.
 
     The CSV format is designed for submission to FDA during recall events
     and follows the sortable spreadsheet format described in FSMA 204.
@@ -446,7 +446,7 @@ async def export_trace_csv(
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
 
-        # FDA-compliant headers
+        # FDA-oriented headers
         writer.writerow(
             [
                 "Traceability Lot Code (TLC)",

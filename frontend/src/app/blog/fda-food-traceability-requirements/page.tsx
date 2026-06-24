@@ -62,7 +62,7 @@ export default function FDAFoodTraceabilityRequirements() {
               The Food Safety Modernization Act (FSMA), signed into law in 2011, gave the FDA broad authority to establish rules that improve food safety and reduce the burden of foodborne illness outbreaks. FSMA 204, the Food Traceability Rule, is one of the most significant rules to emerge from this authority.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              The rule was finalized in November 2022 and becomes enforceable on July 20, 2028. Unlike guidance or recommendations, this is a legal requirement. Non-compliance can result in FDA warning letters, consent decrees, recalls, and product seizures.
+              The rule was finalized in November 2022. The original compliance date was January 20, 2026; FDA has proposed a 30-month extension, and Congress directed FDA not to enforce before July 20, 2028. Unlike guidance or recommendations, this is a legal requirement once applicable and enforceable. Non-compliance can result in FDA warning letters, consent decrees, recalls, and product seizures.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               The FDA's primary goal is to reduce the time it takes to identify products involved in a foodborne illness outbreak or contamination event. When lives are at stake, speed matters.
@@ -75,7 +75,7 @@ export default function FDAFoodTraceabilityRequirements() {
               Which Foods Are Covered? The Food Traceability List (FTL)
             </h2>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-              FSMA 204 doesn't apply to all food products. The FDA created the Food Traceability List (FTL)—a curated list of 26 product categories that have been identified as high-risk for contamination or foodborne illness. Only foods on the FTL are subject to FSMA 204 compliance.
+              FSMA 204 doesn't apply to all food products. The FDA created the Food Traceability List (FTL), a curated list of foods identified as higher risk for contamination or foodborne illness. Only foods specifically listed on the FTL are subject to FSMA 204 traceability requirements.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
               The FTL includes:
@@ -246,7 +246,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
             </ul>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              The FDA prefers data in EPCIS 2.0 format (Electronic Product Code Information Services), a standardized data interchange format. This ensures that data can flow automatically between suppliers, your company, and the FDA.
+              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 
@@ -286,7 +286,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Format the data according to FDA requirements (typically EPCIS 2.0)</span>
+                <span>Prepare records for FDA requests, including an electronic sortable spreadsheet where required</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
@@ -402,7 +402,7 @@ export default function FDAFoodTraceabilityRequirements() {
             <ul className="space-y-3 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>FSMA 204 applies to foods on the FDA's Food Traceability List (26 product categories, mostly produce and seafood).</span>
+                <span>FSMA 204 applies to foods specifically listed on the FDA&apos;s Food Traceability List.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
@@ -422,7 +422,7 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Compliance deadline: July 20, 2028.</span>
+                <span>Original compliance date: January 20, 2026; FDA has proposed a 30-month extension and Congress directed FDA not to enforce before July 20, 2028.</span>
               </li>
             </ul>
           </div>

@@ -402,7 +402,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // re_access_token — if the cookie isn't in the browser yet, middleware
     // rejects and redirects back to /login?next=/dashboard.
     //
-    // Awaiting setSessionCookies first ensures the Set-Cookie response is
+    // Awaiting setSessionCookies first lets the Set-Cookie response be
     // processed by the browser before any navigation can occur.
     //
     // #535: Check the return value — if the /api/session POST fails (network
@@ -423,7 +423,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // React state updates — triggers re-renders and the navigation useEffect.
-    // Cookie is guaranteed to be stored in the browser at this point.
+    // Cookie should be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setAuthMethodState(null);
     setUserState(normalizedLoginUser);

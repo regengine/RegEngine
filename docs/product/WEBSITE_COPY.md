@@ -4,11 +4,11 @@ Current public positioning for the FSMA 204 traceability product.
 
 ## Core Positioning
 
-**Primary line:** From messy supplier data to FDA-ready evidence.
+**Primary line:** From messy supplier data to FDA-oriented evidence.
 
 **Support line:** Inflow prepares the data. The Engine proves it.
 
-**Short description:** RegEngine preflights supplier traceability feeds, maps fields into reusable profiles, creates fix queues, gates evidence commits, and produces FDA-ready exports from validated tenant-scoped records.
+**Short description:** RegEngine preflights supplier traceability feeds, maps fields into reusable profiles, creates fix queues, gates evidence commits, and produces FDA-oriented exports from validated tenant-scoped records.
 
 **Do not overclaim:** RegEngine is building the evidence system of record for FSMA 204 traceability. Public copy should not imply every customer is already live in production evidence mode.
 
@@ -16,7 +16,7 @@ Current public positioning for the FSMA 204 traceability product.
 
 ### Hero
 
-**Headline:** From messy supplier data to FDA-ready evidence.
+**Headline:** From messy supplier data to FDA-oriented evidence.
 
 **Subheadline:** Inflow prepares the data. The Engine proves it. RegEngine preflights supplier traceability feeds, creates fix queues, scores readiness, and commits only validated records as tenant-scoped FSMA 204 evidence.
 
@@ -54,9 +54,9 @@ Current public positioning for the FSMA 204 traceability product.
 
 ### Hero
 
-**Headline:** From messy supplier data to FDA-ready evidence.
+**Headline:** From messy supplier data to FDA-oriented evidence.
 
-**Subheadline:** Inflow prepares the data. The Engine proves it. RegEngine preflights supplier feeds, creates fix queues, gates evidence commits, and produces FDA-ready exports from validated tenant-scoped records.
+**Subheadline:** Inflow prepares the data. The Engine proves it. RegEngine preflights supplier feeds, creates fix queues, gates evidence commits, and produces FDA-oriented exports from validated tenant-scoped records.
 
 ### Pipeline
 
@@ -70,7 +70,7 @@ Supplier Data -> Inflow Lab -> Engine -> Commit Gate -> Evidence + Export
 
 **Commit Gates:** RegEngine keeps simulation, preflight, staging, and production evidence decisions explicit. Production evidence requires authentication, tenant-scoped persistence, provenance, and clean readiness signals before records can support export.
 
-**Readiness Score + Export:** Readiness scores combine KDE completeness, rule outcomes, unresolved fixes, provenance, and export eligibility. Validated tenant-scoped records can then support FDA-ready sortable spreadsheets and structured export packages.
+**Readiness Score + Export:** Readiness scores combine KDE completeness, rule outcomes, unresolved fixes, provenance, and export eligibility. Validated tenant-scoped records can then support FDA-oriented sortable spreadsheets and structured export packages.
 
 **Audit Trail + Verification:** Committed evidence is hash chained, append-only, tenant-scoped, and independently verifiable.
 

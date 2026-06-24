@@ -4,10 +4,10 @@ import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
+    description: 'FSMA 204 traceability readiness from $425/mo. Transparent design-partner pricing with onboarding terms controlled by your agreement.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
+        description: 'FSMA 204 traceability readiness from $425/mo. Transparent design-partner pricing with onboarding terms controlled by your agreement.',
         url: 'https://regengine.co/pricing',
         type: 'website',
     },
@@ -71,14 +71,14 @@ const PRICING_TIERS = [
         partnerMonthly: 499,
         partnerAnnual: 425,
         highlighted: false,
-        cta: 'Start Base Plan',
+        cta: 'Apply for Base',
         features: [
             '1 facility',
             'Up to 500 CTEs/month',
             'FSMA 204 traceability workspace',
             'Supplier onboarding + FTL scoping',
             'CSV upload + API ingestion',
-            'Self-check scoring + §1.1455(c)-formatted export',
+            'Self-check scoring + FDA-oriented sortable export workflow',
             'Recall drill workflows',
             'Email support',
         ],
@@ -93,14 +93,14 @@ const PRICING_TIERS = [
         partnerMonthly: 649,
         partnerAnnual: 549,
         highlighted: true,
-        cta: 'Start Standard Plan',
+        cta: 'Apply for Standard',
         features: [
             '2–3 facilities',
             'No per-CTE caps (fair use)',
             'Everything in Base',
             'Multi-facility operations',
             'Retailer-specific readiness benchmarks',
-            '§1.1455(c)-formatted export + EPCIS 2.0',
+            'FDA-oriented sortable export + EPCIS 2.0 support',
             'Priority email support',
         ],
     },
@@ -114,7 +114,7 @@ const PRICING_TIERS = [
         partnerMonthly: 749,
         partnerAnnual: 639,
         highlighted: false,
-        cta: 'Start Premium Plan',
+        cta: 'Apply for Premium',
         features: [
             '4+ facilities',
             'No per-CTE caps (fair use)',
@@ -128,25 +128,25 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
-    { feature: 'Time to first FDA-formatted export', regengine: 'Minutes (self-serve)', foodlogiq: 'Enterprise implementation', repositrak: 'Retailer-coordinated', tracegains: 'Enterprise implementation' },
-    { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '◐', repositrak: '◐', tracegains: '◐' },
-    { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '◐', tracegains: '✗' },
-    { feature: 'Developer Sandbox', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
-    { feature: 'Hash-manifested audit trail', regengine: '✓', foodlogiq: '◐', repositrak: '◐', tracegains: '◐' },
-    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
-    { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
+    { feature: 'Time to first FDA-oriented export', regengine: 'Design-partner workflow', foodlogiq: 'Enterprise implementation', repositrak: 'Retailer-coordinated', tracegains: 'Enterprise implementation' },
+    { feature: 'Public API + OpenAPI Docs', regengine: 'Available for contracted workspaces', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Self-Serve Signup', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Developer Sandbox', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Hash-manifested audit trail', regengine: 'Supported where export workflow creates manifests', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Free Trial', regengine: 'Design-partner terms', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Pricing Model', regengine: 'Indicative design-partner ranges; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
 ];
 
 const FAQ: PricingFaqItem[] = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding and custom integration scoping. Support is delivered per the terms of your partner agreement. Your partner rate never increases.' },
-    { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
-    { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
-    { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
+    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partner discounts are documented in the executed order form or design-partner agreement, including term, scope, renewal, taxes, add-ons, plan-change treatment, onboarding, and integration support.' },
+    { q: 'Can I switch plans anytime?', a: 'Plan changes are handled under your executed order form or design-partner agreement. We scope upgrades, downgrades, facility count, and billing changes before applying them.' },
+    { q: 'Do you offer annual billing?', a: 'Annual and monthly billing can be scoped during procurement. Pricing shown is indicative; the executed agreement controls final plan, billing period, and checkout availability.' },
+    { q: 'Does my partner pricing ever change?', a: 'Partner pricing is controlled by the executed order form or design-partner agreement, including renewal, scope, add-ons, taxes, and plan changes.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Major retailers are already requiring traceability data from suppliers regardless of the FDA timeline. RegEngine gives you the tooling and records to support either trigger — the FDA rule or a retailer mandate.' },
     { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
-    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or scoped ERP integration. Self-serve onboarding completes within days; complex ERP integrations are scoped separately.' },
+    { q: 'Can I integrate with my existing ERP?', a: 'RegEngine accepts data via API, CSV upload, or scoped ERP integration. Guided onboarding is available for approved design-partner workspaces. Timeline, support, and commercial terms are confirmed during scoping.' },
     { q: 'What happens to my data?', a: 'Data is encrypted in transit. Encryption at rest is provided by our managed database and storage providers (see the Trust Center subprocessor list). Tenant data is isolated via PostgreSQL row-level policies; tenant-trust hardening is in active rollout. We do not share or sell your data.' },
 ];
 

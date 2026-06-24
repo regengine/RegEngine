@@ -27,7 +27,7 @@ RegEngine may claim a proof point only when the evidence named below exists and 
 | Readiness improvement | Baseline and post-fix readiness scores | Each design partner has at least 2 runs showing either score improvement or a documented reason the score cannot improve yet | Workbench readiness snapshots, fix queue export, dashboard screenshot |
 | Fix queue utility | Fixes are created, assigned, corrected, or accepted | At least 5 real fix items across all partners, with status movement after founder/operator follow-up | Fix queue export or screenshots, session scorecard |
 | Commit-gate risk reduction | Invalid data is blocked before `production_evidence` | At least 1 blocked commit-gate decision per messy feed, with human-readable reason | Workbench run details, commit decision ID, audit note |
-| Export turnaround | Validated records produce an FDA-ready export package | Measure start time, export completion time, row count, and manifest/checksum verification for each successful run | FDA export ZIP, manifest, verifier output, session notes |
+| Export turnaround | Validated records produce an FDA-oriented export package | Measure start time, export completion time, row count, and manifest/checksum verification for each successful run | FDA-oriented export ZIP, manifest, verifier output, session notes |
 | Repeat usage | Partner returns after the first demo | 2 partners complete a second session or submit a second file within 30 days | Outreach tracker, calendar notes, Workbench run IDs |
 | Procurement readiness | Buyer can review a trust packet without overclaims | Packet includes DPA, security posture, incident response, DR/RTO/RPO posture, SOC 2 status, and pentest status with clear caveats | Data-room packet, trust page link, deal notes |
 
@@ -77,9 +77,9 @@ Not allowed until separately verified:
 - "Paying customers."
 - "SOC 2 certified."
 - "Penetration tested."
-- "FDA certified" or "FDA approved."
-- "Guaranteed compliance."
-- "Production SLA" unless backed by a signed contract and measured operational history.
+- "FDA endorsement."
+- "Promised compliance outcome."
+- "Public availability commitment" unless backed by a signed contract and measured operational history.
 
 ## Procurement Packet Checklist
 

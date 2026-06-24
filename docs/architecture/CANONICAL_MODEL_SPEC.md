@@ -4,7 +4,7 @@
 
 The Canonical Model Specification defines the single, authoritative representation of food traceability data within RegEngine. All data ingestion pathways—whether from GS1 EPCIS feeds, EDI messages, manual uploads, or API calls—normalize to this canonical form before any rule evaluation, transformation, or persistence occurs.
 
-This specification ensures that:
+This specification supports:
 1. **Consistency**: All downstream rules and queries operate on uniform data regardless of source format
 2. **Auditability**: Every ingested CTE can be traced back to its canonical representation and original source
 3. **Compliance**: The canonical model directly implements the Key Data Elements (KDEs) required by 21 CFR §§ 1.1325–1.1350 for FSMA 204

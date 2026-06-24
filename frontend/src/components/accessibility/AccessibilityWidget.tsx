@@ -194,7 +194,7 @@ export function AccessibilityWidget() {
         onClick={() => setOpen(!open)}
         aria-label={open ? 'Close accessibility settings' : 'Open accessibility settings'}
         aria-expanded={open}
-        className="fixed bottom-6 right-6 z-[9999] w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2"
+        className="re-a11y-fab fixed bottom-6 right-6 z-[9999] w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-offset-2"
         style={{
           background: 'var(--re-brand)',
           color: '#fff',
@@ -214,7 +214,7 @@ export function AccessibilityWidget() {
           role="dialog"
           aria-label="Accessibility Settings"
           aria-modal="false"
-          className="fixed bottom-20 right-6 z-[9999] w-80 max-h-[80vh] overflow-y-auto rounded-2xl"
+          className="re-a11y-panel fixed bottom-20 right-6 z-[9999] w-80 max-h-[80vh] overflow-y-auto rounded-2xl"
           style={{
             background: 'var(--re-surface-base)',
             border: '1px solid var(--re-surface-border)',

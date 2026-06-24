@@ -6,13 +6,13 @@ Input: 18-team senior engineering audit covering architecture, security, API, in
 
 ## Executive Summary
 
-RegEngine has a strong FSMA 204 product direction, but the audit found launch-blocking issues in security boundaries, tenant isolation, runtime startup, database schema alignment, ingestion correctness, evidence integrity, CI coverage, deployment readiness, privacy controls, and observability. The most serious risks are not isolated defects. They cluster around one core problem: the product promise depends on a trustworthy evidence spine, and that spine currently has too many paths where data can be accepted, transformed, exported, or displayed without the guarantees customers and regulators would assume.
+RegEngine has a strong FSMA 204 product direction, but the audit found launch-blocking issues in security boundaries, tenant isolation, runtime startup, database schema alignment, ingestion correctness, evidence integrity, CI coverage, deployment readiness, privacy controls, and observability. The most serious risks are not isolated defects. They cluster around one core problem: the product promise depends on a trustworthy evidence spine, and that spine currently has too many paths where data can be accepted, transformed, exported, or displayed without the assurances customers and regulators would expect.
 
 This PRD defines the remediation program required to make RegEngine production trustworthy for design partners. It turns the bug hunt into sequenced product and engineering requirements with acceptance criteria, verification gates, and ownership boundaries.
 
 ## Problem Statement
 
-Design partners need confidence that RegEngine can ingest supplier data, enforce tenant scope, validate FSMA events and KDEs, persist tamper-evident evidence, export FDA-ready records, and operate reliably under real deployment conditions. Today, several paths can bypass or break those guarantees:
+Design partners need confidence that RegEngine can ingest supplier data, enforce tenant scope, validate FSMA events and KDEs, persist tamper-evident evidence, export FDA-oriented records, and operate reliably under real deployment conditions. Today, several paths can bypass or break those assurances:
 
 - Browser-facing proxy auth can treat server credentials as caller credentials.
 - Client-controlled tenant values can be forwarded with privileged server credentials.
@@ -460,7 +460,7 @@ Observed baseline during audit:
 
 - What is the design-partner pilot date and minimum acceptance bar?
 - Is `fsma.traceability_events` the committed canonical production contract for all new FSMA evidence?
-- Which dependencies are required for `/readiness` in each deployment mode: Postgres, Kafka/Redpanda, Redis, Neo4j, S3, Stripe?
+- Which dependencies are required for `/readiness` in each deployment mode: Postgres, optional event broker, Redis, Neo4j, object storage, Stripe?
 - Should rule enforcement block production evidence by default for pilot tenants?
 - Who owns compliance signoff for all 7 FSMA CTE/KDE maps?
 - Which public product claims should be hidden until their backing requirement is verified?

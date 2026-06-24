@@ -61,7 +61,7 @@ export function ROICalculatorClient() {
                     </h3>
                     <p className="text-[var(--re-text-tertiary)] max-w-xl mx-auto">
                         Numbers below are illustrative based on your inputs. Actual savings depend on your
-                        contracts, staffing, and existing systems. We don&apos;t publish a guaranteed ROI or payback
+                        contracts, staffing, and existing systems. We don&apos;t publish a promised ROI or payback
                         period.
                     </p>
                 </div>
@@ -101,7 +101,7 @@ export function ROICalculatorClient() {
                     <div className="p-6 space-y-2">
                         <h4 className="text-base font-semibold flex items-center gap-2">
                             <Target className="h-4 w-4 text-[var(--re-brand)]" />
-                            We don&apos;t publish a guaranteed ROI or payback period
+                            We don&apos;t publish a promised ROI or payback period
                         </h4>
                         <p className="text-sm text-[var(--re-text-secondary)]">
                             Book a 20-minute call and we&apos;ll model it against your actual record volume and current
@@ -115,7 +115,7 @@ export function ROICalculatorClient() {
                     <p className="text-[10px] text-[var(--re-text-tertiary)] leading-relaxed">
                         Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
                         We don&apos;t have verified customer ROI data yet — early-design partner pricing reflects that.
-                        FSMA 204 enforcement begins July 20, 2028; no public fine schedule exists, so the
+                        Current public FDA posture points to July 20, 2028 as the earliest enforcement date; no public fine schedule exists, so the
                         risk-concentration tile is illustrative only. Actual results depend on your contracts,
                         existing systems, staffing, and data hygiene.
                     </p>
@@ -135,8 +135,8 @@ export function ROICalculatorClient() {
                         Estimate the <span className="text-[var(--re-brand)]">Savings Opportunity</span>
                     </h1>
                     <p className="text-xl text-[var(--re-text-tertiary)] max-w-2xl mx-auto">
-                        Get an illustrative sense of where compliance automation could pay back. We don&apos;t
-                        publish a guaranteed ROI or payback period.
+                        Get an illustrative sense of where traceability workflow automation could pay back. We don&apos;t
+                        publish a promised ROI or payback period.
                     </p>
                 </div>
 

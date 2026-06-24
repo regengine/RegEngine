@@ -117,7 +117,7 @@ Beta testers should expect:
 
 Beta testers should not expect:
 
-- a GA-finished product surface
+- a production-ready product surface
 - zero-touch "complete compliance"
 - universal regulatory intelligence outside the current FSMA 204 product wedge
 

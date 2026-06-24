@@ -15,16 +15,16 @@ export const metadata: Metadata = {
 };
 
 const verified = [
-  { title: "Tenant isolation", body: "PostgreSQL row-level policies and authenticated tenant context are designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.", icon: Lock },
+  { title: "Tenant isolation", body: "PostgreSQL row-level policies and authenticated tenant context are designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.", icon: Lock },
   { title: "Append-oriented evidence", body: "Committed compliance records are append-oriented after ingest, and corrections preserve lineage rather than mutating prior records.", icon: Database },
-  { title: "Hash verification", body: "Export bundles ship with a SHA-256 manifest so records can be checked outside the product UI; downstream consumer-side signature verification is rolling out.", icon: Hash },
-  { title: "Operational gates", body: "Secrets, SAST, DAST, dependency, container, and SBOM checks run in CI.", icon: ShieldCheck },
+  { title: "Hash verification", body: "Export bundles ship with a SHA-256 manifest so records can be checked outside the product UI. Legacy Kafka-compatible signing exists only for opt-in deployments.", icon: Hash },
+  { title: "Operational gates", body: "CI includes secrets, SAST, and dependency checks. DAST, SBOM, and container scans run when configured or on scheduled/main-branch workflows.", icon: ShieldCheck },
 ];
 
 const controls = [
   ["Encryption", "Encrypted transport in transit; encryption at rest provided by managed database and storage providers (see subprocessors)"],
   ["Identity", "JWT sessions, API keys, CSRF protection"],
-  ["Isolation", "Tenant-scoped database access via PostgreSQL row-level policies"],
+  ["Isolation", "Tenant-scoped database access via PostgreSQL row-level policies on core PostgreSQL-backed paths"],
   ["Audit", "Tamper-evident export manifests covering records after ingest; upstream entry is not cryptographically attested"],
   ["Verification", "Open verifier script for export-bundle chain checks"],
   ["Disclosure", "security.txt and vulnerability intake"],
@@ -44,7 +44,7 @@ export default function SecurityPage() {
         <div>
           <p className="re-label mb-5">Security</p>
           <h1 className="max-w-[680px] text-[clamp(42px,7vw,78px)] font-semibold leading-[0.96]">
-            Do not trust the dashboard. Verify the record.
+            Verify the evidence, not just the dashboard.
           </h1>
           <p className="mt-6 max-w-[590px] text-[17px] leading-7 text-[var(--re-text-muted)]">
             Compliance security should be mechanical: isolate tenants, preserve lineage, hash the evidence, and make verification possible without asking anyone to believe the UI.
@@ -69,6 +69,23 @@ export default function SecurityPage() {
             <p className="text-[#8fd19e]">failed: 0 records</p>
             <p className="text-[#f1c36d]">manifest: hash matched</p>
             <p className="mt-3 text-[#d8d2c5]">result: evidence package intact</p>
+          </div>
+          <div className="grid gap-3 p-5 sm:grid-cols-3">
+            <div>
+              <p className="re-label mb-1">Bundle</p>
+              <p className="text-sm font-semibold text-[var(--re-text-primary)]">fsma_package.json</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">Export package selected by the customer workflow.</p>
+            </div>
+            <div>
+              <p className="re-label mb-1">Manifest</p>
+              <p className="text-sm font-semibold text-[var(--re-text-primary)]">SHA-256</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">Integrity check for records after ingest, not upstream entry proof.</p>
+            </div>
+            <div>
+              <p className="re-label mb-1">Review path</p>
+              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Outside the UI</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--re-text-muted)]">A supported bundle can be checked independently.</p>
+            </div>
           </div>
         </div>
       </section>

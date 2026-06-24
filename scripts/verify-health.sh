@@ -23,7 +23,7 @@ SERVICES=(
 
 INFRASTRUCTURE=(
     "http://localhost:7474|Neo4j|1"
-    "tcp://localhost:9092|Redpanda|0"
+    "tcp://localhost:9092|Legacy event broker|0"
 )
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

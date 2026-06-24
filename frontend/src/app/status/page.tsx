@@ -82,8 +82,8 @@ export default function StatusPage() {
       <section className="max-w-[860px] mx-auto px-4 sm:px-6 pb-20">
         <p className="text-xs text-[var(--re-text-disabled)] leading-relaxed">
           Status reflects backend service liveness as observed from the Vercel
-          edge. It does not guarantee end-to-end ingestion success for every
-          tenant; specific pilot SLAs are set in your agreement.
+          edge. It does not promise end-to-end ingestion success for every
+          tenant; specific service commitments are set in your agreement.
         </p>
       </section>
     </div>

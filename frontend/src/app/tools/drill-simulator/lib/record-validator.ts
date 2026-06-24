@@ -450,7 +450,7 @@ export function validateRecords(records: ParsedRecord[], startTime: Date): Valid
         message: `${kde.field} missing in ${kde.missing} record(s) (${100 - kde.percentage}% incomplete)`,
         citation: kde.citation,
         affectedRows,
-        recommendation: `Ensure all records include the ${kde.field} field as required by FSMA 204.`,
+          recommendation: `Add the ${kde.field} field to all applicable records for FSMA 204 traceability readiness.`,
       });
     }
   });

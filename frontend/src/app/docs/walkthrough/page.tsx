@@ -7,7 +7,7 @@ import { CodeBlock } from '@/components/ui/code-block';
 export const metadata: Metadata = {
   title: 'End-to-End Walkthrough | RegEngine',
   description:
-    'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce an audit-ready export.',
+    'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
 };
 
 export default function WalkthroughPage() {
@@ -33,7 +33,7 @@ export default function WalkthroughPage() {
             End-to-End Walkthrough
           </h1>
           <p className="text-[var(--re-text-muted)] text-base">
-            Post a complete supplier-to-shipping flow, see it on your dashboard, and produce an audit-ready export.
+            Post a complete supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.
             Builds on{' '}
             <Link href="/docs/quickstart" className="text-[var(--re-brand)] underline">
               the 5-minute Quickstart
@@ -207,9 +207,9 @@ export default function WalkthroughPage() {
         </Step>
 
         {/* Step 5 */}
-        <Step n={5} title="Produce an FDA-formatted export">
+        <Step n={5} title="Produce an FDA-oriented export">
           <p className="leading-[1.7] mb-3">
-            For the lot you just shipped, generate the sortable spreadsheet FDA inspectors expect:
+            For the lot you just shipped, generate an FDA-oriented sortable spreadsheet for operator review:
           </p>
           <CodeBlock
             language="bash"
@@ -244,7 +244,7 @@ head -20 lot-export.csv`}
               <ul className="text-sm space-y-1.5 list-disc pl-5">
                 <li>Three CTE events with chained SHA-256 hashes are now in your tenant scope.</li>
                 <li>The compliance dashboard reflects them within seconds.</li>
-                <li>An FDA-formatted export can be produced for any subset by lot code.</li>
+                <li>An FDA-oriented export can be produced for any subset by lot code.</li>
                 <li>Your tenant is now in the OKR count of pilots ingesting weekly.</li>
               </ul>
             </div>

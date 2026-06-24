@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { getAdminTargets as resolveAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targets';
 
-// force-dynamic ensures the proxy runs as a serverless function on every request.
+// force-dynamic makes the proxy run as a serverless function on every request.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 // Allow bulk uploads and long-running admin operations (Pro plan: up to 300s).

@@ -24,11 +24,12 @@
 - [Canonical Model Spec](CANONICAL_MODEL_SPEC.md) -- Authoritative data model with EPCIS 2.0 mapping
 - [Canonical Event Model](CANONICAL_MODEL.md) -- TraceabilityEvent schema generated from code
 - [Requirements Traceability Matrix](compliance/RTM.md) -- FSMA 204 section-by-section requirement mapping to code
-- [Trust Framework](TRUST_FRAMEWORK.md) -- SHA-256 hash chains, 21 CFR Part 11 alignment, tamper-evident persistence
+- [Trust Claims Matrix](../security/TRUST_CLAIMS_MATRIX.md) -- Current control sheet for buyer-facing trust claims
+- [Trust Framework](TRUST_FRAMEWORK.md) -- Internal draft; review against the claims matrix before external use
 - [FSMA Phase 1 Implementation](FSMA_204_PHASE_1_IMPLEMENTATION.md) -- Critical fixes roadmap for FDA production use
 - [FSMA Railway Deployment](FSMA_RAILWAY_DEPLOYMENT.md) -- P0 deployment runbook for FSMA backend services
 - [Compliance Ingestion Library](compliance/ingestion_library/food_agriculture_compliance.md) -- Food and agriculture regulatory framework extractors
-- [Audit Events](AUDIT_EVENTS.md) -- Kafka audit event integration for compliance tracking
+- [Audit Events](AUDIT_EVENTS.md) -- Historical audit-event notes; verify current task-processing posture before external use
 
 ## 3. Security & Access Control
 

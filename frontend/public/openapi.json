@@ -2654,7 +2654,7 @@
     },
     "/api/v1/fda/export": {
       "get": {
-        "description": "Query all CTE events for a specific TLC within an optional date range, generate the FDA-required CSV spreadsheet, log the export for audit, and return the file. This is the endpoint that fulfills the 24-hour FDA response requirement.",
+        "description": "Query all CTE events for a specific TLC within an optional date range, generate an FDA-oriented sortable CSV spreadsheet, log the export for audit, and return the file. This endpoint supports record-availability workflows; operators remain responsible for reviewing the package against the specific FDA request.",
         "operationId": "export_fda_spreadsheet_api_v1_fda_export_get",
         "parameters": [
           {
@@ -2783,7 +2783,7 @@
               "application/zip": {},
               "text/csv": {}
             },
-            "description": "FDA-compliant CSV, ZIP package, or PDF report"
+            "description": "FDA-oriented CSV, ZIP package, or PDF report"
           },
           "422": {
             "content": {
@@ -2941,7 +2941,7 @@
               "application/zip": {},
               "text/csv": {}
             },
-            "description": "FDA-compliant CSV, ZIP package, or PDF report"
+            "description": "FDA-oriented CSV, ZIP package, or PDF report"
           },
           "422": {
             "content": {
@@ -3168,7 +3168,7 @@
     },
     "/api/v1/fda/export/recall": {
       "get": {
-        "description": "Generate an FDA-compliant export filtered by product, location, and/or date range. This is the endpoint used during actual FDA recall investigations: 'Show me everything from [location] on [date] for [product].' Supports any combination of filters.",
+        "description": "Generate an FDA-oriented export filtered by product, location, and/or date range. This is the endpoint used during actual FDA recall investigations: 'Show me everything from [location] on [date] for [product].' Supports any combination of filters.",
         "operationId": "export_recall_filtered_api_v1_fda_export_recall_get",
         "parameters": [
           {
@@ -3356,7 +3356,7 @@
               "application/zip": {},
               "text/csv": {}
             },
-            "description": "FDA-compliant CSV or ZIP package"
+            "description": "FDA-oriented CSV or ZIP package"
           },
           "422": {
             "content": {
@@ -3378,7 +3378,7 @@
     },
     "/api/v1/fda/export/v2": {
       "get": {
-        "description": "Query traceability events from the canonical fsma.traceability_events table, join rule evaluation results from fsma.rule_evaluations + fsma.rule_definitions, and generate an FDA-compliant CSV/package with Compliance Status and Rule Failures columns appended. Backward-compatible with v1 column layout \u2014 new columns are appended at the end.",
+        "description": "Query traceability events from the canonical fsma.traceability_events table, join rule evaluation results from fsma.rule_evaluations + fsma.rule_definitions, and generate an FDA-oriented CSV/package with Compliance Status and Rule Failures columns appended. Backward-compatible with v1 column layout \u2014 new columns are appended at the end.",
         "operationId": "export_fda_spreadsheet_v2_api_v1_fda_export_v2_get",
         "parameters": [
           {
@@ -3530,7 +3530,7 @@
               "application/zip": {},
               "text/csv": {}
             },
-            "description": "FDA-compliant CSV or ZIP package with compliance columns"
+            "description": "FDA-oriented CSV or ZIP package with compliance columns"
           },
           "422": {
             "content": {

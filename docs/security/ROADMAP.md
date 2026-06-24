@@ -26,4 +26,4 @@ We're honest about what's done and what's planned. No checkmarks we haven't earn
 
 ## Audit Track (2026)
 
-- SOC 2 Type II — **In Preparation**
+- External assurance program — **In Preparation**

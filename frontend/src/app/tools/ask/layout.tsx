@@ -30,7 +30,7 @@ const jsonLd = {
 
 const relatedTools = [
     { href: '/tools/knowledge-graph', title: 'Knowledge Graph', description: 'Visually map your FSMA 204 supply chain nodes and identify CTE and KDE coverage gaps.' },
-    { href: '/tools/export', title: 'FDA Export Generator', description: 'Generate a verifiable SHA-256 compliance package from your traceability records.' },
+    { href: '/tools/export', title: 'FDA-Oriented Export Generator', description: 'Generate a verifiable records package from your traceability records.' },
     { href: '/tools/ftl-checker', title: 'FTL Checker', description: 'Check which food products in your supply chain are on the FDA Traceability List.' },
 ];
 

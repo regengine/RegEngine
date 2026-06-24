@@ -2,8 +2,8 @@
 RegEngine Chaos Test Data Seeder
 ================================
 Seeds known quantities of test data into Neo4j and PostgreSQL
-before chaos engineering tests run. This ensures data integrity
-checks are meaningful (not just 0 -> 0).
+before chaos engineering tests run so data integrity checks are
+meaningful (not just 0 -> 0).
 
 
 Usage:

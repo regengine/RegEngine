@@ -18,7 +18,7 @@ Before the scheduled audit, verify the following system states:
     *   Verify CSV headers match FDA template.
 - [ ] **Backward Trace**: Run backward trace on random sample.
     *   `GET /v1/fsma/export/trace/{tlc}?direction=backward`
-- [ ] **Verify Timestamps**: Check that `Response Time` < 24 hours (Internal SLA: 4 hours).
+- [ ] **Verify Timestamps**: Check record-retrieval timing against the current incident/recall drill objective. Do not quote internal timing targets as customer SLAs unless the executed agreement includes them.
 
 ## 3. Data Integrity & Validation
 - [ ] **Chain of Custody**: Verify no broken links in graph.

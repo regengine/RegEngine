@@ -40,7 +40,7 @@ async def roll_out_compliance(standard: str = "FSMA-204"):
         task = (
             f"Proactive Compliance Rollout: {standard}\n"
             f"Service: services/{service}\n"
-            f"Requirement: Ensure all API responses include the compliance header `{header_spec}`. "
+            f"Requirement: Confirm all API responses include the compliance header `{header_spec}`. "
             f"Add this to the FastAPI main.py middleware or global response headers."
         )
         tasks.append(task)

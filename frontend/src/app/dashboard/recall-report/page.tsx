@@ -297,7 +297,7 @@ export default function RecallReportPage() {
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-base flex items-center gap-2">
                                             <Clock className="h-4 w-4 text-[var(--re-brand)]" />
-                                            24-Hour SLA Status
+                                            24-Hour Response Status
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="flex flex-col items-center">

@@ -6,7 +6,7 @@
 
 ## 1. Purpose
 
-This policy governs all changes to the RegEngine compliance database schema. It ensures:
+This policy governs all changes to the RegEngine compliance database schema. It supports:
 - Audit defensibility through append-only, versioned structures
 - Traceability from authority documents to verdicts
 - Reproducibility of any historical analysis

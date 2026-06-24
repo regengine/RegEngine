@@ -132,7 +132,7 @@ ORDER BY traceability_lot_code, event_type;
 
 ## 3. Phase 2: Records Assembly -- Generate the FDA Package
 
-**Goal:** Produce the FDA-compliant export package (CSV + PDF + ZIP).
+**Goal:** Produce the FDA-oriented export package (CSV + PDF + ZIP).
 
 ### 3.1 Generate via API
 

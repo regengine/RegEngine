@@ -469,10 +469,16 @@
   border-color: #8fa695;
 }
 
-.status_ga {
+.status_implemented {
   border-color: #9ad8b9;
   background: #effaf4;
   color: #07543f;
+}
+
+.status_supported {
+  border-color: #8fc7df;
+  background: #eff8fc;
+  color: #0e5367;
 }
 
 .status_pilot {
@@ -503,6 +509,18 @@
   border-color: #d2cfca;
   background: #faf9f7;
   color: #47413b;
+}
+
+.status_preparation {
+  border-color: #e7c982;
+  background: #fff8e8;
+  color: #6a4507;
+}
+
+.status_contract_only {
+  border-color: #c7bfba;
+  background: #f7f4f2;
+  color: #3d332e;
 }
 
 .cta {

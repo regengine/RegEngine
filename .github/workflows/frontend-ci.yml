@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
     paths:
       - 'frontend/**'
+      - 'docs/**'
+      - 'sales/**'
+      - 'sales_enablement/**'
+      - 'frontend/public/**'
       - 'services/admin/app/auth/**'
       - 'services/admin/app/e2e_safety.py'
       - 'services/admin/app/session_store.py'
@@ -13,6 +17,7 @@ on:
       - 'services/admin/tests/test_e2e_safety.py'
       - 'services/admin/tests/test_webauthn_router.py'
       - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/generate_openapi.py'
       - 'scripts/start-e2e-backend.sh'
       - 'requirements.in'
       - 'requirements.lock'
@@ -23,6 +28,10 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'docs/**'
+      - 'sales/**'
+      - 'sales_enablement/**'
+      - 'frontend/public/**'
       - 'services/admin/app/auth/**'
       - 'services/admin/app/e2e_safety.py'
       - 'services/admin/app/session_store.py'
@@ -31,6 +40,7 @@ on:
       - 'services/admin/tests/test_e2e_safety.py'
       - 'services/admin/tests/test_webauthn_router.py'
       - 'scripts/seed_passwordless_e2e_user.py'
+      - 'scripts/generate_openapi.py'
       - 'scripts/start-e2e-backend.sh'
       - 'requirements.in'
       - 'requirements.lock'

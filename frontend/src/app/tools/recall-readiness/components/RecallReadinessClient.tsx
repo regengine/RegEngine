@@ -97,7 +97,7 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
                 type: 'select',
                 hint: 'Ref: 21 CFR §1.1460',
                 options: [
-                    { label: 'Yes, guaranteed', value: 'yes', weight: 4 },
+                    { label: 'Yes, documented', value: 'yes', weight: 4 },
                     { label: 'Unsure/No', value: 'no', weight: 0 },
                 ]
             },

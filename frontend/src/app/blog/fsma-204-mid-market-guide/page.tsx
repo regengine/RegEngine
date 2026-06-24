@@ -217,9 +217,9 @@ export default function FSMA204MidMarketGuide() {
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm pl-4">
                   <li>• Lock in final CTE/KDE definitions</li>
                   <li>• Achieve consistent 24-hour response times</li>
-                  <li>• Complete FDA audit readiness checks</li>
+                  <li>• Complete FDA-oriented record request drills</li>
                   <li>• Document all compliance processes</li>
-                  <li>• Go-live by July 20, 2028</li>
+                  <li>• Target operational readiness before July 20, 2028</li>
                 </ul>
               </div>
             </div>

@@ -26,7 +26,7 @@ const TLC_VALIDATOR_CONFIG: ToolConfig = {
         ],
         leadGate: {
             title: 'Download the Lot Coding Standard',
-            description: 'Get our guide on "Defensible Lot Coding" to ensure your TLCs survive an FDA audit and maintain GS1 compatibility.',
+            description: 'Get our guide on "Defensible Lot Coding" to help your TLCs support FDA record review and maintain GS1 compatibility.',
             cta: 'Download Standard'
         }
     }
@@ -100,7 +100,7 @@ export function TLCValidatorClient() {
                         {findings.length === 0 ? (
                             <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20">
                                 <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)]" />
-                                <span className="text-sm">No structural concerns detected by the heuristic checks. This is not a uniqueness guarantee — uniqueness must be enforced by your assignment system.</span>
+                                <span className="text-sm">No structural concerns detected by the heuristic checks. This is not a uniqueness promise — uniqueness must be enforced by your assignment system.</span>
                             </div>
                         ) : (
                             findings.map((f, i) => (

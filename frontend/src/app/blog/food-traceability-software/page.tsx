@@ -100,15 +100,15 @@ export default function FoodTraceabilitySoftwarePage() {
             <div className="bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] rounded-lg p-6">
               <h3 className="font-semibold text-[var(--re-text-primary)] mb-4 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-[var(--re-brand)]" />
-                Audit-Ready Reporting
+                Review-Ready Reporting
               </h3>
               <p className="text-[var(--re-text-secondary)] text-sm mb-4">
-                FSMA 204 compliance isn't just about tracking events—it's about proving you did it. Ensure the platform generates audit-ready reports that FDA investigators will accept: traceback records showing product movement, deviation logs, verification records, and tamper-evident timestamps.
+                  FSMA 204 traceability is not just about tracking events; it is about preserving evidence for review. Look for FDA-oriented reports that support traceback review: product movement records, deviation logs, verification records, and tamper-evident timestamps.
               </p>
               <ul className="space-y-2 text-sm text-[var(--re-text-secondary)]">
                 <li className="flex gap-2"><span className="text-[var(--re-brand)]">•</span> <span>Automated traceback report generation</span></li>
                 <li className="flex gap-2"><span className="text-[var(--re-brand)]">•</span> <span>Chain-of-custody documentation</span></li>
-                <li className="flex gap-2"><span className="text-[var(--re-brand)]">•</span> <span>Data export in EPCIS 2.0 or FDA-accepted formats</span></li>
+                <li className="flex gap-2"><span className="text-[var(--re-brand)]">•</span> <span>Data export in EPCIS 2.0 or FDA-oriented sortable formats</span></li>
               </ul>
             </div>
           </div>
@@ -311,7 +311,7 @@ export default function FoodTraceabilitySoftwarePage() {
             <ul className="space-y-3">
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span className="text-[var(--re-text-secondary)]"><strong className="text-[var(--re-text-primary)]">Capability matters most.</strong> Choose a platform that captures your specific CTEs and generates audit-ready reports. Feature breadth is less important than depth in the areas you need.</span>
+                <span className="text-[var(--re-text-secondary)]"><strong className="text-[var(--re-text-primary)]">Capability matters most.</strong> Choose a platform that captures your specific CTEs and generates review-ready reports. Feature breadth is less important than depth in the areas you need.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
@@ -356,7 +356,7 @@ export default function FoodTraceabilitySoftwarePage() {
               Ready to evaluate solutions?
             </h2>
             <p className="text-[var(--re-text-secondary)] mb-8 leading-relaxed">
-              RegEngine automates the platform selection and implementation process. We ingest your supplier data, verify compliance, and export audit-ready records in days, not months.
+              RegEngine helps evaluate supplier data, surface traceability gaps, and export review-ready records in days, not months.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link

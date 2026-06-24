@@ -19,7 +19,7 @@ import {
 export const metadata: Metadata = {
     title: 'Retention & Export Guidance | RegEngine',
     description:
-        'Data retention windows, export scheduling, format guarantees, and off-platform archive recommendations for FSMA 204 compliance.',
+        'Data retention windows, export scheduling, format availability, and off-platform archive recommendations for FSMA 204 compliance.',
     openGraph: {
         title: 'Retention & Export Guidance | RegEngine',
         description: 'Retention windows, export formats, and archive guidance for RegEngine FSMA 204.',
@@ -50,7 +50,7 @@ const RETENTION_TIMELINE = [
         duration: 'After the contract-defined window',
         icon: Trash2,
         color: 'bg-re-danger-muted0/15 text-re-danger',
-        detail: 'All tenant data is permanently deleted from production databases and backups. Deletion is irreversible. RegEngine cannot recover data after this point.',
+        detail: 'Tenant data is scheduled for deletion from active systems after the contract-defined window. Provider backups, immutable logs, and disaster recovery copies expire on their normal cycles, and legal or regulatory holds may require longer retention.',
     },
 ];
 const EXPORT_FORMATS = [
@@ -63,7 +63,7 @@ const EXPORT_FORMATS = [
     {
         format: 'FDA sortable spreadsheet',
         standard: '21 CFR 1.1455',
-        useCase: 'The exact format FDA inspectors expect during a traceability investigation or recall',
+        useCase: 'FDA-oriented sortable spreadsheet aligned to 21 CFR 1.1455 where applicable',
         icon: Download,
     },
     {
@@ -145,7 +145,7 @@ export default function RetentionPage() {
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Vendor continuity risk</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                             No vendor should be a single point of failure for regulatory records. Schedule recurring exports and store them in your own infrastructure
-                            from day one. If RegEngine is unavailable during an FDA investigation, your off-platform archives satisfy the requirement independently.
+                            from day one. If RegEngine is unavailable during an FDA investigation, your off-platform archives help support retrieval and retention obligations.
                         </p>
                     </div>
                     <div className={`${card} p-5`}>
@@ -157,7 +157,7 @@ export default function RetentionPage() {
                     <div className={`${card} p-5`}>
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">No vendor lock-in</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                            Exports are intended to use industry-standard formats such as EPCIS 2.0, FDA spreadsheet layouts, and CSV. Exact format coverage depends on the workflow enabled for your account.
+                Exports are intended to use industry-standard formats such as EPCIS 2.0, FDA spreadsheet layouts, and CSV. Format coverage depends on the workflow enabled for your account.
                         </p>
                     </div>
                 </div>
@@ -219,8 +219,8 @@ export default function RetentionPage() {
                         <h3 className="text-lg font-bold text-[var(--re-text-primary)] mb-2">Our recommendation</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                             Set up weekly automated exports to your own object storage within the first week of onboarding.
-                            Use the audit evidence bundle format — it ships with a SHA-256 manifest so records can be verified out-of-band. Cryptographic signature verification across the message bus is rolling out.
-                            This ensures you meet FSMA 204&apos;s two-year retention requirement regardless of your RegEngine subscription status.
+                            Use the audit evidence bundle format — it ships with a SHA-256 manifest so records can be verified out-of-band. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.
+                            This supports FSMA 204&apos;s two-year retention requirement regardless of your RegEngine subscription status.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-3 justify-center mt-8">

@@ -2,11 +2,15 @@
 
 **Version:** 1.0
 **Last Updated:** 2026-01-03
-**Status:** Active
+**Status:** Internal planning draft - not a public commitment
+
+> This document contains internal targets and historical architecture assumptions. Do not use it as procurement, DPA, security, or public Trust Center copy without review against `docs/security/TRUST_CLAIMS_MATRIX.md` and the current repository. Executed agreements control availability, retention, deletion, and support commitments.
 
 ---
 
 ## 1. Availability
+
+These are planning targets for capacity and incident-response design. They are not public SLAs and should not be quoted externally unless an executed agreement adopts them.
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
@@ -14,7 +18,9 @@
 | **Planned Downtime** | < 4 hours/month | Maintenance windows |
 | **Unplanned Downtime** | < 43 min/month | Incident tracking |
 
-### SLA Tiers
+### Planning Availability Tiers
+
+The tier labels below are internal modeling examples, not packaged service commitments.
 
 | Tier | Availability | Downtime/Year |
 |------|--------------|---------------|
@@ -51,7 +57,7 @@
 | Concurrent Users | 100 |
 | API Requests/sec | 500 |
 | Documents/hour (ingestion) | 100 |
-| Kafka Messages/sec | 1000 |
+| Background tasks/hour | Scoped per deployment |
 
 ---
 
@@ -60,16 +66,16 @@
 | Metric | Target | Justification |
 |--------|--------|---------------|
 | **RTO** (Recovery Time Objective) | 4 hours | Maximum acceptable downtime |
-| **RPO** (Recovery Point Objective) | 15 minutes | Kafka retention window |
+| **RPO** (Recovery Point Objective) | Contract-defined | Depends on active hosting configuration |
 
 ### Backup Schedule
 
 | Data Store | Frequency | Retention |
 |------------|-----------|-----------|
-| PostgreSQL | Hourly | 30 days |
-| Neo4j | Daily | 14 days |
-| S3 (documents) | Versioned | 7 years (regulatory) |
-| Kafka | 7 days | Replay capability |
+| PostgreSQL | Configuration-dependent | Executed agreement and active hosting configuration control |
+| Neo4j | Configuration-dependent | Legacy/optional graph posture; active hosting configuration controls |
+| Object storage (documents) | Configuration-dependent | Executed agreement controls |
+| Background task queue | Configuration-dependent | Replay capability depends on enabled workflow |
 
 ---
 
@@ -81,7 +87,7 @@
 |---------|-----|-----|---------|
 | Admin API | 1 | 3 | CPU > 70% |
 | Ingestion | 2 | 10 | Queue depth > 100 |
-| NLP | 2 | 10 | Kafka lag > 1000 |
+| NLP | 2 | 10 | Queue depth or configured worker backlog |
 | Graph | 2 | 5 | CPU > 70% |
 | Compliance | 1 | 5 | CPU > 70% |
 
@@ -108,21 +114,25 @@
 
 ### Encryption
 
+Implementation details below are target patterns. Confirm the current deployment provider and key-management setup before using these in customer-facing material.
+
 | Layer | Standard |
 |-------|----------|
-| Data in Transit | TLS 1.3 |
-| Data at Rest | AES-256 |
-| Secrets | AWS KMS / Vault |
+| Data in Transit | Modern TLS configurations |
+| Data at Rest | Managed-provider encryption at rest |
+| Secrets | Provider key management or vault service, as configured |
 | API Keys | bcrypt hash (cost 12) |
 
 ### Network
+
+Network-control examples vary by host and environment. Treat this table as a deployment checklist until the live stack is verified.
 
 | Requirement | Implementation |
 |-------------|----------------|
 | SSRF Protection | Block private IPs |
 | Rate Limiting | Per-key, Redis-backed |
-| DDoS Protection | WAF + CloudFront |
-| VPC Isolation | Private subnets for data |
+| DDoS Protection | Provider edge/WAF controls where configured |
+| Network Isolation | Private network controls where configured |
 
 ---
 
@@ -132,19 +142,19 @@
 
 | Event Type | Retention | Immutability |
 |------------|-----------|--------------|
-| Authentication | 2 years | WORM storage |
-| Data Access | 7 years | WORM storage |
-| Configuration Changes | 7 years | WORM storage |
-| API Calls | 90 days | Log aggregation |
+| Authentication | Executed agreement controls | Append-oriented logs where configured |
+| Data Access | Executed agreement controls | Append-oriented logs where configured |
+| Configuration Changes | Executed agreement controls | Append-oriented logs where configured |
+| API Calls | Executed agreement and active hosting configuration control | Log aggregation where configured |
 
 ### Regulatory Standards
 
 | Standard | Status | Evidence |
 |----------|--------|----------|
-| SOC 2 Type II | Roadmap Y1 | Control matrix |
+| External assurance program | Preparation | Control matrix |
 | GDPR | Partial | Data handling policy |
-| FSMA 204 | Implemented | CTE/KDE tracking |
-| 21 CFR Part 11 | Roadmap | E-signatures |
+| FSMA 204 | Supported | CTE/KDE tracking |
+| Electronic-record controls | Preparation | E-signature and audit controls |
 
 ---
 
@@ -157,21 +167,25 @@
 | Format | Structured JSON |
 | Correlation ID | X-Request-ID header |
 | Log Level | Configurable per service |
-| Retention | 30 days hot, 1 year cold |
+| Retention | Executed agreement and active hosting configuration control |
 
 ### Metrics
+
+Tool names are planning references; use the active deployment's observability stack as the source of truth.
 
 | Category | Tool | Endpoints |
 |----------|------|-----------|
 | Application | Prometheus | `/metrics` |
-| Infrastructure | CloudWatch | ECS/RDS metrics |
-| Business | Custom dashboards | Grafana |
+| Infrastructure | Provider monitoring | Database/service metrics |
+| Business | Custom dashboards | Implementation-dependent |
 
 ### Alerting
 
+Response-time rows are internal operating targets unless adopted by an executed support agreement.
+
 | Severity | Response Time | Channel |
 |----------|---------------|---------|
-| Critical (SEV1) | 15 min | PagerDuty |
+| Critical (SEV1) | Target defined by support agreement or incident plan | On-call channel |
 | High (SEV2) | 1 hour | Slack + Email |
 | Medium (SEV3) | 4 hours | Email |
 | Low (SEV4) | Next business day | Ticket |

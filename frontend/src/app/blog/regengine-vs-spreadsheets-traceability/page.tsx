@@ -136,7 +136,7 @@ export default function RegEngineVsSpreadsheets() {
               </div>
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              When you rely on humans to enter traceability data into a spreadsheet, you're guaranteed to have gaps and errors. RegEngine reduces human error through automation and validation.
+              When you rely on humans to enter traceability data into a spreadsheet, gaps and errors are likely. RegEngine reduces human error through automation and validation.
             </p>
           </div>
 
@@ -158,7 +158,7 @@ export default function RegEngineVsSpreadsheets() {
                   <li>• Finding the right data: which file version is current? Where's the 2022 data?</li>
                   <li>• Manually querying: searching through thousands of rows for matching products and dates</li>
                   <li>• Cross-referencing: matching suppliers to lot codes, then to customers (hours of work)</li>
-                  <li>• Formatting: converting your data into the FDA's required format (EPCIS 2.0) by hand</li>
+                  <li>• Formatting: organizing data into FDA-oriented sortable records and buyer-requested formats by hand</li>
                   <li>• Review and validation: making sure the report is complete and accurate</li>
                   <li>• Total time: 8-16 hours on a good day. You miss the deadline.</li>
                 </ul>
@@ -172,9 +172,9 @@ export default function RegEngineVsSpreadsheets() {
                 <ul className="space-y-2 text-[var(--re-text-secondary)] text-sm">
                   <li>• One-click query: search by product name, date range, lot code, or customer</li>
                   <li>• Instant results: within seconds, see all matching transactions</li>
-                  <li>• Auto-formatted: data is automatically formatted in FDA-required EPCIS 2.0 format</li>
+                  <li>• Export workflow: data can be organized into FDA-oriented sortable records and EPCIS 2.0 where buyer workflows require it</li>
                   <li>• Traceability links: immediate source and recipient are already linked in the system</li>
-                  <li>• One-click export: generate a complete, audit-ready report in minutes</li>
+                  <li>• One-click export: generate a complete, review-ready report in minutes</li>
                   <li>• Total time: 5-30 minutes from request to delivery. You exceed the requirement.</li>
                 </ul>
               </div>
@@ -336,7 +336,7 @@ export default function RegEngineVsSpreadsheets() {
               </li>
               <li className="flex gap-3">
                 <AlertCircle className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Your FSMA 204 deadline is less than 12 months away</span>
+                <span>Your implementation window is shorter than your data mapping, supplier onboarding, and training timeline</span>
               </li>
             </ul>
           </div>
@@ -361,11 +361,11 @@ export default function RegEngineVsSpreadsheets() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>RegEngine provides a dedicated traceability system that meets all FSMA 204 requirements and reduces labor costs.</span>
+                <span>RegEngine supports FSMA 204 traceability workflows by validating mapped CTE/KDE records and producing FDA-oriented export packages; compliance depends on complete source data and operating procedures.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>If you have more than 50 SKUs, 10+ suppliers, or less than 12 months to the deadline, you need a dedicated system.</span>
+                <span>If you have more than 50 SKUs, 10+ suppliers, or a compressed implementation timeline, evaluate a dedicated traceability workflow.</span>
               </li>
             </ul>
           </div>
