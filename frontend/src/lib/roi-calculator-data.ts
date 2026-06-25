@@ -3,7 +3,7 @@ import { ToolConfig } from '@/types/fsma-tools';
 export const ROI_CALCULATOR_CONFIG: ToolConfig = {
     id: 'roi-calculator',
     title: 'FSMA 204 Savings Estimator',
-    description: 'Get an illustrative sense of where compliance automation could pay back. Numbers depend on your inputs and on assumptions we publish in the methodology note. Not a forecast.',
+    description: 'Get an illustrative sense of where traceability workflow automation could pay back. Numbers depend on your inputs and on assumptions we publish in the methodology note. Not a forecast.',
     icon: 'TrendingUp',
     stages: {
         questions: [

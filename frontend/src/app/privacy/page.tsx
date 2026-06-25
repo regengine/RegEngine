@@ -79,18 +79,18 @@ const collectItems = [
 ];
 
 const useItems = [
-  { Icon: Server, text: 'Providing and maintaining RegEngine services' },
-  { Icon: Database, text: 'Processing your compliance data as directed by you' },
-  { Icon: FileText, text: 'Generating §1.1455(c)-formatted exports and reports you request' },
+  { Icon: Server, text: 'Providing, maintaining, and securing RegEngine services' },
+  { Icon: Database, text: 'Processing your compliance data as directed by you and the applicable agreement' },
+  { Icon: FileText, text: 'Generating FDA-oriented exports and reports you request' },
   { Icon: Bell, text: 'Sending transactional emails (account, billing, compliance alerts)' },
   { Icon: RefreshCw, text: 'Improving our platform based on aggregate usage patterns' },
   { Icon: Mail, text: 'Responding to your support requests' },
 ];
 
 const dontItems = [
-  'We do not sell your personal data or compliance data to third parties.',
-  'We do not train RegEngine-owned models on your compliance data. Where we use third-party LLM providers (e.g., OpenAI, Vertex AI) for extraction, those calls run under the providers\' standard data-handling terms — confirm specific terms with us before relying on this for sensitive content.',
-  'We do not share your data with other RegEngine tenants. PostgreSQL row-level policies and authenticated tenant context are designed to restrict cross-tenant access; identity-resolution and graph-layer hardening is in active rollout.',
+  'We do not sell or share your personal data or compliance data as those terms are defined by CCPA/CPRA.',
+  'We do not train RegEngine-owned models on your compliance data. Where third-party LLM providers such as OpenAI or Vertex AI are enabled for extraction, those calls run under the applicable provider terms and the executed agreement.',
+  'We do not share your data with other RegEngine tenants. PostgreSQL row-level policies and authenticated tenant context are designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths; identity-resolution and graph-layer hardening is in active rollout.',
   'We do not serve targeted ads.',
   'We do not share your data with data brokers.',
 ];
@@ -99,17 +99,17 @@ const storageItems = [
   {
     Icon: Globe,
     subtitle: 'Where',
-    text: 'Your data is stored in US-based cloud infrastructure with encryption at rest (AES-256) and in transit (TLS 1.3).',
+    text: 'RegEngine uses US-default cloud infrastructure with managed-provider encryption at rest and encrypted transport. Provider-specific locations are listed in the DPA.',
   },
   {
     Icon: Lock,
     subtitle: 'Isolation',
-    text: "Tenant data is isolated via PostgreSQL row-level policies and authenticated tenant context, designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout — see the DPA for the full subprocessor list.",
+    text: "Tenant data is scoped by PostgreSQL row-level policies and authenticated tenant context, designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in active rollout — see the DPA for the full subprocessor list.",
   },
   {
     Icon: Hash,
     subtitle: 'Integrity',
-    text: 'Regulatory facts are cryptographically hashed with SHA-256. You can independently verify data integrity using our open verification tools.',
+    text: 'Supported evidence workflows create SHA-256 manifests so exported records can be independently checked using RegEngine verification tools.',
   },
 ];
 
@@ -122,7 +122,7 @@ const rightsItems = [
   {
     Icon: Trash2,
     subtitle: 'Deletion',
-    text: 'You can request deletion of your account and all associated data by contacting privacy@regengine.co. We will complete deletion within 30 days.',
+    text: 'You can request deletion of your account and associated data by contacting privacy@regengine.co. Timing, retention exceptions, and confirmation steps follow the executed agreement or DPA.',
   },
   {
     Icon: UserCheck,
@@ -132,7 +132,7 @@ const rightsItems = [
   {
     Icon: KeyRound,
     subtitle: 'California Residents (CCPA)',
-    text: 'California residents have additional rights under the CCPA, including the right to know what personal information we collect and the right to opt out of data sales. We do not sell personal information.',
+    text: 'California residents have additional rights under the CCPA/CPRA, including the right to know what personal information we collect and the right to opt out of certain sales or sharing. We do not sell or share personal information as defined by CCPA/CPRA.',
   },
 ];
 
@@ -186,8 +186,8 @@ export default function PrivacyPage() {
               </h2>
               <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                 Here&apos;s what we collect, why, and what we do with it. Your compliance data belongs
-                to you — always. We enforce tenant isolation at the database layer, hash every
-                regulatory fact with SHA-256, and never sell your data to anyone.
+                to you. RegEngine is designed to restrict tenant access at the database layer,
+                provide verifiable evidence exports where configured, and never sell your data.
               </p>
             </div>
           </div>
@@ -330,10 +330,13 @@ export default function PrivacyPage() {
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     We retain your compliance data for the duration of your subscription and any
                     post-cancellation period defined by your customer agreement. After cancellation,
-                    you can request a full data export. Customers with regulatory
-                    retention obligations should maintain recurring exports or an external archive
-                    rather than relying on an active subscription alone. After the retention period,
-                    data is permanently deleted.
+                    you can request available exports of customer-submitted compliance data, subject
+                    to plan, workspace configuration, retention status, and the executed agreement.
+                    Customers with regulatory retention obligations should maintain recurring exports
+                    or an external archive rather than relying on an active subscription alone. After the applicable
+                    retention period, data is scheduled for deletion from active systems; provider
+                    backups, immutable logs, and disaster recovery copies expire on their normal
+                    cycles, and legal or regulatory holds may require longer retention.
                   </p>
                 </div>
               </div>
@@ -392,13 +395,14 @@ export default function PrivacyPage() {
                     Third-Party Services
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We use a limited list of third-party subprocessors to operate RegEngine — currently
-                    Supabase, Railway, Vercel, Sentry (incl. session replay), Resend, PostHog, OpenAI
-                    (incl. Vision), Google Cloud / Vertex AI, Stripe, and Redpanda. The full
-                    authoritative list, including purpose, data processed, and region, is in the{' '}
-                    <Link href="/dpa" className="text-[var(--re-brand)] underline">DPA</Link>. Each
-                    provider is bound by a data-processing agreement and material changes to the list
-                    are notified per the DPA.
+                    RegEngine uses subprocessors to operate the platform. Default processors support
+                    core hosting, database, and request-routing functions; optional processors are used
+                    only where the relevant billing flow, analytics flow, email flow, object storage,
+                    or AI extraction workflow is enabled or configured. The authoritative public list,
+                    including purpose, data processed, region, and availability, is in the{' '}
+                    <Link href="/dpa" className="text-[var(--re-brand)] underline">DPA</Link>. The
+                    executed agreement controls notice periods, objections, and any negotiated
+                    subprocessor terms.
                   </p>
                 </div>
               </div>
@@ -474,8 +478,8 @@ export default function PrivacyPage() {
             Your data belongs to you — always
           </h2>
           <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
-            Become a Founding Design Partner to see Row-Level Security and Merkle chain verification live in
-            your workspace. No strings attached.
+            Become a Founding Design Partner to review the current tenant-isolation posture and
+            evidence verification workflows in your workspace.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Link href="/alpha">

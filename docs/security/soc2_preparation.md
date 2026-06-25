@@ -84,7 +84,7 @@
 | **P1** | Risk Assessment (formal) | Annual risk assessment process |
 | **P1** | Business Continuity Plan | Document RTO/RPO, failover procedures |
 | **P1** | Security Handbook | Consolidate existing security docs |
-| **P2** | Vendor Risk Assessments | Assess Supabase, Vercel, Stripe, Redpanda |
+| **P2** | Vendor Risk Assessments | Assess default and where-configured subprocessors listed in the DPA |
 | **P2** | Change Advisory Board | Formalize approval gates for production changes |
 | **P2** | Code of Conduct | Draft organizational ethics policy |
 

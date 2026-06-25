@@ -532,8 +532,8 @@ Cypher query in graph service has hardcoded `LIMIT 100`. No cursor-based paginat
         "labels": ["P2", "marketing"],
         "body": """## Problem
 - 50% founding partner discount has no visible terms (permanent? time-limited? which tiers?)
-- No free trial or money-back guarantee mentioned for $999-$1499 tiers
-- Fallback pricing uses unclear abbreviations ("GA")
+- No free-trial or refund-policy language mentioned for $999-$1499 tiers
+- Fallback pricing uses unclear availability abbreviations
 - No payment method visibility (Stripe, wire, etc.)
 
 ## File
@@ -541,7 +541,7 @@ Cypher query in graph service has hardcoded `LIMIT 100`. No cursor-based paginat
 
 ## Action
 - Clarify discount terms
-- Add free trial or guarantee language
+- Add free-trial or refund-policy language
 - Show accepted payment methods
 """,
     },

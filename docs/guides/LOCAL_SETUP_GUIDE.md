@@ -294,8 +294,8 @@ curl http://localhost:8002/health | jq
 ```
 
 For the current minimal local stack, traceability data is written to PostgreSQL
-by the running backend service. Kafka/Redpanda and Neo4j are legacy optional
-components and are not started by `docker-compose.dev.yml`.
+by the running backend service. Legacy event-broker and graph components are
+optional and are not started by `docker-compose.dev.yml`.
 
 ### Step 4: Query Current APIs
 
@@ -325,7 +325,7 @@ RegEngine includes a complete FDA Food Safety Modernization Act (FSMA) 204 compl
 This demonstrates:
 - **Forward tracing** (find all downstream products from a contaminated lot)
 - **Backward tracing** (find all upstream suppliers)
-- **FDA-compliant CSV export** (24-hour recall requirement)
+- **FDA-oriented CSV export** (24-hour recall requirement)
 - **Contact list generation** (notify affected facilities)
 
 ### Step 2: Test FSMA API Endpoints
@@ -347,7 +347,7 @@ curl -H "X-RegEngine-API-Key: $API_KEY" \
 curl -H "X-RegEngine-API-Key: $API_KEY" \
   http://localhost:8200/v1/fsma/trace/backward/FC-20240116-A | jq
 
-# Export FDA-compliant CSV
+# Export FDA-oriented CSV
 curl -H "X-RegEngine-API-Key: $API_KEY" \
   http://localhost:8200/v1/fsma/export/trace/SV-20240115-001
 ```

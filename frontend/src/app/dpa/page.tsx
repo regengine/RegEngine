@@ -16,6 +16,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import { TRUST_SUBPROCESSORS } from '@/lib/trust-subprocessors';
 
 export const metadata: Metadata = {
   title: 'Data Processing Agreement | RegEngine',
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Data Processing Agreement | RegEngine',
     description:
-      'RegEngine DPA — GDPR-compliant data processor obligations for food safety traceability data.',
+      'RegEngine DPA — data processor obligations for food safety traceability data.',
     url: 'https://regengine.co/dpa',
     type: 'website',
   },
@@ -48,74 +49,21 @@ const TOC = [
   { id: 'contact', label: 'Contact' },
 ];
 
-/* ── Sub-processors ───────────────────────────────────────────── */
-
-const SUBPROCESSORS = [
+const DPA_SUMMARY_CARDS = [
   {
-    name: 'Supabase',
-    purpose: 'Authentication, user database (PostgreSQL), and row-level security enforcement for passwordless sessions.',
-    location: 'United States (AWS us-east-2)',
-    link: 'https://supabase.com/privacy',
+    Icon: FileText,
+    title: 'Summary only',
+    text: 'This page summarizes RegEngine standard data processing terms for food traceability data that may include personal information.',
   },
   {
-    name: 'Railway',
-    purpose: 'Backend API hosting for compliance, ingestion, NLP, and graph services',
-    location: 'United States',
-    link: 'https://railway.app/legal/privacy',
+    Icon: ShieldCheck,
+    title: 'Executed terms control',
+    text: 'Binding commitments are controlled by the DPA, order form, or negotiated agreement signed by your organization and RegEngine.',
   },
   {
-    name: 'Vercel',
-    purpose: 'Frontend hosting, CDN, edge middleware, and build infrastructure',
-    location: 'United States / Global CDN',
-    link: 'https://vercel.com/legal/privacy-policy',
-  },
-  {
-    name: 'Stripe',
-    purpose: 'Payment processing and subscription management',
-    location: 'United States',
-    link: 'https://stripe.com/privacy',
-  },
-  {
-    name: 'Resend',
-    purpose: 'Transactional email delivery for account, billing, compliance alerts, team invites, and passwordless sign-in codes.',
-    location: 'United States',
-    link: 'https://resend.com/legal/privacy-policy',
-  },
-  {
-    name: 'Sentry',
-    purpose: 'Error monitoring, performance tracing, and session replay. Stack traces and replays of authenticated UI may include incidental tenant identifiers and request context.',
-    location: 'United States',
-    link: 'https://sentry.io/privacy/',
-  },
-  {
-    name: 'PostHog',
-    purpose: 'Product analytics for consented users. Captures product events after user consent.',
-    location: 'United States',
-    link: 'https://posthog.com/privacy',
-  },
-  {
-    name: 'OpenAI',
-    purpose: 'LLM extraction and label-image vision. Processes document text and uploaded label images for KDE extraction.',
-    location: 'United States (multi-region)',
-    link: 'https://openai.com/policies/privacy-policy',
-  },
-  {
-    name: 'Google Cloud / Vertex AI',
-    purpose: 'Gemini-based extraction. Processes document text submitted for extraction.',
-    location: 'us-central1',
-    link: 'https://cloud.google.com/terms/cloud-privacy-notice',
-  },
-  {
-    name: 'Redpanda',
-    purpose: 'Kafka-compatible event streaming for ingested events in transit.',
-    location: 'United States',
-    link: 'https://redpanda.com/legal/privacy-policy',
-  },
-  {
-    name: 'Cloudflare R2',
-    purpose: 'Object storage for ingested document artifacts (raw uploads, normalized JSON, parsed text extracts). S3-compatible API; AES-256 server-side encryption at rest.',
-    location: 'United States / global edge (S3-compatible API)',
-    link: 'https://www.cloudflare.com/privacypolicy/',
+    Icon: Users,
+    title: 'Personal data may be included',
+    text: 'Supplier contacts, employee identifiers, logistics personnel, or other covered data subjects may appear in traceability workflows.',
   },
 ];
 
@@ -125,17 +73,17 @@ const SECURITY_MEASURES = [
   {
     Icon: Lock,
     title: 'Encryption at Rest',
-    text: 'All customer data is encrypted at rest using AES-256. Traceability lot data and compliance records are additionally protected by SHA-256 content hashing for integrity verification.',
+    text: 'Customer data is stored with managed provider encryption at rest. Traceability lot data and compliance records are additionally protected by SHA-256 content hashing for integrity verification where evidence workflows create hash manifests.',
   },
   {
     Icon: Globe,
     title: 'Encryption in Transit',
-    text: 'All data transmitted between customers, the RegEngine platform, and sub-processors is encrypted using TLS 1.3.',
+    text: 'Data transmitted between customers, the RegEngine platform, and sub-processors is encrypted using modern TLS configurations.',
   },
   {
     Icon: Shield,
     title: 'Tenant Isolation',
-    text: 'Customer data is isolated using PostgreSQL row-level policies and authenticated tenant context, designed to restrict cross-tenant access. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.',
+    text: 'Customer data is isolated using PostgreSQL row-level policies and authenticated tenant context, designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in active rollout; details available under NDA.',
   },
   {
     Icon: Server,
@@ -150,7 +98,7 @@ const SECURITY_MEASURES = [
   {
     Icon: RefreshCw,
     title: 'Incident Response',
-    text: 'RegEngine maintains a documented incident response procedure. Security incidents are triaged within 4 hours of detection, with affected customers notified within 72 hours of confirmed personal data breach.',
+    text: 'RegEngine maintains a documented incident response procedure. Security incidents are triaged promptly, with affected customers notified without undue delay and according to the executed agreement and applicable law.',
   },
 ];
 
@@ -164,7 +112,7 @@ export default function DpaPage() {
       <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
         <div className="flex items-center gap-2.5 mb-5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
-            <ShieldCheck className="h-3 w-3" /> GDPR Compliant
+            <ShieldCheck className="h-3 w-3" /> Data Processing Terms
           </span>
         </div>
         <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
@@ -196,22 +144,21 @@ export default function DpaPage() {
           className="rounded-2xl border border-[var(--re-brand)]/20 p-6"
           style={{ background: 'var(--re-brand-muted)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
         >
-          <div className="flex items-start gap-3">
-            <FileText className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
-            <div>
-              <h2 className="text-[15px] font-bold text-[var(--re-text-primary)] mb-1">
-                This agreement is incorporated into your RegEngine subscription.
-              </h2>
-              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                By using RegEngine to process food traceability data that includes personal
-                information — such as supplier contacts, employee records, or data subjects covered
-                by GDPR, CCPA, or other applicable privacy law — you (the <strong>Controller</strong>)
-                and RegEngine, Inc. (the <strong>Processor</strong>) agree to the terms of this Data
-                Processing Agreement (&ldquo;DPA&rdquo;). This DPA supplements and is incorporated
-                into the RegEngine Terms of Service.
-              </p>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {DPA_SUMMARY_CARDS.map(({ Icon, title, text }) => (
+              <div key={title} className="rounded-xl border border-[var(--re-brand)]/15 bg-[var(--re-surface-card)] p-4">
+                <Icon className="mb-3 h-5 w-5 text-[var(--re-brand)]" />
+                <h2 className="text-[13px] font-bold text-[var(--re-text-primary)]">{title}</h2>
+                <p className="mt-2 text-[12px] leading-relaxed text-[var(--re-text-muted)]">{text}</p>
+              </div>
+            ))}
           </div>
+          <p className="mt-4 text-sm leading-relaxed text-[var(--re-text-muted)]">
+            This public page is not a substitute for an executed DPA, order form, or negotiated
+            agreement. It is a diligence summary for standard processor obligations, subprocessors,
+            data subject rights, incident notification, deletion, transfers, audits, and liability
+            boundaries.
+          </p>
         </div>
       </section>
 
@@ -323,18 +270,18 @@ export default function DpaPage() {
                 3. Processor Obligations
               </h2>
               <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                <p>RegEngine shall:</p>
+                <p>RegEngine&apos;s standard processor commitments are intended to include:</p>
                 <ul className="list-none space-y-2 pl-0">
                   {[
-                    'Process Personal Data only on documented instructions from the Controller, unless required to do so by applicable law (in which case RegEngine will notify the Controller before processing, to the extent permitted by law).',
-                    'Ensure that personnel authorised to process Personal Data have committed themselves to confidentiality or are under an appropriate statutory obligation of confidentiality.',
-                    'Implement the technical and organisational security measures described in Section 6 of this DPA.',
-                    'Not engage Sub-Processors without prior written authorisation from the Controller, except as set out in Section 4 of this DPA.',
-                    'Assist the Controller, by appropriate technical and organisational measures, in responding to requests from data subjects exercising their rights under Applicable Data Protection Law.',
-                    'Assist the Controller in ensuring compliance with security, breach notification, data protection impact assessment, and prior consultation obligations, taking into account the nature of processing and information available to RegEngine.',
-                    'Delete or return all Personal Data to the Controller after the end of the provision of Services, as described in Section 8 of this DPA, and delete existing copies unless applicable law requires storage.',
-                    'Make available to the Controller all information necessary to demonstrate compliance with the obligations of this DPA and allow for and contribute to audits as described in Section 10.',
-                    'Immediately inform the Controller if, in its opinion, an instruction infringes Applicable Data Protection Law.',
+                    'Processing Personal Data on documented customer instructions, unless applicable law requires otherwise.',
+                    'Requiring personnel authorized to process Personal Data to follow confidentiality obligations.',
+                    'Maintaining the technical and organizational security measures described in Section 6, subject to the executed agreement and current deployment posture.',
+                    'Using Sub-Processors under the authorization, notice, and objection process in the executed agreement or signed DPA.',
+                    'Assisting the Controller, by appropriate technical and organizational measures, in responding to applicable data subject rights requests.',
+                    'Assisting the Controller with security, breach notification, data protection impact assessment, and prior consultation obligations, taking into account the nature of processing and information available to RegEngine.',
+                    'Returning or scheduling active-system deletion of Personal Data after the end of Services, subject to legal-retention, backup, immutable-log, and executed-agreement limits.',
+                    'Providing available documentation reasonably needed to support DPA verification under the confidentiality, scope, and cost controls in the executed agreement.',
+                    'Informing the Controller if RegEngine believes an instruction infringes Applicable Data Protection Law, to the extent required and permitted by law.',
                   ].map((item, i) => (
                     <li key={i} className="flex items-start gap-2.5">
                       <ShieldCheck className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
@@ -351,23 +298,24 @@ export default function DpaPage() {
                 4. Sub-Processors
               </h2>
               <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-5">
-                The Controller grants RegEngine general authorisation to engage the Sub-Processors
-                listed below. RegEngine will notify the Controller at least 30 days before engaging
-                a new Sub-Processor or making a material change to an existing Sub-Processor, giving
-                the Controller the opportunity to object. RegEngine imposes data protection
-                obligations on each Sub-Processor equivalent to those in this DPA.
+                The executed agreement or signed DPA controls subprocessor authorization, notice,
+                objection, and termination rights. The list below summarizes current default and
+                where-configured processors. Default processors support core platform operations;
+                optional processors are used only where the relevant feature, billing flow, analytics
+                flow, object storage, or AI extraction workflow is enabled or configured.
               </p>
               <div className="rounded-xl border border-[var(--re-surface-border)] overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">
                       <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Sub-Processor</th>
-                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Purpose</th>
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Use</th>
+                      <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)]">Data Processed</th>
                       <th className="text-left px-4 py-3 font-semibold text-[var(--re-text-secondary)] hidden sm:table-cell">Location</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {SUBPROCESSORS.map((sp, i) => (
+                    {TRUST_SUBPROCESSORS.map((sp, i) => (
                       <tr
                         key={sp.name}
                         className={`border-b border-[var(--re-surface-border)] last:border-0 ${i % 2 === 1 ? 'bg-[var(--re-surface-card)]' : ''}`}
@@ -381,8 +329,12 @@ export default function DpaPage() {
                           >
                             {sp.name}
                           </a>
+                          <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--re-text-disabled)]">
+                            {sp.availabilityLabel}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-[var(--re-text-muted)]">{sp.purpose}</td>
+                        <td className="px-4 py-3 text-[var(--re-text-muted)]">{sp.dataProcessed}</td>
                         <td className="px-4 py-3 text-[var(--re-text-muted)] hidden sm:table-cell whitespace-nowrap">{sp.location}</td>
                       </tr>
                     ))}
@@ -412,8 +364,8 @@ export default function DpaPage() {
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3 mt-4">
                   {[
-                    { Icon: FileText, title: 'Access & Portability', text: 'Export all traceability and compliance records via the API or dashboard at any time.' },
-                    { Icon: Trash2, title: 'Erasure', text: 'Request deletion of your account and all associated data. Completed within 30 days.' },
+                    { Icon: FileText, title: 'Access & Portability', text: 'Export records through the API, dashboard, or enabled workflow surfaces available to your plan and agreement.' },
+                    { Icon: Trash2, title: 'Erasure', text: 'Request deletion under your executed agreement. Verified requests are scheduled for active-system deletion; provider backups expire on their normal cycles.' },
                     { Icon: Building2, title: 'Rectification', text: 'Update or correct records through the dashboard. API updates are available to all plans.' },
                   ].map(({ Icon, title, text }) => (
                     <div key={title} className="group rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4">
@@ -461,16 +413,16 @@ export default function DpaPage() {
               <div className="rounded-xl border border-re-warning/30 bg-re-warning-muted0/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                 <div className="flex items-center gap-2 mb-1">
                   <Bell className="h-4 w-4 text-re-warning shrink-0" />
-                  <h3 className="text-[14px] font-semibold text-[var(--re-text-primary)]">72-Hour Notification Commitment</h3>
+                  <h3 className="text-[14px] font-semibold text-[var(--re-text-primary)]">Incident Notification Process</h3>
                 </div>
                 <p>
-                  RegEngine will notify the Controller without undue delay — and in any event within
-                  72 hours of becoming aware — of a personal data breach affecting Personal Data
-                  processed on behalf of the Controller. Notification will be made to the primary
-                  account email address on record.
+                  RegEngine&apos;s standard incident process is designed to notify affected Controllers
+                  without undue delay. Where required by applicable law or agreed in the executed
+                  agreement or signed DPA, notification will follow the timeline and recipient
+                  process stated there.
                 </p>
                 <p>
-                  The notification will include, to the extent available at the time: a description of
+                  Any notification will include, to the extent available and appropriate at the time: a description of
                   the nature of the breach; the categories and approximate number of data subjects
                   concerned; the categories and approximate number of personal data records concerned;
                   the likely consequences of the breach; and the measures taken or proposed to address
@@ -478,13 +430,13 @@ export default function DpaPage() {
                 </p>
                 <p>
                   Where it is not possible to provide complete information at the time of initial
-                  notification, RegEngine will provide the information in phases without undue further
-                  delay.
+                  notification, RegEngine expects to provide reasonable updates as information becomes
+                  available, subject to confidentiality, security, legal privilege, and scope limits.
                 </p>
                 <p>
-                  RegEngine will document all personal data breaches, including those not required to
-                  be notified under applicable law, and will make that documentation available to the
-                  Controller on request.
+                  RegEngine may provide reasonable incident summaries to affected Controllers where
+                  required or agreed, subject to confidentiality, legal privilege, security, and scope
+                  limits.
                 </p>
               </div>
             </div>
@@ -496,30 +448,32 @@ export default function DpaPage() {
               </h2>
               <div className="space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                 <p>
-                  Upon termination or expiry of the Controller&apos;s subscription, RegEngine will
-                  retain the Controller&apos;s data for a 90-day grace period to allow the Controller
-                  to retrieve and export their data. After this grace period, all Personal Data and
-                  Traceability Data processed on behalf of the Controller will be permanently deleted
-                  from RegEngine systems and Sub-Processor systems, except to the extent that
-                  applicable law requires continued storage.
+                  Upon termination or expiry of the Controller&apos;s subscription, data return,
+                  retention, and deletion windows are controlled by the executed agreement or DPA.
+                  RegEngine will make commercially reasonable export assistance available during the
+                  applicable return period. After that period, Personal Data and Traceability Data
+                  processed on behalf of the Controller are scheduled for deletion from active
+                  systems, except to the extent that applicable law, regulatory obligations, dispute
+                  preservation, or the executed agreement requires continued storage.
                 </p>
                 <p>
                   The Controller may request deletion at any time by contacting{' '}
                   <a href="mailto:privacy@regengine.co" className="text-[var(--re-brand)] underline hover:opacity-90">
                     privacy@regengine.co
                   </a>
-                  . RegEngine will complete the deletion within 30 days of a verified request and
-                  provide written confirmation.
+                  . RegEngine will process verified deletion requests according to the executed
+                  agreement. Provider backups, immutable provider logs, and disaster recovery copies
+                  expire according to the applicable provider&apos;s normal retention cycle and may not
+                  be overwritten immediately.
                 </p>
                 <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 flex items-start gap-3 mt-2">
                   <Trash2 className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
                   <p className="text-[12px] text-[var(--re-text-muted)] leading-relaxed">
                     <strong className="text-[var(--re-text-secondary)]">FSMA 204 Retention Note:</strong>{' '}
                     FDA regulations require covered entities to maintain traceability records for a
-                    minimum of 2 years. Customers with ongoing FDA compliance obligations should
-                    export and maintain their own archive of traceability records before cancelling
-                    their RegEngine subscription, rather than relying on RegEngine as their sole
-                    record-keeping system.
+                    minimum of 2 years. RegEngine helps support those workflows, but customers remain
+                    responsible for maintaining any independent archives required by their own legal,
+                    operational, or regulator-facing obligations.
                   </p>
                 </div>
               </div>
@@ -534,22 +488,23 @@ export default function DpaPage() {
                 <p>
                   RegEngine primarily processes data in the United States. For Controllers in the
                   European Economic Area (EEA), the United Kingdom, or Switzerland, transfers of
-                  Personal Data to RegEngine in the United States are governed by the EU Standard
-                  Contractual Clauses (SCCs) as adopted by the European Commission (Decision
-                  2021/914), which are incorporated into this DPA by reference.
+                  Personal Data to RegEngine in the United States are handled through the executed
+                  agreement, signed DPA, Standard Contractual Clauses (SCCs), UK Addendum, or another
+                  approved transfer mechanism where required.
                 </p>
                 <p>
-                  For UK data subjects, transfers are made pursuant to the UK International Data
-                  Transfer Agreement (IDTA) or the UK Addendum to the EU SCCs.
+                  Customers who require completed SCC modules, a UK Addendum, or transfer annexes
+                  should request the current execution package during procurement.
                 </p>
                 <p>
-                  Where RegEngine engages Sub-Processors located outside the EEA or UK that process
-                  EEA or UK personal data, RegEngine ensures appropriate transfer safeguards are in
-                  place — such as SCCs or equivalent mechanisms — with each such Sub-Processor.
+                  Where required for a customer deployment, RegEngine relies on the transfer mechanism
+                  set out in the executed DPA or procurement package, which may include SCCs, a UK
+                  Addendum/IDTA, or another approved mechanism, depending on the data flow and
+                  Sub-Processor.
                 </p>
                 <p>
-                  Controllers who require a countersigned copy of the SCCs or IDTA for their records
-                  may request one by emailing{' '}
+                  Controllers who require transfer documentation for their records may request the
+                  current execution package by emailing{' '}
                   <a href="mailto:privacy@regengine.co" className="text-[var(--re-brand)] underline hover:opacity-90">
                     privacy@regengine.co
                   </a>
@@ -568,16 +523,17 @@ export default function DpaPage() {
                   </h2>
                   <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     <p>
-                      RegEngine will make available to the Controller all information reasonably
-                      necessary to demonstrate compliance with the obligations set out in this DPA and
-                      in Applicable Data Protection Law.
+                  Audit and verification rights are controlled by the executed agreement or signed
+                  DPA. RegEngine&apos;s standard diligence process prioritizes written security
+                  questionnaires, available policies, control summaries, and completed third-party
+                  attestations when available.
                     </p>
                     <p>
-                      The Controller (or a mandated auditor) may conduct an audit of RegEngine&apos;s
-                      processing activities no more than once per calendar year, with at least 30 days&apos;
-                      written notice, during normal business hours, and at the Controller&apos;s expense.
-                      RegEngine may satisfy audit requests by providing relevant third-party certifications
-                      (e.g. SOC 2 reports) in lieu of a direct on-site audit where appropriate.
+                      Direct system, facility, or personnel audits are available only where required by
+                      law or expressly agreed in the executed agreement, and remain subject to
+                      confidentiality, security, scope, timing, and cost controls. Formal audit reports,
+                      penetration-test summaries, or similar artifacts are provided only if completed
+                      and available for the requested review tier.
                     </p>
                   </div>
                 </div>
@@ -615,15 +571,15 @@ export default function DpaPage() {
                   </h2>
                   <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     <p>
-                      This DPA is governed by the laws of the State of Delaware, United States, without
-                      regard to conflict-of-law principles, except where Applicable Data Protection Law
-                      requires otherwise (e.g. GDPR dispute resolution mechanisms for EEA Controllers).
+                      The governing law for any binding data processing terms is the law specified in
+                      the executed agreement or signed DPA, except where Applicable Data Protection Law
+                      requires otherwise.
                     </p>
                     <p>
-                      RegEngine may update this DPA to reflect changes in applicable law, regulatory
-                      guidance, or Sub-Processor arrangements. Material changes will be notified to the
-                      Controller at least 30 days before taking effect. Continued use of the Services
-                      after the effective date constitutes acceptance of the updated DPA.
+                      RegEngine may update this public summary to reflect changes in applicable law,
+                      regulatory guidance, or Sub-Processor arrangements. Notice, objection, and
+                      acceptance rights for binding DPA changes are controlled by the executed agreement
+                      or signed DPA.
                     </p>
                   </div>
                 </div>
@@ -640,16 +596,16 @@ export default function DpaPage() {
                   </h2>
                   <div className="space-y-2 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     <p>
-                      For questions about this DPA, to request a countersigned copy for your records, or
-                      to exercise any rights described herein, contact:{' '}
+                      For questions about this public DPA summary, to request an execution package, or
+                      to exercise privacy rights, contact:{' '}
                       <a
                         href="mailto:privacy@regengine.co"
                         className="text-[var(--re-brand)] underline hover:opacity-90"
                       >
                         privacy@regengine.co
                       </a>
-                      . Enterprise customers requiring a separately executed DPA with custom addenda
-                      should contact us to arrange this.
+                      . Customer agreements and DPA redlines should be reviewed by the appropriate
+                      business, security, and legal contacts before execution.
                     </p>
                     <p className="font-medium text-[var(--re-text-secondary)]">
                       RegEngine, Inc.<br />
@@ -674,9 +630,9 @@ export default function DpaPage() {
             Questions about data processing?
           </h2>
           <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
-            Enterprise and design-partner customers can request a countersigned DPA, custom data
-            retention schedules, or a security review call. You&apos;ll hear from the founder, not
-            a legal department.
+            Enterprise and design-partner customers can request a DPA execution package, custom data
+            retention schedules, or a security review call. Legal terms require appropriate customer
+            and RegEngine review before execution.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <a href="mailto:privacy@regengine.co">

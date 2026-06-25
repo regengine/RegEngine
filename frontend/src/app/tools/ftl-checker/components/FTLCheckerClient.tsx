@@ -707,7 +707,7 @@ export function FTLCheckerClient() {
                         <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Deadline: July 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Earliest enforcement: July 2028</span>
                         </div>
                     </motion.div>
                 </div>

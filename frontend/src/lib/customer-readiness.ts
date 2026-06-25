@@ -1,10 +1,13 @@
 export type CustomerVisibleStatus =
-    | 'ga'
+    | 'implemented'
+    | 'supported'
     | 'pilot'
     | 'design_partner'
     | 'export_supported'
     | 'file_import_supported'
-    | 'custom_scoped';
+    | 'custom_scoped'
+    | 'preparation'
+    | 'contract_only';
 
 export type DeliveryMode =
     | 'native_api'
@@ -16,30 +19,30 @@ export type DeliveryMode =
 /**
  * Diligence-grade integration type classification.
  * Maps to the taxonomy used in customer procurement diligence:
- *   Native Bidirectional | API-Based Custom | File-Based Import | One-Way Export Adapter
+ *   Standards-Based Ingest / Export | API-Based Custom | File-Based Import | One-Way Export Adapter
  */
 export type IntegrationType =
-    | 'native_bidirectional'
+    | 'standards_based'
     | 'api_based_custom'
     | 'file_based_import'
     | 'one_way_export';
 
 export const INTEGRATION_TYPE_LABELS: Record<IntegrationType, string> = {
-    native_bidirectional: 'Native Bidirectional',
+    standards_based: 'Standards-Based Ingest / Export',
     api_based_custom: 'API-Based Custom',
     file_based_import: 'File-Based Import',
     one_way_export: 'One-Way Export Adapter',
 };
 
 export const INTEGRATION_TYPE_DESCRIPTIONS: Record<IntegrationType, string> = {
-    native_bidirectional: 'Real-time, two-way sync with source system. Write-back supported where applicable.',
+    standards_based: 'Standards-oriented ingest and export support without a claim of managed two-way sync or source-system write-back.',
     api_based_custom: 'Customer-managed integration via RegEngine API and implementation guidance. The customer builds and maintains the workflow unless otherwise scoped.',
     file_based_import: 'Scheduled or manual CSV/XLSX ingestion with field mapping and exception handling.',
     one_way_export: 'RegEngine prepares outbound packages. No write-back to source system.',
 };
 
 export const INTEGRATION_TYPE_VERIFY: Record<IntegrationType, string> = {
-    native_bidirectional: 'Is write-back supported? What is the sync frequency? What triggers reconciliation?',
+    standards_based: 'Which version is supported? What validation is performed? Is this ingest, export, or both?',
     api_based_custom: 'Who builds and maintains this? What documentation is available? What is the versioning policy?',
     file_based_import: 'How often? Manual trigger or automated? What is the error handling and rejection flow?',
     one_way_export: 'What is the latency? Is this real-time or batch? What format is produced?',
@@ -52,7 +55,7 @@ export type CapabilityCategory =
     | 'developer_api'
     | 'commercial';
 
-export type EvidenceAccess = 'public' | 'request' | 'nda';
+export type EvidenceAccess = 'public' | 'request' | 'nda' | 'contract_only';
 
 export interface CapabilityRegistryEntry {
     id: string;
@@ -115,12 +118,15 @@ export interface SupportChannel {
 }
 
 export const STATUS_LABELS: Record<CustomerVisibleStatus, string> = {
-    ga: 'GA',
+    implemented: 'Implemented',
+    supported: 'Supported',
     pilot: 'Pilot',
     design_partner: 'Design Partner',
     export_supported: 'Export Supported',
     file_import_supported: 'File Import Supported',
     custom_scoped: 'Custom Scoped',
+    preparation: 'Preparation',
+    contract_only: 'Contract-only',
 };
 
 export const DELIVERY_MODE_LABELS: Record<DeliveryMode, string> = {
@@ -176,7 +182,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'sensitech',
         name: 'Sensitech TempTale',
         category: 'food_safety_iot',
-        status: 'ga',
+        status: 'implemented',
         delivery_mode: 'csv_sftp_import',
         integration_type: 'file_based_import',
         customer_copy: 'Sensitech CSV exports are supported in the data-import flow for temperature-linked events.',
@@ -276,17 +282,17 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'rest-api',
         name: 'REST API',
         category: 'developer_api',
-        status: 'ga',
+        status: 'implemented',
         delivery_mode: 'native_api',
         integration_type: 'api_based_custom',
-        customer_copy: 'Core REST endpoints are available for paid tenants and internal integration work.',
+        customer_copy: 'Core REST endpoints are available for contracted workspaces and internal integration work.',
         evidence_url: '/docs/api',
     },
     {
         id: 'webhooks',
         name: 'Webhooks',
         category: 'developer_api',
-        status: 'ga',
+        status: 'implemented',
         delivery_mode: 'webhook',
         integration_type: 'api_based_custom',
         customer_copy: 'Webhook ingestion is available for inbound event submission and downstream normalization (one-way inbound).',
@@ -306,10 +312,10 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'epcis',
         name: 'GS1 EPCIS 2.0',
         category: 'developer_api',
-        status: 'ga',
+        status: 'implemented',
         delivery_mode: 'native_api',
-        integration_type: 'native_bidirectional',
-        customer_copy: 'JSON-LD EPCIS ingest and export are supported. Downstream signature verification is rolling out and not yet strict-mode by default.',
+        integration_type: 'standards_based',
+        customer_copy: 'JSON-LD EPCIS ingest and export are supported. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {
@@ -366,14 +372,14 @@ export const TRUST_ARTIFACTS: TrustArtifact[] = [
     {
         id: 'subprocessors',
         title: 'Subprocessors and data residency',
-        summary: 'US-hosted default posture, vendor categories, and subprocessor details available on request.',
+        summary: 'US-configured core posture, provider-specific locations, and subprocessor details available on request.',
         access: 'request',
         href: '/contact',
     },
     {
         id: 'security-artifacts',
         title: 'Security artifacts package',
-        summary: 'Additional materials such as pen-test summaries or diligence documents are available under request or NDA when applicable.',
+        summary: 'Approved security diligence materials are available under request or NDA when applicable. RegEngine does not currently claim completed third-party penetration testing.',
         access: 'nda',
         href: '/contact',
     },

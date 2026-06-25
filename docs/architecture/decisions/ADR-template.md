@@ -58,7 +58,7 @@ RegEngine needs to process regulatory documents through multiple stages (ingesti
 
 ## Decision
 
-Use Kafka (Redpanda) for asynchronous message passing between services with the following topics:
+Use a Kafka-compatible event broker for asynchronous message passing between services with the following topics:
 - `ingest.normalized` - Ingestion → NLP
 - `graph.update` - NLP → Graph (high confidence)
 - `nlp.needs_review` - NLP → Admin (low confidence)

@@ -113,7 +113,7 @@ export default function RecallResponsePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">FDA Recall Response</h1>
           <p className="text-muted-foreground">
-            24-hour SLA tracking for FDA records requests
+            24-hour response-objective tracking for FDA records requests
           </p>
         </div>
         <Button onClick={handleCreateRequest} disabled={createRequest.isPending}>

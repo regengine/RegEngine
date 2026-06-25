@@ -46,7 +46,7 @@ export default function FSMA204ComplianceGuide() {
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              On July 20, 2028, the FDA's Food Safety Modernization Act (FSMA) 204 compliance deadline arrives. Food businesses across the supply chain—from farms and manufacturers to distributors and retailers—must be able to provide complete traceability records within 24 hours of an FDA request.
+              FDA's Food Safety Modernization Act (FSMA) 204 rule requires covered food businesses across the supply chain, from farms and manufacturers to distributors and retailers, to provide traceability records within 24 hours of an FDA request. The original compliance date was January 20, 2026; FDA has proposed a 30-month extension, and Congress directed FDA not to enforce before July 20, 2028.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               This is not optional. Non-compliance can result in FDA enforcement action, product recalls, and loss of retailer partnerships. The good news: understanding FSMA 204 requirements is straightforward, and with the right approach, compliance is achievable.
@@ -62,7 +62,7 @@ export default function FSMA204ComplianceGuide() {
               FSMA 204 is the FDA's Food Traceability Rule. It requires covered food businesses to keep records identifying the immediate previous sources and immediate recipients of their products. When the FDA needs your traceability data—due to a foodborne illness outbreak, contamination, or suspected intentional adulteration—you have 24 hours to provide it.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              The rule applies to foods on the FDA's Food Traceability List (FTL), which covers 23 categories of high-risk foods — including leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles any FTL product, FSMA 204 compliance is mandatory.
+              The rule applies to foods specifically listed on the FDA's Food Traceability List (FTL), including leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles an FTL product, FSMA 204 traceability obligations may apply.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               The FDA designed FSMA 204 around two core concepts: Critical Tracking Events (CTEs) and Key Data Elements (KDEs). These are the data points your business must capture and retain for 2 years.
@@ -142,7 +142,7 @@ export default function FSMA204ComplianceGuide() {
               </li>
             </ul>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              The FDA prefers EPCIS 2.0 (Electronic Product Code Information Services) as the data exchange format. This standardized format ensures interoperability across the supply chain, making it easier to share data with suppliers, customers, and the FDA.
+              EPCIS 2.0 (Electronic Product Code Information Services) can support trading-partner interoperability across the supply chain. FDA requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies.
             </p>
           </div>
 
@@ -165,7 +165,7 @@ export default function FSMA204ComplianceGuide() {
               </div>
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              This is why your traceability system cannot rely on manual processes or spreadsheets. When the FDA calls, you need to generate a complete, audit-ready report in minutes, not days.
+              This is why your traceability system cannot rely on manual processes or spreadsheets. When the FDA calls, you need to generate a complete, review-ready report in minutes, not days.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               You must also retain all traceability records for the required period (up to 2 years depending on product type — shorter for perishable foods). This means your system needs robust backup, archival, and retrieval capabilities to ensure data integrity over time.
@@ -178,7 +178,7 @@ export default function FSMA204ComplianceGuide() {
               Who Is Covered by FSMA 204?
             </h2>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-              FSMA 204 applies to any business that handles foods on the FDA's Food Traceability List, which covers 23 categories across:
+              FSMA 204 applies to covered businesses that handle foods specifically listed on the FDA's Food Traceability List, including:
             </p>
             <ul className="space-y-2 mb-8 text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               <li className="flex gap-3">
@@ -213,7 +213,7 @@ export default function FSMA204ComplianceGuide() {
             </h2>
             <div className="space-y-4 mb-8">
               {[
-                { year: 'July 20, 2028', desc: 'Deadline for all covered food businesses' },
+                { year: 'July 20, 2028', desc: 'Earliest enforcement date under current congressional direction; FDA has proposed a 30-month extension' },
               ].map((item, idx) => (
                 <div key={idx} className="flex gap-4">
                   <div className="flex-shrink-0">
@@ -231,7 +231,7 @@ export default function FSMA204ComplianceGuide() {
               ))}
             </div>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
-              You have until July 20, 2028 to implement FSMA 204 compliance. That may sound far away, but implementation typically takes 3–6 months depending on your current systems and supply chain complexity. Starting early gives you time to test, train, and refine your processes before the deadline.
+              The current public posture points to July 20, 2028 as the earliest enforcement date under congressional direction, with FDA also proposing a 30-month extension. That may sound far away, but implementation typically takes 3-6 months depending on your current systems and supply chain complexity. Starting early gives you time to test, train, and refine your processes before enforcement resumes.
             </p>
           </div>
 
@@ -264,7 +264,7 @@ export default function FSMA204ComplianceGuide() {
                   3. Choose a Traceability System
                 </h4>
                 <p className="text-[var(--re-text-secondary)]">
-                  Options range from improved spreadsheets to specialized FSMA 204 software. Consider integration with your ERP, supplier connectivity, FDA data format support (EPCIS 2.0), and your budget. A dedicated platform is typically faster and more reliable than manual processes.
+                  Options range from improved spreadsheets to specialized FSMA 204 software. Consider integration with your ERP, supplier connectivity, electronic sortable spreadsheet support, EPCIS 2.0 interoperability for trading partners, and your budget. A dedicated platform is typically faster and more reliable than manual processes.
                 </p>
               </div>
 
@@ -312,7 +312,7 @@ export default function FSMA204ComplianceGuide() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>The compliance deadline is July 20, 2028. Start planning and implementation now.</span>
+                <span>The original compliance date was January 20, 2026; FDA has proposed a 30-month extension and Congress directed FDA not to enforce before July 20, 2028. Start planning and implementation now.</span>
               </li>
             </ul>
           </div>
@@ -323,7 +323,7 @@ export default function FSMA204ComplianceGuide() {
               Ready to implement FSMA 204 compliance?
             </h3>
             <p className="text-[var(--re-text-secondary)] mb-8">
-              RegEngine automates FSMA 204 data capture, hash-chained ingestion, and §1.1455(c)-formatted reporting. Run a free self-check to see where you stand.
+              RegEngine helps prepare CTE/KDE evidence, hash-chained ingestion records, and FDA-oriented sortable export packages aligned to 21 CFR 1.1455 where applicable. Run a free self-check to see where you stand.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link

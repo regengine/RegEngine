@@ -18,7 +18,7 @@ const HERO_METRICS = [
     { value: '94.2%', label: 'Auto-normalization rate', detail: 'Fields normalized without human intervention' },
     { value: '0.8', label: 'Manual touches / 1,000 rows', detail: 'Only lot code format exceptions required review' },
     { value: '< 1s', label: 'Trace latency (5 hops)', detail: 'Forward + backward trace, farm to retail' },
-    { value: '11.6 min', label: 'Time to §1.1455(c)-formatted export', detail: 'From raw CSV upload to sortable spreadsheet' },
+    { value: '11.6 min', label: 'Time to FDA-oriented sortable export', detail: 'From raw CSV upload to sortable spreadsheet in a synthetic workflow' },
 ];
 
 const SUPPLY_CHAIN = [
@@ -92,9 +92,9 @@ export default function CaseStudy() {
                         <Link href="/proof/recall-drill" className="text-re-brand hover:opacity-80 underline">/proof/recall-drill</Link>.
                     </p>
                     <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-3xl">
-                        We ran a representative leafy greens supply chain through RegEngine — from Salinas Valley
-                        harvest to grocery DC receiving — and measured every step. No composites. No projections.
-                        System-measured results.
+                        We ran a synthetic validation workflow modeled on leafy-greens supply chains — from Salinas Valley
+                        harvest to grocery DC receiving — and measured every step. These are not customer ROI, SLA,
+                        or production-performance commitments.
                     </p>
 
                     {/* Metric cards */}
@@ -217,15 +217,14 @@ export default function CaseStudy() {
                         <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
                             <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">What this measures</h3>
                             <p className="text-sm text-[var(--re-text-secondary)] mb-4">
-                                Self-serve onboarding speed. No implementation consultant, no scheduled
-                                call, no contract negotiation. A food safety manager with basic spreadsheet
-                                skills can get from zero to first validated CTE in under 10 minutes.
+                                Guided onboarding speed for an approved design-partner workspace using synthetic
+                                sample data. Timeline, support, and commercial terms are confirmed during scoping.
                             </p>
                             <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded p-4">
                                 <p className="text-xs text-[var(--re-text-muted)] mb-2">Industry comparison</p>
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-[var(--re-text-tertiary)]">Enterprise platforms (typical)</span>
+                                        <span className="text-[var(--re-text-tertiary)]">Enterprise platforms (validate directly)</span>
                                         <span className="text-[var(--re-text-muted)]">3-6 months</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
@@ -326,7 +325,7 @@ export default function CaseStudy() {
                             </div>
                             <p className="text-[var(--re-text-secondary)] mb-6">
                                 A "manual touch" is any point where a human must review, correct, or
-                                approve a record before it can proceed to §1.1455(c)-formatted export. Lower is better.
+                                approve a record before it can proceed to an FDA-oriented sortable export. Lower is better.
                             </p>
                             <div className="space-y-4">
                                 <div className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-4">
@@ -358,9 +357,9 @@ export default function CaseStudy() {
                         <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
                             <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">Why this matters</h3>
                             <p className="text-sm text-[var(--re-text-secondary)] mb-4">
-                                Manual data cleaning is the hidden cost of compliance. A mid-size produce
-                                operation processing 10,000 CTE events/month at industry-typical error
-                                rates (5-15%) would require 500-1,500 manual corrections monthly.
+                                Manual data cleaning is a common operational cost in traceability work. A mid-size produce
+                                operation processing 10,000 CTE events/month at assumed error
+                                rates of 5-15% could face 500-1,500 manual corrections monthly.
                             </p>
                             <p className="text-sm text-[var(--re-text-secondary)] mb-4">
                                 At 0.8 touches per 1,000 rows, the same operation needs 8 corrections
@@ -463,19 +462,19 @@ export default function CaseStudy() {
                 </div>
             </section>
 
-            {/* Metric 5: Time to §1.1455(c)-Formatted Export */}
+                        {/* Metric 5: Time to FDA-oriented sortable export */}
             <section className="px-4 sm:px-6 lg:px-8 py-16">
                 <div className="max-w-5xl mx-auto">
                     <div className="grid md:grid-cols-2 gap-12 items-start">
                         <div>
                             <div className="flex items-center gap-3 mb-4">
                                 <FileSpreadsheet className="w-6 h-6 text-re-brand" />
-                                <h2 className="text-2xl font-bold">Metric 5: Time to §1.1455(c)-Formatted Export</h2>
+                                <h2 className="text-2xl font-bold">Metric 5: Time to FDA-Oriented Sortable Export</h2>
                             </div>
                             <p className="text-[var(--re-text-secondary)] mb-6">
                                 End-to-end: from uploading a raw CSV with messy supplier data to
-                                downloading a sortable spreadsheet that meets 21 CFR 1.1455 requirements
-                                (29 columns, date-range filtered, includes chain verification).
+                                downloading an FDA-oriented sortable spreadsheet aligned to 21 CFR 1.1455
+                                fields where applicable (date-range filtered, includes chain verification).
                             </p>
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
@@ -491,7 +490,7 @@ export default function CaseStudy() {
                                     <span className="text-[var(--re-text-primary)] font-mono">2.4 min</span>
                                 </div>
                                 <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
-                                    <span className="text-[var(--re-text-tertiary)]">Generate FDA export package</span>
+	                                    <span className="text-[var(--re-text-tertiary)]">Generate FDA-oriented export package</span>
                                     <span className="text-[var(--re-text-primary)] font-mono">0.4 min</span>
                                 </div>
                                 <div className="flex justify-between items-center border-b border-[var(--re-surface-border)] pb-3">
@@ -505,10 +504,10 @@ export default function CaseStudy() {
                             </div>
                         </div>
                         <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-lg p-6">
-                            <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">The FDA export package includes</h3>
+	                            <h3 className="text-sm font-semibold text-[var(--re-text-tertiary)] mb-4">The FDA-oriented export package includes</h3>
                             <div className="space-y-3">
                                 {[
-                                    'Sortable CSV (29 columns per 21 CFR 1.1455)',
+	                                    'Sortable CSV aligned to 21 CFR 1.1455 fields where applicable',
                                     'Date range filtering for targeted FDA requests',
                                     'Chain verification JSON (SHA-256 + Merkle proof)',
                                     'KDE completeness validation log',
@@ -523,8 +522,9 @@ export default function CaseStudy() {
                             </div>
                             <div className="mt-6 bg-re-brand/20 border border-re-brand/30 rounded p-4">
                                 <p className="text-sm text-re-brand">
-                                    The FDA requires records within 24 hours.
-                                    RegEngine delivers in under 12 minutes.
+	                                    FDA requests may require records within 24 hours. This synthetic
+	                                    workflow generated the package in 11.6 minutes; customer review and
+	                                    data completeness still matter.
                                 </p>
                             </div>
                         </div>
@@ -572,8 +572,8 @@ export default function CaseStudy() {
                             },
                             {
                                 title: 'Retailer Pressure',
-                                description: 'Walmart and Kroger require supplier compliance ahead of the FDA deadline. Produce suppliers face the earliest enforcement.',
-                                metric: 'Walmart + Kroger export templates included',
+                                description: 'Major retailers are signaling traceability expectations ahead of federal enforcement. Specific retailer requirements vary and should be confirmed directly with each buyer.',
+                                metric: 'Retailer-oriented export templates scoped per buyer',
                             },
                         ].map((item) => (
                             <div key={item.title} className="bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-lg p-5">
@@ -607,7 +607,7 @@ export default function CaseStudy() {
                     <h2 className="text-4xl font-bold mb-6">Run This Validation on Your Data</h2>
                     <p className="text-xl text-[var(--re-text-secondary)] mb-10 max-w-2xl mx-auto">
                         Upload a sample CSV. See your auto-normalization rate, KDE completeness score,
-                        and time to §1.1455(c)-formatted export — measured on your actual supply chain data.
+	                        and time to FDA-oriented sortable export — measured on your actual supply chain data.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
@@ -655,8 +655,8 @@ export default function CaseStudy() {
                             <p>
                                 This is a product validation study, not a customer case study. Data is
                                 synthetic but modeled on real supply chain patterns and industry-reported
-                                data quality rates. RegEngine is pre-GA. Metrics reflect current system
-                                capabilities on representative workloads.
+                                data quality assumptions. RegEngine is pre-production. Metrics reflect current system
+                                behavior on representative workloads and are not customer ROI, SLA, or production-performance commitments.
                             </p>
                         </div>
                     </div>

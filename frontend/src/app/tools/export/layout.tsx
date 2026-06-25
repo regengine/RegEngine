@@ -3,14 +3,14 @@ import { JSONLD } from '@/components/seo/json-ld';
 import { RelatedTools } from '@/components/tools/RelatedTools';
 
 export const metadata: Metadata = {
-    title: 'FDA Export Package Generator | FSMA 204 21 CFR 1.1455 Compliance | RegEngine',
-    description: 'Generate a cryptographically verifiable FDA compliance package for FSMA 204 records. SHA-256 chain verification meets 21 CFR 1.1455 requirements. Try free.',
+    title: 'FDA-Oriented Export Package Generator | FSMA 204 Records | RegEngine',
+    description: 'Generate a verifiable FSMA 204 records package to support 21 CFR 1.1455 record-availability workflows. SHA-256 verification supports integrity; it does not determine compliance or FDA acceptance. Try free.',
     alternates: {
         canonical: 'https://regengine.co/tools/export',
     },
     openGraph: {
         title: 'FDA Export Package Generator — RegEngine',
-        description: 'Generate verifiable FSMA 204 compliance packages with SHA-256 chain verification meeting 21 CFR 1.1455 requirements. Free.',
+        description: 'Generate verifiable FSMA 204 records packages with SHA-256 chain verification to support record-availability workflows. Free.',
         type: 'website',
         url: 'https://regengine.co/tools/export',
     },
@@ -22,7 +22,7 @@ const jsonLd = {
     name: 'FDA Export Package Generator',
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
-    description: 'Generate SHA-256 chain-verified FDA compliance packages for FSMA 204 traceability records per 21 CFR 1.1455.',
+    description: 'Generate SHA-256 chain-verified FDA-oriented records packages for FSMA 204 traceability workflows.',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };

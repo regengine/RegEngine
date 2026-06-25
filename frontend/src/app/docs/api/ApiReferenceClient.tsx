@@ -266,7 +266,7 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
             {
                 method: 'GET',
                 path: '/export/fda-request',
-                description: 'Generate a §1.1455(c)-formatted sortable spreadsheet (CSV)',
+                description: 'Generate an FDA-oriented sortable spreadsheet (CSV)',
                 auth: true,
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
                 params: ['start_date=2026-01-01', 'end_date=2026-01-31'],

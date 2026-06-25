@@ -136,7 +136,7 @@ export default function FSMA204BusinessGuidePage() {
           {[
             { icon: Clock, text: "24 hours to respond to an FDA request" },
             { icon: Shield, text: "Applies to all foods on the FTL" },
-            { icon: CheckCircle, text: "Enforcement begins July 20, 2028" },
+            { icon: CheckCircle, text: "Earliest enforcement date under current public posture: July 20, 2028" },
           ].map((fact) => (
             <div key={fact.text} className="flex items-center gap-3">
               <fact.icon className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
@@ -185,7 +185,7 @@ export default function FSMA204BusinessGuidePage() {
             Are your products covered?
           </h2>
           <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[600px]">
-            FSMA 204 only applies to foods on the FDA&apos;s Food Traceability List. The FTL has 23 commodity groupings — examples below. Use the FTL Checker for a definitive answer for your specific products.
+            FDA&apos;s Food Traceability List identifies covered foods and certain foods containing listed ingredients in the same form. Examples are below; verify each product against FDA&apos;s current FTL and applicable exemptions.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
@@ -360,7 +360,7 @@ export default function FSMA204BusinessGuidePage() {
       <section className="bg-[var(--re-text-primary)] text-white py-20 px-6">
         <div className="max-w-[960px] mx-auto text-center">
           <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
-            FSMA 204 Enforcement: July 20, 2028
+            Earliest FSMA 204 Enforcement Date: July 20, 2028
           </p>
           <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
             Don&apos;t wait for the deadline.

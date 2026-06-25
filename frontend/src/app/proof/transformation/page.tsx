@@ -5,9 +5,9 @@ import { ArrowRight, FileSpreadsheet, Database, ShieldCheck } from "lucide-react
 export const metadata: Metadata = {
   title: "Proof: CSV → CTE → FDA row | RegEngine",
   description:
-    "Watch a real supplier CSV become a §1.1455(c)-formatted record. Three CTEs, three transformations, real production code, synthetic data.",
+    "Watch a real supplier CSV become an FDA-oriented sortable record. Three CTEs, three transformations, real production code, synthetic data.",
   openGraph: {
-    title: "How a supplier CSV becomes a §1.1455(c)-formatted record | RegEngine",
+    title: "How a supplier CSV becomes an FDA-oriented sortable record | RegEngine",
     description:
       "Three CTEs, three transformations. Real production code, synthetic data.",
     url: "https://regengine.co/proof/transformation",
@@ -328,7 +328,7 @@ export default function TransformationProofPage() {
             ← Proof
           </Link>
           <h1 className="mt-4 text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
-            How a supplier CSV becomes a §1.1455(c)-formatted record.
+            How a supplier CSV becomes an FDA-oriented sortable record.
           </h1>
           <p className="mt-4 text-lg text-slate-600 max-w-3xl">
             Three CTEs, three transformations. Real production code, synthetic

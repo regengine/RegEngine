@@ -40,7 +40,7 @@ const capabilities = [
     {
         Icon: FileSpreadsheet,
         title: 'Records Export',
-        description: 'Generate a 21 CFR §1.1455(c) sortable-spreadsheet export and an EPCIS 2.0 event export with one API call.',
+        description: 'Generate FDA-oriented sortable spreadsheet records and EPCIS 2.0 event exports where the enabled workflow and source data support them.',
     },
     {
         Icon: BarChart3,
@@ -92,7 +92,7 @@ export default function DevelopersPage() {
                     </h1>
                     <p className="re-hero-copy mt-5">
                         Developer preview for FSMA 204 traceability teams. Scope your
-                        ingestion path, validate event payloads, and plan §1.1455(c)-formatted
+                        ingestion path, validate event payloads, and plan FDA-oriented sortable
                         export workflows with the RegEngine team.
                     </p>
                     <div className="mt-8 flex flex-wrap gap-3">
@@ -120,7 +120,7 @@ export default function DevelopersPage() {
                     {[
                         ['Ingest', 'POST critical tracking events with tenant scope.'],
                         ['Validate', 'Run KDE, TLC, and rule checks before evidence commit.'],
-                        ['Export', 'Generate §1.1455(c)-formatted packages from ingested records.'],
+                        ['Export', 'Generate FDA-oriented sortable records where configured data supports the request.'],
                     ].map(([label, detail], index) => (
                         <div key={label} className="grid grid-cols-[32px_110px_1fr] gap-3 border-b border-[var(--re-surface-border)] px-4 py-4 last:border-b-0">
                             <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--re-brand-muted)] font-mono text-xs font-semibold text-[var(--re-brand)]">

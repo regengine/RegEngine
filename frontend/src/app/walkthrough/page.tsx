@@ -259,7 +259,7 @@ export default function WalkthroughPage() {
       <section className="relative z-[2] max-w-[700px] mx-auto px-6 py-12 sm:py-16 text-center">
         <h2 className="text-2xl font-bold text-re-text-primary mb-3">This is what RegEngine does.</h2>
         <p className="text-[0.95rem] text-re-text-muted mb-6 max-w-lg mx-auto">
-          It takes messy, inconsistent supplier data and turns it into a §1.1455(c)-formatted records-on-request package under deadline. Nothing more. Nothing less.
+          It takes messy, inconsistent supplier data and turns it into an FDA-oriented sortable records-on-request workflow for operator review. Nothing more. Nothing less.
         </p>
         <div className="flex gap-3 justify-center flex-wrap">
           <Link href="/pricing">

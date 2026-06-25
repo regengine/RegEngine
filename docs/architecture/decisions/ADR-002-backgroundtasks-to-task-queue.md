@@ -101,7 +101,7 @@ RegEngine is targeting an investor milestone where we claim "durable, auditable 
 
 #### Alternative C: Vercel Queues
 
-- **Pros:** durable, at-least-once delivery, built on Fluid Compute, public-beta GA path clear.
+- **Pros:** durable, at-least-once delivery, built on Fluid Compute, public-beta path clear.
 - **Cons:** We don't deploy on Vercel (we're on Railway). Adopting Vercel Queues = adopting Vercel Functions = a multi-month replatform. Not the right time. **Rejected.**
 
 #### Alternative D: Raw Kafka topic

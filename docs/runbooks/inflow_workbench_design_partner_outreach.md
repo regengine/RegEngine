@@ -18,7 +18,7 @@ We just shipped a RegEngine workflow for messy supplier traceability data: uploa
 
 The useful part is that it shows exactly which lots are ready, which records are blocked, and which supplier fields need remediation before an FDA request.
 
-Would you be open to a 20-minute design-partner walkthrough using a sample supplier file? The goal is simple: show whether your current traceability data can become FDA-ready evidence, and what needs to change if not.
+Would you be open to a 20-minute design-partner walkthrough using a sample supplier file? The goal is simple: show whether your current traceability data can become FDA-oriented evidence, and what needs to change if not.
 
 Best,
 {{sender}}

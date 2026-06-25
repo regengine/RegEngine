@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-This document defines procedures to recover RegEngine services in the event of system failures, data loss, or catastrophic incidents. The plan ensures business continuity and regulatory compliance.
+This document defines procedures to recover RegEngine services in the event of system failures, data loss, or catastrophic incidents. The plan supports business continuity and regulatory response planning.
 
 ### Recovery Objectives
 
@@ -34,7 +34,7 @@ This document defines procedures to recover RegEngine services in the event of s
 
 | System | Impact if Down |
 |--------|----------------|
-| Kafka/Redpanda | Processing stops, but data queued |
+| Legacy event broker | Processing stops, but data queued |
 | NLP Service | Ingestion pipeline pauses |
 | Redis | Rate limiting disabled |
 

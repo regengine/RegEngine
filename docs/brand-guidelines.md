@@ -163,7 +163,7 @@ Copy can reference the builder's perspective: "I built RegEngine because..." -- 
 > "Every CTE is SHA-256 hashed and chain-linked. Tampering breaks the chain. Your auditor can verify it."
 
 **Not like this:**
-> "We use state-of-the-art cryptographic security to ensure your data is safe and secure at all times."
+> "Our security controls are designed to protect traceability records, with current scope documented in the Trust Center and executed agreements."
 
 ---
 
@@ -298,7 +298,7 @@ RegEngine replaces the compliance spreadsheet -- not the ERP. Position against m
 ```
 [Timeframe] + [specific outcome] + [without the old way]
 
-"Get FDA-ready in minutes, not months."
+"Get FDA-oriented in minutes, not months."
 "24-hour FDA response deadline. RegEngine gets you there in minutes."
 "Retailer-ready in 30 days -- not 12 months."
 ```

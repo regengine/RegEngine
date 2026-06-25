@@ -26,7 +26,7 @@ graph TB
     end
     
     subgraph messaging["Messaging"]
-        KAFKA[📨 Redpanda<br/>:9092<br/>Kafka-compatible]
+        KAFKA[📨 Legacy event broker<br/>:9092<br/>Kafka-compatible]
     end
     
     subgraph data["Data Stores"]
@@ -85,7 +85,7 @@ graph TB
 
 | Container | Technology | Topics |
 |-----------|------------|--------|
-| **Redpanda** | Kafka-compatible | `ingest.normalized`, `graph.update`, `nlp.needs_review`, `graph.audit` |
+| **Legacy event broker** | Kafka-compatible | `ingest.normalized`, `graph.update`, `nlp.needs_review`, `graph.audit` |
 
 ### Data Stores
 

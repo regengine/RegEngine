@@ -139,7 +139,7 @@ export default function BlogPage() {
               Need hands-on help?
             </h2>
             <p className="text-[var(--re-text-secondary)] mb-8 leading-relaxed">
-              RegEngine automates FSMA 204 compliance in minutes, not months. Get your free readiness score and see what you need to do.
+              RegEngine helps turn supplier data into FSMA 204 traceability evidence in minutes, not months. Get your free readiness score and see what needs attention.
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link

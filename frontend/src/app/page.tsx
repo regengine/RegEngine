@@ -28,7 +28,7 @@ import {
 export const metadata: Metadata = {
   title: "RegEngine — Compliance OS for Food Traceability",
   description:
-    "RegEngine turns messy supplier data into FSMA 204 evidence packages with readiness scoring, supplier gap queues, commit gates, and FDA-formatted export packages.",
+    "RegEngine turns messy supplier data into FSMA 204 evidence packages with readiness scoring, supplier gap queues, commit gates, and FDA-oriented export packages.",
   openGraph: {
     title: "RegEngine — Compliance OS for Food Traceability",
     description:
@@ -99,7 +99,7 @@ const workflow = [
   { label: "Interrogate", detail: "CTE/KDE coverage, identity, and facility scope are checked.", icon: Database },
   { label: "Correct", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
   { label: "Commit", detail: "Records pass commit gates for CTE/KDE coverage and supplier readiness before entering the evidence ledger.", icon: ShieldCheck },
-  { label: "Export", detail: "Build FDA-formatted, retailer, or internal evidence packets with producer-signed manifests.", icon: PackageCheck },
+  { label: "Export", detail: "Build FDA-oriented, retailer, or internal evidence packets with producer-signed manifests.", icon: PackageCheck },
 ];
 
 const destinations = [

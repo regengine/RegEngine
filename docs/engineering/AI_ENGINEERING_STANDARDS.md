@@ -31,8 +31,8 @@ Before writing any code, internalize these facts.
 
 - Domain: FDA FSMA 204 food traceability compliance.
 - Buyer: VP of Food Safety or Compliance at companies doing $10M-$500M in revenue.
-- Wedge: API-first traceability record generation. One API call produces FDA-ready audit records.
-- Deadline: FDA enforcement begins July 2028. Retailers (Walmart, Kroger, Costco) are requiring compliance now.
+- Wedge: API-first traceability record generation. One API call can produce tenant-scoped traceability evidence for configured workflows.
+- Timing: Current public FDA posture points to July 2028 as the earliest enforcement date. Retailer requirements vary and should be confirmed directly with each buyer.
 
 ### The Tech Stack
 

@@ -146,7 +146,7 @@ const CTE_DATA: Record<string, CTEData> = {
     ],
     commonMistakes: [
       "Missing destination (ship-to) — WMS systems often omit the full destination address, recording only a customer code.",
-      "Abbreviated headers from WMS — column names like 'SHP_DT', 'DEST_CD', or 'QTY_CS' don't map to FDA-required field names.",
+      "Abbreviated headers from WMS — column names like 'SHP_DT', 'DEST_CD', or 'QTY_CS' may not map cleanly to FDA-oriented field names.",
       "Carrier name inconsistency — the same carrier appearing as 'Pacific Cold', 'Pacific Cold Freight', and 'PCF Logistics'.",
     ],
     howRegEngineHelps: [

@@ -4,6 +4,8 @@
 
 *Version 1.0 — Effective Date: [INSERT DATE]*
 
+> Internal template status: this markdown file is not the public source of truth and must not be sent externally without counsel review. Use the public DPA page and `docs/security/TRUST_CLAIMS_MATRIX.md` for current wording. Any executed agreement or negotiated DPA controls over this template.
+
 This Data Processing Agreement ("DPA") is entered into between:
 
 - **Controller**: The entity identified in the RegEngine subscription agreement ("Customer")
@@ -47,9 +49,9 @@ This DPA supplements and forms part of the RegEngine Terms of Service or Master 
 
 RegEngine processes Personal Data solely to:
 
-- Provide FSMA 204 food traceability compliance services
-- Maintain audit trails required by 21 CFR Part 1, Subpart S
-- Generate FDA-required sortable spreadsheets per 21 CFR 1.1455(b)(3)
+- Provide FSMA 204 traceability evidence workflow services
+- Maintain platform audit logs that help support recordkeeping and investigation workflows
+- Generate FDA-oriented sortable spreadsheets aligned to 21 CFR 1.1455 where applicable
 - Operate recall management and supply chain tracing features
 - Authenticate and authorize access to the platform
 
@@ -67,9 +69,9 @@ RegEngine shall:
 2. Ensure that persons authorized to process Personal Data are bound by confidentiality obligations.
 3. Implement and maintain appropriate technical and organizational security measures (see Section 5).
 4. Assist Customer in responding to data subject rights requests (see Section 6).
-5. Assist Customer in ensuring compliance with GDPR Articles 32–36 (security, DPIA, breach notification).
-6. At Customer's choice, delete or return all Personal Data upon termination of the Agreement.
-7. Make available all information necessary to demonstrate compliance and allow for audits.
+5. Assist Customer with compliance efforts related to GDPR Articles 32–36 (security, DPIA, breach notification), taking into account the nature of processing and information available to RegEngine.
+6. Return or schedule active-system deletion of Personal Data upon termination of the Agreement, subject to legal-retention, backup, immutable-log, and executed-agreement limits.
+7. Make available documentation reasonably needed to support DPA verification under the confidentiality, scope, and cost controls in the executed agreement.
 
 ---
 
@@ -77,21 +79,15 @@ RegEngine shall:
 
 ### 4.1 Authorized Sub-processors
 
-RegEngine uses the following sub-processors:
-
-| Sub-processor | Purpose | Location |
-|---------------|---------|----------|
-| Supabase (via AWS) | Authentication, database hosting | US (AWS us-east-1) |
-| Vercel | Frontend hosting, edge functions | US/Global CDN |
-| Sentry | Error monitoring (PII minimized) | US |
+RegEngine's current public subprocessor list is maintained in the public DPA page and the shared frontend constant at `frontend/src/lib/trust-subprocessors.ts`. Attach or generate the current list at execution time after legal/security review. Do not maintain duplicate static subprocessor tables in this template.
 
 ### 4.2 Changes to Sub-processors
 
-RegEngine will notify Customer at least 30 days before engaging a new sub-processor. Customer may object in writing within 14 days. If a reasonable objection cannot be resolved, Customer may terminate the affected services without penalty.
+Subprocessor notice, objection, and termination rights are controlled by the executed agreement or signed DPA. Do not use this template to promise a notice period or objection process without counsel review.
 
 ### 4.3 Sub-processor Obligations
 
-All sub-processors are bound by written agreements imposing data protection obligations no less protective than those in this DPA.
+Subprocessor contract obligations should be confirmed against current vendor agreements before this template is executed.
 
 ---
 
@@ -101,7 +97,7 @@ RegEngine maintains the following technical and organizational measures:
 
 **Access Control**: Role-based access with API key authentication (SHA-256 hashed at rest), TOTP-based MFA for admin accounts, configurable session timeouts.
 
-**Encryption**: TLS 1.2+ for data in transit (HSTS enforced), AES-256 encryption at rest for databases and object storage.
+**Encryption**: Encrypted transport for customer and service connections; managed-provider encryption at rest for databases and object storage.
 
 **Network Security**: Services bound to localhost only, nginx gateway with rate limiting, Docker network isolation.
 
@@ -109,7 +105,7 @@ RegEngine maintains the following technical and organizational measures:
 
 **Incident Response**: Documented incident response procedures with defined severity levels and escalation paths.
 
-**Development Practices**: Dependency vulnerability scanning in CI/CD, Semgrep static analysis, container image scanning, pre-commit security hooks.
+**Development Practices**: CI includes secrets, SAST, and dependency checks; DAST, SBOM, and container scans run when configured or on scheduled/main-branch workflows.
 
 ---
 
@@ -119,12 +115,12 @@ RegEngine will assist Customer in fulfilling data subject requests under GDPR Ar
 
 - **Right of access** (Art. 15): Export of all Personal Data associated with the data subject
 - **Right to rectification** (Art. 16): Correction of inaccurate Personal Data
-- **Right to erasure** (Art. 17): Deletion via the GDPR right-to-erasure endpoint (soft-delete with 30-day grace period, followed by hard-delete and audit log anonymization)
+- **Right to erasure** (Art. 17): Verified deletion requests are processed according to the executed agreement; active-system deletion may be subject to provider backup expiry and legal-retention caveats.
 - **Right to restrict processing** (Art. 18): Flagging of restricted records
 - **Right to data portability** (Art. 20): Export in machine-readable format (JSON/CSV)
 - **Right to object** (Art. 21): Processing cessation for objected purposes
 
-RegEngine will respond to Customer's data subject request instructions within 5 business days.
+RegEngine will respond to Customer's data subject request instructions according to the executed agreement and applicable law.
 
 ---
 
@@ -132,13 +128,13 @@ RegEngine will respond to Customer's data subject request instructions within 5 
 
 | Data Type | Retention Period | Post-Retention Action |
 |-----------|-----------------|----------------------|
-| User account data | Duration of account + 30 days | Soft-delete → hard-delete |
-| Supply chain records | 24 months (FSMA 204 requirement) | Anonymization of PII fields |
-| Audit logs | 24 months | PII anonymization |
-| Transaction logs | 84 months (7 years, FDA compliance) | PII anonymization |
-| Temporary PII (session data) | 14 days | Hard-delete |
+| User account data | Executed agreement controls | Scheduled active-system deletion, subject to legal-retention and provider-backup caveats |
+| Supply chain records | Customer remains responsible for FSMA 204 retention obligations | Export and off-platform archive recommended before cancellation |
+| Audit logs | Executed agreement controls | Anonymization, deletion, or preservation as applicable |
+| Transaction logs | Executed agreement and applicable law control | Anonymization, deletion, or preservation as applicable |
+| Temporary session data | Operationally limited where configured | Provider and application retention settings apply |
 
-Automated retention enforcement runs nightly via scheduled job.
+Retention and deletion workflows must be verified against the live environment before being described in a customer agreement.
 
 ---
 
@@ -155,19 +151,19 @@ RegEngine will notify Customer of a Personal Data breach without undue delay and
 
 ## 9. International Data Transfers
 
-When Personal Data is transferred outside the EEA/UK, RegEngine ensures adequate protection through:
+Where required for a customer deployment, RegEngine relies on the transfer mechanism set out in the executed DPA or procurement package, depending on the data flow and subprocessor. Such mechanisms may include:
 
 - Standard Contractual Clauses (SCCs) approved by the European Commission (Decision 2021/914)
-- Data Processing Addendum with each sub-processor
+- a UK Addendum/IDTA or another approved transfer mechanism where applicable
 - Supplementary technical measures (encryption, access controls, pseudonymization)
 
 ---
 
 ## 10. Audit Rights
 
-Customer (or its designated independent auditor) may audit RegEngine's compliance with this DPA once per calendar year, with 30 days' prior written notice. RegEngine will cooperate reasonably and provide access to relevant facilities, systems, and documentation.
+Audit rights are controlled by the executed agreement. RegEngine's standard diligence process prioritizes written security questionnaires, available policies, control summaries, and completed third-party attestations when available. Direct system, facility, or personnel audits should be permitted only where required by law or expressly agreed, and should remain subject to confidentiality, security, scope, timing, and cost controls.
 
-RegEngine also makes available SOC 2 Type II reports and penetration test summaries upon request under NDA.
+Formal audit reports, penetration-test summaries, or similar artifacts are provided only if completed and available for the requested review tier under NDA.
 
 ---
 
@@ -177,9 +173,9 @@ This DPA takes effect on the date Customer signs the Agreement and remains in ef
 
 Upon termination, RegEngine will:
 
-1. Cease processing Personal Data within 30 days
-2. Delete or return all Personal Data (at Customer's election) within 90 days
-3. Provide written certification of deletion upon request
+1. Cease processing Personal Data according to the executed agreement
+2. Return or schedule active-system deletion of Personal Data according to the executed agreement
+3. Provide written confirmation where supported by the agreement and live deletion workflow
 
 Obligations that by their nature survive termination (confidentiality, indemnification) remain in effect.
 

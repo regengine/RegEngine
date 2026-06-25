@@ -72,8 +72,20 @@ const inflowPath = [
   ["RegEngine", "Validates, stores, and tags events"],
 ];
 
+const STATUS_CLASS: Record<CustomerVisibleStatus, string> = {
+  implemented: styles.status_implemented,
+  supported: styles.status_supported,
+  pilot: styles.status_pilot,
+  design_partner: styles.status_design_partner,
+  export_supported: styles.status_export_supported,
+  file_import_supported: styles.status_file_import_supported,
+  custom_scoped: styles.status_custom_scoped,
+  preparation: styles.status_preparation,
+  contract_only: styles.status_contract_only,
+};
+
 function statusClass(status: CustomerVisibleStatus) {
-  return `${styles.pill} ${styles[`status_${status}`]}`;
+  return `${styles.pill} ${STATUS_CLASS[status]}`;
 }
 
 export default function IntegrationsPage() {
@@ -91,7 +103,7 @@ export default function IntegrationsPage() {
             <p className={styles.kicker}>Supplier data intake</p>
             <h1>Know which sources are ready, guided, or custom scoped.</h1>
             <p>
-              A compact view of what can send data into RegEngine today, what is export-ready, and what still needs an explicit implementation estimate. Inflow Lab is the live simulator path for webhook demos and contract CI.
+              A compact view of available intake modes, guided workflows, and custom-scoped implementation paths. Named vendor and retailer workflows require scope confirmation and evidence review before being treated as production connectors. Inflow Lab is the live simulator path for webhook demos and contract CI.
             </p>
             <div className={styles.actions}>
               <Link href="/docs/connectors/inflow-lab" className={styles.primaryButton}>
@@ -166,7 +178,7 @@ export default function IntegrationsPage() {
             <h2>Current integration posture</h2>
           </div>
           <p>
-            Status labels stay conservative. GA is usable today; Pilot means validated but guided; Custom Scoped means implementation work should be explicitly estimated.
+            Status labels stay conservative. Implemented and Supported mean usable in supported workspaces; Pilot means validated but guided; Preparation and Contract-only items require explicit diligence; Custom Scoped means implementation work should be explicitly estimated.
           </p>
         </div>
 

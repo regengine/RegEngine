@@ -189,9 +189,9 @@ def _audit_identity(
     summary="Generate FDA export for a traceability lot code",
     description=(
         "Query all CTE events for a specific TLC within an optional date range, "
-        "generate the FDA-required CSV spreadsheet, log the export for audit, "
-        "and return the file. This is the endpoint that fulfills the 24-hour "
-        "FDA response requirement."
+        "generate an FDA-oriented sortable CSV spreadsheet, log the export for audit, "
+        "and return the file. This endpoint supports record-availability workflows; "
+        "operators remain responsible for reviewing the package against the specific FDA request."
     ),
     responses={
         200: {
@@ -200,7 +200,7 @@ def _audit_identity(
                 "application/zip": {},
                 "application/pdf": {},
             },
-            "description": "FDA-compliant CSV, ZIP package, or PDF report",
+            "description": "FDA-oriented CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -235,7 +235,7 @@ async def export_fda_spreadsheet(
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
-    """Generate and return an FDA-compliant traceability export."""
+    """Generate and return an FDA-oriented traceability export."""
     # FSMA 204 §1.1455(c) requires a tamper-evident audit trail identifying
     # WHO produced each export and WHEN (issue #1205). Identity fields must
     # resolve from the authenticated principal — never from the request
@@ -485,7 +485,7 @@ async def export_fda_spreadsheet(
                 "application/zip": {},
                 "application/pdf": {},
             },
-            "description": "FDA-compliant CSV, ZIP package, or PDF report",
+            "description": "FDA-oriented CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -579,7 +579,7 @@ async def export_all_events(
                 seen.add(e["id"])
                 deduped.append(e)
 
-        # EPIC-L (#1655): no empty-success exports. An FDA-formatted CSV
+        # EPIC-L (#1655): no empty-success exports. An FDA-oriented CSV
         # with zero data rows looks identical to a complete "no compliance
         # activity" response and is easy to misread. Fail loudly instead.
         if not deduped:
@@ -797,7 +797,7 @@ async def export_history(
     "/export/recall",
     summary="Recall-filtered FDA export",
     description=(
-        "Generate an FDA-compliant export filtered by product, location, and/or date range. "
+        "Generate an FDA-oriented export filtered by product, location, and/or date range. "
         "This is the endpoint used during actual FDA recall investigations: "
         "'Show me everything from [location] on [date] for [product].' "
         "Supports any combination of filters."
@@ -808,7 +808,7 @@ async def export_history(
                 "text/csv": {},
                 "application/zip": {},
             },
-            "description": "FDA-compliant CSV or ZIP package",
+            "description": "FDA-oriented CSV or ZIP package",
         },
     },
 )
@@ -910,7 +910,7 @@ async def verify_export(
     description=(
         "Query traceability events from the canonical fsma.traceability_events table, "
         "join rule evaluation results from fsma.rule_evaluations + fsma.rule_definitions, "
-        "and generate an FDA-compliant CSV/package with Compliance Status and Rule Failures "
+        "and generate an FDA-oriented CSV/package with Compliance Status and Rule Failures "
         "columns appended. Backward-compatible with v1 column layout — new columns are "
         "appended at the end."
     ),
@@ -920,7 +920,7 @@ async def verify_export(
                 "text/csv": {},
                 "application/zip": {},
             },
-            "description": "FDA-compliant CSV or ZIP package with compliance columns",
+            "description": "FDA-oriented CSV or ZIP package with compliance columns",
         },
     },
 )
@@ -949,7 +949,7 @@ async def export_fda_spreadsheet_v2(
     principal: IngestionPrincipal = Depends(require_permission("fda.export")),
     _subscription=Depends(require_active_subscription),
 ):
-    """Generate FDA-compliant traceability export from the canonical model with rule evaluation results."""
+    """Generate FDA-oriented traceability export from the canonical model with rule evaluation results."""
     identity = _audit_identity(request, principal)
     if not identity["user_id"]:
         raise HTTPException(

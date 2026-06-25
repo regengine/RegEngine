@@ -3,7 +3,7 @@
 **Owner:** Christopher (solo founder)
 **Date:** April 9, 2026
 **Revenue:** $0 | **Team:** 1 + Claude Code overnight sessions
-**North Star:** Generate inbound leads and close first paying customers before FSMA 204 urgency kicks in (July 2028 enforcement deadline)
+**North Star:** Generate inbound leads and close first paying customers before FSMA 204 urgency kicks in (earliest enforcement date under current public posture: July 2028)
 
 ---
 

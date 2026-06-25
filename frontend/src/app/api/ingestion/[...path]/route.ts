@@ -10,7 +10,7 @@ import {
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
-// force-dynamic ensures the proxy runs as a serverless function on every request,
+// force-dynamic makes the proxy run as a serverless function on every request,
 // forwarding auth headers and query params to the ingestion backend.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

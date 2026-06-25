@@ -14,7 +14,7 @@ Make the free sandbox and Inflow Lab feel like one operational workflow:
 
 ## Shared Rules
 
-- No sandbox result may claim FDA-ready, FDA submission-ready, or production evidence-ready status.
+- No sandbox result may claim FDA-oriented, FDA submission-ready, or production evidence-ready status.
 - Primary copy should say diagnose, correct, save test run, map source, monitor feed, generate evidence.
 - Keep mock, sandbox, authenticated feed, and production evidence visually and semantically distinct.
 - Prefer existing Next.js dashboard, ingestion, sandbox, and Inflow Lab routes. Do not create speculative services.

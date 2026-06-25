@@ -12,26 +12,26 @@ The structured pricing study (per [GTM memo](../research/fsma-204-go-to-market-2
 
 ## The answer (memorize this)
 
-> "Free during pilot — we're looking for 5-10 design partners who'll let us watch them use it for 60 days in exchange for free 12-month access and a public reference if you're satisfied. After GA, pricing is volume-tiered around CTE event count; we'll know your tier once we've seen your data. For your scale, expect roughly $X-$Y per month — we'll firm that up in the second call."
+> "Free during pilot — we're looking for 5-10 design partners who'll let us watch them use it for 60 days in exchange for free 12-month access and a public reference if you're satisfied. After the pilot period, pricing is volume-tiered around CTE event count; we'll know your tier once we've seen your data. For your scale, expect roughly $X-$Y per month — we'll firm that up in the second call."
 
 Replace `$X-$Y` with the range from the table below once you've heard the prospect describe their volume.
 
 ## Three options I considered
 
-### Option A (recommended) — Design partner free, volume-tiered paid GA
+### Option A (recommended) — Design partner free, volume-tiered post-pilot pricing
 - **Pilot (60 days):** Free. Includes founder support, 30-min biweekly observation, no event volume cap.
 - **Post-pilot:** Three usage tiers, billed monthly, anchored on CTE events ingested per month.
-  - **Pilot Grandfather** (signed before 2026-08-01): 12 months free at GA, then locked-in tier price.
+  - **Pilot Grandfather** (signed before 2026-08-01): 12 months free after pilot, then locked-in tier price.
   - **Starter:** ~$X/month, up to ~5K CTE events/month.
   - **Growth:** ~$Y/month, up to ~50K events/month.
-  - **Scale / Enterprise:** Custom, includes EDI ingestion, custom export formats, SLA.
+  - **Scale / Enterprise:** Custom, includes EDI ingestion, custom export formats, and contract-defined support terms.
 
-**Pros:** Removes pricing question for first pilots. Volume tiering aligns price with the natural unit of value (events). "Pilot grandfather" creates urgency without discounting GA pricing.
+**Pros:** Removes pricing question for first pilots. Volume tiering aligns price with the natural unit of value (events). "Pilot grandfather" creates urgency without discounting post-pilot pricing.
 **Cons:** Requires firming up `$X/$Y` before second-call follow-up.
 
-### Option B — Free, no GA pricing yet
+### Option B — Free, no post-pilot pricing yet
 - Free for everyone until first 10 paying customers.
-- "We'll set GA pricing based on what we learn from you."
+- "We'll set post-pilot pricing based on what we learn from you."
 
 **Pros:** Even less friction; emphasizes design-partner positioning.
 **Cons:** Sophisticated prospects will assume you don't know what you're doing. Procurement teams won't sign without a future-cost number, even a rough one.
@@ -64,10 +64,10 @@ These are placeholders. Refine after first 3 prospect calls reveal what they act
 Have a one-line answer ready:
 
 - **"Is there an annual discount?"** Yes — 10% off Starter/Growth on annual prepay.
-- **"Is there a setup fee?"** No for pilot. For GA, the Scale tier includes one-time integration scoping; Starter/Growth are self-serve.
-- **"What's your cancellation policy?"** Pilot can end at any time; GA contracts are month-to-month unless on annual prepay.
+- **"Is there a setup fee?"** No for pilot. After pilot, the Scale tier includes one-time integration scoping; Starter/Growth are self-serve.
+- **"What's your cancellation policy?"** Pilot can end at any time; post-pilot contracts are month-to-month unless on annual prepay.
 - **"Where's your data residency?"** US (per /trust). Specifics in your DPA.
-- **"Do you have SOC 2?"** Not yet — see /trust for current security posture; SOC 2 Type I planned post-revenue.
+- **"Do you have third-party assurance?"** Not yet — see /trust for current security posture; an external assurance program is planned post-revenue.
 
 ## What this doc explicitly does NOT cover
 

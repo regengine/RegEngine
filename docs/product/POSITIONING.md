@@ -4,20 +4,20 @@
 
 ## Positioning Statement
 
-**For** food safety, supplier onboarding, and compliance operations teams at food manufacturers, distributors, retailers, and logistics partners **who need** to satisfy FSMA 204 traceability requirements without running the workflow through spreadsheets, inboxes, and ad hoc CSV cleanup,
+**For** food safety, supplier onboarding, and compliance operations teams at food manufacturers, distributors, retailers, and logistics partners **who need** to support FSMA 204 traceability readiness without running the workflow through spreadsheets, inboxes, and ad hoc CSV cleanup,
 
 **RegEngine** is a traceability evidence platform **that** ingests supplier and ERP data, preflights CTE/KDE quality, routes fixes, and turns validated records into tenant-scoped audit and export evidence.
 
 **Unlike** generic food software, services-heavy legacy stacks, or manual audit-prep workflows,
 
-**RegEngine** combines API-first ingestion, deterministic FSMA rules, readiness scoring, tenant isolation, commit gates, and FDA-ready export packaging in one consolidated product path.
+**RegEngine** combines API-first ingestion, deterministic FSMA rules, readiness scoring, tenant isolation, commit gates, and FDA-oriented export packaging in one consolidated product path.
 
 ## Commercial Stage
 
-- Mature pre-production, not GA
+- Mature pre-production, design-partner oriented
 - Active hardening and remediation against a consolidated deploy path
 - Best fit today: design-partner pilots, onboarding workflows, supplier data cleanup, recall drill prep, and FDA response readiness
-- Messaging should not imply universal, zero-touch compliance automation
+- Messaging should not imply universal, zero-touch regulatory outcome automation
 
 ## Ideal Customer Profile
 
@@ -53,9 +53,9 @@
 
 **Why it matters**: operators get a defensible answer about what is missing and what can ship.
 
-### 3. Audit-ready export and response preparation
+### 3. Review-ready export and response preparation
 
-**Problem**: the painful moment is not just data capture; it is producing an FDA-ready response package quickly from messy operational inputs.
+**Problem**: the painful moment is not just data capture; it is producing an FDA-oriented response package quickly from messy operational inputs.
 
 **What RegEngine does**: assemble validated evidence into sortable spreadsheet and export workflows aligned to FSMA 204 response expectations.
 
@@ -74,7 +74,7 @@
 - FSMA 204 CTE/KDE ingestion paths across webhook, CSV, EPCIS, and related import workflows
 - Deterministic validation and readiness scoring in the main traceability path
 - Tenant-scoped evidence persistence and audit controls
-- FDA-ready export generation and response workflow support
+- FDA-oriented export generation and response workflow support
 - Inflow Workbench capabilities for preflight, fix queue, commit gating, and design-partner demo flows
 
 ## Business Promises We Can Make Now
@@ -90,7 +90,7 @@
 - "Fully autonomous compliance with no operator review"
 - "General-purpose regulatory intelligence across all industries"
 - "Instant replacement for every legacy food safety platform"
-- Any GA-style uptime, scale, or product-surface promise that exceeds the documented pre-production stage
+- Any uptime, scale, or product-surface promise that exceeds the documented pre-production stage
 
 ## Messaging Framework
 
@@ -104,7 +104,7 @@
 
 ### Two-sentence outreach pitch
 
-"RegEngine helps food teams turn supplier and ERP traceability data into validated FSMA 204 evidence. Instead of discovering gaps during a recall drill or export request, teams can preflight records, fix failures, and ship FDA-ready outputs from one system."
+"RegEngine helps food teams turn supplier and ERP traceability data into validated FSMA 204 evidence. Instead of discovering gaps during a recall drill or export request, teams can preflight records, fix failures, and prepare FDA-oriented outputs from one system."
 
 ## Competitive Framing
 
@@ -123,7 +123,7 @@
 
 - "FSMA 204 traceability readiness"
 - "Preflight supplier data before evidence commit"
-- "Validated records and FDA-ready exports"
+- "Validated records and FDA-oriented exports"
 - "Tenant-scoped audit evidence"
 
 ### Do not say this

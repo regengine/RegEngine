@@ -35,7 +35,7 @@ const statusConfig: Record<RecallStatus, {
   CANCELLED: { label: 'Cancelled', color: 'text-re-text-disabled', bgColor: 'bg-re-surface-elevated', icon: StopCircle },
 };
 
-// FDA 24-hour SLA in seconds
+// FDA 24-hour response objective in seconds
 const SLA_SECONDS = 24 * 60 * 60; // 86400 seconds
 
 interface RecallTimerProps {
@@ -139,7 +139,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
           </Badge>
         </div>
         <CardDescription>
-          24-Hour SLA Compliance Tracking
+          24-Hour Response Objective Tracking
         </CardDescription>
       </CardHeader>
 
@@ -152,7 +152,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             isActive={drill.status === 'IN_PROGRESS'}
           />
           <p className="text-sm text-muted-foreground mt-2">
-            Time Remaining to Meet FDA 24-Hour SLA
+            Time Remaining for FDA 24-Hour Response Objective
           </p>
         </div>
 

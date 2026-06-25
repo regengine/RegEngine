@@ -35,7 +35,7 @@ const COMPLIANCE_STEPS = [
     {
         step: '3',
         title: 'Data is Verified & Recorded',
-        description: 'Your submission is SHA-256 hashed, chain-linked, and stored in a §1.1455(c)-formatted structure. You receive a verification receipt with your event ID instantly.',
+        description: 'Your submission is SHA-256 hashed, chain-linked, and stored in an FDA-oriented sortable structure. You receive a verification receipt with your event ID instantly.',
         icon: ShieldCheck,
         time: 'Instant',
     },
@@ -55,7 +55,7 @@ const FAQ = [
     },
     {
         q: 'What is FSMA 204?',
-        a: 'The FDA Food Safety Modernization Act Section 204 requires enhanced traceability for high-risk foods (fresh produce, seafood, dairy, eggs, deli items). Companies must record Key Data Elements at Critical Tracking Events and provide records to the FDA within 24 hours of request. The compliance deadline is July 20, 2028.',
+        a: 'The FDA Food Safety Modernization Act Section 204 requires enhanced traceability for foods on the Food Traceability List. Covered companies must record Key Data Elements at Critical Tracking Events and may need to provide records to the FDA within 24 hours of request. Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction.',
     },
     {
         q: 'What if I already have a traceability system?',
@@ -198,7 +198,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Clock,
                                 title: 'The deadline',
-                                body: 'The FDA compliance deadline is July 20, 2028. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
+                                body: 'Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
                             },
                             {
                                 icon: AlertTriangle,

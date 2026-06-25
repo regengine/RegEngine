@@ -282,7 +282,7 @@ export default function CTEKDEGuidePage() {
           </h2>
 
           <p className="text-[var(--re-text-secondary)] mb-6">
-            The FDA recommends (and many retailers require) the EPCIS 2.0 standard for submitting traceability data. Here's a simplified example:
+            EPCIS 2.0 can support trading-partner interoperability, and some buyers may request it. FDA records requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies. Here is a simplified EPCIS-style example:
           </p>
 
           <div className="bg-black/60 rounded-lg overflow-hidden border border-[var(--re-surface-border)] mb-8">
@@ -424,7 +424,7 @@ export default function CTEKDEGuidePage() {
               </li>
               <li className="flex items-start gap-3 text-[var(--re-text-secondary)]">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>EPCIS 2.0 is the FDA-recommended format for submitting data. Most enterprise systems will require this standard for recalls.</span>
+                <span>EPCIS 2.0 can support trading-partner interoperability; confirm buyer and retailer format requirements directly.</span>
               </li>
               <li className="flex items-start gap-3 text-[var(--re-text-secondary)]">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
@@ -436,12 +436,12 @@ export default function CTEKDEGuidePage() {
           {/* Next Steps */}
           <h2 className="text-[var(--re-text-primary)] font-serif text-2xl font-bold mb-6 mt-12">Next Steps</h2>
           <p className="text-[var(--re-text-secondary)] mb-8">
-            Understanding CTEs and KDEs is foundational, but implementation is where compliance happens. Start by mapping your CTEs, then build data capture workflows that integrate with your existing systems. RegEngine automates this entire process, helping you capture FSMA 204 data in minutes instead of months.
+            Understanding CTEs and KDEs is foundational, but implementation is where traceability work becomes operational. Start by mapping your CTEs, then build data capture workflows that integrate with your existing systems. RegEngine helps capture and review FSMA 204 traceability data in minutes instead of months.
           </p>
 
           <div className="mb-8 p-6 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)]">
             <p className="text-[var(--re-text-secondary)] mb-4">
-              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS export.
+              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS-oriented export workflows.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Link

@@ -70,7 +70,7 @@ Solo-founder-pragmatism agent ranked this #1 (speed-to-yes, $6K–$12K ARR, 30�
 
 ### Strategic open questions
 
-1. **Post-2028 cliff:** What's the year-3 product? Once customers have a sortable spreadsheet that satisfies FDA, perceived value collapses unless RegEngine has expanded into adjacent workflows.
+1. **Post-2028 cliff:** What's the year-3 product? Once customers have a sortable spreadsheet workflow that supports FDA record requests, perceived value collapses unless RegEngine has expanded into adjacent workflows.
 2. **ReposiTrak displacement filter:** Pre-sales disqualification — "Who are your top 3 customers?" If Walmart/Kroger/Sysco/USFoods/Costco-heavy → defer.
 
 ---
@@ -220,7 +220,7 @@ Probe unit each time: *"Per facility? Per location? Per user? Per FTL SKU?"*
 21. What would have to be in your hands before you'd run a 30-day paid pilot?
 
 ### F. Wrap (5 min)
-22. If a one-person team built this and got it audit-ready, what would your decision criteria be?
+22. If a one-person team built this and got it review-ready, what would your decision criteria be?
 23. **Who else should I talk to?** *(Referral chain.)*
 
 ---

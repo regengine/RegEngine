@@ -34,7 +34,7 @@ export default function Image() {
           FSMA 204 Food Traceability Compliance
         </div>
         <div style={{ fontSize: '20px', color: '#94a3b8', maxWidth: '700px', textAlign: 'center', lineHeight: 1.5 }}>
-          Ingest supplier data. Verify chain of custody. Export audit-ready records in minutes.
+          Ingest supplier data. Verify chain of custody. Export review-ready records in minutes.
         </div>
       </div>
     ),

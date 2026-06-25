@@ -28,7 +28,7 @@ def generate_csv_and_hash(
     *,
     include_pii: bool = False,
 ) -> tuple[str, str]:
-    """Generate FDA-compliant CSV content and its SHA-256 hash.
+    """Generate FDA-oriented CSV content and its SHA-256 hash.
 
     ``include_pii=False`` (default) redacts facility-name/location
     columns (issue #1219). The caller must pass the same flag to the

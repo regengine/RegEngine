@@ -1089,7 +1089,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" aria-hidden />
                     <span className="font-medium text-slate-900">Sandbox preview only.</span>
                     <span className="text-slate-600">
-                        Production FDA exports stay sealed and audit-ready — nothing here writes to them.
+                        Production FDA-oriented exports stay sealed and review-ready — nothing here writes to them.
                     </span>
                     <Link
                         href="/docs/connectors/inflow-lab"

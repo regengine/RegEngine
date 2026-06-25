@@ -101,8 +101,8 @@ Not allowed until evidence exists:
 - reduced labor or audit-prep time,
 - SOC 2 certification,
 - completed penetration testing,
-- FDA certification or approval,
-- production SLA.
+- FDA endorsement,
+- public availability commitment.
 
 ## Recommended Next Step
 

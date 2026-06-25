@@ -34,16 +34,16 @@ const STACK_LAYERS = [
     {
         Icon: Monitor,
         layer: 'Frontend',
-        technology: 'Next.js 15 on Vercel',
+        technology: 'Next.js 16 on Vercel',
         detail:
             'Current deployment posture uses a server-rendered React app with edge caching and proxy-based API routing so browser traffic is mediated before it reaches backend services.',
     },
     {
         Icon: Server,
-        layer: 'Ingestion Service',
-        technology: 'FastAPI on Railway',
+        layer: 'Backend',
+        technology: 'FastAPI monolith on Railway',
         detail:
-            'Python service layer for CTE ingestion, webhook validation, CSV parsing, compliance scoring, and alert generation. Exact scaling posture depends on the active deployment.',
+            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance scoring, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
     },
     {
         Icon: Database,
@@ -51,12 +51,13 @@ const STACK_LAYERS = [
         technology: 'PostgreSQL on Supabase',
         detail:
             'Current database posture uses PostgreSQL tenant-scoping controls, append-oriented audit protections, and managed connection pooling.',
-    },    {
+    },
+    {
         Icon: Cloud,
         layer: 'Infrastructure',
-        technology: 'US-based hosting',
+        technology: 'US-configured core hosting',
         detail:
-            'Default hosting posture is US-based infrastructure with encrypted transport and encrypted storage. Regional deployment details may vary by environment and contract.',
+            'Default active application/database hosting is US-based where configured. CDN, edge, AI, and object-storage processing locations vary by provider and executed DPA.',
     },
 ];
 
@@ -76,9 +77,10 @@ const DATA_FLOW_STEPS = [
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Independent verification of exported bundles is offered at /verify; consumer-side enforcement of producer signatures across the message bus is rolling out.',
+        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
         color: 'bg-re-brand/15 text-re-brand',
-    },    {
+    },
+    {
         step: '4',
         title: 'Score',
         description: 'The compliance engine produces an advisory readiness signal across six weighted dimensions: export readiness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product coverage. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
@@ -96,13 +98,14 @@ const ISOLATION_CONTROLS = [
     {
         Icon: Lock,
         title: 'Row-Level Security',
-        detail: 'PostgreSQL row-level policies and authenticated tenant context scope reads at the database layer. Identity-resolution and graph-layer hardening is in progress; details available under NDA.',
+        detail: 'PostgreSQL row-level policies and authenticated tenant context are designed and tested to restrict reads on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in progress; details available under NDA.',
     },
     {
         Icon: Hash,
         title: 'Per-tenant hash chains',
         detail: 'Integrity records are designed to remain tenant-scoped so one customer workspace does not depend on another customer\'s evidence chain.',
-    },    {
+    },
+    {
         Icon: Shield,
         title: 'API key scoping',
         detail: 'API credentials and tenant context are intended to be scoped per customer workspace, with server-side mediation preferred over trusting raw client context.',
@@ -112,6 +115,46 @@ const ISOLATION_CONTROLS = [
         title: 'Append-oriented audit handling',
         detail: 'Compliance records are append-oriented after ingest; in-place mutation is not the supported path. Audit-chain coverage across review and admin surfaces is being expanded.',
     },
+];
+
+const SYSTEM_FLOW = [
+    {
+        Icon: Globe,
+        title: 'Source systems',
+        detail: 'ERP, WMS, supplier files, webhooks, or EPCIS feeds',
+        boundary: 'Customer-owned data quality',
+    },
+    {
+        Icon: Layers,
+        title: 'App and API edge',
+        detail: 'Next.js app, authenticated routes, and mediated API traffic',
+        boundary: 'Session and request context',
+    },
+    {
+        Icon: Server,
+        title: 'Ingestion service',
+        detail: 'FastAPI validation, mapping, scoring, and workflow orchestration',
+        boundary: 'Server-side tenant context',
+    },
+    {
+        Icon: Database,
+        title: 'Tenant database',
+        detail: 'PostgreSQL records, RLS policies, append-oriented evidence handling',
+        boundary: 'Core data isolation layer',
+    },
+    {
+        Icon: Workflow,
+        title: 'Evidence exports',
+        detail: 'FDA-oriented spreadsheets, EPCIS/CSV packages, and manifests where configured',
+        boundary: 'Customer review and archive',
+    },
+];
+
+const OPTIONAL_PROCESSORS = [
+    'AI extraction where enabled',
+    'Object storage where configured',
+    'Transactional email where configured',
+    'Analytics after consent or workspace enablement',
 ];
 
 export default function ArchitecturePage() {
@@ -135,6 +178,62 @@ export default function ArchitecturePage() {
                     Service topology, data flow from ingest to export, tenant isolation model, and infrastructure posture.
                     This page is written for IT reviewers and security teams evaluating RegEngine for procurement.
                 </p>
+            </section>
+
+            {/* System flow diagram */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[1180px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                    <div className="mb-6 max-w-[760px]">
+                        <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">
+                            System flow at a glance
+                        </h2>
+                        <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                            The core path keeps customer-owned source data, authenticated request context, PostgreSQL
+                            tenant controls, and export review boundaries visually separate. Optional processors sit
+                            outside the default core path unless they are enabled or configured for a workspace.
+                        </p>
+                    </div>
+                    <div className={`${card} overflow-hidden`}>
+                        <div className="grid gap-0 lg:grid-cols-5">
+                            {SYSTEM_FLOW.map((step, index) => {
+                                const Icon = step.Icon;
+                                return (
+                                    <div
+                                        key={step.title}
+                                        className="relative border-b border-[var(--re-surface-border)] p-5 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0"
+                                    >
+                                        {index < SYSTEM_FLOW.length - 1 && (
+                                            <ArrowRight className="absolute right-[-10px] top-8 z-[1] hidden h-5 w-5 rounded-full border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-0.5 text-[var(--re-text-disabled)] lg:block" />
+                                        )}
+                                        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--re-brand)]/10">
+                                            <Icon className="h-5 w-5 text-[var(--re-brand)]" />
+                                        </div>
+                                        <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">{step.title}</h3>
+                                        <p className="mt-2 text-sm leading-relaxed text-[var(--re-text-muted)]">{step.detail}</p>
+                                        <p className="mt-4 text-[11px] font-mono uppercase tracking-normal text-[var(--re-text-disabled)]">
+                                            {step.boundary}
+                                        </p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4">
+                            <div className="mb-3 text-[11px] font-mono uppercase tracking-widest text-[var(--re-text-disabled)]">
+                                Conditional processors
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {OPTIONAL_PROCESSORS.map((processor) => (
+                                    <span
+                                        key={processor}
+                                        className="rounded-full border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] px-3 py-1.5 text-xs text-[var(--re-text-muted)]"
+                                    >
+                                        {processor}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             {/* Stack layers */}
@@ -217,7 +316,7 @@ export default function ArchitecturePage() {
                         { label: 'Encryption in transit', value: 'Encrypted transport', detail: 'Client and service connections are intended to use encrypted transport' },
                         { label: 'Data residency', value: 'US default', detail: 'Current default posture for active deployments' },
                         { label: 'Backup cadence', value: 'Platform managed', detail: 'Backup and recovery posture depends on the active hosting configuration' },
-                        { label: 'CI/CD security', value: 'Current workflow controls', detail: 'Security scanning and secret-handling practices depend on the active delivery pipeline' },
+                        { label: 'CI/CD security', value: 'Current workflow controls', detail: 'Secrets, SAST, and dependency gates run in CI; DAST, SBOM, and container scans run when configured or on scheduled/main-branch workflows' },
                         { label: 'Branch protection', value: 'Repository controlled', detail: 'Review and merge controls are managed at the repository level' },
                     ].map((item) => (
                         <div key={item.label} className={`${card} p-4`}>
@@ -233,7 +332,7 @@ export default function ArchitecturePage() {
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[860px] mx-auto py-10 sm:py-14 px-4 sm:px-6 text-center">
                     <p className="text-sm text-[var(--re-text-muted)] mb-4">
-                        Need more detail? The security page covers RLS testing, hash verification, and audit trail enforcement.
+                        Need more detail? The security page covers RLS testing, hash verification, and audit trail posture.
                     </p>
                     <div className="flex flex-wrap gap-3 justify-center">
                         <Link href="/security">
@@ -252,7 +351,7 @@ export default function ArchitecturePage() {
                         </Link>
                     </div>
                     <p className="text-sm text-[var(--re-text-muted)] mt-6">
-                        Verify any export yourself: drop a bundle into{' '}
+                        Verify supported evidence export bundles yourself: drop a supported bundle into{' '}
                         <Link href="/verify" className="text-[var(--re-brand)] hover:opacity-80">/verify</Link>{' '}
                         or download a synthetic sample at{' '}
                         <Link href="/proof" className="text-[var(--re-brand)] hover:opacity-80">/proof</Link>.

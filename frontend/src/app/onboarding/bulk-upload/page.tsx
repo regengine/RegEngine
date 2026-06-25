@@ -531,7 +531,7 @@ export default function BulkUploadPage() {
               <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Upload a CSV to preview and validate your data against FSMA 204 requirements — no account required. Sign in to commit with cryptographic integrity and generate audit-ready records.
+              Upload a CSV to preview and validate your data against FSMA 204 traceability expectations — no account required. Sign in to commit with cryptographic integrity and generate review-ready records.
             </p>
           </div>
         )}
@@ -924,7 +924,7 @@ export default function BulkUploadPage() {
                       : 'Fix the issues above, then sign in to commit'}
                   </p>
                   <p className="text-xs text-[var(--re-text-muted)] mb-3 max-w-sm mx-auto">
-                    Server-side commit adds SHA-256 hashing, Merkle tree integrity, and generates audit-ready records for FDA inspection.
+                    Server-side commit adds SHA-256 hashing, Merkle tree integrity, and generates review-ready records for operator review.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link

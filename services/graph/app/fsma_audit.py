@@ -674,7 +674,7 @@ class FSMAAuditLog:
         tenant_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Export audit log in FDA-ready format.
+        Export audit log in FDA-oriented format.
 
         Args:
             target_id: Filter by specific target (e.g., lot TLC)

@@ -84,7 +84,7 @@ const SUPPORT_BOUNDARIES = [
             'Custom report development outside your plan',
             'Recall operations or logistics coordination',
             'Food safety consulting or PCQI services',
-            'Guaranteed SLAs without enterprise contract',
+            'Service-level commitments without enterprise contract',
         ],
     },
 ];
@@ -166,7 +166,7 @@ export default function SupportPage() {
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">During a live recall</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
-                        This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to satisfy statutory retention or a live recall response — your recall-readiness plan owns that.
+                        This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response — your recall-readiness plan owns that.
                     </p>
                     <div className={`${card} p-6 border-re-danger/20 bg-re-danger-muted0/[0.02]`}>
                         <div className="flex items-start gap-4">
@@ -176,9 +176,9 @@ export default function SupportPage() {
                             <div>
                                 <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does during a recall</h3>
                                 <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">
-                                    <li>Generates FDA-formatted sortable spreadsheet for the affected product and date range</li>
+                                    <li>Generates FDA-oriented sortable spreadsheet for the affected product and date range</li>
                                     <li>Provides hash-manifest verification artifacts for records in the recall scope</li>
-                                    <li>Exports complete CTE/KDE trail for affected lots as a downloadable bundle</li>
+                                    <li>Exports available committed CTE/KDE records for affected lots, subject to upstream data quality and the configured workflow</li>
                                     <li>Customers with a recall-response addendum receive coordinated export and evidence support per contract</li>
                                 </ul>
                             </div>
@@ -193,7 +193,7 @@ export default function SupportPage() {
                                 <h3 className="text-base font-semibold text-[var(--re-text-primary)] mb-2">What RegEngine does not do during a recall</h3>
                                 <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">                                    <li>RegEngine does not coordinate recall logistics, supplier notifications, or retail removals</li>
                                     <li>RegEngine does not provide legal representation or regulatory advice</li>
-                                    <li>RegEngine does not guarantee FDA acceptance of any export or report format</li>
+                                    <li>RegEngine does not promise FDA acceptance of any export or report format</li>
                                     <li>Public support windows are not a substitute for your recall-readiness plan</li>
                                 </ul>
                             </div>

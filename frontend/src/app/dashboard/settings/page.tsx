@@ -480,7 +480,7 @@ export default function SettingsPage() {
                                     <div>
                                         <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            This catalog shows which delivery modes RegEngine can support, not a guarantee that every source is already live for this tenant. Connection status, automated ingest, and downstream scoring appear only after the relevant workflow is provisioned.
+                                            This catalog shows which delivery modes RegEngine can support, not a promise that every source is already live for this tenant. Connection status, automated ingest, and downstream scoring appear only after the relevant workflow is provisioned.
                                         </p>
                                     </div>
                                 </div>

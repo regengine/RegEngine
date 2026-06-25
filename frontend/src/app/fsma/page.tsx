@@ -140,7 +140,7 @@ function FSMADashboardContent() {
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
-                  <Badge className="bg-re-brand-muted text-re-brand-dark border border-re-brand/20 text-xs">GA</Badge>
+                  <Badge className="bg-re-brand-muted text-re-brand-dark border border-re-brand/20 text-xs">Supported</Badge>
                 </div>
                 <div className="mt-1 flex items-center gap-1 text-muted-foreground">
                   <p>Food Safety Traceability & Recall Management</p>

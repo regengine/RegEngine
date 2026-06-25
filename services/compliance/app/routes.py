@@ -131,7 +131,7 @@ def _load_fsma_rules() -> dict:
     except FileNotFoundError:
         raise RuntimeError(
             f"FSMA rules config not found at {_RULES_PATH}. "
-            "Ensure fsma_rules.json is present in the compliance app directory."
+            "Confirm fsma_rules.json is present in the compliance app directory."
         )
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Malformed fsma_rules.json: {exc}") from exc
@@ -467,7 +467,7 @@ async def fsma_audit_spreadsheet(
       raw query-string values — blocking CRLF / quote injection of a
       second response header.
     * Zero-row exports return HTTP 404 with a structured body rather
-      than an empty FDA-formatted CSV.
+      than an empty FDA-oriented CSV.
     """
     # ---- Tenant binding (#1106) ------------------------------------------
     # The authenticated API key is the sole source of truth for tenant

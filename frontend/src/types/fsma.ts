@@ -130,7 +130,7 @@ export interface RecallDrill {
   target_product?: string;
   initiated_at: string;
   completed_at?: string;
-  deadline: string; // 24-hour SLA deadline
+  deadline: string; // 24-hour response-objective deadline
   elapsed_seconds: number;
   remaining_seconds: number;
   facilities_contacted: number;
@@ -290,4 +290,3 @@ export interface WizardExemptionResult {
   active_exemptions: WizardExemptionDefinition[];
   unanswered_count: number;
 }
-

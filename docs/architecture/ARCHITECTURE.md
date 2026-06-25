@@ -59,12 +59,12 @@ graph TB
 - **Backend:** one Railway service that builds the repo-root [`Dockerfile`](../../Dockerfile) and starts `server.main:app`. Railway's native TLS + routing terminates the public domain — no separate gateway.
 - **Frontend:** Next.js App Router app in `frontend/` deployed to Vercel (`regengine.co`) via its own workflow.
 - **Database:** PostgreSQL via `DATABASE_URL` (production: Supabase Postgres 17).
-- **Optional infra:** Neo4j, Redis, and Redpanda-compatible code paths exist in-tree but are not part of the default local dev stack (`docker-compose.dev.yml` starts only Postgres). Treat any in-tree reference to a 6-port topology as historical scaffolding unless you can trace it back to the current Dockerfile.
+- **Optional infra:** Neo4j, Redis, and Kafka-compatible code paths exist in-tree but are not part of the default local dev stack (`docker-compose.dev.yml` starts only Postgres). Treat any in-tree reference to a 6-port topology as historical scaffolding unless you can trace it back to the current Dockerfile.
 
 ## Async / Event Backbone
 
 - Background work uses PostgreSQL-backed task processing via [`server/workers/task_processor.py`](../../server/workers/task_processor.py) and [`services/shared/task_queue.py`](../../services/shared/task_queue.py).
-- The Kafka/Redpanda consumer code in-tree pre-dates the consolidation decision (see [`alembic/versions/20260329_task_queue_v050.py`](../../alembic/versions/20260329_task_queue_v050.py)) and is not part of the current deploy contract.
+- The Kafka-compatible consumer code in-tree pre-dates the consolidation decision (see [`alembic/versions/20260329_task_queue_v050.py`](../../alembic/versions/20260329_task_queue_v050.py)) and is not part of the current deploy contract.
 
 ## Router Surface
 

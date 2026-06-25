@@ -213,7 +213,7 @@ export const FREE_TOOLS = [
     {
         id: 'roi-calculator',
         title: 'FSMA 204 Savings Estimator',
-        description: 'Estimate potential FSMA 204 savings — illustrative, not a guarantee.',
+        description: 'Estimate potential FSMA 204 savings — illustrative, not a promise.',
         icon: TrendingUp,
         href: '/tools/roi-calculator'
     },

@@ -57,16 +57,16 @@ export function PricingPageClient({
 
     return (
         <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
-            <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
+            <section className="relative z-[2] max-w-[900px] mx-auto pt-10 sm:pt-14 pb-7 sm:pb-10 px-4 sm:px-6 text-center">
                 <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
-                    FSMA 204 compliance,<br />
+                    FSMA 204 traceability readiness,<br />
                     priced for facility teams.
                 </h1>
-                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
-                    Three plans sized by facility count. Founding Design Partners lock in a lower rate while the product is shaped around real supplier data.
+                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-3 leading-relaxed">
+                    Three indicative plans sized by facility count. Founding Design Partner discounts are documented in the executed order form or design-partner agreement.
                 </p>
                 <p className="font-display text-base font-semibold text-[var(--re-text-muted)] tracking-tight">
-                    Based on company size. No hidden fees. Cancel anytime.
+                    Pricing shown is indicative. Executed agreement controls final plan, billing period, and checkout availability.
                 </p>
                 <p className="text-sm text-[var(--re-text-disabled)] mt-2">
                     Annual billing saves ~15%. Monthly billing also available.
@@ -114,20 +114,11 @@ export function PricingPageClient({
                                         </div>
                                         <p className="text-xs text-[var(--re-text-disabled)] mt-1">
                                             <span className="line-through opacity-60">${tier.gaAnnual}/mo</span>
-                                            {' '}General Availability (GA) price · billed annually
+                                            {' '}Post-pilot list price · billed annually
                                         </p>
                                         <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
                                             ${tier.partnerMonthly}/mo if billed monthly
                                         </p>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2.5 flex-1">
-                                        {tier.features.map((f, i) => (
-                                            <div key={i} className="flex items-start gap-2">
-                                                <Check className="w-3.5 h-3.5 text-[var(--re-brand)] mt-[3px] shrink-0" />
-                                                <span className="text-[13px] text-[var(--re-text-secondary)]">{f}</span>
-                                            </div>
-                                        ))}
                                     </div>
 
                                     <PricingCheckoutButton
@@ -139,8 +130,18 @@ export function PricingPageClient({
                                             color: tier.highlighted ? '#fff' : 'var(--re-text-primary)',
                                             border: tier.highlighted ? 'none' : '1px solid var(--re-surface-border)',
                                             boxShadow: 'none',
+                                            marginBottom: '20px',
                                         }}
                                     />
+
+                                    <div className="flex flex-col gap-2.5 flex-1">
+                                        {tier.features.map((f, i) => (
+                                            <div key={i} className="flex items-start gap-2">
+                                                <Check className="w-3.5 h-3.5 text-[var(--re-brand)] mt-[3px] shrink-0" />
+                                                <span className="text-[13px] text-[var(--re-text-secondary)]">{f}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -156,10 +157,10 @@ export function PricingPageClient({
                         Founding Design Partner Program
                     </p>
                     <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
-                        50% off General Availability (GA) pricing for the life of your account. White-glove onboarding, custom integration scoping, and direct founder support.
+                        50% off post-pilot list pricing under your executed design-partner terms. White-glove onboarding, custom integration scoping, and direct founder support.
                     </p>
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-3">
-                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
+                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement, including scope for facilities, add-ons, taxes, and plan changes.
                     </p>
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
                         Larger deployments are scoped with the team so onboarding, billing, and integration support match your operating model.
@@ -177,17 +178,17 @@ export function PricingPageClient({
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
                         <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
                             <Lock className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
-                            <span>AES-256 encryption at rest · TLS 1.3 in transit</span>
+                            <span>Managed-provider encryption at rest · encrypted transport</span>
                         </div>
                         <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
                         <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
                             <ShieldCheck className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
-                            <span>Built on SOC 2 Type II certified infrastructure (Supabase, Vercel)</span>
+                            <span>Security posture and subprocessors documented in the Trust Center</span>
                         </div>
                         <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
                         <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
                             <KeyRound className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
-                            <span>Tenant isolation by design · <Link href="/security" className="text-[var(--re-brand)] hover:underline">Security details →</Link></span>
+                            <span>Core PostgreSQL tenant scoping · <Link href="/security" className="text-[var(--re-brand)] hover:underline">Security details →</Link></span>
                         </div>
                     </div>
                 </div>
@@ -233,7 +234,7 @@ export function PricingPageClient({
                         </div>
                     </div>
                     <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
-                        Competitor data from public sources as of April 2026.
+                        Operating-model comparison based on public information and RegEngine&apos;s current design-partner posture; validate competitor capabilities directly before procurement decisions.
                     </p>
                 </div>
             </section>

@@ -133,8 +133,8 @@ if [ "$INGEST_COUNT" -eq 0 ]; then
   exit 1
 fi
 
-# ── Step 3: Export FDA-ready package ────────────────────────────────────────
-header "Step 3 · Generating FDA-ready export"
+# ── Step 3: Export FDA-oriented package ────────────────────────────────────────
+header "Step 3 · Generating FDA-oriented export"
 
 mkdir -p "$EXPORT_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -222,7 +222,7 @@ echo ""
 echo -e "  ${G}What just happened:${NC}"
 echo -e "  1. Uploaded 6 supply chain CSVs (harvest → cool → pack → ship → receive → transform)"
 echo -e "  2. Each event was normalized, hashed (SHA-256), and stored with chain linkage"
-echo -e "  3. Generated an FDA-ready export with full traceability for lot $TLC"
+echo -e "  3. Generated an FDA-oriented export with full traceability for lot $TLC"
 echo -e "  4. Checked compliance status against FSMA 204 rules"
 echo -e "  5. Verified cryptographic chain integrity"
 echo ""

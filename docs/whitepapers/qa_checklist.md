@@ -112,7 +112,7 @@ Use this checklist before publishing any RegEngine white paper. All items must p
 
 ### Legal Disclaimer
 - [ ] Disclaimer present and comprehensive
-- [ ] Covers: informational purposes, consult professionals, no guarantees
+- [ ] Covers: informational purposes, consult professionals, no promised outcomes
 
 ### Document Control
 - [ ] Document version matches cover block

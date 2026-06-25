@@ -13,7 +13,7 @@ RegEngine is currently positioned and documented as an FSMA 204 traceability pla
 
 - Food traceability under FSMA 204
 - Critical Tracking Events (CTEs) and Key Data Elements (KDEs)
-- FDA-ready export generation inside the 24-hour response window
+- FDA-oriented sortable export workflows that help support record requests with time-bound response expectations
 - Supplier onboarding, recall drills, and traceability graph workflows
 
 ## Note

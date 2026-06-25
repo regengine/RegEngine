@@ -552,7 +552,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Export Trace Csv",
-                "description": "Export traceability data as FDA-compliant CSV spreadsheet.\n\nThe CSV format is designed for submission to FDA during recall events\nand follows the sortable spreadsheet format described in FSMA 204.\n\nColumns:\n- TLC (Traceability Lot Code)\n- Product Description\n- Quantity\n- Unit of Measure\n- Event Type (CTE)\n- Event Date\n- Event Time\n- Facility Name\n- Facility GLN\n- Facility Address",
+                "description": "Export traceability data as FDA-oriented CSV spreadsheet.\n\nThe CSV format is designed for submission to FDA during recall events\nand follows the sortable spreadsheet format described in FSMA 204.\n\nColumns:\n- TLC (Traceability Lot Code)\n- Product Description\n- Quantity\n- Unit of Measure\n- Event Type (CTE)\n- Event Date\n- Event Time\n- Facility Name\n- Facility GLN\n- Facility Address",
                 "operationId": "export_trace_csv_v1_fsma_export_trace__tlc__get",
                 "parameters": [
                     {
@@ -1025,7 +1025,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Fsma Metrics Endpoint",
-                "description": "Prometheus metrics endpoint for FSMA 204 compliance monitoring.\n\nExposes metrics including:\n- Trace query latency (fsma_trace_query_seconds)\n- Recall SLA compliance (fsma_recall_sla_seconds)\n- Data quality gauges (fsma_gaps_total, fsma_orphans_total)\n- KDE completeness (fsma_kde_completeness_rate)\n\nReturns: Prometheus text format metrics.",
+                "description": "Prometheus metrics endpoint for FSMA 204 traceability monitoring.\n\nExposes metrics including:\n- Trace query latency (fsma_trace_query_seconds)\n- Recall response timing (fsma_recall_sla_seconds)\n- Data quality gauges (fsma_gaps_total, fsma_orphans_total)\n- KDE completeness (fsma_kde_completeness_rate)\n\nReturns: Prometheus text format metrics.",
                 "operationId": "fsma_metrics_endpoint_v1_fsma_metrics_get",
                 "responses": {
                     "200": {
@@ -2153,7 +2153,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Create Recall Drill",
-                "description": "Execute a mock recall drill.\n\nSimulates an FDA recall request and measures response time against\nthe 24-hour SLA mandate. Tracks all drill results for audit purposes.\n\nDrill Types:\n- forward_trace: From raw material to consumer\n- backward_trace: From consumer to source\n- full_trace: Both directions\n- targeted: Specific facility/lot\n- mass_balance: Quantity reconciliation\n\nReturns drill results with SLA metrics.",
+                "description": "Execute a mock recall drill.\n\nSimulates an FDA records request and measures response time against\nthe 24-hour response objective. Tracks drill results for internal review.\n\nDrill Types:\n- forward_trace: From raw material to consumer\n- backward_trace: From consumer to source\n- full_trace: Both directions\n- targeted: Specific facility/lot\n- mass_balance: Quantity reconciliation\n\nReturns drill results with response timing metrics.",
                 "operationId": "create_recall_drill_v1_fsma_recall_drill_post",
                 "parameters": [
                     {
@@ -2395,7 +2395,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Get Recall Drill",
-                "description": "Get details of a specific recall drill.\n\nReturns full drill information including affected facilities,\ntrace metrics, and SLA compliance status.",
+                "description": "Get details of a specific recall drill.\n\nReturns drill information including affected facilities,\ntrace metrics, and response-objective status.",
                 "operationId": "get_recall_drill_v1_fsma_recall_drill__drill_id__get",
                 "parameters": [
                     {
@@ -2531,7 +2531,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Get Recall Readiness Report",
-                "description": "Get FDA recall readiness report.\n\nComprehensive assessment of recall preparedness including:\n- SLA compliance rate\n- Drill frequency vs recommendations\n- Data quality metrics\n- Actionable recommendations\n\nUse for FDA audit preparation and compliance documentation.",
+                "description": "Get FDA recall readiness report.\n\nAssessment of recall preparedness including:\n- Response-objective performance\n- Drill frequency vs recommendations\n- Data quality metrics\n- Actionable recommendations\n\nUse for FDA-oriented record-request preparation and internal documentation.",
                 "operationId": "get_recall_readiness_report_v1_fsma_recall_readiness_get",
                 "parameters": [
                     {
@@ -2591,7 +2591,7 @@
                     "FSMA 204"
                 ],
                 "summary": "Get Recall Sla Metrics",
-                "description": "Get SLA compliance metrics.\n\nReturns metrics on 24-hour recall response mandate compliance.",
+                "description": "Get response-objective metrics.\n\nReturns metrics on 24-hour recall response performance.",
                 "operationId": "get_recall_sla_metrics_v1_fsma_recall_sla_get",
                 "parameters": [
                     {

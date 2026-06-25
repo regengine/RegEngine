@@ -591,7 +591,7 @@ These create or alter structure. Rollback = drop the structure. Safe as long as 
 
 ### Hash Chain Immutability (V039)
 
-`V039__hash_chain_immutability.sql` adds protections to the hash chain table. **If rolled back**, the hash chain loses its immutability guarantees — UPDATE and DELETE become possible, which undermines the entire tamper-evident audit trail.
+`V039__hash_chain_immutability.sql` adds protections to the hash chain table. **If rolled back**, the hash chain loses its immutability protections — UPDATE and DELETE become possible, which undermines the entire tamper-evident audit trail.
 
 ```sql
 -- Check if V039 protections are in place

@@ -38,7 +38,7 @@ export const publicOpenApiSpec = {
   tags: [
     { name: 'Webhook Ingestion', description: 'Create tenant-scoped CTE/KDE records.' },
     { name: 'Records', description: 'Read canonical ingestion-run records.' },
-    { name: 'FDA Export', description: 'Export §1.1455(c)-formatted packages.' },
+    { name: 'FDA Export', description: 'Export FDA-oriented sortable records where configured data supports the request.' },
   ],
   security: [{ RegEngineApiKey: [] }],
   paths: {

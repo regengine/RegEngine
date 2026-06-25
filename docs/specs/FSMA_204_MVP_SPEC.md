@@ -141,4 +141,4 @@ This milestone shifts the MVP from a rules engine plus simulator toward an opera
 ## Non-blocking Known Gaps (from repo instructions)
 - Scrapers: `nydfs.py` returns empty bytes (not used for FSMA MVP).
 - Scheduler: missing auto-ingestion trigger; can be deferred for demo.
-- Compliance service absent from docker-compose; ensure it’s started (e.g., `uvicorn services.compliance.main:app --port 8500`) for spreadsheet and validation endpoints.
+- Compliance service absent from docker-compose; confirm it is started (e.g., `uvicorn services.compliance.main:app --port 8500`) for spreadsheet and validation endpoints.

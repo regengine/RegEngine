@@ -230,7 +230,7 @@ export default function DashboardIntegrationsPage() {
     const notConnected = meta?.status === 'not_connected';
     const reviewCount = items.filter((item) => item.status !== 'mapped').length;
     const capabilityCount = CAPABILITY_REGISTRY.filter((item) => item.category !== 'commercial').length;
-    const liveApiCount = CAPABILITY_REGISTRY.filter((item) => item.status === 'ga').length;
+    const liveApiCount = CAPABILITY_REGISTRY.filter((item) => item.status === 'implemented').length;
     const activeProfileCount = profiles.filter((profile) => profile.status === 'active').length;
 
     const handleMappingChange = (key: string, value: string) => {
@@ -320,9 +320,9 @@ export default function DashboardIntegrationsPage() {
                         <p className={styles.statCopy}>Customer-visible connectors and export surfaces.</p>
                     </div>
                     <div className={styles.statCard}>
-                        <div className={styles.statLabel}>Registry items marked GA</div>
+                        <div className={styles.statLabel}>Registry items marked implemented</div>
                         <div className={styles.statValue}>{liveApiCount}</div>
-                        <p className={styles.statCopy}>Status-model entries currently marked generally available.</p>
+                        <p className={styles.statCopy}>Status-model entries currently marked usable in supported workspaces.</p>
                     </div>
                     <div className={styles.statCard}>
                         <div className={styles.statLabel}>Open review items</div>

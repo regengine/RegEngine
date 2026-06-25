@@ -46,7 +46,7 @@ export default function FSMA204ComplianceChecklist() {
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              July 20, 2028 is the FSMA 204 compliance deadline. That may sound like a long way off, but implementation typically takes 6-18 months depending on your business complexity. The difference between companies that start now and those that wait is the difference between smooth adoption and a last-minute scramble.
+              Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction. That may sound like a long way off, but implementation typically takes 6-18 months depending on your business complexity. The difference between companies that start now and those that wait is the difference between smooth adoption and a last-minute scramble.
             </p>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed">
               This checklist breaks FSMA 204 compliance into manageable phases. Use it to track your progress, identify gaps, and keep your team aligned. Work through these items over the next 24 months, and you'll be ready well before the deadline.
@@ -164,7 +164,7 @@ export default function FSMA204ComplianceChecklist() {
               Phase 4: Scale & Hardening (Q1-Q2 2027)
             </h2>
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-              Roll out FSMA 204 to all product lines and refine your processes to ensure consistent, reliable compliance.
+              Roll out FSMA 204 traceability work to all applicable product lines and refine your processes for consistent, reliable records.
             </p>
             <div className="space-y-4 mb-8">
               {[
@@ -208,7 +208,7 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Stay informed of FDA updates', detail: 'Subscribe to FDA updates and FSMA 204 guidance. Make any necessary adjustments to your system or procedures', done: false },
                 { task: 'Conduct annual training', detail: 'Refresh training for all staff involved in data capture. Bring in new team members as needed', done: false },
                 { task: 'Maintain supplier relationships', detail: 'Keep communication open with suppliers. Make sure they continue to submit accurate, timely traceability data', done: false },
-                { task: 'Go-live officially on July 20, 2028', detail: 'Your FSMA 204 system is live and ready. You are compliant and prepared for any FDA enforcement actions', done: false },
+                { task: 'Target readiness before July 20, 2028', detail: 'Your FSMA 204 traceability workflow is live, tested, and ready for operator review before enforcement resumes', done: false },
               ].map((item, idx) => (
                 <div key={idx} className="flex gap-4 p-4 rounded-lg bg-[var(--re-surface-secondary)] border border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30 transition-colors duration-200">
                   <div className="flex-shrink-0">

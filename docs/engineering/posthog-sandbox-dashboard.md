@@ -57,7 +57,7 @@ Steps:
 - **Columns:** Email, defect_count, event_count, timestamp, cta_type
 - **Filter:** `SANDBOX_LEAD_CAPTURE` in last 7 days
 - **Sort:** Most recent first
-- **Action:** Click email to open PostHog person profile → see full session replay
+- **Action:** Click email to open PostHog person profile and review captured product-event context
 
 ### Row 5: CTA Performance (pie + bar)
 

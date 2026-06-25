@@ -56,7 +56,7 @@ export default function DataImportPage() {
             <RelatedTools tools={filterExperimentalToolLinks([
                 { href: "/tools/scan", title: "GS1 Barcode Scanner", description: "Scan barcodes to decode GTIN and lot codes directly into FSMA 204 traceability records." },
                 { href: "/tools/label-scanner", title: "AI Label Scanner", description: "Upload a food label and AI extracts lot code, GTIN, and FSMA 204 KDEs automatically." },
-                { href: "/tools/export", title: "FDA Export Generator", description: "Generate a verifiable SHA-256 compliance package from your traceability records." },
+                { href: "/tools/export", title: "FDA-Oriented Export Generator", description: "Generate a verifiable records package from your traceability records." },
             ])} />
             </>
         </EmailGate>

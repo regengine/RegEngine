@@ -47,7 +47,7 @@ def fsma_metrics_endpoint():
 
     Exposes metrics including:
     - Trace query latency (fsma_trace_query_seconds)
-    - Recall SLA compliance (fsma_recall_sla_seconds)
+    - Recall response timing (fsma_recall_sla_seconds)
     - Data quality gauges (fsma_gaps_total, fsma_orphans_total)
     - KDE completeness (fsma_kde_completeness_rate)
 

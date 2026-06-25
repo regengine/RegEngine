@@ -11,7 +11,7 @@ const sections = [
 
 Features may change without notice, and we may suspend or modify access during staged rollouts, maintenance windows, or broader service updates.
 
-We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data — they do not constitute legal advice or guarantee regulatory compliance. You are responsible for your own compliance decisions.`,
+We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data — they do not constitute legal advice or promise regulatory compliance. You are responsible for your own compliance decisions.`,
     },
     {
         id: 'accounts',
@@ -24,15 +24,15 @@ We may also suspend or restrict access to the Service if required to do so by la
     },    {
         id: 'your-data',
         title: '3. Your Data',
-        content: `You own your compliance data. Period.
+        content: `As between you and RegEngine, you retain rights in the Customer Data you submit.
 
-We store and process your data solely to provide RegEngine services. We do not claim any intellectual property rights over your compliance data, traceability records, or exported reports.
+We store and process Customer Data to provide, secure, support, and improve RegEngine services as described in the Privacy Policy and applicable agreement. We do not claim ownership of your compliance data, traceability records, or exported reports.
 
-You can export all of your data at any time via the API or dashboard. If you cancel your subscription or if RegEngine Inc. terminates your account, your export and deletion window follows the active customer agreement and workspace operating posture.
+You can export your data through the API, dashboard, or enabled workflow surfaces available to your plan and agreement. If you cancel your subscription or if RegEngine Inc. terminates your account, your export and deletion window follows the active customer agreement and workspace operating posture.
 
-If you have statutory or contractual retention obligations, you are responsible for maintaining an off-platform archive or recurring export process that satisfies those obligations.
+If you have statutory or contractual retention obligations, you are responsible for maintaining an off-platform archive or recurring export process that meets those obligations.
 
-You grant us a limited license to store, process, and display your data as necessary to operate the service — nothing more.`,
+You grant us a limited license to store, process, and display Customer Data as necessary to operate, secure, support, and improve the service under these Terms and any applicable agreement.`,
         hasPrivacyLink: true,
     },
     {
@@ -48,13 +48,13 @@ Free tools may be modified, updated, or discontinued at any time.`,
     },    {
         id: 'paid-services',
         title: '5. Paid Services',
-        content: `Paid plans are billed monthly or annually as selected. Prices are listed on our pricing page and may change with 30 days' notice.
+        content: `Unless otherwise stated in a signed order form or customer agreement, paid plans are billed monthly or annually as selected. Prices are listed on our pricing page and may change with 30 days' notice.
 
 You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time — no cancellation fees.
 
-If you exceed your CTE limit, we charge $0.002 per additional CTE. We will notify you by email before any overage charges are applied.
+Unless your signed order form or customer agreement states otherwise, if you exceed your CTE limit, we charge $0.002 per additional CTE. We will notify you by email before any overage charges are applied.
 
-Refunds are discretionary and evaluated on a case-by-case basis. Except as required by law, RegEngine Inc. does not guarantee refunds beyond the express terms stated in these Terms. If you're genuinely unhappy with the service within the first 30 days, contact us at support@regengine.co.`,
+Refunds are discretionary and evaluated on a case-by-case basis. Except as required by law, refunds are limited to the express terms stated in these Terms. If you're genuinely unhappy with the service within the first 30 days, contact us at support@regengine.co.`,
     },
     {
         id: 'api-usage',
@@ -68,7 +68,7 @@ We reserve the right to throttle or suspend API access if usage patterns suggest
     {
         id: 'accuracy-disclaimers',
         title: '7. Accuracy & Disclaimers',
-        content: `We work hard to ensure our regulatory data is accurate. Our FTL Coverage Checker covers FDA Food Traceability List categories per 21 CFR 1.1300 with citations to specific CFR sections. Our data is cryptographically hashed and independently verifiable.
+        content: `We work to keep our regulatory data accurate. Our FTL Coverage Checker covers FDA Food Traceability List categories per 21 CFR 1.1300 with citations to specific CFR sections. Our data is cryptographically hashed and independently verifiable.
 
 That said: regulations change. We monitor federal sources and update our data, but there may be delays. We strongly recommend verifying critical compliance decisions against official FDA sources (fda.gov, eCFR.gov).
 
@@ -85,7 +85,7 @@ This limitation applies regardless of the theory of liability (contract, tort, s
     {
         id: 'security',
         title: '9. Security',
-        content: `We implement Row-Level Security (RLS), encryption at rest (AES-256), encryption in transit (TLS 1.3), and cryptographic fact hashing (SHA-256). See our Security page for details and verification evidence.
+        content: `RegEngine uses PostgreSQL row-level policies and authenticated tenant context designed to restrict access on core PostgreSQL-backed paths, managed-provider encryption at rest, encrypted transport, and evidence manifests where supported workflows create them. See our Security page for details and verification evidence.
 
 You are responsible for keeping your API keys and account credentials secure. If you believe your account has been compromised, notify us immediately.`,
     },
@@ -114,7 +114,7 @@ Upon termination: your export and deletion window follows the active customer ag
     {
         id: 'changes',
         title: '13. Changes to These Terms',
-        content: `We may update these terms. Material changes get 30 days' email notice. Continued use after changes take effect constitutes acceptance.
+        content: `We may update these terms. Unless a signed order form or customer agreement controls changes for your workspace, material changes get 30 days' email notice and continued use after changes take effect constitutes acceptance.
 
 If you disagree with changes, you can close your account before the updated terms take effect.`,
     },
@@ -131,7 +131,7 @@ Notwithstanding the above, either party may seek injunctive relief in any court 
     },    {
         id: 'governing-law',
         title: '15. Governing Law',
-        content: `These terms are governed by the laws of the State of California, without regard to conflict of law principles.`,
+        content: `These terms are governed by the laws of the State of California, without regard to conflict of law principles, unless a separate signed agreement with RegEngine states otherwise. Data-processing terms are governed by the signed DPA or executed agreement, subject to mandatory applicable privacy law.`,
     },
     {
         id: 'contact',
@@ -192,7 +192,7 @@ export default function TermsClient() {
                             </h3>
                         </div>
                         <p className="text-sm text-[var(--re-text-secondary)] leading-relaxed">
-                            You own your data. We store it to provide the service. Free tools are free with no strings. Paid plans can be cancelled anytime. We&apos;re a software tool, not legal advice. Don&apos;t try to access other people&apos;s data. California law applies.
+                            You retain rights in Customer Data you submit. We process it to provide, secure, support, and improve the service under the applicable terms. Free tools are informational. Paid-plan and legal terms may be controlled by a signed agreement. We&apos;re a software tool, not legal advice. Don&apos;t try to access other people&apos;s data.
                         </p>
                     </div>
                 </div>
