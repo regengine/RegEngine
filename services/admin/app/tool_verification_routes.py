@@ -35,6 +35,19 @@ router = APIRouter(prefix="/api/v1/tools", tags=["tool-verification"])
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 VERIFICATION_CODE_TTL = 600  # 10 minutes
 MAX_VERIFICATION_ATTEMPTS = 3
+CODE_STORE_UNAVAILABLE_DETAIL = "Verification code store temporarily unavailable."
+_CLOUD_ENV_VARS = (
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "RAILWAY_ENVIRONMENT_ID",
+    "RAILWAY_PROJECT_NAME",
+    "RAILWAY_PROJECT_ID",
+    "RAILWAY_SERVICE_NAME",
+    "RAILWAY_SERVICE_ID",
+    "VERCEL",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+)
 
 # ---------------------------------------------------------------------------
 # Tool-access JWT signing secret — MUST be separate from the session key (#1060)
@@ -81,9 +94,30 @@ _redis_available: bool | None = None
 _memory_store: dict[str, dict] = {}
 
 
+def _mark_redis_unavailable() -> None:
+    global _redis_client, _redis_available
+    _redis_available = False
+    _redis_client = None
+
+
+def _code_store_unavailable(operation: str, exc: Exception | None = None) -> HTTPException:
+    log_payload = {"operation": operation}
+    if exc is not None:
+        log_payload["error"] = str(exc)
+    logger.error("tool_verify_code_store_unavailable", **log_payload)
+    return HTTPException(
+        status_code=503,
+        detail=CODE_STORE_UNAVAILABLE_DETAIL,
+    )
+
+
+def _requires_shared_code_store() -> bool:
+    return is_production() or any(os.getenv(name) for name in _CLOUD_ENV_VARS)
+
+
 async def _get_redis() -> aioredis.Redis | None:
     global _redis_client, _redis_available
-    if _redis_available is False:
+    if _redis_available is False and not _requires_shared_code_store():
         return None
     if _redis_client is None:
         try:
@@ -97,10 +131,55 @@ async def _get_redis() -> aioredis.Redis | None:
             await _redis_client.ping()
             _redis_available = True
         except Exception as exc:
+            _mark_redis_unavailable()
+            if _requires_shared_code_store():
+                raise _code_store_unavailable("connect", exc) from exc
             logger.warning("tool_verify_redis_unavailable", error=str(exc))
-            _redis_available = False
-            _redis_client = None
     return _redis_client
+
+
+async def _redis_set_code(key: str, payload: str, operation: str) -> bool:
+    client = await _get_redis()
+    if client is None:
+        return False
+    try:
+        await client.setex(key, VERIFICATION_CODE_TTL, payload)
+        return True
+    except Exception as exc:
+        _mark_redis_unavailable()
+        if _requires_shared_code_store():
+            raise _code_store_unavailable(operation, exc) from exc
+        logger.warning("tool_verify_redis_write_failed", operation=operation, error=str(exc))
+        return False
+
+
+async def _redis_get_code(key: str, operation: str) -> tuple[bool, str | None]:
+    client = await _get_redis()
+    if client is None:
+        return False, None
+    try:
+        return True, await client.get(key)
+    except Exception as exc:
+        _mark_redis_unavailable()
+        if _requires_shared_code_store():
+            raise _code_store_unavailable(operation, exc) from exc
+        logger.warning("tool_verify_redis_read_failed", operation=operation, error=str(exc))
+        return False, None
+
+
+async def _redis_delete_code(key: str, operation: str) -> bool:
+    client = await _get_redis()
+    if client is None:
+        return False
+    try:
+        await client.delete(key)
+        return True
+    except Exception as exc:
+        _mark_redis_unavailable()
+        if _requires_shared_code_store():
+            raise _code_store_unavailable(operation, exc) from exc
+        logger.warning("tool_verify_redis_delete_failed", operation=operation, error=str(exc))
+        return False
 
 
 def _cleanup_memory() -> None:
@@ -113,9 +192,7 @@ def _cleanup_memory() -> None:
 async def _store_code(email: str, code: str) -> None:
     key = f"tool_verify:{email}"
     payload = f"{code}:{MAX_VERIFICATION_ATTEMPTS}"
-    client = await _get_redis()
-    if client is not None:
-        await client.setex(key, VERIFICATION_CODE_TTL, payload)
+    if await _redis_set_code(key, payload, "store_tool_code"):
         return
     _cleanup_memory()
     _memory_store[key] = {
@@ -128,22 +205,25 @@ async def _store_code(email: str, code: str) -> None:
 async def _check_code(email: str, code: str) -> tuple[bool, str]:
     """Return (success, error_message). Decrements attempts on failure."""
     key = f"tool_verify:{email}"
-    client = await _get_redis()
 
-    if client is not None:
-        raw = await client.get(key)
+    redis_checked = False
+    raw = None
+    if _redis_available is not False or _requires_shared_code_store():
+        redis_checked, raw = await _redis_get_code(key, "check_tool_code")
+
+    if redis_checked:
         if not raw:
             return False, "Code expired or not found. Please request a new code."
         stored_code, attempts_str = raw.rsplit(":", 1)
         attempts = int(attempts_str)
         if attempts <= 0:
-            await client.delete(key)
+            await _redis_delete_code(key, "delete_exhausted_tool_code")
             return False, "Too many attempts. Please request a new code."
         if stored_code != code:
-            await client.setex(key, VERIFICATION_CODE_TTL, f"{stored_code}:{attempts - 1}")
+            await _redis_set_code(key, f"{stored_code}:{attempts - 1}", "decrement_tool_code_attempts")
             remaining = attempts - 1
             return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
-        await client.delete(key)
+        await _redis_delete_code(key, "consume_tool_code")
         return True, ""
 
     # In-memory fallback
@@ -176,9 +256,7 @@ async def _check_code(email: str, code: str) -> tuple[bool, str]:
 async def _store_erasure_code(email: str, code: str) -> None:
     key = f"lead_erasure:{email}"
     payload = f"{code}:{MAX_VERIFICATION_ATTEMPTS}"
-    client = await _get_redis()
-    if client is not None:
-        await client.setex(key, VERIFICATION_CODE_TTL, payload)
+    if await _redis_set_code(key, payload, "store_erasure_code"):
         return
     _cleanup_memory()
     _memory_store[key] = {
@@ -191,22 +269,25 @@ async def _store_erasure_code(email: str, code: str) -> None:
 async def _check_erasure_code(email: str, code: str) -> tuple[bool, str]:
     """Return (success, error_message). Decrements attempts on failure."""
     key = f"lead_erasure:{email}"
-    client = await _get_redis()
 
-    if client is not None:
-        raw = await client.get(key)
+    redis_checked = False
+    raw = None
+    if _redis_available is not False or _requires_shared_code_store():
+        redis_checked, raw = await _redis_get_code(key, "check_erasure_code")
+
+    if redis_checked:
         if not raw:
             return False, "Code expired or not found. Please request a new code."
         stored_code, attempts_str = raw.rsplit(":", 1)
         attempts = int(attempts_str)
         if attempts <= 0:
-            await client.delete(key)
+            await _redis_delete_code(key, "delete_exhausted_erasure_code")
             return False, "Too many attempts. Please request a new code."
         if stored_code != code:
-            await client.setex(key, VERIFICATION_CODE_TTL, f"{stored_code}:{attempts - 1}")
+            await _redis_set_code(key, f"{stored_code}:{attempts - 1}", "decrement_erasure_code_attempts")
             remaining = attempts - 1
             return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
-        await client.delete(key)
+        await _redis_delete_code(key, "consume_erasure_code")
         return True, ""
 
     # In-memory fallback
@@ -309,7 +390,7 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
                 logger.error("resend_api_error", status=resp.status_code, body=resp.text)
                 raise HTTPException(status_code=500, detail="Failed to send verification email")
     else:
-        logger.warning("dev_mode_verification_code", email=mask_email(email), code=code)
+        logger.warning("dev_mode_verification_email_not_sent", email=mask_email(email))
 
     return VerifyEmailResponse(
         status="code_sent",
@@ -465,7 +546,7 @@ async def _send_erasure_email(email: str, code: str) -> None:
                 )
                 raise HTTPException(status_code=500, detail="Failed to send erasure email")
     else:
-        logger.warning("dev_mode_erasure_code", email=mask_email(email), code=code)
+        logger.warning("dev_mode_erasure_email_not_sent", email=mask_email(email))
 
 
 def _build_erasure_email_html(code: str) -> str:
