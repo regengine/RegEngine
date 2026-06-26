@@ -242,6 +242,22 @@ async def create_auth_challenge(
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
 
+    try:
+        can_complete_passwordless_login = _has_valid_passwordless_identity(
+            db=db,
+            email_fingerprint=email_fingerprint,
+        )
+    except Exception as exc:
+        logger.error(
+            "auth_challenge_identity_lookup_failed",
+            email=mask_email(normalized_email),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable.",
+        ) from exc
+
     challenge_id = uuid.uuid4()
     code = crypto_service.generate_secure_otp()
     code_digest = crypto_service.hash_otp(
@@ -272,7 +288,14 @@ async def create_auth_challenge(
             detail="Authentication service temporarily unavailable.",
         ) from exc
 
-    background_tasks.add_task(_dispatch_sign_in_code_email, normalized_email, code, challenge_id)
+    if can_complete_passwordless_login:
+        background_tasks.add_task(_dispatch_sign_in_code_email, normalized_email, code, challenge_id)
+    else:
+        logger.info(
+            "auth_challenge_email_suppressed_ineligible_identity",
+            challenge_id=str(challenge_id),
+            email=mask_email(normalized_email),
+        )
     response.set_cookie(
         AUTH_BROWSER_NONCE_COOKIE,
         browser_nonce,
@@ -346,6 +369,14 @@ def _load_valid_identity(
         return None
     user, membership = row
     return user, membership
+
+
+def _has_valid_passwordless_identity(
+    *,
+    db: Session,
+    email_fingerprint: str,
+) -> bool:
+    return _load_valid_identity(db=db, email_fingerprint=email_fingerprint) is not None
 
 
 @router.post(
