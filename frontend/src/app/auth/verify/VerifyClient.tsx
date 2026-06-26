@@ -90,13 +90,13 @@ export default function VerifyClient({ initialEmail = '', initialChallengeId = '
               Email code
             </div>
             <h1 className="mt-5 text-3xl font-semibold leading-tight text-[var(--re-text-primary)]">
-              Enter the 6-digit code sent to your email.
+              Enter your 6-digit sign-in code.
             </h1>
             <CardDescription className="mt-2 text-sm leading-6 text-[var(--re-text-muted)]">
               {state?.email ? (
                 <span className="inline-flex items-center gap-2">
                   <Mail className="h-4 w-4" aria-hidden="true" />
-                  {state.email}
+                  If this address is eligible, use the code sent to {state.email}
                 </span>
               ) : (
                 'Use the same browser where you requested the sign-in code.'

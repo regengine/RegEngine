@@ -264,9 +264,16 @@ def _identity():
     return user, membership
 
 
-def _mock_db_for_org_lookup(organization=None):
+_DEFAULT_IDENTITY = object()
+
+
+def _mock_db_for_org_lookup(organization=None, identity=_DEFAULT_IDENTITY):
     db = MagicMock()
-    db.execute.return_value.scalar_one_or_none.return_value = organization
+    org_result = MagicMock()
+    org_result.scalar_one_or_none.return_value = organization
+    identity_result = MagicMock()
+    identity_result.first.return_value = _identity() if identity is _DEFAULT_IDENTITY else identity
+    db.execute.side_effect = [org_result, identity_result]
     return db
 
 
@@ -536,9 +543,9 @@ async def test_organization_policy_lookup_failure_returns_503_without_generating
 
 
 @pytest.mark.asyncio
-async def test_known_and_unknown_email_take_same_no_user_lookup_path():
-    async def call(email: str):
-        db = _mock_db_for_org_lookup()
+async def test_known_and_unknown_email_get_same_response_but_only_known_identity_receives_code():
+    async def call(email: str, identity):
+        db = _mock_db_for_org_lookup(identity=identity)
         response = Response()
         background_tasks = BackgroundTasks()
         result = await cr.create_auth_challenge(
@@ -552,19 +559,50 @@ async def test_known_and_unknown_email_take_same_no_user_lookup_path():
         )
         return result, db, response, background_tasks
 
-    known, known_db, known_response, known_tasks = await call("known@example.com")
-    unknown, unknown_db, unknown_response, unknown_tasks = await call("unknown@example.com")
+    known, known_db, known_response, known_tasks = await call("known@example.com", _identity())
+    unknown, unknown_db, unknown_response, unknown_tasks = await call("unknown@example.com", None)
 
     assert known.detail == unknown.detail == cr.AUTH_CHALLENGE_DETAIL
     assert known.challenge_id
     assert unknown.challenge_id
-    assert known_db.execute.call_count == unknown_db.execute.call_count == 1
-    assert "organizations" in str(known_db.execute.call_args.args[0])
-    assert "users" not in str(known_db.execute.call_args.args[0])
+    assert known_db.execute.call_count == unknown_db.execute.call_count == 2
+    assert "organizations" in str(known_db.execute.call_args_list[0].args[0])
+    assert "users" in str(known_db.execute.call_args_list[1].args[0])
     assert known_db.add.call_count == unknown_db.add.call_count == 1
     assert known_db.commit.call_count == unknown_db.commit.call_count == 1
     assert bool(known_response.headers.get("set-cookie")) == bool(unknown_response.headers.get("set-cookie"))
-    assert len(known_tasks.tasks) == len(unknown_tasks.tasks) == 1
+    assert len(known_tasks.tasks) == 1
+    assert unknown_tasks.tasks == []
+
+
+@pytest.mark.asyncio
+async def test_identity_lookup_failure_returns_503_without_generating_otp():
+    org_result = MagicMock()
+    org_result.scalar_one_or_none.return_value = None
+    db = MagicMock()
+    db.execute.side_effect = [org_result, RuntimeError("identity lookup failed")]
+    response = Response()
+    background_tasks = BackgroundTasks()
+    crypto = FakeCrypto()
+    rate_limit = FakeRateLimit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await cr.create_auth_challenge(
+            payload=ChallengeCreateRequest(email="user@example.com"),
+            request=_make_request(),
+            response=response,
+            background_tasks=background_tasks,
+            db=db,
+            rate_limit_service=rate_limit,
+            crypto_service=crypto,
+        )
+
+    assert exc_info.value.status_code == 503
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    assert len(rate_limit.calls) == 1
+    assert background_tasks.tasks == []
+    assert "set-cookie" not in response.headers
 
 
 def test_challenge_request_validates_email_syntax():

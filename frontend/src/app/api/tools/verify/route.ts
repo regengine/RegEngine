@@ -10,17 +10,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('admin');
-
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
+
+function getBackendUrl(): string {
+    return getServerServiceURL('admin').replace(/\/+$/, '');
+}
 
 export async function POST(request: NextRequest) {
     // On Vercel, localhost fallback will never work — fail fast with a clear error.
-    if (
-        process.env.VERCEL &&
-        !process.env.NEXT_PUBLIC_API_BASE_URL &&
-        !process.env.ADMIN_SERVICE_URL
-    ) {
+    const backendUrl = getBackendUrl();
+    if (process.env.VERCEL && !backendUrl) {
         console.error(
             '[api/tools/verify] ADMIN_SERVICE_URL or NEXT_PUBLIC_API_BASE_URL must be set on Vercel — cannot reach localhost from serverless functions',
         );
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
                 ? '/api/v1/tools/confirm-code'
                 : '/api/v1/tools/verify-email';
 
-        const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+        const res = await fetch(`${backendUrl}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
