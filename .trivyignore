@@ -1,0 +1,6 @@
+# Temporary Starlette exceptions mirrored from the pip-audit gate in
+# .github/workflows/security.yml. FastAPI 0.136 resolves Starlette 0.52.x, while
+# these fixes require Starlette 1.x; production runs Linux containers.
+# Revisit before this expires and remove once the framework stack supports 1.x.
+CVE-2026-48818 exp:2026-09-30
+CVE-2026-54283 exp:2026-09-30
