@@ -49,7 +49,7 @@ export async function POST(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
 
     const rawBody = await request.text();
@@ -70,6 +70,23 @@ export async function POST(
         headers['X-RegEngine-API-Key'] = apiKey;
     }
     const allowFallback = allowDevComplianceSnapshotFallback();
+    if (!COMPLIANCE_URL) {
+        if (allowFallback) {
+            const result = refreezeDevComplianceSnapshot({
+                tenantId,
+                snapshotId,
+                createdBy: typeof parsedBody.created_by === 'string' ? parsedBody.created_by : undefined,
+            });
+            if (result) {
+                return NextResponse.json(result);
+            }
+        }
+        console.error('[proxy/refreeze] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
+            { status: 503 },
+        );
+    }
 
     try {
         const response = await fetch(

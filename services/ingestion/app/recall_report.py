@@ -30,10 +30,17 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
 
         db = SessionLocal()
         try:
-            # Count CTE events
+            # Count events from the canonical store of record (#2506). The
+            # legacy ``fsma.cte_events`` table is a dual-write copy being
+            # retired; the hash-chain verifier now anchors on
+            # ``fsma.traceability_events``, so these scoring readers read the
+            # same source of truth. Columns ``traceability_lot_code`` and
+            # ``event_type`` are identical on both tables, and no status
+            # filter is applied here (matching the prior legacy behavior,
+            # which counted every row regardless of validation status).
             cte_count = (
                 db.execute(
-                    text("SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"), {"tid": tenant_id}
+                    text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid"), {"tid": tenant_id}
                 ).scalar()
                 or 0
             )
@@ -41,7 +48,10 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
             # Count distinct TLCs
             tlc_count = (
                 db.execute(
-                    text("SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    text(
+                        "SELECT COUNT(DISTINCT traceability_lot_code) "
+                        "FROM fsma.traceability_events WHERE tenant_id = :tid"
+                    ),
                     {"tid": tenant_id},
                 ).scalar()
                 or 0
@@ -50,7 +60,7 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
             # Count CTE types covered
             cte_types = (
                 db.execute(
-                    text("SELECT COUNT(DISTINCT event_type) FROM fsma.cte_events WHERE tenant_id = :tid"),
+                    text("SELECT COUNT(DISTINCT event_type) FROM fsma.traceability_events WHERE tenant_id = :tid"),
                     {"tid": tenant_id},
                 ).scalar()
                 or 0

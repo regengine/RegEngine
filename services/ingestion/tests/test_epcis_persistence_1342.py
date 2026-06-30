@@ -747,10 +747,19 @@ class TestPersistPreparedEventInSession:
         assert status == 200
         assert payload["idempotent"] is True
 
-    def test_canonical_write_failure_logs_and_swallows(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Lines 686-687: canonical write exception is swallowed + logged."""
+    def test_canonical_write_failure_now_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """#2534: a canonical-write failure must PROPAGATE, not be
+        downgraded to a warning and dropped.
+
+        Previously the canonical write ran in a best-effort daemon thread
+        whose exceptions were captured and logged as
+        ``epcis_canonical_write_skipped``; the event was still reported
+        persisted (HTTP 201) while the ``traceability_events`` row and
+        its rule rows silently never landed. The write is now synchronous
+        and inline, so a failure poisons the caller's session and bubbles
+        up — the outer ``_ingest_single_event_db`` rolls back (legacy CTE
+        row included) and re-raises instead of returning a false 201.
+        """
         _FakeCTEPersistence.idempotent_flag = False
 
         # Replace normalize_epcis_event on the canonical-event shim to blow up.
@@ -763,10 +772,8 @@ class TestPersistPreparedEventInSession:
         )
 
         sess = MagicMock()
-        with caplog.at_level("WARNING"):
-            payload, status = persistence_mod._persist_prepared_event_in_session(sess, "tenant-1", self._prep())
-        assert status == 201
-        assert any("epcis_canonical_write_skipped" in m for m in caplog.messages)
+        with pytest.raises(RuntimeError, match="canon boom"):
+            persistence_mod._persist_prepared_event_in_session(sess, "tenant-1", self._prep())
 
 
 # ── _ingest_single_event_db ───────────────────────────────────────────────

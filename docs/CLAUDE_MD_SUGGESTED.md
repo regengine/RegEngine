@@ -15,7 +15,9 @@ user's home directory.
   Next.js 16 frontend on Vercel. The `services/` directories are code-organization
   seams (router domains: ingestion, admin, graph, nlp, fsma_compliance), not separate
   deployments. `graph` and `nlp` routers are experimental-gated off in production;
-  the scheduler is not deployed (in-process wiring into the monolith is in flight).
+  the scheduler runs embedded in the monolith lifespan
+  (`server/workers/embedded_scheduler.py`, advisory-lock leader election; see
+  `ASYNC_PROCESSES.md` lines 65+).
 
 ## Stack defaults (RegEngine — replace)
 

@@ -38,10 +38,17 @@ TENANT = UUID("00000000-0000-0000-0000-000000000099")
 ACTOR = UUID("00000000-0000-0000-0000-000000000001")
 
 
-def _mk_session(*, prev_hash: str | None = None, add_side_effect=None):
+def _mk_session(*, prev_hash: str | None = None, prev_seq: int | None = None, add_side_effect=None):
     """Build a mock SQLAlchemy session that behaves like a real session."""
     session = MagicMock()
-    # _get_prev_hash path: session.execute(...).scalar_one_or_none() -> prev_hash
+    # SQLite branch in _acquire_chain_lock is skipped for the mock (no real
+    # bind), so the advisory-lock execute() and chain-head execute() both
+    # land on session.execute. _get_chain_head uses .one_or_none() and
+    # expects a (prev_hash, sequence_num) row (#2513); legacy callers used
+    # .scalar_one_or_none() -> prev_hash, which we keep wired too.
+    session.bind = None
+    head_row = None if prev_hash is None and prev_seq is None else (prev_hash, prev_seq)
+    session.execute.return_value.one_or_none.return_value = head_row
     session.execute.return_value.scalar_one_or_none.return_value = prev_hash
     if add_side_effect is not None:
         session.add.side_effect = add_side_effect

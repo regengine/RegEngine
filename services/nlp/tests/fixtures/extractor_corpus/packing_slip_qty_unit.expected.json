@@ -1,0 +1,22 @@
+{
+  "confidence_level": "HIGH",
+  "ctes": [
+    {
+      "cte_type": "INITIAL_PACKING",
+      "event_date": "2026-03-11",
+      "gtin": "00012345678901",
+      "location_identifier": "urn:gln:0033333333334",
+      "prior_source_tlc": null,
+      "product_description": null,
+      "quantity": 50.0,
+      "ship_from_gln": "urn:gln:0033333333334",
+      "ship_to_gln": null,
+      "tlc_source_fda_reg": null,
+      "tlc_source_gln": "urn:gln:0033333333334",
+      "traceability_lot_code": "00012345678901-PK-1",
+      "unit_of_measure": "cases"
+    }
+  ],
+  "document_type": "PACKING_SLIP",
+  "review_required": false
+}

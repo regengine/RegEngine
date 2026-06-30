@@ -130,3 +130,76 @@ class TestAuthConfigValidation:
         assert "auth_config_validation_failed" in result.stdout
         assert "AUTH_TEST_BYPASS_TOKEN is set in production" in result.stdout
         assert "STARTED_OK" in result.stdout
+
+    # ── #2512: cloud-marker + ephemeral-secret fail-fast ─────────────────────
+
+    def test_cloud_marker_non_production_env_with_ephemeral_secret_hard_fails(self):
+        """Defense-in-depth: a cloud marker present with an explicit
+        non-production environment the central gate leaves alone (staging on a
+        non-Railway host) AND an ephemeral signing key active (no AUTH_SECRET_KEY
+        / TOOL_ACCESS_SECRET) must refuse to boot rather than serve
+        restart-forgeable sessions (#2512). Outside CI.
+
+        Note REGENGINE_ENV=development would be *forced* to production by the
+        central gate (and thus start cleanly); staging is the genuine bypass
+        case the gate intentionally does not force."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "staging",
+            }
+        )
+        assert result.returncode != 0
+        assert "ephemeral signing key is active" in result.stderr
+        assert "STARTED_OK" not in result.stdout
+
+    def test_cloud_marker_development_env_is_forced_production_and_starts(self):
+        """A cloud marker with REGENGINE_ENV=development is forced to production
+        by the central gate, so the ephemeral-secret branch is skipped and
+        startup proceeds — proving the fail-fast aligns with the gate (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "development",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_cloud_marker_with_explicit_secrets_starts(self):
+        """The same bypass-shaped config is fine once real secrets are provided —
+        only the ephemeral-key case fails (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "RENDER": "1",
+                "REGENGINE_ENV": "staging",
+                "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+                "TOOL_ACCESS_SECRET": "another-valid-secret-key-long-enough",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_no_cloud_marker_ephemeral_secret_still_starts(self):
+        """Truly-local dev (no cloud marker) with no secrets keeps starting —
+        the fail-fast must not regress local development (#2512)."""
+        result = _run_validate(
+            {
+                "CI": "",
+                "GITHUB_ACTIONS": "",
+                "REGENGINE_ENV": "development",
+                # Clear any cloud markers the CI host itself might inject so the
+                # "truly local" assertion is honest.
+                "RENDER": "",
+                "FLY_APP_NAME": "",
+                "KUBERNETES_SERVICE_HOST": "",
+            }
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout

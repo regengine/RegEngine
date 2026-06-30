@@ -50,6 +50,36 @@ def _serialize_last_scrapes(service) -> dict:
     }
 
 
+def _webhook_dlq_status(service) -> dict:
+    """#2510: report whether the webhook dead-letter queue is durable.
+
+    When ``WEBHOOK_URLS`` is set but ``WEBHOOK_OUTBOX_PATH`` is empty, failed
+    deliveries of HIGH/CRITICAL alerts live only in process memory and are lost
+    on the next restart. Surface that here so the footgun is visible without
+    grepping startup logs.
+    """
+    # A live SchedulerService always carries .settings, but stay defensive: a
+    # leader whose service object predates settings (or a future caller) must
+    # not 500 the whole diagnostic route just to report the DLQ status.
+    settings = getattr(service, "settings", None)
+    if settings is None:
+        return {
+            "urls_configured": False,
+            "persistence_enabled": False,
+            "outbox_path": None,
+            "at_risk": False,
+        }
+    urls_configured = bool(settings.webhook_url_list)
+    persistent = bool(settings.webhook_outbox_path)
+    return {
+        "urls_configured": urls_configured,
+        "persistence_enabled": persistent,
+        "outbox_path": settings.webhook_outbox_path or None,
+        # Only a problem once webhooks are actually enabled.
+        "at_risk": urls_configured and not persistent,
+    }
+
+
 def _running_status(service) -> dict:
     # Import the registry lazily so importing this module never drags in the
     # scheduler app package until a leader can report live diagnostics.
@@ -60,6 +90,7 @@ def _running_status(service) -> dict:
         "status": "running",
         "circuit_breakers": circuit_registry.get_all_status(),
         "last_scrapes": _serialize_last_scrapes(service),
+        "webhook_dlq": _webhook_dlq_status(service),
     }
 
 

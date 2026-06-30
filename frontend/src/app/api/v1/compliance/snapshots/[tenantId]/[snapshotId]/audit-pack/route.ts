@@ -49,7 +49,7 @@ export async function GET(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
 
     const COMPLIANCE_URL = getComplianceUrl();
@@ -61,6 +61,26 @@ export async function GET(
         headers['X-RegEngine-API-Key'] = apiKey;
     }
     const allowFallback = allowDevComplianceSnapshotFallback();
+    if (!COMPLIANCE_URL) {
+        if (allowFallback) {
+            const auditPack = buildDevComplianceSnapshotAuditPack({ tenantId, snapshotId });
+            if (auditPack) {
+                return new NextResponse(auditPack, {
+                    status: 200,
+                    headers: {
+                        'content-type': 'text/plain; charset=utf-8',
+                        'content-disposition': `attachment; filename="ZeroTrust-AuditPack-${snapshotId}.txt"`,
+                        'cache-control': 'no-store',
+                    },
+                });
+            }
+        }
+        console.error('[proxy/audit-pack] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
+            { status: 503 },
+        );
+    }
 
     try {
         const response = await fetch(
