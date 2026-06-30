@@ -285,8 +285,7 @@ These are current repo facts, not speculation:
 
 ## Documentation Map
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape and debt register.
-- [CURRENT_SYSTEM_MAP.md](CURRENT_SYSTEM_MAP.md) - system map.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - current runtime shape, system map, and debt register.
 - [ASYNC_PROCESSES.md](ASYNC_PROCESSES.md) - async and background processing notes.
 - [CANONICAL_OWNERSHIP.md](CANONICAL_OWNERSHIP.md) - module ownership notes.
 - [SECURITY.md](SECURITY.md) - security posture.
