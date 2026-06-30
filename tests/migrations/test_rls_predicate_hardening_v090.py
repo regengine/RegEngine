@@ -61,11 +61,13 @@ def _operational_sql(v090) -> str:
     return "\n".join(v090._converge_operational_table(t, p) for t, p in v090._OPERATIONAL_TABLES)
 
 
-def test_revision_chains_off_v089_head(v090) -> None:
-    """v090 must extend the v089 head so it lands as the single new head."""
+def test_revision_chains_off_current_head(v090) -> None:
+    """v090 RLS hardening must extend the current single head so it lands as
+    the new single head. Re-chained onto the v090-heads merge revision
+    (d1bdfe74d1fd) after #2544/#2546 each added a parallel v090 head."""
     assert v090.revision == "a128f7f95db8"
-    assert v090.down_revision == "38e02636e340", (
-        f"v090 must revise the v089 head (38e02636e340); got {v090.down_revision!r}"
+    assert v090.down_revision == "d1bdfe74d1fd", (
+        f"v090 RLS hardening must revise the merge head (d1bdfe74d1fd); got {v090.down_revision!r}"
     )
 
 
