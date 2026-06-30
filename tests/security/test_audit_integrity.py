@@ -65,7 +65,7 @@ class TestComputeIntegrityHash:
         assert h1 != h2
 
     def test_genesis_uses_string(self):
-        """When prev_hash is None, 'GENESIS' is used in the v2 payload."""
+        """When prev_hash is None, 'GENESIS' is used in the v3 payload."""
         kwargs = {
             "prev_hash": None,
             "tenant_id": "test-tenant",
@@ -74,9 +74,10 @@ class TestComputeIntegrityHash:
             "action": "create",
             "resource_id": None,
             "metadata": {},
+            "sequence_num": 1,
         }
         h = compute_integrity_hash(**kwargs)
-        # Manually compute to verify
+        # Manually compute to verify (#2513: v3 folds in sequence_num).
         payload = json.dumps(
             {
                 "prev_hash": "GENESIS",
@@ -86,11 +87,12 @@ class TestComputeIntegrityHash:
                 "action": "create",
                 "resource_id": None,
                 "metadata": {},
-                "version": 2,
+                "version": 3,
                 "actor_id": None,
                 "actor_email": None,
                 "severity": None,
                 "endpoint": None,
+                "sequence_num": 1,
             },
             sort_keys=True,
             default=str,

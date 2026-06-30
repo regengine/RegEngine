@@ -57,6 +57,10 @@ class CapturingFakeSession:
         self.storage = storage
         self.audit_sink = audit_sink
         self._pending_review = None
+        # No real engine bind; AuditLogger._acquire_chain_lock treats a
+        # None bind as "not SQLite" and issues the advisory-lock execute()
+        # (harmlessly swallowed by .execute below). (#2513)
+        self.bind = None
 
     def add(self, item):
         # AuditLogger writes AuditLogModel; tracker writes ReviewItemModel.
@@ -73,11 +77,14 @@ class CapturingFakeSession:
             self._pending_review = item
 
     def execute(self, stmt, params=None):
-        # AuditLogger._get_prev_hash runs a SELECT; return a result
-        # whose scalar_one_or_none returns None so the chain starts at
-        # GENESIS. _session_scope also calls execute for SET LOCAL;
-        # that path does not inspect the return value.
+        # AuditLogger._get_chain_head runs a SELECT; return a result whose
+        # one_or_none returns None so the chain starts at GENESIS (seq 1).
+        # _session_scope and the #2513 advisory lock also call execute;
+        # those paths do not inspect the return value.
         class _Result:
+            def one_or_none(self_inner):
+                return None
+
             def scalar_one_or_none(self_inner):
                 return None
 
