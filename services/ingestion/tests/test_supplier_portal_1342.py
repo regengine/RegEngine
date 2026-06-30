@@ -41,15 +41,27 @@ def _portal_integration_router():
 # ---------------------------------------------------------------------------
 
 
+def _reset_rate_limit_bucket():
+    """Clear the per-process rate-limit bucket so the per-link limits added in
+    #2508 do not leak hits across tests in this module."""
+    import shared.tenant_rate_limiting as srl
+
+    hits = getattr(srl._bucket, "_hits", None)
+    if hits is not None:
+        hits.clear()
+
+
 @pytest.fixture(autouse=True)
 def _clear_portal_links():
     sp._portal_links.clear()
     ir._profile_store.clear()
     _portal_integration_router()._profile_store.clear()
+    _reset_rate_limit_bucket()
     yield
     sp._portal_links.clear()
     ir._profile_store.clear()
     _portal_integration_router()._profile_store.clear()
+    _reset_rate_limit_bucket()
 
 
 class _FakeResult:
@@ -912,3 +924,118 @@ class TestRouterSurface:
         assert "/api/v1/portal/{portal_id}" in paths
         assert "/api/v1/portal/{portal_id}/preflight" in paths
         assert "/api/v1/portal/{portal_id}/submit" in paths
+
+
+# ---------------------------------------------------------------------------
+# Issue #2508 — per-portal-link abuse controls
+# ---------------------------------------------------------------------------
+
+
+class TestPortalAbuseControls:
+    def _seed_link(self, tok="tok", tenant_id="t1"):
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        sp._portal_links[tok] = {
+            "tenant_id": tenant_id,
+            "supplier_name": "Acme",
+            "allowed_cte_types": ["shipping"],
+            "expires_at": future,
+        }
+
+    def _payload(self) -> dict:
+        return {
+            "traceability_lot_code": "TLC123",
+            "product_description": "lettuce",
+            "quantity": 10.0,
+            "unit_of_measure": "cases",
+            "ship_date": "2026-04-17",
+            "ship_from_location": "Farm A",
+            "ship_to_location": "DC 1",
+        }
+
+    def test_preflight_rate_limited_per_link(self, monkeypatch):
+        self._seed_link()
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_PORTAL_PREFLIGHT_RATE_LIMIT_RPM", 3)
+
+        client = TestClient(_build_app())
+        for _ in range(3):
+            ok = client.post("/api/v1/portal/tok/preflight", json=self._payload())
+            assert ok.status_code == 200
+        blocked = client.post("/api/v1/portal/tok/preflight", json=self._payload())
+        assert blocked.status_code == 429
+
+    def test_submit_rate_limited_does_not_ingest_past_cap(self, monkeypatch):
+        self._seed_link()
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_PORTAL_SUBMIT_RATE_LIMIT_RPM", 2)
+
+        ingest_calls: list = []
+
+        async def _fake_ingest(payload, **_kwargs):
+            ingest_calls.append(payload)
+            return _make_ingest_response(accepted=1)
+
+        monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
+
+        client = TestClient(_build_app())
+        for _ in range(2):
+            ok = client.post("/api/v1/portal/tok/submit", json=self._payload())
+            assert ok.status_code == 200
+        blocked = client.post("/api/v1/portal/tok/submit", json=self._payload())
+        assert blocked.status_code == 429
+        # The over-cap request must never reach persistence.
+        assert len(ingest_calls) == 2
+
+    def test_submit_blocked_when_subscription_inactive(self, monkeypatch):
+        self._seed_link()
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: False)
+
+        ingest_calls: list = []
+
+        async def _fake_ingest(payload, **_kwargs):
+            ingest_calls.append(payload)
+            return _make_ingest_response(accepted=1)
+
+        monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
+
+        client = TestClient(_build_app())
+        resp = client.post("/api/v1/portal/tok/submit", json=self._payload())
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "error"
+        assert "subscription" in body["message"].lower()
+        # No evidence row written.
+        assert ingest_calls == []
+
+    def test_submit_allowed_when_subscription_active(self, monkeypatch):
+        self._seed_link()
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: True)
+
+        async def _fake_ingest(payload, **_kwargs):
+            return _make_ingest_response(accepted=1)
+
+        monkeypatch.setattr(sp, "ingest_events", _fake_ingest)
+
+        client = TestClient(_build_app())
+        resp = client.post("/api/v1/portal/tok/submit", json=self._payload())
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "accepted"
+
+    def test_per_link_buckets_are_independent(self, monkeypatch):
+        # Two links on the SAME tenant get independent buckets keyed on
+        # portal_id, so exhausting one does not block the other (and neither
+        # consumes the tenant's general webhooks.ingest budget).
+        self._seed_link(tok="link-a", tenant_id="shared-tenant")
+        self._seed_link(tok="link-b", tenant_id="shared-tenant")
+        monkeypatch.setattr(sp, "_db_get_portal_link", lambda _pid: None)
+        monkeypatch.setattr(sp, "_PORTAL_PREFLIGHT_RATE_LIMIT_RPM", 2)
+
+        client = TestClient(_build_app())
+        # Exhaust link-a.
+        assert client.post("/api/v1/portal/link-a/preflight", json=self._payload()).status_code == 200
+        assert client.post("/api/v1/portal/link-a/preflight", json=self._payload()).status_code == 200
+        assert client.post("/api/v1/portal/link-a/preflight", json=self._payload()).status_code == 429
+        # link-b on the same tenant is unaffected.
+        assert client.post("/api/v1/portal/link-b/preflight", json=self._payload()).status_code == 200

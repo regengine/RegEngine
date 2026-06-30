@@ -234,3 +234,40 @@ def test_scheduler_status_leader_returns_circuit_and_scrape_state(server_main, m
         "warnings": ["parser_mismatch_suspected"],
     }
     assert body["last_scrapes"]["import_alerts"]["error"] == "timeout"
+
+
+# ---------------------------------------------------------------------------
+# #2517 — /api/v1/features is auth-gated and hidden from the schema
+# ---------------------------------------------------------------------------
+
+
+def test_features_requires_auth(server_main):
+    """An unauthenticated caller must not learn the router topology. Without a
+    valid X-Metrics-Key the endpoint is forbidden (mirrors /v1/scheduler/status)."""
+    client = TestClient(server_main.app)
+    assert client.get("/api/v1/features").status_code == 403
+
+
+def test_features_rejects_wrong_metrics_key(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    resp = TestClient(server_main.app).get("/api/v1/features", headers={"X-Metrics-Key": "wrong"})
+    assert resp.status_code == 403
+
+
+def test_features_returns_topology_with_valid_key(server_main, monkeypatch):
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    resp = TestClient(server_main.app).get("/api/v1/features", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    body = resp.json()
+    # Full topology payload is only available to the authenticated caller.
+    assert set(body) == {"enabled", "disabled", "auto_disabled", "experimental_enabled"}
+
+
+def test_features_hidden_from_openapi_schema(server_main):
+    """The route must not be advertised in the generated (non-prod) schema."""
+    schema = server_main.app.openapi()
+    assert "/api/v1/features" not in schema.get("paths", {})

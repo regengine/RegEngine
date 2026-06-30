@@ -27,7 +27,7 @@ except ImportError:
 
 from fastapi import Depends, Header, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
@@ -665,9 +665,31 @@ async def require_mfa(
             detail="Invalid MFA token",
         )
 
-    # Mark recovery code as consumed (one-time use)
-    recovery.used_at = datetime.now(timezone.utc)
+    # Consume the recovery code atomically (#2509). The candidate above was
+    # selected and matched in app memory, which is racy: two concurrent
+    # redemptions of the same code can both observe ``used_at IS NULL`` and
+    # both pass verification. The single-shot invariant is enforced here by a
+    # conditional ``UPDATE ... WHERE id = :id AND used_at IS NULL``. Only the
+    # request that flips exactly one row wins; ``rowcount == 0`` means another
+    # request already consumed it, so we reject this redemption distinctly
+    # rather than granting a second session from one one-time code.
+    consumed = db.execute(
+        update(MFARecoveryCodeModel)
+        .where(
+            MFARecoveryCodeModel.id == recovery.id,
+            MFARecoveryCodeModel.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
     db.commit()
+    if consumed.rowcount != 1:
+        _logger.warning(f"Recovery code already consumed (race) for user {current_user.id}")
+        await _record_and_raise_invalid_token(
+            reason="recovery_code_already_used",
+            token_type="recovery",
+            detail="Invalid MFA token",
+        )
+
     if session_store is not None:
         await _clear_mfa_lockout(session_store, subject_key)
     _logger.info(f"Recovery code consumed for user {current_user.id}")
