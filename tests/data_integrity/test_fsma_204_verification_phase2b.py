@@ -6,6 +6,8 @@ from typing import Any, Dict
 import pytest
 import requests
 
+from tests.live_services import skip_or_fail_service
+
 # Phase 2b: Golden Corpus Verification
 # Validates the end-to-end "Happy Path" for FSMA 204 compliance data.
 
@@ -49,9 +51,9 @@ class TestFSMA204GoldenCorpus:
         4. Verify Extracted Facts matches "Golden" expectations.
         """
         if not _service_available(INGEST_SERVICE_URL):
-            pytest.skip("ingestion service not running")
+            skip_or_fail_service("Ingestion service")
         if not _service_available(API_BASE_URL):
-            pytest.skip("admin service not running")
+            skip_or_fail_service("Admin service")
 
         # 1. Submit Document
         # Using the official FDA Final Rule URL (or a specific page for testing)

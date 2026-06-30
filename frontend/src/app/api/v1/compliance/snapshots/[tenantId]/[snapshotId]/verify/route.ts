@@ -55,7 +55,7 @@ export async function GET(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
     const url = new URL(request.url);
     const queryString = url.search;
@@ -71,6 +71,19 @@ export async function GET(
     }
     const allowFallback = allowDevComplianceSnapshotFallback();
     const verifiedBy = url.searchParams.get('verified_by') || 'playwright@regengine.local';
+    if (!COMPLIANCE_URL) {
+        if (allowFallback) {
+            const result = verifyDevComplianceSnapshot({ tenantId, snapshotId, verifiedBy });
+            if (result) {
+                return NextResponse.json(result);
+            }
+        }
+        console.error('[proxy/verify] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { is_valid: false, error: 'backend_not_configured', message: 'Compliance backend is not configured' },
+            { status: 503 },
+        );
+    }
 
     try {
         const response = await fetch(

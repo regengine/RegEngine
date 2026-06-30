@@ -1,0 +1,6 @@
+INVOICE
+Invoice #: INV-555
+Bill To: Acme Foods
+Lot: 00012345678901-IN-3
+QTY: 10 cases
+Date: 2026-03-08

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { decodeRegEngineClaims, extractRegEngineTenantId } from './jwt-claims';
 import { getServerServiceURL } from './api-config';
+import { getAdminTargets, shouldRetryAdminProxyResponse } from './admin-targets';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -57,6 +58,51 @@ export function validateUuid(value: string | undefined | null): string | null {
 }
 
 /**
+ * Resolve the authoritative tenant for an opaque `__Host-regengine_session`
+ * by calling the backend `/auth/me`. The session cookie is httpOnly and
+ * server-validated, so the returned `organization_id` is trustworthy — unlike
+ * the client-writable `re_tenant_id` cookie. Returns the tenant id (lowercased)
+ * or `null` when no server-derived tenant is available (caller must fail closed).
+ *
+ * Mirrors `getOpaqueSessionInfo` in `app/api/session/route.ts`.
+ */
+async function resolveOpaqueSessionTenantId(sessionToken: string): Promise<string | null> {
+  const cookieHeader = `__Host-regengine_session=${sessionToken}`;
+
+  for (const target of getAdminTargets()) {
+    const baseUrl = target.replace(/\/+$/, '');
+    try {
+      const response = await fetch(`${baseUrl}/auth/me`, {
+        method: 'GET',
+        headers: { accept: 'application/json', cookie: cookieHeader },
+        cache: 'no-store',
+      });
+
+      if (shouldRetryAdminProxyResponse(response, 'auth/me')) {
+        continue;
+      }
+      if (response.status === 401 || response.status === 403) {
+        return null;
+      }
+      if (!response.ok) {
+        continue;
+      }
+
+      const body = await response.json().catch(() => null);
+      const organizationId =
+        body && typeof body === 'object' && typeof (body as Record<string, unknown>).organization_id === 'string'
+          ? ((body as Record<string, unknown>).organization_id as string)
+          : null;
+      return organizationId ? organizationId.toLowerCase() : null;
+    } catch {
+      // Try the next configured admin target.
+    }
+  }
+
+  return null;
+}
+
+/**
  * Cross-tenant authorization guard for `[tenantId]` proxy routes.
  *
  * The path `tenantId` is attacker-controlled and the proxy injects a
@@ -67,16 +113,20 @@ export function validateUuid(value: string | undefined | null): string | null {
  *    (issuer/audience/exp already checked by `decodeRegEngineClaims`). A
  *    tenant-unbound principal — no claim, i.e. master/sysadmin/dev — is
  *    legitimately cross-tenant capable and is allowed through.
- *  - Otherwise fall back to the `re_tenant_id` cookie, the same
- *    defense-in-depth signal `validateProxySession` already relies on.
+ *  - Opaque `__Host-regengine_session` (SSO / passkey / email-OTP): there is
+ *    no JWT, so the authoritative tenant is derived server-side from the
+ *    backend `/auth/me` `organization_id`. The client-writable `re_tenant_id`
+ *    cookie is NEVER trusted as an authorization input (it is set
+ *    `httpOnly:false` and is forgeable from `document.cookie`). We fail closed
+ *    when no server-derived tenant is available (#2501).
  *
  * Returns a 403 `NextResponse` on mismatch, or `null` when access is allowed.
  * Callers must still run `requireProxyAuth` + `validateProxySession` first.
  */
-export function enforceTenantMatch(
+export async function enforceTenantMatch(
   request: NextRequest,
   pathTenantId: string,
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const mismatch = NextResponse.json(
     { error: 'Tenant context does not match authenticated session' },
     { status: 403 },
@@ -89,18 +139,42 @@ export function enforceTenantMatch(
       const tokenTenantId = extractRegEngineTenantId(payload);
       // No tenant claim => tenant-unbound principal (master/sysadmin/dev),
       // which is legitimately cross-tenant capable.
-      if (tokenTenantId && tokenTenantId !== pathTenantId) {
+      if (tokenTenantId && tokenTenantId.toLowerCase() !== pathTenantId.toLowerCase()) {
         return mismatch;
       }
       return null;
     }
   }
 
-  const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
-  if (cookieTenantId && cookieTenantId !== pathTenantId) {
-    return mismatch;
+  // Opaque session: derive the authoritative tenant from the server, never
+  // from the client-writable `re_tenant_id` cookie. Fail closed if the backend
+  // does not yield a tenant.
+  const sessionToken = request.cookies.get('__Host-regengine_session')?.value;
+  if (isUsableCallerCredential(sessionToken)) {
+    const serverTenantId = await resolveOpaqueSessionTenantId(sessionToken);
+    if (!serverTenantId || serverTenantId !== pathTenantId.toLowerCase()) {
+      return mismatch;
+    }
+    return null;
   }
-  return null;
+
+  // API-key caller (re_api_key cookie / x-regengine-api-key header): the
+  // backend binds tenant to the key's server-side row and rejects a conflicting
+  // client-asserted tenant (resolve_tenant_context → 409 E_TENANT_MISMATCH), so
+  // the path tenantId cannot cross tenants. Let the backend remain authoritative
+  // here rather than fail closed and break legitimate API-key integrations.
+  if (
+    isUsableCallerCredential(request.cookies.get('re_api_key')?.value) ||
+    isUsableCallerCredential(request.headers.get('x-regengine-api-key')) ||
+    isUsableCallerCredential(request.headers.get('x-api-key'))
+  ) {
+    return null;
+  }
+
+  // No authoritative, server-validated tenant signal available. The
+  // client-writable `re_tenant_id` cookie is never trusted here (#2501), so we
+  // fail closed for cross-tenant path access by default.
+  return mismatch;
 }
 
 /** Percent-encode a path segment after validating it is URL-safe.

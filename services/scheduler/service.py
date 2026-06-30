@@ -606,6 +606,24 @@ class SchedulerService:
                 hint="services.graph.app.audit_buffer_reconciler not importable",
             )
 
+        # #2510 — loud-default footgun guard. If webhooks are enabled but no
+        # durable outbox path is configured, failed HIGH/CRITICAL alert
+        # deliveries live only in process memory and are lost on every Railway
+        # restart/deploy (the container filesystem is ephemeral — no volume in
+        # railway.toml). Warn at startup so enabling WEBHOOK_URLS without
+        # WEBHOOK_OUTBOX_PATH is not silent.
+        if self.settings.webhook_url_list and not self.settings.webhook_outbox_path:
+            logger.warning(
+                "webhook_dlq_persistence_disabled",
+                webhook_count=len(self.settings.webhook_url_list),
+                hint=(
+                    "WEBHOOK_URLS is set but WEBHOOK_OUTBOX_PATH is empty: failed "
+                    "webhook deliveries are in-memory only and will NOT survive a "
+                    "restart. Set WEBHOOK_OUTBOX_PATH to a path on a persistent "
+                    "volume for durable dead-letter retries."
+                ),
+            )
+
         # #1150 — drain the persistent webhook outbox periodically. Only
         # register the job when an outbox path is actually configured, so
         # a scheduler with legacy (in-memory-only) delivery doesn't pay
@@ -709,13 +727,23 @@ class SchedulerService:
         logger.info("fsma_nightly_sync_started", mode="in_process")
         try:
             summary = asyncio.run(run_all_regulations_ingest())
-            logger.info(
-                "fsma_nightly_sync_complete",
-                sources_attempted=summary.get("sources_attempted"),
-                ingested=summary.get("ingested"),
-                unchanged=summary.get("unchanged"),
-                failed=summary.get("failed"),
-            )
+            attempted = summary.get("sources_attempted") or 0
+            failed = summary.get("failed") or 0
+            log_fields = {
+                "sources_attempted": attempted,
+                "ingested": summary.get("ingested"),
+                "unchanged": summary.get("unchanged"),
+                "failed": failed,
+            }
+            # #2505: a sync where every source failed (e.g. Redis
+            # unreachable for the ETag/content-hash dedup layer) used to log
+            # at info and pass silently, so regulatory source data could
+            # stop refreshing without any alert. Escalate the all-failed
+            # case to error so it pages instead of being lost in info noise.
+            if attempted > 0 and failed == attempted:
+                logger.error("fsma_nightly_sync_all_failed", **log_fields)
+            else:
+                logger.info("fsma_nightly_sync_complete", **log_fields)
         except Exception as exc:
             logger.error("fsma_nightly_sync_failed", error=str(exc))
 

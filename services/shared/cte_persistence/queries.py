@@ -177,7 +177,9 @@ class QueryPathMixin:
         # Resolve the full set of TLCs to query
         if follow_transformations:
             tlc_set = self._expand_tlcs_via_transformation_links(
-                tenant_id, tlc, depth=max_depth,
+                tenant_id,
+                tlc,
+                depth=max_depth,
             )
         else:
             tlc_set = [tlc]
@@ -242,9 +244,7 @@ class QueryPathMixin:
                 "kdes": {},
                 # Trace relationship metadata (used in FDA export CSV)
                 "trace_seed_tlc": seed_tlc,
-                "trace_relationship": (
-                    "queried" if row_tlc == seed_tlc else "linked_via_transformation"
-                ),
+                "trace_relationship": ("queried" if row_tlc == seed_tlc else "linked_via_transformation"),
             }
             events.append(event)
 
@@ -253,7 +253,7 @@ class QueryPathMixin:
             event_ids = [e["id"] for e in events]
             kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
             for chunk_start in range(0, len(event_ids), 100):
-                chunk = event_ids[chunk_start:chunk_start + 100]
+                chunk = event_ids[chunk_start : chunk_start + 100]
                 placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
                 kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
                 kde_params["tid"] = tenant_id
@@ -287,6 +287,245 @@ class QueryPathMixin:
                     "event_count": len(events),
                     "event_ids": [e["id"] for e in events],
                     "source": "query_events_by_tlc",
+                    "fsma_au2": True,
+                },
+            )
+
+        return events
+
+    def _expand_tlcs_via_transformation_links_batch(
+        self,
+        tenant_id: str,
+        seed_tlcs: List[str],
+        depth: Optional[int] = None,
+    ) -> List[str]:
+        """Batch variant of ``_expand_tlcs_via_transformation_links`` (#2515).
+
+        Expands *all* ``seed_tlcs`` through ``fsma.transformation_links`` in a
+        single ``WITH RECURSIVE`` traversal instead of one recursive-CTE
+        round-trip per seed. The seed set is materialized as a ``VALUES`` list
+        feeding the recursion base case; the bidirectional walk and depth cap
+        are identical to the single-seed method. Returns the full reachable TLC
+        set (including the seeds), de-duplicated.
+
+        Degrades to ``list(set(seed_tlcs))`` if ``transformation_links`` does
+        not exist or the DB is transiently unreachable — mirroring the
+        single-seed fallback so a fresh/booting environment still exports.
+        """
+        from . import core as _core
+
+        if not seed_tlcs:
+            return []
+
+        max_depth = depth if depth is not None else self.DEFAULT_TRAVERSAL_DEPTH
+        if max_depth < 0:
+            raise ValueError(f"depth must be >= 0, got {max_depth}")
+
+        seeds = list(dict.fromkeys(seed_tlcs))  # preserve order, drop dupes
+        seed_placeholders = ", ".join(f"(:seed_{i})" for i in range(len(seeds)))
+        params: Dict[str, Any] = {"tid": tenant_id, "max_depth": max_depth}
+        for i, s in enumerate(seeds):
+            params[f"seed_{i}"] = s
+
+        try:
+            rows = self.session.execute(
+                text(f"""
+                    WITH RECURSIVE seeds(tlc) AS (
+                        VALUES {seed_placeholders}
+                    ),
+                    tlc_graph(tlc, depth) AS (
+                        -- Seed set
+                        SELECT CAST(tlc AS text), 0 FROM seeds
+                        UNION
+                        -- Forward: input → outputs
+                        SELECT tl.output_tlc, tg.depth + 1
+                        FROM   fsma.transformation_links tl
+                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
+                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
+                        UNION
+                        -- Backward: output → inputs
+                        SELECT tl.input_tlc, tg.depth + 1
+                        FROM   fsma.transformation_links tl
+                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
+                    )
+                    SELECT DISTINCT tlc FROM tlc_graph
+                """),
+                params,
+            ).fetchall()
+            return [r[0] for r in rows] if rows else seeds
+        except ProgrammingError as e:
+            _core.logger.info(
+                "transformation_links_table_missing",
+                extra={
+                    "tenant_id": tenant_id,
+                    "seed_count": len(seeds),
+                    "error": str(e),
+                },
+            )
+            try:
+                self.session.rollback()
+            except DatabaseError:
+                _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
+            return seeds
+        except OperationalError as e:
+            _core.logger.warning(
+                "transformation_links_traversal_db_unavailable",
+                extra={
+                    "tenant_id": tenant_id,
+                    "seed_count": len(seeds),
+                    "error": str(e),
+                },
+            )
+            try:
+                self.session.rollback()
+            except DatabaseError:
+                _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
+            return seeds
+
+    def query_events_by_tlcs(
+        self,
+        tenant_id: str,
+        tlcs: List[str],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        follow_transformations: bool = True,
+        max_depth: Optional[int] = None,
+        limit: int = 10000,
+    ) -> List[Dict[str, Any]]:
+        """Batch-query CTE events for many TLCs in a bounded number of queries.
+
+        This is the set-based replacement for calling ``query_events_by_tlc``
+        once per distinct lot code (#2515). Regardless of how many seed TLCs
+        are passed, it issues a constant number of DB round-trips:
+
+          1. one recursive-CTE transformation-link expansion for the whole set
+             (when ``follow_transformations`` is True),
+          2. one bounded events ``SELECT`` over the expanded TLC set, and
+          3. chunked KDE fetches (100 event ids per chunk, as elsewhere).
+
+        ``limit`` caps the materialized event set so a tenant with many events
+        per lot cannot exhaust memory; rows are ordered ``event_timestamp ASC``
+        and truncated server-side. ``trace_relationship`` is set per row based
+        on whether the row's TLC was one of the original seeds.
+
+        Returns ``[]`` for an empty ``tlcs`` input without touching the DB.
+        """
+        from . import core as _core
+
+        seeds = list(dict.fromkeys(tlcs))
+        if not seeds:
+            return []
+
+        self.set_tenant_context(tenant_id)
+
+        if follow_transformations:
+            tlc_set = self._expand_tlcs_via_transformation_links_batch(
+                tenant_id,
+                seeds,
+                depth=max_depth,
+            )
+        else:
+            tlc_set = seeds
+
+        seed_set = set(seeds)
+
+        params: Dict[str, Any] = {"tid": tenant_id, "lim": limit}
+        tlc_placeholders = ", ".join(f":tlc_{i}" for i in range(len(tlc_set)))
+        for i, t in enumerate(tlc_set):
+            params[f"tlc_{i}"] = t
+
+        where_clauses = [
+            "tenant_id = :tid",
+            f"traceability_lot_code IN ({tlc_placeholders})",
+            "validation_status != 'rejected'",
+        ]
+        if start_date:
+            where_clauses.append("event_timestamp >= :start_date")
+            params["start_date"] = start_date
+        if end_date:
+            where_clauses.append("event_timestamp <= :end_date")
+            params["end_date"] = end_date
+
+        where = " AND ".join(where_clauses)
+
+        rows = self.session.execute(
+            text(f"""
+                SELECT
+                    e.id, e.event_type, e.traceability_lot_code,
+                    e.product_description, e.quantity, e.unit_of_measure,
+                    e.location_gln, e.location_name,
+                    e.event_timestamp, e.sha256_hash, e.chain_hash,
+                    e.source, e.validation_status, e.ingested_at,
+                    e.event_entry_timestamp
+                FROM fsma.cte_events e
+                WHERE {where}
+                ORDER BY e.event_timestamp ASC
+                LIMIT :lim
+            """),
+            params,
+        ).fetchall()
+
+        events = []
+        for row in rows:
+            row_tlc = row[2]
+            events.append(
+                {
+                    "id": str(row[0]),
+                    "event_type": row[1],
+                    "traceability_lot_code": row_tlc,
+                    "product_description": row[3],
+                    "quantity": row[4],
+                    "unit_of_measure": row[5],
+                    "location_gln": row[6],
+                    "location_name": row[7],
+                    "event_timestamp": row[8].isoformat() if row[8] else None,
+                    "sha256_hash": row[9],
+                    "chain_hash": row[10],
+                    "source": row[11],
+                    "validation_status": row[12],
+                    "ingested_at": row[13].isoformat() if row[13] else None,
+                    "event_entry_timestamp": row[14].isoformat() if row[14] else None,
+                    "kdes": {},
+                    "trace_relationship": ("queried" if row_tlc in seed_set else "linked_via_transformation"),
+                }
+            )
+
+        # Bulk-fetch KDEs for all events (chunked, avoids N+1) — same pattern
+        # as query_events_by_tlc.
+        if events:
+            event_ids = [e["id"] for e in events]
+            kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
+            for chunk_start in range(0, len(event_ids), 100):
+                chunk = event_ids[chunk_start : chunk_start + 100]
+                placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
+                kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
+                kde_params["tid"] = tenant_id
+                kde_rows = self.session.execute(
+                    text(f"""
+                        SELECT cte_event_id, kde_key, kde_value
+                        FROM fsma.cte_kdes
+                        WHERE tenant_id = :tid AND cte_event_id IN ({placeholders})
+                    """),
+                    kde_params,
+                ).fetchall()
+                for kr in kde_rows:
+                    kde_map[str(kr[0])][kr[1]] = kr[2]
+            for event in events:
+                event["kdes"] = kde_map.get(event["id"], {})
+
+        # FSMA 204 / NIST AU-2 read-access audit (#1033)
+        if events:
+            _core.logger.info(
+                "kde_read_access",
+                extra={
+                    "audit": True,
+                    "event_type": "kde_read_access",
+                    "tenant_id": tenant_id,
+                    "seed_tlc_count": len(seeds),
+                    "event_count": len(events),
+                    "event_ids": [e["id"] for e in events],
+                    "source": "query_events_by_tlcs",
                     "fsma_au2": True,
                 },
             )
@@ -342,8 +581,7 @@ class QueryPathMixin:
             "       product_description, quantity, unit_of_measure,"
             "       event_timestamp, validation_status, sha256_hash"
             " FROM fsma.cte_events"
-            " WHERE " + where +
-            " ORDER BY event_timestamp DESC"
+            " WHERE " + where + " ORDER BY event_timestamp DESC"
             " LIMIT :lim OFFSET :off"
         )
         rows = self.session.execute(
@@ -420,27 +658,29 @@ class QueryPathMixin:
 
         events = []
         for row in rows:
-            events.append({
-                "id": str(row[0]),
-                "event_type": row[1],
-                "traceability_lot_code": row[2],
-                "product_description": row[3],
-                "quantity": row[4],
-                "unit_of_measure": row[5],
-                "location_gln": row[6],
-                "location_name": row[7],
-                "event_timestamp": row[8].isoformat() if row[8] else None,
-                "source": row[9],
-                "sequence_num": row[10],
-                "kdes": {},
-            })
+            events.append(
+                {
+                    "id": str(row[0]),
+                    "event_type": row[1],
+                    "traceability_lot_code": row[2],
+                    "product_description": row[3],
+                    "quantity": row[4],
+                    "unit_of_measure": row[5],
+                    "location_gln": row[6],
+                    "location_name": row[7],
+                    "event_timestamp": row[8].isoformat() if row[8] else None,
+                    "source": row[9],
+                    "sequence_num": row[10],
+                    "kdes": {},
+                }
+            )
 
         # Bulk-fetch KDEs for all events in one query (avoids N+1)
         if events:
             event_ids = [e["id"] for e in events]
             kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
             for chunk_start in range(0, len(event_ids), 100):
-                chunk = event_ids[chunk_start:chunk_start + 100]
+                chunk = event_ids[chunk_start : chunk_start + 100]
                 placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
                 kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
                 kde_params["tid"] = tenant_id

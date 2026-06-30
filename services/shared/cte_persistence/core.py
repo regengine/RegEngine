@@ -91,6 +91,15 @@ _REJECT_SEVERITIES: frozenset[str] = frozenset({"reject", "error", "critical"})
 # the same events with divergent idempotency-key formulas. Reconciliation
 # is required before canonical_persistence can be made the sole writer.
 # See #1335 and grep for this constant to find all related references.
+#
+# #2521: the reconciliation routine now EXISTS and is enforced —
+# ``scripts/validate_data_integrity.py:check_dual_write_reconciliation``
+# compares the two stores by ``sha256_hash`` per tenant and fails
+# (non-zero exit) when a legacy ``cte_events`` row has no canonical
+# ``traceability_events`` twin. The marker stays ``True`` because the
+# dual-write shim is still LIVE; it flips to ``False`` / is deleted only
+# when the shim is removed under #1335 (reconciliation green + monitored
+# is the precondition this check satisfies).
 DUAL_WRITE_RECONCILIATION_NEEDED = True
 
 logger = logging.getLogger("cte-persistence")

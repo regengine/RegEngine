@@ -47,6 +47,14 @@ useful decomposition seams in the codebase:
   contract.
 - **Graph:** Neo4j integration code and health checks exist, but the default
   local development stack does not start Neo4j.
+- **Edge / gateway:** there is no app-managed nginx layer in production — the
+  Railway container runs `gunicorn server.main:app` directly. The authoritative
+  defense against a client-supplied `X-RegEngine-Tenant-ID` header is the in-app
+  `TenantContextMiddleware` (`services/shared/middleware/tenant_context.py`),
+  which rejects the header unless it carries a valid `REGENGINE_INTERNAL_SECRET`
+  (covered by `tests/security/test_header_remediation.py`). `infra/gateway/nginx.conf`
+  is a reference-only config (with its own test suite) for if a gateway service is
+  ever provisioned; it is not in the production image.
 
 ## Current Architecture Direction
 

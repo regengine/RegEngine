@@ -2,5 +2,18 @@
 # .github/workflows/security.yml. FastAPI 0.136 resolves Starlette 0.52.x, while
 # these fixes require Starlette 1.x; production runs Linux containers.
 # Revisit before this expires and remove once the framework stack supports 1.x.
+#
+# This file must list every FIXED-UPSTREAM CVE that the pip-audit gate
+# accepts, because Trivy runs with `ignore-unfixed: true`: unfixed advisories
+# are filtered automatically, but fixed-upstream ones (Starlette 1.x) are
+# reported and would hard-fail the container scan unless suppressed here.
+# scripts/check_trivyignore_sync.py keeps this list in lockstep with the
+# pip-audit `--ignore-vuln` set so the two gates can't drift again (#2528).
+#
+# PYSEC-2025-183 (PyJWT) and PYSEC-2024-278 (langchain-community) are
+# intentionally NOT listed: Trivy keys Python advisories by CVE/GHSA and has
+# no published fix, so `ignore-unfixed: true` already filters them.
+CVE-2026-48817 exp:2026-09-30
 CVE-2026-48818 exp:2026-09-30
+CVE-2026-54282 exp:2026-09-30
 CVE-2026-54283 exp:2026-09-30

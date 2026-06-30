@@ -189,10 +189,16 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 )
                 tenant_header_rejected_total.labels(client_host=client_host).inc()
 
-        # Method 3: From API key
-        # API keys must be validated against the database (api_key_store).
-        # A single configurable key is supported for service accounts via env vars;
-        # a hardcoded key in source code is never acceptable.
+        # Method 3: From API key (env service-account fallback only).
+        #
+        # NOTE: This branch resolves a tenant ONLY for the single shared
+        # service-account key configured via REGENGINE_API_KEY /
+        # REGENGINE_API_KEY_TENANT_ID. It does NOT perform a per-key
+        # api_key_store lookup — that is intentional. Per-key DB-issued tenants
+        # are resolved later, in ``get_current_tenant_id``, from the principal
+        # that ``require_api_key`` (the production DatabaseAPIKeyStore validator)
+        # attaches to ``request.state.api_key``. Middleware runs before route
+        # dependencies, so the validated principal is not available here yet.
         api_key = request.headers.get("X-RegEngine-API-Key")
         if api_key:
             configured_key = os.getenv("REGENGINE_API_KEY")
@@ -208,11 +214,42 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         return None
 
 
+def _tenant_id_from_authenticated_principal(request: Request) -> Optional[uuid.UUID]:
+    """Resolve tenant_id from the principal attached by ``require_api_key``.
+
+    The middleware's env-only Method 3 cannot resolve per-key DB-issued tenants,
+    so DB-issued API keys would otherwise have no tenant source and fail closed
+    with 401 on every ``get_current_tenant_id``-guarded route (#2524). Because
+    route dependencies run after the middleware, ``require_api_key`` has already
+    stored the validated key on ``request.state.api_key`` by the time this is
+    read; we coerce its ``tenant_id`` to UUID. Returns None when no principal /
+    tenant is present or the value is not a valid UUID (caller fails closed).
+    """
+    api_key = getattr(request.state, "api_key", None)
+    if api_key is None:
+        return None
+    tenant_id_raw = getattr(api_key, "tenant_id", None)
+    if not tenant_id_raw:
+        return None
+    try:
+        return uuid.UUID(str(tenant_id_raw))
+    except (ValueError, AttributeError, TypeError):
+        logger.warning("Invalid tenant_id on authenticated API key principal: %s", tenant_id_raw)
+        return None
+
+
 async def get_current_tenant_id(request: Request) -> uuid.UUID:
     """
     FastAPI dependency to get the current request's tenant_id.
 
-    Raises HTTPException(401) if no tenant_id is available.
+    Resolution order:
+    1. ``request.state.tenant_id`` set by ``TenantContextMiddleware``
+       (JWT, internal header, or env service-account key).
+    2. Fallback to the tenant on the authenticated principal that
+       ``require_api_key`` attaches to ``request.state.api_key`` — this is how
+       per-key DB-issued API keys resolve their own tenant (#2524).
+
+    Raises HTTPException(401) if no tenant_id is available (fail closed).
 
     Usage:
         @app.get("/reports")
@@ -221,10 +258,14 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
         ):
             return await fetch_reports(tenant_id)
     """
-    if not hasattr(request.state, "tenant_id") or request.state.tenant_id is None:
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        tenant_id = _tenant_id_from_authenticated_principal(request)
+
+    if tenant_id is None:
         raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
 
-    return request.state.tenant_id
+    return tenant_id
 
 
 async def get_optional_tenant_id(request: Request) -> Optional[uuid.UUID]:

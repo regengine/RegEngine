@@ -107,9 +107,19 @@ class TestValidateTenantId:
 class TestResolveTenant:
     """resolve_tenant prefers scoped principals, with explicit fallback for admin paths."""
 
-    def test_scoped_principal_tenant_wins_over_explicit(self):
+    def test_scoped_principal_conflicting_explicit_rejected(self):
+        # A tenant-bound principal cannot be redirected to a different tenant
+        # via an explicit tenant_id — the bound tenant is authoritative and a
+        # conflicting explicit value is a 403, matching resolve_principal_tenant_id.
         principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
-        assert resolve_tenant("explicit", principal) == "from-principal"
+        with pytest.raises(HTTPException) as exc_info:
+            resolve_tenant("explicit", principal)
+        assert exc_info.value.status_code == 403
+        assert "Tenant mismatch" in exc_info.value.detail
+
+    def test_scoped_principal_matching_explicit_allowed(self):
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
+        assert resolve_tenant("from-principal", principal) == "from-principal"
 
     def test_falls_back_to_principal_when_explicit_none(self):
         principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
@@ -119,9 +129,20 @@ class TestResolveTenant:
         principal = SimpleNamespace(tenant_id="from-principal", scopes=["records.read"])
         assert resolve_tenant("", principal) == "from-principal"
 
-    def test_wildcard_principal_can_target_explicit_tenant(self):
+    def test_wildcard_tenant_bound_principal_cannot_pivot_to_other_tenant(self):
+        # A tenant-bound key that also carries `*` must NOT be able to override
+        # its own tenant with a client-supplied tenant_id (#2504). Wildcard
+        # grants action breadth, not tenant breadth.
         principal = SimpleNamespace(tenant_id="from-principal", scopes=["*"])
-        assert resolve_tenant("explicit", principal) == "explicit"
+        with pytest.raises(HTTPException) as exc_info:
+            resolve_tenant("explicit", principal)
+        assert exc_info.value.status_code == 403
+        assert "Tenant mismatch" in exc_info.value.detail
+
+    def test_wildcard_tenant_bound_principal_matching_explicit_allowed(self):
+        # An explicit tenant_id that matches the principal's bound tenant is fine.
+        principal = SimpleNamespace(tenant_id="from-principal", scopes=["*"])
+        assert resolve_tenant("from-principal", principal) == "from-principal"
 
     def test_principal_without_tenant_id_attr_raises(self):
         principal = SimpleNamespace()  # no tenant_id
@@ -165,13 +186,24 @@ class TestResolveTenant:
 
     def test_returns_validated_tenant_id(self):
         principal = SimpleNamespace(tenant_id="valid", scopes=["records.read"])
-        result = resolve_tenant("explicit-valid", principal)
+        # No explicit override → resolves to the principal's bound tenant.
+        result = resolve_tenant(None, principal)
         assert result == "valid"
 
-    def test_returns_validated_explicit_tenant_for_wildcard(self):
+    def test_unscoped_principal_can_target_explicit_tenant(self):
+        # legacy_master / dev_open carry tenant_id=None and may still target an
+        # explicit tenant — explicit-tenant targeting is gated on the ABSENCE of
+        # a bound principal tenant, not on the `*` scope (#2504).
+        principal = SimpleNamespace(tenant_id=None, scopes=["*"])
+        assert resolve_tenant("explicit-valid", principal) == "explicit-valid"
+
+    def test_wildcard_tenant_bound_principal_pivot_rejected_before_format_check(self):
+        # The cross-tenant pivot is rejected with 403 even when both tenant
+        # values are well-formed (#2504).
         principal = SimpleNamespace(tenant_id="valid", scopes=["*"])
-        result = resolve_tenant("explicit-valid", principal)
-        assert result == "explicit-valid"
+        with pytest.raises(HTTPException) as exc_info:
+            resolve_tenant("explicit-valid", principal)
+        assert exc_info.value.status_code == 403
 
     def test_principal_without_attr_but_with_explicit(self):
         principal = SimpleNamespace()  # no tenant_id attr
@@ -222,3 +254,47 @@ class TestModuleSurface:
         import re
 
         assert isinstance(_TENANT_ID_PATTERN, re.Pattern)
+
+
+class TestResolveTenantRouterLevelPathParam:
+    """#2504 — a *-scoped tenant-bound key cannot pivot to another tenant
+    through resolve_tenant via a PATH-param-shaped tenant input.
+
+    This exercises the latent vector the issue describes: ``require_permission``
+    only inspects query/header tenant context, never path params. A route that
+    feeds a ``{tenant_id}`` path param into ``resolve_tenant`` must be backstopped
+    by the resolver itself. We mount such a route directly so the resolver is the
+    only thing standing between the caller and the other tenant.
+    """
+
+    def _build_app(self):
+        from fastapi import Depends, FastAPI
+
+        app = FastAPI()
+
+        # A tenant-bound, owner-tier (*-scoped) principal — a real, creatable
+        # production configuration per the issue evidence.
+        principal = SimpleNamespace(tenant_id="tenant-a", scopes=["*"])
+
+        @app.get("/records/{tenant_id}")
+        def read_records(tenant_id: str):
+            tid = resolve_tenant(tenant_id, principal)
+            return {"tenant_id": tid}
+
+        return app
+
+    def test_path_param_pivot_to_other_tenant_rejected(self):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(self._build_app())
+        resp = client.get("/records/tenant-b")
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["detail"]
+
+    def test_path_param_matching_own_tenant_allowed(self):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(self._build_app())
+        resp = client.get("/records/tenant-a")
+        assert resp.status_code == 200
+        assert resp.json()["tenant_id"] == "tenant-a"

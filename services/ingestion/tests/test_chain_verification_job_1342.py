@@ -96,6 +96,29 @@ class _FakeThreading:
     Lock = threading.Lock
 
 
+def _patch_canonical(monkeypatch, **fields):
+    """#2506: patch ``CanonicalEventStore`` so ``verify_chain_canonical``
+    returns a scripted result. The job runs both verifiers and combines."""
+    result = SimpleNamespace(
+        valid=fields.get("valid", True),
+        chain_length=fields.get("chain_length", 0),
+        errors=fields.get("errors", []),
+        orphan_chain_rows=fields.get("orphan_chain_rows", []),
+        tamper_rows=fields.get("tamper_rows", []),
+    )
+
+    class _Store:
+        def __init__(self, session, dual_write=True, skip_chain_write=False):
+            pass
+
+        def verify_chain_canonical(self, tid):
+            return result
+
+    import shared.canonical_persistence as canon_pkg
+
+    monkeypatch.setattr(canon_pkg, "CanonicalEventStore", _Store)
+
+
 def _seed_job(job_id: str, tenant_id: str = "t1") -> None:
     """Seed a job record so _run_verification can update it."""
     _verification_jobs[job_id] = {
@@ -189,11 +212,21 @@ class TestRunVerification:
                 pass
 
             def verify_chain(self, tid):
-                return SimpleNamespace(valid=True, chain_length=100, errors=None)
+                return SimpleNamespace(valid=True, chain_length=100, errors=None, orphan_chain_rows=[])
 
         import shared.cte_persistence as cte_pkg
 
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
+        # #2506: the job now also walks the canonical store. A healthy
+        # canonical verifier with matching length.
+        _patch_canonical(
+            monkeypatch,
+            valid=True,
+            chain_length=100,
+            errors=[],
+            orphan_chain_rows=[],
+            tamper_rows=[],
+        )
 
         # Suppress audit log side effects
         monkeypatch.setattr(cvj, "_log_verification_audit", lambda *a, **k: None)
@@ -223,18 +256,29 @@ class TestRunVerification:
                     valid=False,
                     chain_length=10,
                     errors=["block 3 tampered"],
+                    orphan_chain_rows=[],
                 )
 
         import shared.cte_persistence as cte_pkg
 
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
+        # #2506: a real tamper is detected by the canonical verifier. Its
+        # non-orphan error surfaces in the combined result.
+        _patch_canonical(
+            monkeypatch,
+            valid=False,
+            chain_length=10,
+            errors=["Event tamper at seq=3: block 3 tampered"],
+            orphan_chain_rows=[],
+            tamper_rows=[3],
+        )
         monkeypatch.setattr(cvj, "_log_verification_audit", lambda *a, **k: None)
 
         _run_verification("j1", "t1")
         entry = _verification_jobs["j1"]
         assert entry["status"] == "completed"
         assert entry["chain_valid"] is False
-        assert entry["errors"] == ["block 3 tampered"]
+        assert entry["errors"] == ["Event tamper at seq=3: block 3 tampered"]
         assert "FAILED" in entry["message"]
         assert "1 error" in entry["message"]
 
@@ -380,11 +424,19 @@ class TestStartChainVerification:
                 pass
 
             def verify_chain(self, tid):
-                return SimpleNamespace(valid=True, chain_length=7, errors=[])
+                return SimpleNamespace(valid=True, chain_length=7, errors=[], orphan_chain_rows=[])
 
         import shared.cte_persistence as cte_pkg
 
         monkeypatch.setattr(cte_pkg, "CTEPersistence", _Persistence)
+        _patch_canonical(
+            monkeypatch,
+            valid=True,
+            chain_length=7,
+            errors=[],
+            orphan_chain_rows=[],
+            tamper_rows=[],
+        )
         monkeypatch.setattr(cvj, "_log_verification_audit", lambda *a, **k: None)
 
         r = client.post("/api/v1/chain/verify-all", json={"tenant_id": "t1"})

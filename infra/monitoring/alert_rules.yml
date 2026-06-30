@@ -125,6 +125,21 @@ groups:
           summary: "PostgreSQL approaching max connections"
           description: "PostgreSQL connection usage is above 90% of the configured max; current matching value is {{ $value }}."
 
+      # Audit-the-auditor: a dropped data.bulk.export self-log means a
+      # privileged audit export (potentially raw PII) returned without
+      # its tamper-evidence record. The export endpoint now fails closed
+      # (#2522), but any increment here is a compliance-relevant event
+      # that must page an operator rather than sit unread on /metrics.
+      - alert: AuditExportSelfLogFailed
+        expr: increase(admin_audit_log_failures_total{event_type="data.bulk.export"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: audit
+        annotations:
+          summary: "Audit-export self-log failed (audit the auditor)"
+          description: "{{ $value }} data.bulk.export audit self-log write(s) failed in the last 5m on {{ $labels.instance }}. A privileged audit export could not persist its 'who exported what' record; investigate audit_logs schema/health immediately."
+
   - name: regengine_warning_alerts
     interval: 30s
     rules:
