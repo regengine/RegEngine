@@ -1,0 +1,37 @@
+{
+  "confidence_level": "HIGH",
+  "ctes": [
+    {
+      "cte_type": "SHIPPING",
+      "event_date": "2026-03-12",
+      "gtin": "00099999999999",
+      "location_identifier": "urn:gln:0012345678905",
+      "prior_source_tlc": null,
+      "product_description": null,
+      "quantity": 12.0,
+      "ship_from_gln": "urn:gln:0012345678905",
+      "ship_to_gln": "urn:gln:0098765432108",
+      "tlc_source_fda_reg": null,
+      "tlc_source_gln": null,
+      "traceability_lot_code": "00099999999999-LOT-7",
+      "unit_of_measure": "pallets"
+    },
+    {
+      "cte_type": "RECEIVING",
+      "event_date": "2026-03-12",
+      "gtin": "00099999999999",
+      "location_identifier": "urn:gln:0098765432108",
+      "prior_source_tlc": "00099999999999-LOT-7",
+      "product_description": null,
+      "quantity": 12.0,
+      "ship_from_gln": "urn:gln:0012345678905",
+      "ship_to_gln": "urn:gln:0098765432108",
+      "tlc_source_fda_reg": null,
+      "tlc_source_gln": null,
+      "traceability_lot_code": "00099999999999-LOT-7",
+      "unit_of_measure": "pallets"
+    }
+  ],
+  "document_type": "BOL",
+  "review_required": false
+}
