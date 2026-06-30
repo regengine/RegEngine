@@ -108,9 +108,17 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 - If you manually insert or delete rows in `traceability_events` without going
   through `canonical_persistence.py`, the hash chain will be broken. There is
   no automatic repair mechanism — a broken chain requires manual investigation.
-- The chain verification function is in `cte_persistence.py` (`verify_chain()`),
-  but it verifies the legacy `cte_events` chain, not the canonical one. This
-  is a gap.
+- The legacy chain verifier `cte_persistence.verify_chain()` walks the legacy
+  `cte_events` chain, not the canonical `traceability_events` one. A canonical
+  chain verifier now exists:
+  `canonical_persistence.verification.verify_chain_canonical()`
+  (`CanonicalEventStore.verify_chain_canonical`) — it joins `fsma.hash_chain` to
+  `traceability_events`, recomputes both the event and chain hashes, and flags
+  orphans/tamper against the canonical store. Tracked in #2506. The scheduled
+  chain-verification job runs both and combines them; the read-coupled FDA
+  export / recall / compliance call sites still pair with the legacy verifier
+  because their readers still query `cte_events` — repointing those is deferred
+  until the export readers migrate to canonical (see #2506).
 
 ### Frontend Service URL Resolution
 

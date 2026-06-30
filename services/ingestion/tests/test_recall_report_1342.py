@@ -79,7 +79,7 @@ class _ScoringSession:
 
 
 # Substrings used to route execute() calls:
-#   "COUNT(*) FROM fsma.cte_events"     → cte_count
+#   "COUNT(*) FROM fsma.traceability_events" → cte_count  (#2506: canonical)
 #   "COUNT(DISTINCT traceability_lot"   → tlc_count
 #   "COUNT(DISTINCT event_type)"        → cte_types
 #   "COUNT(*) FROM fsma.fda_export_log" → has_export
@@ -99,7 +99,8 @@ def _full_route(
 ):
     """Build a full route dict for _query_scoring_data."""
     return {
-        "COUNT(*) FROM fsma.cte_events": cte_count,
+        # #2506: scoring reader now counts the canonical store of record.
+        "COUNT(*) FROM fsma.traceability_events": cte_count,
         "COUNT(DISTINCT traceability_lot": tlc_count,
         "COUNT(DISTINCT event_type)": cte_types,
         "COUNT(*) FROM fsma.fda_export_log": has_export,
@@ -279,7 +280,7 @@ class TestQueryScoringData:
     def test_execute_raises_returns_none(self, monkeypatch):
         """An execute() exception is caught and returns None."""
         sess = _ScoringSession(
-            raise_on={"COUNT(*) FROM fsma.cte_events": ValueError("boom")},
+            raise_on={"COUNT(*) FROM fsma.traceability_events": ValueError("boom")},
         )
         import shared.database as db_mod
 

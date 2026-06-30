@@ -34,8 +34,17 @@ def verify_chain(entries: List[dict]) -> dict:
             "total_entries": int,
             "verified": int,
             "first_break": int | None,  # entry id where chain breaks
-            "errors": [{"id": ..., "error": ..., "expected": ..., "actual": ...}]
+            "errors": [{"id": ..., "error": ..., "expected": ..., "actual": ...}],
+            "legacy_v1_rows": [id, ...],  # ids verified only under the v1 hash
+            "has_legacy_v1_rows": bool,   # any row lacks actor-field tamper-evidence
         }
+
+    #2523: a row that verifies only under the v1 fallback lacks actor-field
+    (actor_id/actor_email/severity/endpoint) tamper-evidence — a DB-write
+    attacker can rewrite those "who did this" fields on a pre-#1415 row and
+    the chain still reports valid. We now record each such row's id in
+    ``legacy_v1_rows`` (and set ``has_legacy_v1_rows``) so the marker
+    propagates into the auditor-facing export instead of being invisible.
     """
     if not entries:
         return {
@@ -44,9 +53,12 @@ def verify_chain(entries: List[dict]) -> dict:
             "verified": 0,
             "first_break": None,
             "errors": [],
+            "legacy_v1_rows": [],
+            "has_legacy_v1_rows": False,
         }
 
     errors = []
+    legacy_v1_rows: List = []
     expected_prev_hash = None
     # #2513: track the previous entry's per-tenant sequence so a gap
     # (a removed/deleted middle row) is flagged with a distinct
@@ -129,9 +141,11 @@ def verify_chain(entries: List[dict]) -> dict:
             # covered by the sequence-gap check above when present.
             recomputed = recomputed_v2
         elif actual_hash == recomputed_v1:
-            # Accept legacy row but surface the hash version for operator
-            # visibility — pre-#1415 rows lack actor-field tamper evidence.
+            # Accept legacy row but record it so the v1-only status is
+            # surfaced to the caller (and the export) — pre-#1415 rows lack
+            # actor-field tamper-evidence (#2523).
             recomputed = recomputed_v1
+            legacy_v1_rows.append(entry.get("id"))
         else:
             recomputed = recomputed_v3
 
@@ -154,4 +168,6 @@ def verify_chain(entries: List[dict]) -> dict:
         "verified": len(entries) - len(errors),
         "first_break": errors[0]["id"] if errors else None,
         "errors": errors,
+        "legacy_v1_rows": legacy_v1_rows,
+        "has_legacy_v1_rows": bool(legacy_v1_rows),
     }

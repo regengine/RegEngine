@@ -91,6 +91,16 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     result = {}
 
+    # TODO(#2506): migrate to fsma.traceability_events. DEFERRED: this scorer
+    # is tightly coupled to the legacy key-value KDE table (fsma.cte_kdes,
+    # joined below for the KDE-completeness ratio) and to the legacy
+    # CTEPersistence.verify_chain. The canonical store keeps KDEs as a JSONB
+    # column with no row-per-field equivalent, so a partial table swap here
+    # would split the score across two stores and change the KDE-completeness
+    # semantics. Migrate the whole scorer (events + KDE JSONB + canonical
+    # verifier) together once the canonical KDE-completeness contract is
+    # defined; until then this reader stays on fsma.cte_events as a unit.
+
     # 1) CTE event stats
     row = db_session.execute(
         text("""
