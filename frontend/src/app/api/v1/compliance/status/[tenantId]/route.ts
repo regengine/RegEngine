@@ -43,12 +43,19 @@ export async function GET(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
     const searchParams = request.nextUrl.searchParams;
     const detailed = searchParams.get('detailed') === 'true';
 
     const COMPLIANCE_URL = getComplianceUrl();
+    if (!COMPLIANCE_URL) {
+        console.error('[proxy/compliance-status] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
+            { status: 503 },
+        );
+    }
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
     };
