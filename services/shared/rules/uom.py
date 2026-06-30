@@ -2,7 +2,16 @@
 Unit of Measure conversion and CTE lifecycle ordering.
 
 Weight: converts common food industry units to a canonical base unit (lbs).
-Used by mass balance evaluator to compare quantities across different UOMs.
+
+Container weights (case/box/bin/pallet/...) in ``_UOM_TO_LBS`` are
+commodity-INDEPENDENT industry approximations. They MUST NOT be used to drive
+a regulatory mass-balance verdict (``pass``/``fail``) without an explicit,
+authoritative tenant/product container-weight mapping — a "24 lb case" of
+lettuce, shrimp, and berries are not the same mass (#2520). For compliance
+decisions, use ``normalize_to_mass`` (which only converts true mass units
+unless a ``weights`` mapping is supplied) and ``is_mass_uom`` to classify
+units. ``normalize_to_lbs`` retains the legacy approximations and is used only
+by the non-evidence sandbox/preflight diagnosis path.
 
 Temperature (#1364): converts Fahrenheit↔Celsius so numeric-range evaluators
 can compare a recorded reading against an operational cold-chain threshold
@@ -11,7 +20,9 @@ regardless of the unit the operator recorded it in.
 
 from typing import Dict, Optional, Tuple
 
-_UOM_TO_LBS: Dict[str, float] = {
+# True mass units → lbs. Converting between any of these is physically exact
+# and commodity-independent, so they are safe to drive a compliance verdict.
+_MASS_UOM_TO_LBS: Dict[str, float] = {
     # Weight (already in lbs)
     "lbs": 1.0,
     "lb": 1.0,
@@ -32,7 +43,12 @@ _UOM_TO_LBS: Dict[str, float] = {
     "short_ton": 2000.0,
     "metric_ton": 2204.62,
     "mt": 2204.62,
-    # Produce containers (industry standard approximations)
+}
+
+# Container / count units. The weights here are commodity-INDEPENDENT
+# approximations (a "case" is 24 lbs regardless of contents). They are NOT a
+# valid basis for a compliance mass-balance verdict — see module docstring.
+_CONTAINER_UOM_TO_LBS: Dict[str, float] = {
     "case": 24.0,
     "cases": 24.0,
     "cs": 24.0,
@@ -62,17 +78,65 @@ _UOM_TO_LBS: Dict[str, float] = {
     "pcs": 1.0,
 }
 
+# Legacy combined table. Retained for the non-evidence sandbox/preflight
+# diagnosis path which still surfaces approximate cross-UOM comparisons to a
+# human. Do NOT use this to stamp a compliance verdict.
+_UOM_TO_LBS: Dict[str, float] = {**_MASS_UOM_TO_LBS, **_CONTAINER_UOM_TO_LBS}
+
+# Canonical sets for classifying a UOM without converting it.
+MASS_UOMS = frozenset(_MASS_UOM_TO_LBS)
+CONTAINER_UOMS = frozenset(_CONTAINER_UOM_TO_LBS)
+
+
+def _uom_key(uom: str) -> str:
+    return uom.lower().strip().rstrip(".")
+
+
+def is_mass_uom(uom: Optional[str]) -> bool:
+    """True if ``uom`` is a true mass unit (lb/kg/oz/ton family)."""
+    if not uom:
+        return False
+    return _uom_key(uom) in _MASS_UOM_TO_LBS
+
 
 def normalize_to_lbs(quantity: float, uom: str) -> Optional[float]:
-    """Convert a quantity to lbs using the UOM lookup table.
+    """Convert a quantity to lbs using the legacy UOM lookup table.
 
-    Returns None if the UOM is not recognized.
+    Includes commodity-independent container approximations. Returns None if
+    the UOM is not recognized. NOTE: not safe for compliance verdicts — use
+    ``normalize_to_mass`` for those. Retained for the sandbox/preflight path.
     """
-    uom_key = uom.lower().strip().rstrip(".")
-    factor = _UOM_TO_LBS.get(uom_key)
+    factor = _UOM_TO_LBS.get(_uom_key(uom))
     if factor is None:
         return None
     return quantity * factor
+
+
+def normalize_to_mass(
+    quantity: float,
+    uom: str,
+    *,
+    weights: Optional[Dict[str, float]] = None,
+) -> Optional[float]:
+    """Convert ``quantity`` of ``uom`` to lbs for a compliance mass comparison.
+
+    True mass units (lb/kg/oz/ton family) always convert. Container/count
+    units (case/box/bin/...) convert ONLY when an authoritative ``weights``
+    mapping (e.g. tenant/product container weights, keyed by lowercased UOM)
+    is supplied; otherwise this returns ``None`` so the caller can decline to
+    render a verdict rather than rely on a commodity-independent guess.
+
+    Returns ``None`` when the unit cannot be converted to mass safely.
+    """
+    key = _uom_key(uom)
+    factor = _MASS_UOM_TO_LBS.get(key)
+    if factor is not None:
+        return quantity * factor
+    if weights:
+        override = weights.get(key)
+        if override is not None:
+            return quantity * float(override)
+    return None
 
 
 # ---------------------------------------------------------------------------

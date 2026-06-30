@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +25,8 @@ from sqlalchemy import text
 from .authz import IngestionPrincipal, require_permission
 from .sandbox.models import SandboxResponse
 from .shared.tenant_resolution import resolve_principal_tenant_id
+
+logger = logging.getLogger("inflow-workbench")
 
 router = APIRouter(prefix="/api/v1/inflow-workbench", tags=["Inflow Workbench"])
 require_inflow_read = require_permission("inflow.read")
@@ -258,16 +262,46 @@ def _set_tenant_context(db: Any, tenant_id: str) -> None:
     db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
 
 
-def _store_path() -> Path:
-    return Path(os.getenv("REGENGINE_INFLOW_WORKBENCH_PATH", "/tmp/regengine_inflow_workbench.json"))
+def _is_production() -> bool:
+    from shared.env import is_production
+
+    return is_production()
+
+
+def _tenant_store_slug(tenant_id: str) -> str:
+    """Filesystem-safe per-tenant filename component.
+
+    The dev file store is namespaced per tenant so two tenants never share a
+    single commingled JSON file. Non-alphanumeric characters are replaced and
+    a short hash is appended to keep distinct tenant ids from colliding after
+    sanitization.
+    """
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", str(tenant_id))[:64]
+    digest = hashlib.sha256(str(tenant_id).encode("utf-8")).hexdigest()[:12]
+    return f"{safe}-{digest}"
+
+
+def _store_path(tenant_id: str) -> Path:
+    """Per-tenant dev store path.
+
+    ``REGENGINE_INFLOW_WORKBENCH_PATH`` sets a base path; the tenant slug is
+    interpolated so each tenant gets its own file (no cross-tenant
+    commingling). Falls back to a per-tenant file under /tmp in dev.
+    """
+    base = os.getenv("REGENGINE_INFLOW_WORKBENCH_PATH")
+    slug = _tenant_store_slug(tenant_id)
+    if base:
+        base_path = Path(base)
+        return base_path.with_name(f"{base_path.stem}.{slug}{base_path.suffix}")
+    return Path(f"/tmp/regengine_inflow_workbench.{slug}.json")
 
 
 def _empty_store() -> dict[str, Any]:
     return {"scenarios": [], "runs": {}, "fix_queue": {}}
 
 
-def _read_store() -> dict[str, Any]:
-    path = _store_path()
+def _read_store(tenant_id: str) -> dict[str, Any]:
+    path = _store_path(tenant_id)
     if not path.exists():
         return _empty_store()
     try:
@@ -281,8 +315,8 @@ def _read_store() -> dict[str, Any]:
     }
 
 
-def _write_store(store: dict[str, Any]) -> None:
-    path = _store_path()
+def _write_store(tenant_id: str, store: dict[str, Any]) -> None:
+    path = _store_path(tenant_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(store, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -324,6 +358,7 @@ def _db_list_scenarios(tenant_id: str) -> Optional[list[WorkbenchScenario]]:
         ]
     except Exception:
         db.rollback()
+        logger.exception("inflow workbench DB list_scenarios failed (tenant_id=%s)", tenant_id)
         return None
     finally:
         db.close()
@@ -362,6 +397,11 @@ def _db_create_scenario(scenario: WorkbenchScenario) -> bool:
         return True
     except Exception:
         db.rollback()
+        logger.exception(
+            "inflow workbench DB create_scenario failed (tenant_id=%s scenario_id=%s)",
+            tenant_id,
+            scenario.id,
+        )
         return False
     finally:
         db.close()
@@ -485,6 +525,11 @@ def _db_save_run(run: WorkbenchRun) -> bool:
         return True
     except Exception:
         db.rollback()
+        logger.exception(
+            "inflow workbench DB save_run failed (tenant_id=%s run_id=%s)",
+            tenant_id,
+            run.run_id,
+        )
         return False
     finally:
         db.close()
@@ -529,6 +574,11 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
         return _run_from_row(row, fix_queue)
     except Exception:
         db.rollback()
+        logger.exception(
+            "inflow workbench DB get_run failed (tenant_id=%s run_id=%s)",
+            tenant_uuid,
+            run_id,
+        )
         return None
     finally:
         db.close()
@@ -595,6 +645,11 @@ def _db_list_fix_queue(tenant_id: str, run_id: Optional[str] = None) -> Optional
         ]
     except Exception:
         db.rollback()
+        logger.exception(
+            "inflow workbench DB list_fix_queue failed (tenant_id=%s run_id=%s)",
+            tenant_uuid,
+            run_id,
+        )
         return None
     finally:
         db.close()
@@ -626,6 +681,11 @@ def _db_update_fix_item(item_id: str, tenant_id: str, payload: UpdateFixItemRequ
         return next((item for item in items if item.id == item_id), None)
     except Exception:
         db.rollback()
+        logger.exception(
+            "inflow workbench DB update_fix_item failed (tenant_id=%s item_id=%s)",
+            tenant_uuid,
+            item_id,
+        )
         return None
     finally:
         db.close()
@@ -687,6 +747,7 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
         )
     except Exception:
         db.rollback()
+        logger.exception("inflow workbench DB readiness_snapshot failed (tenant_id=%s)", tenant_uuid)
         return None
     finally:
         db.close()
@@ -694,7 +755,7 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
 
 def _file_readiness_snapshot(tenant_id: str) -> WorkbenchReadinessSnapshot:
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
     runs = [WorkbenchRun(**run) for run in store["runs"].values() if run.get("tenant_id") == tenant_id]
     if not runs:
         return WorkbenchReadinessSnapshot(tenant_id=tenant_id)
@@ -907,7 +968,7 @@ async def list_scenarios(
         return [WorkbenchScenario(**item) for item in BUILT_IN_SCENARIOS] + db_scenarios
 
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
     custom = [item for item in store["scenarios"] if item.get("tenant_id") in {tenant_id, "system"}]
     return [WorkbenchScenario(**item) for item in [*BUILT_IN_SCENARIOS, *custom]]
 
@@ -933,10 +994,19 @@ async def create_scenario(
     if _db_create_scenario(scenario):
         return scenario
 
+    if _is_production():
+        logger.error(
+            "inflow workbench create_scenario could not persist to DB in production "
+            "(tenant_id=%s scenario_id=%s); refusing ephemeral file-store fallback",
+            tenant_id,
+            scenario.id,
+        )
+        raise HTTPException(status_code=503, detail="Workbench persistence unavailable")
+
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
         store["scenarios"].append(scenario.model_dump())
-        _write_store(store)
+        _write_store(tenant_id, store)
     return scenario
 
 
@@ -1011,12 +1081,26 @@ async def save_run(
     if _db_save_run(run):
         return run
 
+    # DB persistence failed. In production the ephemeral, process-local file
+    # store is NOT a valid durability fallback: returning 200 here would tell
+    # the caller their run was durably persisted when it was only written to a
+    # /tmp file that vanishes on container restart. Fail loudly instead so the
+    # outage is visible rather than silently masked.
+    if _is_production():
+        logger.error(
+            "inflow workbench save_run could not persist to DB in production "
+            "(tenant_id=%s run_id=%s); refusing ephemeral file-store fallback",
+            tenant_id,
+            run_id,
+        )
+        raise HTTPException(status_code=503, detail="Workbench persistence unavailable")
+
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
         store["runs"][run_id] = run.model_dump()
         for item in fix_queue:
             store["fix_queue"][item.id] = item.model_dump()
-        _write_store(store)
+        _write_store(tenant_id, store)
 
     return run
 
@@ -1034,7 +1118,7 @@ async def get_run(
         return db_run
 
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
     run = store["runs"].get(run_id)
     if not run or run.get("tenant_id") != tenant_id:
         raise HTTPException(status_code=404, detail="Workbench run not found")
@@ -1053,7 +1137,7 @@ async def list_fix_queue(
         return db_items
 
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
     items = [FixQueueItem(**item) for item in store["fix_queue"].values() if item.get("tenant_id") == tenant_id]
     return sorted(items, key=lambda item: item.created_at, reverse=True)
 
@@ -1072,7 +1156,7 @@ async def update_fix_item(
         return db_item
 
     with _STORE_LOCK:
-        store = _read_store()
+        store = _read_store(tenant_id)
         item = store["fix_queue"].get(item_id)
         if not item or item.get("tenant_id") != tenant_id:
             raise HTTPException(status_code=404, detail="Fix queue item not found")
@@ -1082,5 +1166,5 @@ async def update_fix_item(
             item["owner"] = payload.owner
         item["updated_at"] = _now()
         store["fix_queue"][item_id] = item
-        _write_store(store)
+        _write_store(tenant_id, store)
     return FixQueueItem(**item)
