@@ -232,11 +232,20 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
     )
 
 
-def _tenant_id_from_master_header(request: Request) -> Optional[str]:
-    """Return a validated X-Tenant-ID for legacy master-key callers, if present."""
+def _tenant_id_from_master_header(request: Request) -> str:
+    """Return a validated X-Tenant-ID for legacy master-key callers.
+
+    Fail closed (mirrors ``shared/auth.py`` #1068): the legacy master key may
+    authenticate ANY tenant, so it MUST supply a non-empty, valid-UUID
+    ``X-Tenant-ID``. Without it we would mint a ``*``-scoped, ``tenant_id=None``
+    principal that silently disables RLS — so absence raises 401, not None.
+    """
     tenant_id = (request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id") or "").strip()
     if not tenant_id:
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="E_TENANT_HEADER_REQUIRED: preshared master-key auth requires X-Tenant-ID",
+        )
     try:
         uuid.UUID(tenant_id)
     except (ValueError, AttributeError, TypeError) as exc:
