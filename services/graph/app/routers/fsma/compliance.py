@@ -138,6 +138,7 @@ async def export_fda_request_sheet(
         for event in events:
             # RE-SEC-002: every cell goes through csv_safe() to neutralize
             # Excel formula prefixes from tenant-stored values.
+            # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- cells are Neo4j-sourced and csv_safe()-wrapped; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
             writer.writerow(
                 [
                     csv_safe(event.get("tlc", "")),
@@ -749,6 +750,7 @@ async def export_gaps_csv(
 
         for gap in gaps:
             # RE-SEC-002: csv_safe() on tenant-stored cells.
+            # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- cells are Neo4j-sourced and csv_safe()-wrapped; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
             writer.writerow(
                 [
                     csv_safe(gap.get("event_id", "")),
