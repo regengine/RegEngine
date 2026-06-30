@@ -21,20 +21,35 @@ jobs:
     name: Wait for CI
     runs-on: ubuntu-latest
     steps:
-      - name: Require CI green
+      - name: Require backend CI green
         uses: lewagon/wait-on-check-action@96d9100b431964d10e0136aff8b9ccb92470505e  # v1.8.0
         with:
           ref: ${{ github.sha }}
           running-workflow-name: 'Wait for CI'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          # Match the CI Status Gate check created for the selected ref.
+          # The deploy ships the backend monolith image, so it must wait on the
+          # BACKEND gate specifically. Backend and frontend used to share the
+          # name "CI Status Gate", so a frontend-only SHA (whose only run was
+          # frontend-ci) satisfied this wait with the backend never verified.
+          # The gates are now "Backend CI Status Gate" / "Frontend CI Status
+          # Gate"; matching the backend name means a SHA with no backend run has
+          # no matching check, so this step times out (checks-discovery-timeout)
+          # instead of passing — deploy does not proceed. (#2537)
           # GitHub Checks API returns job names, not "workflow / job" format.
-          # Backend CI and cold frontend installs can take longer than 15m to
-          # create their summary gates, so keep discovery patient.
-          check-regexp: 'CI Status Gate'
+          # Backend CI can take longer than 15m to create its summary gate, so
+          # keep discovery patient.
+          check-name: 'Backend CI Status Gate'
           wait-interval: 30
           checks-discovery-timeout: 2700
+          # Only a passing backend gate clears the deploy. `skipped` is NOT in
+          # this list (the action default is `success,skipped`), so a skipped
+          # gate cannot green-light a deploy.
           allowed-conclusions: success
+          # If no "Backend CI Status Gate" check exists for the dispatched SHA
+          # (e.g. a frontend-only SHA never ran backend-ci), fail rather than
+          # treat "no matching check" as success — deploy must not proceed on a
+          # ref the backend never verified (#2537).
+          fail-on-no-checks: true
 
   deploy:
     name: Deploy RegEngine Service

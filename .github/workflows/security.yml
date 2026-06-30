@@ -353,6 +353,13 @@ jobs:
             echo '{"info": "no python project"}' > pip-audit-results.json
           fi
 
+      # Keep .trivyignore in lockstep with the pip-audit --ignore-vuln set so
+      # the container scan can't hard-fail on accepted-risk Starlette CVEs the
+      # team already documented in the pip-audit gate (#2528). This runs in the
+      # `deps` job rather than `container-scan` so it gates PRs too.
+      - name: Verify .trivyignore mirrors the pip-audit ignore set
+        run: python scripts/check_trivyignore_sync.py
+
       - name: Upload dependency audit results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7

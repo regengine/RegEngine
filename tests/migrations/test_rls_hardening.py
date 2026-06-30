@@ -14,9 +14,12 @@ hardening chain we assert:
 Run via:
     pytest tests/migrations/test_rls_hardening.py -v
 
-Requires Docker for testcontainers. If Docker is unavailable the test
-module skips cleanly — the CI guard (scripts/check_rls_fallback.py) is
-the static safety net.
+Needs a real Postgres. Reuses ``DATABASE_URL`` when set (CI service
+container), else spins up a disposable testcontainers Postgres. With
+``REGENGINE_REQUIRE_DB=1`` an unavailable Postgres FAILS instead of skipping,
+so the RLS gate can't pass green by skipping in CI (#2530). Without it the
+module skips cleanly — the CI guard (scripts/check_rls_fallback.py) is the
+static safety net.
 """
 
 from __future__ import annotations
@@ -25,15 +28,11 @@ import uuid
 from typing import Iterator
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import InternalError, ProgrammingError
 
-# Skip the whole module if Docker / testcontainers unavailable.
-testcontainers = pytest.importorskip("testcontainers")  # noqa: F841
-pytest.importorskip("testcontainers.postgres")
-
-from sqlalchemy import create_engine, text  # noqa: E402
-from sqlalchemy.engine import Engine  # noqa: E402
-from sqlalchemy.exc import InternalError, ProgrammingError  # noqa: E402
-from testcontainers.postgres import PostgresContainer  # noqa: E402
+from tests.migrations.rls_db import rls_engine_or_skip
 
 # Subset of tenant-scoped tables covered by the active RLS hardening chain.
 # We don't need to re-verify every one —
@@ -71,23 +70,19 @@ def _set_tenant_context(conn, tenant_id: uuid.UUID) -> None:
 
 @pytest.fixture(scope="module")
 def pg_engine() -> Iterator[Engine]:
-    """Spin up a disposable PostgreSQL container and apply a focused RLS fixture."""
-    try:
-        container = PostgresContainer("postgres:16", driver="psycopg")
-        container.start()
-    except Exception as exc:  # Docker missing, image pull fails, etc.
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+    """Yield an Engine against a real Postgres and apply a focused RLS fixture.
 
-    try:
-        url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
-        engine = create_engine(url, future=True)
-
+    Reuses ``DATABASE_URL`` (CI service container) when set, else spins up a
+    disposable testcontainers Postgres. Skips locally when no Postgres is
+    available, but FAILS when ``REGENGINE_REQUIRE_DB=1`` so the RLS gate can't
+    silently pass by skipping in CI (#2530). The schema bootstrap is idempotent
+    (``CREATE TABLE IF NOT EXISTS`` / ``DROP POLICY IF EXISTS``) and each test
+    scopes to a fresh random tenant UUID, so reusing a shared DB is safe.
+    """
+    with rls_engine_or_skip() as engine:
         _bootstrap_schema(engine)
         _apply_rls_hardening_pattern(engine)
         yield engine
-    finally:
-        engine.dispose()
-        container.stop()
 
 
 def _bootstrap_schema(engine: Engine) -> None:
