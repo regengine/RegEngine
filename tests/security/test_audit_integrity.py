@@ -258,3 +258,108 @@ class TestVerifyChain:
         result = verify_chain([entry1, entry2])
         assert result["valid"] is False
         assert any(e["error"] == "prev_hash_mismatch" for e in result["errors"])
+
+
+class TestLegacyV1Marker_Issue2523:
+    """#2523 — verify_chain must mark rows that verify only under the v1
+    (pre-#1415) hash, which omits actor_id/actor_email/severity/endpoint.
+    Without the marker an auditor can't tell which exported rows lack
+    actor-field tamper-evidence."""
+
+    def _make_v1_entry(self, entry_id, prev_hash):
+        """A row written before #1415: its stored hash matches the v1 body
+        (no actor fields), even though the entry dict now carries actor /
+        severity / endpoint data the v2 recompute would fold in."""
+        tenant_id = "tenant-1"
+        timestamp = "2026-01-01T00:00:00+00:00"
+        event_type = "data.write"
+        action = "create"
+        resource_id = "doc-1"
+        metadata = {"ip": "10.0.0.1"}
+        v1_hash = compute_integrity_hash(
+            prev_hash=prev_hash,
+            tenant_id=tenant_id,
+            timestamp=timestamp,
+            event_type=event_type,
+            action=action,
+            resource_id=resource_id,
+            metadata=metadata,
+            version=1,
+        )
+        return {
+            "id": entry_id,
+            "tenant_id": tenant_id,
+            "timestamp": timestamp,
+            "event": {"type": event_type, "action": action},
+            "resource": {"id": resource_id},
+            "metadata": metadata,
+            # Actor / audit fields the v1 hash did NOT cover.
+            "actor": {"id": "actor-9", "email": "a@example.com"},
+            "severity": "info",
+            "endpoint": "/v1/admin/thing",
+            "integrity": {"prev_hash": prev_hash, "hash": v1_hash},
+        }
+
+    def _make_v2_entry(self, entry_id, prev_hash):
+        actor = {"id": "actor-9", "email": "a@example.com"}
+        severity = "info"
+        endpoint = "/v1/admin/thing"
+        tenant_id = "tenant-1"
+        timestamp = "2026-01-01T00:01:00+00:00"
+        event_type = "data.write"
+        action = "create"
+        resource_id = "doc-2"
+        metadata = {"ip": "10.0.0.2"}
+        v2_hash = compute_integrity_hash(
+            prev_hash=prev_hash,
+            tenant_id=tenant_id,
+            timestamp=timestamp,
+            event_type=event_type,
+            action=action,
+            resource_id=resource_id,
+            metadata=metadata,
+            actor_id=actor["id"],
+            actor_email=actor["email"],
+            severity=severity,
+            endpoint=endpoint,
+            version=2,
+        )
+        return {
+            "id": entry_id,
+            "tenant_id": tenant_id,
+            "timestamp": timestamp,
+            "event": {"type": event_type, "action": action},
+            "resource": {"id": resource_id},
+            "metadata": metadata,
+            "actor": actor,
+            "severity": severity,
+            "endpoint": endpoint,
+            "integrity": {"prev_hash": prev_hash, "hash": v2_hash},
+        }
+
+    def test_v1_row_verifies_and_is_marked(self):
+        entry = self._make_v1_entry(entry_id=1, prev_hash=None)
+        result = verify_chain([entry])
+        assert result["valid"] is True
+        assert result["legacy_v1_rows"] == [1]
+        assert result["has_legacy_v1_rows"] is True
+
+    def test_pure_v2_chain_has_no_marker(self):
+        entry = self._make_v2_entry(entry_id=1, prev_hash=None)
+        result = verify_chain([entry])
+        assert result["valid"] is True
+        assert result["legacy_v1_rows"] == []
+        assert result["has_legacy_v1_rows"] is False
+
+    def test_mixed_chain_marks_only_v1_row(self):
+        v1 = self._make_v1_entry(entry_id=1, prev_hash=None)
+        v2 = self._make_v2_entry(entry_id=2, prev_hash=v1["integrity"]["hash"])
+        result = verify_chain([v1, v2])
+        assert result["valid"] is True
+        assert result["legacy_v1_rows"] == [1]
+        assert result["has_legacy_v1_rows"] is True
+
+    def test_empty_chain_reports_empty_marker(self):
+        result = verify_chain([])
+        assert result["legacy_v1_rows"] == []
+        assert result["has_legacy_v1_rows"] is False

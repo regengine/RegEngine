@@ -22,6 +22,7 @@ from shared.canonical_event import (
 )
 from shared.canonical_persistence import legacy_dual_write as migration
 from shared.canonical_persistence.models import CanonicalStoreResult
+from shared.canonical_persistence.verification import CanonicalChainVerificationMixin
 from shared.cte_persistence import compute_chain_hash
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
@@ -29,12 +30,17 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger("canonical-persistence")
 
 
-class CanonicalEventStore:
+class CanonicalEventStore(CanonicalChainVerificationMixin):
     """
     Database-backed persistence for canonical TraceabilityEvents.
 
     Writes to fsma.traceability_events (canonical) and optionally
     dual-writes to fsma.cte_events (legacy) during migration.
+
+    Chain verification against the canonical store is provided by
+    :meth:`verify_chain_canonical` (mixed in from ``verification.py``,
+    #2506) — the legacy ``CTEPersistence.verify_chain`` walks
+    ``fsma.cte_events`` and reports canonical-only chains as orphaned.
     """
 
     def __init__(self, session: Session, dual_write: bool = True, skip_chain_write: bool = False):
