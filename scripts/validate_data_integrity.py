@@ -93,6 +93,86 @@ def check_orphaned_records(conn, text_fn) -> tuple[bool, str]:
     return True, "No orphaned records found"
 
 
+def check_dual_write_reconciliation(conn, text_fn) -> tuple[bool, str]:
+    """Reconcile fsma.traceability_events vs fsma.cte_events by sha256_hash (#2521).
+
+    The canonical writer (``traceability_events``) and the legacy
+    dual-write shim (``cte_events``) compute idempotency keys with
+    divergent formulas, so the only field that joins a real-world event
+    across both stores is ``sha256_hash`` (the dual-write copies it
+    verbatim into both tables). FDA export reads from BOTH tables during
+    the migration window, so a silent desync corrupts the regulator-
+    facing source of truth. This is the standing invariant check that
+    unblocks retiring the legacy path (#1335).
+
+    Directionality — only ONE direction is a hard failure:
+
+    * ``cte_events`` row with NO matching ``traceability_events`` row by
+      (tenant_id, sha256_hash) → FAIL. Every legacy row is written as a
+      dual-write of a canonical row (``dual_write_legacy`` runs inside
+      ``persist_event`` AFTER the canonical INSERT), so a legacy row with
+      no canonical twin means the canonical write was lost / swallowed —
+      a genuine "both tables or neither" (#1277) violation.
+
+    * ``traceability_events`` row with no ``cte_events`` twin → reported
+      as INFO, not a failure. Several production ingestion paths run
+      ``CanonicalEventStore(dual_write=False)`` by design (webhook_compat,
+      epcis, canonical_router, auditor_router, webhook_router_v2), so
+      canonical-only rows are expected and must NOT be flagged as false
+      positives.
+
+    Rows are compared per ``tenant_id`` implicitly via the join key.
+    """
+    try:
+        # Legacy rows missing a canonical twin (the hard-failure direction).
+        orphan_legacy = conn.execute(
+            text_fn("""
+            SELECT COUNT(*)
+            FROM fsma.cte_events c
+            WHERE NOT EXISTS (
+                SELECT 1 FROM fsma.traceability_events t
+                WHERE t.tenant_id = c.tenant_id
+                  AND t.sha256_hash = c.sha256_hash
+            )
+        """)
+        ).scalar()
+
+        # Canonical rows with no legacy twin (informational — dominated by
+        # intentional dual_write=False paths).
+        canonical_only = conn.execute(
+            text_fn("""
+            SELECT COUNT(*)
+            FROM fsma.traceability_events t
+            WHERE NOT EXISTS (
+                SELECT 1 FROM fsma.cte_events c
+                WHERE c.tenant_id = t.tenant_id
+                  AND c.sha256_hash = t.sha256_hash
+            )
+        """)
+        ).scalar()
+
+        orphan_legacy = orphan_legacy or 0
+        canonical_only = canonical_only or 0
+
+        if orphan_legacy > 0:
+            return False, (
+                f"{orphan_legacy} legacy cte_events row(s) have NO canonical "
+                f"traceability_events twin by sha256_hash — a swallowed/lost "
+                f"canonical write violates the #1277 dual-write invariant. "
+                f"({canonical_only} canonical-only rows are expected from "
+                f"dual_write=False paths and are not counted as failures.)"
+            )
+        return True, (
+            f"Dual-write reconciled: every cte_events row has a canonical "
+            f"twin by sha256_hash ({canonical_only} canonical-only rows from "
+            f"dual_write=False paths, which is expected)."
+        )
+    except Exception as e:
+        if "does not exist" in str(e):
+            return True, "Dual-write reconciliation skipped (canonical/legacy table not deployed)"
+        return False, f"Dual-write reconciliation error: {e}"
+
+
 def check_tenant_isolation(conn, text_fn) -> tuple[bool, str]:
     """Verify no cross-tenant data leakage exists."""
     try:
@@ -143,6 +223,7 @@ def main():
     checks = [
         ("Hash Chain Continuity", check_hash_chain_continuity),
         ("Orphaned Records", check_orphaned_records),
+        ("Dual-Write Reconciliation", check_dual_write_reconciliation),
         ("Tenant Isolation", check_tenant_isolation),
     ]
 

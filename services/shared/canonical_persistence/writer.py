@@ -1162,15 +1162,29 @@ class CanonicalEventStore:
         previous_chain_hash: Optional[str],
         chain_hash: str,
     ) -> None:
-        """Insert a hash chain entry."""
+        """Insert a hash chain entry.
+
+        #2533: guarded with ``WHERE EXISTS`` against the canonical
+        ``fsma.traceability_events`` row so a chain entry is only written
+        when the referenced event actually exists. Without this guard, a
+        path where ``_insert_canonical_event`` no-ops (ON CONFLICT DO
+        NOTHING) but the re-SELECT finds no winner — or a caller with an
+        empty ``idempotency_key`` — would fall through and write an orphan
+        chain row pointing at an event_id that was never inserted,
+        consuming a sequence number and tripping ``verify_chain``. Mirrors
+        the sibling CTE guard in ``cte_persistence/writes.py``.
+        """
         self.session.execute(
             text("""
                 INSERT INTO fsma.hash_chain (
                     tenant_id, cte_event_id, sequence_num,
                     event_hash, previous_chain_hash, chain_hash
-                ) VALUES (
-                    :tenant_id, :cte_event_id, :sequence_num,
-                    :event_hash, :previous_chain_hash, :chain_hash
+                )
+                SELECT :tenant_id, :cte_event_id, :sequence_num,
+                       :event_hash, :previous_chain_hash, :chain_hash
+                WHERE EXISTS (
+                    SELECT 1 FROM fsma.traceability_events
+                    WHERE event_id = :cte_event_id AND tenant_id = :tenant_id
                 )
             """),
             {

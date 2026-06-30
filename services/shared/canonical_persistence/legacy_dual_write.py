@@ -58,6 +58,76 @@ logger = logging.getLogger("canonical-persistence.legacy_dual_write")
 
 
 # ---------------------------------------------------------------------------
+# #2514: canonical EventStatus -> legacy validation_status mapping
+# ---------------------------------------------------------------------------
+#
+# fsma.cte_events.validation_status carries a CHECK domain of
+# {'valid','rejected','warning'} (V002 line 84). The canonical
+# EventStatus enum has FOUR values (active, superseded, rejected,
+# draft). Passing the raw enum value through — as the previous
+# ``"valid" if status == "active" else status.value`` did — writes
+# ``superseded`` / ``draft`` into the column, which violate the CHECK
+# and (because the #1277 dual-write is fail-loud) roll back the
+# canonical row too. Map every status explicitly onto a CHECK-domain
+# value. ``superseded`` and ``draft`` are successfully-persisted events
+# (just not the current head / not finalized), so they map to ``valid``;
+# ``rejected`` maps to ``rejected``. Unknown future statuses fall back to
+# ``valid`` AND are logged so the gap is observable.
+_STATUS_TO_VALIDATION_STATUS: Dict[str, str] = {
+    "active": "valid",
+    "superseded": "valid",
+    "rejected": "rejected",
+    "draft": "valid",
+}
+
+
+def _map_validation_status(status_value: str) -> str:
+    """Map a canonical ``EventStatus`` value to a legacy validation_status.
+
+    Returns a value guaranteed to be inside the
+    ``fsma.cte_events.validation_status`` CHECK domain. An unrecognized
+    status is mapped to ``valid`` (the safe default — the event WAS
+    persisted) and logged at warning so a newly-added EventStatus that
+    is missing from the map surfaces instead of failing the dual-write.
+    """
+    mapped = _STATUS_TO_VALIDATION_STATUS.get(status_value)
+    if mapped is None:
+        logger.warning(
+            "dual_write_unknown_event_status",
+            extra={"status": status_value},
+        )
+        return "valid"
+    return mapped
+
+
+# ---------------------------------------------------------------------------
+# #2532: KDE value serialization for the JSONB ``fsma.cte_kdes.kde_value``
+# ---------------------------------------------------------------------------
+#
+# Migration v078 converted ``fsma.cte_kdes.kde_value`` from TEXT to JSONB.
+# Binding ``str(kde_value)`` and relying on the implicit text->jsonb cast
+# fails for ordinary values (lot codes, facility names, dicts, lists),
+# silently dropping most KDEs from the legacy table. Mirror the
+# proven-correct ``cte_persistence.core._jsonify_kde`` (#1311) so values
+# are emitted as valid JSON text and cast explicitly with ``::jsonb``.
+
+
+def _jsonify_kde(value: Any) -> str:
+    """Serialize a KDE value to JSON text suitable for a ``::jsonb`` cast.
+
+    Mirrors ``shared.cte_persistence.core._jsonify_kde`` (#1311): dicts,
+    lists, scalars and ``None`` are JSON-encoded; bare strings are
+    wrapped as a JSON string (``"..."``) so the parser accepts them;
+    anything else is stringified and wrapped as a best-effort fallback.
+    """
+    if isinstance(value, (dict, list, bool, int, float)) or value is None:
+        return json.dumps(value, default=str, sort_keys=True)
+    if isinstance(value, str):
+        return json.dumps(value)
+    return json.dumps(str(value))
+
+
+# ---------------------------------------------------------------------------
 # #1293: Table existence guard
 # ---------------------------------------------------------------------------
 
@@ -192,9 +262,17 @@ def dual_write_legacy(session: Session, event: "TraceabilityEvent") -> str:
             "product_description": event.product_reference or "",
             "quantity": event.quantity,
             "unit_of_measure": event.unit_of_measure,
-            "location_gln": event.from_facility_reference
-            if event.from_facility_reference and len(event.from_facility_reference) == 13
-            else None,
+            # #2535: carry the full facility reference verbatim instead of
+            # dropping anything that is not exactly 13 chars. The previous
+            # ``len()==13`` heuristic NULLed out SGLN-URN read points
+            # (urn:epc:id:sgln:...), GLN+extension ids, and every
+            # ``to_facility``-only event — diverging the regulator-facing
+            # FDA export (which reads cte_events.location_gln/location_name)
+            # from the canonical store, which keeps the reference unmodified.
+            # Prefer ``from_facility_reference`` and fall back to
+            # ``to_facility_reference`` so a ``to``-only event still records
+            # its location.
+            "location_gln": event.from_facility_reference or event.to_facility_reference,
             "location_name": event.from_facility_reference or event.to_facility_reference,
             "event_timestamp": event.event_timestamp.isoformat(),
             "source": event.source_system.value,
@@ -205,41 +283,49 @@ def dual_write_legacy(session: Session, event: "TraceabilityEvent") -> str:
             "epcis_event_type": event.epcis_event_type,
             "epcis_action": event.epcis_action,
             "epcis_biz_step": event.epcis_biz_step,
-            "validation_status": "valid" if event.status.value == "active" else event.status.value,
+            "validation_status": _map_validation_status(event.status.value),
         },
     )
 
-    # Write KDEs to legacy table. The inner savepoint is intentionally
-    # preserved: KDEs are metadata annotations, and a single malformed
-    # KDE row should not invalidate the whole CTE event. ON CONFLICT
-    # handles the common race; the savepoint protects against anything
-    # else the legacy schema throws (type mismatches in free-form
-    # kde_value strings, for instance).
+    # Write KDEs to legacy table (#2532).
+    #
+    # ``fsma.cte_kdes.kde_value`` is JSONB (migration v078). The previous
+    # implementation bound ``str(kde_value)`` with no ``::jsonb`` cast and
+    # swallowed EVERY exception with a debug log, so the implicit
+    # text->jsonb cast failed for ordinary values (lot codes, facility
+    # names, dicts, lists) and those KDEs were silently dropped from the
+    # legacy table while the canonical row kept them — reintroducing the
+    # canonical/legacy divergence #1277 set out to eliminate, at KDE
+    # granularity.
+    #
+    # Fix: serialize to JSON text via ``_jsonify_kde`` and cast explicitly
+    # with ``CAST(:kde_value AS jsonb)`` (matching cte_persistence #1311).
+    # The ``ON CONFLICT (cte_event_id, kde_key) DO NOTHING`` clause already
+    # absorbs the idempotency-race duplicate, so we no longer wrap each
+    # insert in a blanket-swallowing savepoint — any OTHER failure now
+    # propagates, rolling back the surrounding transaction and restoring
+    # the "both tables or neither" invariant at KDE granularity.
     for kde_key, kde_value in event.kdes.items():
         if kde_value is None:
             continue
-        nested = session.begin_nested()
-        try:
-            session.execute(
-                text("""
-                    INSERT INTO fsma.cte_kdes (
-                        tenant_id, cte_event_id, kde_key, kde_value, is_required
-                    ) VALUES (
-                        :tenant_id, :cte_event_id, :kde_key, :kde_value, :is_required
-                    )
-                    ON CONFLICT (cte_event_id, kde_key) DO NOTHING
-                """),
-                {
-                    "tenant_id": str(event.tenant_id),
-                    "cte_event_id": legacy_id,
-                    "kde_key": kde_key,
-                    "kde_value": str(kde_value),
-                    "is_required": False,
-                },
-            )
-        except Exception:
-            logger.debug("KDE insert failed, rolling back savepoint", exc_info=True)
-            nested.rollback()
+        session.execute(
+            text("""
+                INSERT INTO fsma.cte_kdes (
+                    tenant_id, cte_event_id, kde_key, kde_value, is_required
+                ) VALUES (
+                    :tenant_id, :cte_event_id, :kde_key,
+                    CAST(:kde_value AS jsonb), :is_required
+                )
+                ON CONFLICT (cte_event_id, kde_key) DO NOTHING
+            """),
+            {
+                "tenant_id": str(event.tenant_id),
+                "cte_event_id": legacy_id,
+                "kde_key": kde_key,
+                "kde_value": _jsonify_kde(kde_value),
+                "is_required": False,
+            },
+        )
 
     return legacy_id
 
