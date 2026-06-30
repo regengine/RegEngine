@@ -173,7 +173,13 @@ class TestTimeArrowInTraceForward:
         )
         mock_neo4j_session.run.return_value = mock_result
 
-        result = await trace_forward(mock_neo4j_client, "LOT-001", max_depth=10, enforce_time_arrow=True)
+        result = await trace_forward(
+            mock_neo4j_client,
+            "LOT-001",
+            max_depth=10,
+            tenant_id="00000000-0000-0000-0000-000000000001",
+            enforce_time_arrow=True,
+        )
 
         # Result should have time_violations field
         assert hasattr(result, "time_violations")
@@ -188,7 +194,7 @@ class TestTimeArrowInTraceForward:
         mock_result.__iter__ = MagicMock(return_value=iter([]))
         mock_neo4j_session.run.return_value = mock_result
 
-        result = await trace_forward(mock_neo4j_client, "LOT-001")
+        result = await trace_forward(mock_neo4j_client, "LOT-001", tenant_id="00000000-0000-0000-0000-000000000001")
 
         # The query should be called with temporal filtering
         assert mock_neo4j_session.run.called

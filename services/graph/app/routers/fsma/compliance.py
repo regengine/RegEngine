@@ -20,7 +20,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from shared.auth import require_api_key
+from shared.auth import reconcile_tenant_scope, require_api_key
 from shared.fsma_plan_builder import (
     FirmInfo,
     FirmType,
@@ -102,13 +102,17 @@ async def export_fda_request_sheet(
     """
     logger.info("fda_request_export_initiated", start=start_date, end=end_date)
 
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
     client = Neo4jClient(database=db_name)
 
     try:
         from ...fsma_utils import query_events_by_range
 
-        events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
+        events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
         await client.close()
 
         csv_buffer = io.StringIO()
@@ -629,11 +633,14 @@ async def get_compliance_gaps(
     Returns events that are missing critical FSMA 204 required fields,
     enabling compliance officers to prioritize data collection.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: scope Neo4j to the authenticated API-key tenant; fail closed
+    # on any divergence from the middleware-resolved tenant.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
     client = Neo4jClient(database=db_name)
 
     try:
-        gaps = await find_gaps(client, str(tenant_id))
+        gaps = await find_gaps(client, scoped_tenant_id)
         await client.close()
 
         return {
@@ -669,11 +676,14 @@ async def get_orphaned_lots(
     FSMA 204 requires complete chain of custody - orphan lots may indicate
     compliance gaps requiring remediation.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: scope Neo4j to the authenticated API-key tenant; fail closed
+    # on any divergence from the middleware-resolved tenant.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
     client = Neo4jClient(database=db_name)
 
     try:
-        orphans = await find_orphaned_lots(client, str(tenant_id), days_stagnant)
+        orphans = await find_orphaned_lots(client, scoped_tenant_id, days_stagnant)
         await client.close()
 
         return {
@@ -713,11 +723,14 @@ async def export_gaps_csv(
     """
     Export compliance gaps as CSV for review and remediation tracking.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: scope Neo4j to the authenticated API-key tenant; fail closed
+    # on any divergence from the middleware-resolved tenant.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
     client = Neo4jClient(database=db_name)
 
     try:
-        gaps = await find_gaps(client, str(tenant_id))
+        gaps = await find_gaps(client, scoped_tenant_id)
         await client.close()
 
         csv_buffer = io.StringIO()
