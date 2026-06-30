@@ -357,6 +357,13 @@ class AuditLogModel(Base):
     # TAMPER EVIDENCE
     prev_hash = Column(String, nullable=True)
     integrity_hash = Column(String, nullable=False)
+    # Contiguous per-tenant chain position (#2513). Nullable for legacy
+    # rows written before the backfill migration; new rows always set it
+    # under the per-tenant advisory lock. UNIQUE (tenant_id, sequence_num)
+    # surfaces a forked chain as an IntegrityError instead of silent
+    # duplicate sequences, and lets verify_chain detect a removed middle
+    # row via a sequence gap.
+    sequence_num = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=True)
 
     __table_args__ = (
         Index("idx_audit_tenant_time", "tenant_id", "timestamp"),
@@ -364,6 +371,7 @@ class AuditLogModel(Base):
         Index("idx_audit_actor", "tenant_id", "actor_id"),
         Index("idx_audit_resource", "tenant_id", "resource_type", "resource_id"),
         Index("idx_audit_integrity", "tenant_id", "id", "integrity_hash"),
+        UniqueConstraint("tenant_id", "sequence_num", name="uq_audit_tenant_sequence"),
     )
 
 
