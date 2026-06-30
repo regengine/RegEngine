@@ -133,3 +133,60 @@ class TestNightlyFsmaSyncExecution:
             svc.run_fsma_nightly_sync()
 
         post.assert_not_called()
+
+
+class TestNightlyFsmaSyncAllFailedAlerting:
+    """#2505 — a sync where every source failed (e.g. Redis unreachable for the
+    ETag/content-hash dedup layer) must escalate to error/alert, not pass
+    silently at info level."""
+
+    def _run_with_summary(self, summary):
+        from services.scheduler import service as scheduler_service
+
+        svc = _build_scheduler_service_without_init()
+
+        async def _fake_ingest():
+            return summary
+
+        with (
+            patch(
+                "services.ingestion.app.routes_scraping.run_all_regulations_ingest",
+                side_effect=_fake_ingest,
+            ),
+            patch.object(scheduler_service.logger, "error") as err,
+            patch.object(scheduler_service.logger, "info") as info,
+        ):
+            svc.run_fsma_nightly_sync()
+
+        err_events = [c.args[0] for c in err.call_args_list if c.args]
+        info_events = [c.args[0] for c in info.call_args_list if c.args]
+        return err_events, info_events
+
+    def test_all_sources_failed_logs_error(self):
+        err_events, info_events = self._run_with_summary(
+            {"sources_attempted": 5, "ingested": 0, "unchanged": 0, "failed": 5}
+        )
+        assert "fsma_nightly_sync_all_failed" in err_events
+        assert "fsma_nightly_sync_complete" not in info_events
+
+    def test_partial_failure_logs_info_complete(self):
+        err_events, info_events = self._run_with_summary(
+            {"sources_attempted": 5, "ingested": 2, "unchanged": 2, "failed": 1}
+        )
+        assert "fsma_nightly_sync_complete" in info_events
+        assert "fsma_nightly_sync_all_failed" not in err_events
+
+    def test_all_success_logs_info_complete(self):
+        err_events, info_events = self._run_with_summary(
+            {"sources_attempted": 5, "ingested": 5, "unchanged": 0, "failed": 0}
+        )
+        assert "fsma_nightly_sync_complete" in info_events
+        assert "fsma_nightly_sync_all_failed" not in err_events
+
+    def test_zero_sources_attempted_does_not_alert(self):
+        """0/0 is not an all-failed condition — must not page."""
+        err_events, info_events = self._run_with_summary(
+            {"sources_attempted": 0, "ingested": 0, "unchanged": 0, "failed": 0}
+        )
+        assert "fsma_nightly_sync_all_failed" not in err_events
+        assert "fsma_nightly_sync_complete" in info_events

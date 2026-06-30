@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from shared.rules.types import RuleDefinition, RuleEvaluationResult
-from shared.rules.uom import CTE_LIFECYCLE_ORDER, normalize_to_lbs
+from shared.rules.uom import CTE_LIFECYCLE_ORDER, is_mass_uom, normalize_to_mass
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -384,7 +384,12 @@ def evaluate_mass_balance(
             evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
         )
 
-    tolerance_percent = logic.get("params", {}).get("tolerance_percent", 1.0)
+    params = logic.get("params", {})
+    tolerance_percent = params.get("tolerance_percent", 1.0)
+    # Optional authoritative tenant/product container-weight mapping
+    # (UOM -> lbs). Only when this is supplied may a container UOM (case,
+    # box, bin, ...) be converted to mass for a compliance verdict (#2520).
+    container_weights = params.get("container_weights") or {}
 
     input_types = {"harvesting", "receiving", "first_land_based_receiving"}
     output_types = {"shipping"}
@@ -408,22 +413,28 @@ def evaluate_mass_balance(
         all_entries.append((float(evt_qty), evt_uom, evt["event_type"]))
 
     if len(units_seen) > 1:
+        # Mixed UOMs. We may only render a verdict if every quantity can be
+        # converted to a true mass. Container/count units (case/box/bin/...)
+        # are NOT convertible to mass via commodity-independent approximations
+        # — converting a "24 lb case" of lettuce, shrimp, and berries to the
+        # same mass produces false pass/fail verdicts (#2520). They convert
+        # only when an authoritative container-weight mapping is supplied.
         converted_entries = []
         all_convertible = True
         for qty, uom, etype in all_entries:
-            lbs = normalize_to_lbs(qty, uom) if uom else None
-            if lbs is None:
+            mass = normalize_to_mass(qty, uom, weights=container_weights) if uom else None
+            if mass is None:
                 all_convertible = False
                 break
-            converted_entries.append((lbs, etype))
+            converted_entries.append((mass, etype))
 
         if all_convertible:
             use_converted = True
-            for lbs, etype in converted_entries:
+            for mass, etype in converted_entries:
                 if etype in input_types:
-                    total_input += lbs
+                    total_input += mass
                 elif etype in output_types:
-                    total_output += lbs
+                    total_output += mass
 
     if not use_converted:
         for qty, uom, etype in all_entries:
@@ -445,18 +456,28 @@ def evaluate_mass_balance(
     ]
 
     if len(units_seen) > 1 and not use_converted:
+        has_container_uom = any(not is_mass_uom(u) for u in units_seen)
+        if has_container_uom:
+            reason = (
+                f"Mass balance check not comparable for TLC '{tlc}': "
+                f"events mix mass and container/count units ({', '.join(sorted(units_seen))}). "
+                f"Container UOMs (e.g. case/box/bin) are not convertible to mass without a "
+                f"tenant/product container-weight mapping, so no pass/fail verdict is rendered."
+            )
+        else:
+            reason = (
+                f"Mass balance check inconclusive for TLC '{tlc}': "
+                f"mixed units of measure detected ({', '.join(sorted(units_seen))}) "
+                f"and not all could be converted. "
+                f"Cannot reliably compare input ({total_input}) vs output ({total_output})."
+            )
         return RuleEvaluationResult(
             rule_id=rule.rule_id,
             rule_version=rule.rule_version,
             rule_title=rule.title,
             severity=rule.severity,
             result="warn",
-            why_failed=(
-                f"Mass balance check inconclusive for TLC '{tlc}': "
-                f"mixed units of measure detected ({', '.join(sorted(units_seen))}) "
-                f"and not all could be converted. "
-                f"Cannot reliably compare input ({total_input}) vs output ({total_output})."
-            ),
+            why_failed=reason,
             evidence_fields_inspected=evidence,
             citation_reference=rule.citation_reference,
             category=rule.category,

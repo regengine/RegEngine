@@ -7,6 +7,53 @@ import pytest
 
 from services.ingestion.app import discovery as discovery_mod
 
+# ─── #2505: EthicalScraper must read REDIS_URL like every other consumer ─────
+
+
+def _resolved_redis_host(scraper) -> str:
+    """The host the redis client is actually pointed at."""
+    return scraper.redis.connection_pool.connection_kwargs.get("host")
+
+
+def test_redis_url_from_env_is_used_when_set(monkeypatch):
+    """On Railway the Redis host is not ``redis``; the scraper must resolve it
+    from REDIS_URL (the var the readiness probe and shared stores use) instead
+    of the hardcoded docker-compose default (#2505)."""
+    monkeypatch.setenv("REDIS_URL", "redis://prod-redis.internal:6380/2")
+
+    scraper = discovery_mod.EthicalScraper()
+
+    assert _resolved_redis_host(scraper) == "prod-redis.internal"
+
+
+def test_redis_url_tls_scheme_is_inherited(monkeypatch):
+    """Production Redis may be rediss:// (TLS); reading the env var inherits the
+    scheme automatically (#2505)."""
+    monkeypatch.setenv("REDIS_URL", "rediss://secure-redis.internal:6379/0")
+
+    scraper = discovery_mod.EthicalScraper()
+
+    assert scraper.redis.connection_pool.connection_kwargs.get("host") == "secure-redis.internal"
+    # redis-py records TLS via the SSL connection class.
+    conn_class = scraper.redis.connection_pool.connection_class
+    assert "SSL" in conn_class.__name__
+
+
+def test_explicit_redis_url_arg_overrides_env(monkeypatch):
+    monkeypatch.setenv("REDIS_URL", "redis://env-host:6379/0")
+
+    scraper = discovery_mod.EthicalScraper(redis_url="redis://explicit-host:6379/1")
+
+    assert _resolved_redis_host(scraper) == "explicit-host"
+
+
+def test_falls_back_to_docker_default_only_when_env_unset(monkeypatch):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    scraper = discovery_mod.EthicalScraper()
+
+    assert _resolved_redis_host(scraper) == "redis"
+
 
 class FakeRedis:
     def __init__(self):

@@ -247,21 +247,39 @@ class RegEngineClient:
         if input_tlcs:
             payload["input_tlcs"] = input_tlcs
 
-        data = self._request("POST", "/api/graph/fsma/records", json=payload)
-        return Record(**data)
+        # The consolidated API exposes no public POST create-record endpoint:
+        # canonical records (``/api/v1/records``) are read-only and are written
+        # by the ingestion spine (webhook/EPCIS/EDI), not by a direct create
+        # call. Calling the old ``/api/graph/fsma/records`` path 404'd silently
+        # (#2531). Fail loudly until a supported create endpoint exists.
+        raise NotImplementedError(
+            "create_record is not supported: the RegEngine API has no public "
+            "create-record endpoint. Records are written through the ingestion "
+            "pipeline (webhook/EPCIS/EDI). Payload prepared: " + str(sorted(payload))
+        )
 
     def get_record(self, tlc: str) -> Record:
         """
-        Retrieve a traceability record by Traceability Lot Code.
+        Retrieve a single traceability record by Traceability Lot Code.
 
         Args:
             tlc: The Traceability Lot Code to look up
 
         Returns:
             Record object with record details
+
+        Raises:
+            NotFoundError: if no record exists for the given TLC.
         """
-        data = self._request("GET", f"/api/graph/fsma/records/{tlc}")
-        return Record(**data)
+        data = self._request(
+            "GET",
+            "/api/v1/records",
+            params={"tlc": tlc, "limit": 1},
+        )
+        events = data.get("events", [])
+        if not events:
+            raise NotFoundError(f"No record found for TLC: {tlc}")
+        return Record(**events[0])
 
     def query_records(
         self,
@@ -288,10 +306,10 @@ class RegEngineClient:
             "limit": limit,
         }
         if cte_type:
-            params["cte_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
+            params["event_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
 
-        data = self._request("GET", "/api/graph/fsma/records", params=params)
-        return [Record(**r) for r in data.get("records", [])]
+        data = self._request("GET", "/api/v1/records", params=params)
+        return [Record(**r) for r in data.get("events", [])]
 
     # =========================================================================
     # Supply Chain Tracing
@@ -318,7 +336,7 @@ class RegEngineClient:
             "max_depth": max_depth,
             "enforce_time_arrow": enforce_time_arrow,
         }
-        data = self._request("GET", f"/api/graph/fsma/trace/forward/{tlc}", params=params)
+        data = self._request("GET", f"/api/v1/fsma/traceability/trace/forward/{tlc}", params=params)
         return TraceResult(**data)
 
     def trace_backward(
@@ -337,7 +355,7 @@ class RegEngineClient:
             TraceResult with source lots and facilities
         """
         params = {"max_depth": max_depth}
-        data = self._request("GET", f"/api/graph/fsma/trace/backward/{tlc}", params=params)
+        data = self._request("GET", f"/api/v1/fsma/traceability/trace/backward/{tlc}", params=params)
         return TraceResult(**data)
 
     def get_timeline(self, tlc: str) -> List[TimelineEvent]:
@@ -350,7 +368,7 @@ class RegEngineClient:
         Returns:
             List of TimelineEvent objects in chronological order
         """
-        data = self._request("GET", f"/api/graph/fsma/timeline/{tlc}")
+        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{tlc}")
         return [TimelineEvent(**e) for e in data.get("events", [])]
 
     # =========================================================================
@@ -367,8 +385,17 @@ class RegEngineClient:
         Returns:
             FTLResult with coverage status, CTEs, and KDEs required
         """
-        data = self._request("GET", f"/api/compliance/ftl/{product_category}")
-        return FTLResult(**data)
+        # The old per-category path ``/api/compliance/ftl/{category}`` is not a
+        # registered route on the consolidated app and 404'd (#2531). The FTL
+        # data is exposed as a category listing at
+        # ``/api/v1/products/categories/ftl``, not a per-category lookup, so
+        # there is no drop-in replacement for this signature. Fail loudly
+        # rather than silently 404.
+        raise NotImplementedError(
+            "check_ftl is not supported: the RegEngine API has no per-category "
+            "FTL endpoint. Use the FTL category listing at "
+            f"/api/v1/products/categories/ftl instead (requested: {product_category})."
+        )
 
     # =========================================================================
     # Recall Management
@@ -396,7 +423,7 @@ class RegEngineClient:
             "type": drill_type,
             "severity": severity,
         }
-        data = self._request("POST", "/api/graph/fsma/recall/drills", json=payload)
+        data = self._request("POST", "/api/v1/fsma/recall/drill", json=payload)
         return RecallDrill(**data)
 
     def get_recall_drills(self, limit: int = 20) -> List[RecallDrill]:
@@ -409,7 +436,7 @@ class RegEngineClient:
         Returns:
             List of RecallDrill objects
         """
-        data = self._request("GET", "/api/graph/fsma/recall/drills", params={"limit": limit})
+        data = self._request("GET", "/api/v1/fsma/recall/history", params={"limit": limit})
         return [RecallDrill(**d) for d in data.get("drills", [])]
 
     def get_readiness_score(self) -> ReadinessScore:
@@ -419,7 +446,7 @@ class RegEngineClient:
         Returns:
             ReadinessScore with score and recommendations
         """
-        data = self._request("GET", "/api/graph/fsma/recall/readiness")
+        data = self._request("GET", "/api/v1/fsma/recall/readiness")
         return ReadinessScore(**data)
 
     # =========================================================================
@@ -451,4 +478,4 @@ class RegEngineClient:
             "start_date": start_date,
             "end_date": end_date,
         }
-        return self._request_bytes("GET", "/api/graph/fsma/export/fda-spreadsheet", params=params)
+        return self._request_bytes("GET", "/api/v1/fsma/compliance/export/fda-request", params=params)

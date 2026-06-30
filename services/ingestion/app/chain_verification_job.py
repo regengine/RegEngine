@@ -76,20 +76,60 @@ class VerificationResultResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _combine_verifications(canonical_result, legacy_result):
+    """Combine the canonical and legacy chain verifications (#2506).
+
+    Both verifiers walk the SAME ``fsma.hash_chain`` rows (sequence,
+    linkage, and ``chain_hash`` recompute are store-independent and
+    identical). They diverge only on:
+      * the orphan check — store-specific: the canonical verifier flags a
+        row whose ``event_id`` is absent from ``traceability_events``, the
+        legacy one whose id is absent from ``cte_events``;
+      * event-content tamper — a canonical-only capability (re-derives
+        ``sha256_hash`` from the canonical row).
+
+    During the dual-write migration a chain row legitimately lives in only
+    one store. So a row is a TRUE orphan only when BOTH stores miss it. A
+    canonical event-content tamper, or a sequence/linkage/chain_hash break,
+    is real regardless of store. Returns ``(valid, chain_length, errors)``.
+    """
+    canonical_orphans = set(canonical_result.orphan_chain_rows or [])
+    legacy_orphans = set(legacy_result.orphan_chain_rows or [])
+    true_orphans = sorted(canonical_orphans & legacy_orphans)
+
+    # Non-orphan failures from the canonical verifier: tamper (event +
+    # chain_hash), sequence gaps, linkage breaks. The canonical verifier
+    # skips event-hash recompute for rows it considers orphaned, so its
+    # ``tamper_rows`` never contains a legacy-only (canonical-orphan) row.
+    canonical_non_orphan_break = bool(canonical_result.tamper_rows) or any(
+        "Sequence gap" in e or "Chain break" in e or "Genesis entry" in e for e in (canonical_result.errors or [])
+    )
+
+    valid = not true_orphans and not canonical_non_orphan_break
+    chain_length = max(canonical_result.chain_length, legacy_result.chain_length)
+
+    errors: list[str] = []
+    if canonical_non_orphan_break:
+        errors.extend(e for e in (canonical_result.errors or []) if "Orphan chain row" not in e)
+    if true_orphans:
+        errors.append(f"Orphan chain rows missing from BOTH stores: {true_orphans}")
+    return valid, chain_length, errors
+
+
 def _run_verification(job_id: str, tenant_id: str) -> None:
     """Execute chain verification in a background thread."""
     try:
+        from shared.canonical_persistence import CanonicalEventStore
         from shared.cte_persistence import CTEPersistence
         from shared.database import SessionLocal
 
         db = SessionLocal()
         try:
-            persistence = CTEPersistence(db)
-            result = persistence.verify_chain(tenant_id)
+            # #2506: walk BOTH stores and combine (see _combine_verifications).
+            canonical_result = CanonicalEventStore(db, dual_write=False).verify_chain_canonical(tenant_id)
+            legacy_result = CTEPersistence(db).verify_chain(tenant_id)
 
-            chain_valid = result.valid
-            chain_length = result.chain_length
-            errors = result.errors or []
+            chain_valid, chain_length, errors = _combine_verifications(canonical_result, legacy_result)
             completed_at = datetime.now(timezone.utc).isoformat()
 
             # Try to persist to fsma.chain_verification_log

@@ -634,7 +634,11 @@ def _dep_default(dep):
 
 
 class TestGetIngestionPrincipal:
-    def test_legacy_master_key_accepted(self, _strip_env, monkeypatch):
+    def test_legacy_master_key_without_tenant_header_fails_closed(self, _strip_env, monkeypatch):
+        # #2543: the legacy master key may authenticate ANY tenant, so it MUST
+        # supply X-Tenant-ID. Absent header fails closed with 401
+        # E_TENANT_HEADER_REQUIRED — mirroring shared/auth.py (#1068) — instead
+        # of minting a `*`-scoped, tenant_id=None principal.
         from app import config as cfg
 
         cfg.get_settings.cache_clear()
@@ -645,10 +649,8 @@ class TestGetIngestionPrincipal:
             "/whoami",
             headers={"X-RegEngine-API-Key": "master-secret"},
         )
-        assert resp.status_code == 200
-        assert resp.json()["auth_mode"] == "legacy_master"
-        assert resp.json()["scopes"] == ["*"]
-        assert resp.json()["tenant_id"] is None
+        assert resp.status_code == 401
+        assert "E_TENANT_HEADER_REQUIRED" in resp.json()["detail"]
 
     def test_legacy_master_key_binds_valid_tenant_header(self, _strip_env, monkeypatch):
         from app import config as cfg
@@ -668,6 +670,43 @@ class TestGetIngestionPrincipal:
         assert resp.status_code == 200
         assert resp.json()["auth_mode"] == "legacy_master"
         assert resp.json()["tenant_id"] == tenant_id
+
+    def test_legacy_master_key_invalid_tenant_header_fails_closed(self, _strip_env, monkeypatch):
+        # #2543: a present-but-malformed X-Tenant-ID fails closed with 401
+        # E_TENANT_HEADER_INVALID (matching shared/auth.py), never a None tenant.
+        from app import config as cfg
+
+        cfg.get_settings.cache_clear()
+        monkeypatch.setenv("API_KEY", "master-secret")
+        app = _build_app()
+        client = TestClient(app)
+        resp = client.get(
+            "/whoami",
+            headers={
+                "X-RegEngine-API-Key": "master-secret",
+                "X-Tenant-ID": "not-a-uuid",
+            },
+        )
+        assert resp.status_code == 401
+        assert "E_TENANT_HEADER_INVALID" in resp.json()["detail"]
+
+    def test_master_key_paths_agree_on_missing_tenant_header(self):
+        # #2543 acceptance: the ingestion master-key path and the canonical
+        # shared/auth.py master-key path agree on the no-tenant-header case —
+        # both fail closed with 401 E_TENANT_HEADER_REQUIRED.
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/whoami",
+            "headers": [(b"x-regengine-api-key", b"master-secret")],
+            "query_string": b"",
+            "client": ("testclient", 50000),
+        }
+        with pytest.raises(HTTPException) as exc_info:
+            authz._tenant_id_from_master_header(Request(scope))
+
+        assert exc_info.value.status_code == 401
+        assert "E_TENANT_HEADER_REQUIRED" in exc_info.value.detail
 
     def test_missing_header_with_api_key_returns_401(self, _strip_env, monkeypatch):
         from app import config as cfg
@@ -991,16 +1030,21 @@ class TestRequirePermission:
         resp = client.get("/protected?tenant_id=t-a")
         assert resp.status_code == 200
 
-    def test_master_principal_cross_tenant_still_allowed(self, monkeypatch):
-        """Legacy master / dev-open principals (tenant_id=None, scopes=['*'])
-        retain cross-tenant access — they bypass the check via the
+    def test_dev_open_principal_cross_tenant_still_allowed(self, monkeypatch):
+        """A dev-open principal (tenant_id=None, scopes=['*']) retains
+        cross-tenant access — it bypasses the check via the
         ``principal.tenant_id`` guard, not via the wildcard short-circuit
-        that the audit removed."""
+        that the audit removed.
+
+        Note (#2543): legacy_master can no longer PRODUCE a tenant_id=None
+        principal — it now fails closed without X-Tenant-ID — so dev_open is
+        the remaining legitimate producer of this shape, gated on _is_dev_env().
+        """
         p = IngestionPrincipal(
-            key_id="legacy-master",
+            key_id="dev-open",
             scopes=["*"],
             tenant_id=None,
-            auth_mode="legacy_master",
+            auth_mode="dev_open",
         )
         app, _ = self._app_with(p, monkeypatch)
         client = TestClient(app)

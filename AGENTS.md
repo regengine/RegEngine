@@ -22,7 +22,7 @@ Read these before large changes:
 
 - `README.md`
 - `REPO_PURPOSE.md`
-- `CURRENT_SYSTEM_MAP.md`
+- `ARCHITECTURE.md`
 - `CANONICAL_OWNERSHIP.md`
 - `docs/specs/FSMA_204_MVP_SPEC.md`
 - `frontend/package.json` for frontend commands

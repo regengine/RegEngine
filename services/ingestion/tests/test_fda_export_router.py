@@ -122,6 +122,22 @@ class _FakePersistence:
         _ = tenant_id, start_date, end_date
         return list(self._by_tlc.get(tlc, []))
 
+    def query_events_by_tlcs(
+        self,
+        tenant_id: str,
+        tlcs: list[str],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 10000,
+    ) -> list[dict]:
+        # Batch variant (#2515): one call returns the union of events for all
+        # requested lot codes, mirroring the real set-based query.
+        _ = tenant_id, start_date, end_date, limit
+        out: list[dict] = []
+        for tlc in tlcs:
+            out.extend(self._by_tlc.get(tlc, []))
+        return out
+
     def query_all_events(
         self,
         tenant_id: str,

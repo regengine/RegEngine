@@ -1,0 +1,5 @@
+Packing Slip
+Packed By: GLN 0033333333334
+Lot: 00012345678901-PK-1
+QTY: 50 cases
+Packing Date: 2026-03-11

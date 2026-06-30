@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import importlib
 
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 import app.authz as authz
 import app.inflow_workbench as workbench
+import pytest
 from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.inflow_workbench import router
 from app.sandbox.router import router as sandbox_router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 sandbox_router_module = importlib.import_module("app.sandbox.router")
 
@@ -519,3 +518,115 @@ def test_tenant_qualified_fix_update_can_use_db_store(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.json()["tenant_id"] == tenant_id
     assert calls == [("item-1", tenant_id, "corrected")]
+
+
+def test_production_db_failure_returns_503_not_silent_file_fallback(tmp_path, monkeypatch, caplog):
+    """#2519: when DB persistence fails in production, save_run must return 503
+    instead of silently writing to the ephemeral /tmp file store and returning
+    a 2xx that falsely implies durable persistence."""
+    monkeypatch.setattr(workbench, "_is_production", lambda: True)
+    monkeypatch.setattr(workbench, "_db_save_run", lambda _run: False)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+
+    with caplog.at_level("ERROR", logger="inflow-workbench"):
+        response = client.post(
+            "/api/v1/inflow-workbench/runs",
+            json={
+                "source": "inflow-lab-data-feeder",
+                "csv": "cte_type,traceability_lot_code\nshipping,TLC-FEED-002",
+                "result": _sandbox_result(blocked=False),
+            },
+        )
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Workbench persistence unavailable"
+    # No commingled file should have been written in the production failure path.
+    assert not any(tmp_path.glob("workbench*.json"))
+    assert any("could not persist to DB in production" in rec.message for rec in caplog.records)
+
+
+def test_db_save_run_failure_logs_exception_with_tenant_and_run(tmp_path, monkeypatch, caplog):
+    """#2519: a failing _db_save_run logs the underlying exception with the
+    tenant_id and run_id so real outages are observable instead of swallowed."""
+    tenant_id = "33333333-3333-3333-3333-333333333333"
+
+    def boom(_db, _tenant):  # _set_tenant_context replacement that always fails
+        raise RuntimeError("simulated DB outage")
+
+    monkeypatch.setattr(workbench, "_set_tenant_context", boom)
+
+    run = workbench.WorkbenchRun(
+        run_id="run-abc123",
+        tenant_id=tenant_id,
+        source="inflow-lab",
+        csv="",
+        result=workbench.SandboxResponse(**_sandbox_result(blocked=False)),
+        readiness=workbench.build_readiness_summary(workbench.SandboxResponse(**_sandbox_result(blocked=False))),
+        fix_queue=[],
+        commit_gate=workbench.decide_commit_gate(workbench.CommitGateRequest(mode="staging", tenant_id=tenant_id)),
+        saved_at="2026-04-30T00:00:00+00:00",
+    )
+
+    # object() has no .rollback/.close — guard against AttributeError masking
+    # the logging assertion by giving the fake session those no-op methods.
+    class _FakeSession:
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(workbench, "_db_session_for_tenant", lambda _tid: _FakeSession())
+
+    with caplog.at_level("ERROR", logger="inflow-workbench"):
+        ok = workbench._db_save_run(run)
+
+    assert ok is False
+    failure = next(rec for rec in caplog.records if "DB save_run failed" in rec.message)
+    assert tenant_id in failure.getMessage()
+    assert "run-abc123" in failure.getMessage()
+
+
+def test_dev_file_store_isolates_tenants(tmp_path, monkeypatch):
+    """#2519 acceptance: in dev (non-prod), two tenants saving runs must not
+    share one commingled file. Tenant B cannot read tenant A's run."""
+    writer_a = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id="tenant-a"),
+    )
+    run_a = writer_a.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "source": "inflow-lab",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-A",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+    assert run_a.status_code == 200, run_a.text
+    run_a_id = run_a.json()["run_id"]
+
+    # Tenant B saves their own run, then tries to read tenant A's run id.
+    writer_b = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write", "inflow.read"], tenant_id="tenant-b"),
+    )
+    writer_b.post(
+        "/api/v1/inflow-workbench/runs",
+        json={
+            "source": "inflow-lab",
+            "csv": "cte_type,traceability_lot_code\nshipping,TLC-B",
+            "result": _sandbox_result(blocked=False),
+        },
+    )
+
+    cross = writer_b.get(f"/api/v1/inflow-workbench/runs/{run_a_id}")
+    assert cross.status_code == 404, cross.text
+
+    # The two tenants must occupy distinct files on disk.
+    assert workbench._store_path("tenant-a") != workbench._store_path("tenant-b")
