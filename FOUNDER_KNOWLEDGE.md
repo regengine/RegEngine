@@ -57,11 +57,16 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 
 ### Scheduler Assumptions
 
-- **The scheduler is not running in production at all.** Its standalone entrypoint
-  (`services/scheduler/main.py`) is blocked in production, and `server/main.py` does
-  not mount or start it — so none of its jobs (FDA scraping, deadline monitoring,
-  nightly sync, retention) currently fire on Railway. In-process wiring into the
-  monolith lifespan (APScheduler + advisory-lock leader election) is in flight.
+- **The scheduler runs in production, embedded in the monolith.** It runs
+  in-process via `server/workers/embedded_scheduler.py`, started in the
+  `server/main.py` lifespan and enabled by default in production (override with
+  the `SCHEDULER_EMBEDDED` env flag). Execution is single-flighted across
+  gunicorn workers and replicas by a PostgreSQL advisory lock (lock id
+  4294967295) — exactly one worker runs the jobs (FDA scraping, recall→tenant
+  alerting, deadline monitoring, retention/archival, nightly FSMA sync); the
+  rest standby-poll and re-enter election on leadership loss. The standalone
+  entrypoint (`services/scheduler/main.py`) is the prod-blocked local-debug path.
+  See `ASYNC_PROCESSES.md` (Scheduler section, lines 65+) for the live reference.
 - The scheduler uses leader election — only one instance processes jobs.
   If multiple instances run, only the elected leader runs
   APScheduler jobs. The others idle.
@@ -201,7 +206,7 @@ v073 and should not be treated as production storage.
 | `services/shared/` (56 modules) | Lightweight shared utilities | A hidden monolith — contains core domain logic, persistence, identity resolution, rules engine, and audit |
 | `fsma.cte_events` table | The canonical event store | Legacy table being replaced by `fsma.traceability_events`. Still written to (dual-write) and read from (exports, graph sync). |
 | Graph service compliance router | Compliance evaluation | Neo4j-based graph queries + CSV export. Separate from the actual rules engine in `shared/rules/`. |
-| `services/scheduler` | Simple cron runner | Leader-elected orchestrator with APScheduler jobs, Kafka producer, webhook delivery, and FDA scraping — and it does NOT run in production (in-process wiring into the monolith is in flight) |
+| `services/scheduler` | Simple cron runner | Leader-elected orchestrator with APScheduler jobs, Kafka producer, webhook delivery, and FDA scraping — runs in production embedded in the monolith via `server/workers/embedded_scheduler.py`, single-flighted by a PostgreSQL advisory lock (see `ASYNC_PROCESSES.md` lines 65+) |
 
 ---
 
