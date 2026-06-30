@@ -34,6 +34,10 @@ import os
 from typing import AsyncIterator, Iterator
 
 import structlog
+
+# #2512: single shared cloud-marker tuple — keep this in lockstep with the
+# central security gate in shared.env rather than maintaining a divergent copy.
+from shared.env import CLOUD_ENV_VARS as _CLOUD_ENV_MARKERS
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -41,19 +45,6 @@ logger = structlog.get_logger("admin-db")
 
 _ADMIN_DB_INIT_LOCK_ID = 2026050402
 _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
-_CLOUD_ENV_MARKERS = (
-    "RAILWAY_ENVIRONMENT",
-    "RAILWAY_ENVIRONMENT_NAME",
-    "RAILWAY_ENVIRONMENT_ID",
-    "RAILWAY_PROJECT_NAME",
-    "RAILWAY_PROJECT_ID",
-    "RAILWAY_SERVICE_NAME",
-    "RAILWAY_SERVICE_ID",
-    "VERCEL_ENV",
-    "VERCEL_URL",
-    "RENDER",
-    "FLY_APP_NAME",
-)
 
 
 def _sqlalchemy_url(url: str) -> str:
