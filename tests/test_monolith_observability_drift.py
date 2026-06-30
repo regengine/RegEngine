@@ -234,3 +234,43 @@ def test_scheduler_status_leader_returns_circuit_and_scrape_state(server_main, m
         "warnings": ["parser_mismatch_suspected"],
     }
     assert body["last_scrapes"]["import_alerts"]["error"] == "timeout"
+    # #2510: a service without settings must not 500 the diagnostic — the DLQ
+    # block is reported defensively.
+    assert body["webhook_dlq"]["at_risk"] is False
+
+
+def test_scheduler_status_reports_webhook_dlq_at_risk(server_main, monkeypatch):
+    """#2510: when WEBHOOK_URLS is set but no durable outbox path is configured,
+    /v1/scheduler/status surfaces webhook_dlq.at_risk=true so the in-memory-only
+    footgun is visible without grepping startup logs."""
+    import shared.observability.metrics_auth as metrics_auth
+
+    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+
+    class _Settings:
+        webhook_url_list = ["https://hook.example.com/alerts"]
+        webhook_outbox_path = ""
+
+    service = _FakeService({})
+    service.settings = _Settings()
+    monkeypatch.setattr(
+        server_main.app.state,
+        "embedded_scheduler",
+        _FakeRunner(is_leader=True, current_service=service),
+        raising=False,
+    )
+
+    import services.scheduler.app.circuit_breaker as cb
+
+    class _FakeRegistry:
+        def get_all_status(self):
+            return {}
+
+    monkeypatch.setattr(cb, "circuit_registry", _FakeRegistry())
+
+    resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
+    assert resp.status_code == 200
+    dlq = resp.json()["webhook_dlq"]
+    assert dlq["urls_configured"] is True
+    assert dlq["persistence_enabled"] is False
+    assert dlq["at_risk"] is True

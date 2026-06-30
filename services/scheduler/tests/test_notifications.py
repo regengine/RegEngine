@@ -186,6 +186,53 @@ class TestDeadLetterQueue:
         assert len(notifier._dead_letter) == 0
 
 
+class TestOutboxPersistence:
+    """#2510 — the dead-letter queue must survive process restart when an
+    outbox path is configured. Without it, failed HIGH/CRITICAL alert
+    deliveries live only in process memory and are lost on every Railway
+    restart/deploy."""
+
+    @patch.object(notifications_mod.time, "sleep")
+    def test_failed_delivery_persists_and_survives_restart(self, mock_sleep, tmp_path):
+        outbox = tmp_path / "webhook_outbox.jsonl"
+
+        # Notifier #1: configured with a durable outbox path.
+        n1 = WebhookNotifier(
+            urls=["https://hook1.example.com/webhook"],
+            timeout=5,
+            max_retries=2,
+            max_workers=1,
+            outbox_path=str(outbox),
+        )
+        assert n1._outbox_path is not None
+
+        fail_response = MagicMock()
+        fail_response.status_code = 500
+        fail_response.text = "Error"
+        with patch.object(n1.session, "post", return_value=fail_response):
+            n1.notify([_make_item(severity=EnforcementSeverity.CRITICAL)])
+
+        # The on-disk JSONL file exists and holds one entry.
+        assert outbox.exists()
+        assert len([ln for ln in outbox.read_text().splitlines() if ln.strip()]) == 1
+
+        # Notifier #2 simulates a fresh process after restart: it reads the
+        # same path back and recovers the dead-letter (in-memory list is empty).
+        n2 = WebhookNotifier(
+            urls=["https://hook1.example.com/webhook"],
+            outbox_path=str(outbox),
+        )
+        recovered = n2._read_outbox()
+        assert len(recovered) == 1
+        assert recovered[0].url == "https://hook1.example.com/webhook"
+
+    def test_empty_outbox_path_selects_in_memory_only(self):
+        """An empty outbox path -> in-memory-only mode (the unsafe legacy
+        default the #2510 footgun warns about)."""
+        n = WebhookNotifier(urls=["https://hook1.example.com/webhook"], outbox_path=None)
+        assert n._outbox_path is None
+
+
 # ─── Summary building ───────────────────────────────────────────────────
 
 

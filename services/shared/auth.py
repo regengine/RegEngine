@@ -62,6 +62,42 @@ def validate_auth_config() -> None:
     if issues and is_explicit_production and not is_ci:
         raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
+    # #2512: defense-in-depth fail-fast for the dev-auth-fallback surface.
+    # First re-run the central gate: when ANY cloud marker is present it forces
+    # REGENGINE_ENV=production (broadened beyond Railway/Vercel to Render / Fly /
+    # Kubernetes), which is the normal, correct path and disables the ephemeral
+    # signing-key fallbacks. We call it here too so this check sees the same
+    # resolved environment regardless of import order.
+    from shared.env import (  # noqa: PLC0415
+        CLOUD_ENV_VARS,
+        is_production,
+        validate_cloud_environment,
+    )
+
+    validate_cloud_environment()
+
+    # If a cloud marker is present yet the environment STILL did not resolve to
+    # production (e.g. an explicit REGENGINE_ENV=staging on a non-Railway host —
+    # a case the gate intentionally leaves alone), the ephemeral-secret
+    # fallbacks in admin auth_utils / tool_verification_routes are live: per-
+    # process JWT / TOOL_ACCESS signing keys mean non-portable, restart-forgeable
+    # sessions and invisible cross-worker revocation. Refuse to boot.
+    cloud_marker_present = any(os.getenv(var) for var in CLOUD_ENV_VARS)
+    if cloud_marker_present and not is_production() and not is_ci:
+        ephemeral_secrets: list[str] = []
+        if not (os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")):
+            ephemeral_secrets.append("AUTH_SECRET_KEY")
+        if not os.getenv("TOOL_ACCESS_SECRET"):
+            ephemeral_secrets.append("TOOL_ACCESS_SECRET")
+        if ephemeral_secrets:
+            raise RuntimeError(
+                "Cloud deployment detected (marker present) but the environment did "
+                "not resolve to 'production' and an ephemeral signing key is active "
+                f"for: {', '.join(ephemeral_secrets)}. Set REGENGINE_ENV=production "
+                "and provide these secrets before deploying — ephemeral keys produce "
+                "non-portable, restart-forgeable sessions."
+            )
+
 
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
