@@ -297,29 +297,74 @@ async def test_query_events_by_range_returns_in_tenant_records():
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Null tenant — back-compat for admin-scope callers
+# Null / empty tenant — fail closed (#2540)
 # ─────────────────────────────────────────────────────────────────────
+# Previously tenant_id=None was an "admin-scope" path that returned every
+# tenant's rows via the `$tenant_id IS NULL OR ...` Cypher shim. On the
+# default Community Neo4j (one shared DB) that is a cross-tenant leak the
+# moment any caller forgets to pass a tenant. Both helpers now fail closed.
 
 
 @pytest.mark.asyncio
-async def test_get_lot_timeline_null_tenant_skips_invariant():
-    """tenant_id=None is used by admin-scope callers; invariant must not fire."""
-    admin_scope_record = {
-        "event_id": "evt-1",
-        "type": "RECEIVING",
-        "event_date": "2026-04-01",
-        "event_time": None,
-        "confidence": 1.0,
-        "event_tenant": TENANT_B,  # wouldn't match TENANT_A, but tenant_id=None
-        "facility_name": "Any",
-        "facility_gln": "0000000000000",
-        "facility_tenant": TENANT_B,
-    }
-    mock_client, _ = _make_mock_client([admin_scope_record])
+async def test_get_lot_timeline_none_tenant_raises():
+    """#2540: tenant_id=None must raise rather than returning all tenants."""
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await get_lot_timeline(mock_client, tlc="LOT-A", tenant_id=None)
 
-    # tenant_id=None means "no tenant filter" — the invariant must be a no-op.
-    out = await get_lot_timeline(mock_client, tlc="LOT-A", tenant_id=None)
-    assert len(out) == 1  # no exception, record returned
+
+@pytest.mark.asyncio
+async def test_get_lot_timeline_empty_tenant_raises():
+    """#2540: empty-string tenant_id is treated as absent — same failure."""
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await get_lot_timeline(mock_client, tlc="LOT-A", tenant_id="")
+
+
+@pytest.mark.asyncio
+async def test_query_events_by_range_none_tenant_raises():
+    """#2540: the FDA-export query must fail closed on a null tenant."""
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await query_events_by_range(
+            mock_client,
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            tenant_id=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_query_events_by_range_empty_tenant_raises():
+    """#2540: empty-string tenant_id is treated as absent — same failure."""
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await query_events_by_range(
+            mock_client,
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            tenant_id="",
+        )
+
+
+@pytest.mark.asyncio
+async def test_no_query_contains_is_null_or_shim():
+    """#2540: the `$tenant_id IS NULL OR` fail-open idiom must be gone from
+    both helpers' Cypher."""
+    mock_client, mock_session = _make_mock_client([])
+    await get_lot_timeline(mock_client, tlc="LOT-A", tenant_id=TENANT_A)
+    timeline_cypher = mock_session.run.call_args[0][0]
+    assert "$tenant_id IS NULL OR" not in timeline_cypher
+
+    mock_client, mock_session = _make_mock_client([])
+    await query_events_by_range(
+        mock_client,
+        start_date="2026-01-01",
+        end_date="2026-12-31",
+        tenant_id=TENANT_A,
+    )
+    range_cypher = mock_session.run.call_args[0][0]
+    assert "$tenant_id IS NULL OR" not in range_cypher
 
 
 if __name__ == "__main__":

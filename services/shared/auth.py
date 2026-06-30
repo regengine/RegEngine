@@ -510,6 +510,66 @@ def init_demo_keys():
 # Rejects requests where neither is present.
 
 
+def reconcile_tenant_scope(
+    api_key: Optional["APIKey"],
+    middleware_tenant_id: object,
+    *,
+    request_path: Optional[str] = None,
+) -> str:
+    """Reconcile the two independent tenant sources that drive one request.
+
+    Handlers that depend on BOTH ``require_api_key`` (authenticated
+    principal) and ``get_current_tenant_id`` (TenantContextMiddleware) have
+    two separately-resolved tenant values. They can diverge — most
+    concretely on the preshared master-key path, where the middleware pins
+    one tenant while ``require_api_key`` accepts a caller-supplied
+    ``X-Tenant-ID``. This helper makes them fail closed by construction and
+    returns the authenticated API-key tenant as the single source of truth
+    for downstream scoping (DB selection, query predicates).
+
+    Mirrors ``services/compliance/app/routes.py`` FDA-export tenant binding
+    (#1106). See issue #2511.
+
+    Args:
+        api_key: The authenticated ``APIKey`` (from ``require_api_key``).
+        middleware_tenant_id: The middleware-resolved tenant (from
+            ``get_current_tenant_id`` — a ``uuid.UUID`` in practice). Any
+            value with a ``str()`` representation is accepted.
+        request_path: Optional request path, for log context only.
+
+    Returns:
+        The authenticated tenant id as a string.
+
+    Raises:
+        HTTPException: 403 if the API key has no tenant; 409
+            (``E_TENANT_MISMATCH``) if the two tenant sources disagree.
+    """
+    authenticated_tenant_id = getattr(api_key, "tenant_id", None)
+    if not authenticated_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not associated with a tenant",
+        )
+    authenticated_tenant = str(authenticated_tenant_id)
+
+    # ``middleware_tenant_id`` is non-optional at the handler (the
+    # get_current_tenant_id dependency 401s when absent), but guard anyway.
+    middleware_tenant = str(middleware_tenant_id) if middleware_tenant_id is not None else None
+    if middleware_tenant and middleware_tenant != authenticated_tenant:
+        logger.warning(
+            "graph_tenant_scope_mismatch",
+            authenticated_tenant=authenticated_tenant,
+            middleware_tenant=middleware_tenant,
+            key_id=getattr(api_key, "key_id", None),
+            path=request_path,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="E_TENANT_MISMATCH",
+        )
+    return authenticated_tenant
+
+
 def get_tenant_id(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
 ) -> str:

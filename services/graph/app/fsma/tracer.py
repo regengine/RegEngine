@@ -8,7 +8,7 @@ with Physics Engine time arrow enforcement.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import structlog
 from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
@@ -23,7 +23,7 @@ async def trace_forward(
     client: Neo4jClient,
     tlc: str,
     max_depth: int = 10,
-    tenant_id: Optional[str] = None,
+    tenant_id: str = "",
     enforce_time_arrow: bool = True,
 ) -> TraceResult:
     """
@@ -44,12 +44,21 @@ async def trace_forward(
         client: Neo4j client
         tlc: Traceability Lot Code to trace from
         max_depth: Maximum hops in the trace (default 10)
-        tenant_id: Optional tenant filter
+        tenant_id: Tenant UUID (required, non-empty)
         enforce_time_arrow: If True, validates temporal ordering (default True)
 
     Returns:
         TraceResult with all downstream facilities, events, lots, and any time violations
+
+    Raises:
+        ValueError: if ``tenant_id`` is falsy/empty. Variable-length traversal
+            with a null tenant would cross tenant boundaries via shared
+            facilities/events. Fail closed (#2540).
     """
+    # #2540 — fail closed on a missing tenant rather than the old
+    # `$tenant_id IS NULL OR ...` shim, which traversed every tenant's graph.
+    if not tenant_id:
+        raise ValueError("trace_forward requires a non-empty tenant_id; null-tenant traces are not supported (#2540)")
     if not isinstance(max_depth, int) or max_depth < 1:
         raise ValueError(f"max_depth must be a positive integer, got {max_depth!r}")
 
@@ -82,10 +91,10 @@ async def trace_forward(
         + str(rel_depth)
         + """]->(end)
     USING INDEX start:Lot(tlc)
-    WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-      AND ($tenant_id IS NULL OR ALL(
+    WHERE start.tenant_id = $tenant_id
+      AND ALL(
               n IN nodes(path) WHERE n.tenant_id = $tenant_id
-          ))
+          )
     WITH path, nodes(path) as path_nodes
 
     // Extract events with dates for temporal validation
@@ -120,10 +129,10 @@ async def trace_forward(
         + str(rel_depth)
         + """]->(end)
     USING INDEX start:Lot(tlc)
-    WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-      AND ($tenant_id IS NULL OR ALL(
+    WHERE start.tenant_id = $tenant_id
+      AND ALL(
               n IN nodes(path) WHERE n.tenant_id = $tenant_id
-          ))
+          )
     WITH path, nodes(path) as path_nodes
     UNWIND path_nodes as node
     WITH DISTINCT node, path
@@ -158,8 +167,10 @@ async def trace_forward(
             # belong to the caller's tenant. If Cypher somehow returned a
             # cross-tenant node, raise rather than leak data. This mirrors
             # the predicate in the query and guards against future edits.
+            # #2540: tenant_id is guaranteed non-empty above, so the
+            # invariant always runs (no `is not None` gate).
             node_tenant = props.get("tenant_id")
-            if tenant_id is not None and node_tenant not in (None, "", tenant_id):
+            if node_tenant not in (None, "", tenant_id):
                 logger.error(
                     "trace_forward_tenant_invariant_violation",
                     tlc=tlc,
@@ -208,11 +219,9 @@ async def trace_forward(
     # returning facilities reached via cross-tenant events.
     facility_query = """
     MATCH (l:Lot {tlc: $tlc})-[:UNDERWENT]->(e:TraceEvent)-[:SHIPPED_TO]->(f:Facility)
-    WHERE ($tenant_id IS NULL OR (
-              l.tenant_id = $tenant_id
-              AND e.tenant_id = $tenant_id
-              AND f.tenant_id = $tenant_id
-          ))
+    WHERE l.tenant_id = $tenant_id
+      AND e.tenant_id = $tenant_id
+      AND f.tenant_id = $tenant_id
     RETURN DISTINCT properties(f) as facility
     """
 
@@ -221,8 +230,9 @@ async def trace_forward(
         async for record in result:
             fac = record["facility"]
             # SECURITY (#1256): invariant check for facility-only results.
+            # #2540: tenant_id is non-empty, so the invariant always runs.
             fac_tenant = (fac or {}).get("tenant_id")
-            if tenant_id is not None and fac and fac_tenant not in (None, "", tenant_id):
+            if fac and fac_tenant not in (None, "", tenant_id):
                 logger.error(
                     "trace_forward_facility_invariant_violation",
                     tlc=tlc,
@@ -341,7 +351,7 @@ async def trace_backward(
     client: Neo4jClient,
     tlc: str,
     max_depth: int = 10,
-    tenant_id: Optional[str] = None,
+    tenant_id: str = "",
 ) -> TraceResult:
     """
     Trace backward from a lot to find all source materials and suppliers.
@@ -352,11 +362,20 @@ async def trace_backward(
         client: Neo4j client
         tlc: Traceability Lot Code to trace from
         max_depth: Maximum hops in the trace (default 10)
-        tenant_id: Optional tenant filter
+        tenant_id: Tenant UUID (required, non-empty)
 
     Returns:
         TraceResult with all upstream facilities, events, and lots
+
+    Raises:
+        ValueError: if ``tenant_id`` is falsy/empty. Variable-length traversal
+            with a null tenant would cross tenant boundaries via shared
+            facilities/events. Fail closed (#2540).
     """
+    # #2540 — fail closed on a missing tenant rather than the old
+    # `$tenant_id IS NULL OR ...` shim, which traversed every tenant's graph.
+    if not tenant_id:
+        raise ValueError("trace_backward requires a non-empty tenant_id; null-tenant traces are not supported (#2540)")
     if not isinstance(max_depth, int) or max_depth < 1:
         raise ValueError(f"max_depth must be a positive integer, got {max_depth!r}")
 
@@ -381,10 +400,10 @@ async def trace_backward(
         + str(rel_depth)
         + """]-(source)
     USING INDEX start:Lot(tlc)
-    WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-      AND ($tenant_id IS NULL OR ALL(
+    WHERE start.tenant_id = $tenant_id
+      AND ALL(
               n IN nodes(path) WHERE n.tenant_id = $tenant_id
-          ))
+          )
     WITH path, nodes(path) as path_nodes
     UNWIND path_nodes as node
     WITH DISTINCT node, path
@@ -415,8 +434,10 @@ async def trace_backward(
             # SECURITY (#1256): invariant check — every returned node must
             # belong to the caller's tenant. If the Cypher ALL(...) guard
             # was bypassed, fail loud rather than silently leak data.
+            # #2540: tenant_id is guaranteed non-empty above, so the
+            # invariant always runs (no `is not None` gate).
             node_tenant = props.get("tenant_id")
-            if tenant_id is not None and node_tenant not in (None, "", tenant_id):
+            if node_tenant not in (None, "", tenant_id):
                 logger.error(
                     "trace_backward_tenant_invariant_violation",
                     tlc=tlc,
@@ -465,11 +486,9 @@ async def trace_backward(
     # facility reached via a cross-tenant event.
     facility_query = """
     MATCH (f:Facility)-[:SHIPPED]->(e:TraceEvent)-[:INCLUDED]->(l:Lot {tlc: $tlc})
-    WHERE ($tenant_id IS NULL OR (
-              l.tenant_id = $tenant_id
-              AND e.tenant_id = $tenant_id
-              AND f.tenant_id = $tenant_id
-          ))
+    WHERE l.tenant_id = $tenant_id
+      AND e.tenant_id = $tenant_id
+      AND f.tenant_id = $tenant_id
     RETURN DISTINCT properties(f) as facility
     """
 
@@ -477,8 +496,9 @@ async def trace_backward(
         result = await session.run(facility_query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
             fac = record["facility"]
+            # #2540: tenant_id is non-empty, so the invariant always runs.
             fac_tenant = (fac or {}).get("tenant_id")
-            if tenant_id is not None and fac and fac_tenant not in (None, "", tenant_id):
+            if fac and fac_tenant not in (None, "", tenant_id):
                 logger.error(
                     "trace_backward_facility_invariant_violation",
                     tlc=tlc,

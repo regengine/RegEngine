@@ -182,5 +182,54 @@ async def test_trace_backward_facility_fallback_has_three_way_tenant_guard():
     assert "f.tenant_id = $tenant_id" in facility_cypher
 
 
+# ── Fail-closed on null/empty tenant (#2540) ────────────────────────────────
+# Variable-length traversal with a null tenant crosses tenant boundaries via
+# shared facilities/events on the default Community Neo4j (one shared DB).
+# Both tracers now raise instead of degrading via `$tenant_id IS NULL OR`.
+
+
+@pytest.mark.asyncio
+async def test_trace_forward_none_tenant_raises():
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await trace_forward(mock_client, "LOT-A", max_depth=5, tenant_id=None)
+
+
+@pytest.mark.asyncio
+async def test_trace_forward_empty_tenant_raises():
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await trace_forward(mock_client, "LOT-A", max_depth=5, tenant_id="")
+
+
+@pytest.mark.asyncio
+async def test_trace_backward_none_tenant_raises():
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await trace_backward(mock_client, "LOT-A", max_depth=5, tenant_id=None)
+
+
+@pytest.mark.asyncio
+async def test_trace_backward_empty_tenant_raises():
+    mock_client, _ = _make_mock_client([])
+    with pytest.raises(ValueError, match="tenant_id"):
+        await trace_backward(mock_client, "LOT-A", max_depth=5, tenant_id="")
+
+
+@pytest.mark.asyncio
+async def test_tracer_queries_drop_is_null_or_shim():
+    """No tracer Cypher (path query + facility fallback) may keep the
+    `$tenant_id IS NULL OR` fail-open idiom."""
+    mock_client, mock_session = _make_mock_client([])
+    await trace_forward(mock_client, "LOT-A", max_depth=5, tenant_id=TENANT_A)
+    for call in mock_session.run.call_args_list:
+        assert "$tenant_id IS NULL OR" not in call[0][0]
+
+    mock_client, mock_session = _make_mock_client([])
+    await trace_backward(mock_client, "LOT-A", max_depth=5, tenant_id=TENANT_A)
+    for call in mock_session.run.call_args_list:
+        assert "$tenant_id IS NULL OR" not in call[0][0]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
