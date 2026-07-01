@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException
+from shared.fsma_validation import verify_gs1_check_digit
 
 from ..webhook_models import VALID_UNITS_OF_MEASURE
 from .constants import _X12_UOM_MAP
@@ -84,9 +85,10 @@ def _valid_gln_or_none(value: Optional[str]) -> Optional[str]:
     if len(clean) != 13:
         return None
 
-    total = sum(int(digit) * (3 if index % 2 else 1) for index, digit in enumerate(reversed(clean[:-1])))
-    expected = (10 - (total % 10)) % 10
-    return clean if int(clean[-1]) == expected else None
+    # Delegate the GS1 mod-10 check-digit math to the shared canonical helper so
+    # this gate agrees with ``webhook_models.validate_gln`` (which IngestEvent
+    # re-runs) and never disagrees on a 13-digit GLN.
+    return clean if verify_gs1_check_digit(clean) else None
 
 
 def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Optional[str]) -> tuple[str, str]:
