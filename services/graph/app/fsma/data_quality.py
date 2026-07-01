@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 import structlog
 
@@ -21,7 +21,7 @@ logger = structlog.get_logger("fsma-utils")
 
 async def find_orphaned_lots(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
     days_stagnant: int = 30,
 ) -> List[OrphanLot]:
     """
@@ -37,12 +37,24 @@ async def find_orphaned_lots(
 
     Args:
         client: Neo4j client
-        tenant_id: Optional tenant filter
+        tenant_id: Tenant UUID (required, non-empty)
         days_stagnant: Minimum days without outbound activity (default 30)
 
     Returns:
         List of OrphanLot objects with stagnant inventory details
+
+    Raises:
+        ValueError: if ``tenant_id`` is falsy/empty. On Community Neo4j all
+            tenants share one database, so a null tenant would return every
+            tenant's orphan lots. Fail closed (#2540).
     """
+    # #2540 — fail closed on a missing tenant rather than the old
+    # `$tenant_id IS NULL OR ...` shim that returned every tenant's lots.
+    if not tenant_id:
+        raise ValueError(
+            "find_orphaned_lots requires a non-empty tenant_id; null-tenant queries are not supported (#2540)"
+        )
+
     start_time = time.time()
 
     # Calculate cutoff date
@@ -74,7 +86,7 @@ async def find_orphaned_lots(
     # shape.
     query = """
     MATCH (l:Lot)
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+    WHERE l.tenant_id = $tenant_id
 
     // Must have at least one inbound event
     AND (
@@ -161,7 +173,7 @@ async def find_orphaned_lots(
 
 async def analyze_kde_completeness(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
     confidence_threshold: float = 0.85,
 ) -> DataQualityReport:
     """
@@ -181,17 +193,29 @@ async def analyze_kde_completeness(
 
     Args:
         client: Neo4j client
-        tenant_id: Optional tenant filter
+        tenant_id: Tenant UUID (required, non-empty)
         confidence_threshold: Threshold below which confidence is "low" (default 0.85)
 
     Returns:
         DataQualityReport with completeness metrics by event type
+
+    Raises:
+        ValueError: if ``tenant_id`` is falsy/empty. A null tenant would
+            aggregate every tenant's events into one report. Fail closed
+            (#2540).
     """
+    # #2540 — fail closed on a missing tenant rather than the old
+    # `$tenant_id IS NULL OR ...` shim that aggregated every tenant's events.
+    if not tenant_id:
+        raise ValueError(
+            "analyze_kde_completeness requires a non-empty tenant_id; null-tenant queries are not supported (#2540)"
+        )
+
     start_time = time.time()
 
     query = """
     MATCH (e:TraceEvent)
-    WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
+    WHERE e.tenant_id = $tenant_id
 
     WITH e.type as event_type,
          count(e) as total,

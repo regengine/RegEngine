@@ -226,12 +226,13 @@ async def test_rejects_invalid_recovery_code():
 
 @pytest.mark.asyncio
 async def test_accepts_valid_recovery_code_and_marks_used():
-    """Valid recovery code is accepted and its used_at is set.
+    """Valid recovery code is accepted and consumed via an atomic UPDATE.
 
-    Updated for #1041: argon2 hashes are salted, so the DB lookup now fetches
-    all unused rows and calls verify_recovery_code on each. The mock must
-    return a list of candidate rows with a real argon2 hash so verification
-    can succeed.
+    Updated for #1041: argon2 hashes are salted, so the DB lookup fetches all
+    unused rows and calls verify_recovery_code on each. Updated again for
+    #2509: consumption is now an atomic conditional ``UPDATE ... WHERE
+    used_at IS NULL`` rather than an in-memory ``used_at`` assignment, so the
+    success criterion is that the update flips exactly one row (rowcount == 1).
     """
     from services.admin.app.mfa import hash_recovery_code
 
@@ -244,8 +245,13 @@ async def test_accepts_valid_recovery_code_and_marks_used():
     recovery_row.code_hash = hash_recovery_code("ABCD-EFGH")
 
     db = MagicMock()
-    # New query pattern: .scalars().all() returns a list of candidate rows
-    db.execute.return_value.scalars.return_value.all.return_value = [recovery_row]
+    # First execute(): the SELECT — .scalars().all() returns candidate rows.
+    select_result = MagicMock()
+    select_result.scalars.return_value.all.return_value = [recovery_row]
+    # Second execute(): the conditional UPDATE — rowcount==1 means we won.
+    update_result = MagicMock()
+    update_result.rowcount = 1
+    db.execute.side_effect = [select_result, update_result]
 
     result = await require_mfa(
         x_mfa_token="ABCD-EFGH",
@@ -254,7 +260,6 @@ async def test_accepts_valid_recovery_code_and_marks_used():
         session_store=session_store,
     )
     assert result == "ABCD-EFGH"
-    assert recovery_row.used_at is not None
     db.commit.assert_called_once()
 
 

@@ -54,7 +54,7 @@ from shared.observability.context import setup_logging
 logger = setup_logging()
 
 # ── Imports ──────────────────────────────────────────────────────
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from shared.env import is_production
 from shared.middleware.security import add_security
 from shared.observability import add_observability
@@ -430,7 +430,22 @@ def _router_enabled(name: str) -> bool:
     return enabled
 
 
-@app.get("/api/v1/features", tags=["system"])
+# Issue #2517 — same diagnostic gate used by /v1/scheduler/status.
+from shared.observability.metrics_auth import require_metrics_key
+
+
+@app.get(
+    "/api/v1/features",
+    tags=["system"],
+    # Issue #2517 — the full router topology (enabled/disabled/experimental) is
+    # reconnaissance-grade info that lets an anonymous caller fingerprint the
+    # deployment's attack surface. Prod already nulls docs/redoc/openapi to
+    # avoid exactly this; this endpoint must not re-open the same door.
+    # Gated behind X-Metrics-Key (mirrors /v1/scheduler/status) and hidden from
+    # the OpenAPI schema in non-prod.
+    include_in_schema=False,
+    dependencies=[Depends(require_metrics_key)],
+)
 async def list_enabled_features():
     return {
         "enabled": _MOUNTED_ROUTERS,
