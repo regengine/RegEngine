@@ -14,11 +14,15 @@ The module has two evaluation halves:
     - ``mass_balance`` (per-TLC output ≤ input, plus cross-TLC checks
       on transformations)
 
-The mass-balance code also exercises a UOM-conversion fallback via
-``_normalize_to_lbs`` — we monkeypatch that in tests where we want to
-assert the converted/non-converted branches deterministically.
+The mass-balance code converts mixed UOMs via ``normalize_to_mass``
+(#2520): true mass units (lb/kg/oz/ton) always convert, while
+container/count units (case/box/bin) convert ONLY when the rule supplies
+an authoritative ``container_weights`` mapping. Mixed mass/container units
+without such a mapping yield a "not comparable" no-verdict warning instead
+of the old approximate pass/fail driven by hardcoded container weights.
 
-Tracks GitHub issue #1342 (ingestion test coverage).
+Tracks GitHub issue #1342 (ingestion test coverage); mass-balance UOM
+behavior aligned with the compliance evaluator per #2520.
 """
 
 from __future__ import annotations
@@ -709,9 +713,13 @@ class TestIdentityConsistency:
 # ===========================================================================
 
 
-def _only_mass_rule(monkeypatch, *, cte_types=None, tolerance=1.0):
+def _only_mass_rule(monkeypatch, *, cte_types=None, tolerance=1.0, container_weights=None):
     from datetime import datetime, timezone
 
+    params: Dict[str, Any] = {"tolerance_percent": tolerance}
+    if container_weights is not None:
+        # Authoritative tenant/product container-weight mapping (#2520).
+        params["container_weights"] = container_weights
     rule = RuleDefinition(
         rule_id="R-MB",
         rule_version=1,
@@ -723,7 +731,7 @@ def _only_mass_rule(monkeypatch, *, cte_types=None, tolerance=1.0):
         citation_reference="§3",
         effective_date=datetime.now(timezone.utc).date(),
         retired_date=None,
-        evaluation_logic={"type": "mass_balance", "params": {"tolerance_percent": tolerance}},
+        evaluation_logic={"type": "mass_balance", "params": params},
         failure_reason_template="",
         remediation_suggestion="rebalance",
     )
@@ -775,10 +783,11 @@ class TestMassBalancePerTlc:
         assert res["E2"][0].result == "fail"
         assert "Mass balance violation" in res["E2"][0].why_failed
 
-    def test_mixed_units_not_convertible_warns(self, monkeypatch):
+    def test_mixed_mass_and_container_uom_not_comparable(self, monkeypatch):
+        """#2520: a mass input vs a container output with no authoritative
+        weight mapping must NOT be reconciled via a hardcoded case weight.
+        It is reported as not comparable (no pass/fail verdict)."""
         _only_mass_rule(monkeypatch)
-        # Patch normalize_to_lbs to always fail
-        monkeypatch.setattr(evaluators_mod, "_normalize_to_lbs", lambda q, u: None)
         evts = [
             {
                 "event_id": "E1",
@@ -797,20 +806,38 @@ class TestMassBalancePerTlc:
         ]
         res = _evaluate_relational_in_memory(evts)
         assert res["E2"][0].result == "warn"
-        assert "inconclusive" in res["E2"][0].why_failed
+        assert "not comparable" in res["E2"][0].why_failed
+        assert res["E2"][0].evidence_fields_inspected[0]["uom_converted"] is False
 
-    def test_mixed_units_convertible_uses_conversion(self, monkeypatch):
+    def test_mixed_mass_units_convert_and_render_verdict(self, monkeypatch):
+        """Two true mass units (kg + lbs) always convert without any weight
+        mapping, so a verdict is still rendered."""
         _only_mass_rule(monkeypatch, tolerance=1.0)
+        evts = [
+            {
+                "event_id": "E1",
+                "traceability_lot_code": "TLC",
+                "event_type": "harvesting",
+                "quantity": 100,
+                "unit_of_measure": "lbs",
+            },
+            {
+                "event_id": "E2",
+                "traceability_lot_code": "TLC",
+                "event_type": "shipping",
+                "quantity": 40,
+                "unit_of_measure": "kg",
+            },
+        ]
+        res = _evaluate_relational_in_memory(evts)
+        # 40 kg ≈ 88.18 lbs ≤ 100 lbs input → within tolerance → pass
+        assert res["E2"][0].result == "pass"
+        assert res["E2"][0].evidence_fields_inspected[0]["uom_converted"] is True
 
-        # 10 cases normalize to 100 lbs
-        def _norm(q, u):
-            if u.lower() == "cases":
-                return q * 10.0
-            if u.lower() == "lbs":
-                return q
-            return None
-
-        monkeypatch.setattr(evaluators_mod, "_normalize_to_lbs", _norm)
+    def test_container_uom_converts_with_authoritative_weights(self, monkeypatch):
+        """When the rule supplies a container-weight mapping, container UOMs
+        convert to mass and a verdict is rendered (#2520)."""
+        _only_mass_rule(monkeypatch, tolerance=1.0, container_weights={"cases": 10.0})
         evts = [
             {
                 "event_id": "E1",
@@ -828,11 +855,9 @@ class TestMassBalancePerTlc:
             },
         ]
         res = _evaluate_relational_in_memory(evts)
-        # 10 cases = 100 lbs ≥ 100 lbs shipping → within tolerance → pass
+        # 10 cases × 10 lb = 100 lbs ≥ 100 lbs shipping → within tolerance → pass
         assert res["E2"][0].result == "pass"
-        # Evidence shows uom_converted = True
-        evidence = res["E2"][0].evidence_fields_inspected[0]
-        assert evidence["uom_converted"] is True
+        assert res["E2"][0].evidence_fields_inspected[0]["uom_converted"] is True
 
     def test_none_quantity_skipped_in_collection(self, monkeypatch):
         _only_mass_rule(monkeypatch)
@@ -1110,17 +1135,43 @@ class TestMassBalanceCrossTlc:
         # No cross-TLC result for the transformation because total_input=0
         assert "E-XFORM" not in res
 
-    def test_cross_tlc_uom_conversion_success(self, monkeypatch):
+    def test_cross_tlc_mixed_mass_units_convert(self, monkeypatch):
+        """Mixed true mass units (kg input, lbs output) convert without any
+        weight mapping → a verdict is rendered."""
         _only_mass_rule(monkeypatch, cte_types=["transformation"], tolerance=5.0)
+        evts = [
+            {
+                "event_id": "E-IN",
+                "traceability_lot_code": "LOT-A",
+                "event_type": "harvesting",
+                "quantity": 100,
+                "unit_of_measure": "kg",
+            },
+            {
+                "event_id": "E-XFORM",
+                "traceability_lot_code": "LOT-MEGA",
+                "event_type": "transformation",
+                "quantity": 200,
+                "unit_of_measure": "lbs",
+                "kdes": {"input_traceability_lot_codes": ["LOT-A"]},
+            },
+        ]
+        res = _evaluate_relational_in_memory(evts)
+        xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
+        # 100 kg ≈ 220.46 lbs ≥ 200 lbs output → within 5% → pass
+        assert any(r.result == "pass" for r in xform_results)
+        pass_evidence = [r.evidence_fields_inspected[0] for r in xform_results if r.result == "pass"]
+        assert any(ev.get("uom_converted") for ev in pass_evidence)
 
-        def _norm(q, u):
-            if u.lower() == "cases":
-                return q * 10.0
-            if u.lower() == "lbs":
-                return q
-            return None
-
-        monkeypatch.setattr(evaluators_mod, "_normalize_to_lbs", _norm)
+    def test_cross_tlc_container_uom_converts_with_weights(self, monkeypatch):
+        """A container input + mass output convert when the rule supplies an
+        authoritative container-weight mapping (#2520)."""
+        _only_mass_rule(
+            monkeypatch,
+            cte_types=["transformation"],
+            tolerance=5.0,
+            container_weights={"cases": 10.0},
+        )
         evts = [
             {
                 "event_id": "E-IN",
@@ -1140,37 +1191,19 @@ class TestMassBalanceCrossTlc:
         ]
         res = _evaluate_relational_in_memory(evts)
         xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
-        # 10 cases → 100 lbs ≥ 95 → pass
+        # 10 cases × 10 lb = 100 lbs ≥ 95 → pass
         assert any(r.result == "pass" for r in xform_results)
         pass_evidence = [r.evidence_fields_inspected[0] for r in xform_results if r.result == "pass"]
         assert any(ev.get("uom_converted") for ev in pass_evidence)
 
-    def test_cross_tlc_input_uom_unconvertible_aborts_conversion(self, monkeypatch):
-        """If any input lot's UOM can't be normalized to lbs, `all_ok` flips
-        to False and both inner loops break (lines 446-450). The code then
-        falls back to raw quantities."""
+    def test_cross_tlc_input_container_uom_not_comparable(self, monkeypatch):
+        """#2520: a container/count input (widgets) vs a mass output (lbs)
+        with no weight mapping is NOT reconciled via a raw comparison — it
+        yields a 'not comparable' no-verdict warning."""
         _only_mass_rule(monkeypatch, cte_types=["transformation"], tolerance=5.0)
-
-        def _norm(q, u):
-            # "lbs" normalizes, "widgets" fails.
-            if u.lower() == "lbs":
-                return q
-            return None
-
-        monkeypatch.setattr(evaluators_mod, "_normalize_to_lbs", _norm)
-
         evts = [
-            # Two input lots with DIFFERENT uoms so len(all_units) > 1 and
-            # conversion is attempted. The "widgets" UOM forces lbs=None.
             {
-                "event_id": "E-IN-A",
-                "traceability_lot_code": "LOT-A",
-                "event_type": "harvesting",
-                "quantity": 5,
-                "unit_of_measure": "widgets",
-            },
-            {
-                "event_id": "E-IN-B",
+                "event_id": "E-IN",
                 "traceability_lot_code": "LOT-A",
                 "event_type": "harvesting",
                 "quantity": 5,
@@ -1186,26 +1219,18 @@ class TestMassBalanceCrossTlc:
             },
         ]
         res = _evaluate_relational_in_memory(evts)
-        # The evaluator should still emit a result (raw-units fallback) because
-        # all_ok became False, conversion is skipped, and raw quantities are used.
         xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
         assert xform_results
-        # Evidence must show uom_converted=False since conversion aborted.
+        assert all(r.result == "warn" for r in xform_results)
+        assert all("not comparable" in r.why_failed for r in xform_results)
         for r in xform_results:
             for ev in r.evidence_fields_inspected:
                 assert ev.get("uom_converted") is False
 
-    def test_cross_tlc_uom_conversion_output_none_skips(self, monkeypatch):
-        """If output UOM can't be normalized, use_converted stays False."""
+    def test_cross_tlc_output_container_uom_not_comparable(self, monkeypatch):
+        """A mass input (lbs) vs a container output (cases) with no weight
+        mapping is reported as not comparable rather than compared raw."""
         _only_mass_rule(monkeypatch, cte_types=["transformation"])
-
-        def _norm(q, u):
-            # Only lbs normalizes; cases fail
-            if u.lower() == "lbs":
-                return q
-            return None
-
-        monkeypatch.setattr(evaluators_mod, "_normalize_to_lbs", _norm)
         evts = [
             {
                 "event_id": "E-IN",
@@ -1225,9 +1250,9 @@ class TestMassBalanceCrossTlc:
         ]
         res = _evaluate_relational_in_memory(evts)
         xform_results = [r for r in res.get("E-XFORM", []) if r.rule_id == "R-MB"]
-        # Conversion failed → uses raw quantities: 10 cases (raw) vs 10 lbs input
-        # — passes because output <= input * tolerance
         assert xform_results
+        assert all(r.result == "warn" for r in xform_results)
+        assert all("not comparable" in r.why_failed for r in xform_results)
 
     def test_no_mass_rule_registered_skips_cross_tlc_entirely(self, monkeypatch):
         monkeypatch.setattr(evaluators_mod, "_get_relational_rules", lambda: {})

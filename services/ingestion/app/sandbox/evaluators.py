@@ -13,13 +13,13 @@ from datetime import datetime
 from typing import Any, Dict, List
 from uuid import uuid4
 
+from shared.rules.uom import is_mass_uom, normalize_to_mass
 from shared.rules_engine import (
     _CTE_LIFECYCLE_ORDER,
     _EVALUATORS,
     EvaluationSummary,
     RuleDefinition,
     RuleEvaluationResult,
-    _normalize_to_lbs,
 )
 
 from .rule_loader import _SANDBOX_RULES, _get_applicable_rules
@@ -300,7 +300,14 @@ def _evaluate_relational_in_memory(
         if mass_rule:
             input_types = {"harvesting", "receiving", "first_land_based_receiving"}
             output_types = {"shipping"}
-            tolerance = mass_rule.evaluation_logic.get("params", {}).get("tolerance_percent", 1.0)
+            mass_params = mass_rule.evaluation_logic.get("params", {})
+            tolerance = mass_params.get("tolerance_percent", 1.0)
+            # Optional authoritative container-weight mapping (lowercased UOM ->
+            # lbs). Only when supplied may a container/count UOM (case/box/bin/...)
+            # be converted to mass; otherwise mixed mass/container units are
+            # reported as not comparable rather than reconciled via a
+            # commodity-independent guess (#2520).
+            container_weights = mass_params.get("container_weights") or {}
 
             total_input = 0.0
             total_output = 0.0
@@ -318,23 +325,26 @@ def _evaluate_relational_in_memory(
                     units_seen.add(uom.lower().strip())
                 all_entries.append((float(qty), uom, evt.get("event_type", "")))
 
-            # Try UOM conversion if units differ
+            # Mixed UOMs: only render a verdict if every quantity converts to a
+            # true mass. Container/count units convert only with an authoritative
+            # weight mapping; without one a "24 lb case" of lettuce vs shrimp vs
+            # berries produces false pass/fail verdicts (#2520).
             if len(units_seen) > 1:
                 converted = []
                 all_ok = True
                 for qty, uom, etype in all_entries:
-                    lbs = _normalize_to_lbs(qty, uom) if uom else None
-                    if lbs is None:
+                    mass = normalize_to_mass(qty, uom, weights=container_weights) if uom else None
+                    if mass is None:
                         all_ok = False
                         break
-                    converted.append((lbs, etype))
+                    converted.append((mass, etype))
                 if all_ok:
                     use_converted = True
-                    for lbs, etype in converted:
+                    for mass, etype in converted:
                         if etype in input_types:
-                            total_input += lbs
+                            total_input += mass
                         elif etype in output_types:
-                            total_output += lbs
+                            total_output += mass
 
             if not use_converted:
                 for qty, uom, etype in all_entries:
@@ -361,6 +371,23 @@ def _evaluate_relational_in_memory(
                 ]
 
                 if len(units_seen) > 1 and not use_converted:
+                    if any(not is_mass_uom(u) for u in units_seen):
+                        reason = (
+                            f"Mass balance check not comparable for TLC '{tlc}': "
+                            f"events mix mass and container/count units "
+                            f"({', '.join(sorted(units_seen))}). Container UOMs "
+                            f"(e.g. case/box/bin) are not convertible to mass without "
+                            f"a tenant/product container-weight mapping, so no "
+                            f"pass/fail verdict is rendered."
+                        )
+                    else:
+                        reason = (
+                            f"Mass balance check inconclusive for TLC '{tlc}': "
+                            f"mixed units of measure detected "
+                            f"({', '.join(sorted(units_seen))}) and not all could be "
+                            f"converted. Cannot reliably compare input "
+                            f"({total_input}) vs output ({total_output})."
+                        )
                     results[evt["event_id"]].append(
                         RuleEvaluationResult(
                             rule_id=mass_rule.rule_id,
@@ -368,11 +395,7 @@ def _evaluate_relational_in_memory(
                             rule_title=mass_rule.title,
                             severity=mass_rule.severity,
                             result="warn",
-                            why_failed=(
-                                f"Mass balance check inconclusive for TLC '{tlc}': "
-                                f"mixed units ({', '.join(sorted(units_seen))}) "
-                                f"could not all be converted."
-                            ),
+                            why_failed=reason,
                             evidence_fields_inspected=evidence,
                             citation_reference=mass_rule.citation_reference,
                             category=mass_rule.category,
@@ -419,7 +442,11 @@ def _evaluate_relational_in_memory(
     # -----------------------------------------------------------------------
     mass_rule = relational_rules.get("mass_balance")
     if mass_rule:
-        tolerance = mass_rule.evaluation_logic.get("params", {}).get("tolerance_percent", 1.0)
+        mass_params = mass_rule.evaluation_logic.get("params", {})
+        tolerance = mass_params.get("tolerance_percent", 1.0)
+        # See per-TLC block: container/count UOMs convert only with an
+        # authoritative weight mapping; otherwise the comparison is declined (#2520).
+        container_weights = mass_params.get("container_weights") or {}
 
         for evt in all_canonical:
             if evt.get("event_type") != "transformation":
@@ -458,8 +485,11 @@ def _evaluate_relational_in_memory(
                 all_units.add(output_uom.lower().strip())
 
             use_converted = False
+            not_comparable = False
             if len(all_units) > 1:
-                # Try UOM conversion
+                # Mixed UOMs: convert every input + the output to a true mass.
+                # Container/count units convert only with an authoritative weight
+                # mapping; otherwise the comparison is not meaningful (#2520).
                 converted_input = 0.0
                 all_ok = True
                 for input_tlc in input_tlcs:
@@ -467,19 +497,26 @@ def _evaluate_relational_in_memory(
                         oq = other.get("quantity")
                         ou = other.get("unit_of_measure", "")
                         if oq is not None and ou:
-                            lbs = _normalize_to_lbs(float(oq), ou)
-                            if lbs is None:
+                            mass = normalize_to_mass(float(oq), ou, weights=container_weights)
+                            if mass is None:
                                 all_ok = False
                                 break
-                            converted_input += lbs
+                            converted_input += mass
                     if not all_ok:
                         break
 
-                converted_output = _normalize_to_lbs(output_qty, output_uom) if output_uom else None
+                converted_output = (
+                    normalize_to_mass(output_qty, output_uom, weights=container_weights) if output_uom else None
+                )
                 if all_ok and converted_output is not None:
                     use_converted = True
                     total_input = converted_input
                     output_qty = converted_output
+                else:
+                    # A quantity could not be converted to mass. If any unit is a
+                    # container/count UOM, decline to render a verdict rather than
+                    # compare raw mixed units (an approximate pass/fail).
+                    not_comparable = any(not is_mass_uom(u) for u in all_units)
 
             evidence = [
                 {
@@ -494,7 +531,29 @@ def _evaluate_relational_in_memory(
                 }
             ]
 
-            if output_qty > total_input * (1 + tolerance / 100):
+            if not_comparable:
+                results[evt["event_id"]].append(
+                    RuleEvaluationResult(
+                        rule_id=mass_rule.rule_id,
+                        rule_version=mass_rule.rule_version,
+                        rule_title=mass_rule.title,
+                        severity=mass_rule.severity,
+                        result="warn",
+                        why_failed=(
+                            f"Mass balance check not comparable for transformation "
+                            f"'{evt.get('traceability_lot_code', '')}': inputs/output mix "
+                            f"mass and container/count units "
+                            f"({', '.join(sorted(all_units))}). Container UOMs "
+                            f"(e.g. case/box/bin) are not convertible to mass without a "
+                            f"tenant/product container-weight mapping, so no pass/fail "
+                            f"verdict is rendered."
+                        ),
+                        evidence_fields_inspected=evidence,
+                        citation_reference=mass_rule.citation_reference,
+                        category=mass_rule.category,
+                    )
+                )
+            elif output_qty > total_input * (1 + tolerance / 100):
                 max_allowed = total_input * (1 + tolerance / 100)
                 results[evt["event_id"]].append(
                     RuleEvaluationResult(
