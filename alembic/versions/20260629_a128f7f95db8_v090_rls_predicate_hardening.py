@@ -52,10 +52,10 @@ Idempotent: every policy install is DROP-IF-EXISTS + CREATE, and every
 table reference is guarded by ``to_regclass`` so the migration is safe on
 fresh, legacy, and partially-migrated databases.
 
-Note: ``alembic/sql/V053__rls_standardize_1271.sql`` proposes the
-*opposite* convergence (everything onto the text-compare style). It is
-dead -- not wired into any Alembic revision -- and is intentionally left
-untouched here.
+Note: a former ``alembic/sql/V053__rls_standardize_1271.sql`` proposed the
+*opposite* convergence (everything onto the text-compare style). It was
+dead -- never wired into any Alembic revision -- and has since been
+removed as a follow-up cleanup to this change.
 
 Revision ID: a128f7f95db8
 Revises: 38e02636e340

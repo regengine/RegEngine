@@ -94,12 +94,9 @@ _PAT_TENANT_TEXT = re.compile(
 # CREATE POLICY. These are historical migrations already merged. v048–v051
 # and v063 are the fail-open / text-compare originals that v090 (and v067
 # for task_queue) supersede in the live chain; v078/v080 use the
-# NULLIF-guarded fail-closed form. The dead, unwired V053 standardization
-# SQL is also grandfathered (it is not run by any Alembic revision). New
-# migrations get no such pass.
+# NULLIF-guarded fail-closed form. New migrations get no such pass.
 POLICY_PREDICATE_GRANDFATHERED = {
     "alembic/sql/V052__ensure_tenant_tables.sql",
-    "alembic/sql/V053__rls_standardize_1271.sql",
     "alembic/versions/20260327_v048_operational_hardening.py",
     "alembic/versions/20260327_v049_fsma_audit_trail.py",
     "alembic/versions/20260329_task_queue_v050.py",
