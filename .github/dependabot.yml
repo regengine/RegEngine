@@ -7,6 +7,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -45,6 +49,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -70,6 +78,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -107,6 +119,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -137,6 +153,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -167,6 +187,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -201,6 +225,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -238,6 +266,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -271,6 +303,10 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    # Supply-chain cooldown: wait before adopting brand-new releases
+    # (dependabot security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
