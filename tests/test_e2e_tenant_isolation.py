@@ -88,9 +88,18 @@ def workflow(db_session):
 
 @pytest.fixture(scope="module")
 def rules_engine(db_session):
-    """Create a RulesEngine instance."""
-    from shared.rules_engine import RulesEngine
+    """Create a RulesEngine instance with the built-in FSMA rules seeded.
 
+    A freshly alembic-migrated DB has an empty ``fsma.rule_definitions``,
+    so ``evaluate_event(persist=True)`` finds zero applicable rules and
+    writes nothing — test_07 then passes vacuously and test_11's
+    ``rule_evaluations`` count assertion fails. Seed the canonical rules
+    the same way production is provisioned.
+    """
+    from shared.rules_engine import RulesEngine, seed_rule_definitions
+
+    seed_rule_definitions(db_session)
+    db_session.commit()
     return RulesEngine(db_session)
 
 
@@ -248,7 +257,9 @@ class TestTenantIsolationE2E:
         )
 
         assert case["package_status"] == "intake"
-        assert case["tenant_id"] == tenant_a
+        # tenant_id comes back as a native uuid.UUID from the row mapping;
+        # compare by value, not type.
+        assert str(case["tenant_id"]) == tenant_a
         self.__class__._case_a_id = case["request_case_id"]
 
     # ------------------------------------------------------------------
@@ -415,7 +426,7 @@ class TestTenantIsolationE2E:
         )
 
         assert case["package_status"] == "intake"
-        assert case["tenant_id"] == tenant_b
+        assert str(case["tenant_id"]) == tenant_b
         self.__class__._case_b_id = case["request_case_id"]
 
         # Advance tenant_b's case through scope and collect

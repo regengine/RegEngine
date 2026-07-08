@@ -214,6 +214,24 @@ class _FakePersistence:
         _ = tenant_id, start_date, end_date
         return list(self._events_by_tlc.get(tlc, []))
 
+    def query_events_by_tlcs(
+        self,
+        tenant_id,
+        tlcs,
+        start_date=None,
+        end_date=None,
+        follow_transformations=True,
+        max_depth=None,
+        limit=10000,
+    ):
+        """Set-based batch fetch (#2515). Delegates to query_events_by_tlc
+        so subclasses that override the per-TLC method keep their behavior."""
+        _ = follow_transformations, max_depth
+        events: list[dict] = []
+        for tlc in tlcs:
+            events.extend(self.query_events_by_tlc(tenant_id, tlc, start_date, end_date))
+        return events[:limit]
+
     def query_all_events(
         self,
         tenant_id,

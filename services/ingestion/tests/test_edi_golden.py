@@ -247,6 +247,18 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
 
+    # ISA13 interchange dedup is Redis-backed with a 7-day TTL and keyed on
+    # (sender, receiver, isa13) — NOT per test run. With a real REDIS_URL
+    # (the full-suite CI job) any prior POST of the same committed fixture,
+    # from this run or another worker, turns every replay into a 409
+    # duplicate_interchange. This file asserts KDE *mapping*; dedup has its
+    # own coverage, so pin it to "first time seen".
+    monkeypatch.setattr(
+        edi_ingestion_routes,
+        "check_and_record_interchange",
+        lambda *_a, **_kw: (False, None),
+    )
+
     with TestClient(app) as test_client:
         yield test_client
 

@@ -785,6 +785,16 @@ def _make_ingest_response(accepted: int, errors: Optional[list] = None) -> Inges
 
 
 class TestSubmitSupplierData:
+    @pytest.fixture(autouse=True)
+    def _subscription_gate_unconfigured(self, monkeypatch):
+        """These tests target submission mechanics, not the #2508 gate.
+        When REDIS_URL points at a real Redis (the full-suite CI job),
+        the gate fails closed for the unseeded test tenant and every
+        submit returns the subscription error. Pin the gate to its
+        'not configured' state; the gate itself is covered by
+        TestPortalAbuseControls.test_submit_blocked_when_subscription_inactive."""
+        monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: None)
+
     def _seed_link(self, tok="tok"):
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         sp._portal_links[tok] = {
@@ -932,6 +942,13 @@ class TestRouterSurface:
 
 
 class TestPortalAbuseControls:
+    @pytest.fixture(autouse=True)
+    def _subscription_gate_unconfigured(self, monkeypatch):
+        """Rate-limit tests must reach the limiter, not die at the #2508
+        subscription gate when a real Redis is configured. The
+        subscription test below re-stubs the gate to False explicitly."""
+        monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: None)
+
     def _seed_link(self, tok="tok", tenant_id="t1"):
         future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         sp._portal_links[tok] = {
