@@ -138,7 +138,7 @@ def _make_user():
     return SimpleNamespace(
         id=uuid.uuid4(),
         email="test@example.com",
-        mfa_secret="TESTBASE32SECRET",
+        mfa_secret="TESTBASE32SECRET",  # pragma: allowlist secret
     )
 
 
