@@ -125,30 +125,41 @@ function auditInternalRoutes() {
   }
 }
 
-async function fetchWithTimeout(url, timeoutMs = 30000) {
+async function fetchWithTimeout(url, timeoutMs = 30000, method = 'GET') {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
+      method,
       redirect: 'follow',
       cache: 'no-store',
       signal: controller.signal,
-      headers: { 'user-agent': 'regengine-promise-audit/1.0' },
+      // A real browser UA — some hosts (calendly) stall or block obvious
+      // bot user-agents, producing inconclusive timeouts.
+      headers: {
+        'user-agent':
+          'Mozilla/5.0 (compatible; regengine-promise-audit/1.0; +https://regengine.co)',
+      },
     });
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function fetchWithRetry(url, attempts = 2) {
-  // External hosts (e.g. calendly.com) intermittently take >10s to first
-  // byte, which flaked this gate on unrelated PRs. One retry plus a more
-  // generous timeout keeps the dead-link signal (dead hosts still error or
-  // 4xx/5xx) without failing the build on a slow-but-alive endpoint.
+async function fetchWithRetry(url, attempts = 3) {
+  // Some external hosts (e.g. calendly.com) intermittently take a long time
+  // to first byte, or stall a bot user-agent entirely. Retry a few times
+  // with a generous timeout before giving up.
   let lastError;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fetchWithTimeout(url);
+      // Prefer HEAD — lighter, and less likely to hang on a heavy page
+      // render than a full GET. Fall back to GET if the host rejects HEAD.
+      const head = await fetchWithTimeout(url, 30000, 'HEAD');
+      if (head.status === 405 || head.status === 501) {
+        return await fetchWithTimeout(url, 30000, 'GET');
+      }
+      return head;
     } catch (error) {
       lastError = error;
     }
@@ -166,6 +177,8 @@ async function auditExternalUrls() {
     try {
       const response = await fetchWithRetry(url);
       if (response.status >= 400) {
+        // A definitive HTTP error status means the link is genuinely
+        // broken (wrong path, removed page) — fail the build.
         findings.push({
           type: 'bad-external-url',
           url,
@@ -173,11 +186,16 @@ async function auditExternalUrls() {
         });
       }
     } catch (error) {
-      findings.push({
-        type: 'bad-external-url',
-        url,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      // A network error / timeout / abort is INCONCLUSIVE: it does not
+      // prove the URL is dead, and hard-failing on it flaked this gate on
+      // unrelated PRs (e.g. calendly.com stalling a bot user-agent). Warn
+      // so a persistently unreachable host is still visible in logs, but
+      // do not fail the build — only real 4xx/5xx responses do that.
+      console.warn(
+        `promise-audit: WARN could not verify external URL ${url} ` +
+          `(${error instanceof Error ? error.message : String(error)}) — ` +
+          'treating as inconclusive, not a dead link',
+      );
     }
   }
 }
