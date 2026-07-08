@@ -125,7 +125,7 @@ function auditInternalRoutes() {
   }
 }
 
-async function fetchWithTimeout(url, timeoutMs = 10000) {
+async function fetchWithTimeout(url, timeoutMs = 30000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -140,6 +140,22 @@ async function fetchWithTimeout(url, timeoutMs = 10000) {
   }
 }
 
+async function fetchWithRetry(url, attempts = 2) {
+  // External hosts (e.g. calendly.com) intermittently take >10s to first
+  // byte, which flaked this gate on unrelated PRs. One retry plus a more
+  // generous timeout keeps the dead-link signal (dead hosts still error or
+  // 4xx/5xx) without failing the build on a slow-but-alive endpoint.
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchWithTimeout(url);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function auditExternalUrls() {
   if (process.env.PROMISE_AUDIT_SKIP_EXTERNAL === '1') {
     console.log('Skipping external URL checks because PROMISE_AUDIT_SKIP_EXTERNAL=1');
@@ -148,7 +164,7 @@ async function auditExternalUrls() {
 
   for (const url of CRITICAL_EXTERNAL_URLS) {
     try {
-      const response = await fetchWithTimeout(url);
+      const response = await fetchWithRetry(url);
       if (response.status >= 400) {
         findings.push({
           type: 'bad-external-url',

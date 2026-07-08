@@ -155,6 +155,10 @@ class TestEmptyChain:
             "verified": 0,
             "first_break": None,
             "errors": [],
+            # #2523 — legacy v1-hash visibility markers are part of the
+            # canonical result shape, trivially empty for an empty chain.
+            "legacy_v1_rows": [],
+            "has_legacy_v1_rows": False,
         }
 
 
