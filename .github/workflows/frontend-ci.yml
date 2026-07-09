@@ -57,8 +57,11 @@ on:
       - '.github/workflows/frontend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: frontend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
 env:

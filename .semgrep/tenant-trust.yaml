@@ -145,16 +145,17 @@ rules:
       pool-hygiene pattern, not a tenant grant.
     severity: ERROR
     languages: [python]
-    # Matches the inline bound-parameter form (set_config('app.tenant_id',
-    # :tid, ...)) on a single line — the shape every ad-hoc call site used.
-    # Clears (value '') don't match; multi-line docstring mentions don't
-    # match; f-string interpolation is caught by the f-string SQL gate.
-    pattern-regex: 'set_config\(\s*["'']app\.tenant_id["'']\s*,[ \t]*:'
+    # Matches the single-line inline forms with a SQLAlchemy bind (:tid), a
+    # psycopg placeholder (%s), or an asyncpg positional ($1) — every shape
+    # a converged call site historically used. This is defense-in-depth, not
+    # an exhaustive ban: multi-line text(""" blocks and f-string
+    # interpolation can evade a regex (the fail-hard get_tenant_context()
+    # RLS predicate remains the actual security control); grep for
+    # "app.tenant_id" during review of anything tenant-adjacent.
+    pattern-regex: 'set_config\(\s*["'']app\.tenant_id["'']\s*,[ \t]*(?::|%s|\$1)'
     paths:
       exclude:
         - "**/services/shared/tenant_context.py"  # the canonical primitive
-        - "**/services/admin/app/database.py"  # PL/pgSQL SECURITY DEFINER body + pool-clear listener
         - "**/tests/**"
         - "**/migrations/**"
         - "**/alembic/**"
-        - "**/scripts/**"  # ops verify tooling; not on the request path

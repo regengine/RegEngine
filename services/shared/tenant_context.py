@@ -333,9 +333,12 @@ def is_production() -> bool:
 # session scope is the correct shape there) and the admin pool-checkout
 # listener that CLEARS the GUC ('' at session scope, pool hygiene).
 #
-# Regressions are blocked by the ``adhoc-tenant-guc-set-config`` rule in
-# ``.semgrep/tenant-trust.yaml`` (a hard CI gate): new inline
-# ``set_config('app.tenant_id', :tid, ...)`` fails the build.
+# The ``adhoc-tenant-guc-set-config`` rule in ``.semgrep/tenant-trust.yaml``
+# (a hard CI gate) blocks the single-line inline shapes prior call sites
+# used (:tid / %s / $1 binds). It is defense-in-depth, not an exhaustive
+# ban — multi-line SQL blocks can evade a regex; the fail-hard
+# ``get_tenant_context()`` RLS predicate remains the actual security
+# control. Grep for "app.tenant_id" when reviewing tenant-adjacent code.
 #
 # Scope is ``SET LOCAL`` (transaction-scoped, auto-resets at COMMIT/ROLLBACK)
 # — never session-scoped. Pool-bleed safety relies on this: a connection
@@ -439,7 +442,11 @@ def set_tenant_guc_if_uuid(session: Any, tenant_id: Any) -> Any:
         _uuid.UUID(str(tenant_id))
     except (ValueError, AttributeError, TypeError):
         return None
-    return set_tenant_guc(session, tenant_id)
+    # str-coerce so a uuid.UUID instance (or any object whose str() is a
+    # valid UUID) sets the GUC rather than tripping set_tenant_guc's
+    # isinstance(tenant_id, str) check — honoring this helper's documented
+    # "set for UUID tenants, skip otherwise, never raise" contract.
+    return set_tenant_guc(session, str(tenant_id))
 
 
 def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
