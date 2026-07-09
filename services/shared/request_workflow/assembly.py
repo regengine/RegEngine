@@ -12,7 +12,7 @@ from uuid import uuid4
 from sqlalchemy import text
 
 from .constants import REQUIRED_SIGNOFF_TYPES, VALID_SIGNOFF_TYPES
-from .utils import format_countdown, row_to_serializable
+from .utils import format_countdown, row_to_dict, row_to_serializable
 
 logger = logging.getLogger("request-workflow")
 
@@ -313,7 +313,7 @@ class AssemblyMixin:
             hash=package_hash,
             record_count=len(events_data),
         )
-        return dict(row)
+        return row_to_dict(row)
 
     # ------------------------------------------------------------------
     # 6. Add Signoff

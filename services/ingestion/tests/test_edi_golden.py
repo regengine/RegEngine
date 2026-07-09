@@ -247,6 +247,17 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
 
+    # Neutralize interchange dedup for this test app. The ISA13 dedup
+    # registry lives in shared Redis keyed on the fixture's envelope IDs, so
+    # whichever test file ingests a corpus fixture first claims the key and
+    # this file's replays 409 depending on xdist scheduling. Dedup semantics
+    # have their own suite (test_edi_dedup*); this file freezes KDE mapping.
+    monkeypatch.setattr(
+        edi_ingestion_routes,
+        "check_and_record_interchange",
+        lambda *a, **kw: (False, None),
+    )
+
     with TestClient(app) as test_client:
         yield test_client
 
