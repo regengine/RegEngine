@@ -155,6 +155,10 @@ class TestEmptyChain:
             "verified": 0,
             "first_break": None,
             "errors": [],
+            # #2523: legacy-v1 tamper-evidence markers are part of the
+            # canonical shape; an empty chain trivially has none.
+            "legacy_v1_rows": [],
+            "has_legacy_v1_rows": False,
         }
 
 
