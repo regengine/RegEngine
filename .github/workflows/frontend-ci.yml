@@ -1,6 +1,14 @@
 name: Frontend CI/CD
 
 on:
+  # Nightly run against main, mirroring backend-ci: the path-filtered
+  # triggers below leave these gates unexercised during stretches of
+  # backend-only merges, letting drift (promise-audit URL rot, e2e flake)
+  # accumulate silently until an unrelated frontend-touching PR pays for it.
+  # Offset from backend-ci's 05:00 to spread runner load.
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
