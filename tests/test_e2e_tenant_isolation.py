@@ -88,9 +88,18 @@ def workflow(db_session):
 
 @pytest.fixture(scope="module")
 def rules_engine(db_session):
-    """Create a RulesEngine instance."""
+    """Create a RulesEngine instance with the built-in FSMA rules seeded.
+
+    An alembic-head database has no rule_definitions rows; without seeds
+    every evaluation returns no-verdict and persists nothing, so step 7
+    would silently evaluate zero rules and step 11's tenant-A
+    rule_evaluations count would be empty.
+    """
+    from shared.rules import seed_rule_definitions
     from shared.rules_engine import RulesEngine
 
+    seed_rule_definitions(db_session)
+    db_session.commit()
     return RulesEngine(db_session)
 
 

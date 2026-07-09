@@ -54,7 +54,12 @@ test('WebAuthn step-up registers a passkey and completes the admin policy action
         await expect(stepUpDialog).toBeHidden({ timeout: 15_000 });
         await expect(page).toHaveURL(/\/settings\/security$/);
         await expectHydratedSession(page, email, 'webauthn');
-        await expect(page.getByText('webauthn')).toBeVisible({ timeout: 10_000 });
+        // StepUpModal does window.location.reload() on success, so these
+        // assertions race a fresh next-dev cold recompile of /settings/security.
+        // The inline timeout must cover that first-render latency (the global
+        // expect timeout does not apply once an inline one is set); the session
+        // itself is already confirmed webauthn above.
+        await expect(page.getByText('webauthn')).toBeVisible({ timeout: 30_000 });
         await expect(page.getByText('Ready')).toBeVisible();
 
         await page.getByRole('button', { name: /verify admin policy access/i }).click();
@@ -62,7 +67,7 @@ test('WebAuthn step-up registers a passkey and completes the admin policy action
             page.getByRole('status').filter({
                 hasText: /high-assurance organization policy access confirmed/i,
             }),
-        ).toBeVisible({ timeout: 10_000 });
+        ).toBeVisible({ timeout: 20_000 });
     } finally {
         await authenticator.remove();
     }

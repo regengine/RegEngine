@@ -25,6 +25,22 @@ def row_to_serializable(row) -> Dict[str, Any]:
     return d
 
 
+def row_to_dict(row) -> Dict[str, Any]:
+    """Convert a row mapping to a dict with UUID columns as strings.
+
+    The workflow API contract is string IDs (``tenant_id: str``,
+    ``request_case_id: str``). The tenant_id TEXT→UUID column migration made
+    raw ``dict(row)`` returns leak ``uuid.UUID`` objects, breaking string
+    comparisons in callers. Unlike ``row_to_serializable`` this keeps
+    datetimes as datetime objects, matching the pre-migration row shape.
+    """
+    d = dict(row)
+    for key, val in d.items():
+        if isinstance(val, UUID):
+            d[key] = str(val)
+    return d
+
+
 def format_countdown(hours: float) -> str:
     """Format hours remaining into a human-readable countdown string."""
     if hours <= 0:
@@ -70,7 +86,7 @@ class WorkflowBase:
         row = result.mappings().fetchone()
         if not row:
             raise ValueError(f"Request case {request_case_id} not found for tenant {tenant_id}.")
-        return dict(row)
+        return row_to_dict(row)
 
     def _get_scope_event_ids(self, tenant_id: str, case: Dict[str, Any]) -> List[str]:
         """Get event IDs matching the case scope criteria."""

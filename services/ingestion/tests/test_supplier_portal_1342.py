@@ -52,6 +52,20 @@ def _reset_rate_limit_bucket():
 
 
 @pytest.fixture(autouse=True)
+def _subscription_gate_defaults_active(monkeypatch):
+    """Default the portal subscription gate to an active entitlement.
+
+    ``_portal_subscription_active`` reads live Redis when REDIS_URL is set
+    (as in CI service containers) and consults the subscription gate's
+    module-level circuit breaker, so unstubbed tests pass or fail depending
+    on breaker state left by earlier tests. Every test here exercises portal
+    behavior *behind* the gate; the gate itself is covered by the explicit
+    subscription tests below, whose own monkeypatch.setattr overrides this.
+    """
+    monkeypatch.setattr(sp, "_portal_subscription_active", lambda _tid: True)
+
+
+@pytest.fixture(autouse=True)
 def _clear_portal_links():
     sp._portal_links.clear()
     ir._profile_store.clear()
