@@ -747,7 +747,11 @@ jobs:
           # asserts every fsma.* table is RLS-hardened; the e2e isolation test
           # reuses the same migrated schema. Both FAIL (not skip) here because
           # REGENGINE_REQUIRE_DB=1 and DATABASE_URL is reachable.
-          pytest tests/migrations/test_rls_coverage.py tests/test_e2e_tenant_isolation.py \
+          # test_client_role_lockdown_v092 asserts the v092 client-role
+          # lockdown (Supabase anon/authenticated exposure) holds at head.
+          pytest tests/migrations/test_rls_coverage.py \
+            tests/migrations/test_client_role_lockdown_v092.py \
+            tests/test_e2e_tenant_isolation.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS hardening behavioral assertions
