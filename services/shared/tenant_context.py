@@ -321,18 +321,21 @@ def is_production() -> bool:
 # legacy fail-open V3 form that v056/v059 superseded — falls back to the
 # sandbox tenant.
 #
-# Today there are at least 8 places that set ``app.tenant_id`` via ad-hoc
-# code (``set_tenant_context`` methods on CTEPersistence /
-# CanonicalEventStore / ExceptionQueueService, inline ``SET LOCAL`` in
-# canonical_router and a few admin paths, plus a SECURITY DEFINER SQL
-# function called from ``DatabaseManager.set_tenant_context``). Each
-# implementation is correct in isolation but the duplication is a
-# maintenance hazard — a future bug fix to the GUC name or scope has to be
-# applied in eight places.
+# Phase B convergence is COMPLETE (WS-4 of the 2026-07-07 remediation
+# plan): every Python call site that sets ``app.tenant_id`` now delegates
+# to the canonical primitives below — CTEPersistence / CanonicalEventStore /
+# ExceptionQueueService / canonical_router / api_key_store use
+# ``set_tenant_guc``; the ingestion module helpers (inflow_workbench,
+# integration_router, supplier_portal) use ``set_tenant_guc_if_uuid``
+# because those paths can carry non-UUID tenant slugs. Two deliberate
+# non-Python carve-outs remain: the SECURITY DEFINER SQL function called
+# by ``DatabaseManager.set_tenant_context`` (autocommit psycopg layer —
+# session scope is the correct shape there) and the admin pool-checkout
+# listener that CLEARS the GUC ('' at session scope, pool hygiene).
 #
-# These helpers are the canonical primitive: every caller that needs to
-# set the GUC should use ``set_tenant_guc(session, tenant_id)``. Future
-# sprints migrate the existing ad-hoc call sites one service at a time.
+# Regressions are blocked by the ``adhoc-tenant-guc-set-config`` rule in
+# ``.semgrep/tenant-trust.yaml`` (a hard CI gate): new inline
+# ``set_config('app.tenant_id', :tid, ...)`` fails the build.
 #
 # Scope is ``SET LOCAL`` (transaction-scoped, auto-resets at COMMIT/ROLLBACK)
 # — never session-scoped. Pool-bleed safety relies on this: a connection
