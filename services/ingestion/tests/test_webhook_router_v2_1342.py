@@ -163,7 +163,11 @@ class _FakeSession:
 
 class _FakeNestedTxn:
     def __init__(self):
+        self.committed = False
         self.rolled_back = False
+
+    def commit(self):
+        self.committed = True
 
     def rollback(self):
         self.rolled_back = True

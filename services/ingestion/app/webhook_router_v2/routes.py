@@ -275,6 +275,17 @@ async def ingest_events(
                     "batch_persistence_failed",
                     extra={"error": str(e), "batch_size": len(valid_events)},
                 )
+                # The failed batch may have left flushed-but-doomed rows or an
+                # aborted transaction on the shared session. Reset it so the
+                # per-event retries below start clean — on Postgres a poisoned
+                # transaction turns the final commit() into a silent no-op
+                # that discards every event this loop reports as accepted.
+                try:
+                    db_session.rollback()
+                except SQLAlchemyError as rb_err:
+                    _pkg.logger.warning(
+                        "fallback_pre_rollback_failed: %s", str(rb_err)
+                    )
                 # Fall back to per-event persistence
                 for event, alerts in valid_events:
                     # Enforcement: same pre-eval gate as the happy path.
@@ -294,6 +305,13 @@ async def ingest_events(
                         ))
                         rejected += 1
                         continue
+                    # Each event gets its own savepoint (same pattern as the
+                    # webhook_compat v1 path) so one event's storage failure
+                    # never poisons the shared transaction — without it, the
+                    # events already accepted by this loop are silently
+                    # discarded at the final commit while the response still
+                    # reports them accepted with hashes.
+                    savepoint = db_session.begin_nested()
                     try:
                         store_result = persistence.store_event(
                             tenant_id=tenant_id,
@@ -309,15 +327,6 @@ async def ingest_events(
                             kdes=event.kdes,
                             alerts=alerts,
                         )
-                        results.append(EventResult(
-                            traceability_lot_code=event.traceability_lot_code,
-                            cte_type=event.cte_type.value,
-                            status="accepted",
-                            event_id=store_result.event_id,
-                            sha256_hash=store_result.sha256_hash,
-                            chain_hash=store_result.chain_hash,
-                        ))
-                        accepted += 1
 
                         # Canonical normalization + rule evaluation. Required in
                         # the same transaction as the legacy fallback write.
@@ -329,6 +338,17 @@ async def ingest_events(
                             source=payload.source,
                             canonical_event_id=store_result.event_id,
                         )
+                        savepoint.commit()
+
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="accepted",
+                            event_id=store_result.event_id,
+                            sha256_hash=store_result.sha256_hash,
+                            chain_hash=store_result.chain_hash,
+                        ))
+                        accepted += 1
 
                         _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
@@ -345,6 +365,12 @@ async def ingest_events(
                         except (ImportError, SQLAlchemyError, ValueError, TypeError, KeyError) as learn_err:
                             _pkg.logger.warning("catalog_learn_skipped: %s", str(learn_err))
                     except (SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as inner_e:
+                        try:
+                            savepoint.rollback()
+                        except SQLAlchemyError as sp_err:
+                            _pkg.logger.warning(
+                                "fallback_savepoint_rollback_failed: %s", str(sp_err)
+                            )
                         # F-3: don't leak SQL/bound-params from SQLAlchemyError.__str__
                         # to the API caller. Full detail goes to server logs with a
                         # correlation_id; the response carries only the correlation_id.

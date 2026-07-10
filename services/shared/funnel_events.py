@@ -98,22 +98,36 @@ def emit_funnel_event(
             )
             inserted = bool(getattr(result, "rowcount", 0) > 0)
         else:
-            result = session.execute(
-                text(
-                    """
-                    INSERT INTO funnel_events (tenant_id, event_name, metadata)
-                    VALUES (CAST(:tenant_id AS uuid), :event_name, CAST(:metadata AS jsonb))
-                    ON CONFLICT (tenant_id, event_name) DO NOTHING
-                    RETURNING id
-                    """
-                ),
-                {
-                    "tenant_id": tenant,
-                    "event_name": normalized_event,
-                    "metadata": json.dumps(payload, sort_keys=True),
-                },
+            statement = text(
+                """
+                INSERT INTO funnel_events (tenant_id, event_name, metadata)
+                VALUES (CAST(:tenant_id AS uuid), :event_name, CAST(:metadata AS jsonb))
+                ON CONFLICT (tenant_id, event_name) DO NOTHING
+                RETURNING id
+                """
             )
-            inserted = result.fetchone() is not None
+            params = {
+                "tenant_id": tenant,
+                "event_name": normalized_event,
+                "metadata": json.dumps(payload, sort_keys=True),
+            }
+            begin_nested = getattr(session, "begin_nested", None)
+            if not owns_session and callable(begin_nested):
+                # Borrowed session: run on a SAVEPOINT so a failed
+                # telemetry insert (e.g. funnel_events_tenant_id_fkey when
+                # the tenant row doesn't exist) rolls back only itself. On
+                # Postgres a plain failed statement aborts the enclosing
+                # transaction, and the caller's later commit() then
+                # silently discards everything flushed before it — the
+                # webhook ingest path lost whole accepted batches of CTE
+                # events / hash-chain rows this way while still returning
+                # 200 "accepted" to the sender.
+                with begin_nested():
+                    result = session.execute(statement, params)
+                    inserted = result.fetchone() is not None
+            else:
+                result = session.execute(statement, params)
+                inserted = result.fetchone() is not None
 
         if owns_session:
             session.commit()
