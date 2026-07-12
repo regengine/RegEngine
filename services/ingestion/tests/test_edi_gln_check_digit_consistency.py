@@ -39,9 +39,9 @@ from shared.fsma_validation import (  # noqa: E402
 # GS1 spec ground truth (GLN/GTIN/SSCC share one mod-10 algorithm). These are
 # real, published check digits — they only validate under the correct weighting.
 GS1_SPEC_EXAMPLES = [
-    ("400638133393", 1),   # textbook EAN-13 / GTIN-13 4006381333931
+    ("400638133393", 1),  # textbook EAN-13 / GTIN-13 4006381333931
     ("0950600013435", 2),  # GS1 sample GTIN-14 09506000134352
-    ("9638507", 4),        # GTIN-8 96385074
+    ("9638507", 4),  # GTIN-8 96385074
 ]
 
 # 13-digit GLNs whose check digit is correct under the GS1 standard.
@@ -98,6 +98,5 @@ def test_validators_never_disagree_across_check_digits():
             webhook_ok = webhook_validate_gln(gln)[0]
             shared_ok = shared_validate_gln(gln).is_valid
             assert utils_ok == webhook_ok == shared_ok, (
-                f"validators disagree on {gln}: "
-                f"utils={utils_ok} webhook={webhook_ok} shared={shared_ok}"
+                f"validators disagree on {gln}: utils={utils_ok} webhook={webhook_ok} shared={shared_ok}"
             )
