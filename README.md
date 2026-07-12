@@ -31,13 +31,14 @@ Verified product capabilities in the current tree:
 
 | Capability | Evidence |
 | --- | --- |
-| API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2.py](services/ingestion/app/webhook_router_v2.py) |
+| API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2/routes.py](services/ingestion/app/webhook_router_v2/routes.py) |
 | Canonical tenant context for API-key, JWT, and ingestion RBAC callers | [services/shared/tenant_context.py](services/shared/tenant_context.py) |
 | Legacy ingestion route tenant-context migration inventory | [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) |
 | Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
 | CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
 | EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
 | EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
 | Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
 | Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
 | CTE persistence, hash-chain storage, and verification | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py) |
@@ -47,7 +48,8 @@ Verified product capabilities in the current tree:
 | Persisted admin tenant provisioning | [services/admin/app/routes.py](services/admin/app/routes.py) |
 | Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
 | Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
-| Password reset redirect hardening | [frontend/src/app/api/auth/supabase/reset-email/route.ts](frontend/src/app/api/auth/supabase/reset-email/route.ts) |
+| Passwordless email-OTP and passkey login | [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts) |
+| Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
 | Scheduler jobs and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
 
@@ -101,7 +103,7 @@ Verified from checked-in config and code:
 - Root migration config: [alembic.ini](alembic.ini).
 - Migration files: [alembic/versions/](alembic/versions/).
 - Deploy migration runner: [scripts/run-migrations.sh](scripts/run-migrations.sh).
-- Legacy Flyway-style SQL files still exist under service directories and are tracked as orphan-migration debt by [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py).
+- Legacy Flyway-style SQL migrations under service directories have been removed (meta-issue #2004); [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py) is a CI guard that keeps orphan migrations at zero and fails if any are reintroduced.
 
 Schema-related CI guards include:
 
@@ -134,14 +136,15 @@ Verified controls in the codebase:
 - Rate limiting code exists for multiple surfaces, including tenant-scoped ingestion limits and auth-related limits.
 - Paid endpoint access uses [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) and derives tenant from authenticated principal state, not request tenant claims.
 - Admin tenant creation through `POST /v1/admin/tenants` persists a `TenantModel` row with active status before returning the tenant UUID.
-- Supabase reset-email handling derives `/auth/callback?next=/reset-password` server-side and does not trust client-controlled reset redirects.
-- Frontend auth uses Supabase session state plus a RegEngine JWT/cookie flow. See [frontend/src/lib/auth-context.tsx](frontend/src/lib/auth-context.tsx), [frontend/src/proxy.ts](frontend/src/proxy.ts), and [frontend/src/app/login/LoginClient.tsx](frontend/src/app/login/LoginClient.tsx).
+- Primary frontend login is passwordless: email one-time-code and WebAuthn passkey login, issued through HTTP-only cookie sessions. See [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts), and [frontend/src/app/login/PasswordlessEntryClient.tsx](frontend/src/app/login/PasswordlessEntryClient.tsx). OTP codes are delivered by Resend. In local E2E mode only (`REGENGINE_E2E_MODE` plus `REGENGINE_E2E_EMAIL_OUTBOX`; hard-blocked in production by [services/admin/app/e2e_safety.py](services/admin/app/e2e_safety.py)), codes are also written to a Playwright outbox file. If `RESEND_API_KEY` is unset outside E2E mode, codes are not delivered at all — the challenge flow drops the code with only an error log.
+- A legacy Supabase-session code path still exists in [frontend/src/proxy.ts](frontend/src/proxy.ts) alongside the passwordless flow; do not assume it has been fully removed. [frontend/src/lib/auth-context.tsx](frontend/src/lib/auth-context.tsx) is now cookie-session only.
+- A public, unauthenticated lead-capture surface exists under `/api/v1/tools` ([services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py)): email in, 6-digit code out, verified leads stored in `tool_leads`, plus public GDPR lead-erasure endpoints. Endpoints are rate limited. Tool-access JWTs are signed with a dedicated `TOOL_ACCESS_SECRET` that is never shared with session keys; startup raises in production if it is unset.
 
 Tenant-scoped HTTP handlers must use authenticated principal state as the source of tenant authority. Path, query, header, and JSON body `tenant_id` values are treated as caller assertions only; conflicts with the authenticated tenant fail closed with `409 E_TENANT_MISMATCH`. Missing principal or tenant context fails with `401 E_NO_PRINCIPAL` or `401 E_NO_TENANT`. The current legacy ingestion route inventory is maintained in [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md).
 
 Subscription-gated paid routes also fail closed: missing or inactive subscriptions return `402`, and Redis/circuit uncertainty returns `503` because the service cannot confirm entitlement state.
 
-Known authentication caveat: the dual Supabase plus RegEngine JWT flow can produce session mismatch states. Treat auth behavior as code-and-test verified, not marketing-copy verified.
+Known authentication caveat: two login/session code paths (passwordless cookie sessions and the legacy Supabase-session flow in `proxy.ts`) coexist in the frontend. Treat auth behavior as code-and-test verified, not marketing-copy verified.
 
 ## Local Development
 
@@ -244,7 +247,7 @@ Notes:
 
 Main workflows live in [.github/workflows/](.github/workflows/).
 
-Backend CI includes:
+Backend CI ([.github/workflows/backend-ci.yml](.github/workflows/backend-ci.yml)) includes:
 
 - test matrix by service
 - lint matrix by service plus `services/shared`
@@ -254,9 +257,9 @@ Backend CI includes:
 - orphan migration guard
 - tenant_id UUID guard
 - ingestion full suite hard gate
-- tenant-trust Semgrep gate with zero existing findings allowed
-- secrets scanning through gitleaks and detect-secrets
 - final `ci-status` gate
+
+The security workflow ([.github/workflows/security.yml](.github/workflows/security.yml)) separately runs the tenant-trust Semgrep gate (zero findings allowed) plus gitleaks and detect-secrets secrets scanning; these run outside the backend `ci-status` gate.
 
 Frontend CI is separate in [.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml).
 
@@ -273,10 +276,11 @@ Verified deployment files:
 These are current repo facts, not speculation:
 
 - The codebase still contains both consolidated-monolith wiring and legacy service entrypoints.
-- Legacy/orphan migration files still exist and are guarded by an allowlist. See [scripts/orphan_migrations_allowlist.txt](scripts/orphan_migrations_allowlist.txt).
-- A live ORM-to-database type assertion startup check now runs during startup for
-  the admin ORM/schema path; extend that coverage deliberately if more ORM
-  surfaces become part of the production contract.
+- Legacy/orphan migration files were burned down to zero (#2004). [scripts/orphan_migrations_allowlist.txt](scripts/orphan_migrations_allowlist.txt) is a comments-only zero-state contract; [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py) fails CI if any orphan migration file or allowlist entry reappears.
+- A live ORM-to-database type assertion startup check runs for the admin
+  ORM/schema path and the shared `api_keys` auth tables (see `server/main.py`
+  startup); extend that coverage deliberately if more ORM surfaces become part
+  of the production contract.
 - Rule failures are not universally blocking unless the relevant enforcement mode is enabled and the route supports it.
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j, Redis, Redpanda/Kafka-compatible code paths exist, but the default local dev compose file starts only PostgreSQL.
