@@ -47,7 +47,7 @@ interface RecallTimerProps {
 }
 
 export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, className }: RecallTimerProps) {
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   // Update timer every second
   useEffect(() => {

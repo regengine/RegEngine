@@ -29,12 +29,16 @@ export default [
             // Newer eslint-plugin-react-hooks v7 rules that weren't enforced
             // under the old `.eslintrc.json` config (lint has been effectively
             // off since the Next.js 16 upgrade silently broke `next lint`).
-            // Downgraded to warnings so existing violations don't block CI;
-            // tracked for follow-up cleanup.
+            // Burndown (WS-10): each rule is promoted warn → error as its
+            // violation count reaches zero. Remaining at warn:
+            //   - set-state-in-effect (16 violations)
+            //   - exhaustive-deps (7 violations)
+            // Promoted to error (violations fixed, do not regress):
+            //   - purity, immutability, refs
             'react-hooks/set-state-in-effect': 'warn',
-            'react-hooks/purity': 'warn',
-            'react-hooks/immutability': 'warn',
-            'react-hooks/refs': 'warn',
+            'react-hooks/purity': 'error',
+            'react-hooks/immutability': 'error',
+            'react-hooks/refs': 'error',
 
             // Pre-existing <a> tags in src/app/sandbox/results/[id]/SharedSandboxResult.tsx
             // pointing at /#sandbox. Downgraded to warn to unblock CI; a
