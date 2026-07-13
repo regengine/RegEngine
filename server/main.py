@@ -430,6 +430,19 @@ def _router_enabled(name: str) -> bool:
     return enabled
 
 
+def _subsystem_active(name: str) -> bool:
+    """Pure predicate: would ``name`` be mounted, without _router_enabled's
+    ``_MOUNTED_ROUTERS`` side effect. Safe to call after startup (e.g. from
+    the /readiness probe) to decide whether a subsystem's dependencies are
+    even worth probing."""
+    router_name = name.lower()
+    if router_name in _DISABLED_ROUTERS:
+        return False
+    if _is_prod and router_name in _EXPERIMENTAL_ROUTERS and not _ENABLE_EXPERIMENTAL_ROUTERS:
+        return False
+    return True
+
+
 # Issue #2517 — same diagnostic gate used by /v1/scheduler/status.
 from shared.observability.metrics_auth import require_metrics_key
 
@@ -874,7 +887,10 @@ async def readiness(request: Request):
     optional dependencies — failures are reported per-component in the
     ``checks`` payload with overall status ``degraded`` but still return 200,
     so a down optional mirror cannot fail the Railway healthcheck
-    (railway.toml healthcheckPath=/readiness) and block deploys.
+    (railway.toml healthcheckPath=/readiness) and block deploys. Neo4j is
+    probed only when the graph subsystem is mounted; when it is disabled
+    (the production default — graph routers are experimental) Neo4j is
+    reported ``not_probed`` and never touched (WS-6).
 
     The background runners (ingestion worker, embedded scheduler) are reported
     the same way (#2518): a swallowed boot failure shows as ``error`` and
@@ -921,14 +937,33 @@ async def readiness(request: Request):
         checks["redis"] = {"status": "error", "error": str(exc)[:200]}
 
     # --- Neo4j (optional graph mirror — never fatal to readiness) ---
-    # Bounded timeouts: the driver defaults to a 30s connect / 60s acquisition
-    # timeout, so without them an unreachable Neo4j hangs the probe long enough
-    # to fail the Railway healthcheck even though the response would be 200.
-    try:
-        from neo4j import GraphDatabase
+    # WS-6: only probe Neo4j when the graph subsystem is actually mounted.
+    # The graph routers are experimental and auto-disabled in production
+    # (ENABLE_EXPERIMENTAL_ROUTERS off), yet NEO4J_URI is set in prod for the
+    # best-effort admin supplier-graph mirror. Probing a mirror that no
+    # mounted route reads only adds latency to every Railway healthcheck and
+    # would flip the deploy-gating payload to ``degraded`` on a Neo4j blip
+    # for a subsystem nobody is serving. When graph is disabled we report
+    # ``not_probed`` (informational; not an error, so it never degrades). The
+    # admin mirror's own health stays observable via its runtime
+    # shared.circuit_breaker.neo4j_circuit metrics, not this deploy gate.
+    #
+    # When the graph subsystem IS active, probe with bounded timeouts: the
+    # driver defaults to a 30s connect / 60s acquisition timeout, so without
+    # them an unreachable Neo4j hangs the probe long enough to fail the
+    # Railway healthcheck even though the response would be 200.
+    neo4j_uri = os.getenv("NEO4J_URI")
+    if not neo4j_uri:
+        checks["neo4j"] = {"status": "not_configured"}
+    elif not _subsystem_active("graph"):
+        checks["neo4j"] = {
+            "status": "not_probed",
+            "reason": "graph subsystem disabled",
+        }
+    else:
+        try:
+            from neo4j import GraphDatabase
 
-        neo4j_uri = os.getenv("NEO4J_URI")
-        if neo4j_uri:
             driver = GraphDatabase.driver(
                 neo4j_uri,
                 auth=(
@@ -943,10 +978,8 @@ async def readiness(request: Request):
             finally:
                 driver.close()
             checks["neo4j"] = {"status": "ok"}
-        else:
-            checks["neo4j"] = {"status": "not_configured"}
-    except Exception as exc:
-        checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
+        except Exception as exc:
+            checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
 
     # --- Background runners (#2518) ---
     # The ingestion worker and embedded scheduler start in the lifespan inside
