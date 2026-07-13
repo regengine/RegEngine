@@ -206,6 +206,19 @@ class TestSetTenantGucIfUuid:
         assert set_tenant_guc_if_uuid(session, None) is None
         assert session.calls == []
 
+    def test_uuid_object_sets_the_guc(self):
+        """A uuid.UUID instance must SET (str-coerced), not raise — the
+        documented contract is 'set for UUID tenants, skip otherwise, never
+        raise'. Previously the parse check passed but set_tenant_guc's
+        isinstance(str) check raised ValueError (WS-4 adversarial finding)."""
+        import uuid as _uuid_mod
+
+        session = _RecordingSession()
+        tid = _uuid_mod.UUID("22222222-2222-2222-2222-222222222222")
+        set_tenant_guc_if_uuid(session, tid)
+        assert len(session.calls) == 1
+        assert session.calls[0][1] == {"tid": str(tid)}
+
 
 # ---------------------------------------------------------------------------
 # apply_tenant_context — convenience wrapper

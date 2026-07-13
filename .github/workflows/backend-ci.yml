@@ -1,6 +1,15 @@
 name: Backend Services CI/CD
 
 on:
+  # Nightly run against main. The push/pull_request triggers below are
+  # path-filtered, so a stretch of docs- or frontend-only merges leaves the
+  # backend gauntlet unexercised — that let seven gates rot silently on main
+  # (lock freshness, repo-root RLS suite, ingestion suite, admin tests, ...)
+  # until the next backend-touching PR lit them all up at once (#2566).
+  # A scheduled run converts silent drift into a red run within 24h.
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
@@ -39,8 +48,11 @@ on:
       - '.github/workflows/deploy.yml'
 
 # Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
 concurrency:
-  group: backend-${{ github.ref }}
+  group: backend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
 env:

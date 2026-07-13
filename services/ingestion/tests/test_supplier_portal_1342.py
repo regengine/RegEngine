@@ -153,12 +153,17 @@ class TestDbStorePortalLink:
         assert ok is False
 
     def test_success(self, monkeypatch):
+        # UUID tenant so the GUC-before-write ordering invariant is
+        # observable: _set_tenant_context now delegates to the canonical
+        # set_tenant_guc_if_uuid (WS-4 #1934), which binds {"tid": ...} and
+        # deliberately skips the GUC for non-UUID slugs.
+        tenant = "5f0c6f6a-9a1e-4b7e-8a53-2f6a1c9d0e11"
         session = _FakeSession()
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
         ok = _db_store_portal_link(
             "tok",
             {
-                "tenant_id": "t1",
+                "tenant_id": tenant,
                 "supplier_name": "S",
                 "created_at": "2026-04-17",
                 "expires_at": "2026-05-17",
@@ -167,7 +172,7 @@ class TestDbStorePortalLink:
         assert ok is True
         assert session.committed is True
         assert session.closed is True
-        assert session.executed[0][1] == {"tenant_id": "t1"}
+        assert session.executed[0][1] == {"tid": tenant}
 
     def test_failure_rolls_back(self, monkeypatch):
         session = _FakeSession(raise_on_execute=RuntimeError("boom"))
@@ -241,11 +246,14 @@ class TestDbUpdateStatus:
         assert _db_update_portal_link_status("tok", "revoked") is False
 
     def test_success(self, monkeypatch):
+        # UUID tenant — see TestDbStorePortalLink.test_success; the canonical
+        # GUC primitive binds {"tid": ...} and skips non-UUID slugs.
+        tenant = "5f0c6f6a-9a1e-4b7e-8a53-2f6a1c9d0e11"
         session = _FakeSession()
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
-        assert _db_update_portal_link_status("tok", "revoked", tenant_id="t1") is True
+        assert _db_update_portal_link_status("tok", "revoked", tenant_id=tenant) is True
         assert session.committed is True
-        assert session.executed[0][1] == {"tenant_id": "t1"}
+        assert session.executed[0][1] == {"tid": tenant}
 
     def test_failure_rolls_back(self, monkeypatch):
         session = _FakeSession(raise_on_execute=RuntimeError("oops"))

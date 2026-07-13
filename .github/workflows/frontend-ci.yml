@@ -1,6 +1,14 @@
 name: Frontend CI/CD
 
 on:
+  # Nightly run against main, mirroring backend-ci: the path-filtered
+  # triggers below leave these gates unexercised during stretches of
+  # backend-only merges, letting drift (promise-audit URL rot, e2e flake)
+  # accumulate silently until an unrelated frontend-touching PR pays for it.
+  # Offset from backend-ci's 05:00 to spread runner load.
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
@@ -49,8 +57,11 @@ on:
       - '.github/workflows/frontend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: frontend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
 env:

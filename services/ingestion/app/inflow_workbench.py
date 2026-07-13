@@ -259,7 +259,14 @@ def _db_session_for_tenant(tenant_id: str):
 
 
 def _set_tenant_context(db: Any, tenant_id: str) -> None:
-    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+    # Phase B (#1934): delegate to the canonical tenant-GUC primitive instead
+    # of inlining set_config. The _if_uuid variant preserves this module's
+    # slug-tenant behavior (dev/file-store tenants may be non-UUID): the GUC
+    # is skipped for slugs, and the fail-hard get_tenant_context() RLS
+    # predicate still rejects any DB read/write without tenant context.
+    from shared.tenant_context import set_tenant_guc_if_uuid
+
+    set_tenant_guc_if_uuid(db, tenant_id)
 
 
 def _is_production() -> bool:
