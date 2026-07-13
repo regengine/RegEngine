@@ -1,10 +1,11 @@
 # Frontend Page Audit
 
-> Last verified: 2026-04-17 (#1188)
-> Prior version dated 2026-03-19 claimed 7 directories had been moved to
-> `src/app/_disabled/`. That directory never existed and the pages listed
-> there were still linked. This version re-audits against the actual
-> routing graph.
+> Last verified: 2026-07-13 (WS-10)
+> Prior verification 2026-04-17 (#1188). Changes this pass: removed the
+> deleted `/owner/*`, `/forgot-password`, and `/reset-password` routes from
+> the inventory, refreshed the quick stats against the current tree
+> (163 pages / 38 handlers), and fixed the middleware reference — Next 16
+> renamed `src/middleware.ts` to `src/proxy.ts`.
 
 ## What's live and linked
 
@@ -24,7 +25,9 @@ Top-level entries link to:
 Authenticated app — reached after `/login` or `/alpha`. Each has active
 product owners and regular UI work.
 1. `/` — Landing page
-2. `/alpha`, `/login`, `/signup`, `/forgot-password`, `/reset-password`
+2. `/alpha`, `/login`, `/signup` — sign-in is passwordless (email OTP /
+   passkey via `/login`); the old `/forgot-password` and `/reset-password`
+   pages no longer exist
 3. `/onboarding` + `/onboarding/bulk-upload` + `/onboarding/setup/*`
 4. `/dashboard` and `/dashboard/*` (20 sub-pages; canonical user surface)
 5. `/fsma` and `/fsma/*` — authenticated FSMA dashboard (not the same
@@ -73,11 +76,19 @@ the link graph goes quiet before the pages are removed.
 
 ## Candidates for future archival
 Still reachable but low-usage. Keep for now, revisit if we prune:
-- `/owner/*` (15 pages) — billing/contracts suite, not wired up
 - `/portal/[portalId]` — supplier portal entry point
 - `/sandbox/results/[id]` — sandbox analysis result share
 
+Resolved since the last audit: `/owner/*` (the unwired billing/contracts
+suite) has been deleted, and its prefix removed from
+`src/lib/app-routes.ts`.
+
 ## Route map quick stats
-- Total page routes: ~150 (including dynamic `[param]` variants)
-- API route handlers: 29
-- Middleware-gated route prefixes: 24 (see `src/middleware.ts`)
+- Total page routes: 163 (including dynamic `[param]` variants)
+- API route handlers: 38
+- Auth-gated route prefixes: 19 (`AUTHENTICATED_APP_ROUTE_PREFIXES` in
+  `src/lib/app-routes.ts`, consumed by `src/proxy.ts` — Next 16 renamed
+  middleware to proxy)
+
+Regenerate the counts with:
+`find src/app -name page.tsx | wc -l` and `find src/app -name route.ts | wc -l`.
