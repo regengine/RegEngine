@@ -17,8 +17,14 @@ from __future__ import annotations
 import re
 
 import pytest
-from fastapi import FastAPI
-from fastapi.routing import APIRoute
+
+# sdk-ci runs this suite in a CLEAN venv (pytest + httpx + requests only) to
+# prove the installed package works without the backend dependency tree. The
+# route-contract half of this module needs the real routers, so it runs in
+# the full backend suite instead of sdk-ci.
+fastapi = pytest.importorskip("fastapi", reason="route-contract check requires the backend dependency tree")
+from fastapi import FastAPI  # noqa: E402
+from fastapi.routing import APIRoute  # noqa: E402
 
 from regengine import RegEngineClient
 from regengine.models import CTEType
