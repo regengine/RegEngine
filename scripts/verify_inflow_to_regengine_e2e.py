@@ -27,7 +27,6 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_ROOTS = (
     REPO_ROOT,
@@ -143,10 +142,9 @@ def _check_database(tenant_id: str) -> None:
                 + ", ".join(missing)
             )
 
-        db.execute(
-            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
-            {"tenant_id": tenant_id},
-        )
+        from shared.tenant_context import set_tenant_guc
+
+        set_tenant_guc(db, tenant_id)
     finally:
         db.close()
 
@@ -228,10 +226,9 @@ def _assert_workbench_persisted(tenant_id: str, run_id: str) -> None:
 
     db = SessionLocal()
     try:
-        db.execute(
-            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
-            {"tenant_id": tenant_id},
-        )
+        from shared.tenant_context import set_tenant_guc
+
+        set_tenant_guc(db, tenant_id)
         stored = db.execute(
             text(
                 """
@@ -284,10 +281,9 @@ def _persistence_counts(tenant_id: str) -> dict[str, int]:
 
     db = SessionLocal()
     try:
-        db.execute(
-            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
-            {"tenant_id": tenant_id},
-        )
+        from shared.tenant_context import set_tenant_guc
+
+        set_tenant_guc(db, tenant_id)
         event_count = db.execute(
             text(
                 """

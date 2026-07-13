@@ -113,10 +113,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 
         RE-SCH-003: this endpoint exposes circuit-breaker state and per-source
         scrape error messages — useful debugging context that should not be
-        public. Gate behind ``X-Metrics-Key`` (same secret used by ``/metrics``
-        and by the sibling FastAPI ``/status`` route at
-        ``services/scheduler/api.py``). The basic ``/health`` endpoint stays
-        unauthenticated so the k8s liveness probe (see
+        public. Gate behind ``X-Metrics-Key`` (same secret used by
+        ``/metrics``). The basic ``/health`` endpoint stays unauthenticated so
+        the k8s liveness probe (see
         ``infra/k8s/base/scheduler/deployment.yaml``) keeps working.
         """
         import json

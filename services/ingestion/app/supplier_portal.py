@@ -128,7 +128,13 @@ def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
 
 
 def _set_tenant_context(db, tenant_id: str) -> None:
-    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+    # Phase B (#1934): delegate to the canonical tenant-GUC primitive. The
+    # _if_uuid variant preserves portal behavior for non-UUID tenant slugs
+    # (the GUC is skipped; fail-hard get_tenant_context() RLS still rejects
+    # DB access without tenant context).
+    from shared.tenant_context import set_tenant_guc_if_uuid
+
+    set_tenant_guc_if_uuid(db, tenant_id)
 
 
 def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
@@ -357,7 +363,7 @@ def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str
     db = get_db_safe()
     if db:
         try:
-            db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+            _set_tenant_context(db, tenant_id)
             row = db.execute(
                 # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
                 text("""

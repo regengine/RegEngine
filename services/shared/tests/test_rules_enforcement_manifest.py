@@ -105,3 +105,38 @@ def test_manifest_is_nonempty():
         "Manifest unexpectedly small — at least the 3 documented call sites "
         "(webhook_compat, epcis/persistence, webhook_router_v2) must be present."
     )
+
+
+# ---------------------------------------------------------------------------
+# WS-9 / #1203 option 2 — /validate must derive verdicts from shared.rules
+# ---------------------------------------------------------------------------
+
+
+def test_compliance_validate_derives_from_rules_engine():
+    """Drift guard for the #1203 option-2 rewire (WS-9).
+
+    The compliance ``POST /validate`` endpoint must derive its verdicts
+    from ``services/shared/rules`` — a regression to a local contract
+    check (the pre-WS-9 ``_validate_fsma204_config``) would silently
+    decouple the endpoint from the versioned rule definitions the
+    ingestion paths enforce. This asserts the route module still imports
+    the engine and evaluates through it.
+    """
+    routes_path = REPO_ROOT / "services" / "compliance" / "app" / "routes.py"
+    text = routes_path.read_text()
+
+    assert "from shared.rules.engine import RulesEngine" in text, (
+        "services/compliance/app/routes.py no longer imports RulesEngine — "
+        "the /validate endpoint must evaluate through services/shared/rules "
+        "(#1203 option 2, WS-9), not a local validation stub."
+    )
+    assert "evaluate_event(" in text, (
+        "services/compliance/app/routes.py imports RulesEngine but never "
+        "calls evaluate_event() — /validate verdicts must come from the "
+        "rules engine (#1203 option 2, WS-9)."
+    )
+    assert "def _validate_fsma204_config" not in text, (
+        "The pre-WS-9 local contract check (_validate_fsma204_config) has "
+        "reappeared in services/compliance/app/routes.py — /validate "
+        "verdicts must derive from services/shared/rules, not a local stub."
+    )
