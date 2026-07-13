@@ -40,10 +40,13 @@ jobs:
           import re
           from pathlib import Path
 
-          files = [
-              Path(".github/workflows/deploy.yml"),
-              Path(".github/workflows/security.yml"),
-          ]
+          # Cover EVERY workflow, not just deploy.yml/security.yml. Scoping the
+          # gate to two files is what let sentinel.yml drift to a mutable ref
+          # unnoticed (#2562 fixed that instance; this closes the class). Any
+          # new or edited workflow is now held to the SHA-pin / install-pin
+          # policy automatically.
+          workflow_dir = Path(".github/workflows")
+          files = sorted(workflow_dir.glob("*.yml")) + sorted(workflow_dir.glob("*.yaml"))
           action_ref = re.compile("uses:" + r"\s*([^@\s#]+)@([^\s#]+)")
           pinned_sha = re.compile(r"^[0-9a-f]{40}$")
           install_patterns = [
