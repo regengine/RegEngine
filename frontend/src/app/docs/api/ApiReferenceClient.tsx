@@ -102,11 +102,12 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
             {
                 method: 'POST',
                 path: '/validate',
-                description: 'Validate configuration against rules',
+                description:
+                    'Validate a CTE configuration against the versioned FSMA 204 rules engine (FTL-scoped)',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                body: '{ "config": {...}, "ruleset": "fsma_204" }',
-                response: '{ "valid": true, "errors": [], "warnings": [...] }',
+                body: '{ "ftl_commodity": "leafy greens", "config": { "cte_type": "HARVESTING", "tlc": "...", "kdes": {...} }, "strict": false }',
+                response: '{ "valid": true, "ftl_commodity": "leafy greens", "errors": [], "warnings": [...], "rules_evaluated": 5, "no_verdict_reason": null }',
             },
             {
                 method: 'GET',
