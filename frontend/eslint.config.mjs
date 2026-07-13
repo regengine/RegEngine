@@ -14,8 +14,6 @@ export default [
             'node_modules/**',
             'public/**',
             'test-results/**',
-            'build_output.txt',
-            'build_v2_log.txt',
         ],
     },
     {

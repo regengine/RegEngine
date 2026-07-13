@@ -69,6 +69,8 @@ secrets.md
 *.zip
 login_resp.json
 frontend/build_log.txt
+frontend/build_output.txt
+frontend/build_v2_log.txt
 
 # Stress test / bulk data files (move to external storage)
 fsma_stress_test_*
