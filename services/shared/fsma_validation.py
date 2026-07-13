@@ -75,8 +75,19 @@ class ValidationResult:
 
 
 def _gs1_check_digit(digits: str) -> int:
-    """Calculate GS1 check digit for a numeric string (without the check digit)."""
-    total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(reversed(digits)))
+    """Calculate GS1 check digit for a numeric string (without the check digit).
+
+    Per the GS1 General Specifications mod-10 algorithm, the data digits are
+    weighted from the RIGHT as 3, 1, 3, 1, ... — i.e. the rightmost data digit
+    (immediately left of the check digit) is multiplied by 3. Enumerating the
+    *reversed* digits, index 0 is that rightmost digit, so even indices get 3
+    and odd indices get 1.
+
+    Cross-check: textbook EAN-13/GTIN-13 ``4006381333931`` has check digit 1,
+    and GS1 sample GTIN-14 ``09506000134352`` has check digit 2 — both only
+    validate under this weighting.
+    """
+    total = sum(int(d) * (1 if i % 2 else 3) for i, d in enumerate(reversed(digits)))
     return (10 - (total % 10)) % 10
 
 

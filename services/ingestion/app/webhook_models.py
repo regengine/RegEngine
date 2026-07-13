@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from shared.fsma_validation import calculate_gs1_check_digit
 
 _gln_logger = logging.getLogger("gln-validation")
 
@@ -25,12 +26,13 @@ def validate_gln(gln: str) -> tuple[bool, str | None]:
     """Validate a GS1 Global Location Number (13-digit with mod-10 check digit).
 
     Returns (is_valid, error_message). Standalone helper for use outside Pydantic.
+    Delegates the GS1 mod-10 check-digit math to the shared canonical helper so
+    ingestion and the rest of the platform share a single source of truth.
     """
     clean = re.sub(r"\D", "", gln)
     if len(clean) != 13:
         return False, f"GLN must be exactly 13 digits, got {len(clean)}"
-    total = sum(int(d) * (1 if i % 2 else 3) for i, d in enumerate(reversed(clean[:-1])))
-    expected = (10 - (total % 10)) % 10
+    expected = calculate_gs1_check_digit(clean[:-1])
     if int(clean[-1]) != expected:
         return False, f"GLN check digit invalid: expected {expected}, got {clean[-1]}"
     return True, None

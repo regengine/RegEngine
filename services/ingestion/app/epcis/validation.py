@@ -149,7 +149,9 @@ def _validate_gln_format(gln: str) -> bool:
         logger.debug("shared.fsma_validation unavailable — using inline GLN check")
         if not gln.isdigit() or len(gln) != 13:
             return False
-        total = sum(int(digit) * (3 if index % 2 else 1) for index, digit in enumerate(reversed(gln[:-1])))
+        # GS1 mod-10: data digits weighted 3,1,3,1,... from the right (rightmost
+        # data digit ×3). Keep in sync with shared.fsma_validation._gs1_check_digit.
+        total = sum(int(digit) * (1 if index % 2 else 3) for index, digit in enumerate(reversed(gln[:-1])))
         expected = (10 - (total % 10)) % 10
         return int(gln[-1]) == expected
 
