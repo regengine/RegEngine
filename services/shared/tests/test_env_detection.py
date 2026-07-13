@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 import os
 
+import pytest
+
 _ENV_MARKERS = (
     "DATABASE_URL",
     "ENV",
@@ -18,6 +20,10 @@ _ENV_MARKERS = (
     "RAILWAY_SERVICE_ID",
     "VERCEL_ENV",
     "VERCEL_URL",
+    # #2512: non-Railway/Vercel cloud markers must also force production.
+    "RENDER",
+    "FLY_APP_NAME",
+    "KUBERNETES_SERVICE_HOST",
 )
 
 
@@ -86,3 +92,46 @@ def test_no_cloud_markers_and_no_regengine_env_remains_non_production(monkeypatc
 
     assert "REGENGINE_ENV" not in os.environ
     assert env.is_production() is False
+
+
+# ─── #2512: non-Railway/Vercel cloud markers force production ────────────────
+
+
+@pytest.mark.parametrize("marker", ["RENDER", "FLY_APP_NAME", "KUBERNETES_SERVICE_HOST"])
+def test_non_railway_cloud_marker_forces_production(monkeypatch, marker):
+    """On Render/Fly/Kubernetes (no RAILWAY_*/VERCEL_*) with REGENGINE_ENV unset,
+    the central gate must still force production — otherwise dev auth fallbacks
+    (ephemeral JWT keys, in-memory sessions) silently activate on a deployed
+    host (#2512)."""
+    for key in _ENV_MARKERS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv(marker, "1")
+
+    env = _reload_env_module()
+
+    assert os.environ["REGENGINE_ENV"] == "production"
+    assert env.is_production() is True
+
+
+def test_shared_marker_constant_is_single_source_of_truth():
+    """database.py and invite_routes.py must reference the same CLOUD_ENV_VARS
+    tuple from shared.env — no divergent copies that can drift (#2512).
+
+    Asserted at the source level (not by importing the admin DB module, which
+    initializes a real engine at import time) so the check stays a fast unit
+    test: the two modules must import the shared constant and must NOT carry a
+    private hard-coded ``"RENDER"`` literal list of their own.
+    """
+    import shared.env as env
+
+    # The broadened markers live in the shared constant.
+    for marker in ("RENDER", "FLY_APP_NAME", "KUBERNETES_SERVICE_HOST"):
+        assert marker in env.CLOUD_ENV_VARS
+
+    # env.__file__ -> services/shared/env.py; two dirnames up -> services/.
+    services_dir = os.path.dirname(os.path.dirname(env.__file__))
+    for rel in ("admin/app/database.py", "admin/app/invite_routes.py"):
+        source = open(os.path.join(services_dir, rel), encoding="utf-8").read()
+        assert "CLOUD_ENV_VARS" in source, f"{rel} must import the shared CLOUD_ENV_VARS"
+        # No divergent local copy: the old hard-coded tuples listed "RENDER".
+        assert '"RENDER"' not in source, f"{rel} still defines a divergent cloud-marker list"

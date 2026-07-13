@@ -40,35 +40,41 @@ def get_recall_engine():
         return _recall_engine
 
     async def wrapped_forward(tlc, tenant_id=None):
-        db_name = Neo4jClient.get_global_database_name()
-        if tenant_id:
-            try:
-                # Handle both string and UUID objects
-                tid = uuid.UUID(str(tenant_id))
-                db_name = Neo4jClient.get_tenant_database_name(tid)
-            except (ValueError, TypeError):
-                pass
+        # #2540: a drill always carries the authenticated tenant
+        # (drill.tenant_id is set from get_current_tenant_id at creation).
+        # Require it here and raise rather than degrading to a null-tenant
+        # trace, which the query layer now rejects anyway.
+        if not tenant_id:
+            raise ValueError("wrapped_forward requires a tenant_id; null-tenant traces are not supported (#2540)")
+        tenant_str = str(tenant_id)
+        try:
+            tid = uuid.UUID(tenant_str)
+            db_name = Neo4jClient.get_tenant_database_name(tid)
+        except (ValueError, TypeError):
+            db_name = Neo4jClient.get_global_database_name()
 
         client = Neo4jClient(database=db_name)
         try:
-            res = await trace_forward(client, tlc, tenant_id=str(tenant_id) if tenant_id else None)
+            res = await trace_forward(client, tlc, tenant_id=tenant_str)
             # Convert TraceResult to dict for engine compatibility if needed
             return res.__dict__ if hasattr(res, "__dict__") else res
         finally:
             await client.close()
 
     async def wrapped_backward(tlc, tenant_id=None):
-        db_name = Neo4jClient.get_global_database_name()
-        if tenant_id:
-            try:
-                tid = uuid.UUID(str(tenant_id))
-                db_name = Neo4jClient.get_tenant_database_name(tid)
-            except (ValueError, TypeError):
-                pass
+        # #2540: require the tenant — see wrapped_forward.
+        if not tenant_id:
+            raise ValueError("wrapped_backward requires a tenant_id; null-tenant traces are not supported (#2540)")
+        tenant_str = str(tenant_id)
+        try:
+            tid = uuid.UUID(tenant_str)
+            db_name = Neo4jClient.get_tenant_database_name(tid)
+        except (ValueError, TypeError):
+            db_name = Neo4jClient.get_global_database_name()
 
         client = Neo4jClient(database=db_name)
         try:
-            res = await trace_backward(client, tlc, tenant_id=str(tenant_id) if tenant_id else None)
+            res = await trace_backward(client, tlc, tenant_id=tenant_str)
             return res.__dict__ if hasattr(res, "__dict__") else res
         finally:
             await client.close()

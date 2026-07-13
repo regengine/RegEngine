@@ -54,11 +54,12 @@ from shared.observability.context import setup_logging
 logger = setup_logging()
 
 # ── Imports ──────────────────────────────────────────────────────
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from shared.env import is_production
 from shared.middleware.security import add_security
 from shared.observability import add_observability
 from shared.rate_limit import add_rate_limiting
+
 from services.admin.app.e2e_safety import assert_e2e_mode_allowed
 
 assert_e2e_mode_allowed()
@@ -158,12 +159,22 @@ async def lifespan(app: FastAPI):
         register_regulation_handlers()
         register_agent_bridge_handlers()
         _ingestion_worker = TaskWorker(engine=_db_engine)
-        _ingestion_worker.start()
+        # #2518: keep the daemon thread handle so /readiness can tell a live
+        # worker from one whose loop died after start.
+        _ingestion_worker_thread = _ingestion_worker.start()
         app.state.ingestion_worker = _ingestion_worker
+        app.state.ingestion_worker_thread = _ingestion_worker_thread
+        # #2518: record the start outcome so /readiness can report a swallowed
+        # boot failure instead of silently passing while ingestion jobs pile up.
+        app.state.ingestion_worker_started = True
         logger.info("ingestion_task_worker_started")
     except Exception as exc:
-        logger.warning("ingestion_task_worker_start_failed", error=str(exc))
+        # #2518: escalate to error (Sentry-captured) — a swallowed worker-start
+        # failure used to vanish into warning noise while /readiness stayed green.
+        logger.error("ingestion_task_worker_start_failed", error=str(exc))
         app.state.ingestion_worker = None
+        app.state.ingestion_worker_thread = None
+        app.state.ingestion_worker_started = False
 
     # Run scheduler jobs in-process: FDA scrapers, recall→tenant alerting,
     # deadline monitoring, retention/archival, nightly FSMA sync. Production
@@ -175,9 +186,18 @@ async def lifespan(app: FastAPI):
         from server.workers.embedded_scheduler import start_embedded_scheduler
 
         app.state.embedded_scheduler = start_embedded_scheduler()
+        # #2518: distinguish "started" from "intentionally disabled". The
+        # runner is None when SCHEDULER_EMBEDDED=0 / non-production — that is a
+        # healthy state, not a failure. Only a raised exception is a failure.
+        app.state.embedded_scheduler_started = True
     except Exception as exc:
-        logger.warning("embedded_scheduler_start_failed", error=str(exc))
+        # #2518: escalate to error (Sentry-captured). A swallowed scheduler-start
+        # failure silently disables FDA scrapers, recall→tenant alerting,
+        # deadline monitoring, retention/archival, and the nightly FSMA sync —
+        # none of which have another execution home in production.
+        logger.error("embedded_scheduler_start_failed", error=str(exc))
         app.state.embedded_scheduler = None
+        app.state.embedded_scheduler_started = False
 
     yield
 
@@ -410,7 +430,35 @@ def _router_enabled(name: str) -> bool:
     return enabled
 
 
-@app.get("/api/v1/features", tags=["system"])
+def _subsystem_active(name: str) -> bool:
+    """Pure predicate: would ``name`` be mounted, without _router_enabled's
+    ``_MOUNTED_ROUTERS`` side effect. Safe to call after startup (e.g. from
+    the /readiness probe) to decide whether a subsystem's dependencies are
+    even worth probing."""
+    router_name = name.lower()
+    if router_name in _DISABLED_ROUTERS:
+        return False
+    if _is_prod and router_name in _EXPERIMENTAL_ROUTERS and not _ENABLE_EXPERIMENTAL_ROUTERS:
+        return False
+    return True
+
+
+# Issue #2517 — same diagnostic gate used by /v1/scheduler/status.
+from shared.observability.metrics_auth import require_metrics_key
+
+
+@app.get(
+    "/api/v1/features",
+    tags=["system"],
+    # Issue #2517 — the full router topology (enabled/disabled/experimental) is
+    # reconnaissance-grade info that lets an anonymous caller fingerprint the
+    # deployment's attack surface. Prod already nulls docs/redoc/openapi to
+    # avoid exactly this; this endpoint must not re-open the same door.
+    # Gated behind X-Metrics-Key (mirrors /v1/scheduler/status) and hidden from
+    # the OpenAPI schema in non-prod.
+    include_in_schema=False,
+    dependencies=[Depends(require_metrics_key)],
+)
 async def list_enabled_features():
     return {
         "enabled": _MOUNTED_ROUTERS,
@@ -832,14 +880,23 @@ async def health():
 
 
 @app.get("/readiness", tags=["system"])
-async def readiness():
+async def readiness(request: Request):
     """Deep readiness probe — verifies critical dependencies.
 
     Postgres is required: missing or down returns 503. Redis and Neo4j are
     optional dependencies — failures are reported per-component in the
     ``checks`` payload with overall status ``degraded`` but still return 200,
     so a down optional mirror cannot fail the Railway healthcheck
-    (railway.toml healthcheckPath=/readiness) and block deploys.
+    (railway.toml healthcheckPath=/readiness) and block deploys. Neo4j is
+    probed only when the graph subsystem is mounted; when it is disabled
+    (the production default — graph routers are experimental) Neo4j is
+    reported ``not_probed`` and never touched (WS-6).
+
+    The background runners (ingestion worker, embedded scheduler) are reported
+    the same way (#2518): a swallowed boot failure shows as ``error`` and
+    degrades the payload to 200 ``degraded`` — visible to operators — but never
+    503, so a non-fatal background failure does not block deploys. Postgres
+    remains the only component that can return 503.
 
     Use this for load balancer health checks so traffic isn't routed
     to instances that can't actually serve requests.
@@ -880,14 +937,33 @@ async def readiness():
         checks["redis"] = {"status": "error", "error": str(exc)[:200]}
 
     # --- Neo4j (optional graph mirror — never fatal to readiness) ---
-    # Bounded timeouts: the driver defaults to a 30s connect / 60s acquisition
-    # timeout, so without them an unreachable Neo4j hangs the probe long enough
-    # to fail the Railway healthcheck even though the response would be 200.
-    try:
-        from neo4j import GraphDatabase
+    # WS-6: only probe Neo4j when the graph subsystem is actually mounted.
+    # The graph routers are experimental and auto-disabled in production
+    # (ENABLE_EXPERIMENTAL_ROUTERS off), yet NEO4J_URI is set in prod for the
+    # best-effort admin supplier-graph mirror. Probing a mirror that no
+    # mounted route reads only adds latency to every Railway healthcheck and
+    # would flip the deploy-gating payload to ``degraded`` on a Neo4j blip
+    # for a subsystem nobody is serving. When graph is disabled we report
+    # ``not_probed`` (informational; not an error, so it never degrades). The
+    # admin mirror's own health stays observable via its runtime
+    # shared.circuit_breaker.neo4j_circuit metrics, not this deploy gate.
+    #
+    # When the graph subsystem IS active, probe with bounded timeouts: the
+    # driver defaults to a 30s connect / 60s acquisition timeout, so without
+    # them an unreachable Neo4j hangs the probe long enough to fail the
+    # Railway healthcheck even though the response would be 200.
+    neo4j_uri = os.getenv("NEO4J_URI")
+    if not neo4j_uri:
+        checks["neo4j"] = {"status": "not_configured"}
+    elif not _subsystem_active("graph"):
+        checks["neo4j"] = {
+            "status": "not_probed",
+            "reason": "graph subsystem disabled",
+        }
+    else:
+        try:
+            from neo4j import GraphDatabase
 
-        neo4j_uri = os.getenv("NEO4J_URI")
-        if neo4j_uri:
             driver = GraphDatabase.driver(
                 neo4j_uri,
                 auth=(
@@ -902,10 +978,45 @@ async def readiness():
             finally:
                 driver.close()
             checks["neo4j"] = {"status": "ok"}
+        except Exception as exc:
+            checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
+
+    # --- Background runners (#2518) ---
+    # The ingestion worker and embedded scheduler start in the lifespan inside
+    # best-effort try/except blocks. Before #2518 a swallowed start failure left
+    # app.state.* = None while /readiness stayed green, so stuck ingestion /
+    # disabled recall alerting was invisible to deploy health checks. Report
+    # their start outcome here. These are non-fatal (degraded, never 503):
+    # mirror the optional-dependency pattern so a background failure surfaces in
+    # the payload without blocking a deploy.
+    state = getattr(request.app, "state", None)
+
+    # --- Ingestion worker ---
+    if state is None or not hasattr(state, "ingestion_worker_started"):
+        # Mounted on a minimal app (no lifespan) — nothing to report.
+        checks["worker"] = {"status": "not_configured"}
+    elif not state.ingestion_worker_started:
+        checks["worker"] = {"status": "error", "error": "ingestion worker failed to start"}
+    else:
+        thread = getattr(state, "ingestion_worker_thread", None)
+        if thread is not None and not thread.is_alive():
+            checks["worker"] = {"status": "error", "error": "ingestion worker thread is not alive"}
         else:
-            checks["neo4j"] = {"status": "not_configured"}
-    except Exception as exc:
-        checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
+            checks["worker"] = {"status": "ok"}
+
+    # --- Embedded scheduler ---
+    # A None runner with a successful start is the *intended* state when the
+    # scheduler is disabled (SCHEDULER_EMBEDDED=0 / non-production) — report
+    # that as "disabled", not an error. Only a raised start exception
+    # (embedded_scheduler_started is False) is a failure.
+    if state is None or not hasattr(state, "embedded_scheduler_started"):
+        checks["scheduler"] = {"status": "not_configured"}
+    elif not state.embedded_scheduler_started:
+        checks["scheduler"] = {"status": "error", "error": "embedded scheduler failed to start"}
+    elif getattr(state, "embedded_scheduler", None) is None:
+        checks["scheduler"] = {"status": "disabled"}
+    else:
+        checks["scheduler"] = {"status": "ok"}
 
     # --- Determine overall status ---
     # Postgres is required for the consolidated API to serve production traffic.

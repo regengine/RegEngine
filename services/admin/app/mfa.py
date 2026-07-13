@@ -27,7 +27,7 @@ except ImportError:
 
 from fastapi import Depends, Header, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
@@ -158,6 +158,81 @@ def _mfa_progressive_delay_seconds(count: int) -> int:
     if count < _MFA_PROGRESSIVE_DELAY_START:
         return 0
     return min(2 ** (count - _MFA_PROGRESSIVE_DELAY_START), _MFA_PROGRESSIVE_DELAY_CAP_SECONDS)
+
+
+# The lockout / replay guards are load-bearing brute-force controls. If the
+# throttle backend (Redis) cannot answer, MFA verification must fail closed
+# (retryable 503) rather than proceed with brute-force protection silently
+# disabled. Backend errors are alertable via this counter, mirroring
+# admin_audit_log_failures_total.
+try:
+    from prometheus_client import Counter
+
+    MFA_THROTTLE_BACKEND_ERRORS_COUNTER = Counter(
+        "admin_mfa_throttle_backend_errors_total",
+        "MFA throttle backend (Redis) failures by operation and outcome "
+        "(rejected = request failed closed with 503; degraded = non-fatal, "
+        "stale throttle state left in place).",
+        ["operation", "outcome"],
+    )
+except ImportError:  # prometheus_client not installed
+    MFA_THROTTLE_BACKEND_ERRORS_COUNTER = None
+except ValueError:  # already registered (double-import / module reload)
+    from prometheus_client import REGISTRY
+
+    MFA_THROTTLE_BACKEND_ERRORS_COUNTER = REGISTRY._names_to_collectors.get(
+        "admin_mfa_throttle_backend_errors_total"
+    )
+
+
+def _count_mfa_backend_error(operation: str, outcome: str) -> None:
+    if MFA_THROTTLE_BACKEND_ERRORS_COUNTER is None:
+        return
+    try:
+        MFA_THROTTLE_BACKEND_ERRORS_COUNTER.labels(operation=operation, outcome=outcome).inc()
+    except Exception:  # metrics must never break the auth path
+        pass
+
+
+async def _mfa_throttle_fail_closed(operation: str, call):
+    """Await a throttle-backend coroutine, converting backend errors to 503.
+
+    HTTPExceptions (the lockout 423/429 responses) pass through untouched.
+    Any other failure means the brute-force control cannot be evaluated, so
+    the verification attempt is rejected with a retryable 503 instead of
+    proceeding unthrottled.
+    """
+    try:
+        return await call
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _logger.error(
+            "mfa_throttle_backend_unavailable operation=%s error=%s", operation, str(exc)
+        )
+        _count_mfa_backend_error(operation, "rejected")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MFA verification temporarily unavailable",
+            headers={"Retry-After": "30"},
+        ) from exc
+
+
+async def _clear_mfa_lockout_best_effort(session_store: "RedisSessionStore", subject_key: str) -> None:
+    """Clear throttle state after a successful verification, non-fatally.
+
+    Failing to clear errs toward *more* lockout (stale counters), never less,
+    and the verification itself already succeeded — on the recovery-code path
+    the one-time code is already consumed — so a backend error here must not
+    fail the request.
+    """
+    try:
+        await _clear_mfa_lockout(session_store, subject_key)
+    except Exception as exc:
+        _logger.warning(
+            "mfa_throttle_backend_unavailable operation=clear_lockout error=%s", str(exc)
+        )
+        _count_mfa_backend_error("clear_lockout", "degraded")
 
 
 async def _check_mfa_lockout(session_store: "RedisSessionStore", subject_key: str) -> None:
@@ -475,11 +550,18 @@ def _mfa_lock_key(user_id) -> str:
     return f"mfa_lock:{user_id}"
 
 
+# NOTE: the three `*_mfa_counter_*` helpers below currently have no callers
+# (the live throttle in `require_mfa` uses `_check_mfa_lockout` /
+# `_record_mfa_lockout_attempt` above). They previously swallowed backend
+# errors and continued (fail-open); they now fail closed like the live path
+# so that wiring them into a route can never silently disable brute-force
+# protection. Removal is tracked in the 2026-07-07 remediation plan (WS-3).
 async def _check_mfa_counter_lockout(session_store, user_id) -> None:
     """Raise 429 if this user is currently locked out of MFA verification."""
     if session_store is None:
         return
-    try:
+
+    async def _check() -> None:
         client = await session_store._get_client()
         locked = await client.get(_mfa_lock_key(user_id))
         if locked:
@@ -488,17 +570,16 @@ async def _check_mfa_counter_lockout(session_store, user_id) -> None:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="MFA temporarily locked due to repeated failures",
             )
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - redis outage, fail-open
-        _logger.warning("mfa_lockout_check_failed error=%s", str(exc))
+
+    await _mfa_throttle_fail_closed("counter_check_lockout", _check())
 
 
 async def _record_mfa_counter_failure(session_store, user_id) -> None:
     """Increment the failure counter and lock the user out on threshold."""
     if session_store is None:
         return
-    try:
+
+    async def _record() -> None:
         client = await session_store._get_client()
         key = _mfa_fail_key(user_id)
         count = await client.incr(key)
@@ -510,11 +591,13 @@ async def _record_mfa_counter_failure(session_store, user_id) -> None:
         elif count >= MFA_MAX_FAILURES:
             await client.setex(_mfa_lock_key(user_id), MFA_LOCKOUT_SECONDS, "1")
             _logger.warning("mfa_soft_lockout user_id=%s failures=%s", str(user_id), count)
-    except Exception as exc:  # pragma: no cover - redis outage, fail-open
-        _logger.warning("mfa_failure_record_failed error=%s", str(exc))
+
+    await _mfa_throttle_fail_closed("counter_record_failure", _record())
 
 
 async def _reset_mfa_counter_failures(session_store, user_id) -> None:
+    # Clearing counters after success is best-effort: failure leaves stale
+    # throttle state (errs toward more lockout, never less).
     if session_store is None:
         return
     try:
@@ -522,6 +605,7 @@ async def _reset_mfa_counter_failures(session_store, user_id) -> None:
         await client.delete(_mfa_fail_key(user_id), _mfa_lock_key(user_id))
     except Exception as exc:  # pragma: no cover
         _logger.warning("mfa_failure_reset_failed error=%s", str(exc))
+        _count_mfa_backend_error("counter_reset", "degraded")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -589,15 +673,23 @@ async def require_mfa(
             token_type=token_type,
         )
         if session_store is not None:
-            await _record_mfa_lockout_attempt(session_store, subject_key)
+            # Backend outage here converts the 403 into a fail-closed 503:
+            # still a denial, but visible as an outage rather than letting
+            # failed attempts go uncounted.
+            await _mfa_throttle_fail_closed(
+                "record_failure", _record_mfa_lockout_attempt(session_store, subject_key)
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
         )
 
-    # #1862 — reject early if this user is currently locked out.
+    # #1862 — reject early if this user is currently locked out. A throttle
+    # backend outage fails closed (503) instead of skipping the check.
     if session_store is not None:
-        await _check_mfa_lockout(session_store, subject_key)
+        await _mfa_throttle_fail_closed(
+            "check_lockout", _check_mfa_lockout(session_store, subject_key)
+        )
 
     # Classify token format. TOTP = 6 digits. Recovery = normalized 8 alnum
     # chars (after stripping dash/space/etc).
@@ -623,14 +715,20 @@ async def require_mfa(
                 detail="Invalid MFA token",
             )
         if session_store is not None:
-            inserted = await _record_totp_replay_guard(session_store, subject_key, x_mfa_token)
+            # Replay protection cannot be skipped: if the backend can't
+            # confirm this TOTP hasn't been used, reject (503) rather than
+            # accept a potentially replayed code.
+            inserted = await _mfa_throttle_fail_closed(
+                "replay_guard",
+                _record_totp_replay_guard(session_store, subject_key, x_mfa_token),
+            )
             if not inserted:
                 await _record_and_raise_invalid_token(
                     reason="totp_replay",
                     token_type="totp",
                     detail="Invalid MFA token",
                 )
-            await _clear_mfa_lockout(session_store, subject_key)
+            await _clear_mfa_lockout_best_effort(session_store, subject_key)
         return x_mfa_token
 
     # Recovery code verification (#1041) — argon2 hashes are salted so we
@@ -665,11 +763,33 @@ async def require_mfa(
             detail="Invalid MFA token",
         )
 
-    # Mark recovery code as consumed (one-time use)
-    recovery.used_at = datetime.now(timezone.utc)
+    # Consume the recovery code atomically (#2509). The candidate above was
+    # selected and matched in app memory, which is racy: two concurrent
+    # redemptions of the same code can both observe ``used_at IS NULL`` and
+    # both pass verification. The single-shot invariant is enforced here by a
+    # conditional ``UPDATE ... WHERE id = :id AND used_at IS NULL``. Only the
+    # request that flips exactly one row wins; ``rowcount == 0`` means another
+    # request already consumed it, so we reject this redemption distinctly
+    # rather than granting a second session from one one-time code.
+    consumed = db.execute(
+        update(MFARecoveryCodeModel)
+        .where(
+            MFARecoveryCodeModel.id == recovery.id,
+            MFARecoveryCodeModel.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
     db.commit()
+    if consumed.rowcount != 1:
+        _logger.warning(f"Recovery code already consumed (race) for user {current_user.id}")
+        await _record_and_raise_invalid_token(
+            reason="recovery_code_already_used",
+            token_type="recovery",
+            detail="Invalid MFA token",
+        )
+
     if session_store is not None:
-        await _clear_mfa_lockout(session_store, subject_key)
+        await _clear_mfa_lockout_best_effort(session_store, subject_key)
     _logger.info(f"Recovery code consumed for user {current_user.id}")
     return x_mfa_token
 

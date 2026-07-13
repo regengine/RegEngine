@@ -19,6 +19,8 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from tests.live_services import skip_or_fail_service
+
 # Service URLs
 ADMIN_URL = "http://localhost:8400"
 INGESTION_URL = "http://localhost:8002"
@@ -74,7 +76,7 @@ class TestSQLInjectionPrevention:
             )
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_epcis_tenant_column_injection_blocked(self, ingestion_client):
         """Test that SQL injection in tenant_col parameter is blocked."""
@@ -97,7 +99,7 @@ class TestSQLInjectionPrevention:
             assert response.status_code in [400, 422]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_epcis_message_expr_injection_blocked(self, ingestion_client):
         """Test that SQL injection in message_expr is blocked."""
@@ -121,7 +123,7 @@ class TestSQLInjectionPrevention:
             assert response.status_code in [400, 422, 200]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_cte_persistence_condition_injection_blocked(self, ingestion_client):
         """Test that CTE persistence condition parameter rejects SQL injection."""
@@ -146,7 +148,7 @@ class TestSQLInjectionPrevention:
             assert response.status_code in [400, 422]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     @pytest.mark.parametrize(
         "malicious_col",
@@ -178,7 +180,7 @@ class TestSQLInjectionPrevention:
             assert response.status_code in [400, 422]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
 
 class TestAuthGuardEnforcement:
@@ -208,7 +210,7 @@ class TestAuthGuardEnforcement:
             )
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     @pytest.mark.parametrize(
         "endpoint,method",
@@ -228,7 +230,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_vision_analyze_label_requires_auth(self, graph_client):
         """Test that vision analysis endpoint requires auth."""
@@ -239,7 +241,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Graph service not running")
+            skip_or_fail_service("Graph service")
 
     @pytest.mark.parametrize(
         "endpoint,method",
@@ -257,7 +259,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Graph service not running")
+            skip_or_fail_service("Graph service")
 
     def test_invalid_api_key_rejected(self, ingestion_client):
         """Test that invalid API keys are rejected."""
@@ -269,7 +271,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_malformed_api_key_rejected(self, ingestion_client):
         """Test that malformed API keys are rejected."""
@@ -282,7 +284,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_expired_api_key_rejected(self, ingestion_client):
         """Test that expired API keys are rejected."""
@@ -302,7 +304,7 @@ class TestAuthGuardEnforcement:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
 
 class TestK8sAuthBypassGuard:
@@ -340,7 +342,7 @@ class TestK8sAuthBypassGuard:
                 pytest.skip(f"Not in production env, bypassing test (env={current_env})")
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
     def test_bypass_token_disabled_when_env_not_set(self, ingestion_client):
         """Test that bypass token is disabled when REGENGINE_ENV is not set."""
@@ -360,7 +362,7 @@ class TestK8sAuthBypassGuard:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Ingestion service not running")
+            skip_or_fail_service("Ingestion service")
 
 
 class TestRLSSysadminDefense:
@@ -394,7 +396,7 @@ class TestRLSSysadminDefense:
             )
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_sysadmin_flag_in_token_ignored_without_auth(self, admin_client):
         """Test that sysadmin flags in tokens are ignored without proper auth."""
@@ -417,7 +419,7 @@ class TestRLSSysadminDefense:
                 assert isinstance(data, (list, dict))
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_sysadmin_operations_require_admin_key(self, admin_client):
         """Test that sysadmin operations require proper X-Admin-Key."""
@@ -434,7 +436,7 @@ class TestRLSSysadminDefense:
             assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
 
 class TestRaceConditionGuards:
@@ -475,7 +477,7 @@ class TestRaceConditionGuards:
                 assert len(ids) == len(set(ids)), "Duplicate supplier IDs created"
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_concurrent_onboarding_step_completion_safe(self, admin_client):
         """Test that concurrent onboarding step completion is safe."""
@@ -506,7 +508,7 @@ class TestRaceConditionGuards:
             # (i.e., the step should be marked as complete only once)
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
 
 class TestJWTKeyRotation:
@@ -538,7 +540,7 @@ class TestJWTKeyRotation:
                 )
 
         except httpx.ConnectError:
-            pytest.skip("Graph service not running")
+            skip_or_fail_service("Graph service")
 
     def test_jwt_signed_with_wrong_key_rejected(self, graph_client):
         """Test that JWTs signed with the wrong key are rejected."""
@@ -561,7 +563,7 @@ class TestJWTKeyRotation:
                 assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Graph service not running")
+            skip_or_fail_service("Graph service")
 
     def test_jwt_with_invalid_format_rejected(self, graph_client):
         """Test that malformed JWTs are rejected."""
@@ -579,7 +581,7 @@ class TestJWTKeyRotation:
                 assert response.status_code in [401, 403]
 
         except httpx.ConnectError:
-            pytest.skip("Graph service not running")
+            skip_or_fail_service("Graph service")
 
 
 class TestCSRFDoubleSubmit:
@@ -621,7 +623,7 @@ class TestCSRFDoubleSubmit:
                 pytest.skip(f"{endpoint} may not have CSRF, got {response.status_code}")
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_csrf_token_required_on_post_endpoints(self, admin_client):
         """Test that POST endpoints reject requests without CSRF tokens."""
@@ -644,7 +646,7 @@ class TestCSRFDoubleSubmit:
                 pytest.skip(f"CSRF may not be enforced, got {response.status_code}")
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_get_endpoints_do_not_require_csrf(self, admin_client):
         """Test that GET endpoints don't require CSRF tokens."""
@@ -661,7 +663,7 @@ class TestCSRFDoubleSubmit:
             assert response.status_code != 403, "GET should not require CSRF"
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_csrf_token_mismatch_rejected(self, admin_client):
         """Test that mismatched CSRF tokens are rejected."""
@@ -683,7 +685,7 @@ class TestCSRFDoubleSubmit:
                 pytest.skip(f"CSRF validation may not be implemented, got {response.status_code}")
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
 
 class TestSecurityHeadersPresence:
@@ -715,7 +717,7 @@ class TestSecurityHeadersPresence:
                 pytest.skip("Security headers not configured on this endpoint")
 
         except httpx.ConnectError:
-            pytest.skip("Service not running")
+            skip_or_fail_service("Service")
 
     def test_strict_transport_security_header(self, admin_client):
         """Test that HSTS header is present."""
@@ -730,7 +732,7 @@ class TestSecurityHeadersPresence:
                 pytest.skip("HSTS may be configured at load balancer level")
 
         except httpx.ConnectError:
-            pytest.skip("Service not running")
+            skip_or_fail_service("Service")
 
 
 class TestInputValidationAndSanitization:
@@ -771,7 +773,7 @@ class TestInputValidationAndSanitization:
                     assert "<script>" not in data["name"]
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_oversized_request_rejected(self, admin_client):
         """Test that very large request bodies are rejected."""
@@ -794,7 +796,7 @@ class TestInputValidationAndSanitization:
             )
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
         except Exception:
             # Large request may fail at network level, which is fine
             pass
@@ -816,7 +818,7 @@ class TestErrorHandlingAndInfoLeakage:
                 assert 'file "' not in body
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_500_does_not_leak_stack_trace(self, admin_client):
         """Test that 500 errors don't reveal stack traces."""
@@ -838,7 +840,7 @@ class TestErrorHandlingAndInfoLeakage:
                 assert "line " not in body
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")
 
     def test_error_messages_generic(self, admin_client):
         """Test that error messages are generic, not revealing."""
@@ -858,4 +860,4 @@ class TestErrorHandlingAndInfoLeakage:
                 pass
 
         except httpx.ConnectError:
-            pytest.skip("Admin service not running")
+            skip_or_fail_service("Admin service")

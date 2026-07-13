@@ -31,6 +31,11 @@ from services.graph.app.fsma_utils import (
     find_orphaned_lots,
 )
 
+# #2540: these helpers now require a non-empty tenant_id (they used to
+# accept None as an "all tenants" admin path, which fails open). Tests that
+# only need a mocked Neo4j pass this placeholder tenant.
+TEST_TENANT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
 
 class AsyncIteratorMock:
     """Helper to create a proper async iterator from a list of items."""
@@ -277,7 +282,7 @@ class TestOrphanDetectionLogic:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        result = await find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
+        result = await find_orphaned_lots(mock_client, tenant_id=TEST_TENANT, days_stagnant=30)
 
         assert isinstance(result, list)
 
@@ -308,7 +313,7 @@ class TestOrphanDetectionLogic:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        result = await find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
+        result = await find_orphaned_lots(mock_client, tenant_id=TEST_TENANT, days_stagnant=30)
 
         assert len(result) == 1
         assert result[0].tlc == "ORPHAN-001"
@@ -337,6 +342,67 @@ class TestOrphanDetectionLogic:
         mock_session.run.assert_called()
         call_kwargs = mock_session.run.call_args
         assert "tenant_id" in str(call_kwargs) or call_kwargs[1].get("tenant_id") == "tenant-123"
+
+
+# ============================================================================
+# #2540 — fail-closed on null/empty tenant_id
+# ============================================================================
+
+
+class TestDataQualityFailClosed:
+    """#2540: both data-quality helpers must reject a null/empty tenant_id.
+
+    On the default Community Neo4j all tenants share one database, so the
+    old `$tenant_id IS NULL OR ...` shim returned every tenant's rows. The
+    helpers now raise ValueError instead of degrading to "all tenants".
+    """
+
+    def _make_client(self):
+        mock_client = MagicMock()
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_client, mock_session
+
+    @pytest.mark.asyncio
+    async def test_find_orphaned_lots_none_tenant_raises(self):
+        mock_client, _ = self._make_client()
+        with pytest.raises(ValueError, match="tenant_id"):
+            await find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
+
+    @pytest.mark.asyncio
+    async def test_find_orphaned_lots_empty_tenant_raises(self):
+        mock_client, _ = self._make_client()
+        with pytest.raises(ValueError, match="tenant_id"):
+            await find_orphaned_lots(mock_client, tenant_id="", days_stagnant=30)
+
+    @pytest.mark.asyncio
+    async def test_analyze_kde_completeness_none_tenant_raises(self):
+        mock_client, _ = self._make_client()
+        with pytest.raises(ValueError, match="tenant_id"):
+            await analyze_kde_completeness(mock_client, tenant_id=None)
+
+    @pytest.mark.asyncio
+    async def test_analyze_kde_completeness_empty_tenant_raises(self):
+        mock_client, _ = self._make_client()
+        with pytest.raises(ValueError, match="tenant_id"):
+            await analyze_kde_completeness(mock_client, tenant_id="")
+
+    @pytest.mark.asyncio
+    async def test_queries_drop_is_null_or_shim(self):
+        """Neither helper's Cypher may contain the fail-open idiom."""
+        mock_client, mock_session = self._make_client()
+        await find_orphaned_lots(mock_client, tenant_id=TEST_TENANT, days_stagnant=30)
+        assert "$tenant_id IS NULL OR" not in mock_session.run.call_args[0][0]
+
+        mock_client, mock_session = self._make_client()
+        await analyze_kde_completeness(mock_client, tenant_id=TEST_TENANT)
+        assert "$tenant_id IS NULL OR" not in mock_session.run.call_args[0][0]
 
 
 # ============================================================================
@@ -489,7 +555,7 @@ class TestKDECompletenessAnalysisLogic:
         mock_result = AsyncIteratorMock([])
         mock_session.run = AsyncMock(return_value=mock_result)
 
-        result = await analyze_kde_completeness(mock_client, tenant_id=None)
+        result = await analyze_kde_completeness(mock_client, tenant_id=TEST_TENANT)
 
         assert isinstance(result, DataQualityReport)
 
@@ -513,7 +579,7 @@ class TestKDECompletenessAnalysisLogic:
         mock_result = AsyncIteratorMock([mock_record])
         mock_session.run = AsyncMock(return_value=mock_result)
 
-        result = await analyze_kde_completeness(mock_client, tenant_id=None)
+        result = await analyze_kde_completeness(mock_client, tenant_id=TEST_TENANT)
 
         assert result.total_events == 100
         assert len(result.metrics_by_type) == 1
@@ -530,7 +596,7 @@ class TestKDECompletenessAnalysisLogic:
         mock_session.run = AsyncMock(return_value=mock_result)
 
         # Call with custom threshold
-        await analyze_kde_completeness(mock_client, tenant_id=None, confidence_threshold=0.90)
+        await analyze_kde_completeness(mock_client, tenant_id=TEST_TENANT, confidence_threshold=0.90)
 
         # Verify threshold was passed
         call_kwargs = mock_session.run.call_args

@@ -150,7 +150,13 @@ def _tenant_uuid(tenant_id: str) -> Optional[str]:
 
 
 def _set_tenant_context(db: Any, tenant_id: str) -> None:
-    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+    # Phase B (#1934): delegate to the canonical tenant-GUC primitive.
+    # _if_uuid skips the GUC for non-UUID tenant ids (matching _tenant_uuid's
+    # tolerance above); fail-hard get_tenant_context() RLS still rejects any
+    # DB access without tenant context.
+    from shared.tenant_context import set_tenant_guc_if_uuid
+
+    set_tenant_guc_if_uuid(db, tenant_id)
 
 
 def _profile_from_row(row: Any) -> IntegrationProfile:

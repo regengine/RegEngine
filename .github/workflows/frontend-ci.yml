@@ -1,6 +1,14 @@
 name: Frontend CI/CD
 
 on:
+  # Nightly run against main, mirroring backend-ci: the path-filtered
+  # triggers below leave these gates unexercised during stretches of
+  # backend-only merges, letting drift (promise-audit URL rot, e2e flake)
+  # accumulate silently until an unrelated frontend-touching PR pays for it.
+  # Offset from backend-ci's 05:00 to spread runner load.
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
@@ -49,8 +57,11 @@ on:
       - '.github/workflows/frontend-ci.yml'
 
 # Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
 concurrency:
-  group: frontend-${{ github.ref }}
+  group: frontend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
 env:
@@ -268,7 +279,11 @@ jobs:
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
-    name: CI Status Gate
+    # Distinct from the backend gate ("Backend CI Status Gate"): a deploy
+    # ships the backend image, so deploy.yml waits on the backend gate
+    # specifically. Sharing one "CI Status Gate" name let a frontend-only SHA
+    # satisfy the deploy gate without the backend ever being verified (#2537).
+    name: Frontend CI Status Gate
     if: always()
     needs: [promise-audit, build, lint, test, smoke, security, production-readiness, e2e]
     runs-on: ubuntu-latest
@@ -283,15 +298,20 @@ jobs:
           echo "Security: ${{ needs.security.result }}"
           echo "Readiness:${{ needs.production-readiness.result }}"
           echo "E2E:      ${{ needs.e2e.result }}"
-          if [[ "${{ needs.promise-audit.result }}" == "failure" \
-             || "${{ needs.build.result }}" == "failure" \
-             || "${{ needs.lint.result }}" == "failure" \
-             || "${{ needs.test.result }}" == "failure" \
-             || "${{ needs.smoke.result }}" == "failure" \
-             || "${{ needs.security.result }}" == "failure" \
-             || "${{ needs.production-readiness.result }}" == "failure" \
-             || "${{ needs.e2e.result }}" == "failure" ]]; then
-            echo "::error::Promise audit, build, lint, unit tests, deterministic smoke, security audit, production readiness, or E2E failed"
+          # Require an explicit "success" from every needed job. The previous
+          # ``== "failure"`` checks let a ``skipped`` or ``cancelled`` job (a
+          # routine outcome under ``cancel-in-progress``) report the gate green
+          # without that check ever passing. Mirrors backend-ci.yml's stricter
+          # ``!= "success"`` contract (#2537).
+          if [[ "${{ needs.promise-audit.result }}" != "success" \
+             || "${{ needs.build.result }}" != "success" \
+             || "${{ needs.lint.result }}" != "success" \
+             || "${{ needs.test.result }}" != "success" \
+             || "${{ needs.smoke.result }}" != "success" \
+             || "${{ needs.security.result }}" != "success" \
+             || "${{ needs.production-readiness.result }}" != "success" \
+             || "${{ needs.e2e.result }}" != "success" ]]; then
+            echo "::error::One or more required frontend checks failed, were cancelled, or were skipped"
             exit 1
           fi
           echo "All blocking frontend checks passed"
@@ -329,7 +349,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
-          python-version: "3.12"
+          # Install requirements.lock on the same interpreter it is compiled
+          # and freshness-gated under (3.11, matching Dockerfile and backend-ci
+          # PYTHON_VERSION). Was 3.12 — a --require-hashes install of the
+          # 3.11-resolved lock on 3.12 reintroduces the interpreter split (#2527).
+          python-version: "3.11"
 
       - name: Install backend dependencies
         run: |

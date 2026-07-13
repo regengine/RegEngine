@@ -12,6 +12,13 @@ Usage:
 
 The "Verify, Don't Trust" principle: You maintain full control of verification.
 
+NOTE (#2507): this is the per-RECORD verifier — it recomputes each canonical
+record's ``sha256_hash`` (see ``compute_record_hash``). It is a DIFFERENT
+program from ``frontend/public/sdk/verify_chain.py``, which verifies a
+``/proof`` Merkle BUNDLE (per-file leaf hashes + Merkle root). The two share
+only a filename; a planned rename (this tool -> ``verify_records.py``, the
+bundle tool -> ``verify_bundle.py``) is tracked in the PR for this issue.
+
 License: MIT
 """
 
@@ -45,46 +52,79 @@ class VerificationResult:
     error: Optional[str] = None
 
 
+def _first(record: dict, *keys: str, default: str = "") -> str:
+    """Return the first present, non-None value among ``keys``.
+
+    Lets the verifier read both the canonical export key
+    (``traceability_lot_code``) and any short alias (``tlc``) without
+    diverging from the production hash inputs.
+    """
+    for key in keys:
+        value = record.get(key)
+        if value is not None:
+            return value
+    return default
+
+
 def compute_record_hash(record: dict) -> str:
     """
-    Compute SHA-256 hash of a traceability record.
+    Recompute the SHA-256 ``sha256_hash`` of a canonical traceability record.
 
-    The hash is computed over a canonical JSON representation of the
-    record's immutable fields, ensuring deterministic results.
+    This MUST stay byte-for-byte identical to the server's
+    ``TraceabilityEvent.compute_sha256_hash`` in
+    ``services/shared/canonical_event.py`` — the function that produces the
+    ``sha256_hash`` written to ``fsma.traceability_events`` and emitted in
+    canonical exports. Any divergence makes every authentic record verify
+    as INVALID (#2507).
 
-    Immutable fields (in order):
-    - tlc (Traceability Lot Code)
-    - cte_type (Critical Tracking Event type)
-    - location (GLN)
-    - quantity
-    - unit_of_measure
-    - product_description
-    - event_timestamp
-    - input_tlcs (sorted list)
+    Canonical form (pipe-delimited, in this exact order), bare hex digest
+    with NO ``sha256:`` prefix:
+
+        event_id | event_type | traceability_lot_code | product_reference |
+        quantity | unit_of_measure | from_facility_reference |
+        to_facility_reference | event_timestamp |
+        json.dumps(kdes, sort_keys=True, default=str)
+
+    Field aliases (``tlc`` for ``traceability_lot_code`` etc.) are accepted
+    so the verifier works against either the raw canonical export keys or a
+    flattened pack, but the hashed VALUES are the canonical ones.
     """
-    canonical_fields = {
-        "tlc": record.get("tlc", ""),
-        "cte_type": record.get("cte_type", ""),
-        "location": record.get("location", ""),
-        "quantity": record.get("quantity", 0),
-        "unit_of_measure": record.get("unit_of_measure", ""),
-        "product_description": record.get("product_description", ""),
-        "event_timestamp": record.get("event_timestamp", ""),
-        "input_tlcs": sorted(record.get("input_tlcs", [])),
-    }
+    event_id = _first(record, "event_id", "id")
+    event_type = _first(record, "event_type", "cte_type")
+    tlc = _first(record, "traceability_lot_code", "tlc")
+    product_reference = _first(record, "product_reference")
+    quantity = record.get("quantity", 0)
+    unit_of_measure = _first(record, "unit_of_measure")
+    from_facility = _first(record, "from_facility_reference", "location")
+    to_facility = _first(record, "to_facility_reference")
+    event_timestamp = _first(record, "event_timestamp")
+    kdes = record.get("kdes", {})
 
-    # Canonical JSON: sorted keys, no whitespace
-    canonical_json = json.dumps(canonical_fields, sort_keys=True, separators=(",", ":"))
+    canonical = "|".join(
+        [
+            str(event_id),
+            event_type,
+            tlc,
+            product_reference,
+            str(quantity),
+            unit_of_measure,
+            from_facility,
+            to_facility,
+            event_timestamp,
+            json.dumps(kdes, sort_keys=True, default=str),
+        ]
+    )
 
-    # SHA-256 hash
-    hash_bytes = hashlib.sha256(canonical_json.encode("utf-8")).digest()
-    return f"sha256:{hash_bytes.hex()}"
+    # Bare hex — matches the server's ``hexdigest()`` (no ``sha256:`` prefix).
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def verify_record_offline(record: dict) -> VerificationResult:
     """Verify a record's hash offline using local data only."""
-    tlc = record.get("tlc", "UNKNOWN")
-    expected_hash = record.get("hash", "")
+    tlc = _first(record, "traceability_lot_code", "tlc", default="UNKNOWN")
+    # Canonical exports emit the per-record digest as ``sha256_hash``;
+    # accept a bare ``hash`` alias for flattened packs.
+    expected_hash = _first(record, "sha256_hash", "hash")
 
     try:
         computed_hash = compute_record_hash(record)

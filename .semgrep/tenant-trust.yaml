@@ -131,3 +131,31 @@ rules:
         - "**/services/admin/app/consumer.py"
       exclude:
         - "**/tests/**"
+
+  - id: adhoc-tenant-guc-set-config
+    message: >-
+      Setting the app.tenant_id GUC with inline set_config is forbidden
+      (Phase B #1934, WS-4 of the 2026-07-07 remediation plan). Use
+      services.shared.tenant_context.set_tenant_guc (or
+      set_tenant_guc_if_uuid for slug-tolerant paths) — the canonical
+      primitive validates the tenant id, works under both psycopg and
+      asyncpg, and keeps one greppable seam for RLS context. Divergent
+      inline copies are how fail-open RLS bugs (the v090 class) re-enter.
+      Clearing the GUC with an empty string ('') is allowed — that is the
+      pool-hygiene pattern, not a tenant grant.
+    severity: ERROR
+    languages: [python]
+    # Matches the single-line inline forms with a SQLAlchemy bind (:tid), a
+    # psycopg placeholder (%s), or an asyncpg positional ($1) — every shape
+    # a converged call site historically used. This is defense-in-depth, not
+    # an exhaustive ban: multi-line text(""" blocks and f-string
+    # interpolation can evade a regex (the fail-hard get_tenant_context()
+    # RLS predicate remains the actual security control); grep for
+    # "app.tenant_id" during review of anything tenant-adjacent.
+    pattern-regex: 'set_config\(\s*["'']app\.tenant_id["'']\s*,[ \t]*(?::|%s|\$1)'
+    paths:
+      exclude:
+        - "**/services/shared/tenant_context.py"  # the canonical primitive
+        - "**/tests/**"
+        - "**/migrations/**"
+        - "**/alembic/**"

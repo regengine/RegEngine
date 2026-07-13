@@ -62,6 +62,42 @@ def validate_auth_config() -> None:
     if issues and is_explicit_production and not is_ci:
         raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
+    # #2512: defense-in-depth fail-fast for the dev-auth-fallback surface.
+    # First re-run the central gate: when ANY cloud marker is present it forces
+    # REGENGINE_ENV=production (broadened beyond Railway/Vercel to Render / Fly /
+    # Kubernetes), which is the normal, correct path and disables the ephemeral
+    # signing-key fallbacks. We call it here too so this check sees the same
+    # resolved environment regardless of import order.
+    from shared.env import (  # noqa: PLC0415
+        CLOUD_ENV_VARS,
+        is_production,
+        validate_cloud_environment,
+    )
+
+    validate_cloud_environment()
+
+    # If a cloud marker is present yet the environment STILL did not resolve to
+    # production (e.g. an explicit REGENGINE_ENV=staging on a non-Railway host —
+    # a case the gate intentionally leaves alone), the ephemeral-secret
+    # fallbacks in admin auth_utils / tool_verification_routes are live: per-
+    # process JWT / TOOL_ACCESS signing keys mean non-portable, restart-forgeable
+    # sessions and invisible cross-worker revocation. Refuse to boot.
+    cloud_marker_present = any(os.getenv(var) for var in CLOUD_ENV_VARS)
+    if cloud_marker_present and not is_production() and not is_ci:
+        ephemeral_secrets: list[str] = []
+        if not (os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")):
+            ephemeral_secrets.append("AUTH_SECRET_KEY")
+        if not os.getenv("TOOL_ACCESS_SECRET"):
+            ephemeral_secrets.append("TOOL_ACCESS_SECRET")
+        if ephemeral_secrets:
+            raise RuntimeError(
+                "Cloud deployment detected (marker present) but the environment did "
+                "not resolve to 'production' and an ephemeral signing key is active "
+                f"for: {', '.join(ephemeral_secrets)}. Set REGENGINE_ENV=production "
+                "and provide these secrets before deploying — ephemeral keys produce "
+                "non-portable, restart-forgeable sessions."
+            )
+
 
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
@@ -472,6 +508,66 @@ def init_demo_keys():
 #   1. X-Tenant-ID header (explicit override)
 #   2. Authenticated principal's tenant (from API key)
 # Rejects requests where neither is present.
+
+
+def reconcile_tenant_scope(
+    api_key: Optional["APIKey"],
+    middleware_tenant_id: object,
+    *,
+    request_path: Optional[str] = None,
+) -> str:
+    """Reconcile the two independent tenant sources that drive one request.
+
+    Handlers that depend on BOTH ``require_api_key`` (authenticated
+    principal) and ``get_current_tenant_id`` (TenantContextMiddleware) have
+    two separately-resolved tenant values. They can diverge — most
+    concretely on the preshared master-key path, where the middleware pins
+    one tenant while ``require_api_key`` accepts a caller-supplied
+    ``X-Tenant-ID``. This helper makes them fail closed by construction and
+    returns the authenticated API-key tenant as the single source of truth
+    for downstream scoping (DB selection, query predicates).
+
+    Mirrors ``services/compliance/app/routes.py`` FDA-export tenant binding
+    (#1106). See issue #2511.
+
+    Args:
+        api_key: The authenticated ``APIKey`` (from ``require_api_key``).
+        middleware_tenant_id: The middleware-resolved tenant (from
+            ``get_current_tenant_id`` — a ``uuid.UUID`` in practice). Any
+            value with a ``str()`` representation is accepted.
+        request_path: Optional request path, for log context only.
+
+    Returns:
+        The authenticated tenant id as a string.
+
+    Raises:
+        HTTPException: 403 if the API key has no tenant; 409
+            (``E_TENANT_MISMATCH``) if the two tenant sources disagree.
+    """
+    authenticated_tenant_id = getattr(api_key, "tenant_id", None)
+    if not authenticated_tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="API key is not associated with a tenant",
+        )
+    authenticated_tenant = str(authenticated_tenant_id)
+
+    # ``middleware_tenant_id`` is non-optional at the handler (the
+    # get_current_tenant_id dependency 401s when absent), but guard anyway.
+    middleware_tenant = str(middleware_tenant_id) if middleware_tenant_id is not None else None
+    if middleware_tenant and middleware_tenant != authenticated_tenant:
+        logger.warning(
+            "graph_tenant_scope_mismatch",
+            authenticated_tenant=authenticated_tenant,
+            middleware_tenant=middleware_tenant,
+            key_id=getattr(api_key, "key_id", None),
+            path=request_path,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="E_TENANT_MISMATCH",
+        )
+    return authenticated_tenant
 
 
 def get_tenant_id(

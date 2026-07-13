@@ -53,7 +53,7 @@ export async function GET(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
 
     const COMPLIANCE_URL = getComplianceUrl();
@@ -65,6 +65,16 @@ export async function GET(
         headers['X-RegEngine-API-Key'] = apiKey;
     }
     const allowFallback = allowDevComplianceSnapshotFallback();
+    if (!COMPLIANCE_URL) {
+        if (allowFallback) {
+            return NextResponse.json({ items: listDevComplianceSnapshots(tenantId) });
+        }
+        console.error('[proxy/snapshots] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured', items: [] },
+            { status: 503 },
+        );
+    }
 
     try {
         const response = await fetch(`${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}`, {
@@ -119,7 +129,7 @@ export async function POST(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
     const body = await request.json().catch(() => ({}));
     const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
@@ -133,6 +143,22 @@ export async function POST(
         headers['X-RegEngine-API-Key'] = apiKey;
     }
     const allowFallback = allowDevComplianceSnapshotFallback();
+    if (!COMPLIANCE_URL) {
+        if (allowFallback) {
+            const snapshot = createDevComplianceSnapshot({
+                tenantId,
+                snapshotName: String(parsedBody.snapshot_name || 'Manual Snapshot'),
+                snapshotReason: typeof parsedBody.snapshot_reason === 'string' ? parsedBody.snapshot_reason : undefined,
+                createdBy: String(parsedBody.created_by || 'playwright@regengine.local'),
+            });
+            return NextResponse.json(snapshot);
+        }
+        console.error('[proxy/snapshots] 503 — compliance backend not configured');
+        return NextResponse.json(
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
+            { status: 503 },
+        );
+    }
 
     try {
         const response = await fetch(`${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}`, {

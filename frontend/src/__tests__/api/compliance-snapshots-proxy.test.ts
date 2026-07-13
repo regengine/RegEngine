@@ -16,10 +16,16 @@ const {
     mockRequireProxyAuth,
     mockValidateProxySession,
     mockGetServerApiKey,
+    mockEnforceTenantMatch,
 } = vi.hoisted(() => ({
     mockRequireProxyAuth: vi.fn(() => null),
     mockValidateProxySession: vi.fn(async () => null),
     mockGetServerApiKey: vi.fn(() => null),
+    // enforceTenantMatch now fails closed without an authoritative session
+    // signal (#2501). These tests exercise the dev-fallback store, not tenant
+    // authorization, so stub the guard the same way the other preflight checks
+    // are stubbed. Tenant-match behavior is covered in enforce-tenant-match.test.ts.
+    mockEnforceTenantMatch: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/api-proxy', async () => {
@@ -29,6 +35,7 @@ vi.mock('@/lib/api-proxy', async () => {
         requireProxyAuth: mockRequireProxyAuth,
         validateProxySession: mockValidateProxySession,
         getServerApiKey: mockGetServerApiKey,
+        enforceTenantMatch: mockEnforceTenantMatch,
     };
 });
 

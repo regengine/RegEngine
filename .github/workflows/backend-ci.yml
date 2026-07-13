@@ -1,6 +1,15 @@
 name: Backend Services CI/CD
 
 on:
+  # Nightly run against main. The push/pull_request triggers below are
+  # path-filtered, so a stretch of docs- or frontend-only merges leaves the
+  # backend gauntlet unexercised — that let seven gates rot silently on main
+  # (lock freshness, repo-root RLS suite, ingestion suite, admin tests, ...)
+  # until the next backend-touching PR lit them all up at once (#2566).
+  # A scheduled run converts silent drift into a red run within 24h.
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
@@ -39,8 +48,11 @@ on:
       - '.github/workflows/deploy.yml'
 
 # Cancel in-progress runs for the same branch/PR
+# Scheduled runs get their own concurrency group: the nightly must never
+# cancel an in-flight push-to-main run (deploy.yml gates on that run's
+# status check — a cancelled run would leave the deploy gated forever).
 concurrency:
-  group: backend-${{ github.ref }}
+  group: backend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
 env:
@@ -64,9 +76,14 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
-          # requirements.lock was generated with Python 3.12; keep this
-          # freshness check on the same interpreter to avoid header-only diffs.
-          python-version: "3.12"
+          # Generate, freshness-validate, install, and runtime must all agree on
+          # one interpreter so the --require-hashes lock stays reproducible.
+          # Dockerfile (python:3.11-slim) and PYTHON_VERSION below both use 3.11,
+          # so this gate runs on 3.11 too — was 3.12, which let the 3.12-resolved
+          # lock be installed on 3.11 everywhere else (#2527). requirements.lock
+          # must be regenerated under 3.11 (header reads "with Python 3.11"); the
+          # freshness diff below makes any leftover 3.12 resolution a hard fail.
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Verify requirements.lock freshness
         run: |
@@ -160,7 +177,7 @@ jobs:
           psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
           # Key off the root requirements.lock — the single source of truth.
@@ -479,7 +496,7 @@ jobs:
         run: psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
         with:
           path: ~/.cache/pip
           key: pip-${{ hashFiles('requirements.lock') }}
@@ -643,11 +660,132 @@ jobs:
             exit 1
           fi
 
+  # ── Repo-root security / RLS / isolation suite (hard gate) ─
+  # The highest-value correctness suites live in the repo-root tests/ dir
+  # (cross-tenant isolation, RLS coverage + hardening, hash-chain audit
+  # integrity, canonical-event invariants). The per-service `test` matrix
+  # cd's into services/<svc> and never runs them; test-suite-check only
+  # `--collect-only`s them; qa-health runs them continue-on-error with no DB.
+  # So a regression in tenant isolation or the evidence hash chain merged
+  # green (#2502). The RLS behavioral tests additionally only knew how to
+  # spin up Docker-in-Docker testcontainers and skipped silently in every
+  # blocking job (#2530).
+  #
+  # This job provisions Postgres + Redis, sets DATABASE_URL so the
+  # ``skipif(not DATABASE_URL)`` / ``rls_postgres_or_skip`` guards activate,
+  # and sets REGENGINE_REQUIRE_DB=1 so the RLS suites FAIL (not skip) if the
+  # DB is unreachable — a missing DB layer can never turn this gate green.
+  # Each DB-mutating suite gets its own fresh database to avoid schema
+  # interference (alembic head vs the hardening test's self-built tables).
+  repo-root-suite:
+    name: Repo-root security/RLS/isolation suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: test-secret-key-for-ci
+      # Make missing/unreachable Postgres a hard failure for the RLS suites
+      # so the behavioral gate can't pass green by skipping (#2530).
+      REGENGINE_REQUIRE_DB: "1"
+      PYTHONDONTWRITEBYTECODE: 1
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Create isolated test databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Separate DBs so alembic-migrated suites and the self-bootstrapping
+          # RLS hardening suite never collide on schema.
+          psql -h localhost -U postgres -c "CREATE DATABASE rls_migrated;"
+          psql -h localhost -U postgres -c "CREATE DATABASE rls_hardening;"
+
+      - name: Offline invariants (no DB)
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # These execute pure-Python assertions (hash-chain audit integrity,
+          # canonical-event normalization). No DB, no skips.
+          pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
+            -v --no-cov -o "testpaths=tests"
+
+      - name: RLS coverage + tenant-isolation e2e (alembic head)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # test_rls_coverage runs `alembic upgrade head` into rls_migrated and
+          # asserts every fsma.* table is RLS-hardened; the e2e isolation test
+          # reuses the same migrated schema. Both FAIL (not skip) here because
+          # REGENGINE_REQUIRE_DB=1 and DATABASE_URL is reachable.
+          # test_client_role_lockdown_v092 asserts the v092 client-role
+          # lockdown (Supabase anon/authenticated exposure) holds at head.
+          pytest tests/migrations/test_rls_coverage.py \
+            tests/migrations/test_client_role_lockdown_v092.py \
+            tests/test_e2e_tenant_isolation.py \
+            -v --no-cov -o "testpaths=tests"
+
+      - name: RLS hardening behavioral assertions
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_hardening
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Cross-tenant SELECT denial, unset-context fail-hard, sandbox-UUID
+          # sees no real rows. Self-bootstraps its schema into rls_hardening.
+          pytest tests/migrations/test_rls_hardening.py \
+            -v --no-cov -o "testpaths=tests"
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
-    name: CI Status Gate
+    # Distinct name from the frontend gate ("Frontend CI Status Gate"). The
+    # Railway deploy ships the backend image, so deploy.yml waits on THIS gate
+    # specifically — a shared "CI Status Gate" name previously let a
+    # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
+    name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -658,6 +796,7 @@ jobs:
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
           echo "Lint repo roots:   ${{ needs.lint-repo-roots.result }}"
           echo "Ingestion suite:   ${{ needs.ingestion-full-suite.result }}"
+          echo "Repo-root suite:   ${{ needs.repo-root-suite.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
@@ -675,6 +814,7 @@ jobs:
              || "${{ needs.lint-shared.result }}" != "success" \
              || "${{ needs.lint-repo-roots.result }}" != "success" \
              || "${{ needs.ingestion-full-suite.result }}" != "success" \
+             || "${{ needs.repo-root-suite.result }}" != "success" \
              || "${{ needs.docker-build.result }}" != "success" \
              || "${{ needs.security.result }}" != "success" \
              || "${{ needs.rls-fallback-check.result }}" != "success" \

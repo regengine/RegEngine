@@ -50,8 +50,9 @@ export async function POST(
     const COMPLIANCE_URL = getComplianceUrl();
     const allowFallback = allowDevComplianceSnapshotFallback();
     if (!COMPLIANCE_URL && !allowFallback) {
+        console.error('[proxy/attest] 503 — compliance backend not configured');
         return NextResponse.json(
-            { error: 'COMPLIANCE_SERVICE_URL not configured' },
+            { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
             { status: 503 },
         );
     }
@@ -68,7 +69,7 @@ export async function POST(
     }
 
     // Cross-tenant authorization: bind this request to the caller's own tenant.
-    const tenantError = enforceTenantMatch(request, tenantId);
+    const tenantError = await enforceTenantMatch(request, tenantId);
     if (tenantError) return tenantError;
     const body = await request.json().catch(() => ({}));
     const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
@@ -82,6 +83,20 @@ export async function POST(
     const apiKey = getServerApiKey() ?? getAdminMasterKey();
     if (apiKey) {
         headers['X-RegEngine-API-Key'] = apiKey;
+    }
+
+    // When the backend base is unresolved (empty sentinel from getComplianceUrl),
+    // never construct a relative fetch URL. Use the dev fallback if available.
+    if (!COMPLIANCE_URL && allowFallback) {
+        const result = attestDevComplianceSnapshot({
+            tenantId,
+            snapshotId,
+            attestedBy: String(parsedBody.attested_by || 'playwright@regengine.local'),
+            attestationTitle: String(parsedBody.attestation_title || 'Compliance Owner'),
+        });
+        if (result) {
+            return NextResponse.json(result);
+        }
     }
 
     try {

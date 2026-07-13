@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from sqlalchemy import text
 
-from .utils import format_countdown
+from .utils import format_countdown, row_to_dict
 
 logger = logging.getLogger("request-workflow")
 
@@ -50,7 +50,7 @@ class QueryMixin:
         rows = result.mappings().fetchall()
         cases = []
         for row in rows:
-            case = dict(row)
+            case = row_to_dict(row)
             hours = case.get("hours_remaining")
             if hours is not None:
                 case["hours_remaining"] = round(float(hours), 2)

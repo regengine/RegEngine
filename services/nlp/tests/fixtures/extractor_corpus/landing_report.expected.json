@@ -1,0 +1,22 @@
+{
+  "confidence_level": "LOW",
+  "ctes": [
+    {
+      "cte_type": "FIRST_LAND_BASED_RECEIVER",
+      "event_date": "2026-03-07",
+      "gtin": "00012345678901",
+      "location_identifier": null,
+      "prior_source_tlc": null,
+      "product_description": null,
+      "quantity": 500.0,
+      "ship_from_gln": null,
+      "ship_to_gln": null,
+      "tlc_source_fda_reg": null,
+      "tlc_source_gln": null,
+      "traceability_lot_code": "00012345678901-LR-2",
+      "unit_of_measure": "lbs"
+    }
+  ],
+  "document_type": "LANDING_REPORT",
+  "review_required": true
+}

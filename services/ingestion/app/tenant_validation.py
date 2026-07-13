@@ -27,17 +27,28 @@ def resolve_tenant(tenant_id: Optional[str], principal) -> str:
     """Resolve tenant ID from auth principal, with controlled explicit fallback.
 
     Accepts any principal object with a tenant_id attribute (typically
-    IngestionPrincipal from app.authz). For scoped callers, the
-    authenticated principal is authoritative. Explicit tenant IDs remain
-    available only for wildcard or otherwise unscoped principals so
-    admin/dev flows can intentionally target another tenant. Validates
-    the resolved tenant format and raises 400 if no tenant context is
-    available.
+    IngestionPrincipal from app.authz).
+
+    Security invariant (mirrors ``shared/tenant_resolution.resolve_principal_tenant_id``):
+    when the principal is bound to a tenant, that tenant is ALWAYS authoritative
+    regardless of scope. A conflicting non-empty explicit ``tenant_id`` raises 403
+    (tenant mismatch). The wildcard ``*`` scope grants permission BREADTH (which
+    actions), not tenant BREADTH (which tenants) — a tenant-bound key with ``*``
+    must not be able to pivot to another tenant via an explicit tenant input.
+
+    Explicit-tenant targeting is reserved strictly for principals with NO bound
+    tenant (legacy_master / dev_open, which carry ``tenant_id=None``), so those
+    admin/dev flows can still intentionally target another tenant. Validates the
+    resolved tenant format and raises 400 if no tenant context is available.
     """
     principal_tenant_id = getattr(principal, "tenant_id", None)
-    principal_scopes = getattr(principal, "scopes", []) or []
 
-    if principal_tenant_id and "*" not in principal_scopes:
+    if principal_tenant_id:
+        if tenant_id and tenant_id != principal_tenant_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Tenant mismatch: your API key does not have access to this tenant.",
+            )
         tid = principal_tenant_id
     else:
         tid = tenant_id or principal_tenant_id

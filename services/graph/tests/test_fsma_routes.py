@@ -16,6 +16,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 _AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")}
 
 
+def _fake_api_key(tenant_id):
+    """An APIKey object whose ``tenant_id`` the #2511 reconciliation reads.
+
+    The compliance gap handlers compare ``api_key.tenant_id`` against the
+    middleware tenant, so the override must expose a ``.tenant_id``
+    attribute (a plain dict would resolve to None and 403).
+    """
+    from datetime import datetime, timezone
+
+    from shared.auth import APIKey
+
+    return APIKey(
+        key_id="test-key",
+        key_hash="",
+        name="test",
+        tenant_id=tenant_id,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 def _build_fsma_router():
     """Aggregate the live FSMA sub-routers under /v1/fsma.
 
@@ -439,10 +459,10 @@ class TestGapAnalysisEndpoints:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant",
-            "key_id": "test-key",
-        }
+        # #2511: the gap handlers reconcile the api_key tenant against the
+        # middleware tenant. Override with an APIKey object whose tenant
+        # matches the middleware tenant (the agreement case).
+        app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
         app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
@@ -471,10 +491,8 @@ class TestGapAnalysisEndpoints:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant",
-            "key_id": "test-key",
-        }
+        # #2511: see test_get_gaps — api_key tenant must match middleware.
+        app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
         app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)

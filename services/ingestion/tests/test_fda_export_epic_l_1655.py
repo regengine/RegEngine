@@ -84,6 +84,9 @@ class _EmptyPersistence:
     def query_events_by_tlc(self, **_kwargs):
         return []
 
+    def query_events_by_tlcs(self, **_kwargs):
+        return []
+
     def verify_chain(self, **_kwargs):  # pragma: no cover — unreached
         class _Dummy:
             valid = True

@@ -50,22 +50,10 @@ def _record_e2e_invite_email(recipient_email: str, invite_link: str) -> bool:
     """Record an invite email in the Playwright-only outbox fixture."""
     outbox_path = os.getenv("REGENGINE_E2E_EMAIL_OUTBOX")
     environment = os.getenv("REGENGINE_ENV", "").strip().lower()
-    cloud_deployment = any(
-        os.getenv(marker)
-        for marker in (
-            "RAILWAY_ENVIRONMENT",
-            "RAILWAY_ENVIRONMENT_NAME",
-            "RAILWAY_ENVIRONMENT_ID",
-            "RAILWAY_PROJECT_NAME",
-            "RAILWAY_PROJECT_ID",
-            "RAILWAY_SERVICE_NAME",
-            "RAILWAY_SERVICE_ID",
-            "VERCEL_ENV",
-            "VERCEL_URL",
-            "RENDER",
-            "FLY_APP_NAME",
-        )
-    )
+    # #2512: reuse the single shared cloud-marker tuple from shared.env.
+    from shared.env import CLOUD_ENV_VARS  # noqa: PLC0415
+
+    cloud_deployment = any(os.getenv(marker) for marker in CLOUD_ENV_VARS)
     if (
         not outbox_path
         or not e2e_mode_enabled()

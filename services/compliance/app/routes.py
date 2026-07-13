@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from shared.auth import APIKey, require_api_key
 from shared.circuit_breaker import CircuitOpenError
+from shared.database import get_db_session
 from shared.fda_export import (
     MAX_EXPORT_WINDOW_DAYS,
     ExportWindowError,
@@ -23,7 +24,9 @@ from shared.fda_export import (
     validate_export_window,
 )
 from shared.resilient_http import resilient_client
+from shared.rules.engine import RulesEngine
 from shared.rules.ftl import FTL_CATEGORIES
+from shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
 from .config import settings
 from .csv_safety import sanitize_cell
@@ -163,13 +166,14 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # ---------------------------------------------------------------------------
 #
 # HISTORY (#1203 / #1105): POST /validate was removed on 2026-04-17 as
-# orphaned code. It was restored below on 2026-04-20 as part of #1105 but
-# now gates STRICTLY on FTL-commodity scope — any caller that reaches this
-# endpoint must declare an FDA Food Traceability List commodity, otherwise
-# the request is rejected (400 ``E_NON_FTL_FOOD``) rather than returning a
-# false-positive compliance stamp. The deeper rule-engine logic (per-CTE
-# required-field enforcement, etc.) remains in ``services/shared/rules``
-# and is pending the #1203 option-2 rewire.
+# orphaned code. It was restored on 2026-04-20 as part of #1105, gating
+# STRICTLY on FTL-commodity scope — any caller that reaches this endpoint
+# must declare an FDA Food Traceability List commodity, otherwise the
+# request is rejected (400 ``E_NON_FTL_FOOD``) rather than returning a
+# false-positive compliance stamp. The #1203 option-2 rewire landed with
+# WS-9: verdicts now derive from the versioned rules engine in
+# ``services/shared/rules`` (per-CTE KDE enforcement), replacing the
+# endpoint's former lightweight local contract check.
 
 
 @router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
@@ -222,10 +226,12 @@ class ValidateRequest(BaseModel):
     commodities (bananas, apples, beef, etc.) are out of FSMA 204 scope
     and are rejected before any further validation runs.
 
-    ``config`` and ``checklist_id`` are optional hooks for the future rules-
-    engine reintegration (#1203 option 2). They are carried through today
-    for forward compatibility but are not yet evaluated; downstream callers
-    should still expect the endpoint to gate on ``ftl_commodity`` first.
+    ``config``, when supplied, is evaluated against the versioned rules
+    engine in ``services/shared/rules`` (#1203 option 2): ``cte_type``
+    selects the per-CTE ruleset and the remaining keys are treated as
+    event fields/KDEs (nested under ``kdes`` or flat). ``checklist_id``
+    remains a scope hook — the endpoint still gates on ``ftl_commodity``
+    first.
     """
 
     ftl_commodity: str
@@ -241,12 +247,21 @@ class ValidateResponse(BaseModel):
     ``warnings``. FTL out-of-scope conditions are surfaced as HTTP 400 with
     a structured ``detail`` code rather than a 200 with ``valid=false`` so
     a caller that ignores the body still fails closed.
+
+    ``rules_evaluated`` / ``no_verdict_reason`` (#1203 option 2) expose the
+    rules-engine provenance of the verdict: how many active rule
+    definitions applied, and — when the engine could not produce a verdict
+    (``no_rules_loaded``, ``ftl_classification_missing``) — why. A
+    no-verdict outcome is reported as ``valid=false`` with a ``NO_VERDICT``
+    error, never as a silent pass.
     """
 
     valid: bool
     ftl_commodity: str
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    rules_evaluated: int = 0
+    no_verdict_reason: str | None = None
 
 
 _ALLOWED_VALIDATE_CTE_TYPES = {
@@ -258,23 +273,6 @@ _ALLOWED_VALIDATE_CTE_TYPES = {
     "RECEIVING",
     "TRANSFORMATION",
 }
-
-_REQUIRED_VALIDATE_FIELDS = [
-    "tlc",
-    "cte_type",
-    "event_date",
-    "location",
-    "quantity",
-    "unit_of_measure",
-    "product_description",
-    "responsible_party_contact",
-]
-
-_RECOMMENDED_VALIDATE_FIELDS = {
-    "lot_size_unit": "Include lot size unit so reviewers can reconcile quantities.",
-    "supplier_reference": "Include supplier reference to support traceability lookups.",
-}
-
 
 def _validation_issue(
     path: str,
@@ -289,100 +287,166 @@ def _validation_issue(
     return issue
 
 
-def _validate_fsma204_config(
-    config: dict[str, Any] | None,
+# ---------------------------------------------------------------------------
+# #1203 option-2 rewire — /validate verdicts derive from services/shared/rules
+# ---------------------------------------------------------------------------
+#
+# The previous handler ran a local 8-field contract check
+# (``_validate_fsma204_config``). That duplicated — and drifted from — the
+# versioned per-CTE rules in ``services/shared/rules``, which is what the
+# ingestion paths actually enforce. The mapping below converts the caller's
+# ``config`` into the engine's canonical event shape, evaluates it against
+# the active rule definitions (``fsma.rule_definitions``), and translates
+# the ``EvaluationSummary`` back into this endpoint's response contract.
+#
+# The drift test in
+# ``services/shared/tests/test_rules_enforcement_manifest.py`` asserts this
+# module keeps importing ``RulesEngine`` so the endpoint cannot silently
+# revert to a local stub.
+
+# Engine-canonical top-level event fields (mirrors the ingestion
+# rules-router request model). Config keys matching these pass through
+# at the top level; everything else lands under ``kdes.``.
+_ENGINE_TOP_LEVEL_FIELDS = {
+    "traceability_lot_code",
+    "product_reference",
+    "quantity",
+    "unit_of_measure",
+    "from_facility_reference",
+    "to_facility_reference",
+    "from_entity_reference",
+    "to_entity_reference",
+    "transport_reference",
+}
+
+# Legacy /validate config keys → engine-canonical names.
+_CONFIG_KEY_ALIASES = {
+    "tlc": "traceability_lot_code",
+    "product_description": "product_reference",
+}
+
+
+def _config_to_engine_event(
+    config: dict[str, Any],
+    canonical_commodity: str,
+) -> dict[str, Any]:
+    """Map a /validate ``config`` payload to the engine's canonical event shape.
+
+    ``ftl_category`` is stamped from the endpoint's own FTL gate — the
+    commodity was already verified against the FTL catalog, so the engine
+    classifies the event as on-FTL and applies the full per-CTE ruleset.
+    ``cte_type`` becomes the engine's lower-case ``event_type``. Any key
+    that is not engine-canonical is preserved under ``kdes.`` so callers
+    can supply KDEs either nested (``{"kdes": {...}}``) or flat.
+    """
+    event: dict[str, Any] = {
+        "event_id": f"validate:{uuid.uuid4()}",
+        "event_type": str(config.get("cte_type", "")).strip().lower(),
+        "ftl_category": canonical_commodity,
+    }
+    kdes: dict[str, Any] = {}
+    raw_kdes = config.get("kdes")
+    if isinstance(raw_kdes, dict):
+        kdes.update(raw_kdes)
+    for key, value in config.items():
+        if key in ("cte_type", "kdes"):
+            continue
+        target = _CONFIG_KEY_ALIASES.get(key, key)
+        if target in _ENGINE_TOP_LEVEL_FIELDS:
+            event[target] = value
+        else:
+            kdes.setdefault(key, value)
+    event["kdes"] = kdes
+    return event
+
+
+def _rule_result_issue(result: RuleEvaluationResult, code: str) -> dict[str, Any]:
+    """Translate one engine rule result into the endpoint's issue shape."""
+    path = "config"
+    for evidence in result.evidence_fields_inspected:
+        field = evidence.get("field")
+        if field:
+            path = str(field)
+            break
+    issue = _validation_issue(
+        path,
+        code,
+        result.why_failed or result.rule_title,
+        suggestion=result.remediation_suggestion,
+    )
+    issue["rule_id"] = result.rule_id
+    issue["rule_title"] = result.rule_title
+    issue["severity"] = result.severity
+    if result.citation_reference:
+        issue["citation_reference"] = result.citation_reference
+    return issue
+
+
+def _summary_to_validate_response(
+    summary: EvaluationSummary,
+    canonical_commodity: str,
     *,
     strict: bool,
-) -> tuple[bool, list[dict[str, Any]], list[dict[str, Any]]]:
-    """Run the lightweight /validate config contract behind the FTL gate."""
-    if config is None:
-        return True, [], []
+) -> "ValidateResponse":
+    """Map an ``EvaluationSummary`` onto the /validate response contract.
 
+    Fail-closed semantics (#1346/#1347 carried through to this endpoint):
+    a tri-state ``compliant is None`` (no rules loaded / nothing evaluated)
+    is NEVER reported as ``valid=true`` — it surfaces as a structured
+    ``NO_VERDICT`` error so a caller cannot mistake "not evaluated" for
+    "compliant".
+    """
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
-    for field in _REQUIRED_VALIDATE_FIELDS:
-        if field not in config:
-            errors.append(
-                _validation_issue(
-                    field,
-                    "MISSING_REQUIRED_FIELD",
-                    f"Missing required field: {field}",
-                )
-            )
-        elif config[field] is None:
-            errors.append(
-                _validation_issue(
-                    field,
-                    "NULL_REQUIRED_FIELD",
-                    f"Required field cannot be null: {field}",
-                )
-            )
+    for result in summary.results:
+        if result.result == "fail":
+            errors.append(_rule_result_issue(result, "RULE_FAILED"))
+        elif result.result == "error":
+            errors.append(_rule_result_issue(result, "RULE_EVALUATION_ERROR"))
+        elif result.result == "warn":
+            if strict:
+                errors.append(_rule_result_issue(result, "STRICT_MODE_WARNING"))
+            else:
+                warnings.append(_rule_result_issue(result, "RULE_WARNING"))
 
-    cte_value = config.get("cte_type")
-    cte_type = cte_value.upper() if isinstance(cte_value, str) else None
-    if cte_value is not None and cte_type not in _ALLOWED_VALIDATE_CTE_TYPES:
+    if summary.compliant is None:
+        reason = summary.no_verdict_reason or "nothing_evaluated"
         errors.append(
             _validation_issue(
-                "cte_type",
-                "INVALID_CTE_TYPE",
-                "cte_type must be a valid FSMA 204 CTE type",
+                "config",
+                "NO_VERDICT",
+                (
+                    "The rules engine produced no compliance verdict "
+                    f"({reason}). A missing verdict is not a pass — supply a "
+                    "valid cte_type and ensure rule definitions are seeded."
+                ),
             )
         )
 
-    if cte_type == "RECEIVING":
-        if "prior_source_tlc" not in config:
-            errors.append(
-                _validation_issue(
-                    "prior_source_tlc",
-                    "MISSING_REQUIRED_FIELD",
-                    "RECEIVING events require prior_source_tlc",
-                )
-            )
-        elif config["prior_source_tlc"] is None:
-            errors.append(
-                _validation_issue(
-                    "prior_source_tlc",
-                    "NULL_REQUIRED_FIELD",
-                    "prior_source_tlc cannot be null for RECEIVING events",
-                )
-            )
-
-    for field, suggestion in _RECOMMENDED_VALIDATE_FIELDS.items():
-        if field not in config or config[field] is None:
-            warnings.append(
-                _validation_issue(
-                    field,
-                    "MISSING_RECOMMENDED_FIELD",
-                    f"Recommended field is missing: {field}",
-                    suggestion=suggestion,
-                )
-            )
-
-    if strict and warnings:
-        errors.extend(
-            _validation_issue(
-                warning["path"],
-                "STRICT_MODE_WARNING",
-                warning["message"],
-                suggestion=warning.get("suggestion"),
-            )
-            for warning in warnings
-        )
-        warnings = []
-
-    return not errors, errors, warnings
+    valid = summary.compliant is True and not errors
+    return ValidateResponse(
+        valid=valid,
+        ftl_commodity=canonical_commodity,
+        errors=errors,
+        warnings=warnings,
+        rules_evaluated=summary.total_rules,
+        no_verdict_reason=summary.no_verdict_reason,
+    )
 
 
 @router.post(
     "/validate",
-    dependencies=[Depends(require_api_key)],
     response_model=ValidateResponse,
 )
-async def validate_compliance(request: ValidateRequest) -> ValidateResponse:
-    """Validate an FSMA 204 configuration, gated on FTL commodity scope.
+async def validate_compliance(
+    request: ValidateRequest,
+    api_key: APIKey = Depends(require_api_key),
+    db=Depends(get_db_session),
+) -> ValidateResponse:
+    """Validate an FSMA 204 configuration against the versioned rules engine.
 
-    Enforcement order (#1105):
+    Enforcement order (#1105 gate + #1203 option-2 rewire):
 
     1. Request must declare ``ftl_commodity`` (Pydantic 422 if missing).
     2. The commodity must be on the FDA FTL catalog, else 400
@@ -394,6 +458,21 @@ async def validate_compliance(request: ValidateRequest) -> ValidateResponse:
        ``E_CHECKLIST_OUT_OF_SCOPE``. Today's checklists carry no scope
        field, so this branch is a no-op — wired now so the follow-up can
        drop in a scope without another endpoint change.
+    4. When a ``config`` is supplied, it is mapped to the engine's
+       canonical event shape and evaluated against the active rule
+       definitions in ``services/shared/rules`` (#1203 option 2) — the
+       same per-CTE FSMA 204 rules the ingestion paths enforce. The
+       evaluation is advisory (``persist=False``): nothing is written to
+       ``fsma.rule_evaluations``. A no-verdict evaluation fails closed
+       (``valid=false`` + ``NO_VERDICT``), and requesting rule evaluation
+       without a database available returns 503 rather than a fabricated
+       verdict.
+
+    ``config.cte_type`` must be one of the FSMA 204 CTE types — it selects
+    which per-CTE rules apply. KDEs may be supplied nested
+    (``config.kdes.harvest_date``) or flat (``config.harvest_date``);
+    ``tlc`` and ``product_description`` are aliased to the engine's
+    ``traceability_lot_code`` / ``product_reference``.
     """
     # --- Step 1 / 2 — catalog-level FTL gate ------------------------------
     if not _is_ftl_commodity(request.ftl_commodity):
@@ -421,15 +500,51 @@ async def validate_compliance(request: ValidateRequest) -> ValidateResponse:
                     detail="E_CHECKLIST_OUT_OF_SCOPE",
                 )
 
-    valid, errors, warnings = _validate_fsma204_config(
-        request.config,
-        strict=request.strict,
+    # --- Step 4 — rules-engine evaluation (#1203 option 2) ----------------
+    if request.config is None:
+        # Nothing to validate: the request passed the FTL scope gate but
+        # supplied no configuration. This is NOT a compliance verdict on
+        # any event — rules_evaluated=0 makes the distinction machine-readable.
+        return ValidateResponse(
+            valid=True,
+            ftl_commodity=canonical_commodity,
+            rules_evaluated=0,
+        )
+
+    cte_value = request.config.get("cte_type")
+    cte_type = cte_value.upper() if isinstance(cte_value, str) else None
+    if cte_type not in _ALLOWED_VALIDATE_CTE_TYPES:
+        # Fail fast with a structured error rather than handing the engine
+        # an event_type no rule targets (which would surface as a less
+        # actionable NO_VERDICT).
+        return ValidateResponse(
+            valid=False,
+            ftl_commodity=canonical_commodity,
+            errors=[
+                _validation_issue(
+                    "cte_type",
+                    "INVALID_CTE_TYPE",
+                    "cte_type must be a valid FSMA 204 CTE type",
+                )
+            ],
+        )
+
+    if db is None:
+        # Rule definitions live in the database. Refuse rather than
+        # fabricate a verdict from nothing (fail-closed, #1347).
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    event_data = _config_to_engine_event(request.config, canonical_commodity)
+    engine = RulesEngine(db)
+    summary = engine.evaluate_event(
+        event_data,
+        persist=False,
+        tenant_id=api_key.tenant_id,
     )
-    return ValidateResponse(
-        valid=valid,
-        ftl_commodity=canonical_commodity,
-        errors=errors,
-        warnings=warnings,
+    return _summary_to_validate_response(
+        summary,
+        canonical_commodity,
+        strict=request.strict,
     )
 
 

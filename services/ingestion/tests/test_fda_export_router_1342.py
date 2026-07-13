@@ -214,6 +214,24 @@ class _FakePersistence:
         _ = tenant_id, start_date, end_date
         return list(self._events_by_tlc.get(tlc, []))
 
+    def query_events_by_tlcs(
+        self,
+        tenant_id,
+        tlcs,
+        start_date=None,
+        end_date=None,
+        follow_transformations=True,
+        max_depth=None,
+        limit=10000,
+    ):
+        # Set-based batch fetch used by /export/all since #2515. Mirrors the
+        # real method's contract: one combined, capped list across seed TLCs.
+        _ = tenant_id, start_date, end_date, follow_transformations, max_depth
+        events = []
+        for tlc in dict.fromkeys(tlcs):
+            events.extend(self._events_by_tlc.get(tlc, []))
+        return events[:limit]
+
     def query_all_events(
         self,
         tenant_id,

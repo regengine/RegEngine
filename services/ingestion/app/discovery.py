@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,9 +25,16 @@ class EthicalScraper:
     and is idempotent via ETag + content-hash deduplication.
     """
 
-    def __init__(self, redis_url: str = "redis://redis:6379/0"):
+    def __init__(self, redis_url: str | None = None):
         self.session = httpx.Client(headers={"User-Agent": "RegEngine-Research-Bot/1.0 (+https://regengine.co/bot)"})
-        self.redis = Redis.from_url(redis_url)
+        # #2505: read REDIS_URL like every other Redis consumer
+        # (server/main.py readiness probe, shared.idempotency,
+        # shared.circuit_breaker_store, shared.api_key_store). The old
+        # hardcoded "redis://redis:6379/0" default only resolves on
+        # docker-compose; on Railway it points at a non-existent host, so
+        # every nightly FSMA-sync dedup op failed silently. Reading the env
+        # var also inherits the correct scheme (e.g. rediss:// for TLS).
+        self.redis = Redis.from_url(redis_url or os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
     def can_fetch(self, url: str) -> bool:
         """Check if robots.txt allows fetching this URL."""

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.env import is_production
 from shared.pagination import PaginationParams
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -54,8 +56,85 @@ def _allow_memory_fallback() -> bool:
     return not is_production()
 
 
+# Issue #2508 — per-portal-link abuse controls.
+#
+# The public, link-authenticated portal endpoints declare no auth and were
+# covered only by the coarse per-IP global middleware (preflight) and the
+# victim-tenant-scoped webhook limiter (submit). Both backstops are evadable
+# and neither is scoped to the portal link itself. These per-link buckets are
+# keyed on ``portal:{portal_id}`` so abuse on one link cannot consume the
+# owning tenant's general ``webhooks.ingest`` budget.
+_PORTAL_PREFLIGHT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_PREFLIGHT_RATE_LIMIT_RPM", "30")))
+_PORTAL_SUBMIT_RATE_LIMIT_RPM = max(1, int(os.getenv("PORTAL_SUBMIT_RATE_LIMIT_RPM", "20")))
+_PORTAL_RATE_LIMIT_WINDOW_SECS = max(1, int(os.getenv("PORTAL_RATE_LIMIT_WINDOW_SECONDS", "60")))
+
+
+def _enforce_portal_rate_limit(portal_id: str, tenant_id: str, *, scope: str, limit: int) -> None:
+    """Per-portal-link sliding-window limit. Raises HTTP 429 when exceeded.
+
+    Keyed on ``portal:{portal_id}`` (not the bare tenant_id) so each link gets
+    its own bucket and one abused link does not starve the owning tenant's
+    other ingestion budgets.
+    """
+    allowed, _remaining = consume_tenant_rate_limit(
+        tenant_id=tenant_id,
+        bucket_suffix=f"portal:{portal_id}:{scope}",
+        limit=limit,
+        window=_PORTAL_RATE_LIMIT_WINDOW_SECS,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=(f"Portal rate limit exceeded ({limit}/{_PORTAL_RATE_LIMIT_WINDOW_SECS}s for this link)"),
+            headers={
+                "Retry-After": str(_PORTAL_RATE_LIMIT_WINDOW_SECS),
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(rate_limit_reset_epoch(_PORTAL_RATE_LIMIT_WINDOW_SECS)),
+                "X-RateLimit-Scope": f"portal:{portal_id}:{scope}",
+            },
+        )
+
+
+def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
+    """Check the owning tenant's subscription status for a portal submission.
+
+    Returns:
+      * ``True``  — tenant has an active/trialing subscription (allow).
+      * ``False`` — Redis is reachable but the tenant has no active subscription
+        (block before persistence).
+      * ``None``  — subscription checking is not configured for this deploy
+        (no Redis); the caller skips the gate rather than failing closed, so
+        local/dev submissions are not broken. Production runs with Redis, where
+        the gate is meaningful.
+
+    Mirrors ``subscription_gate.require_active_subscription`` but is callable
+    with the link's tenant_id, since the portal has no authenticated principal.
+    """
+    if not os.getenv("REDIS_URL"):
+        return None
+    from .subscription_gate import _check_subscription_and_redis_health
+
+    try:
+        status, redis_available = _check_subscription_and_redis_health(tenant_id)
+    except Exception:
+        # Circuit open / unexpected error — cannot confirm state. Treat as
+        # unconfigured so a Redis incident does not hard-block suppliers; the
+        # per-link rate limit still caps abuse.
+        return None
+    if not redis_available:
+        return None
+    return (status or "").lower() in {"active", "trialing"}
+
+
 def _set_tenant_context(db, tenant_id: str) -> None:
-    db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+    # Phase B (#1934): delegate to the canonical tenant-GUC primitive. The
+    # _if_uuid variant preserves portal behavior for non-UUID tenant slugs
+    # (the GUC is skipped; fail-hard get_tenant_context() RLS still rejects
+    # DB access without tenant context).
+    from shared.tenant_context import set_tenant_guc_if_uuid
+
+    set_tenant_guc_if_uuid(db, tenant_id)
 
 
 def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
@@ -284,7 +363,7 @@ def _db_get_integration_profile_summary(tenant_id: str, profile_id: Optional[str
     db = get_db_safe()
     if db:
         try:
-            db.execute(text("SELECT set_config('app.tenant_id', :tenant_id, true)"), {"tenant_id": tenant_id})
+            _set_tenant_context(db, tenant_id)
             row = db.execute(
                 # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
                 text("""
@@ -760,6 +839,14 @@ async def preflight_supplier_data(
 ) -> SupplierPreflightResult:
     """Run the supplier submission through the Workbench validation gate."""
     link = _get_active_portal_link(portal_id)
+    # Issue #2508 — per-link throttle for CPU-heavy sandbox validation, scoped
+    # to the portal link so it cannot be driven at the full per-IP ceiling.
+    _enforce_portal_rate_limit(
+        portal_id,
+        link["tenant_id"],
+        scope="preflight",
+        limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
+    )
     return _build_supplier_preflight(portal_id, link, submission)
 
 
@@ -778,6 +865,29 @@ async def submit_supplier_data(
 ) -> SubmissionResult:
     """Process a supplier submission — no auth required (link-based access)."""
     link = _get_active_portal_link(portal_id)
+
+    # Issue #2508 — per-link submission cap. Scoped to the portal link, not the
+    # victim tenant's general ingest budget, and enforced BEFORE any persisted
+    # write so abuse past the cap never reaches ``ingest_events``.
+    _enforce_portal_rate_limit(
+        portal_id,
+        link["tenant_id"],
+        scope="submit",
+        limit=_PORTAL_SUBMIT_RATE_LIMIT_RPM,
+    )
+
+    # Issue #2508 — gate persisted writes on the owning tenant's subscription.
+    # The portal has no authenticated principal, so we check the link's tenant
+    # directly. ``None`` means subscription checking is not configured for this
+    # deploy (no Redis) and the gate is skipped.
+    if _portal_subscription_active(link["tenant_id"]) is False:
+        return SubmissionResult(
+            status="error",
+            message="Submission rejected: the receiving organization does not have an active subscription.",
+            supplier_name=link["supplier_name"],
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+        )
+
     preflight = _build_supplier_preflight(portal_id, link, submission)
     if preflight.status == "blocked":
         return SubmissionResult(

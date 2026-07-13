@@ -40,10 +40,13 @@ jobs:
           import re
           from pathlib import Path
 
-          files = [
-              Path(".github/workflows/deploy.yml"),
-              Path(".github/workflows/security.yml"),
-          ]
+          # Cover EVERY workflow, not just deploy.yml/security.yml. Scoping the
+          # gate to two files is what let sentinel.yml drift to a mutable ref
+          # unnoticed (#2562 fixed that instance; this closes the class). Any
+          # new or edited workflow is now held to the SHA-pin / install-pin
+          # policy automatically.
+          workflow_dir = Path(".github/workflows")
+          files = sorted(workflow_dir.glob("*.yml")) + sorted(workflow_dir.glob("*.yaml"))
           action_ref = re.compile("uses:" + r"\s*([^@\s#]+)@([^\s#]+)")
           pinned_sha = re.compile(r"^[0-9a-f]{40}$")
           install_patterns = [
@@ -352,6 +355,13 @@ jobs:
             echo "No Python deps detected."
             echo '{"info": "no python project"}' > pip-audit-results.json
           fi
+
+      # Keep .trivyignore in lockstep with the pip-audit --ignore-vuln set so
+      # the container scan can't hard-fail on accepted-risk Starlette CVEs the
+      # team already documented in the pip-audit gate (#2528). This runs in the
+      # `deps` job rather than `container-scan` so it gates PRs too.
+      - name: Verify .trivyignore mirrors the pip-audit ignore set
+        run: python scripts/check_trivyignore_sync.py
 
       - name: Upload dependency audit results
         if: always()

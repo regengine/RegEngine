@@ -835,8 +835,11 @@ class TestEvaluateMassBalance:
         assert result.result == "warn"
         assert "mixed units" in result.why_failed.lower() or "convert" in result.why_failed.lower()
 
-    def test_convertible_units_compares_correctly(self, mock_session):
-        """Known units (lbs vs cases) are converted and compared."""
+    def test_mass_vs_container_uom_is_not_comparable(self, mock_session):
+        """#2520: a mass unit (lbs) mixed with a container unit (cases) and no
+        tenant container-weight mapping must NOT drive a compliance fail/pass.
+        The old behavior multiplied cases by a hardcoded 24 lbs and reported a
+        bogus 'fail'; the corrected behavior renders no verdict (warn)."""
         mock_session.execute.return_value.fetchall.return_value = [
             ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "lbs"),
         ]
@@ -848,11 +851,62 @@ class TestEvaluateMassBalance:
             "quantity": 2100,
             "unit_of_measure": "cases",
         }
-        # 2100 cases = 50,400 lbs >> 1000 lbs input → fail
+        result = _evaluate_mass_balance(
+            event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
+        )
+        assert result.result == "warn"
+        assert "not comparable" in result.why_failed.lower()
+
+    def test_mixed_true_mass_units_still_convert_and_fail(self, mock_session):
+        """#2520: a mix of two TRUE mass units (kg input, lbs output) is
+        physically convertible and must still produce a verdict — here output
+        far exceeds input, so it fails."""
+        # 1 kg input ≈ 2.205 lbs; 5000 lbs output >> input → fail
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1, "kg"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 5000,
+            "unit_of_measure": "lbs",
+        }
         result = _evaluate_mass_balance(
             event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session, tenant_id="tenant-1"
         )
         assert result.result == "fail"
+        assert "Mass balance violation" in result.why_failed
+
+    def test_container_weight_mapping_enables_conversion(self, mock_session):
+        """#2520: when an authoritative tenant/product container-weight mapping
+        is supplied, container UOMs convert using THAT mapping (not the global
+        24-lb guess), and the rule can render a verdict again."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "lbs"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 10,
+            "unit_of_measure": "cases",
+        }
+        rule = _make_rule(
+            rule_id="rule-mass",
+            title="Mass Balance Check",
+            severity="critical",
+            category="quantity_consistency",
+            evaluation_logic={
+                "type": "mass_balance",
+                "params": {"tolerance_percent": 1.0, "container_weights": {"cases": 50.0}},
+            },
+        )
+        # 10 cases * 50 lbs = 500 lbs output <= 1000 lbs input → pass
+        result = _evaluate_mass_balance(event, rule.evaluation_logic, rule, mock_session, tenant_id="tenant-1")
+        assert result.result == "pass"
 
     def test_no_prior_events_passes(self, mock_session):
         """No related events — pass (nothing to compare)."""
