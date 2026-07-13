@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""
+verify_records.py - Independent Hash Verification for RegEngine Records
+
+This open-source script allows anyone to independently verify the cryptographic
+integrity of RegEngine traceability records without relying on RegEngine servers.
+
+Usage:
+    regengine-verify --tlc LOT-2026-001 --api-key rge_live_xxx
+    regengine-verify --file exported_records.json --offline
+    regengine-verify --audit-pack audit_2026_02.zip
+
+The "Verify, Don't Trust" principle: You maintain full control of verification.
+
+NOTE (#2507): this is the per-RECORD verifier — it recomputes each canonical
+record's ``sha256_hash`` (see ``compute_record_hash``). It is a DIFFERENT
+program from ``frontend/public/sdk/verify_chain.py``, which verifies a
+``/proof`` Merkle BUNDLE (per-file leaf hashes + Merkle root). This tool was
+renamed from ``verify_chain.py`` -> ``verify_records.py`` (WS-11) to end the
+filename collision; the bundle tool keeps its name because it is served at
+the public URL https://regengine.co/sdk/verify_chain.py, which external
+auditors curl (renaming it would break published instructions). A
+deprecation shim remains at ``regengine.verify_chain``.
+
+License: MIT
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+try:
+    import requests
+
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+
+
+@dataclass
+class VerificationResult:
+    """Result of a single record verification."""
+
+    tlc: str
+    expected_hash: str
+    computed_hash: str
+    valid: bool
+    chain_position: Optional[int] = None
+    verified_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+def _first(record: dict, *keys: str, default: str = "") -> str:
+    """Return the first present, non-None value among ``keys``.
+
+    Lets the verifier read both the canonical export key
+    (``traceability_lot_code``) and any short alias (``tlc``) without
+    diverging from the production hash inputs.
+    """
+    for key in keys:
+        value = record.get(key)
+        if value is not None:
+            return value
+    return default
+
+
+def compute_record_hash(record: dict) -> str:
+    """
+    Recompute the SHA-256 ``sha256_hash`` of a canonical traceability record.
+
+    This MUST stay byte-for-byte identical to the server's
+    ``TraceabilityEvent.compute_sha256_hash`` in
+    ``services/shared/canonical_event.py`` — the function that produces the
+    ``sha256_hash`` written to ``fsma.traceability_events`` and emitted in
+    canonical exports. Any divergence makes every authentic record verify
+    as INVALID (#2507).
+
+    Canonical form (pipe-delimited, in this exact order), bare hex digest
+    with NO ``sha256:`` prefix:
+
+        event_id | event_type | traceability_lot_code | product_reference |
+        quantity | unit_of_measure | from_facility_reference |
+        to_facility_reference | event_timestamp |
+        json.dumps(kdes, sort_keys=True, default=str)
+
+    Field aliases (``tlc`` for ``traceability_lot_code`` etc.) are accepted
+    so the verifier works against either the raw canonical export keys or a
+    flattened pack, but the hashed VALUES are the canonical ones.
+    """
+    event_id = _first(record, "event_id", "id")
+    event_type = _first(record, "event_type", "cte_type")
+    tlc = _first(record, "traceability_lot_code", "tlc")
+    product_reference = _first(record, "product_reference")
+    quantity = record.get("quantity", 0)
+    unit_of_measure = _first(record, "unit_of_measure")
+    from_facility = _first(record, "from_facility_reference", "location")
+    to_facility = _first(record, "to_facility_reference")
+    event_timestamp = _first(record, "event_timestamp")
+    kdes = record.get("kdes", {})
+
+    canonical = "|".join(
+        [
+            str(event_id),
+            event_type,
+            tlc,
+            product_reference,
+            str(quantity),
+            unit_of_measure,
+            from_facility,
+            to_facility,
+            event_timestamp,
+            json.dumps(kdes, sort_keys=True, default=str),
+        ]
+    )
+
+    # Bare hex — matches the server's ``hexdigest()`` (no ``sha256:`` prefix).
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def verify_record_offline(record: dict) -> VerificationResult:
+    """Verify a record's hash offline using local data only."""
+    tlc = _first(record, "traceability_lot_code", "tlc", default="UNKNOWN")
+    # Canonical exports emit the per-record digest as ``sha256_hash``;
+    # accept a bare ``hash`` alias for flattened packs.
+    expected_hash = _first(record, "sha256_hash", "hash")
+
+    try:
+        computed_hash = compute_record_hash(record)
+        valid = computed_hash == expected_hash
+
+        return VerificationResult(
+            tlc=tlc,
+            expected_hash=expected_hash,
+            computed_hash=computed_hash,
+            valid=valid,
+            verified_at=datetime.utcnow().isoformat() + "Z",
+        )
+    except Exception as e:
+        return VerificationResult(tlc=tlc, expected_hash=expected_hash, computed_hash="", valid=False, error=str(e))
+
+
+def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.regengine.co") -> VerificationResult:
+    """Verify a record against the RegEngine API."""
+    if not HAS_REQUESTS:
+        return VerificationResult(
+            tlc=tlc,
+            expected_hash="",
+            computed_hash="",
+            valid=False,
+            error="requests library not installed. Run: pip install requests",
+        )
+
+    try:
+        # Fetch record
+        headers = {"Authorization": f"Bearer {api_key}"}
+        resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}", headers=headers, timeout=30)
+        resp.raise_for_status()
+        record = resp.json()
+
+        # Verify locally
+        result = verify_record_offline(record)
+
+        # Cross-check with server's verification endpoint
+        verify_resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}/verify", headers=headers, timeout=30)
+        if verify_resp.ok:
+            verify_data = verify_resp.json()
+            result.chain_position = verify_data.get("chain_position")
+            # Double-check: our hash should match server's
+            if verify_data.get("hash") != result.computed_hash:
+                result.valid = False
+                result.error = "Hash mismatch between local and server verification"
+
+        return result
+
+    except requests.exceptions.RequestException as e:
+        return VerificationResult(
+            tlc=tlc, expected_hash="", computed_hash="", valid=False, error=f"API request failed: {e}"
+        )
+
+
+def verify_file(file_path: Path) -> list[VerificationResult]:
+    """Verify all records in a JSON file."""
+    with open(file_path, "r") as f:
+        data = json.load(f)
+
+    records = data if isinstance(data, list) else data.get("records", [data])
+    return [verify_record_offline(r) for r in records]
+
+
+def print_results(results: list[VerificationResult]) -> int:
+    """Print verification results and return exit code."""
+    passed = 0
+    failed = 0
+
+    print("\n" + "=" * 60)
+    print("REGENGINE CHAIN VERIFICATION REPORT")
+    print("=" * 60)
+    print(f"Verified at: {datetime.utcnow().isoformat()}Z")
+    print("-" * 60)
+
+    for r in results:
+        status = "✓ VALID" if r.valid else "✗ INVALID"
+        print(f"\n{status}: {r.tlc}")
+        print(f"  Expected:  {r.expected_hash[:50]}...")
+        print(f"  Computed:  {r.computed_hash[:50]}...")
+        if r.chain_position:
+            print(f"  Chain pos: {r.chain_position}")
+        if r.error:
+            print(f"  Error:     {r.error}")
+
+        if r.valid:
+            passed += 1
+        else:
+            failed += 1
+
+    print("\n" + "-" * 60)
+    print(f"SUMMARY: {passed} passed, {failed} failed, {len(results)} total")
+    print("=" * 60 + "\n")
+
+    return 0 if failed == 0 else 1
+
+
+def _sdk_version() -> str:
+    """Report the SDK package version — one source of truth (__init__.py).
+
+    Falls back to "standalone" when the script is run as a lone file
+    outside the package (auditors are told they can download and run it
+    independently), where the relative import has no parent package.
+    """
+    try:
+        from . import __version__
+
+        return __version__
+    except ImportError:
+        return "standalone"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Independently verify RegEngine traceability record integrity",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Verify a single lot online
+  regengine-verify --tlc LOT-2026-001 --api-key rge_live_xxx
+  
+  # Verify exported records offline
+  regengine-verify --file exported_records.json --offline
+  
+  # Verify an FDA audit pack
+  regengine-verify --audit-pack audit_2026_02.zip
+        """,
+    )
+
+    parser.add_argument("--tlc", help="Traceability Lot Code to verify")
+    parser.add_argument("--api-key", help="RegEngine API key")
+    parser.add_argument("--file", type=Path, help="JSON file with records to verify")
+    parser.add_argument("--offline", action="store_true", help="Verify without API calls")
+    parser.add_argument("--base-url", default="https://api.regengine.co", help="API base URL")
+    parser.add_argument("--version", action="version", version=f"regengine-verify {_sdk_version()}")
+
+    args = parser.parse_args()
+
+    results = []
+
+    if args.file:
+        if not args.file.exists():
+            print(f"Error: File not found: {args.file}", file=sys.stderr)
+            sys.exit(1)
+        results = verify_file(args.file)
+
+    elif args.tlc:
+        if args.offline:
+            print("Error: --offline requires --file", file=sys.stderr)
+            sys.exit(1)
+        if not args.api_key:
+            print("Error: --api-key required for online verification", file=sys.stderr)
+            sys.exit(1)
+        results = [verify_record_online(args.tlc, args.api_key, args.base_url)]
+
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+    exit_code = print_results(results)
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()

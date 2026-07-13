@@ -4,7 +4,6 @@ RegEngine API Client
 
 import logging
 import time
-from datetime import date
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -20,7 +19,6 @@ from .exceptions import (
 )
 from .models import (
     CTEType,
-    FTLResult,
     ReadinessScore,
     RecallDrill,
     Record,
@@ -199,64 +197,12 @@ class RegEngineClient:
     # =========================================================================
     # Record Management
     # =========================================================================
-
-    def create_record(
-        self,
-        cte_type: CTEType,
-        tlc: str,
-        location: str,
-        quantity: float,
-        quantity_uom: str = "lbs",
-        product_description: Optional[str] = None,
-        event_date: Optional[str] = None,
-        reference_document: Optional[str] = None,
-        input_tlcs: Optional[List[str]] = None,
-        **extra_kdes: Any,
-    ) -> Record:
-        """
-        Create a traceability record for a Critical Tracking Event.
-
-        Args:
-            cte_type: Type of CTE (HARVESTING, COOLING, INITIAL_PACKING, FIRST_LAND_BASED_RECEIVING, SHIPPING, RECEIVING, TRANSFORMATION)
-            tlc: Traceability Lot Code
-            location: GLN of the facility
-            quantity: Amount of product
-            quantity_uom: Unit of measure (default: lbs)
-            product_description: Description of the product
-            event_date: Date of the event (ISO format, defaults to today)
-            reference_document: Associated document reference
-            input_tlcs: For TRANSFORMATION, list of input lot codes
-            **extra_kdes: Additional Key Data Elements
-
-        Returns:
-            Record object with created record details
-        """
-        payload = {
-            "cte_type": cte_type.value if isinstance(cte_type, CTEType) else cte_type,
-            "tlc": tlc,
-            "location": location,
-            "quantity": quantity,
-            "quantity_uom": quantity_uom,
-            "event_date": event_date or date.today().isoformat(),
-            **extra_kdes,
-        }
-        if product_description:
-            payload["product_description"] = product_description
-        if reference_document:
-            payload["reference_document"] = reference_document
-        if input_tlcs:
-            payload["input_tlcs"] = input_tlcs
-
-        # The consolidated API exposes no public POST create-record endpoint:
-        # canonical records (``/api/v1/records``) are read-only and are written
-        # by the ingestion spine (webhook/EPCIS/EDI), not by a direct create
-        # call. Calling the old ``/api/graph/fsma/records`` path 404'd silently
-        # (#2531). Fail loudly until a supported create endpoint exists.
-        raise NotImplementedError(
-            "create_record is not supported: the RegEngine API has no public "
-            "create-record endpoint. Records are written through the ingestion "
-            "pipeline (webhook/EPCIS/EDI). Payload prepared: " + str(sorted(payload))
-        )
+    #
+    # WS-11 note: create_record and check_ftl were removed (not deprecated) —
+    # both always raised NotImplementedError because the consolidated API has
+    # no public create-record endpoint (records are written by the ingestion
+    # pipeline) and no per-category FTL lookup (#2531). The client exposes
+    # only methods with real routes behind them.
 
     def get_record(self, tlc: str) -> Record:
         """
@@ -374,28 +320,6 @@ class RegEngineClient:
     # =========================================================================
     # FTL Checker
     # =========================================================================
-
-    def check_ftl(self, product_category: str) -> FTLResult:
-        """
-        Check if a product category is on FDA's Food Traceability List.
-
-        Args:
-            product_category: Category ID (e.g., 'leafy-greens', 'finfish')
-
-        Returns:
-            FTLResult with coverage status, CTEs, and KDEs required
-        """
-        # The old per-category path ``/api/compliance/ftl/{category}`` is not a
-        # registered route on the consolidated app and 404'd (#2531). The FTL
-        # data is exposed as a category listing at
-        # ``/api/v1/products/categories/ftl``, not a per-category lookup, so
-        # there is no drop-in replacement for this signature. Fail loudly
-        # rather than silently 404.
-        raise NotImplementedError(
-            "check_ftl is not supported: the RegEngine API has no per-category "
-            "FTL endpoint. Use the FTL category listing at "
-            f"/api/v1/products/categories/ftl instead (requested: {product_category})."
-        )
 
     # =========================================================================
     # Recall Management

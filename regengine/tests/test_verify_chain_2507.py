@@ -17,7 +17,7 @@ production Merkle scheme in ``services/shared/merkle_tree.py``, so a
 change to one side cannot silently break the served verifier.
 
 The repo root + ``services`` are on ``pythonpath`` (pyproject), so both
-``regengine.verify_chain`` and ``shared.*`` import cleanly.
+``regengine.verify_records`` and ``shared.*`` import cleanly.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from uuid import UUID
 
 import pytest
 
-import regengine.verify_chain as vc
+import regengine.verify_records as vc
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 

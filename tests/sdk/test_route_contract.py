@@ -121,21 +121,15 @@ def test_every_sdk_path_resolves_to_a_registered_route(registered_routes):
     )
 
 
-def test_unsupported_sdk_methods_fail_loudly_without_a_request():
-    """#2531: create_record / check_ftl have no real route and must raise
-    NotImplementedError (a clear deprecation) instead of issuing a 404 call."""
+def test_unsupported_sdk_methods_are_removed():
+    """#2531 → WS-11: create_record / check_ftl had no real route. They first
+    became loud NotImplementedError stubs; WS-11 removed them entirely so the
+    installed client exposes only methods with registered routes behind them.
+    This pins the removal — reintroducing either name must come with a real
+    route (and a test in _captured_sdk_calls scope)."""
     client = RegEngineClient(api_key="rge_test")
     try:
-
-        def _boom(*_a, **_k):  # pragma: no cover - must never be reached
-            raise AssertionError("unsupported method issued a request")
-
-        client._request = _boom  # type: ignore[assignment]
-        client._request_bytes = _boom  # type: ignore[assignment]
-
-        with pytest.raises(NotImplementedError):
-            client.create_record(cte_type="shipping", tlc="LOT-1", location="GLN", quantity=1.0)
-        with pytest.raises(NotImplementedError):
-            client.check_ftl("leafy-greens")
+        assert not hasattr(client, "create_record")
+        assert not hasattr(client, "check_ftl")
     finally:
         client._session.close()
