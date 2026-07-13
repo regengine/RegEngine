@@ -15,7 +15,7 @@ pydantic-settings>=2.14.2
 structlog>=24.1.0
 python-json-logger>=2.0.7
 python-dotenv>=1.0.0
-click>=8.1.0
+click>=8.3.3
 typer>=0.9.0
 PyYAML>=6.0.1
 gunicorn>=22.0.0
@@ -123,7 +123,7 @@ python-docx>=0.8.11
 docx2txt>=0.8
 pytesseract>=0.3.10
 pdf2image>=1.16.0
-Pillow>=12.1.1,<13
+Pillow>=12.3.0,<13
 pyzbar>=0.1.9,<1
 
 # Testing (included for CI — move to dev-requirements.txt if image size matters)
