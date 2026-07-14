@@ -310,10 +310,18 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     # 6) Chain integrity — full cryptographic verification (last 50 entries)
     try:
+        from shared.canonical_persistence.verification import chain_verify_reads_canonical
         from shared.cte_persistence import CTEPersistence
 
-        persistence = CTEPersistence(db_session)
-        chain_result = persistence.verify_chain(tenant_id)
+        # WS-1b (#1335): behind CHAIN_VERIFY_READ_CANONICAL (default off)
+        # the score verifies the canonical chain instead of the legacy one.
+        if chain_verify_reads_canonical():
+            from shared.canonical_persistence import CanonicalEventStore
+
+            chain_result = CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
+        else:
+            persistence = CTEPersistence(db_session)
+            chain_result = persistence.verify_chain(tenant_id)
         result["chain_verified"] = chain_result.valid
         result["chain_verification_errors"] = chain_result.errors
     except (ImportError, OperationalError, ProgrammingError) as exc:
