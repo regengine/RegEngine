@@ -1,17 +1,33 @@
-"""Comprehensive tests for FSMA 204 validation engine.
+"""Tests for the /validate endpoint (rules-engine backed, #1203 option 2).
 
-Covers:
-- Required field validation
-- CTE type enumeration
-- RECEIVING-specific requirements
-- Strict mode behavior
-- Warning generation for recommended fields
+WS-9 rewired /validate from a local 8-field contract check to the versioned
+rules engine in ``services/shared/rules`` — verdicts now derive from the
+active rule definitions, and issues carry rule provenance (rule_id, CFR
+citation, remediation). This suite covers the endpoint behaviors through
+that path with a deterministic in-memory ruleset (``load_active_rules`` is
+patched; no ``fsma.rule_definitions`` table is required):
+
+- Happy path: KDE-complete configs pass; verdicts are engine-derived
+  (``rules_evaluated`` > 0).
+- KDE-presence failures: incomplete configs fail with RULE_FAILED issues
+  carrying the engine's field paths and citations.
+- RECEIVING semantics: the per-CTE receiving rules (immediate previous
+  source / TLC source reference) replace the legacy ``prior_source_tlc``
+  contract.
+- CTE type gate: INVALID_CTE_TYPE short-circuits before the engine
+  (including non-string cte_type — no crash).
+- Strict mode: engine warnings escalate to STRICT_MODE_WARNING errors.
+- Fail-closed: an empty ruleset yields NO_VERDICT, never valid=true.
+- Auth: API key still required.
+
+Deeper golden coverage (endpoint verdict vs direct engine evaluation on the
+real seed rules) lives in ``tests/compliance/test_validate_rules_engine_golden.py``.
 """
 
 import os
 import sys
+from datetime import date
 from pathlib import Path
-from uuid import uuid4
 
 # Ensure service imports resolve
 service_dir = Path(__file__).parent.parent
@@ -41,17 +57,102 @@ def _headers(tenant_id: str | None = None) -> dict:
     return h
 
 
+def _rule(
+    rule_id: str,
+    title: str,
+    cte_types: list[str],
+    logic: dict,
+    *,
+    severity: str = "critical",
+    category: str = "kde_presence",
+    citation: str | None = "21 CFR §1.1345",
+):
+    from shared.rules.types import RuleDefinition
+
+    return RuleDefinition(
+        rule_id=rule_id,
+        rule_version=1,
+        title=title,
+        description=None,
+        severity=severity,
+        category=category,
+        applicability_conditions={"cte_types": cte_types, "ftl_scope": ["ALL"]},
+        citation_reference=citation,
+        effective_date=date(2026, 1, 1),
+        retired_date=None,
+        evaluation_logic=logic,
+        failure_reason_template="{event_type} event missing {field_name} ({citation})",
+        remediation_suggestion="Record the missing field",
+    )
+
+
+def _fixture_rules():
+    """Deterministic stateless ruleset mirroring the built-in seed shapes."""
+    all_ctes = [
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        "transformation",
+    ]
+    return [
+        _rule(
+            "tlc-required",
+            "TLC required",
+            all_ctes,
+            {"type": "field_presence", "field": "traceability_lot_code"},
+        ),
+        _rule(
+            "quantity-required",
+            "Quantity required",
+            all_ctes,
+            {"type": "field_presence", "field": "quantity"},
+        ),
+        # RECEIVING-specific: replaces the legacy prior_source_tlc contract.
+        _rule(
+            "receiving-prev-source",
+            "Receiving: Immediate Previous Source Required",
+            ["receiving"],
+            {
+                "type": "multi_field_presence",
+                "field": "from_entity_reference",
+                "params": {"fields": ["from_entity_reference", "kdes.immediate_previous_source"]},
+            },
+        ),
+        # warn-class rule (severity=warning + operational_quality → engine
+        # downgrades a failure to "warn") for the strict-mode tests.
+        _rule(
+            "lot-size-unit",
+            "Operational: lot size unit recommended",
+            all_ctes,
+            {"type": "field_presence", "field": "kdes.lot_size_unit"},
+            severity="warning",
+            category="operational_quality",
+            citation=None,
+        ),
+    ]
+
+
+@pytest.fixture(autouse=True)
+def seeded_rules(monkeypatch):
+    from shared.rules.engine import RulesEngine
+
+    rules = _fixture_rules()
+    monkeypatch.setattr(RulesEngine, "load_active_rules", lambda self: rules)
+    return rules
+
+
 def _valid_config(**overrides) -> dict:
-    """Return a minimally valid FSMA 204 configuration."""
+    """A config satisfying every critical rule in the fixture ruleset."""
     base = {
         "tlc": "TLC-001",
         "cte_type": "SHIPPING",
-        "event_date": "2026-01-15",
-        "location": "GLN-1234567890123",
         "quantity": 100,
         "unit_of_measure": "cases",
         "product_description": "Organic Romaine Lettuce",
-        "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
+        "kdes": {"lot_size_unit": "cases"},
     }
     base.update(overrides)
     return base
@@ -66,34 +167,23 @@ def _payload(config: dict | None = None, *, strict: bool | None = None) -> dict:
     return payload
 
 
-# ─── Validation: happy path ────────────────────────────────────────────
+def _post(payload: dict) -> dict:
+    resp = client.post("/validate", json=payload, headers=_headers())
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+# ─── Happy path ──────────────────────────────────────────────────────────
 
 
 class TestValidationHappyPath:
     def test_fully_valid_config_passes(self):
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config()),
-            headers=_headers(),
-        )
-        assert resp.status_code == 200
-        body = resp.json()
+        body = _post(_payload(_valid_config()))
         assert body["valid"] is True
         assert body["errors"] == []
-
-    def test_valid_config_with_all_recommended_fields_no_warnings(self):
-        config = _valid_config(
-            lot_size_unit="lbs",
-            supplier_reference="SUP-001",
-        )
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        assert body["valid"] is True
-        assert body["warnings"] == []
+        # The verdict is engine-derived, not a local stub.
+        assert body["rules_evaluated"] > 0
+        assert body["no_verdict_reason"] is None
 
     def test_all_allowed_cte_types_pass(self):
         allowed = [
@@ -107,123 +197,52 @@ class TestValidationHappyPath:
         ]
         for cte in allowed:
             config = _valid_config(cte_type=cte)
-            # RECEIVING needs extra fields
             if cte == "RECEIVING":
-                config["prior_source_tlc"] = "TLC-PRIOR"
-            resp = client.post(
-                "/validate",
-                json=_payload(config),
-                headers=_headers(),
-            )
-            body = resp.json()
-            assert body["valid"] is True, f"CTE type {cte} should be valid"
+                # Per-CTE receiving rule requires the previous-source KDE.
+                config["from_entity_reference"] = "SUPPLIER-GLN-1"
+            body = _post(_payload(config))
+            assert body["valid"] is True, f"CTE type {cte}: {body['errors']}"
 
     def test_cte_type_case_insensitive(self):
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config(cte_type="shipping")),
-            headers=_headers(),
-        )
-        assert resp.json()["valid"] is True
+        body = _post(_payload(_valid_config(cte_type="shipping")))
+        assert body["valid"] is True
 
 
-# ─── Validation: required field errors ──────────────────────────────────
+# ─── KDE-presence failures (engine-derived) ──────────────────────────────
 
 
-class TestRequiredFieldValidation:
-    def test_missing_required_field_produces_error(self):
+class TestRuleFailures:
+    def test_missing_tlc_fails_with_rule_provenance(self):
         config = _valid_config()
         del config["tlc"]
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
+        body = _post(_payload(config))
         assert body["valid"] is False
-        error_codes = [e["code"] for e in body["errors"]]
-        assert "MISSING_REQUIRED_FIELD" in error_codes
-        error_paths = [e["path"] for e in body["errors"]]
-        assert "tlc" in error_paths
-
-    def test_null_required_field_produces_error(self):
-        config = _valid_config(tlc=None)
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        assert body["valid"] is False
-        tlc_errors = [e for e in body["errors"] if e["path"] == "tlc"]
+        tlc_errors = [e for e in body["errors"] if e["path"] == "traceability_lot_code"]
         assert len(tlc_errors) == 1
-        assert tlc_errors[0]["code"] == "NULL_REQUIRED_FIELD"
+        assert tlc_errors[0]["code"] == "RULE_FAILED"
+        assert tlc_errors[0]["rule_id"] == "tlc-required"
+        assert tlc_errors[0]["citation_reference"]
 
     def test_multiple_missing_fields_all_reported(self):
-        """Empty config should report errors for every required field."""
-        resp = client.post(
-            "/validate",
-            json=_payload({}),
-            headers=_headers(),
-        )
-        body = resp.json()
+        """A config missing every critical field reports each failing rule."""
+        body = _post(_payload({"cte_type": "SHIPPING"}))
         assert body["valid"] is False
-        # At minimum, tlc, cte_type, event_date, location, quantity, unit_of_measure,
-        # product_description, responsible_party_contact
-        assert len(body["errors"]) >= 8
+        failed_rules = {e["rule_id"] for e in body["errors"]}
+        assert {"tlc-required", "quantity-required"} <= failed_rules
 
-    def test_missing_responsible_party_contact_produces_error(self):
+    def test_errors_carry_remediation_suggestions(self):
         config = _valid_config()
-        del config["responsible_party_contact"]
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        assert body["valid"] is False
-        error_paths = [e["path"] for e in body["errors"]]
-        assert "responsible_party_contact" in error_paths
-
-    def test_null_responsible_party_contact_produces_error(self):
-        config = _valid_config(responsible_party_contact=None)
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        assert body["valid"] is False
-        rpc_errors = [e for e in body["errors"] if e["path"] == "responsible_party_contact"]
-        assert len(rpc_errors) == 1
-        assert rpc_errors[0]["code"] == "NULL_REQUIRED_FIELD"
-
-    def test_empty_string_is_not_null(self):
-        """An empty string is present and non-null, so it should pass the null check."""
-        config = _valid_config(tlc="")
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        # Empty string is not None, so no NULL_REQUIRED_FIELD error for tlc
-        tlc_null_errors = [e for e in body["errors"] if e["path"] == "tlc" and e["code"] == "NULL_REQUIRED_FIELD"]
-        assert len(tlc_null_errors) == 0
+        del config["tlc"]
+        body = _post(_payload(config))
+        assert all(e.get("suggestion") for e in body["errors"])
 
 
-# ─── Validation: CTE type enum ──────────────────────────────────────────
+# ─── CTE type gate (unchanged pre-engine behavior) ───────────────────────
 
 
 class TestCTETypeValidation:
     def test_invalid_cte_type_rejected(self):
-        config = _valid_config(cte_type="INVALID_TYPE")
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
+        body = _post(_payload(_valid_config(cte_type="INVALID_TYPE")))
         assert body["valid"] is False
         cte_errors = [e for e in body["errors"] if e["path"] == "cte_type"]
         assert len(cte_errors) == 1
@@ -231,122 +250,106 @@ class TestCTETypeValidation:
 
     def test_numeric_cte_type_not_uppercased(self):
         """Non-string cte_type should not crash .upper()."""
-        config = _valid_config(cte_type=123)
         resp = client.post(
             "/validate",
-            json=_payload(config),
+            json=_payload(_valid_config(cte_type=123)),
             headers=_headers(),
         )
-        # Should not 500 — graceful handling
         assert resp.status_code == 200
+        assert resp.json()["valid"] is False
+
+    def test_missing_cte_type_is_structured_error(self):
+        body = _post(_payload({"tlc": "TLC-1"}))
+        assert body["valid"] is False
+        assert body["errors"][0]["code"] == "INVALID_CTE_TYPE"
 
 
-# ─── Validation: RECEIVING CTE special rules ─────────────────────────────
+# ─── RECEIVING per-CTE rules ─────────────────────────────────────────────
 
 
 class TestReceivingCTEValidation:
-    def test_receiving_requires_prior_source_tlc(self):
+    def test_receiving_requires_previous_source(self):
         config = _valid_config(cte_type="RECEIVING")
-        # Intentionally omit prior_source_tlc
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
+        body = _post(_payload(config))
         assert body["valid"] is False
-        error_paths = [e["path"] for e in body["errors"]]
-        assert "prior_source_tlc" in error_paths
+        failed = [e for e in body["errors"] if e["rule_id"] == "receiving-prev-source"]
+        assert len(failed) == 1
+        assert failed[0]["code"] == "RULE_FAILED"
 
-    def test_receiving_with_null_prior_source_tlc_fails(self):
-        config = _valid_config(cte_type="RECEIVING", prior_source_tlc=None)
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
+    def test_receiving_with_previous_source_passes(self):
+        config = _valid_config(
+            cte_type="RECEIVING",
+            from_entity_reference="SUPPLIER-GLN-1",
         )
-        body = resp.json()
-        assert body["valid"] is False
-        prior_errors = [e for e in body["errors"] if e["path"] == "prior_source_tlc"]
-        assert len(prior_errors) == 1
-        assert prior_errors[0]["code"] == "NULL_REQUIRED_FIELD"
+        body = _post(_payload(config))
+        assert body["valid"] is True, body["errors"]
 
-    def test_receiving_with_prior_source_tlc_passes(self):
-        config = _valid_config(cte_type="RECEIVING", prior_source_tlc="TLC-PRIOR-001")
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        assert resp.json()["valid"] is True
+    def test_receiving_accepts_kde_form_too(self):
+        config = _valid_config(cte_type="RECEIVING")
+        config["kdes"] = {**config["kdes"], "immediate_previous_source": "Acme Farms"}
+        body = _post(_payload(config))
+        assert body["valid"] is True, body["errors"]
 
-    def test_non_receiving_does_not_require_prior_source_tlc(self):
-        config = _valid_config(cte_type="SHIPPING")
-        resp = client.post(
-            "/validate",
-            json=_payload(config),
-            headers=_headers(),
-        )
-        body = resp.json()
-        # Should not have prior_source_tlc errors
-        prior_errors = [e for e in body["errors"] if e["path"] == "prior_source_tlc"]
-        assert len(prior_errors) == 0
+    def test_non_receiving_does_not_run_receiving_rules(self):
+        body = _post(_payload(_valid_config(cte_type="SHIPPING")))
+        assert all(e["rule_id"] != "receiving-prev-source" for e in body["errors"])
 
 
-# ─── Validation: warnings & strict mode ──────────────────────────────────
+# ─── Warnings & strict mode ──────────────────────────────────────────────
 
 
 class TestWarningsAndStrictMode:
-    def test_missing_recommended_fields_produce_warnings(self):
+    def _config_missing_lot_size_unit(self) -> dict:
         config = _valid_config()
-        # Remove product_description to trigger warning
-        # (it's also required, so use a config that has required fields but not lot_size_unit)
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config()),
-            headers=_headers(),
-        )
-        body = resp.json()
-        # lot_size_unit and supplier_reference are recommended but not in _valid_config
-        warning_paths = [w["path"] for w in body["warnings"]]
-        assert "lot_size_unit" in warning_paths
-        assert "supplier_reference" in warning_paths
+        config["kdes"] = {}
+        return config
+
+    def test_warn_class_rule_produces_warning_not_error(self):
+        body = _post(_payload(self._config_missing_lot_size_unit()))
+        assert body["valid"] is True
+        assert [w["rule_id"] for w in body["warnings"]] == ["lot-size-unit"]
+        assert body["warnings"][0]["code"] == "RULE_WARNING"
 
     def test_warnings_have_suggestions(self):
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config()),
-            headers=_headers(),
-        )
-        for w in resp.json()["warnings"]:
-            assert w["suggestion"] is not None
-            assert len(w["suggestion"]) > 0
+        body = _post(_payload(self._config_missing_lot_size_unit()))
+        for w in body["warnings"]:
+            assert w["suggestion"]
 
     def test_strict_mode_converts_warnings_to_errors(self):
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config(), strict=True),
-            headers=_headers(),
-        )
-        body = resp.json()
+        body = _post(_payload(self._config_missing_lot_size_unit(), strict=True))
         assert body["valid"] is False
         assert body["warnings"] == []
         strict_errors = [e for e in body["errors"] if e["code"] == "STRICT_MODE_WARNING"]
-        assert len(strict_errors) > 0
+        assert len(strict_errors) == 1
 
     def test_non_strict_mode_keeps_warnings_separate(self):
-        resp = client.post(
-            "/validate",
-            json=_payload(_valid_config(), strict=False),
-            headers=_headers(),
-        )
-        body = resp.json()
+        body = _post(_payload(self._config_missing_lot_size_unit(), strict=False))
         assert body["valid"] is True
-        assert len(body["warnings"]) > 0
+        assert len(body["warnings"]) == 1
         assert body["errors"] == []
 
 
-# ─── Validation: auth ────────────────────────────────────────────────────
+# ─── Fail-closed (no-verdict) ────────────────────────────────────────────
+
+
+class TestFailClosed:
+    def test_empty_ruleset_yields_no_verdict_not_valid(self, monkeypatch):
+        from shared.rules.engine import RulesEngine
+
+        monkeypatch.setattr(RulesEngine, "load_active_rules", lambda self: [])
+        body = _post(_payload(_valid_config()))
+        assert body["valid"] is False
+        assert body["rules_evaluated"] == 0
+        assert body["no_verdict_reason"] == "no_rules_loaded"
+        assert any(e["code"] == "NO_VERDICT" for e in body["errors"])
+
+    def test_config_none_is_not_a_compliance_verdict(self):
+        body = _post(_payload(None))
+        assert body["valid"] is True
+        assert body["rules_evaluated"] == 0
+
+
+# ─── Auth ────────────────────────────────────────────────────────────────
 
 
 class TestValidationAuth:
