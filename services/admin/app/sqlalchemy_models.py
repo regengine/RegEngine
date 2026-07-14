@@ -82,7 +82,8 @@ class TenantModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    __table_args__ = (Index("ix_tenants_slug", "slug"),)
+    # unique=True matches the database index (WS-2b ORM/schema alignment).
+    __table_args__ = (Index("ix_tenants_slug", "slug", unique=True),)
 
 
 class UserModel(Base):
@@ -109,7 +110,8 @@ class UserModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (Index("ix_users_email", "email"),)
+    # unique=True matches the database index (WS-2b ORM/schema alignment).
+    __table_args__ = (Index("ix_users_email", "email", unique=True),)
 
 
 class UserEmailModel(Base):

@@ -766,6 +766,24 @@ jobs:
             tests/test_e2e_tenant_isolation.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: ORM drift gate (alembic check, WS-2b)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # rls_migrated is at alembic head (migrated by test_rls_coverage in
+          # the previous step). `alembic check` compares EVERY registered ORM
+          # Base (admin, agent-operator, api-key store, scheduler state — see
+          # alembic/env.py target_metadata) against that schema and fails on
+          # structural drift: an ORM model whose table/column/index no
+          # migration created. This is the gate that would have caught
+          # scheduler_seen_items existing only via runtime create_all (v093).
+          # Raw-SQL-managed tables without ORM models are exempt by design
+          # (include_object in alembic/env.py); type-level alignment is
+          # enforced separately by verify_orm_db_type_alignment.
+          alembic check
+
       - name: RLS hardening behavioral assertions
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_hardening
