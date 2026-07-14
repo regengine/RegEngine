@@ -41,6 +41,31 @@ from typing import Any, Dict, List, Optional
 from shared.cte_persistence import compute_chain_hash
 from sqlalchemy import text
 
+# ---------------------------------------------------------------------------
+# WS-1b (#1335): flag for cutting chain-verification READERS over to the
+# canonical store. Consumers (compliance_score, FDA export handlers) only
+# consume ``.valid``/``.errors``, which both ChainVerification (legacy) and
+# CanonicalChainVerification expose — so the cutover is duck-type safe.
+# Default OFF; flipping is a release/soak decision
+# (docs/persistence/dual-write-cutover.md). The chain-verification JOB
+# (chain_verification_job.py) deliberately keeps walking BOTH stores until
+# WS-1d (#2506) and does not use this flag.
+# ---------------------------------------------------------------------------
+
+CHAIN_VERIFY_READ_CANONICAL_ENV = "CHAIN_VERIFY_READ_CANONICAL"
+
+
+def chain_verify_reads_canonical() -> bool:
+    """Are chain-verification read paths flagged onto the canonical store?"""
+    import os
+
+    return os.getenv(CHAIN_VERIFY_READ_CANONICAL_ENV, "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 class CanonicalChainVerification:
     """Result of verifying a tenant's canonical hash chain.

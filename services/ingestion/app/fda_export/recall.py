@@ -28,6 +28,7 @@ from .formatters import (
 )
 from .queries import (
     AuditLogWriteError,
+    _verify_chain_for_export,
     build_recall_where_clause,
     build_recall_where_clause_canonical,
     export_v1_reads_canonical,
@@ -175,7 +176,7 @@ async def export_recall_filtered_handler(
         events = rows_to_event_dicts(rows)
 
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
         _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,

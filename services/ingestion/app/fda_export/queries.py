@@ -318,6 +318,25 @@ def fetch_recall_events_canonical(db_session, where_clause: str, params: dict) -
     return rows
 
 
+def _verify_chain_for_export(persistence, db_session, tenant_id: str):
+    """Chain verification for export handlers, honoring the WS-1b flag.
+
+    Behind ``CHAIN_VERIFY_READ_CANONICAL`` (default off) the export's
+    X-Chain-Integrity evidence verifies the canonical chain
+    (``verify_chain_canonical``, #2506) instead of the legacy one. Both
+    result types expose ``.valid``/``.errors``, which is all the export
+    handlers consume. Flip is a soak decision —
+    docs/persistence/dual-write-cutover.md.
+    """
+    from shared.canonical_persistence.verification import chain_verify_reads_canonical
+
+    if chain_verify_reads_canonical():
+        from shared.canonical_persistence import CanonicalEventStore
+
+        return CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
+    return persistence.verify_chain(tenant_id=tenant_id)
+
+
 class AuditLogWriteError(RuntimeError):
     """Raised when the FDA export audit log write fails.
 

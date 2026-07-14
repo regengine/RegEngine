@@ -1,6 +1,6 @@
 # Dual-write retirement — read-path cutover inventory (WS-1, #1335)
 
-> Status date: 2026-07-14 (WS-1b increment 1). Update this table in every WS-1 PR.
+> Status date: 2026-07-14 (WS-1b increment 2). Update this table in every WS-1 PR.
 
 Two write paths persist traceability events with **different
 idempotency-key formulas**: the legacy `CTEPersistence` mixins
@@ -36,7 +36,7 @@ Verified by grep + manual read on 2026-07-14. "Canonical" means
 | FDA CSV export **v1** | `services/ingestion/app/fda_export/{queries,recall}.py` | **legacy** (`cte_events`) by default; canonical reader implemented behind `FDA_EXPORT_V1_READ_CANONICAL` (default off) | Golden suite (`tests/invariants/test_fda_export_v1_golden.py`) proves legacy ≡ canonical byte-identical on the dual-written corpus across 7 filter combinations. **Flip is a soak decision** — set the env var in one environment, watch one release, then make it the default | 🟨 flag + golden landed (WS-1b); flip pending soak |
 | FDA CSV export **v2** | `services/shared/workflows/export_output.py` | canonical | none — already canonical (preferred format) | ✅ canonical |
 | Merkle proof / chain verification (canonical) | `services/shared/canonical_persistence/verification.py` (`verify_chain_canonical`, #2506) | canonical | none | ✅ canonical |
-| Chain verification (legacy) | `services/shared/cte_persistence/verification.py` (`verify_chain`, `verify_chain_merkle`) | **legacy** | Callers move to `verify_chain_canonical`; retire with the mixins in WS-1d | ⬜ pending (WS-1b) |
+| Chain verification (legacy) | `compliance_score.py` + 3 FDA export handlers (via `_verify_chain_for_export`) | **legacy** by default; canonical behind `CHAIN_VERIFY_READ_CANONICAL` (default off) | Golden (`tests/invariants/test_chain_verify_golden.py`) proves both verifiers agree on dual-written data and the flag switches stores. The chain-verification *job* deliberately walks BOTH stores until WS-1d (#2506). **Flip is a soak decision** | 🟨 flag + golden landed (WS-1b); flip pending soak |
 | Ingest workflow | `services/shared/workflows/ingest_event.py` | n/a (documents the dual **write**) | write retirement is WS-1d, not a read cutover | ⬜ WS-1d |
 | Graph FSMA nodes | `services/graph/app/models/fsma_nodes.py` | none (docstring references the `cte_events` hash **convention** only) | update doc references when tables archive | ✅ no live read |
 | Compliance score / snapshots | `services/compliance/`, `server/workers/` | none direct (HTTP to graph service) | none | ✅ no direct read |
