@@ -42,6 +42,9 @@ ALLOWLIST_FILE = Path(__file__).with_name("orphan_migrations_allowlist.txt")
 FORBIDDEN_GLOBS: list[str] = [
     "services/*/migrations/V*.sql",
     "docs/abandoned_migrations_*/**/*.py",
+    # WS-2: the top-level Flyway tree was deleted long ago — reject any
+    # attempt to reintroduce it. Railway runs alembic only.
+    "migrations/V*.sql",
 ]
 
 
@@ -64,6 +67,54 @@ def _find_orphans() -> set[str]:
             if path.is_file():
                 found.add(str(path.relative_to(ROOT)))
     return found
+
+
+def _alembic_sql_reference_errors() -> list[str]:
+    """Cross-check ``alembic/sql/`` against the revisions that execute it (WS-2).
+
+    ``alembic/sql/`` is NOT dead history: live Alembic revisions (the
+    V002–V042 baseline ``97588ba8edf3``, the control-plane revisions, …)
+    read these files and ``op.execute`` them, so a fresh-DB
+    ``alembic upgrade head`` depends on them. Enforce the contract in both
+    directions:
+
+    * every ``alembic/sql/*.sql`` file must be referenced by at least one
+      revision — an unreferenced file is dead weight masquerading as an
+      executable migration (archive it under ``docs/archive/migrations/``
+      instead);
+    * every ``V*.sql`` filename mentioned in a revision must exist in
+      ``alembic/sql/`` — a missing file breaks fresh-DB bootstrap (#1187).
+    """
+    sql_dir = ROOT / "alembic" / "sql"
+    versions_dir = ROOT / "alembic" / "versions"
+    if not versions_dir.is_dir():
+        return []
+
+    revision_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(versions_dir.glob("*.py"))
+    )
+    sql_files = {path.name for path in sql_dir.glob("*.sql")} if sql_dir.is_dir() else set()
+
+    errors: list[str] = []
+    for name in sorted(sql_files):
+        if name not in revision_text:
+            errors.append(
+                f"alembic/sql/{name} is referenced by NO alembic revision — "
+                "dead weight in the executable tree. Archive it under "
+                "docs/archive/migrations/ (see the README there) or wire it "
+                "into a revision."
+            )
+
+    import re
+
+    for name in sorted(set(re.findall(r'"(V\d+__[A-Za-z0-9_]+\.sql)"', revision_text))):
+        if name not in sql_files:
+            errors.append(
+                f"alembic revision references {name} but alembic/sql/{name} "
+                "does not exist — fresh-DB `alembic upgrade head` will crash "
+                "(#1187). Restore the file; do not delete referenced SQL."
+            )
+    return errors
 
 
 def main() -> int:
@@ -103,7 +154,17 @@ def main() -> int:
         )
         return 1
 
-    print("OK — 0 orphan migration file(s); allowlist is comments-only.")
+    reference_errors = _alembic_sql_reference_errors()
+    if reference_errors:
+        print("ERROR: alembic/sql <-> revision reference contract violated.", file=sys.stderr)
+        for message in reference_errors:
+            print(f"  {message}", file=sys.stderr)
+        return 1
+
+    print(
+        "OK — 0 orphan migration file(s); allowlist is comments-only; "
+        "alembic/sql references are consistent."
+    )
     return 0
 
 
