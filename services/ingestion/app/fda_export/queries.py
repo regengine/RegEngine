@@ -7,6 +7,7 @@ Extracted from fda_export_router.py — pure structural refactor.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
@@ -192,6 +193,129 @@ def rows_to_event_dicts(rows) -> list[dict]:
             }
         )
     return events
+
+
+# ---------------------------------------------------------------------------
+# WS-1b (#1335): canonical read path for the v1 recall export, behind a flag.
+# ---------------------------------------------------------------------------
+#
+# ``fetch_recall_events`` reads the legacy ``fsma.cte_events``/``cte_kdes``
+# store. Every legacy row is produced from a canonical event by
+# ``shared.canonical_persistence.legacy_dual_write.dual_write_legacy``, whose
+# mapping is deterministic and invertible from the canonical columns:
+#
+#     cte_events.id                  = event_id (verbatim)
+#     product_description            = COALESCE(product_reference, '')
+#     location_gln = location_name   = COALESCE(from_facility_reference,
+#                                               to_facility_reference)  (#2535)
+#     source                         = source_system
+#     kdes (cte_kdes agg)            = kdes JSONB minus NULL-valued keys
+#                                      (dual_write skips None values)
+#     ingested_at                    = ingested_at (both DEFAULT now();
+#                                      same transaction => same timestamp)
+#     sha256_hash / chain_hash       = identical by construction (#1277)
+#
+# The canonical reader below applies that mapping in SQL so its output is
+# byte-identical to the legacy reader on dual-written data — proven by the
+# golden test (tests/invariants/test_fda_export_v1_golden.py) which runs
+# BOTH readers over the same seeded corpus and asserts exact equality.
+#
+# Flag: FDA_EXPORT_V1_READ_CANONICAL (default OFF). Flipping it is a
+# release/soak decision — see docs/persistence/dual-write-cutover.md.
+
+FDA_EXPORT_V1_READ_CANONICAL_ENV = "FDA_EXPORT_V1_READ_CANONICAL"
+
+
+def export_v1_reads_canonical() -> bool:
+    """Is the v1 recall export flagged onto the canonical store?"""
+    return os.getenv(FDA_EXPORT_V1_READ_CANONICAL_ENV, "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def build_recall_where_clause_canonical(
+    tenant_id: str,
+    product: Optional[str],
+    location: Optional[str],
+    tlc: Optional[str],
+    event_type: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+) -> tuple[str, dict]:
+    """Canonical-store twin of ``build_recall_where_clause``.
+
+    Same parameters, same semantics, filtered on the canonical columns the
+    dual-write mapping derives the legacy columns from — so a filter that
+    matched a legacy row matches its canonical twin and vice versa.
+    """
+    conditions = ["e.tenant_id = :tid"]
+    params: dict = {"tid": tenant_id}
+
+    location_expr = "COALESCE(e.from_facility_reference, e.to_facility_reference)"
+
+    if product:
+        conditions.append("LOWER(COALESCE(e.product_reference, '')) LIKE LOWER(:product)")
+        params["product"] = f"%{product}%"
+
+    if location:
+        conditions.append(f"(LOWER({location_expr}) LIKE LOWER(:loc) OR {location_expr} LIKE :loc_exact)")
+        params["loc"] = f"%{location}%"
+        params["loc_exact"] = f"%{location}%"
+
+    if tlc:
+        conditions.append("e.traceability_lot_code LIKE :tlc")
+        params["tlc"] = f"%{tlc}%" if "%" not in tlc else tlc
+
+    if event_type:
+        conditions.append("e.event_type = :etype")
+        params["etype"] = event_type
+
+    if start_date:
+        conditions.append("e.event_timestamp >= :start")
+        params["start"] = start_date
+
+    if end_date:
+        conditions.append("e.event_timestamp < :end")
+        params["end"] = _end_bound_utc(end_date)
+
+    where_clause = " AND ".join(conditions)
+    return where_clause, params
+
+
+def fetch_recall_events_canonical(db_session, where_clause: str, params: dict) -> list:
+    """Canonical-store twin of ``fetch_recall_events``.
+
+    Column order and shapes match the legacy SELECT exactly so
+    ``rows_to_event_dicts`` consumes either reader's rows unchanged.
+    NULL-valued KDEs are stripped to mirror dual_write_legacy's skip of
+    ``None`` values.
+    """
+    rows = db_session.execute(
+        text(f"""
+            SELECT
+                e.event_id, e.event_type, e.traceability_lot_code,
+                COALESCE(e.product_reference, '') AS product_description,
+                e.quantity, e.unit_of_measure, e.event_timestamp,
+                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_gln,
+                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_name,
+                e.source_system AS source, e.sha256_hash,
+                h.chain_hash,
+                (SELECT jsonb_object_agg(kv.key, kv.value)
+                 FROM jsonb_each(COALESCE(e.kdes, '{{}}'::jsonb)) kv
+                 WHERE kv.value <> 'null'::jsonb) AS kdes,
+                e.ingested_at
+            FROM fsma.traceability_events e
+            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
+            WHERE {where_clause}
+            ORDER BY e.event_timestamp ASC
+            LIMIT 10001
+        """),
+        params,
+    ).fetchall()
+    return rows
 
 
 class AuditLogWriteError(RuntimeError):
