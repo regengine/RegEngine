@@ -17,8 +17,14 @@ from __future__ import annotations
 import re
 
 import pytest
-from fastapi import FastAPI
-from fastapi.routing import APIRoute
+
+# sdk-ci runs this suite in a CLEAN venv (pytest + httpx + requests only) to
+# prove the installed package works without the backend dependency tree. The
+# route-contract half of this module needs the real routers, so it runs in
+# the full backend suite instead of sdk-ci.
+fastapi = pytest.importorskip("fastapi", reason="route-contract check requires the backend dependency tree")
+from fastapi import FastAPI  # noqa: E402
+from fastapi.routing import APIRoute  # noqa: E402
 
 from regengine import RegEngineClient
 from regengine.models import CTEType
@@ -121,21 +127,15 @@ def test_every_sdk_path_resolves_to_a_registered_route(registered_routes):
     )
 
 
-def test_unsupported_sdk_methods_fail_loudly_without_a_request():
-    """#2531: create_record / check_ftl have no real route and must raise
-    NotImplementedError (a clear deprecation) instead of issuing a 404 call."""
+def test_unsupported_sdk_methods_are_removed():
+    """#2531 → WS-11: create_record / check_ftl had no real route. They first
+    became loud NotImplementedError stubs; WS-11 removed them entirely so the
+    installed client exposes only methods with registered routes behind them.
+    This pins the removal — reintroducing either name must come with a real
+    route (and a test in _captured_sdk_calls scope)."""
     client = RegEngineClient(api_key="rge_test")
     try:
-
-        def _boom(*_a, **_k):  # pragma: no cover - must never be reached
-            raise AssertionError("unsupported method issued a request")
-
-        client._request = _boom  # type: ignore[assignment]
-        client._request_bytes = _boom  # type: ignore[assignment]
-
-        with pytest.raises(NotImplementedError):
-            client.create_record(cte_type="shipping", tlc="LOT-1", location="GLN", quantity=1.0)
-        with pytest.raises(NotImplementedError):
-            client.check_ftl("leafy-greens")
+        assert not hasattr(client, "create_record")
+        assert not hasattr(client, "check_ftl")
     finally:
         client._session.close()

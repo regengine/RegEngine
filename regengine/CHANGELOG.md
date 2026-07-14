@@ -1,69 +1,49 @@
 # Changelog
 
-All notable changes to the RegEngine Python SDK will be documented in this file.
+All notable changes to the **RegEngine Python SDK** (`regengine` package) are
+documented in this file. Platform/backend changes live in the repository's
+release notes, not here — earlier revisions of this file mixed in platform
+history (SQL-injection fixes, NLP worker changes) under versions `1.0.0` and
+`1.1.0` that were never SDK releases; that history was removed when the
+version strings were reconciled (WS-11).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-02-11
+The single source of truth for the version is `regengine/__init__.py`
+(`__version__`); `setup.py` and the `regengine-verify --version` output both
+derive from it.
 
-### Security
-- **SEC-P0-1**: Fixed SQL injection in compliance worker tenant context setting — now uses parameterized query binding
-- **SEC-P1-1**: Fixed Cypher injection in Neo4j `create_tenant_database` — regex sanitization + backtick-escaped DB names
-- **DEBT-023**: Fixed serialization mismatch where NLP REGULATORY_DATE entities were silently dropped by Pydantic
+## [0.1.0.dev0] — Unreleased
 
-### Fixed
-- **BUG-P1-1**: Removed duplicate `except Exception` handler (dead code) in compliance worker
-- Removed unreachable duplicate `return` statement in `validate_tlc` endpoint
-- Consolidated `shared/schemas.py` to single source of truth (eliminated identical 490-line copies)
+Pre-PyPI development line. Not yet published.
+
+### Added
+- `RegEngineClient` — httpx-based client with retry/backoff on transient
+  failures (429/500/502/503, `Retry-After`-aware) and typed exceptions
+  (`AuthenticationError`, `NotFoundError`, `RateLimitError`,
+  `ValidationError`, `RegEngineError`).
+- Read/trace surface: `get_record`, `trace_forward`, `trace_backward`,
+  `get_timeline`, `export_fda`, `start_recall_drill`, `get_readiness_score`.
+- `regengine-verify` CLI (`regengine/verify_records.py`) — MIT-licensed,
+  dependency-light offline verifier for canonical record hashes, pinned
+  byte-for-byte to the server's hash by a golden-digest test (#2507).
 
 ### Changed
-- **OPS-P0-1**: Drift detection engine now queries live PostgreSQL (`pcos_extracted_facts`) for trace completeness, ingestion latency, and error rate instead of returning hardcoded values
-- **REL-P1-2**: Compliance worker uses per-batch DB sessions with `pool_pre_ping=True` instead of a single long-lived session
-- **REL-P1-1**: Added DLQ-style error tracking with structured logging (topic, partition, offset) and throttling
-- **MAINT-P2-2**: Replaced `sys.path.append` hacks with deterministic `Path.resolve()` import resolution
-- **OPS-P2-2**: Schema loading now uses `SCHEMA_DIR` environment variable with fallback paths
+- `verify_chain.py` renamed to `verify_records.py` (WS-11) to end the
+  filename collision with the Merkle *bundle* verifier published at
+  `https://regengine.co/sdk/verify_chain.py` (a different program).
+  `regengine.verify_chain` remains as a deprecation shim until the first
+  PyPI release.
+- Packaging fixed (WS-11): `pip install` previously installed the `swarm/`
+  and `tests/` subdirectories as top-level packages and omitted the client
+  itself. The built artifact now contains exactly the `regengine` package;
+  the legacy swarm agent framework is repo-internal and no longer ships.
 
-### Added
-- **OPS-P2-1**: Compliance worker health file + `HEALTHCHECK` in `worker.Dockerfile` for container liveness probes
-- Mock recall engine wired to live Neo4j graph trace queries
-
-### Deprecated
-- **MAINT-P2-1**: Migrated all `datetime.utcnow()` calls to `datetime.now(timezone.utc)` (4 files)
-
-## [1.0.0] - 2026-02-05
-
-### Added
-- **RegEngineClient**: Full-featured API client for FSMA 204 compliance
-  - Record management: `create_record()`, `get_record()`, `list_records()`
-  - Supply chain tracing: `trace_forward()`, `trace_backward()`
-  - Graph visualization: `get_trace_graph()`
-  - FTL compliance checking: `check_ftl()`
-  - Recall management: `start_recall_drill()`, `get_recall_readiness()`
-  - FDA export: `export_fda()`
-
-- **CTEType Enum**: All 7 FSMA 204 Critical Tracking Events
-  - `HARVESTING`, `COOLING`, `INITIAL_PACKING`, `FIRST_LAND_BASED_RECEIVING`
-  - `SHIPPING`, `RECEIVING`, `TRANSFORMATION`
-
-- **Data Models**: Type-safe dataclasses
-  - `Record`, `TraceResult`, `FTLResult`, `RecallDrill`, `ReadinessScore`
-
-- **Exception Hierarchy**: Semantic error handling
-  - `RegEngineError`, `AuthenticationError`, `RateLimitError`
-  - `NotFoundError`, `ValidationError`
-
-- **CLI Tool**: `regengine-verify` for independent hash verification
-  - Offline file verification: `--file records.json --offline`
-  - Online API verification: `--tlc LOT-001 --api-key rge_live_xxx`
-  - Canonical JSON hashing with SHA-256
-
-### Security
-- API keys stored in memory only, never logged
-- All requests use HTTPS
-- Rate limit handling with exponential backoff
-
-## [Unreleased]
-- Async client (`RegEngineAsyncClient`)
-- Webhook event parsing
-- Batch verification optimization
+### Removed
+- `create_record` and `check_ftl` (WS-11): both raised
+  `NotImplementedError` — the consolidated API has no public create-record
+  endpoint (records are written by the ingestion pipeline: webhook/EPCIS/
+  EDI) and no per-category FTL lookup (use the category listing at
+  `/api/v1/products/categories/ftl`). Advertising them in the README while
+  they always raised was a documentation lie (#2531).
