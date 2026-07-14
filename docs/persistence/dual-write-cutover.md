@@ -1,6 +1,6 @@
 # Dual-write retirement — read-path cutover inventory (WS-1, #1335)
 
-> Status date: 2026-07-14 (WS-1a). Update this table in every WS-1 PR.
+> Status date: 2026-07-14 (WS-1b increment 1). Update this table in every WS-1 PR.
 
 Two write paths persist traceability events with **different
 idempotency-key formulas**: the legacy `CTEPersistence` mixins
@@ -33,7 +33,7 @@ Verified by grep + manual read on 2026-07-14. "Canonical" means
 
 | Consumer | Module | Reads today | Cutover action | Status |
 |---|---|---|---|---|
-| FDA CSV export **v1** | `services/shared/workflows/export_output.py` | **legacy** (`cte_events`) | Deprecate v1 or re-point at canonical behind `EXPORT_V1_READ_CANONICAL`; golden CSV byte-diff on seeded corpus before flip | ⬜ pending (WS-1b, first) |
+| FDA CSV export **v1** | `services/ingestion/app/fda_export/{queries,recall}.py` | **legacy** (`cte_events`) by default; canonical reader implemented behind `FDA_EXPORT_V1_READ_CANONICAL` (default off) | Golden suite (`tests/invariants/test_fda_export_v1_golden.py`) proves legacy ≡ canonical byte-identical on the dual-written corpus across 7 filter combinations. **Flip is a soak decision** — set the env var in one environment, watch one release, then make it the default | 🟨 flag + golden landed (WS-1b); flip pending soak |
 | FDA CSV export **v2** | `services/shared/workflows/export_output.py` | canonical | none — already canonical (preferred format) | ✅ canonical |
 | Merkle proof / chain verification (canonical) | `services/shared/canonical_persistence/verification.py` (`verify_chain_canonical`, #2506) | canonical | none | ✅ canonical |
 | Chain verification (legacy) | `services/shared/cte_persistence/verification.py` (`verify_chain`, `verify_chain_merkle`) | **legacy** | Callers move to `verify_chain_canonical`; retire with the mixins in WS-1d | ⬜ pending (WS-1b) |
