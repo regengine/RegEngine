@@ -128,6 +128,16 @@ async def lifespan(app: FastAPI):
 
     verify_orm_db_type_alignment(_shared_engine, _api_key_base)
 
+    # Canonical FSMA operator persistence (WS-2c): ingestion_runs,
+    # ingestion_run_receipts, agent_artifacts, agent_artifact_reviews.
+    # Every row is tenant-scoped by a UUID tenant_id that RLS predicates
+    # cast — a type drift here is a tenant-isolation break, the same
+    # protected class as the admin tables above. Read and mutated in
+    # steady state by the ingestion spine and the operator review view.
+    from shared.agent_operator_models import Base as _agent_operator_base
+
+    verify_orm_db_type_alignment(_shared_engine, _agent_operator_base)
+
     # Register integration connectors (best-effort)
     try:
         from shared.external_connectors.register_all import register_all_connectors

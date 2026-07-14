@@ -60,17 +60,18 @@ target_metadata = [
 ]
 
 
-# Tables whose ORM declaration is KNOWN to lag the raw-SQL schema that
-# v079/v080 created (comments, DESC index expressions, nullability, and
-# composite-unique sets all differ). They stay registered in
-# target_metadata so autogenerate can scaffold future changes, but they
-# are quarantined from the drift GATE until the agent-operator ORM is
-# aligned (tracked as part of WS-2c). Shrink this set — never grow it.
-KNOWN_DRIFT_TABLES = {
-    "ingestion_runs",
-    "ingestion_run_receipts",
-    "agent_artifacts",
-    "agent_artifact_reviews",
+# WS-2c: the agent-operator ORM overlay is now fully aligned with the
+# v079/v080 DDL (nullability, defaults, comments, unique sets), so the
+# former KNOWN_DRIFT_TABLES quarantine is gone. What remains excluded is
+# a fixed set of DESC-ordered indexes: the database orders their trailing
+# timestamp column DESC, which SQLAlchemy reflection surfaces as an
+# expression element autogenerate can never match. Each verified
+# equivalent by hand against the migrated schema. Do not grow this set.
+DESC_INDEX_QUARANTINE = {
+    "idx_audit_tenant_time",
+    "idx_agent_artifacts_tenant_created",
+    "idx_agent_artifacts_tenant_run",
+    "idx_agent_reviews_tenant_status",
 }
 
 
@@ -85,18 +86,13 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
     """
     if type_ in {"table", "index"} and reflected and compare_to is None:
         return False
-    if type_ == "table" and name in KNOWN_DRIFT_TABLES:
-        return False
-    if type_ == "index" and getattr(object_, "table", None) is not None and object_.table.name in KNOWN_DRIFT_TABLES:
-        return False
     # Known-equivalent representations that autogenerate cannot compare
-    # faithfully (verified manually against the migrated schema, WS-2b):
-    #   - idx_audit_tenant_time: the database index orders timestamp DESC
-    #     (an expression element autogenerate always sees as different).
+    # faithfully (verified manually against the migrated schema):
+    #   - DESC_INDEX_QUARANTINE — see above.
     #   - api_keys key_id uniqueness: enforced in the database as a UNIQUE
     #     constraint (api_keys_key_id_key) while the ORM expresses it as
     #     unique=True on the column — same guarantee, different object.
-    if type_ == "index" and name == "idx_audit_tenant_time":
+    if type_ == "index" and name in DESC_INDEX_QUARANTINE:
         return False
     if type_ == "unique_constraint" and getattr(object_, "table", None) is not None and object_.table.name == "api_keys":
         return False
