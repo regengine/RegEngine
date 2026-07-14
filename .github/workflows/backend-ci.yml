@@ -784,6 +784,20 @@ jobs:
           # enforced separately by verify_orm_db_type_alignment.
           alembic check
 
+      - name: Schema parity audit (WS-2c)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Compares the alembic-head schema against the checked-in contract
+          # (docs/schema/expected_schema.json) — EVERY table, including the
+          # raw-SQL canonical FSMA tables the ORM gate cannot see. A
+          # migration that changes the schema must regenerate the contract
+          # in the same PR (scripts/schema_parity_audit.py snapshot), so
+          # schema changes are always deliberate, reviewable diffs.
+          python scripts/schema_parity_audit.py check
+
       - name: RLS hardening behavioral assertions
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_hardening

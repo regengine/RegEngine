@@ -1,0 +1,5282 @@
+{
+  "audit.rls_policy_restoration_log": {
+    "columns": {
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "policy_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "restored_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "schema_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "table_name": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "audit.sysadmin_access_log": {
+    "columns": {
+      "accessed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "client_addr": {
+        "nullable": true,
+        "type": "text"
+      },
+      "connection_info": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "operation": {
+        "nullable": false,
+        "type": "text"
+      },
+      "session_user_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "table_name": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "dlq.webhook_failures": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "error_message": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "max_retries": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "next_retry_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "replay_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "replayed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "retry_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "source": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(20)"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "varchar(36)"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.agent_artifact_reviews": {
+    "columns": {
+      "advisory_receipt_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "artifact_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "decision_metadata": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "ingestion_run_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "operator_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "review_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "review_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "reviewed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "reviewed_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.agent_artifacts": {
+    "columns": {
+      "agent_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "agent_version": {
+        "nullable": false,
+        "type": "text"
+      },
+      "artifact": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "artifact_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "artifact_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "artifact_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "artifact_version": {
+        "nullable": false,
+        "type": "text"
+      },
+      "canonical_event_ids": {
+        "nullable": false,
+        "type": "array"
+      },
+      "citation_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "confidence": {
+        "nullable": false,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evidence_ids": {
+        "nullable": false,
+        "type": "array"
+      },
+      "ingestion_run_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "model_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "received_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "request_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "requires_human_review": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "rule_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "rule_version": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "source_hashes": {
+        "nullable": false,
+        "type": "array"
+      },
+      "suggestion": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.audit_log": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "text"
+      },
+      "changes": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "data_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "entity_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "entity_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "ip_address": {
+        "nullable": true,
+        "type": "inet"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "prev_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "user_agent": {
+        "nullable": true,
+        "type": "text"
+      },
+      "user_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.canonical_entities": {
+    "columns": {
+      "address": {
+        "nullable": true,
+        "type": "text"
+      },
+      "canonical_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "city": {
+        "nullable": true,
+        "type": "text"
+      },
+      "confidence_score": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "contact_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "contact_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "contact_phone": {
+        "nullable": true,
+        "type": "text"
+      },
+      "country": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "entity_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "entity_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "fda_registration": {
+        "nullable": true,
+        "type": "text"
+      },
+      "gln": {
+        "nullable": true,
+        "type": "text"
+      },
+      "gtin": {
+        "nullable": true,
+        "type": "text"
+      },
+      "internal_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "is_active": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "state": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "verification_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "verified_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "verified_by": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.chain_verification_log": {
+    "columns": {
+      "chain_length": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "chain_valid": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "completed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "errors": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "job_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "started_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.compliance_alerts": {
+    "columns": {
+      "alert_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "details": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "entity_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "entity_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "message": {
+        "nullable": false,
+        "type": "text"
+      },
+      "org_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "resolved": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "resolved_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "resolved_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "title": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.compliance_snapshots": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_coverage": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "details": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "kde_completeness": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "overall_score": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "product_score": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "snapshot_date": {
+        "nullable": false,
+        "type": "date"
+      },
+      "supplier_score": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.critical_tracking_events": {
+    "columns": {
+      "bol_number": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "data_source": {
+        "nullable": true,
+        "type": "text"
+      },
+      "dest_location_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "epcis_action": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_biz_step": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_event_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_time": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_timezone": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "location_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "lot_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "po_number": {
+        "nullable": true,
+        "type": "text"
+      },
+      "product_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "quantity": {
+        "nullable": true,
+        "type": "numeric(12, 4)"
+      },
+      "record_date": {
+        "nullable": false,
+        "type": "date"
+      },
+      "source_location_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tlc": {
+        "nullable": false,
+        "type": "text"
+      },
+      "unit_of_measure": {
+        "nullable": true,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "validation_status": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.cte_events": {
+    "columns": {
+      "chain_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "epcis_action": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_biz_step": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_event_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_entry_timestamp": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "event_timestamp": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "idempotency_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "ingested_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "location_gln": {
+        "nullable": true,
+        "type": "text"
+      },
+      "location_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "product_description": {
+        "nullable": false,
+        "type": "text"
+      },
+      "quantity": {
+        "nullable": false,
+        "type": "double precision"
+      },
+      "sha256_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source_event_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "traceability_lot_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "unit_of_measure": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "validation_status": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.cte_kdes": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_required": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "kde_key": {
+        "nullable": false,
+        "type": "text"
+      },
+      "kde_value": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.cte_kdes_backfill_log_v059": {
+    "columns": {
+      "converted": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "kde_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "original": {
+        "nullable": true,
+        "type": "text"
+      },
+      "reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.entity_aliases": {
+    "columns": {
+      "alias_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "alias_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "alias_value": {
+        "nullable": false,
+        "type": "text"
+      },
+      "confidence": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "entity_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "source_file": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_system": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.entity_merge_history": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "text"
+      },
+      "alias_snapshot": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "is_reversed": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "merge_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "performed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "performed_by": {
+        "nullable": false,
+        "type": "text"
+      },
+      "reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "reversed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "reversed_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_entity_ids": {
+        "nullable": false,
+        "type": "array"
+      },
+      "target_entity_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.evidence_attachments": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "document_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "extracted_data": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "extraction_status": {
+        "nullable": true,
+        "type": "text"
+      },
+      "file_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "file_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "file_size": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "mime_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "storage_bucket": {
+        "nullable": true,
+        "type": "text"
+      },
+      "storage_uri": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "uploaded_by": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.exception_attachments": {
+    "columns": {
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "file_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "file_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "file_size": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "mime_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "storage_uri": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "uploaded_by": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.exception_cases": {
+    "columns": {
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "due_date": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "linked_event_ids": {
+        "nullable": false,
+        "type": "array"
+      },
+      "linked_rule_evaluation_ids": {
+        "nullable": false,
+        "type": "array"
+      },
+      "owner_user_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "recommended_remediation": {
+        "nullable": true,
+        "type": "text"
+      },
+      "request_case_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "resolution_summary": {
+        "nullable": true,
+        "type": "text"
+      },
+      "resolved_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "rule_category": {
+        "nullable": true,
+        "type": "text"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source_facility_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_supplier": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "waiver_approved_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "waiver_approved_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "waiver_reason": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.exception_comments": {
+    "columns": {
+      "author_user_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "comment_text": {
+        "nullable": false,
+        "type": "text"
+      },
+      "comment_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.exception_signoffs": {
+    "columns": {
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "signed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "signed_by": {
+        "nullable": false,
+        "type": "text"
+      },
+      "signoff_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.fda_export_log": {
+    "columns": {
+      "export_fingerprint": {
+        "nullable": true,
+        "type": "text"
+      },
+      "export_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "export_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "generated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "generated_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "query_end_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "query_start_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "query_tlc": {
+        "nullable": true,
+        "type": "text"
+      },
+      "record_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.fda_sla_requests": {
+    "columns": {
+      "completed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "deadline_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "export_ids": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "request_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "requested_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.fsma_audit_trail": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "text"
+      },
+      "actor": {
+        "nullable": false,
+        "type": "text"
+      },
+      "actor_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "checksum": {
+        "nullable": false,
+        "type": "text"
+      },
+      "confidence": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "correlation_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "diff_json": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "evidence_link": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "previous_checksum": {
+        "nullable": true,
+        "type": "text"
+      },
+      "target_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "target_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.hash_chain": {
+    "columns": {
+      "chain_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "event_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "previous_chain_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "sequence_num": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.identity_review_queue": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "entity_a_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "entity_b_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "match_confidence": {
+        "nullable": false,
+        "type": "double precision"
+      },
+      "match_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "matching_fields": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "previous_review_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "resolution_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "resolved_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "resolved_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "review_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.inflow_workbench_commit_decisions": {
+    "columns": {
+      "allowed": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "decision_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "export_eligible": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "input_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "mode": {
+        "nullable": false,
+        "type": "text"
+      },
+      "next_state": {
+        "nullable": false,
+        "type": "text"
+      },
+      "reasons": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "result_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "run_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.inflow_workbench_fix_items": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "impact": {
+        "nullable": false,
+        "type": "text"
+      },
+      "item_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "owner": {
+        "nullable": false,
+        "type": "text"
+      },
+      "run_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "title": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.inflow_workbench_runs": {
+    "columns": {
+      "commit_gate_payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "csv_text": {
+        "nullable": false,
+        "type": "text"
+      },
+      "input_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "readiness_payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "result_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "result_payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "run_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "saved_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.inflow_workbench_scenarios": {
+    "columns": {
+      "built_in": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "csv_text": {
+        "nullable": false,
+        "type": "text"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "outcome": {
+        "nullable": false,
+        "type": "text"
+      },
+      "record_count_label": {
+        "nullable": false,
+        "type": "text"
+      },
+      "scenario_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.ingestion_run_receipts": {
+    "columns": {
+      "actor": {
+        "nullable": false,
+        "type": "text"
+      },
+      "canonical_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evidence_attachment_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "export_log_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "ingestion_run_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "metadata": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "occurred_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "payload_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "previous_receipt_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "receipt_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "receipt_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "request_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "rule_evaluation_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "sequence_num": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "state": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.ingestion_runs": {
+    "columns": {
+      "accepted_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "completed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "errors": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "initiated_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "mapper_version": {
+        "nullable": false,
+        "type": "text"
+      },
+      "record_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "rejected_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "schema_version": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source_file_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_file_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_file_size": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "source_system": {
+        "nullable": false,
+        "type": "text"
+      },
+      "started_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.key_data_elements": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "kde_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "kde_unit": {
+        "nullable": true,
+        "type": "text"
+      },
+      "kde_value": {
+        "nullable": false,
+        "type": "text"
+      },
+      "required": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.locations": {
+    "columns": {
+      "address": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "contact": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "fda_fei": {
+        "nullable": true,
+        "type": "text"
+      },
+      "gln": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "location_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.organizations": {
+    "columns": {
+      "address": {
+        "nullable": true,
+        "type": "text"
+      },
+      "contact_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "fei_number": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "phone": {
+        "nullable": true,
+        "type": "text"
+      },
+      "primary_contact": {
+        "nullable": true,
+        "type": "text"
+      },
+      "type": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.products": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "fda_product_code": {
+        "nullable": true,
+        "type": "text"
+      },
+      "ftl_category": {
+        "nullable": true,
+        "type": "text"
+      },
+      "ftl_covered": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "ftl_exclusion": {
+        "nullable": true,
+        "type": "text"
+      },
+      "gtin": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "sku": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "unit_of_measure": {
+        "nullable": true,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.recall_assessments": {
+    "columns": {
+      "assessed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "assessed_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "chain_integrity": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "data_completeness": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "export_readiness": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "product_coverage": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "response_time": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "supplier_coverage": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.request_cases": {
+    "columns": {
+      "active_exception_count": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "affected_facilities": {
+        "nullable": true,
+        "type": "array"
+      },
+      "affected_lots": {
+        "nullable": true,
+        "type": "array"
+      },
+      "affected_products": {
+        "nullable": true,
+        "type": "array"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "final_approver": {
+        "nullable": true,
+        "type": "text"
+      },
+      "gap_count": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "package_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "request_case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "request_channel": {
+        "nullable": true,
+        "type": "text"
+      },
+      "request_received_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "requesting_party": {
+        "nullable": true,
+        "type": "text"
+      },
+      "response_due_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "reviewer": {
+        "nullable": true,
+        "type": "text"
+      },
+      "scope_description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "scope_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "submission_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "submission_timestamp": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "total_records": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.request_signoffs": {
+    "columns": {
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "request_case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "signed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "signed_by": {
+        "nullable": false,
+        "type": "text"
+      },
+      "signoff_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.response_packages": {
+    "columns": {
+      "diff_from_previous": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "gap_analysis": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "generated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "generated_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "package_contents": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "package_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "package_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "request_case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "version_number": {
+        "nullable": false,
+        "type": "integer"
+      }
+    }
+  },
+  "fsma.rule_audit_log": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "text"
+      },
+      "changed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "changed_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "new_values": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "old_values": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "rule_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.rule_definitions": {
+    "columns": {
+      "applicability_conditions": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "category": {
+        "nullable": false,
+        "type": "text"
+      },
+      "citation_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "effective_date": {
+        "nullable": false,
+        "type": "date"
+      },
+      "evaluation_logic": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "failure_reason_template": {
+        "nullable": false,
+        "type": "text"
+      },
+      "remediation_suggestion": {
+        "nullable": true,
+        "type": "text"
+      },
+      "retired_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "rule_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "rule_version": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "text"
+      },
+      "title": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.rule_evaluations": {
+    "columns": {
+      "confidence": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "evaluated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evaluation_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "evidence_fields_inspected": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "result": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rule_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "rule_version": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "why_failed": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.rule_rejections": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "enforcement_mode": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "reasons": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "result": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rule_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "rule_version": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "source": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.submission_log": {
+    "columns": {
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "package_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "package_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "record_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "request_case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "submission_method": {
+        "nullable": true,
+        "type": "text"
+      },
+      "submission_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "submission_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "submitted_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "submitted_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "submitted_to": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.supplier_integration_profiles": {
+    "columns": {
+      "confidence": {
+        "nullable": false,
+        "type": "numeric(4, 3)"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "default_cte_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "display_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "field_mapping": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "last_used_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "profile_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "source_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supplier_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "supplier_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.suppliers": {
+    "columns": {
+      "compliance_score": {
+        "nullable": true,
+        "type": "numeric(5, 2)"
+      },
+      "contact_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "gln": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "last_assessed": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "org_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.task_queue": {
+    "columns": {
+      "attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "completed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "idempotency_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "last_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "locked_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "locked_until": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "max_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "priority": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "scheduled_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "started_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "task_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "visibility_timeout_seconds": {
+        "nullable": true,
+        "type": "integer"
+      }
+    }
+  },
+  "fsma.tenant_data": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "data": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "key": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "namespace": {
+        "nullable": false,
+        "type": "varchar(64)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_exchanges": {
+    "columns": {
+      "config": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "exchange_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_notification_prefs": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "prefs": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_onboarding": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "state": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_portal_links": {
+    "columns": {
+      "allowed_cte_types": {
+        "nullable": false,
+        "type": "array"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "expires_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "integration_profile_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "link_token": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supplier_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "supplier_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.tenant_products": {
+    "columns": {
+      "category": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "facilities": {
+        "nullable": true,
+        "type": "array"
+      },
+      "ftl_covered": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "gtin": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_sample": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "last_cte": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "sku": {
+        "nullable": true,
+        "type": "text"
+      },
+      "suppliers": {
+        "nullable": true,
+        "type": "array"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_settings": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "settings": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_suppliers": {
+    "columns": {
+      "compliance_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "contact_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_sample": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "last_submission": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "missing_kdes": {
+        "nullable": true,
+        "type": "array"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "portal_link_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "portal_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "products": {
+        "nullable": true,
+        "type": "array"
+      },
+      "submissions_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_team_members": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "invited_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "is_sample": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "last_active": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "role": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "fsma.traceability_events": {
+    "columns": {
+      "amended_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "chain_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "confidence_score": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "epcis_action": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_biz_step": {
+        "nullable": true,
+        "type": "text"
+      },
+      "epcis_event_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "event_timestamp": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_timezone": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "from_entity_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "from_facility_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "idempotency_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "ingested_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "ingestion_run_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "kdes": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "lot_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "normalized_payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "product_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "provenance_metadata": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "quantity": {
+        "nullable": false,
+        "type": "double precision"
+      },
+      "raw_payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "schema_version": {
+        "nullable": false,
+        "type": "text"
+      },
+      "sha256_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_file_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "source_record_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_system": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supersedes_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "to_entity_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "to_facility_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "traceability_lot_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "transport_reference": {
+        "nullable": true,
+        "type": "text"
+      },
+      "unit_of_measure": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.transformation_links": {
+    "columns": {
+      "confidence_score": {
+        "nullable": true,
+        "type": "numeric"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "input_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "input_quantity": {
+        "nullable": true,
+        "type": "numeric"
+      },
+      "input_tlc": {
+        "nullable": false,
+        "type": "text"
+      },
+      "input_unit": {
+        "nullable": true,
+        "type": "text"
+      },
+      "link_source": {
+        "nullable": true,
+        "type": "text"
+      },
+      "notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "output_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "output_quantity": {
+        "nullable": true,
+        "type": "numeric"
+      },
+      "output_tlc": {
+        "nullable": false,
+        "type": "text"
+      },
+      "output_unit": {
+        "nullable": true,
+        "type": "text"
+      },
+      "process_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "transformation_event_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "ingestion.audit_log": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "details": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "job_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "resource_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "resource_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(20)"
+      },
+      "timestamp": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "ingestion.documents": {
+    "columns": {
+      "agencies": {
+        "nullable": true,
+        "type": "array"
+      },
+      "cfr_references": {
+        "nullable": true,
+        "type": "array"
+      },
+      "content_length": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "content_sha256": {
+        "nullable": false,
+        "type": "varchar(64)"
+      },
+      "content_sha512": {
+        "nullable": false,
+        "type": "varchar(128)"
+      },
+      "content_type": {
+        "nullable": true,
+        "type": "varchar(100)"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "document_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "effective_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "etag": {
+        "nullable": true,
+        "type": "text"
+      },
+      "fetch_timestamp": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "http_status": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "keywords": {
+        "nullable": true,
+        "type": "array"
+      },
+      "last_modified": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "publication_date": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "source_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "source_url": {
+        "nullable": false,
+        "type": "text"
+      },
+      "storage_key": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "text_length": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "text_sha256": {
+        "nullable": true,
+        "type": "varchar(64)"
+      },
+      "text_sha512": {
+        "nullable": true,
+        "type": "varchar(128)"
+      },
+      "title": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "vertical": {
+        "nullable": false,
+        "type": "varchar(50)"
+      }
+    }
+  },
+  "ingestion.jobs": {
+    "columns": {
+      "completed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "config": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "documents_failed": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "documents_processed": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "documents_skipped": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "documents_succeeded": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "error_details": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "error_message": {
+        "nullable": true,
+        "type": "text"
+      },
+      "job_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "source_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "started_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(20)"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "vertical": {
+        "nullable": false,
+        "type": "varchar(50)"
+      }
+    }
+  },
+  "public.admin_mfa_recovery_codes": {
+    "columns": {
+      "code_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "used_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.api_keys": {
+    "columns": {
+      "allowed_jurisdictions": {
+        "nullable": true,
+        "type": "array"
+      },
+      "billing_tier": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "varchar(36)"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "enabled": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "expires_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "extra_data": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "key_hash": {
+        "nullable": false,
+        "type": "varchar(64)"
+      },
+      "key_id": {
+        "nullable": false,
+        "type": "varchar(64)"
+      },
+      "key_prefix": {
+        "nullable": false,
+        "type": "varchar(12)"
+      },
+      "last_used_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "name": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "partner_id": {
+        "nullable": true,
+        "type": "varchar(64)"
+      },
+      "rate_limit_per_day": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "rate_limit_per_hour": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "rate_limit_per_minute": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "revoke_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "revoked_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "revoked_by": {
+        "nullable": true,
+        "type": "varchar(36)"
+      },
+      "scopes": {
+        "nullable": true,
+        "type": "array"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "total_requests": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.audit_log_buffer": {
+    "columns": {
+      "actor": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "originally_failed_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "primary_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "replay_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "replayed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.audit_logs": {
+    "columns": {
+      "action": {
+        "nullable": false,
+        "type": "text"
+      },
+      "actor_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "actor_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "actor_ip": {
+        "nullable": true,
+        "type": "text"
+      },
+      "actor_ua": {
+        "nullable": true,
+        "type": "text"
+      },
+      "endpoint": {
+        "nullable": true,
+        "type": "text"
+      },
+      "event_category": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "integrity_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "metadata": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "prev_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "request_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "resource_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "resource_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "sequence_num": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "timestamp": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.auth_challenges": {
+    "columns": {
+      "browser_binding_hash": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "code_digest": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "email_fingerprint": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "failed_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "purpose": {
+        "nullable": false,
+        "type": "varchar(13)"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(8)"
+      }
+    }
+  },
+  "public.compliance_alerts": {
+    "columns": {
+      "acknowledged_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "acknowledged_by": {
+        "nullable": true,
+        "type": "varchar(255)"
+      },
+      "countdown_end": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "countdown_hours": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "countdown_start": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "match_reason": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "raw_data": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "required_actions": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "resolution_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "resolved_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "resolved_by": {
+        "nullable": true,
+        "type": "varchar(255)"
+      },
+      "severity": {
+        "nullable": false,
+        "type": "varchar(8)"
+      },
+      "source_id": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "source_type": {
+        "nullable": false,
+        "type": "varchar(18)"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "summary": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "title": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.compliance_notifications": {
+    "columns": {
+      "alert_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "error_message": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "notification_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "recipient": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "sent_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "subject": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.compliance_status_log": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "new_status": {
+        "nullable": false,
+        "type": "varchar(13)"
+      },
+      "previous_status": {
+        "nullable": true,
+        "type": "varchar(13)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "trigger_alert_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "trigger_description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "trigger_type": {
+        "nullable": false,
+        "type": "varchar(100)"
+      }
+    }
+  },
+  "public.controls": {
+    "columns": {
+      "control_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "control_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "frequency": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "obligation_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "threshold_value": {
+        "nullable": true,
+        "type": "text"
+      },
+      "title": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "public.food_traceability_list": {
+    "columns": {
+      "applicable_ctes": {
+        "nullable": false,
+        "type": "array"
+      },
+      "category": {
+        "nullable": false,
+        "type": "text"
+      },
+      "cfr_sections": {
+        "nullable": false,
+        "type": "array"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "effective_date": {
+        "nullable": false,
+        "type": "date"
+      },
+      "examples": {
+        "nullable": true,
+        "type": "array"
+      },
+      "exclusions": {
+        "nullable": true,
+        "type": "array"
+      },
+      "food_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "outbreak_risk": {
+        "nullable": false,
+        "type": "text"
+      },
+      "required_kdes": {
+        "nullable": false,
+        "type": "jsonb"
+      }
+    }
+  },
+  "public.funnel_events": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "metadata": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.graph_outbox": {
+    "columns": {
+      "attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "cypher": {
+        "nullable": false,
+        "type": "text"
+      },
+      "dedupe_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "drained_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "enqueued_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "last_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "max_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "next_attempt_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "operation": {
+        "nullable": false,
+        "type": "text"
+      },
+      "params": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.invites": {
+    "columns": {
+      "accepted_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "email": {
+        "nullable": false,
+        "type": "text"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "revoked_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "role_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "token_hash": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "public.memberships": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "is_active": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "role_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.obligation_cte_rules": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "obligation_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "required_kde_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "validation_rule": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "public.obligations": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "due_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "obligation_text": {
+        "nullable": true,
+        "type": "text"
+      },
+      "regulation_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "risk_category": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "title": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "public.organization_memberships": {
+    "columns": {
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "organization_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "role": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.organizations": {
+    "columns": {
+      "domain_name": {
+        "nullable": true,
+        "type": "varchar"
+      },
+      "domain_verified": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "enforced_auth_policy": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "varchar"
+      }
+    }
+  },
+  "public.pcos_authority_documents": {
+    "columns": {
+      "content_type": {
+        "nullable": true,
+        "type": "varchar(100)"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "document_code": {
+        "nullable": false,
+        "type": "varchar(100)"
+      },
+      "document_hash": {
+        "nullable": true,
+        "type": "varchar(64)"
+      },
+      "document_name": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "document_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "effective_date": {
+        "nullable": false,
+        "type": "date"
+      },
+      "expiration_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "extraction_method": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "extraction_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "file_size_bytes": {
+        "nullable": true,
+        "type": "bigint"
+      },
+      "hash_algorithm": {
+        "nullable": true,
+        "type": "varchar(20)"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "ingested_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "ingested_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "issuer_name": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "issuer_type": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "original_file_path": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(20)"
+      },
+      "supersedes_document_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "verified_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "verified_by": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.pcos_extracted_facts": {
+    "columns": {
+      "authority_document_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "extracted_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "extracted_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "extraction_confidence": {
+        "nullable": true,
+        "type": "numeric(3, 2)"
+      },
+      "extraction_method": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "extraction_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "fact_category": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "fact_description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "fact_key": {
+        "nullable": false,
+        "type": "varchar(100)"
+      },
+      "fact_name": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "fact_unit": {
+        "nullable": true,
+        "type": "varchar(50)"
+      },
+      "fact_value_boolean": {
+        "nullable": true,
+        "type": "boolean"
+      },
+      "fact_value_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "fact_value_decimal": {
+        "nullable": true,
+        "type": "numeric(15, 4)"
+      },
+      "fact_value_integer": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "fact_value_json": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "fact_value_string": {
+        "nullable": true,
+        "type": "text"
+      },
+      "fact_value_type": {
+        "nullable": false,
+        "type": "varchar(20)"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_current": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "previous_fact_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "source_page": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "source_quote": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_section": {
+        "nullable": true,
+        "type": "varchar(255)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "validity_conditions": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "verified_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "verified_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "version": {
+        "nullable": false,
+        "type": "integer"
+      }
+    }
+  },
+  "public.pcos_fact_citations": {
+    "columns": {
+      "citation_notes": {
+        "nullable": true,
+        "type": "text"
+      },
+      "citation_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "cited_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "citing_entity_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "citing_entity_type": {
+        "nullable": false,
+        "type": "varchar(50)"
+      },
+      "comparison_operator": {
+        "nullable": true,
+        "type": "varchar(20)"
+      },
+      "context_applied": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evaluation_result": {
+        "nullable": true,
+        "type": "varchar(20)"
+      },
+      "extracted_fact_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "fact_value_used": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "input_value": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.regulations": {
+    "columns": {
+      "citation": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "effective_date": {
+        "nullable": true,
+        "type": "date"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "section": {
+        "nullable": true,
+        "type": "text"
+      },
+      "source_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "text": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "public.review_items": {
+    "columns": {
+      "confidence_score": {
+        "nullable": false,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "doc_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "embedding": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "extraction": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "provenance": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "reviewer_id": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "text_raw": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.roles": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "permissions": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.sandbox_shares": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "csv_text": {
+        "nullable": false,
+        "type": "text"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "ip_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "result_json": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "view_count": {
+        "nullable": false,
+        "type": "integer"
+      }
+    }
+  },
+  "public.scheduler_seen_items": {
+    "columns": {
+      "content_hash": {
+        "nullable": false,
+        "type": "varchar(64)"
+      },
+      "first_seen_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "last_seen_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "source_id": {
+        "nullable": false,
+        "type": "varchar(255)"
+      },
+      "source_type": {
+        "nullable": false,
+        "type": "varchar(100)"
+      },
+      "title": {
+        "nullable": true,
+        "type": "text"
+      },
+      "url": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "public.sessions": {
+    "columns": {
+      "active_membership_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "auth_method": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "authenticated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "family_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "ip_address": {
+        "nullable": true,
+        "type": "text"
+      },
+      "is_revoked": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "last_used_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "refresh_token_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "revoked_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "token_hash": {
+        "nullable": true,
+        "type": "varchar"
+      },
+      "user_agent": {
+        "nullable": true,
+        "type": "text"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.supplier_cte_events": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "cte_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_time": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "facility_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "kde_data": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "lot_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "merkle_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "merkle_prev_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "obligation_ids": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "payload_sha256": {
+        "nullable": false,
+        "type": "text"
+      },
+      "sequence_number": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "supplier_user_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.supplier_facilities": {
+    "columns": {
+      "city": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "fda_registration_number": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "postal_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "roles": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "state": {
+        "nullable": false,
+        "type": "text"
+      },
+      "street": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supplier_user_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.supplier_facility_ftl_categories": {
+    "columns": {
+      "category_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "category_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "facility_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "required_ctes": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.supplier_funnel_events": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "facility_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "metadata": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "status": {
+        "nullable": true,
+        "type": "text"
+      },
+      "step": {
+        "nullable": true,
+        "type": "text"
+      },
+      "supplier_user_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.supplier_traceability_lots": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "facility_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "product_description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supplier_user_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tlc_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.tenant_compliance_status": {
+    "columns": {
+      "active_alert_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "completeness_score": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "critical_alert_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "last_status_change": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "next_deadline": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "next_deadline_description": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "varchar(13)"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.tenant_product_profile": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "fda_product_codes": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "product_categories": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "retailer_relationships": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "supplier_identifiers": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "supply_regions": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.tenants": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "settings": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "slug": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.tool_leads": {
+    "columns": {
+      "access_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "company_name": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "domain": {
+        "nullable": false,
+        "type": "text"
+      },
+      "email": {
+        "nullable": false,
+        "type": "text"
+      },
+      "first_tool_used": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "ip_country": {
+        "nullable": true,
+        "type": "text"
+      },
+      "last_tool_access": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "source_url": {
+        "nullable": true,
+        "type": "text"
+      },
+      "verified_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.user_emails": {
+    "columns": {
+      "email": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "email_fingerprint": {
+        "nullable": true,
+        "type": "varchar"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_verified": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.users": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "email": {
+        "nullable": false,
+        "type": "text"
+      },
+      "global_status": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_sysadmin": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "last_login_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "mfa_secret": {
+        "nullable": true,
+        "type": "text"
+      },
+      "mfa_secret_ciphertext": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "token_version": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "updated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      }
+    }
+  },
+  "public.webauthn_challenges": {
+    "columns": {
+      "challenge": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "consumed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "purpose": {
+        "nullable": false,
+        "type": "varchar(14)"
+      },
+      "user_id": {
+        "nullable": true,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.webauthn_credentials": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "credential_id": {
+        "nullable": false,
+        "type": "varchar"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "last_used_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "public_key": {
+        "nullable": false,
+        "type": "bytea"
+      },
+      "sign_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "user_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
+  "public.webhook_outbox": {
+    "columns": {
+      "attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "dedupe_key": {
+        "nullable": true,
+        "type": "text"
+      },
+      "delivered_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "enqueued_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "bigint"
+      },
+      "last_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "last_status_code": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "max_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "next_attempt_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "target_url": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  }
+}

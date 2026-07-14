@@ -8,6 +8,7 @@ migrations remain the source of truth for DDL and RLS.
 from __future__ import annotations
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -32,26 +33,31 @@ class IngestionRunModel(Base):
 
     __tablename__ = "ingestion_runs"
     __table_args__ = (
-        UniqueConstraint("id", "tenant_id", name="ux_ingestion_runs_id_tenant"),
-        {"schema": "fsma"},
+        # The database enforces this as a UNIQUE INDEX (v079), not a table
+        # constraint — declare it the same way so autogenerate agrees.
+        Index("ux_ingestion_runs_id_tenant", "id", "tenant_id", unique=True),
+        {
+            "schema": "fsma",
+            "comment": "Batch provenance — one row per file upload, API call, or EPCIS document import",
+        },
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True)
     tenant_id = Column(UUID(as_uuid=True), nullable=False)
-    source_system = Column(Text)
+    source_system = Column(Text, nullable=False)
     source_file_name = Column(Text)
     source_file_hash = Column(Text)
-    source_file_size = Column(Integer)
-    record_count = Column(Integer)
-    accepted_count = Column(Integer)
-    rejected_count = Column(Integer)
-    status = Column(Text)
-    mapper_version = Column(Text)
-    schema_version = Column(Text)
+    source_file_size = Column(BigInteger)
+    record_count = Column(Integer, nullable=False, server_default=text("0"))
+    accepted_count = Column(Integer, nullable=False, server_default=text("0"))
+    rejected_count = Column(Integer, nullable=False, server_default=text("0"))
+    status = Column(Text, nullable=False, server_default=text("'processing'"))
+    mapper_version = Column(Text, nullable=False, server_default=text("'1.0.0'"))
+    schema_version = Column(Text, nullable=False, server_default=text("'1.0.0'"))
     initiated_by = Column(Text)
-    started_at = Column(DateTime(timezone=True))
+    started_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     completed_at = Column(DateTime(timezone=True))
-    errors = Column(JSONB)
+    errors = Column(JSONB, server_default=text("'[]'::jsonb"))
 
 
 class AdvisoryReceiptModel(Base):
@@ -59,27 +65,54 @@ class AdvisoryReceiptModel(Base):
 
     __tablename__ = "ingestion_run_receipts"
     __table_args__ = (
-        UniqueConstraint("receipt_id", "tenant_id", name="ux_ingestion_run_receipts_id_tenant"),
-        {"schema": "fsma"},
+        # UNIQUE INDEX in the database (v079) — the composite-FK target for
+        # agent_artifact_reviews.advisory_receipt_id.
+        Index("ux_ingestion_run_receipts_id_tenant", "receipt_id", "tenant_id", unique=True),
+        # Named table constraints from the v079 CREATE TABLE.
+        UniqueConstraint("tenant_id", "receipt_hash", name="ux_ingestion_run_receipts_hash"),
+        UniqueConstraint(
+            "tenant_id",
+            "ingestion_run_id",
+            "sequence_num",
+            name="ux_ingestion_run_receipts_run_sequence",
+        ),
+        {
+            "schema": "fsma",
+            "comment": "Tenant-scoped append-only state receipt ledger for ingestion runs.",
+        },
     )
 
     receipt_id = Column(UUID(as_uuid=True), primary_key=True)
     tenant_id = Column(UUID(as_uuid=True), nullable=False)
     ingestion_run_id = Column(UUID(as_uuid=True), nullable=False)
-    sequence_num = Column(Integer, nullable=False)
+    sequence_num = Column(BigInteger, nullable=False)
     state = Column(Text, nullable=False)
-    occurred_at = Column(DateTime(timezone=True))
-    actor = Column(Text)
+    occurred_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    actor = Column(Text, nullable=False, server_default=text("'system'"))
     request_id = Column(Text)
     canonical_event_id = Column(UUID(as_uuid=True))
     evidence_attachment_id = Column(UUID(as_uuid=True))
     rule_evaluation_id = Column(UUID(as_uuid=True))
     export_log_id = Column(UUID(as_uuid=True))
     metadata_ = Column("metadata", JSONB, nullable=False)
-    payload_hash = Column(String(64), nullable=False)
-    previous_receipt_hash = Column(String(64))
-    receipt_hash = Column(String(64), nullable=False)
-    created_at = Column(DateTime(timezone=True))
+    payload_hash = Column(
+        String(64),
+        nullable=False,
+        comment="SHA-256 hash of the receipt metadata JSONB payload.",
+    )
+    previous_receipt_hash = Column(
+        String(64),
+        comment="Hash of the previous receipt for the same ingestion run; NULL for sequence 1.",
+    )
+    receipt_hash = Column(
+        String(64),
+        nullable=False,
+        comment=(
+            "SHA-256 hash over receipt identity, state, links, payload hash, "
+            "and previous receipt hash."
+        ),
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
 
 class AgentArtifactModel(Base):
@@ -96,9 +129,15 @@ class AgentArtifactModel(Base):
         ),
         CheckConstraint("artifact_version = 'agent-artifact.v1'", name="ck_agent_artifacts_version"),
         CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_agent_artifacts_confidence"),
+        # NOTE: the database versions of these indexes order created_at DESC
+        # (v080). SQLAlchemy reflection cannot round-trip the DESC element,
+        # so they are name-quarantined from the drift gate in alembic/env.py.
         Index("idx_agent_artifacts_tenant_created", "tenant_id", "created_at"),
         Index("idx_agent_artifacts_tenant_run", "tenant_id", "ingestion_run_id"),
-        {"schema": "fsma"},
+        {
+            "schema": "fsma",
+            "comment": "Tenant-scoped append-only storage for validated advisory agent artifacts.",
+        },
     )
 
     artifact_id = Column(UUID(as_uuid=True), primary_key=True)
@@ -123,7 +162,11 @@ class AgentArtifactModel(Base):
     request_id = Column(Text)
     artifact = Column(JSONB, nullable=False)
     payload = Column(JSONB, nullable=False)
-    artifact_hash = Column(String(64), nullable=False)
+    artifact_hash = Column(
+        String(64),
+        nullable=False,
+        comment="SHA-256 hash of the persisted artifact JSONB payload.",
+    )
 
 
 class AgentArtifactReviewModel(Base):
@@ -154,9 +197,14 @@ class AgentArtifactReviewModel(Base):
             "status IN ('pending', 'accepted', 'rejected', 'needs_more_evidence')",
             name="ck_agent_reviews_status",
         ),
+        # Database version orders created_at DESC (v080) — name-quarantined
+        # from the drift gate (see alembic/env.py).
         Index("idx_agent_reviews_tenant_status", "tenant_id", "status", "created_at"),
         Index("idx_agent_reviews_tenant_artifact", "tenant_id", "artifact_id"),
-        {"schema": "fsma"},
+        {
+            "schema": "fsma",
+            "comment": "Tenant-scoped operator review outcomes for advisory agent artifacts.",
+        },
     )
 
     review_id = Column(UUID(as_uuid=True), primary_key=True)
@@ -164,7 +212,12 @@ class AgentArtifactReviewModel(Base):
     artifact_id = Column(UUID(as_uuid=True), nullable=False)
     ingestion_run_id = Column(UUID(as_uuid=True))
     advisory_receipt_id = Column(UUID(as_uuid=True))
-    status = Column(Text, nullable=False, server_default=text("'pending'"))
+    status = Column(
+        Text,
+        nullable=False,
+        server_default=text("'pending'"),
+        comment="Operator review status: pending, accepted, rejected, or needs_more_evidence.",
+    )
     reviewed_by = Column(UUID(as_uuid=True))
     reviewed_at = Column(DateTime(timezone=True))
     review_reason = Column(Text)
