@@ -21,7 +21,7 @@ All operations are idempotent (IF NOT EXISTS / guarded) — environments
 where the scheduler's create_all already made the table converge to the
 same state.
 
-Revision ID: 16cb29a3938c
+Revision ID: 16cb29a3938c (random hex, not a credential)
 Revises: b3c8e1f4a627
 Create Date: 2026-07-14
 """
@@ -30,7 +30,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "16cb29a3938c"
+revision: str = "16cb29a3938c"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "b3c8e1f4a627"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
