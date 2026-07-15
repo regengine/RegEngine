@@ -296,7 +296,10 @@ def upgrade() -> None:
     op.execute("ALTER TABLE public.obligations FORCE ROW LEVEL SECURITY")
     op.execute("""
         DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            -- memberships only exists from v077/v078 in this chain; skip
+            -- (fail-closed) on fresh clusters where it is not there yet.
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+               AND to_regclass('public.memberships') IS NOT NULL THEN
                 EXECUTE $exec$CREATE POLICY obligations_select_tenant_scoped
                     ON public.obligations FOR SELECT TO authenticated
                     USING (tenant_id::uuid IN (
@@ -313,7 +316,8 @@ def upgrade() -> None:
     op.execute("ALTER TABLE public.obligation_cte_rules FORCE ROW LEVEL SECURITY")
     op.execute("""
         DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+               AND to_regclass('public.memberships') IS NOT NULL THEN
                 EXECUTE $exec$CREATE POLICY obligation_cte_rules_select_via_obligation
                     ON public.obligation_cte_rules FOR SELECT TO authenticated
                     USING (obligation_id IN (
