@@ -57,10 +57,14 @@ ${PYTHON_BIN} -c "
 import os, sys, subprocess, time
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 
 url = os.environ['DATABASE_URL']
 timeout_s = int(os.environ.get('MIGRATION_LOCK_TIMEOUT_S', '${MIGRATION_LOCK_TIMEOUT_S}'))
-engine = create_engine(url, pool_pre_ping=True)
+# NullPool: closing a connection really disconnects it instead of parking an
+# idle backend in the pool for the whole alembic run — the probe connection
+# below must be physically gone, not just checked in, before migrations start.
+engine = create_engine(url, pool_pre_ping=True, poolclass=NullPool)
 
 conn = engine.connect()
 tx = conn.begin()
@@ -80,14 +84,29 @@ try:
         if got:
             lock_acquired = True
             print(f'==> Migration lock acquired (attempt {attempt})', flush=True)
+            # This backend now sits idle-in-transaction while alembic runs in a
+            # subprocess. A server-side idle_in_transaction_session_timeout (or
+            # transaction_timeout, PG 17+) would terminate it and silently
+            # release the advisory lock mid-migration — disable both for this
+            # session. SET takes no relation locks.
+            conn.execute(text(\"SET idle_in_transaction_session_timeout = 0\"))
+            if int(conn.execute(text('SHOW server_version_num')).scalar()) >= 170000:
+                conn.execute(text(\"SET transaction_timeout = 0\"))
             break
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             # Surface the holder so the operator can terminate the stale backend.
+            # A 1-arg bigint advisory lock shows its high 32 bits in classid and
+            # low 32 bits in objid with objsubid=1; filter on all three plus
+            # granted, or waiters and unrelated 2-arg locks get reported (and
+            # the remediation below would terminate an innocent backend).
             holder = conn.execute(text(
                 \"SELECT a.pid, a.application_name, a.state, a.state_change \"
                 \"FROM pg_stat_activity a JOIN pg_locks l ON l.pid = a.pid \"
-                \"WHERE l.locktype = 'advisory' AND l.objid = ${MIGRATION_LOCK_ID}\"
+                \"WHERE l.locktype = 'advisory' AND l.granted \"
+                \"  AND l.classid = ((${MIGRATION_LOCK_ID}::bigint >> 32) & 4294967295)::oid \"
+                \"  AND l.objid = (${MIGRATION_LOCK_ID}::bigint & 4294967295)::oid \"
+                \"  AND l.objsubid = 1\"
             )).fetchall()
             print(
                 f'!! Could not acquire migration lock within {timeout_s}s after {attempt} attempts.',
@@ -110,26 +129,38 @@ try:
     # Keep this transaction open while Alembic runs in its own process. The
     # transaction exists only to own the advisory lock, and PostgreSQL releases
     # it automatically on commit, rollback, disconnect, or process death.
-    # ---- Detect DB state ----
-    result = conn.execute(text(
-        \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version')\"
-    ))
-    has_alembic = result.scalar()
-
-    if not has_alembic:
-        result2 = conn.execute(text(
-            \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
+    #
+    # The lock-holder transaction must never touch application relations:
+    # any SELECT here holds ACCESS SHARE until the transaction ends, and a
+    # migration that takes ACCESS EXCLUSIVE on the same relation (v092 runs
+    # ALTER TABLE public.alembic_version ENABLE ROW LEVEL SECURITY) then
+    # waits on this very connection forever — the runner deadlocks itself
+    # (2026-07-15 deploy incident). State probes run on a separate
+    # connection that is CLOSED before Alembic starts.
+    # ---- Detect DB state (dedicated probe connection) ----
+    probe = engine.connect()
+    try:
+        result = probe.execute(text(
+            \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version')\"
         ))
-        state = 'NEEDS_STAMP' if result2.scalar() else 'FRESH'
-    else:
-        result3 = conn.execute(text('SELECT count(*) FROM alembic_version'))
-        if result3.scalar() > 0:
-            state = 'ALREADY_MANAGED'
-        else:
-            result4 = conn.execute(text(
+        has_alembic = result.scalar()
+
+        if not has_alembic:
+            result2 = probe.execute(text(
                 \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
             ))
-            state = 'NEEDS_STAMP' if result4.scalar() else 'FRESH'
+            state = 'NEEDS_STAMP' if result2.scalar() else 'FRESH'
+        else:
+            result3 = probe.execute(text('SELECT count(*) FROM alembic_version'))
+            if result3.scalar() > 0:
+                state = 'ALREADY_MANAGED'
+            else:
+                result4 = probe.execute(text(
+                    \"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'fsma')\"
+                ))
+                state = 'NEEDS_STAMP' if result4.scalar() else 'FRESH'
+    finally:
+        probe.close()
 
     print(f'    DB state: {state}', flush=True)
 
