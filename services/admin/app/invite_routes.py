@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
+from .auth.identity_helpers import ensure_passwordless_identity
 from .database import get_session
 from .dependencies import PermissionChecker, get_current_user
 from .e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
@@ -467,6 +468,18 @@ async def accept_invite(
         created_by=None,  # Self-accepted via system
     )
     db.add(membership)
+
+    # Provision the passwordless identity rows (verified user_emails +
+    # organization_memberships) or sign-in code emails for this user are
+    # silently suppressed. The invite token is proof of mailbox control.
+    invite_role = db.get(RoleModel, invite.role_id)
+    ensure_passwordless_identity(
+        db,
+        user=user,
+        email=invite.email,
+        organization_id=invite.tenant_id,
+        role_name=invite_role.name if invite_role is not None else None,
+    )
 
     # Update Invite (single-use).
     accepted_at = datetime.now(timezone.utc)
