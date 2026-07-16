@@ -611,7 +611,7 @@ class TestErrorHandlingAndInfoLeakage:
         assert "runtimeerror" not in lowered
 
     def test_invalid_credentials_error_is_generic(self, client):
-        secret_looking_key = "rge_prod.super-secret-key-value-123"
+        secret_looking_key = "rge_prod.super-secret-key-value-123"  # pragma: allowlist secret
 
         response = client.get("/v1/ingest/status/job-123", headers={"X-RegEngine-API-Key": secret_looking_key})
 

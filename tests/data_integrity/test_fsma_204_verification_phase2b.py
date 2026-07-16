@@ -127,7 +127,10 @@ class TestIngestionPipelineContract:
         response = client.post(
             "/v1/ingest/url",
             headers=auth_headers,
-            json={"url": "http://user:secret@93.184.216.34/doc", "source_system": "fda"},
+            json={
+                "url": "http://user:secret@93.184.216.34/doc",  # pragma: allowlist secret
+                "source_system": "fda",
+            },
         )
 
         assert 400 <= response.status_code < 500, (
