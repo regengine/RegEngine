@@ -35,6 +35,29 @@ def upgrade() -> None:
     # 2. Backfill contiguous per-tenant sequences ordered by id. Only
     #    touch rows that have not been assigned yet so re-runs are cheap
     #    and never renumber an already-sequenced chain.
+    #
+    #    The v066 ``audit_append_only`` trigger rejects every UPDATE on
+    #    audit_logs, including this backfill, on any database that already
+    #    has rows (CI migrates empty databases, so only live databases hit
+    #    it). Disable it for the backfill and re-enable afterwards; both
+    #    ALTERs and the UPDATE share this migration's transaction and the
+    #    ACCESS EXCLUSIVE lock, so no concurrent writer ever sees the
+    #    trigger disabled.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_trigger
+                WHERE tgname = 'audit_append_only'
+                  AND tgrelid = 'public.audit_logs'::regclass
+            ) THEN
+                EXECUTE 'ALTER TABLE public.audit_logs DISABLE TRIGGER audit_append_only';
+            END IF;
+        END
+        $$;
+        """
+    )
     op.execute(
         """
         WITH numbered AS (
@@ -47,6 +70,21 @@ def upgrade() -> None:
         FROM numbered
         WHERE a.id = numbered.id
           AND a.sequence_num IS NULL;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_trigger
+                WHERE tgname = 'audit_append_only'
+                  AND tgrelid = 'public.audit_logs'::regclass
+            ) THEN
+                EXECUTE 'ALTER TABLE public.audit_logs ENABLE TRIGGER audit_append_only';
+            END IF;
+        END
+        $$;
         """
     )
 
