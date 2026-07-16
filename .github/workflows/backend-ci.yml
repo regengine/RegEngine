@@ -812,6 +812,78 @@ jobs:
           pytest tests/migrations/test_rls_hardening.py \
             -v --no-cov -o "testpaths=tests"
 
+  # ── Seeded mid-chain migration rehearsal (#2588 follow-up) ──
+  seeded-migration-rehearsal:
+    # Every other migration gate upgrades an EMPTY database, which is how
+    # v090's audit_logs backfill shipped green and then failed both
+    # production deploys (the v066 append-only trigger only fires on rows).
+    # This job upgrades to v089, seeds a representative dataset (tenants,
+    # users, audit_logs, fsma.cte_events, fsma.request_signoffs), then runs
+    # `alembic upgrade head` over the populated tables. Migrations are also
+    # role-sensitive (v051/v056/v092 branch on Supabase client roles), so a
+    # matrix leg replays the chain on a Supabase-like cluster too.
+    name: Seeded migration rehearsal (${{ matrix.cluster }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cluster: [app-roles-only, supabase-client-roles]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # No-Postgres must FAIL the rehearsal, never skip it (#2530).
+      REGENGINE_REQUIRE_DB: "1"
+      PYTHONDONTWRITEBYTECODE: 1
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Create rehearsal database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # The rehearsal drives the DB from empty through v089 + seed to
+          # head itself, so it gets a dedicated database.
+          psql -h localhost -U postgres -c "CREATE DATABASE seeded_migrated;"
+
+      - name: Seeded mid-chain upgrade rehearsal
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seeded_migrated
+          REGENGINE_SEED_CLIENT_ROLES: ${{ matrix.cluster == 'supabase-client-roles' && '1' || '0' }}
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          pytest tests/migrations/test_seeded_mid_chain_upgrade.py \
+            -v --no-cov -o "testpaths=tests"
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     # Distinct name from the frontend gate ("Frontend CI Status Gate"). The
@@ -820,7 +892,7 @@ jobs:
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -832,6 +904,7 @@ jobs:
           echo "Lint repo roots:   ${{ needs.lint-repo-roots.result }}"
           echo "Ingestion suite:   ${{ needs.ingestion-full-suite.result }}"
           echo "Repo-root suite:   ${{ needs.repo-root-suite.result }}"
+          echo "Seeded rehearsal:  ${{ needs.seeded-migration-rehearsal.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
@@ -850,6 +923,7 @@ jobs:
              || "${{ needs.lint-repo-roots.result }}" != "success" \
              || "${{ needs.ingestion-full-suite.result }}" != "success" \
              || "${{ needs.repo-root-suite.result }}" != "success" \
+             || "${{ needs.seeded-migration-rehearsal.result }}" != "success" \
              || "${{ needs.docker-build.result }}" != "success" \
              || "${{ needs.security.result }}" != "success" \
              || "${{ needs.rls-fallback-check.result }}" != "success" \

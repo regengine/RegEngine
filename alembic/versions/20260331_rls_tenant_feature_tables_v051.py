@@ -452,10 +452,16 @@ def upgrade() -> None:
         END $$;
     """)
 
+    # The two policies below reference public.memberships, which this chain
+    # only creates at v077/v078 — on Supabase the table pre-existed, so the
+    # gap never fired there. On a fresh cluster that has the authenticated
+    # role, skip them when memberships is missing (fail-closed: FORCE RLS
+    # with no policy denies authenticated everything on these tables).
     op.execute("""
         ALTER TABLE public.obligations FORCE ROW LEVEL SECURITY;
         DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+               AND to_regclass('public.memberships') IS NOT NULL THEN
             CREATE POLICY "obligations_select_tenant_scoped"
               ON public.obligations
               FOR SELECT
@@ -476,7 +482,8 @@ def upgrade() -> None:
         ALTER TABLE public.obligation_cte_rules ENABLE ROW LEVEL SECURITY;
         ALTER TABLE public.obligation_cte_rules FORCE ROW LEVEL SECURITY;
         DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+               AND to_regclass('public.memberships') IS NOT NULL THEN
             CREATE POLICY "obligation_cte_rules_select_via_obligation"
               ON public.obligation_cte_rules
               FOR SELECT
