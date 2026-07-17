@@ -7,20 +7,21 @@ predicates. Request bodies define no tenant field at all.
 
 Anti-enumeration: every token failure returns the same 400 body and every
 session failure the same 401 body; the real deny reason goes to the audit
-log only. Raw tokens appear once in the emailed link; only hashes are
-stored. GET never consumes the token (acceptance #7) — only the explicit
-exchange rotates a session.
+log only. Raw tokens appear once in the emailed link — in the URL
+FRAGMENT, which browsers never send to the server — and only hashes are
+stored. The context preview never consumes the token (acceptance #7);
+the explicit exchange mints the single-use 30-minute session.
 """
 
 from __future__ import annotations
 
 import logging
-import time
-from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from shared.database import get_db_session
+from shared.tenant_rate_limiting import consume_tenant_rate_limit as _consume_rate_limit
 
 from . import corrections, outbox, service, tokens
 from .audit_utils import audit_event
@@ -33,25 +34,26 @@ router = APIRouter(prefix="/api/v1/remediation/supplier", tags=["Supplier Remedi
 
 _get_db_session = get_db_session  # test-override alias
 
-# In-memory sliding-window rate limiter (per-process; multi-worker deploys
-# should front this with the shared Redis limiter — documented limitation).
-_WINDOW_SECONDS = 60
-_BUCKETS: Dict[str, List[float]] = defaultdict(list)
+_RATE_WINDOW_SECONDS = 60
 
 
 def _rate_limit(request: Request, bucket: str, limit: int) -> None:
-    now = time.monotonic()
-    # Behind the Railway proxy request.client.host is the proxy peer — a
-    # single global bucket that one abuser could exhaust for everyone.
-    # First X-Forwarded-For hop is spoofable but strictly better here.
+    """Shared (Redis-backed when configured) sliding-window rate limit.
+
+    Behind the Railway proxy request.client.host is the proxy peer — a
+    single global bucket that one abuser could exhaust for everyone.
+    First X-Forwarded-For hop is spoofable but strictly better here.
+    """
     forwarded = request.headers.get("x-forwarded-for", "")
     client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
-    key = f"{bucket}:{client_ip}"
-    hits = _BUCKETS[key]
-    hits[:] = [t for t in hits if now - t < _WINDOW_SECONDS]
-    if len(hits) >= limit:
+    allowed, _remaining = _consume_rate_limit(
+        tenant_id=f"remsup:{client_ip}",
+        bucket_suffix=f"remediation.{bucket}",
+        limit=limit,
+        window=_RATE_WINDOW_SECONDS,
+    )
+    if not allowed:
         raise HTTPException(status_code=429, detail="Too many requests")
-    hits.append(now)
 
 
 def _db(db_session):
@@ -84,13 +86,24 @@ def _case_context(db, token_row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/{token}", summary="View the correction request (does not consume the link)")
-async def get_token_context(token: str, request: Request, db_session=Depends(get_db_session)):
+@router.post("/context", summary="View the correction request (does not consume the link)")
+async def get_token_context(body: ExchangeRequest, request: Request, db_session=Depends(get_db_session)):
+    """Non-consuming preview. The token travels in the request BODY —
+    never in a URL path or query string, so it cannot land in access logs."""
     _rate_limit(request, "preview", 10)
     db = _db(db_session)
-    token_row = tokens.resolve_active_token(db, token)
+    token_row = tokens.resolve_active_token(db, body.token)
     ctx = _case_context(db, token_row)
     return {k: v for k, v in ctx.items() if not k.startswith("_")}
+
+
+@router.get("/form", response_class=HTMLResponse, summary="Supplier correction form (token read from URL fragment)")
+async def correction_form() -> HTMLResponse:
+    """Static, self-contained form page. The correction link puts the raw
+    token in the URL FRAGMENT (…/form#<token>): fragments are never sent
+    to the server, so the token cannot appear in gunicorn/proxy logs. The
+    page's JS reads location.hash and talks to the JSON endpoints."""
+    return HTMLResponse(content=_FORM_HTML)
 
 
 @router.post("/exchange", summary="Exchange the link token for a 30-minute correction session")
@@ -316,3 +329,127 @@ def _notify_buyer(db, tenant_id: str, case: Dict[str, Any], *, released_event_id
         body=body_text,
         payload={"case_id": case["id"], "released_event_id": released_event_id},
     )
+
+
+_FORM_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Correction request</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 42rem;
+         margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.25rem; } h2 { font-size: 1rem; margin-top: 1.5rem; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .fail { background: #fff5f5; border-color: #e0b4b4; }
+  .ok { background: #f0fff4; border-color: #a3d9a5; }
+  label { display: block; font-weight: 600; margin-top: .75rem; font-size: .9rem; }
+  .why { font-weight: 400; color: #86181d; font-size: .85rem; }
+  input[type=text] { width: 100%; padding: .45rem; margin-top: .25rem;
+         border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; }
+  button { margin-top: 1rem; padding: .55rem 1.1rem; border: 0; border-radius: 6px;
+         background: #1f6feb; color: #fff; font-size: .95rem; cursor: pointer; }
+  button:disabled { background: #9bb9e8; }
+  .muted { color: #666; font-size: .85rem; }
+  .attest { margin-top: 1rem; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Shipment record correction</h1>
+<div id="status" class="muted">Loading…</div>
+<div id="app" hidden>
+  <div class="card" id="caseinfo"></div>
+  <div class="card fail"><h2>What needs fixing</h2><div id="failures"></div></div>
+  <div id="startwrap">
+    <button id="start">Start correction (opens a 30-minute session)</button>
+    <p class="muted">This link works once. If your session expires before you
+    submit, ask your buyer contact to send a new link.</p>
+  </div>
+  <form id="form" hidden>
+    <h2>Your correction</h2>
+    <div id="fields"></div>
+    <label>Your name<input type="text" id="actor_name" required></label>
+    <label>Your role<input type="text" id="actor_role" required></label>
+    <label>Reason for the correction<input type="text" id="reason" required minlength="3"></label>
+    <div class="attest">
+      <label><input type="checkbox" id="attest">
+        I attest that the corrected information is accurate to the best of my knowledge.</label>
+    </div>
+    <button type="submit">Submit correction</button>
+  </form>
+  <div id="result" class="card ok" hidden></div>
+</div>
+<script>
+(function () {
+  var token = location.hash.slice(1);
+  var api = "/api/v1/remediation/supplier";
+  var statusEl = document.getElementById("status");
+  var session = null, ctx = null;
+  function esc(s) { var d = document.createElement("div"); d.textContent = String(s == null ? "" : s); return d.innerHTML; }
+  function post(path, body, bearer) {
+    return fetch(api + path, {
+      method: "POST",
+      headers: Object.assign({"Content-Type": "application/json"},
+        bearer ? {Authorization: "Bearer " + bearer} : {}),
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (j) { return {ok: r.ok, body: j}; }); });
+  }
+  if (!token) { statusEl.textContent = "This link is missing its access code."; return; }
+  post("/context", {token: token}).then(function (r) {
+    if (!r.ok) { statusEl.textContent = r.body.detail || "This link is not usable."; return; }
+    ctx = r.body;
+    statusEl.hidden = true;
+    document.getElementById("app").hidden = false;
+    document.getElementById("caseinfo").innerHTML =
+      "<h2>" + esc(ctx.manifest) + " — " + esc(ctx.line) + "</h2>" +
+      "<p class='muted'>Supplier: " + esc(ctx.supplier) +
+      (ctx.due_at ? " · Respond by " + esc(ctx.due_at) : "") + "</p>";
+    document.getElementById("failures").innerHTML = (ctx.failures || [])
+      .map(function (f) { return "<p>• " + esc(f.why_failed) + "</p>"; }).join("");
+    var fields = document.getElementById("fields");
+    (ctx.authorized_fields || []).forEach(function (f) {
+      var cur = ctx.current_values && ctx.current_values[f.field_path];
+      fields.insertAdjacentHTML("beforeend",
+        "<label>" + esc(f.field_path) +
+        "<span class='why'> — " + esc(f.reason) + "</span>" +
+        "<input type='text' data-path='" + esc(f.field_path) + "' value='" +
+        esc(cur == null ? "" : cur) + "'></label>");
+    });
+  });
+  document.getElementById("start").onclick = function () {
+    post("/exchange", {token: token}).then(function (r) {
+      if (!r.ok) { alert(r.body.detail || "Could not start a session."); return; }
+      session = r.body.session_token;
+      document.getElementById("startwrap").hidden = true;
+      document.getElementById("form").hidden = false;
+    });
+  };
+  document.getElementById("form").onsubmit = function (e) {
+    e.preventDefault();
+    if (!document.getElementById("attest").checked) { alert("Please confirm the attestation."); return; }
+    var changes = {};
+    document.querySelectorAll("#fields input").forEach(function (i) { changes[i.dataset.path] = i.value; });
+    post("/session/corrections", {
+      changes: changes,
+      actor_name: document.getElementById("actor_name").value,
+      actor_role: document.getElementById("actor_role").value,
+      reason: document.getElementById("reason").value,
+      attestation: {text: "I attest that the corrected information is accurate to the best of my knowledge.", accepted: true}
+    }, session).then(function (r) {
+      var out = document.getElementById("result");
+      out.hidden = false;
+      if (r.ok && r.body.status === "released") {
+        out.innerHTML = "<h2>Correction accepted</h2><p>" + esc(r.body.message) + "</p>";
+        document.getElementById("form").hidden = true;
+      } else {
+        out.className = "card fail";
+        out.innerHTML = "<h2>Still blocked</h2><p>" + esc(r.body.message || r.body.detail) + "</p>" +
+          ((r.body.failures || []).map(function (f) { return "<p>• " + esc(f.why_failed) + "</p>"; }).join(""));
+      }
+    });
+  };
+})();
+</script>
+</body>
+</html>"""

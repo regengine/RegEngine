@@ -191,7 +191,10 @@ def client(app_engine, tenant_a, monkeypatch):
     from sqlalchemy.orm import sessionmaker
 
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
-    sup_mod._BUCKETS.clear()
+    # Supplier endpoints share one limiter bucket per (test) client IP; stub
+    # it here so unrelated tests can't trip each other's windows. The
+    # rate-limit test re-installs the real function for itself.
+    monkeypatch.setattr(sup_mod, "_consume_rate_limit", lambda **_kw: (True, 99))
 
     Session = sessionmaker(bind=app_engine)
 

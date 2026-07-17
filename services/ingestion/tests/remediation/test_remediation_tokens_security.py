@@ -2,6 +2,10 @@
 
 The app engine connects as a non-superuser role, so FORCE RLS and the
 SECURITY DEFINER lookup path are enforced for real in these tests.
+
+Token transport: the raw token never appears in a URL path or query — the
+correction link carries it in the URL fragment, the form page reads it
+client-side, and every API call sends it in a POST body or bearer header.
 """
 
 from __future__ import annotations
@@ -33,6 +37,10 @@ def _issue_link(client, case_id: str) -> dict:
     return response.json()
 
 
+def _context(client, token: str):
+    return client.post("/api/v1/remediation/supplier/context", json={"token": token})
+
+
 def test_raw_token_never_stored(client, admin_engine):
     case_id = _blocked_case(client)
     link = _issue_link(client, case_id)
@@ -47,13 +55,29 @@ def test_raw_token_never_stored(client, admin_engine):
         assert len(row[0]) == 64  # sha256 hex at rest
 
 
-def test_get_does_not_consume_token(client):
+def test_token_rides_in_fragment_not_path(client):
+    """The correction link carries the token after '#': never sent to servers."""
+    case_id = _blocked_case(client)
+    link = _issue_link(client, case_id)
+    assert f"#{link['token']}" in link["correction_url"]
+    path_part = link["correction_url"].split("#")[0]
+    assert link["token"] not in path_part
+
+
+def test_form_page_is_static_and_tokenless(client):
+    response = client.get("/api/v1/remediation/supplier/form")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "location.hash" in response.text  # token read client-side only
+
+
+def test_context_preview_does_not_consume_token(client):
     case_id = _blocked_case(client)
     link = _issue_link(client, case_id)
     for _ in range(3):
-        response = client.get(f"/api/v1/remediation/supplier/{link['token']}")
+        response = _context(client, link["token"])
         assert response.status_code == 200
-    # Still exchangeable after several GETs (AC-7).
+    # Still exchangeable after several previews (AC-7).
     response = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]})
     assert response.status_code == 200
 
@@ -61,7 +85,7 @@ def test_get_does_not_consume_token(client):
 def test_token_context_is_scoped_to_case(client):
     case_id = _blocked_case(client)
     link = _issue_link(client, case_id)
-    ctx = client.get(f"/api/v1/remediation/supplier/{link['token']}").json()
+    ctx = _context(client, link["token"]).json()
     assert ctx["case_id"] == case_id
     assert ctx["authorized_fields"], "supplier must see exactly the failing fields"
     paths = {f["field_path"] for f in ctx["authorized_fields"]}
@@ -73,7 +97,7 @@ def test_unknown_expired_revoked_all_uniform_400(client, admin_engine):
     case_id = _blocked_case(client)
     link = _issue_link(client, case_id)
 
-    unknown = client.get(f"/api/v1/remediation/supplier/{'A' * 43}")
+    unknown = _context(client, "A" * 43)
     assert unknown.status_code == 400
     assert unknown.json() == UNIFORM_400
 
@@ -85,13 +109,13 @@ def test_unknown_expired_revoked_all_uniform_400(client, admin_engine):
             ),
             {"c": case_id},
         )
-    expired = client.get(f"/api/v1/remediation/supplier/{link['token']}")
+    expired = _context(client, link["token"])
     assert expired.status_code == 400
     assert expired.json() == UNIFORM_400
 
-    link2 = _issue_link(client, case_id)  # reissue revokes nothing live but mints fresh
+    link2 = _issue_link(client, case_id)  # reissue mints fresh
     client.post(f"/api/v1/remediation/cases/{case_id}/link/revoke")
-    revoked = client.get(f"/api/v1/remediation/supplier/{link2['token']}")
+    revoked = _context(client, link2["token"])
     assert revoked.status_code == 400
     assert revoked.json() == UNIFORM_400
 
@@ -100,10 +124,10 @@ def test_reissue_invalidates_previous_token(client):
     case_id = _blocked_case(client)
     first = _issue_link(client, case_id)
     second = _issue_link(client, case_id)  # create_link revokes live tokens first
-    old = client.get(f"/api/v1/remediation/supplier/{first['token']}")
+    old = _context(client, first["token"])
     assert old.status_code == 400
     assert old.json() == UNIFORM_400
-    fresh = client.get(f"/api/v1/remediation/supplier/{second['token']}")
+    fresh = _context(client, second["token"])
     assert fresh.status_code == 200
 
 
@@ -127,15 +151,23 @@ def test_session_expiry_and_replay_rejected(client, admin_engine):
     assert replay.json() == UNIFORM_401
 
 
-def test_exchange_rotates_session(client):
+def test_exchange_is_single_use(client):
+    """The link mints exactly one session; a second exchange fails uniformly
+    while the first session stays valid. Recovery is a buyer reissue."""
     case_id = _blocked_case(client)
     link = _issue_link(client, case_id)
-    s1 = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]}).json()
-    s2 = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]}).json()
-    old_headers = {"Authorization": f"Bearer {s1['session_token']}"}
-    assert client.get("/api/v1/remediation/supplier/session/current", headers=old_headers).status_code == 401
-    new_headers = {"Authorization": f"Bearer {s2['session_token']}"}
-    assert client.get("/api/v1/remediation/supplier/session/current", headers=new_headers).status_code == 200
+    first = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]})
+    assert first.status_code == 200
+    second = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]})
+    assert second.status_code == 400
+    assert second.json() == UNIFORM_400
+    headers = {"Authorization": f"Bearer {first.json()['session_token']}"}
+    assert client.get("/api/v1/remediation/supplier/session/current", headers=headers).status_code == 200
+    # Context preview still works after exchange (view-only, non-consuming).
+    assert _context(client, link["token"]).status_code == 200
+    # Reissue recovers: fresh token, fresh single-use exchange.
+    reissued = _issue_link(client, case_id)
+    assert client.post("/api/v1/remediation/supplier/exchange", json={"token": reissued["token"]}).status_code == 200
 
 
 def test_cross_tenant_token_fails_closed(client, admin_engine, tenant_b):
@@ -189,7 +221,7 @@ def test_cross_tenant_token_fails_closed(client, admin_engine, tenant_b):
 
     # The forged token resolves inside tenant B only; the record it points at
     # belongs to tenant A, so every access fails closed.
-    response = client.get(f"/api/v1/remediation/supplier/{forged_raw}")
+    response = _context(client, forged_raw)
     assert response.status_code == 404  # record unreachable across the tenant boundary
 
     exchange = client.post("/api/v1/remediation/supplier/exchange", json={"token": forged_raw})
@@ -242,9 +274,13 @@ def test_attestation_required(client):
     assert response.status_code == 422
 
 
-def test_rate_limit_trips(client):
-    bogus = "B" * 43
+def test_rate_limit_trips(client, monkeypatch):
+    """Re-install the real shared limiter (conftest stubs it) and trip it."""
+    import app.remediation.supplier_router as sup_mod
+    from shared.tenant_rate_limiting import consume_tenant_rate_limit
+
+    monkeypatch.setattr(sup_mod, "_consume_rate_limit", consume_tenant_rate_limit)
     last = None
     for _ in range(12):
-        last = client.get(f"/api/v1/remediation/supplier/{bogus}")
+        last = _context(client, "B" * 43)
     assert last.status_code == 429

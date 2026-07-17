@@ -209,7 +209,9 @@ async def create_link(
         expires_hours=request.expires_hours,
         superseded_token_id=revoked[0] if revoked else None,
     )
-    correction_url = f"https://regengine.co/remediate/{minted['token']}"
+    # Token rides in the URL FRAGMENT: browsers never send fragments to the
+    # server, so the raw token cannot land in access logs anywhere.
+    correction_url = f"https://regengine.co/api/v1/remediation/supplier/form#{minted['token']}"
 
     if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
         transition(
