@@ -22,7 +22,10 @@ from .audit_utils import audit_event
 
 TOKEN_TTL_HOURS_DEFAULT = 24
 SESSION_TTL_MINUTES = 30
-MAX_EXCHANGES = 10
+# Single-use at exchange: the emailed link can mint exactly one session.
+# If the 30-minute session lapses before submit, recovery is a buyer
+# reissue (POST /cases/{id}/link revokes live tokens and mints a fresh one).
+MAX_EXCHANGES = 1
 
 # Uniform anti-enumeration responses (same body for every failure mode).
 TOKEN_NOT_USABLE = HTTPException(status_code=400, detail="Remediation link is not usable")
@@ -200,9 +203,9 @@ def resolve_active_token(db, raw_token: str) -> Dict[str, Any]:
 
 
 def exchange_for_session(db, token_row: Dict[str, Any]) -> Dict[str, Any]:
-    """Explicit user action: rotate the case-scoped 30-minute session."""
+    """Explicit user action: mint the case-scoped 30-minute session (single-use)."""
     if token_row["exchange_count"] >= MAX_EXCHANGES:
-        _deny(db, token_row, "exchange_cap", TOKEN_NOT_USABLE)
+        _deny(db, token_row, "already_exchanged", TOKEN_NOT_USABLE)
     raw_session = secrets.token_urlsafe(32)
     session_expires = _now() + timedelta(minutes=SESSION_TTL_MINUTES)
     result = db.execute(

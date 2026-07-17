@@ -410,6 +410,7 @@ _COMPLIANCE_ROUTERS = {
     "canonical_records",
     "rules",
     "exceptions",
+    "remediation",
     "fda_export",
     "chain_verification",
 }

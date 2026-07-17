@@ -236,6 +236,7 @@ _COMPLIANCE_ROUTERS = {
     "canonical_records",
     "rules",
     "exceptions",
+    "remediation",
     "fda_export",
     "chain_verification",
 }
@@ -555,6 +556,14 @@ if _router_enabled("exceptions"):
     from app.exception_router import router as exception_queue_router
 
     app.include_router(exception_queue_router)
+
+# Supplier manifest remediation loop (compliance-critical)
+if _router_enabled("remediation"):
+    from app.remediation.router import router as remediation_router
+    from app.remediation.supplier_router import router as remediation_supplier_router
+
+    app.include_router(remediation_router)
+    app.include_router(remediation_supplier_router)
 
 # Request-Response Workflow (24-hour FDA response)
 if _router_enabled("request_workflow"):

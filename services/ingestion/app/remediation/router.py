@@ -61,6 +61,20 @@ async def upload_manifest(
     return result
 
 
+@router.get("/manifests", summary="List manifest submissions (buyer view)")
+async def list_manifests(
+    tenant_id: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    principal: IngestionPrincipal = Depends(require_permission("remediation.read")),
+    db_session=Depends(get_db_session),
+):
+    tid = resolve_tenant(tenant_id, principal)
+    db = _db(db_session)
+    tid = service._require_uuid_tenant(tid)
+    set_tenant_guc(db, tid)
+    return {"manifests": service.list_runs(db, tenant_id=tid, limit=limit)}
+
+
 @router.get("/manifests/{run_id}", summary="Manifest status with per-row results")
 async def get_manifest(
     run_id: str,
@@ -74,6 +88,7 @@ async def get_manifest(
     set_tenant_guc(db, tid)
     meta = service.get_run_meta(db, tenant_id=tid, run_id=run_id)
     records = service.list_run_records(db, tenant_id=tid, run_id=run_id)
+    cases = service.list_run_cases(db, tenant_id=tid, run_id=run_id)
     return {
         "ingestion_run_id": run_id,
         "source_sha256": meta["sha256"],
@@ -92,6 +107,7 @@ async def get_manifest(
                 "release_status": r["release_status"],
                 "released_event_id": r["released_event_id"],
                 "remediation_case_id": r["remediation_case_id"],
+                "case": cases.get(r["id"]),
                 "failures": r["rule_failures"],
                 "field_provenance": r["field_provenance"],
             }
@@ -209,7 +225,9 @@ async def create_link(
         expires_hours=request.expires_hours,
         superseded_token_id=revoked[0] if revoked else None,
     )
-    correction_url = f"https://regengine.co/remediate/{minted['token']}"
+    # Token rides in the URL FRAGMENT: browsers never send fragments to the
+    # server, so the raw token cannot land in access logs anywhere.
+    correction_url = f"https://regengine.co/api/v1/remediation/supplier/form#{minted['token']}"
 
     if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
         transition(

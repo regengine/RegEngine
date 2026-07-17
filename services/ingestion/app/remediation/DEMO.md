@@ -46,10 +46,15 @@ curl -sf -X POST "$BASE/api/v1/remediation/cases/$CASE/link" -H "$AUTH" \
 TOKEN=$(jq -r .token /tmp/link.json)
 curl -sf "$BASE/api/v1/remediation/outbox" -H "$AUTH" | jq '.notifications[0]'
 
-# 5. Supplier opens the link (GET does NOT consume the token) …
-curl -sf "$BASE/api/v1/remediation/supplier/$TOKEN" | jq .
+# 5. Supplier opens the link. In a browser that is the self-contained form
+#    page at $BASE/api/v1/remediation/supplier/form#<token> — the token
+#    rides in the URL FRAGMENT, which browsers never send to the server,
+#    so it cannot land in access logs. The API equivalent (non-consuming):
+curl -sf -X POST "$BASE/api/v1/remediation/supplier/context" \
+  -H 'Content-Type: application/json' -d "{\"token\": \"$TOKEN\"}" | jq .
 
-# 6. … explicitly starts a 30-minute correction session …
+# 6. … explicitly starts the SINGLE-USE 30-minute correction session
+#    (a second exchange fails; recovery = buyer reissues the link) …
 SESSION=$(curl -sf -X POST "$BASE/api/v1/remediation/supplier/exchange" \
   -H 'Content-Type: application/json' -d "{\"token\": \"$TOKEN\"}" | jq -r .session_token)
 
