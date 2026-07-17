@@ -129,18 +129,12 @@ def build_recall_where_clause(
 def fetch_recall_events(db_session, where_clause: str, params: dict) -> list:
     """Execute the recall-filtered query and return raw rows.
 
-    TODO(#2506): migrate to fsma.traceability_events. DEFERRED — this is the
-    COMPLIANCE-CRITICAL FDA-export reader (21 CFR 1.1455). It reads
-    legacy-only columns (``product_description``, ``location_gln``,
-    ``location_name``, ``source``) and the legacy key-value KDE table
-    (``fsma.cte_kdes``), and ``build_recall_where_clause`` filters on those
-    same legacy columns. On canonical these map to *different* fields
-    (``product_reference``, ``from/to_facility_reference``,
-    ``from/to_entity_reference``, ``source_system``, ``kdes`` JSONB), so a
-    repoint would silently change both the WHERE-clause filter contract and
-    the exported field content/order. Per the conservative directive we do
-    NOT guess FDA-export semantics; migrate only with golden-output
-    equivalence fixtures proving the §1.1455 spreadsheet is byte-identical.
+    Legacy-store reader, used when ``FDA_EXPORT_V1_READ_CANONICAL`` is off.
+    Its canonical twin (:func:`fetch_recall_events_canonical`, proven
+    byte-identical by tests/invariants/test_fda_export_v1_golden.py) is
+    live in production since 2026-07-17; this path remains as the flag-off
+    fallback until the default flips after the soak (WS-1, #1335 —
+    docs/persistence/dual-write-cutover.md).
     """
     rows = db_session.execute(
         text(f"""
