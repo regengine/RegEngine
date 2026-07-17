@@ -123,6 +123,31 @@ def ingest_manifest(
         },
     )
 
+    # Optional off-box mirror; the bytea row remains the authoritative copy.
+    try:
+        from ..s3_utils import RAW_INGEST_BUCKET, is_object_storage_configured, put_bytes
+
+        if is_object_storage_configured():
+            storage_url = put_bytes(
+                RAW_INGEST_BUCKET,
+                f"remediation/{tenant_id}/{run_id}/{filename}",
+                raw_bytes,
+                content_type or "text/csv",
+            )
+            db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text(
+                    """
+                    UPDATE fsma.manifest_blobs SET storage_url = :storage_url
+                    WHERE ingestion_run_id = CAST(:run_id AS uuid)
+                      AND tenant_id = CAST(:tenant_id AS uuid)
+                    """
+                ),
+                {"storage_url": storage_url, "run_id": run_id, "tenant_id": tenant_id},
+            )
+    except Exception as exc:  # pragma: no cover — mirror is best-effort
+        logger.warning("manifest_blob_mirror_failed run=%s error=%s", run_id, exc)
+
     seen_fingerprints: Dict[str, int] = {}
     records: List[Dict[str, Any]] = []
     passed = failed = 0
@@ -795,6 +820,90 @@ def list_run_records(db, *, tenant_id: str, run_id: str) -> List[Dict[str, Any]]
         {"tenant_id": tenant_id, "run_id": run_id},
     ).fetchall()
     return [load_record(db, tenant_id=tenant_id, record_id=str(r[0])) for r in rows]
+
+
+def list_runs(db, *, tenant_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Manifest submissions for the buyer view (FR-9), newest first."""
+    rows = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            SELECT b.ingestion_run_id, b.original_filename, b.sha256, r.status,
+                   r.record_count, r.started_at, r.completed_at,
+                   COALESCE(agg.passed_staged, 0), COALESCE(agg.blocked, 0),
+                   COALESCE(agg.released, 0)
+            FROM fsma.manifest_blobs b
+            JOIN fsma.ingestion_runs r
+              ON r.id = b.ingestion_run_id AND r.tenant_id = b.tenant_id
+            LEFT JOIN (
+                SELECT ingestion_run_id,
+                       COUNT(*) FILTER (WHERE validation_status = 'passed'
+                                          AND release_status = 'staged') AS passed_staged,
+                       COUNT(*) FILTER (WHERE validation_status = 'failed'
+                                          AND release_status = 'staged') AS blocked,
+                       COUNT(*) FILTER (WHERE release_status = 'released') AS released
+                FROM fsma.manifest_records
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
+                GROUP BY ingestion_run_id
+            ) agg ON agg.ingestion_run_id = b.ingestion_run_id
+            WHERE b.tenant_id = CAST(:tenant_id AS uuid)
+            ORDER BY b.created_at DESC
+            LIMIT :limit
+            """
+        ),
+        {"tenant_id": tenant_id, "limit": limit},
+    ).fetchall()
+    return [
+        {
+            "ingestion_run_id": str(r[0]),
+            "original_filename": r[1],
+            "source_sha256": r[2],
+            "run_status": r[3],
+            "total_rows": r[4],
+            "started_at": r[5].isoformat() if r[5] else None,
+            "completed_at": r[6].isoformat() if r[6] else None,
+            "ready_to_release": r[7],
+            "blocked": r[8],
+            "released": r[9],
+            # Display-only data hold (Product Principle 7): blocked rows are
+            # withheld from export/release; no fees, rejections, or threats.
+            "data_hold": r[8] > 0,
+        }
+        for r in rows
+    ]
+
+
+def list_run_cases(db, *, tenant_id: str, run_id: str) -> Dict[str, Dict[str, Any]]:
+    """Remediation-case status keyed by manifest_record_id, for the buyer view."""
+    rows = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            SELECT c.manifest_record_id, c.id, c.status, c.due_at,
+                   EXISTS (
+                       SELECT 1 FROM fsma.notification_outbox n
+                       WHERE n.tenant_id = c.tenant_id AND n.case_id = c.id
+                   ) AS notified
+            FROM fsma.remediation_cases c
+            WHERE c.tenant_id = CAST(:tenant_id AS uuid)
+              AND c.manifest_record_id IN (
+                  SELECT id FROM fsma.manifest_records
+                  WHERE tenant_id = CAST(:tenant_id AS uuid)
+                    AND ingestion_run_id = CAST(:run_id AS uuid)
+              )
+            """
+        ),
+        {"tenant_id": tenant_id, "run_id": run_id},
+    ).fetchall()
+    return {
+        str(r[0]): {
+            "case_id": str(r[1]),
+            "case_status": r[2],
+            "due_at": r[3].isoformat() if r[3] else None,
+            "notified": bool(r[4]),
+        }
+        for r in rows
+    }
 
 
 def compute_metrics(db, *, tenant_id: str) -> Dict[str, Any]:

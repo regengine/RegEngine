@@ -165,3 +165,28 @@ def test_short_tlc_blocked_with_reason(client):
     record = response.json()["records"][0]
     assert record["blocking"]
     assert any(f["rule_id"] == "svc.invalid_tlc" for f in record["failures"])
+
+
+def test_manifest_list_and_case_enrichment(client):
+    """FR-9 buyer view: list w/ data-hold indicator; per-record case status."""
+    body = upload_fixture(client, "05_missing_tlc_source.csv").json()
+    run_id = body["ingestion_run_id"]
+
+    listing = client.get("/api/v1/remediation/manifests").json()["manifests"]
+    entry = next(m for m in listing if m["ingestion_run_id"] == run_id)
+    assert entry["blocked"] == 1
+    assert entry["ready_to_release"] == 2
+    assert entry["data_hold"] is True
+    assert entry["original_filename"] == "05_missing_tlc_source.csv"
+
+    detail = client.get(f"/api/v1/remediation/manifests/{run_id}").json()
+    blocked = next(r for r in detail["records"] if r["validation_status"] == "failed")
+    assert blocked["case"]["case_status"] == "supplier_action_required"
+    assert blocked["case"]["due_at"]
+    assert blocked["case"]["notified"] is False
+
+    client.post(f"/api/v1/remediation/cases/{blocked['remediation_case_id']}/link", json={})
+    detail2 = client.get(f"/api/v1/remediation/manifests/{run_id}").json()
+    blocked2 = next(r for r in detail2["records"] if r["validation_status"] == "failed")
+    assert blocked2["case"]["case_status"] == "awaiting_supplier"
+    assert blocked2["case"]["notified"] is True
