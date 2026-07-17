@@ -748,6 +748,20 @@ jobs:
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: In-process security & FSMA-204 contract suites (#2503)
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Formerly live-HTTP suites that silently skipped on ConnectError
+          # because no CI job booted the services (#2503). Rewritten to run
+          # in-process against the consolidated monolith via TestClient.
+          # Needs the Redis service (job env REDIS_URL) for the job-status
+          # tenant-scoping tests; no Postgres — every assertion resolves
+          # before DB access. An unreachable Redis FAILS these tests.
+          pytest tests/security/test_security_audit_fixes.py \
+            tests/data_integrity/test_fsma_204_verification_phase2b.py \
+            -v --no-cov -o "testpaths=tests"
+
       - name: RLS coverage + tenant-isolation e2e (alembic head)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
