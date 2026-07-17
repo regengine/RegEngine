@@ -46,8 +46,17 @@ def _connectable(dsn: str) -> bool:
         return False
 
 
+_DB_AVAILABLE = _connectable(SUPERUSER_DSN)
+
+# In CI the DB is provisioned by the workflow; an unreachable DB must FAIL
+# the gate, never turn it green by skipping (#2530).
+if not _DB_AVAILABLE and os.environ.get("REGENGINE_REQUIRE_DB") == "1":
+    raise RuntimeError(
+        f"REGENGINE_REQUIRE_DB=1 but the remediation Postgres is unreachable at {SUPERUSER_DSN!r} — refusing to skip."
+    )
+
 requires_db = pytest.mark.skipif(
-    not _connectable(SUPERUSER_DSN),
+    not _DB_AVAILABLE,
     reason="remediation scratch Postgres not available",
 )
 
