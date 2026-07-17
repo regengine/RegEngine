@@ -348,6 +348,7 @@ _VALID_ROUTER_NAMES = {
     "canonical_records",
     "rules",
     "exceptions",
+    "remediation",
     "request_workflow",
     "identity",
     "auditor",
@@ -693,6 +694,15 @@ if _router_enabled("exceptions"):
     from services.ingestion.app.exception_router import router as exception_queue_router
 
     app.include_router(exception_queue_router)
+
+if _router_enabled("remediation"):
+    from services.ingestion.app.remediation.router import router as remediation_router
+    from services.ingestion.app.remediation.supplier_router import (
+        router as remediation_supplier_router,
+    )
+
+    app.include_router(remediation_router)
+    app.include_router(remediation_supplier_router)
 
 if _router_enabled("request_workflow"):
     from services.ingestion.app.request_workflow_router import router as request_workflow_router
