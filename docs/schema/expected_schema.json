@@ -571,6 +571,90 @@
       }
     }
   },
+  "fsma.correction_patches": {
+    "columns": {
+      "actor_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "actor_role": {
+        "nullable": false,
+        "type": "text"
+      },
+      "attestation_text": {
+        "nullable": false,
+        "type": "text"
+      },
+      "attested_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "auth_method": {
+        "nullable": false,
+        "type": "text"
+      },
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "correcting_org": {
+        "nullable": false,
+        "type": "text"
+      },
+      "correction_reason": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evidence_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "field_path": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "manifest_record_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "patch_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "patch_seq": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "prev_patch_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "previous_value": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "proposed_value": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "validation_issue_id": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
   "fsma.critical_tracking_events": {
     "columns": {
       "bol_number": {
@@ -1823,6 +1907,162 @@
       }
     }
   },
+  "fsma.manifest_blobs": {
+    "columns": {
+      "content_type": {
+        "nullable": true,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "ingestion_run_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "original_filename": {
+        "nullable": false,
+        "type": "text"
+      },
+      "raw_bytes": {
+        "nullable": false,
+        "type": "bytea"
+      },
+      "sha256": {
+        "nullable": false,
+        "type": "text"
+      },
+      "storage_url": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "uploaded_by": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.manifest_records": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "field_provenance": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "ingestion_run_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "last_validated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "normalized_payload": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "raw_row": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "release_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "released_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "remediation_case_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "row_fingerprint": {
+        "nullable": false,
+        "type": "text"
+      },
+      "row_number": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "rule_failures": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "ruleset_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "validation_status": {
+        "nullable": false,
+        "type": "text"
+      }
+    }
+  },
+  "fsma.notification_outbox": {
+    "columns": {
+      "body": {
+        "nullable": false,
+        "type": "text"
+      },
+      "case_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "channel": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "recipient": {
+        "nullable": true,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "subject": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
   "fsma.organizations": {
     "columns": {
       "address": {
@@ -1968,6 +2208,126 @@
       "tenant_id": {
         "nullable": false,
         "type": "uuid"
+      }
+    }
+  },
+  "fsma.remediation_cases": {
+    "columns": {
+      "allowed_fields": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "due_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "exception_case_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "last_revalidation": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "line_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "manifest_record_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "manifest_ref": {
+        "nullable": true,
+        "type": "text"
+      },
+      "released_event_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "supplier_org": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "validation_issue_ids": {
+        "nullable": false,
+        "type": "jsonb"
+      }
+    }
+  },
+  "fsma.remediation_tokens": {
+    "columns": {
+      "case_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "created_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "exchange_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "expires_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "revoked_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "session_expires_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "session_token_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "superseded_by": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "supplier_email": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "token_hash": {
+        "nullable": false,
+        "type": "text"
       }
     }
   },
