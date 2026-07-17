@@ -278,6 +278,38 @@ def _patch_append_only() -> None:
         END $$;
         """
     )
+    # Row-level triggers do not fire on TRUNCATE, and REVOKE FROM PUBLIC is a
+    # no-op for roles holding direct grants — a statement-level trigger closes
+    # the TRUNCATE bypass. Separate function: statement triggers cannot touch
+    # NEW/OLD, which prevent_patch_mutation's break-glass branch does.
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION fsma.prevent_patch_truncate()
+        RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('fsma.allow_mutation', true) = 'true' THEN
+                RAISE WARNING 'correction_patches TRUNCATE via break-glass. user=%', current_user;
+                RETURN NULL;
+            END IF;
+            RAISE EXCEPTION
+                'correction_patches is append-only. TRUNCATE rejected. Set fsma.allow_mutation=true for authorized break-glass.'
+                USING ERRCODE = 'check_violation';
+        END;
+        $$;
+
+        DO $$
+        BEGIN
+            IF to_regclass('fsma.correction_patches') IS NULL THEN
+                RETURN;
+            END IF;
+            DROP TRIGGER IF EXISTS correction_patches_no_truncate
+                ON fsma.correction_patches;
+            CREATE TRIGGER correction_patches_no_truncate
+                BEFORE TRUNCATE ON fsma.correction_patches
+                FOR EACH STATEMENT EXECUTE FUNCTION fsma.prevent_patch_truncate();
+        END $$;
+        """
+    )
 
 
 def _token_lookup() -> None:
@@ -324,6 +356,21 @@ def _token_lookup() -> None:
             AS $fn$
             BEGIN
                 PERFORM set_config('app.remediation_token_hash', p_hash, true);
+                -- The bootstrap SELECT runs before any tenant context
+                -- exists. Pin app.tenant_id to the nil UUID so the
+                -- tenant-isolation policy's get_tenant_context() never
+                -- evaluates against an UNSET GUC (whose behavior differs
+                -- between environments); the nil tenant matches no rows,
+                -- so only the hash-keyed lookup policy admits the row.
+                -- Fail-closed: until the app overwrites the GUC with the
+                -- token row's real tenant, every other table is invisible.
+                IF NULLIF(current_setting('app.tenant_id', true), '') IS NULL THEN
+                    PERFORM set_config(
+                        'app.tenant_id',
+                        '00000000-0000-0000-0000-000000000000',
+                        true
+                    );
+                END IF;
 
                 RETURN QUERY
                 SELECT
@@ -377,6 +424,7 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS fsma.get_remediation_token_by_session_hash(TEXT)")
     op.execute("DROP TABLE IF EXISTS fsma.notification_outbox")
     op.execute("DROP TABLE IF EXISTS fsma.correction_patches")
+    op.execute("DROP FUNCTION IF EXISTS fsma.prevent_patch_truncate()")
     op.execute("DROP FUNCTION IF EXISTS fsma.prevent_patch_mutation()")
     op.execute("DROP TABLE IF EXISTS fsma.remediation_tokens")
     op.execute("DROP TABLE IF EXISTS fsma.remediation_cases")

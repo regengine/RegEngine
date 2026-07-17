@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +25,7 @@ from shared.exception_queue import ExceptionQueueService
 from shared.tenant_context import set_tenant_guc
 from sqlalchemy import text
 
-from ..csv_templates import _parse_date_flexible
+from ..csv_templates import _normalize_uom, _parse_date_flexible
 from . import validation as v
 from .audit_utils import audit_event
 from .state import transition
@@ -445,21 +446,39 @@ def load_record(db, *, tenant_id: str, record_id: str) -> Dict[str, Any]:
 
 
 def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
-    """Re-run validation for one record only (FR-8)."""
+    """Re-run validation for one record only (FR-8).
+
+    Every intake check re-runs here — corrections must not be able to
+    launder a failure class that only fired at intake. Deterministic
+    coercions applied to corrected values are recorded back into
+    field_provenance so it never disagrees with the released payload.
+    """
     event = record["normalized_payload"]
+    provenance = dict(record.get("field_provenance") or {})
     service_failures: List[Dict[str, Any]] = []
+
+    def _coerced(field_path: str, value: Any, rule: str) -> None:
+        entry = provenance.get(field_path)
+        entry = {**entry} if isinstance(entry, dict) else {"source": "auto_normalization"}
+        entry["value"] = value
+        entry["rule"] = rule
+        provenance[field_path] = entry
 
     quantity = event.get("quantity")
     if isinstance(quantity, str):
         try:
-            event["quantity"] = float(quantity)
-        except ValueError:
+            parsed = float(quantity)
+            if not math.isfinite(parsed):
+                raise ValueError("non-finite quantity")
+            event["quantity"] = parsed
+            _coerced("quantity", parsed, "quantity_cast")
+        except (TypeError, ValueError):
             service_failures.append(
                 v._service_failure(
                     "invalid_quantity",
                     field="quantity",
                     source_column=None,
-                    why=f"Quantity '{quantity}' is not a number.",
+                    why=f"Quantity '{quantity}' is not a finite number.",
                     remediation="Provide a positive numeric quantity.",
                 )
             )
@@ -474,6 +493,30 @@ def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str
             )
         )
 
+    uom = event.get("unit_of_measure")
+    if isinstance(uom, str) and uom:
+        normalized_uom = _normalize_uom(uom)
+        if normalized_uom != uom:
+            event["unit_of_measure"] = normalized_uom
+            _coerced("unit_of_measure", normalized_uom, "uom_alias")
+
+    timestamp = event.get("timestamp")
+    if isinstance(timestamp, str) and timestamp.strip():
+        iso_ts, warning = _parse_date_flexible(timestamp)
+        if warning is not None:
+            service_failures.append(
+                v._service_failure(
+                    "invalid_date",
+                    field="timestamp",
+                    source_column=None,
+                    why=f"Date '{timestamp}' could not be parsed: {warning}.",
+                    remediation="Provide the date as YYYY-MM-DD.",
+                )
+            )
+        elif iso_ts != timestamp:
+            event["timestamp"] = iso_ts
+            _coerced("timestamp", iso_ts, "date_format")
+
     for key, value in list((event.get("kdes") or {}).items()):
         if key.endswith("date") and isinstance(value, str) and value.strip():
             iso_ts, warning = _parse_date_flexible(value)
@@ -487,8 +530,81 @@ def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str
                         remediation="Provide the date as YYYY-MM-DD.",
                     )
                 )
-            else:
+            elif iso_ts != value:
                 event["kdes"][key] = iso_ts
+                _coerced(f"kdes.{key}", iso_ts, "date_format")
+
+    tlc = event.get("traceability_lot_code")
+    if isinstance(tlc, str) and 0 < len(tlc) < 3:
+        service_failures.append(
+            v._service_failure(
+                "invalid_tlc",
+                field="traceability_lot_code",
+                source_column=None,
+                why=f"Traceability lot code '{tlc}' is too short (minimum 3 characters).",
+                remediation="Provide the full traceability lot code (at least 3 characters).",
+            )
+        )
+
+    # Duplicate findings can never be corrected away: corrections do not
+    # touch raw_row, so the fingerprint is unchanged by design.
+    dup_row = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            SELECT row_number FROM fsma.manifest_records
+            WHERE tenant_id = CAST(:tenant_id AS uuid)
+              AND ingestion_run_id = CAST(:run_id AS uuid)
+              AND row_fingerprint = :fingerprint
+              AND row_number < :row_number
+            ORDER BY row_number LIMIT 1
+            """
+        ),
+        {
+            "tenant_id": tenant_id,
+            "run_id": record["ingestion_run_id"],
+            "fingerprint": record["row_fingerprint"],
+            "row_number": record["row_number"],
+        },
+    ).fetchone()
+    if dup_row:
+        service_failures.append(
+            v._service_failure(
+                "duplicate_row",
+                field="row",
+                source_column=None,
+                why=f"Row {record['row_number']} is byte-identical to row {dup_row[0]} in this manifest.",
+                remediation="Remove the duplicate row or correct it to a distinct shipment line.",
+            )
+        )
+    dup_released = db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            SELECT 1 FROM fsma.manifest_records
+            WHERE tenant_id = CAST(:tenant_id AS uuid)
+              AND row_fingerprint = :fingerprint
+              AND release_status = 'released'
+              AND id != CAST(:record_id AS uuid)
+            LIMIT 1
+            """
+        ),
+        {
+            "tenant_id": tenant_id,
+            "fingerprint": record["row_fingerprint"],
+            "record_id": record["id"],
+        },
+    ).fetchone()
+    if dup_released:
+        service_failures.append(
+            v._service_failure(
+                "duplicate_event",
+                field="row",
+                source_column=None,
+                why="This row matches a record already released in a previous manifest.",
+                remediation="Do not resubmit already-released records.",
+            )
+        )
 
     alias_failures, _applied = v.check_product_alias(db, tenant_id, event)
     service_failures.extend(alias_failures)
@@ -496,12 +612,14 @@ def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str
     kde_errors, summary = v.validate_event(event)
     failures, warnings, blocking = v.snapshot_failures(kde_errors, summary, service_failures)
 
+    record["field_provenance"] = provenance
     db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
             """
             UPDATE fsma.manifest_records
             SET normalized_payload = CAST(:event AS jsonb),
+                field_provenance = CAST(:provenance AS jsonb),
                 rule_failures = CAST(:failures AS jsonb),
                 validation_status = :validation_status,
                 ruleset_hash = :ruleset_hash,
@@ -513,6 +631,7 @@ def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str
         ),
         {
             "event": json.dumps(event),
+            "provenance": json.dumps(provenance),
             "failures": json.dumps(failures),
             "validation_status": "failed" if blocking else "passed",
             "ruleset_hash": v.RULESET_HASH,
@@ -536,19 +655,17 @@ def revalidate_record(db, *, tenant_id: str, record: Dict[str, Any]) -> Dict[str
     return {"blocking": blocking, "failures": failures, "warnings": warnings, "event": event}
 
 
-def release_record(db, *, tenant_id: str, record: Dict[str, Any], source_meta: Dict[str, Any]) -> str:
-    """Append one validated record to the canonical store and mark it released."""
-    event = record["normalized_payload"]
-    cte_type = event.get("cte_type", "")
-    kdes = event.get("kdes") or {}
-    event_timestamp = event.get("timestamp") or kdes.get(_CTE_DATE_KDE.get(cte_type, ""), None)
-    if not event_timestamp:
-        raise HTTPException(status_code=409, detail="Record has no event timestamp; cannot release")
-
-    normalization_rules = sorted(
-        {p["rule"] for p in (record["field_provenance"] or {}).values() if isinstance(p, dict) and p.get("rule")}
-    )
-    te = TraceabilityEvent(
+def _build_traceability_event(
+    tenant_id: str,
+    record: Dict[str, Any],
+    event: Dict[str, Any],
+    cte_type: str,
+    kdes: Dict[str, Any],
+    event_timestamp: Any,
+    source_meta: Dict[str, Any],
+    normalization_rules: List[str],
+) -> TraceabilityEvent:
+    return TraceabilityEvent(
         tenant_id=tenant_id,
         source_system=IngestionSource.CSV_UPLOAD,
         source_record_id=str(record["row_number"]),
@@ -575,6 +692,34 @@ def release_record(db, *, tenant_id: str, record: Dict[str, Any], source_meta: D
             original_format="csv",
         ),
     )
+
+
+def release_record(db, *, tenant_id: str, record: Dict[str, Any], source_meta: Dict[str, Any]) -> str:
+    """Append one validated record to the canonical store and mark it released."""
+    event = record["normalized_payload"]
+    cte_type = event.get("cte_type", "")
+    kdes = event.get("kdes") or {}
+    event_timestamp = event.get("timestamp") or kdes.get(_CTE_DATE_KDE.get(cte_type, ""), None)
+    if not event_timestamp:
+        raise HTTPException(status_code=409, detail="Record has no event timestamp; cannot release")
+
+    normalization_rules = sorted(
+        {p["rule"] for p in (record["field_provenance"] or {}).values() if isinstance(p, dict) and p.get("rule")}
+    )
+    from pydantic import ValidationError
+
+    try:
+        te = _build_traceability_event(
+            tenant_id, record, event, cte_type, kdes, event_timestamp, source_meta, normalization_rules
+        )
+    except ValidationError as exc:
+        # Validation and the canonical model should agree; if they ever
+        # drift, fail closed with an intelligible 409 instead of a 500
+        # that rolls back the supplier's patch mid-request.
+        raise HTTPException(
+            status_code=409,
+            detail=f"Record failed canonical validation and stays blocked: {str(exc)[:400]}",
+        )
     store = CanonicalEventStore(db)
     result = store.persist_event(te)
     if not result.success:
@@ -743,6 +888,9 @@ def compute_metrics(db, *, tenant_id: str) -> Dict[str, Any]:
         "resolved_without_buyer_intervention": supplier_resolved,
         "resolved_without_buyer_intervention_rate": (supplier_resolved / cases_total) if cases_total else None,
         "median_remediation_seconds": float(median_seconds) if median_seconds is not None else None,
+        # Not yet instrumented — zero is the PRD-sanctioned initial value,
+        # but consumers must not read these as measured.
         "false_blocks": 0,
         "mapping_reversals": 0,
+        "not_yet_instrumented": ["false_blocks", "mapping_reversals"],
     }

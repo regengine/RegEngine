@@ -43,18 +43,22 @@ def audit_event(
     try:
         from services.admin.app.audit import AuditLogger
 
-        AuditLogger.log_event(
-            db,
-            tenant_id=tenant_id,
-            event_type=event_type,
-            action=action,
-            event_category=EVENT_CATEGORY,
-            severity=severity,
-            actor_id=actor_uuid,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            metadata=metadata or {},
-        )
+        # Savepoint so a failed audit INSERT cannot poison the caller's
+        # transaction (AuditLogger swallows its own error but the aborted
+        # DB transaction would otherwise kill every later statement).
+        with db.begin_nested():
+            AuditLogger.log_event(
+                db,
+                tenant_id=tenant_id,
+                event_type=event_type,
+                action=action,
+                event_category=EVENT_CATEGORY,
+                severity=severity,
+                actor_id=actor_uuid,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                metadata=metadata or {},
+            )
     except Exception as exc:  # pragma: no cover — degraded path
         logger.warning(
             "remediation_audit_degraded event_type=%s tenant=%s error=%s",

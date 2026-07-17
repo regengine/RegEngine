@@ -162,6 +162,13 @@ def _now() -> datetime:
 def _deny(db, token_row: Optional[Dict[str, Any]], reason: str, exc: HTTPException) -> None:
     """Uniform external response; the real reason lands in the audit log."""
     if token_row:
+        # The deny fires before any tenant context exists; without the GUC
+        # the RLS-guarded audit INSERT would silently fail and the denial
+        # would never be recorded.
+        try:
+            set_tenant_guc(db, token_row["tenant_id"])
+        except Exception:  # pragma: no cover — audit stays best-effort
+            pass
         audit_event(
             db,
             tenant_id=token_row["tenant_id"],

@@ -96,22 +96,27 @@ def _mirror_exception(db, *, tenant_id: str, case_id: str, to_status: str) -> No
     if not mirrored:
         return
     try:
-        db.execute(
-            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-            text(
-                """
-                UPDATE fsma.exception_cases
-                SET status = :mirrored, updated_at = now()
-                WHERE tenant_id = CAST(:tenant_id AS uuid)
-                  AND case_id = (
-                      SELECT exception_case_id FROM fsma.remediation_cases
-                      WHERE id = CAST(:case_id AS uuid)
-                        AND tenant_id = CAST(:tenant_id AS uuid)
-                  )
-                  AND status NOT IN ('resolved', 'waived')
-                """
-            ),
-            {"mirrored": mirrored, "tenant_id": tenant_id, "case_id": case_id},
-        )
+        with db.begin_nested():
+            _mirror_update(db, mirrored=mirrored, tenant_id=tenant_id, case_id=case_id)
     except Exception as exc:  # pragma: no cover — mirror is best-effort
         logger.warning("exception_mirror_failed case=%s error=%s", case_id, exc)
+
+
+def _mirror_update(db, *, mirrored: str, tenant_id: str, case_id: str) -> None:
+    db.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            UPDATE fsma.exception_cases
+            SET status = :mirrored, updated_at = now()
+            WHERE tenant_id = CAST(:tenant_id AS uuid)
+              AND case_id = (
+                  SELECT exception_case_id FROM fsma.remediation_cases
+                  WHERE id = CAST(:case_id AS uuid)
+                    AND tenant_id = CAST(:tenant_id AS uuid)
+              )
+              AND status NOT IN ('resolved', 'waived')
+            """
+        ),
+        {"mirrored": mirrored, "tenant_id": tenant_id, "case_id": case_id},
+    )

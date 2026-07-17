@@ -167,6 +167,15 @@ async def create_link(
     set_tenant_guc(db, tid)
     case = _load_case(db, tid, case_id)
 
+    if not case["allowed_fields"]:
+        # Nothing a supplier could legitimately correct (e.g. a pure
+        # duplicate row). Issuing a link would invite junk corrections;
+        # this case is buyer work (reject the row or escalate).
+        raise HTTPException(
+            status_code=409,
+            detail="Case has no supplier-correctable fields; resolve it via buyer review instead of a correction link",
+        )
+
     allowed = case["allowed_fields"]
     if request.authorized_fields:
         allowed = [f for f in allowed if f["field_path"] in set(request.authorized_fields)]
@@ -235,7 +244,14 @@ async def create_link(
             f"{case['line_ref']} needs a correction. Open the secure link to fix it. "
             f"Link expires {minted['expires_at'].isoformat()}."
         ),
-        payload={"correction_url": correction_url, "case_id": case_id},
+        # Hash-at-rest invariant: the raw token (inside correction_url) is
+        # returned exactly once in the API response and never persisted —
+        # the outbox row stores only a masked link + the token row id.
+        payload={
+            "correction_url_masked": "https://regengine.co/remediate/•••",
+            "token_id": minted["token_id"],
+            "case_id": case_id,
+        },
     )
 
     return CreateLinkResponse(

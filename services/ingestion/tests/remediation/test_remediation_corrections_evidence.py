@@ -264,3 +264,98 @@ def test_metrics_track_supplier_resolution(client):
     assert metrics["supplier_corrections_submitted"] >= 1
     assert metrics["resolved_without_buyer_intervention"] >= 1
     assert metrics["resolved_without_buyer_intervention_rate"] > 0
+
+
+def _inline_upload(client, rows: list[str], name: str = "inline.csv"):
+    payload = ("\n".join(rows) + "\n").encode()
+    return client.post(
+        "/api/v1/remediation/manifests",
+        files={"file": (name, io.BytesIO(payload), "text/csv")},
+        data={"supplier_org": "Valley Farms LLC"},
+    )
+
+
+_HDR = "cte_type,tlc,product,quantity,uom,receive_date,receiving_location,previous_source,tlc_source,reference_document"
+
+
+def test_duplicate_case_cannot_get_correction_link(client):
+    """A pure-duplicate row has nothing a supplier can correct: no link."""
+    body = upload_fixture(client, "08_duplicate_rows.csv").json()
+    blocked = next(r for r in body["records"] if r["blocking"])
+    response = client.post(
+        f"/api/v1/remediation/cases/{blocked['remediation_case_id']}/link",
+        json={},
+    )
+    assert response.status_code == 409
+    assert "no supplier-correctable fields" in response.json()["detail"]
+
+
+def test_duplicate_with_real_failure_not_laundered(client, admin_engine):
+    """Fixing the correctable field must NOT clear the duplicate finding."""
+    row = "receiving,VF-DUP-77,Romaine Hearts 24ct,50,cases,2026-07-13,Fresh Distributors DC 4,Valley Farms LLC,,BOL-DUP-77"
+    body = _inline_upload(client, [_HDR, row, row]).json()
+    assert body["failed"] == 2
+    row2 = next(r for r in body["records"] if r["row_number"] == 2)
+    assert any(f["rule_id"] == "svc.duplicate_row" for f in row2["failures"])
+
+    link = client.post(f"/api/v1/remediation/cases/{row2['remediation_case_id']}/link", json={}).json()
+    session = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]}).json()
+    response = _submit(
+        client,
+        {"Authorization": f"Bearer {session['session_token']}"},
+        {"kdes.tlc_source_reference": "Valley Farms Packinghouse"},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["status"] == "still_blocked"
+    assert any(f["rule_id"] == "svc.duplicate_row" for f in result["failures"])
+    with admin_engine.connect() as conn:
+        released = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM fsma.manifest_records WHERE remediation_case_id = "
+                "CAST(:c AS uuid) AND release_status = 'released'"
+            ),
+            {"c": row2["remediation_case_id"]},
+        ).scalar()
+    assert released == 0
+
+
+def test_corrected_timestamp_revalidated_not_500(client, admin_engine):
+    """A still-invalid corrected date stays blocked with a reason, never 500s."""
+    hdr = _HDR + ",date"
+    row = "receiving,VF-TS-01,Romaine Hearts 24ct,50,cases,2026-07-13,Fresh Distributors DC 4,Valley Farms LLC,Valley Farms Packinghouse,BOL-TS-01,not-a-real-date"
+    body = _inline_upload(client, [hdr, row]).json()
+    blocked = body["records"][0]
+    assert blocked["blocking"], blocked
+    assert any(f["issue_id"] == "svc:invalid_date:timestamp" for f in blocked["failures"])
+    case_id = blocked["remediation_case_id"]
+
+    link = client.post(f"/api/v1/remediation/cases/{case_id}/link", json={}).json()
+    session = client.post("/api/v1/remediation/supplier/exchange", json={"token": link["token"]}).json()
+    headers = {"Authorization": f"Bearer {session['session_token']}"}
+    still_bad = _submit(client, headers, {"timestamp": "also-not-a-date"})
+    assert still_bad.status_code == 200, still_bad.text
+    assert still_bad.json()["status"] == "still_blocked"
+    assert any("could not be parsed" in (f.get("why_failed") or "") for f in still_bad.json()["failures"])
+
+    # Buyer reissues after buyer_review; a valid date then releases.
+    link2 = client.post(f"/api/v1/remediation/cases/{case_id}/link", json={}).json()
+    session2 = client.post("/api/v1/remediation/supplier/exchange", json={"token": link2["token"]}).json()
+    good = _submit(
+        client,
+        {"Authorization": f"Bearer {session2['session_token']}"},
+        {"timestamp": "2026-07-13"},
+    )
+    assert good.status_code == 200, good.text
+    assert good.json()["status"] == "released"
+
+
+def test_outbox_never_stores_raw_token(client):
+    body = upload_fixture(client, "05_missing_tlc_source.csv").json()
+    blocked = next(r for r in body["records"] if r["blocking"])
+    link = client.post(
+        f"/api/v1/remediation/cases/{blocked['remediation_case_id']}/link",
+        json={"supplier_email": "logistics@valleyfarms.example"},
+    ).json()
+    outbox = client.get("/api/v1/remediation/outbox").json()
+    assert link["token"] not in json.dumps(outbox)

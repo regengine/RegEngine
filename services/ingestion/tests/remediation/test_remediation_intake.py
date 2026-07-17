@@ -129,3 +129,39 @@ def test_exception_case_created_and_visible(client):
     detail = client.get(f"/api/v1/remediation/manifests/{run_id}").json()
     blocked = next(r for r in detail["records"] if r["validation_status"] == "failed")
     assert blocked["remediation_case_id"]
+
+
+def test_missing_dates_never_synthesized():
+    """AC-5: absent factual data stays absent — no default timestamps."""
+    from app.remediation.validation import build_event_from_row
+
+    event, provenance, failures = build_event_from_row(
+        {
+            "cte_type": "receiving",
+            "tlc": "VF-NO-DATE-1",
+            "product": "Romaine Hearts 24ct",
+            "quantity": "10",
+            "uom": "cases",
+        }
+    )
+    assert "timestamp" not in event
+    assert "receive_date" not in event.get("kdes", {})
+    assert not any(p.get("source") != "csv" and "date" in k for k, p in provenance.items())
+
+
+def test_short_tlc_blocked_with_reason(client):
+    import io as _io
+
+    rows = (
+        "cte_type,tlc,product,quantity,uom,receive_date,receiving_location,previous_source,tlc_source,reference_document\n"
+        "receiving,AB,Romaine Hearts 24ct,10,cases,2026-07-13,Fresh Distributors DC 4,Valley Farms LLC,Valley Farms Packinghouse,BOL-STLC-1\n"
+    ).encode()
+    response = client.post(
+        "/api/v1/remediation/manifests",
+        files={"file": ("short_tlc.csv", _io.BytesIO(rows), "text/csv")},
+        data={"supplier_org": "Valley Farms LLC"},
+    )
+    assert response.status_code == 200, response.text
+    record = response.json()["records"][0]
+    assert record["blocking"]
+    assert any(f["rule_id"] == "svc.invalid_tlc" for f in record["failures"])

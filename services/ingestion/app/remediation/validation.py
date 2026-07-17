@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,7 @@ from ..sandbox.csv_parser import (
     _CSV_COLUMN_MAP,
     _CTE_TYPE_ALIASES,
     _KDE_FIELD_ALIASES,
+    _KDE_FIELDS,
     _normalize_for_rules,
 )
 from ..sandbox.evaluators import _evaluate_event_stateless
@@ -105,13 +107,15 @@ def build_event_from_row(
             if mapped == "quantity":
                 try:
                     value = float(stripped)
+                    if not math.isfinite(value):
+                        raise ValueError("non-finite quantity")
                 except (TypeError, ValueError):
                     service_failures.append(
                         _service_failure(
                             "invalid_quantity",
                             field="quantity",
                             source_column=col,
-                            why=f"Quantity '{stripped}' is not a number.",
+                            why=f"Quantity '{stripped}' is not a finite number.",
                             remediation="Provide a positive numeric quantity.",
                         )
                     )
@@ -150,6 +154,20 @@ def build_event_from_row(
                 source_column="quantity",
                 why=f"Quantity {event['quantity']} must be greater than zero.",
                 remediation="Provide a positive numeric quantity.",
+            )
+        )
+
+    tlc = event.get("traceability_lot_code")
+    if isinstance(tlc, str) and 0 < len(tlc) < 3:
+        # The canonical model requires >= 3 chars; catch it here so it blocks
+        # with an intelligible reason instead of crashing at release time.
+        service_failures.append(
+            _service_failure(
+                "invalid_tlc",
+                field="traceability_lot_code",
+                source_column=None,
+                why=f"Traceability lot code '{tlc}' is too short (minimum 3 characters).",
+                remediation="Provide the full traceability lot code (at least 3 characters).",
             )
         )
 
@@ -297,7 +315,9 @@ def snapshot_failures(
         )
 
     for rule in summary.results:
-        if rule.result == "fail" and rule.severity == "critical":
+        if rule.result == "error" or (rule.result == "fail" and rule.severity == "critical"):
+            # 'error' is treated as FAIL regardless of severity (#1354 —
+            # skipping would be fail-open, unsafe for a regulatory stamp).
             failures.append(_rule_failure(rule, result="fail"))
         elif rule.result in ("fail", "warn"):
             warnings.append(f"[{rule.rule_title}] {rule.why_failed or ''}".strip())
@@ -361,16 +381,28 @@ _RULE_FIELD_TO_EVENT_PATH = {
 
 
 def correctable_fields(failures: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Derive the default supplier-correctable field list from failures."""
+    """Derive the default supplier-correctable field list from failures.
+
+    Only real event fields become correctable: top-level canonical fields,
+    explicit ``kdes.*`` paths, or known KDE names. Anything else (row-level
+    findings like duplicates, unmapped rules-engine internals) is skipped —
+    a fabricated path would let a junk value launder an uncorrectable
+    failure through revalidation.
+    """
     out: List[Dict[str, Any]] = []
     seen: set = set()
     for f in failures:
         field = f.get("field")
-        if field in _RULE_FIELD_TO_EVENT_PATH:
-            field = _RULE_FIELD_TO_EVENT_PATH[field]
-        if field and field.startswith("kdes.") is False and field not in _TOP_LEVEL_FIELDS and "." not in field:
+        if not isinstance(field, str) or not field:
+            continue
+        field = _RULE_FIELD_TO_EVENT_PATH.get(field, field)
+        if field in _TOP_LEVEL_FIELDS or field.startswith("kdes."):
+            pass
+        elif field in _KDE_FIELDS:
             field = f"kdes.{field}"
-        if not field or field in seen:
+        else:
+            continue
+        if field in seen:
             continue
         seen.add(field)
         out.append(

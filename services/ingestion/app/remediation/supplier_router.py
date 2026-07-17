@@ -41,7 +41,11 @@ _BUCKETS: Dict[str, List[float]] = defaultdict(list)
 
 def _rate_limit(request: Request, bucket: str, limit: int) -> None:
     now = time.monotonic()
-    client_ip = request.client.host if request.client else "unknown"
+    # Behind the Railway proxy request.client.host is the proxy peer — a
+    # single global bucket that one abuser could exhaust for everyone.
+    # First X-Forwarded-For hop is spoofable but strictly better here.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
     key = f"{bucket}:{client_ip}"
     hits = _BUCKETS[key]
     hits[:] = [t for t in hits if now - t < _WINDOW_SECONDS]
@@ -281,12 +285,13 @@ def _resolve_exception(db, tenant_id: str, case: Dict[str, Any], event_id: str) 
     try:
         from shared.exception_queue import ExceptionQueueService
 
-        ExceptionQueueService(db).resolve_exception(
-            tenant_id=tenant_id,
-            case_id=case["exception_case_id"],
-            resolution_summary=f"Supplier correction accepted; record released as event {event_id}.",
-            resolved_by=f"supplier-remediation:{case['id']}",
-        )
+        with db.begin_nested():
+            ExceptionQueueService(db).resolve_exception(
+                tenant_id=tenant_id,
+                case_id=case["exception_case_id"],
+                resolution_summary=f"Supplier correction accepted; record released as event {event_id}.",
+                resolved_by=f"supplier-remediation:{case['id']}",
+            )
     except Exception as exc:  # pragma: no cover — mirror is best-effort
         logger.warning("exception_resolve_failed case=%s error=%s", case["id"], exc)
 
