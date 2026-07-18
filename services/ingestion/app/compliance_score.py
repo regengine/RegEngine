@@ -91,7 +91,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     result = {}
 
-    # TODO(#2506): migrate to fsma.traceability_events. DEFERRED: this scorer
+    # TODO(#1335): migrate to fsma.traceability_events. DEFERRED: this scorer
     # is tightly coupled to the legacy key-value KDE table (fsma.cte_kdes,
     # joined below for the KDE-completeness ratio) and to the legacy
     # CTEPersistence.verify_chain. The canonical store keeps KDEs as a JSONB

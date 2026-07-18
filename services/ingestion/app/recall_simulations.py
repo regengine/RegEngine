@@ -55,7 +55,7 @@ def _query_tenant_recall_metrics(tenant_id: str) -> dict | None:
             # table deliberately — migrating the table name changes nothing
             # (canonical also lacks the column) and the real fix is a separate
             # supplier-attribution issue.
-            # TODO(#2506): resolve supplier_count source (join supplier
+            # TODO(#2599): resolve supplier_count source (join supplier
             #   profiles or from/to entity refs) and migrate to canonical.
             supplier_count = (
                 db.execute(

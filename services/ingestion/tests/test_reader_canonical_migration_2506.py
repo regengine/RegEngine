@@ -185,7 +185,7 @@ class TestRecallSimulationsRepointedToCanonical:
     def test_supplier_count_query_left_on_legacy_table_deliberately(self, monkeypatch):
         # The supplier_id column exists on NEITHER table; this query is a
         # pre-existing latent bug (raises + swallowed → demo mode) and is
-        # deliberately left on the legacy table with a TODO(#2506). Assert
+        # deliberately left on the legacy table with a TODO(#2599). Assert
         # it was NOT silently repointed to canonical (which would imply a
         # false migration claim).
         session = _OrderedScalarSession([5, 2, 3, 1])
