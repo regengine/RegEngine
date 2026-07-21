@@ -35,6 +35,14 @@ class ComplianceIntegration:
     2. Matches recall to affected tenants
     3. Creates compliance alerts with countdown timers
     4. Triggers notifications
+
+    #2461 note: touches ZERO RLS-forced fsma tables today — the tier-1
+    read scans fsma.traceability_events (not forced) and alert writes go
+    to public.compliance_alerts / tenant_compliance_status. The
+    traceability_events scan is inherently CROSS-TENANT: if that table
+    ever gains a forced policy, this matcher breaks under the
+    least-privilege role and will need a maintenance-role exemption or
+    per-tenant iteration.
     """
 
     def __init__(self, database_url: Optional[str] = None):

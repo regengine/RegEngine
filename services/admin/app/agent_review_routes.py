@@ -18,7 +18,7 @@ from shared.agent_operator_view import (
     fetch_agent_review_items,
     upsert_agent_artifact_review,
 )
-from shared.tenant_context import set_tenant_guc
+from shared.tenant_context import set_rls_tenant_id, set_tenant_guc
 from sqlalchemy.orm import Session
 
 from .dependencies import get_current_user, get_session
@@ -171,4 +171,9 @@ def _resolve_operator_tenant_id(
 
     if current_user.is_sysadmin:
         set_tenant_guc(db, str(requested_tenant_id))
+        # #2461: the sysadmin cross-tenant override changes the effective
+        # tenant for this request — re-seed the RLS contextvar so the
+        # Engine begin-hook re-applies the REQUESTED tenant on any later
+        # transaction (get_current_user seeded the sysadmin's own tenant).
+        set_rls_tenant_id(str(requested_tenant_id))
     return requested_tenant_id

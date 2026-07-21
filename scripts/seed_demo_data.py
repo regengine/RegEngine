@@ -564,6 +564,14 @@ def main() -> int:
         from shared.canonical_persistence import CanonicalEventStore
         from shared.database import SessionLocal
         from shared.rules_engine import RulesEngine, seed_rule_definitions
+        from shared.tenant_context import set_rls_tenant_id
+
+        # #2461: seed the RLS contextvar for this one-shot CLI process so
+        # the Engine begin-hook applies app.tenant_id to every transaction
+        # below (request_cases / rule_evaluations / exception_cases writes
+        # on this bare SessionLocal). Equivalent to wrapping the block in
+        # tenant_scope(); the process exits afterwards so no reset needed.
+        set_rls_tenant_id(args.tenant_id)
 
         db = SessionLocal()
 

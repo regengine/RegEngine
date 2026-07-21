@@ -211,3 +211,257 @@ class TestRlsEnforcesIsolation:
                 cur.execute("INSERT INTO rls_probe_schema.t (tenant_id, val) VALUES (%s, 'X')", (_T_B,))
 
         conn.rollback()  # undoes role, schema, table, and rows
+
+
+# ---------------------------------------------------------------------------
+# #2461: the ContextVar + Engine "begin" hook (shared.tenant_context)
+# ---------------------------------------------------------------------------
+
+
+def _psycopg_url() -> str:
+    url = DATABASE_URL
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
+class TestBeginHookAppliesGuc:
+    """The class-level Engine 'begin' hook applies app.tenant_id from the
+    seeded contextvar as the first statement of EVERY transaction —
+    including the autobegin after commit()/rollback(), which is the fix
+    for the whole mid-request-commit/rollback-clears-GUC bug class."""
+
+    def test_guc_applied_and_reapplied_after_commit_and_rollback(self, conn):
+        import shared.tenant_context as tc
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        engine = create_engine(_psycopg_url())
+        Session = sessionmaker(bind=engine)
+        try:
+            with tc.tenant_scope(_T_A):
+                s = Session()
+                try:
+                    q = text("SELECT current_setting('app.tenant_id', true)")
+                    assert s.execute(q).scalar() == _T_A
+                    # Intervening COMMIT ends the transaction (clearing the
+                    # transaction-scoped GUC) — the next statement autobegins
+                    # and the hook must re-apply it.
+                    s.commit()
+                    assert s.execute(q).scalar() == _T_A
+                    # Same for ROLLBACK.
+                    s.rollback()
+                    assert s.execute(q).scalar() == _T_A
+                finally:
+                    s.rollback()
+                    s.close()
+        finally:
+            engine.dispose()
+
+    def test_unseeded_context_gets_no_guc(self, conn):
+        import shared.tenant_context as tc
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        assert tc.get_rls_tenant_id() is None
+        engine = create_engine(_psycopg_url())
+        Session = sessionmaker(bind=engine)
+        try:
+            s = Session()
+            try:
+                val = s.execute(text("SELECT current_setting('app.tenant_id', true)")).scalar()
+                assert val in (None, "")
+            finally:
+                s.rollback()
+                s.close()
+        finally:
+            engine.dispose()
+
+    def test_async_engine_parity(self, conn):
+        """AsyncEngine coverage: class-level Engine listeners apply to
+        AsyncEngine.sync_engine, contextvars propagate through
+        SQLAlchemy's greenlet_spawn, and the hook's conn.execute is legal
+        under the greenlet."""
+        import asyncio
+
+        pytest.importorskip("asyncpg")
+        import shared.tenant_context as tc
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        url = DATABASE_URL
+        for prefix in ("postgresql+psycopg2://", "postgresql+psycopg://", "postgresql://"):
+            if url.startswith(prefix):
+                url = url.replace(prefix, "postgresql+asyncpg://", 1)
+                break
+
+        async def _run():
+            engine = create_async_engine(url)
+            try:
+                with tc.tenant_scope(_T_A):
+                    async with engine.connect() as aconn:
+                        result = await aconn.execute(text("SELECT current_setting('app.tenant_id', true)"))
+                        return result.scalar()
+            finally:
+                await engine.dispose()
+
+        assert asyncio.run(_run()) == _T_A
+
+
+class TestFailClosedOnForcedTable:
+    """Without any seeded context, a forced-table query under a
+    non-bypass role must RAISE 'app.tenant_id not set' — fail closed.
+
+    A probe row is seeded (as the privileged role, in the rolled-back
+    transaction) because Postgres never evaluates the policy predicate
+    on an empty table — COUNT(*) over zero rows would 'pass' vacuously.
+    """
+
+    def test_unset_context_raises_on_cte_events_as_regengine(self, conn):
+        """Probe as the ``regengine`` app role — the tenant-isolation
+        policies are ``TO regengine, regengine_sysadmin``, so only that
+        role reaches the get_tenant_context() RAISE (any other role gets
+        default-deny: silently zero rows, which the previous assertion
+        style could not distinguish from a vacuous pass)."""
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('fsma.cte_events')")
+            if cur.fetchone()[0] is None:
+                conn.rollback()
+                pytest.skip("fsma.cte_events not present — needs a migrated DB")
+            cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'regengine' AND NOT rolbypassrls AND NOT rolsuper")
+            if cur.fetchone() is None:
+                conn.rollback()
+                pytest.skip("non-bypass 'regengine' role not present")
+            try:
+                cur.execute("GRANT USAGE ON SCHEMA fsma TO regengine")
+                cur.execute("GRANT SELECT ON fsma.cte_events TO regengine")
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+                pytest.skip("connection role cannot GRANT")
+            # Seed a row so the policy predicate actually evaluates
+            # (Postgres never runs the predicate over an empty table).
+            cur.execute(
+                """
+                INSERT INTO fsma.cte_events
+                    (tenant_id, event_type, traceability_lot_code, product_description,
+                     quantity, unit_of_measure, event_timestamp, sha256_hash, chain_hash)
+                VALUES (%s, 'shipping', 'RLS-PROBE-TLC', 'rls probe', 1, 'case', NOW(),
+                        'rls-probe-sha', 'rls-probe-chain')
+                """,
+                (_T_A,),
+            )
+            cur.execute("SET LOCAL ROLE regengine")
+            with pytest.raises((psycopg.errors.RaiseException, psycopg.errors.InsufficientPrivilege)) as exc_info:
+                cur.execute("SELECT COUNT(*) FROM fsma.cte_events")
+            assert "app.tenant_id not set" in str(exc_info.value)
+        conn.rollback()
+
+
+class TestV095SystemContextArm:
+    """v095 gives fsma.task_queue / fsma.fsma_audit_trail a
+    ``regengine.system_context`` arm in CASE form. The CASE form is the
+    OR-ordering regression test: with ONLY the system GUC set the
+    predicate must NOT raise (Postgres does not short-circuit OR, and
+    get_tenant_context() raises on an unset tenant GUC)."""
+
+    def _v095_applied(self, cur) -> bool:
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM pg_policies
+            WHERE schemaname = 'fsma'
+              AND tablename IN ('task_queue', 'fsma_audit_trail')
+              AND (qual LIKE '%regengine.system_context%' OR with_check LIKE '%regengine.system_context%')
+            """
+        )
+        return cur.fetchone()[0] >= 2
+
+    def _provision_probe(self, cur) -> None:
+        """Create the probe role, seed cross-tenant rows (as the privileged
+        role — the policy predicate is never evaluated on empty tables),
+        then drop to the probe role."""
+        cur.execute("CREATE ROLE rls_probe_v095 NOLOGIN NOSUPERUSER NOBYPASSRLS")
+        cur.execute("GRANT USAGE ON SCHEMA fsma TO rls_probe_v095")
+        cur.execute("GRANT SELECT, UPDATE ON fsma.task_queue TO rls_probe_v095")
+        cur.execute("GRANT SELECT ON fsma.fsma_audit_trail TO rls_probe_v095")
+        cur.execute(
+            "INSERT INTO fsma.task_queue (task_type, tenant_id) VALUES ('rls_probe', %s), ('rls_probe', %s)",
+            (_T_A, _T_B),
+        )
+        cur.execute(
+            """
+            INSERT INTO fsma.fsma_audit_trail
+                (event_id, actor, actor_type, action, tenant_id, checksum)
+            VALUES (%s, 'rls-probe', 'System', 'CREATED', %s, 'rls-probe-checksum')
+            """,
+            ("00000000-0000-4000-8000-00000000f095", _T_A),
+        )
+        cur.execute("SET LOCAL ROLE rls_probe_v095")
+
+    def test_system_scope_admits_cross_tenant_queue_and_audit_reads(self, conn):
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('fsma.task_queue')")
+            if cur.fetchone()[0] is None:
+                conn.rollback()
+                pytest.skip("fsma.task_queue not present — needs a migrated DB")
+            if not self._v095_applied(cur):
+                conn.rollback()
+                pytest.skip("v095 system-context policies not applied")
+            try:
+                self._provision_probe(cur)
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+                pytest.skip("connection role cannot CREATE ROLE")
+
+            # Only the SYSTEM GUC is set — app.tenant_id stays unset. The
+            # CASE form must evaluate to true WITHOUT touching
+            # get_tenant_context() (which would raise), and the scan must
+            # see BOTH tenants' rows (cross-tenant queue mechanics).
+            cur.execute("SELECT set_config('regengine.system_context', 'true', true)")
+            cur.execute("SELECT COUNT(*) FROM fsma.task_queue WHERE task_type = 'rls_probe'")
+            assert cur.fetchone()[0] == 2, "system arm must admit BOTH tenants' queue rows"
+            cur.execute(
+                "UPDATE fsma.task_queue SET locked_by = NULL "
+                "WHERE status = 'processing' AND locked_until < NOW() - INTERVAL '100 years'"
+            )
+            cur.execute("SELECT COUNT(*) FROM fsma.fsma_audit_trail WHERE actor = 'rls-probe'")
+            assert cur.fetchone()[0] == 1
+        conn.rollback()
+
+    def test_without_system_scope_same_statements_raise(self, conn):
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass('fsma.task_queue')")
+            if cur.fetchone()[0] is None:
+                conn.rollback()
+                pytest.skip("fsma.task_queue not present — needs a migrated DB")
+            if not self._v095_applied(cur):
+                conn.rollback()
+                pytest.skip("v095 system-context policies not applied")
+            try:
+                self._provision_probe(cur)
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+                pytest.skip("connection role cannot CREATE ROLE")
+
+            with pytest.raises((psycopg.errors.RaiseException, psycopg.errors.InsufficientPrivilege)) as exc_info:
+                cur.execute("SELECT COUNT(*) FROM fsma.task_queue")
+            assert "app.tenant_id not set" in str(exc_info.value)
+        conn.rollback()
+
+        # fsma_audit_trail in a fresh transaction (the raise aborted the
+        # previous one).
+        with conn.cursor() as cur:
+            try:
+                self._provision_probe(cur)
+            except psycopg.errors.InsufficientPrivilege:
+                conn.rollback()
+                pytest.skip("connection role cannot CREATE ROLE")
+            with pytest.raises(
+                (
+                    psycopg.errors.RaiseException,
+                    psycopg.errors.InsufficientPrivilege,
+                )
+            ):
+                cur.execute("SELECT COUNT(*) FROM fsma.fsma_audit_trail")
+        conn.rollback()
