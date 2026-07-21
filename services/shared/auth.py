@@ -260,6 +260,7 @@ class APIKeyStore:
 
 
 from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore, get_db_key_store
+from shared.tenant_context import set_rls_tenant_id
 
 # Global key store instance
 _key_store = APIKeyStore()
@@ -272,6 +273,14 @@ def _store_api_key_principal(
 ) -> Union[APIKey, APIKeyResponse]:
     """Attach the accepted API key to request state for tenant resolution."""
     request.state.api_key = api_key
+    # #2461: seed the RLS contextvar from the authenticated key's tenant
+    # so the Engine begin-hook covers API-key routes that never call a
+    # resolve funnel (routes_scraping enqueue, compliance, nlp routes).
+    # Callers (require_api_key / optional_api_key) are async dependencies,
+    # so the set is visible downstream.
+    tenant_id = getattr(api_key, "tenant_id", None)
+    if tenant_id:
+        set_rls_tenant_id(tenant_id)
     return api_key
 
 

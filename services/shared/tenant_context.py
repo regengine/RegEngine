@@ -43,10 +43,13 @@ or body, the dependency raises ``HTTPException(409)`` with error code
 
 from __future__ import annotations
 
+import contextvars
 import os
 import uuid as _uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Iterator, Optional, Union
 
 import structlog
 from fastapi import HTTPException, Request, status
@@ -148,6 +151,11 @@ async def resolve_tenant_context(request: Request) -> TenantContext:
             path=request.url.path,
         )
 
+    # #2461: seed the RLS contextvar so the Engine begin-hook applies
+    # app.tenant_id on every transaction this request opens. This is an
+    # async dependency, so the set is visible to the handler and to sync
+    # handlers via Starlette's context copy into the threadpool.
+    set_rls_tenant_id(principal.tenant_id)
     return principal
 
 
@@ -464,3 +472,212 @@ def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
     every call site.
     """
     set_tenant_guc(session, ctx.tenant_id)
+
+
+# ---------------------------------------------------------------------------
+# RLS context propagation (#2461) — ContextVar + Engine-class "begin" hook
+# ---------------------------------------------------------------------------
+#
+# The explicit ``set_tenant_guc`` call sites above cover the paths that
+# remembered to call them. The #2461 audit found ~56/60 fsma-querying
+# files never set the GUC, and several that do lose it on a mid-request
+# ``commit()``/``rollback()`` (transaction-scoped ``set_config`` clears
+# at transaction end). Rather than patching every session open/commit,
+# the mechanism below:
+#
+#   1. carries the acting tenant in a :class:`~contextvars.ContextVar`
+#      seeded at every tenant-resolution funnel (auth dependencies,
+#      worker/job bodies via :func:`tenant_scope`), and
+#   2. re-applies ``SELECT set_config('app.tenant_id', :tid, true)`` as
+#      the FIRST statement of EVERY new transaction via a class-level
+#      SQLAlchemy ``Engine`` "begin" listener. SQLAlchemy 2.x autobegin
+#      re-fires the event after each commit()/rollback(), which
+#      structurally eliminates the rollback-clears-GUC bug class.
+#
+# Class-level (not per-engine) registration is deliberate: the codebase
+# constructs ad-hoc engines (fsma_recall builds one per call, fsma_audit
+# and ingestion audit_log build lazy private engines, server/main builds
+# a readiness throwaway), so instance registration cannot guarantee
+# coverage. The handler no-ops on non-postgresql dialects (sqlite unit
+# tests) and when no context is seeded — untenanted access then fails
+# CLOSED at the RLS layer via get_tenant_context()'s RAISE.
+#
+# A second contextvar drives the ``regengine.system_context`` GUC for
+# cross-tenant queue/maintenance mechanics; only the two system-metadata
+# tables given the v095 policy arm (fsma.task_queue,
+# fsma.fsma_audit_trail) honor it. It is an unprivileged GUC — the
+# blast radius is deliberately limited to queue metadata and the audit
+# chain; RLS here defends against application bugs, not SQL injection
+# (an attacker who can run arbitrary SQL could equally set
+# app.tenant_id).
+#
+# Out of hook coverage by construction: the raw-psycopg
+# ``regengine_ingestion.storage.database.DatabaseManager`` (keeps its
+# SECURITY DEFINER session-scoped carve-out) and any other direct
+# psycopg.connect() usage.
+
+_rls_tenant_id: ContextVar[Optional[str]] = ContextVar("rls_tenant_id", default=None)
+_rls_system_context: ContextVar[bool] = ContextVar("rls_system_context", default=False)
+
+_HOOK_INSTALLED = False
+
+# Post-cutover canary: increments per transaction the hook touches.
+# ``skipped_non_uuid`` counts slug-tolerant skips (mirrors
+# set_tenant_guc_if_uuid). Defined here rather than shared/database.py
+# to avoid an import cycle (database.py imports this module so the hook
+# is installed before its module-level create_engine()).
+_RLS_GUC_COUNTER: Any = None
+
+
+def _rls_guc_counter():
+    """Lazily create/fetch the regengine_rls_guc_applied_total counter."""
+    global _RLS_GUC_COUNTER
+    if _RLS_GUC_COUNTER is not None:
+        return _RLS_GUC_COUNTER
+    try:
+        from prometheus_client import REGISTRY, Counter  # noqa: PLC0415
+
+        try:
+            _RLS_GUC_COUNTER = Counter(
+                "regengine_rls_guc_applied",
+                "Transactions where the RLS begin-hook applied (or skipped) a GUC.",
+                ["kind"],
+            )
+        except ValueError:
+            _RLS_GUC_COUNTER = REGISTRY._names_to_collectors.get("regengine_rls_guc_applied")
+    except Exception:  # pragma: no cover — metrics must never break queries
+        _RLS_GUC_COUNTER = None
+    return _RLS_GUC_COUNTER
+
+
+def _inc_rls_guc_metric(kind: str) -> None:
+    try:
+        counter = _rls_guc_counter()
+        if counter is not None:
+            counter.labels(kind=kind).inc()
+    except Exception:  # pragma: no cover — metrics must never break queries
+        pass
+
+
+def get_rls_tenant_id() -> Optional[str]:
+    """Read accessor for the RLS tenant contextvar.
+
+    Named to avoid clashing with
+    ``shared.middleware.tenant_context.get_current_tenant_id``.
+    """
+    return _rls_tenant_id.get()
+
+
+def set_rls_tenant_id(tenant_id: Union[str, _uuid.UUID, None]) -> contextvars.Token:
+    """Seed the RLS tenant contextvar for the current context.
+
+    str-coerces ``uuid.UUID``; ``None`` clears. NO validation here — the
+    begin-hook decides at apply time (mirrors ``set_tenant_guc_if_uuid``
+    slug tolerance: non-UUID values are stored but skipped, never raised
+    on). Returns the token for callers that want explicit reset.
+
+    Only call this from async dependencies or inside handler/thread/job
+    bodies — a sync ``def`` FastAPI dependency runs in a threadpool
+    context copy whose sets are invisible downstream.
+    """
+    if tenant_id is None:
+        return _rls_tenant_id.set(None)
+    return _rls_tenant_id.set(str(tenant_id))
+
+
+def reset_rls_tenant_id(token: contextvars.Token) -> None:
+    """Reset the RLS tenant contextvar to its pre-``set_rls_tenant_id`` state."""
+    _rls_tenant_id.reset(token)
+
+
+@contextmanager
+def tenant_scope(tenant_id: Union[str, _uuid.UUID]) -> Iterator[None]:
+    """Scope all DB transactions in this context to ``tenant_id``.
+
+    Pure contextvar — no SQL — so it is equally valid in sync code,
+    async code, and thread bodies. The begin-hook applies the GUC on
+    every transaction started while the scope is active.
+    """
+    token = set_rls_tenant_id(tenant_id)
+    try:
+        yield
+    finally:
+        _rls_tenant_id.reset(token)
+
+
+@contextmanager
+def system_scope() -> Iterator[None]:
+    """Mark this context as cross-tenant queue/maintenance mechanics.
+
+    Sets ``regengine.system_context = 'true'`` (transaction-scoped) on
+    every transaction started while active. Only affects tables given
+    the v095 system arm (fsma.task_queue, fsma.fsma_audit_trail). Does
+    NOT set a tenant — tenant-DATA tables stay fail-closed.
+    """
+    token = _rls_system_context.set(True)
+    try:
+        yield
+    finally:
+        _rls_system_context.reset(token)
+
+
+def apply_system_guc(session: Any) -> Any:
+    """Explicitly set ``regengine.system_context`` on an ALREADY-OPEN transaction.
+
+    The begin-hook only fires when a transaction starts; sessions whose
+    transaction is already open when :func:`system_scope` is entered
+    (e.g. an admin request session that ran auth queries first) need
+    this explicit, idempotent application. Transaction-scoped — clears
+    at COMMIT/ROLLBACK like set_tenant_guc.
+    """
+    return session.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
+
+
+def _apply_rls_gucs_on_begin(conn: Any) -> None:
+    """SQLAlchemy Connection ``begin`` handler — first statements of every txn."""
+    try:
+        if conn.dialect.name != "postgresql":
+            return  # sqlite fallback engines / unit tests
+    except AttributeError:  # pragma: no cover — defensive
+        return
+
+    tid = _rls_tenant_id.get()
+    if tid is not None:
+        try:
+            _uuid.UUID(str(tid))
+        except (ValueError, AttributeError, TypeError):
+            # Slug tolerance — skip, matching set_tenant_guc_if_uuid.
+            _inc_rls_guc_metric("skipped_non_uuid")
+            tid = None
+    if tid is not None:
+        conn.execute(
+            text("SELECT set_config('app.tenant_id', :tid, true)"),
+            {"tid": str(tid)},
+        )
+        _inc_rls_guc_metric("tenant")
+    if _rls_system_context.get():
+        conn.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
+        _inc_rls_guc_metric("system")
+
+
+def install_rls_guc_hook() -> None:
+    """Register :func:`_apply_rls_gucs_on_begin` on the Engine CLASS.
+
+    Idempotent (module-level flag). Class-level registration covers
+    engines created before AND after this call — required because
+    fsma_recall/fsma_audit/audit_log/readiness construct engines lazily
+    or per-call. Called at module import below; shared/database.py and
+    services/admin/app/database.py import this module before their
+    ``create_engine()`` so coverage is guaranteed either way.
+    """
+    global _HOOK_INSTALLED
+    if _HOOK_INSTALLED:
+        return
+    from sqlalchemy import event as _sa_event  # noqa: PLC0415
+    from sqlalchemy.engine import Engine as _SAEngine  # noqa: PLC0415
+
+    _sa_event.listen(_SAEngine, "begin", _apply_rls_gucs_on_begin)
+    _HOOK_INSTALLED = True
+
+
+install_rls_guc_hook()

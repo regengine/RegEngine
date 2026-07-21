@@ -8,6 +8,7 @@ import re
 from typing import Optional
 
 from fastapi import HTTPException, Path
+from shared.tenant_context import set_rls_tenant_id
 
 # Alphanumeric, hyphens, underscores — 1 to 64 chars
 _TENANT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -56,6 +57,13 @@ def resolve_tenant(tenant_id: Optional[str], principal) -> str:
     if not tid:
         raise HTTPException(status_code=400, detail="Tenant context required")
     validate_tenant_id(tid)
+    # #2461: seed the RLS contextvar with the resolved tenant so the
+    # Engine begin-hook applies app.tenant_id to every transaction the
+    # calling handler opens. Called inline in handler bodies (same
+    # context as the queries that follow); non-UUID slugs (unbound
+    # legacy_master/dev_open principals) are stored but skipped at
+    # apply time — slug tolerance mirrors set_tenant_guc_if_uuid.
+    set_rls_tenant_id(tid)
     return tid
 
 

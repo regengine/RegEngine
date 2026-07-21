@@ -147,6 +147,19 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("connector_registration_skipped", error=str(exc))
 
+    # #2461: boot-time RLS role posture. Today (postgres superuser role)
+    # this logs rls_enforcement_inert + sets the gauge but boots; on the
+    # day of the #2461 DATABASE_URL cutover, set
+    # REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 on Railway so the fleet can
+    # never silently regress to a BYPASSRLS role. Deliberately OUTSIDE
+    # the init_db try/except above — the REQUIRE-mode RuntimeError must
+    # abort boot, not be logged and swallowed. The admin engine is
+    # probed separately because it may point at a different database.
+    from shared.database import check_rls_posture as _check_rls_posture
+
+    _check_rls_posture(label="shared")
+    _check_rls_posture(_admin_engine, label="admin")
+
     # Start background task worker (replaces Kafka consumers)
     from server.workers.task_processor import start_task_worker, stop_task_worker
 

@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
+from shared.tenant_context import system_scope, tenant_scope
 
 logger = structlog.get_logger("task-processor")
 
@@ -447,8 +448,6 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
         Added ``visibility_timeout_seconds`` to RETURNING with a
         COALESCE default so ``row[5]`` is always a non-null int.
     """
-    from sqlalchemy import text
-
     now = datetime.now(timezone.utc)
     default_timeout_seconds = DEFAULT_TIMEOUT_SECONDS
     # `lock_until` is the visibility deadline for this claim — after
@@ -461,6 +460,35 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     # prevents us from fighting with recall_drill rows (which are owned
     # by the recall engine, not the worker).
     handler_types = list(TASK_HANDLERS.keys())
+
+    # #2461: the claim scan is cross-tenant by design — system_scope +
+    # the Engine begin-hook set regengine.system_context so the v095
+    # task_queue policy arm admits it under the least-privilege role.
+    with system_scope():
+        row = _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds)
+
+    if row:
+        task_type = row[1]
+        timeout = row[5] or TASK_TIMEOUTS_SECONDS.get(task_type, default_timeout_seconds)
+        return {
+            "id": row[0],
+            "task_type": task_type,
+            "payload": row[2] if isinstance(row[2], dict) else {},
+            "attempts": row[3],
+            "max_attempts": row[4],
+            "visibility_timeout_seconds": int(timeout),
+            # The row column is the tenant authority (EPIC-A #1651): it is
+            # written by enqueue_task from the authenticated principal and
+            # scopes the (tenant_id, idempotency_key) index. Handlers must
+            # use it instead of any tenant_id embedded in the payload blob.
+            "tenant_id": str(row[6]) if row[6] is not None else None,
+        }
+    return None
+
+
+def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
+    """Run the claim UPDATE...SKIP LOCKED and commit when a row was won."""
+    from sqlalchemy import text
 
     row = db.execute(
         text("""
@@ -496,36 +524,23 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
 
     if row:
         db.commit()
-        task_type = row[1]
-        timeout = row[5] or TASK_TIMEOUTS_SECONDS.get(task_type, default_timeout_seconds)
-        return {
-            "id": row[0],
-            "task_type": task_type,
-            "payload": row[2] if isinstance(row[2], dict) else {},
-            "attempts": row[3],
-            "max_attempts": row[4],
-            "visibility_timeout_seconds": int(timeout),
-            # The row column is the tenant authority (EPIC-A #1651): it is
-            # written by enqueue_task from the authenticated principal and
-            # scopes the (tenant_id, idempotency_key) index. Handlers must
-            # use it instead of any tenant_id embedded in the payload blob.
-            "tenant_id": str(row[6]) if row[6] is not None else None,
-        }
-    return None
+    return row
 
 
 def _complete_task(db, task_id: int) -> None:
     from sqlalchemy import text
 
-    db.execute(
-        text("""
-            UPDATE fsma.task_queue
-            SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
-            WHERE id = :id
-        """),
-        {"id": task_id},
-    )
-    db.commit()
+    # #2461: queue-state transition — system_scope (see _claim_task).
+    with system_scope():
+        db.execute(
+            text("""
+                UPDATE fsma.task_queue
+                SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
+                WHERE id = :id
+            """),
+            {"id": task_id},
+        )
+        db.commit()
 
 
 def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
@@ -540,18 +555,22 @@ def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
     """
     from sqlalchemy import text
 
-    result = db.execute(
-        text(
-            """
-            UPDATE fsma.task_queue
-            SET locked_until = NOW() + (:seconds || ' seconds')::interval
-            WHERE id = :id
-              AND locked_by = :worker
-            """
-        ),
-        {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
-    )
-    db.commit()
+    # #2461: runs in the heartbeat THREAD — contextvars do not inherit
+    # into threading.Thread bodies, so the system scope is entered here,
+    # inside the function that actually executes the SQL.
+    with system_scope():
+        result = db.execute(
+            text(
+                """
+                UPDATE fsma.task_queue
+                SET locked_until = NOW() + (:seconds || ' seconds')::interval
+                WHERE id = :id
+                  AND locked_by = :worker
+                """
+            ),
+            {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
+        )
+        db.commit()
     return bool(result.rowcount)
 
 
@@ -658,6 +677,12 @@ def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -
         - status  → 'dead'
         - locks cleared; scheduled_at left alone (dead never runs again).
     """
+    # #2461: queue-state transition — system_scope (see _claim_task).
+    with system_scope():
+        _fail_task_inner(db, task_id, error, attempts, max_attempts)
+
+
+def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
     from sqlalchemy import text
 
     if attempts >= max_attempts:
@@ -737,15 +762,33 @@ def _worker_loop() -> None:
                 timeout = task.get("visibility_timeout_seconds") or TASK_TIMEOUTS_SECONDS.get(
                     task_type, DEFAULT_TIMEOUT_SECONDS
                 )
-                _run_handler_with_heartbeat(
-                    db_factory=SessionLocal,
-                    task_id=task["id"],
-                    timeout_seconds=int(timeout),
-                    handler=handler,
-                    payload=task["payload"],
-                    attempts=task["attempts"],
-                    tenant_id=task.get("tenant_id"),
-                )
+                # #2461: the claimed row's tenant_id column is the tenant
+                # authority (EPIC-A #1651). Seed it around the handler so
+                # every transaction the handler opens carries the tenant
+                # GUC via the Engine begin-hook. The heartbeat thread does
+                # NOT inherit this contextvar — _heartbeat_extend enters
+                # its own system_scope.
+                if task.get("tenant_id"):
+                    with tenant_scope(task["tenant_id"]):
+                        _run_handler_with_heartbeat(
+                            db_factory=SessionLocal,
+                            task_id=task["id"],
+                            timeout_seconds=int(timeout),
+                            handler=handler,
+                            payload=task["payload"],
+                            attempts=task["attempts"],
+                            tenant_id=task.get("tenant_id"),
+                        )
+                else:
+                    _run_handler_with_heartbeat(
+                        db_factory=SessionLocal,
+                        task_id=task["id"],
+                        timeout_seconds=int(timeout),
+                        handler=handler,
+                        payload=task["payload"],
+                        attempts=task["attempts"],
+                        tenant_id=task.get("tenant_id"),
+                    )
                 _complete_task(db, task["id"])
                 logger.debug("task_completed", task_id=task["id"], task_type=task_type)
             except Exception as exc:
@@ -932,22 +975,26 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     db = None
     try:
         db = SessionLocal()
-        result = db.execute(
-            text(
-                """
-                UPDATE fsma.task_queue
-                SET status = 'pending',
-                    locked_by = NULL,
-                    locked_until = NULL,
-                    attempts = GREATEST(attempts - 1, 0)
-                WHERE id = :id
-                  AND locked_by = :worker
-                  AND status = 'processing'
-                """
-            ),
-            {"id": task_id, "worker": WORKER_ID},
-        )
-        db.commit()
+        # #2461: shutdown-path queue mechanics — system_scope. Runs in
+        # the stop_task_worker caller's thread, so the scope is entered
+        # here, around the statement that needs it.
+        with system_scope():
+            result = db.execute(
+                text(
+                    """
+                    UPDATE fsma.task_queue
+                    SET status = 'pending',
+                        locked_by = NULL,
+                        locked_until = NULL,
+                        attempts = GREATEST(attempts - 1, 0)
+                    WHERE id = :id
+                      AND locked_by = :worker
+                      AND status = 'processing'
+                    """
+                ),
+                {"id": task_id, "worker": WORKER_ID},
+            )
+            db.commit()
         released = bool(result.rowcount)
         logger.warning(
             "task_abandoned_on_shutdown",

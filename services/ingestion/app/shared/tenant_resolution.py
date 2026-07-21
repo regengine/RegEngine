@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import HTTPException
 from shared.api_key_store import api_key_hash_candidates
 from shared.database import get_db_safe
+from shared.tenant_context import set_rls_tenant_id
 from sqlalchemy import bindparam, text
 
 logger = logging.getLogger(__name__)
@@ -121,9 +122,15 @@ def resolve_principal_tenant_id(
                 status_code=403,
                 detail="Tenant mismatch: your API key does not have access to this tenant.",
             )
+        # #2461: seed the RLS contextvar with the resolved tenant so the
+        # Engine begin-hook applies app.tenant_id on every transaction
+        # the calling handler opens (exchange_api, EDI, inflow_workbench,
+        # recall_simulations, supplier_portal authenticated routes).
+        set_rls_tenant_id(principal_tenant)
         return principal_tenant
 
     if requested_tenant_id:
+        set_rls_tenant_id(requested_tenant_id)
         return requested_tenant_id
 
     raise HTTPException(status_code=400, detail="Tenant context required")

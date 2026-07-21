@@ -90,6 +90,13 @@ class DatabaseManager:
         transactions, switch to a SQLAlchemy session, then delegate
         to ``set_tenant_guc``. Out of scope for the Phase B per-call-
         site sweep.
+
+        #2461 note: this raw-psycopg layer is likewise OUT of coverage
+        of the class-level SQLAlchemy Engine "begin" hook installed by
+        ``shared.tenant_context`` (the RLS-readiness mechanism) — by
+        construction, since no SQLAlchemy Engine is involved. This
+        SECURITY DEFINER session-scoped carve-out remains the canonical
+        tenant-context mechanism for DatabaseManager callers.
         """
         if not self.conn:
             self.connect()

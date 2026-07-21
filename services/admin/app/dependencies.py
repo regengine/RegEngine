@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from typing import Iterator, Optional
+from typing import Optional
 from uuid import UUID
 
 import structlog
@@ -12,6 +12,7 @@ from shared.permissions import has_permission
 
 # Supabase Integration
 from shared.supabase_client import get_supabase
+from shared.tenant_context import set_rls_tenant_id
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -399,6 +400,12 @@ async def get_current_user(
             # PostgreSQL uses session-scoped RLS state; SQLite stores the same
             # tenant context in session.info so local/dev parity is preserved.
             TenantContext.set_tenant_context(db, UUID(tenant_id))
+            # #2461: also seed the RLS contextvar so the Engine begin-hook
+            # re-applies app.tenant_id on every transaction (the legacy
+            # session-scoped GUC above survives commits, the hook makes the
+            # transaction-scoped layer idempotent with it). Async dependency
+            # — the set is visible downstream.
+            set_rls_tenant_id(tenant_id)
             # Verify membership exists for this tenant
             membership = db.execute(
                 select(MembershipModel).where(
@@ -507,9 +514,9 @@ def verify_path_tenant_matches(
     return path_tenant
 
 
-def get_tenant_scoped_session(
+async def get_tenant_scoped_session(
     tenant_id: UUID = Depends(verify_path_tenant_matches),
-) -> Iterator[Session]:
+):
     """Yield a SQLAlchemy session with ``app.tenant_id`` GUC bound for RLS.
 
     Usage in routes shaped as ``/v1/foo/{tenant_id}/...``::
@@ -535,8 +542,29 @@ def get_tenant_scoped_session(
     Defense-in-depth, not a substitute for tenant scoping in service code.
     Routes still verify tenant on writes; this just guarantees that an
     accidentally-omitted predicate fails closed instead of leaking.
+
+    #2461: async generator (was a sync ``def``) so the ``set_rls_tenant_id``
+    seed below is visible downstream — a sync dependency runs in a
+    threadpool context copy whose contextvar sets never propagate to the
+    handler. Seeding the VERIFIED path tenant (rather than relying on the
+    auth tenant seeded by ``get_current_user``) matters for sysadmins
+    operating cross-tenant: the Engine begin-hook then re-applies the
+    requested tenant on every transaction, including after a mid-request
+    commit()/rollback() clears the transaction-scoped GUC that
+    ``get_tenant_session`` set.
     """
-    yield from get_tenant_session(str(tenant_id))
+    set_rls_tenant_id(str(tenant_id))
+    # Drive the sync generator manually (``async def`` can't ``yield from``
+    # a sync generator) — same pattern as ``get_auth_scoped_session``.
+    gen = get_tenant_session(str(tenant_id))
+    session = next(gen)
+    try:
+        yield session
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
 
 
 # Imports for ``get_auth_scoped_session``. Aliased to avoid colliding

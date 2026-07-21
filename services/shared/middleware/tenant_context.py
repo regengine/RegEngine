@@ -31,6 +31,7 @@ from typing import Callable, Optional
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from prometheus_client import REGISTRY, Counter
+from shared.tenant_context import set_rls_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -97,11 +98,24 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         """
         path = request.url.path.rstrip("/") or "/"
         is_exempt = path in _TENANT_EXEMPT_PATHS
+
+        # #2461: hygiene reset — no RLS tenant context may leak into this
+        # request from the app-startup context. Auth dependencies remain
+        # authoritative and re-seed downstream.
+        set_rls_tenant_id(None)
+
         try:
             tenant_id = await self._extract_tenant_id(request)
 
             # Store in request state for easy access
             request.state.tenant_id = tenant_id
+
+            # #2461: best-effort early seed for the RLS begin-hook when the
+            # middleware itself resolved a tenant (JWT claim / internal
+            # header / env service-account key). Auth dependencies overwrite
+            # this with the authoritative principal tenant.
+            if tenant_id is not None:
+                set_rls_tenant_id(tenant_id)
 
             # Log tenant context
             logger.debug(f"Request {request.method} {request.url.path} for tenant {tenant_id}")
@@ -265,6 +279,11 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
     if tenant_id is None:
         raise HTTPException(status_code=401, detail="Tenant ID not found in authentication context")
 
+    # #2461: seed the RLS contextvar — this dependency is the tenant
+    # funnel for all graph routers (traceability, recall, lineage,
+    # compliance, metrics, labels), whose fsma_recall / fsma_audit
+    # private engines are covered by the class-level begin-hook.
+    set_rls_tenant_id(tenant_id)
     return tenant_id
 
 

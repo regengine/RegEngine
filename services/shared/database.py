@@ -84,6 +84,14 @@ def retry_with_jitter(func, max_retries=3, base_delay=0.1):
 
 # Engine initialization
 _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
+# #2461: importing tenant_context installs the class-level RLS GUC
+# "begin" hook BEFORE the module-level create_engine() below, so every
+# transaction on this engine (and every other Engine in the process)
+# gets app.tenant_id / regengine.system_context applied from the
+# seeded contextvars. Import kept under the ``shared.`` alias — the
+# canonical runtime alias — so exactly one module instance (and one
+# ContextVar pair) exists.
+import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
 from shared.env import is_production
 
 _is_prod = is_production()
@@ -119,6 +127,82 @@ engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 db_pool_checkedout.set_function(lambda: engine.pool.checkedout())
 db_pool_overflow.set_function(lambda: engine.pool.overflow())
+
+
+# #2461: 1 when the connected role is SUPERUSER/BYPASSRLS (RLS inert),
+# 0 when enforced. Labeled per engine because the admin service may
+# point at a different database than the shared engine.
+def _safe_labeled_gauge(name: str, description: str, labelnames: list[str]) -> Gauge:
+    try:
+        return Gauge(name, description, labelnames)
+    except ValueError:
+        existing = REGISTRY._names_to_collectors.get(name)
+        if existing is not None:
+            return existing  # type: ignore[return-value]
+        return Gauge(name, description, labelnames, registry=None)
+
+
+regengine_rls_enforcement_inert = _safe_labeled_gauge(
+    "regengine_rls_enforcement_inert",
+    "1 when the DB role is SUPERUSER or BYPASSRLS (RLS policies are inert), 0 when enforced.",
+    ["engine"],
+)
+
+
+def check_rls_posture(target_engine=None, *, label: str = "shared") -> str:
+    """Boot-time role posture probe for #2461.
+
+    Returns ``"enforced"`` | ``"inert"`` | ``"unknown"``. ``unknown`` on
+    sqlite or probe failure — a probe failure alone must never crash
+    boot. When the role is SUPERUSER or BYPASSRLS the fleet's RLS
+    policies are decorative: log loudly, set the
+    ``regengine_rls_enforcement_inert{engine=label}`` gauge, and — only
+    when ``REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`` (the post-#2461-cutover
+    posture) — raise RuntimeError so boot aborts instead of silently
+    regressing to a BYPASSRLS role.
+    """
+    eng = target_engine if target_engine is not None else engine
+    try:
+        if eng.dialect.name != "postgresql":
+            return "unknown"
+        with eng.connect() as conn:
+            row = conn.execute(
+                text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            ).fetchone()
+    except Exception as exc:
+        logger.warning("rls_posture_probe_failed", engine=label, error=str(exc))
+        return "unknown"
+
+    if row is None:  # pragma: no cover — current_user always resolves
+        return "unknown"
+
+    rolname, rolsuper, rolbypassrls = row
+    inert = bool(rolsuper) or bool(rolbypassrls)
+    try:
+        regengine_rls_enforcement_inert.labels(engine=label).set(1 if inert else 0)
+    except Exception:  # pragma: no cover — metrics must never break boot
+        pass
+
+    if inert:
+        logger.error(
+            "rls_enforcement_inert",
+            role=rolname,
+            superuser=bool(rolsuper),
+            bypassrls=bool(rolbypassrls),
+            engine=label,
+        )
+        if os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1":
+            raise RuntimeError(
+                f"RLS enforcement required but the '{label}' engine connects as "
+                f"role {rolname!r} (superuser={bool(rolsuper)}, bypassrls={bool(rolbypassrls)}) — "
+                "RLS policies are inert under this role. Point DATABASE_URL at the "
+                "least-privilege application role or unset REGENGINE_REQUIRE_RLS_ENFORCEMENT."
+            )
+        return "inert"
+
+    logger.info("rls_enforcement_active", role=rolname, engine=label)
+    return "enforced"
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 circuit_breaker = CircuitBreaker()

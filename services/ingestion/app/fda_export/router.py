@@ -48,6 +48,7 @@ from ..fda_export_service import (
     _safe_filename_token,
 )
 from ..subscription_gate import require_active_subscription
+from ..tenant_validation import resolve_tenant
 from ..webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 from .coverage import _enforce_kde_coverage_gate
 from .formatters import (
@@ -244,6 +245,12 @@ def export_fda_spreadsheet(
     _subscription=Depends(require_active_subscription),
 ):
     """Generate and return an FDA-oriented traceability export."""
+    # #2461 / EPIC-A: bind the ?tenant_id= query param to the authenticated
+    # principal (403 on mismatch for tenant-bound keys) and seed the RLS
+    # contextvar so the Engine begin-hook covers every query below —
+    # including statements after log_export's commit/rollback.
+    tenant_id = resolve_tenant(tenant_id, principal)
+
     # FSMA 204 §1.1455(c) requires a tamper-evident audit trail identifying
     # WHO produced each export and WHEN (issue #1205). Identity fields must
     # resolve from the authenticated principal — never from the request
@@ -525,6 +532,9 @@ def export_all_events(
     _subscription=Depends(require_active_subscription),
 ):
     """Export all events as FDA-format CSV."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
+
     # FSMA 204 §1.1455(c) audit-trail identity (issue #1205).
     identity = _audit_identity(request, principal)
     if not identity["user_id"]:
@@ -788,10 +798,12 @@ def export_all_events(
 async def export_history(
     tenant_id: str = Query(..., description="Tenant identifier"),
     limit: int = Query(50, ge=1, le=200),
-    _auth=Depends(require_permission("fda.read")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.read")),
     _subscription=Depends(require_active_subscription),
 ):
     """Return export audit log."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
     db_session = None
     try:
         from shared.database import SessionLocal
@@ -856,6 +868,9 @@ async def export_recall_filtered(
     _subscription=Depends(require_active_subscription),
 ):
     """Generate recall-filtered FDA export with flexible search criteria."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
+
     identity = _audit_identity(request, principal)
     if not identity["user_id"]:
         raise HTTPException(
@@ -905,10 +920,12 @@ async def export_recall_filtered(
 async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),
     tenant_id: str = Query(..., description="Tenant identifier"),
-    _auth=Depends(require_permission("fda.verify")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
     _subscription=Depends(require_active_subscription),
 ):
     """Verify that an export can be reproduced with the same hash."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
     return await verify_export_handler(
         export_id=export_id,
         tenant_id=tenant_id,
@@ -969,6 +986,9 @@ def export_fda_spreadsheet_v2(
     _subscription=Depends(require_active_subscription),
 ):
     """Generate FDA-oriented traceability export from the canonical model with rule evaluation results."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
+
     identity = _audit_identity(request, principal)
     if not identity["user_id"]:
         raise HTTPException(
@@ -1207,9 +1227,11 @@ def export_fda_spreadsheet_v2(
 )
 async def get_merkle_root(
     tenant_id: str = Query(..., description="Tenant identifier"),
-    _auth=Depends(require_permission("fda.verify")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
 ):
     """Return the current Merkle root for a tenant's hash chain."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
     return await get_merkle_root_handler(tenant_id)
 
 
@@ -1225,9 +1247,11 @@ async def get_merkle_root(
 async def get_merkle_proof(
     tenant_id: str = Query(..., description="Tenant identifier"),
     event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
-    _auth=Depends(require_permission("fda.verify")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
 ):
     """Return a Merkle inclusion proof for a specific event."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
+    tenant_id = resolve_tenant(tenant_id, principal)
     return await get_merkle_proof_handler(tenant_id, event_id)
 
 
@@ -1254,10 +1278,14 @@ def trace_transformation_graph(
     tlc: str,
     tenant_id: str = Query(..., description="Tenant identifier"),
     depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
-    _auth=Depends(require_permission("fda.read")),
+    principal: IngestionPrincipal = Depends(require_permission("fda.read")),
     _subscription=Depends(require_active_subscription),
 ) -> dict:
     """Return the transformation graph rooted at a given TLC."""
+    # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar
+    # (sync handler: the seed lands in this thread's context, which is the
+    # same context the queries below run in).
+    tenant_id = resolve_tenant(tenant_id, principal)
     db_session = None
     try:
         from shared.cte_persistence import CTEPersistence
