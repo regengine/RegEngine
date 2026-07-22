@@ -344,12 +344,22 @@ async def test_accept_invite_existing_user_with_token_succeeds(monkeypatch):
         "services.admin.app.invite_routes.supplier_graph_sync",
         MagicMock(record_invite_accepted=MagicMock(return_value=None)),
     )
+    ensure_identity = MagicMock(return_value=None)
+    monkeypatch.setattr(
+        "services.admin.app.invite_routes.ensure_passwordless_identity",
+        ensure_identity,
+    )
 
     req = AcceptInviteRequest(token="raw", name="x")
     http_req = _make_starlette_request()
     out = await accept_invite.__wrapped__(payload=req, request=http_req, db=db)
     assert out["status"] == "success"
     assert out["user_id"] == str(existing_user.id)
+    # Existing users joining a tenant must also get passwordless identity rows.
+    ensure_identity.assert_called_once()
+    assert ensure_identity.call_args.kwargs["user"] is existing_user
+    assert ensure_identity.call_args.kwargs["email"] == invite.email
+    assert ensure_identity.call_args.kwargs["organization_id"] == invite.tenant_id
 
 
 @pytest.mark.asyncio
@@ -376,6 +386,10 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
     monkeypatch.setattr(
         "services.admin.app.invite_routes.supplier_graph_sync",
         MagicMock(record_invite_accepted=MagicMock(return_value=None)),
+    )
+    monkeypatch.setattr(
+        "services.admin.app.invite_routes.ensure_passwordless_identity",
+        MagicMock(return_value=None),
     )
 
     req = AcceptInviteRequest(token="raw", name="x")

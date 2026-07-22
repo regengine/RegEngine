@@ -26,7 +26,7 @@ Once committed through supported evidence workflows, records land in Postgres wi
 |---|---|
 | CTE/KDE ingestion across webhook, CSV, EPCIS, and EDI | `services/ingestion/app/webhook_router_v2.py`, `services/ingestion/app/csv_templates.py`, `services/ingestion/app/epcis/router.py`, `services/ingestion/app/edi_ingestion/` |
 | Inflow Workbench preflight + commit gate | `services/ingestion/app/inflow_workbench.py`, `services/ingestion/app/supplier_portal.py` |
-| Tamper-evident audit chain (hash-linked, independently verifiable) | `services/admin/app/audit.py`, `services/admin/app/audit_integrity.py`, `services/shared/cte_persistence/`, `frontend/public/sdk/verify_chain.py` |
+| Tamper-evident audit chain (hash-linked, independently verifiable) | `services/admin/app/audit.py`, `services/admin/app/audit_integrity.py`, `services/shared/canonical_persistence/verification.py` (canonical store-of-record chain verifier), `services/shared/cte_persistence/` (legacy `cte_events` chain, retiring), `frontend/public/sdk/verify_chain.py` (export-bundle Merkle verifier). Note: `cte_persistence/verify_chain` walks the legacy `cte_events` table and reports canonical-only chains as orphaned; canonical chains are verified by `canonical_persistence/verification.py:verify_chain_canonical`. |
 | FDA + retailer exports (1.1455 spreadsheet, EPCIS 2.0 JSON-LD, Merkle proofs) | `services/ingestion/app/fda_export/router.py`, `services/ingestion/app/epcis_export.py`, `services/ingestion/app/fda_export/merkle.py` |
 | Recall drill simulation and readiness reporting | `services/ingestion/app/recall_simulations.py`, `services/ingestion/app/recall_report.py`, `services/ingestion/app/readiness_router.py` |
 

@@ -5,7 +5,17 @@ import os
 
 _logger = logging.getLogger("regengine.env")
 
-_CLOUD_ENV_VARS = (
+# #2512: single source of truth for the cloud-deployment marker set.
+# This tuple is the central security gate — when ANY of these are present
+# and REGENGINE_ENV is not explicitly set, validate_cloud_environment()
+# forces production, which is the only thing preventing dev auth fallbacks
+# (ephemeral JWT keys, in-memory sessions, permissive Supabase branch) from
+# running in a deployed environment. Keep it broader than just Railway/Vercel
+# so non-Railway hosts (Render, Fly, Kubernetes, self-hosted Docker) do not
+# silently resolve to development. services/admin/app/database.py and
+# services/admin/app/invite_routes.py import this so the marker set cannot
+# drift again.
+CLOUD_ENV_VARS = (
     "RAILWAY_ENVIRONMENT",
     "RAILWAY_ENVIRONMENT_NAME",
     "RAILWAY_ENVIRONMENT_ID",
@@ -15,7 +25,13 @@ _CLOUD_ENV_VARS = (
     "RAILWAY_SERVICE_ID",
     "VERCEL_ENV",
     "VERCEL_URL",
+    "RENDER",
+    "FLY_APP_NAME",
+    "KUBERNETES_SERVICE_HOST",
 )
+
+# Backwards-compatible private alias (kept for any internal references).
+_CLOUD_ENV_VARS = CLOUD_ENV_VARS
 
 _PRODUCTION_ENVIRONMENT_NAMES = {"production"}
 
@@ -48,7 +64,7 @@ def validate_cloud_environment() -> None:
     are detected but REGENGINE_ENV is not explicitly set, force it to
     'production' to prevent auth bypass tokens from being active.
     """
-    is_cloud = any(os.getenv(var) for var in _CLOUD_ENV_VARS)
+    is_cloud = any(os.getenv(var) for var in CLOUD_ENV_VARS)
     if not is_cloud:
         return
 

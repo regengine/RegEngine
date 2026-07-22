@@ -4,7 +4,6 @@ RegEngine API Client
 
 import logging
 import time
-from datetime import date
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -20,7 +19,6 @@ from .exceptions import (
 )
 from .models import (
     CTEType,
-    FTLResult,
     ReadinessScore,
     RecallDrill,
     Record,
@@ -199,69 +197,35 @@ class RegEngineClient:
     # =========================================================================
     # Record Management
     # =========================================================================
-
-    def create_record(
-        self,
-        cte_type: CTEType,
-        tlc: str,
-        location: str,
-        quantity: float,
-        quantity_uom: str = "lbs",
-        product_description: Optional[str] = None,
-        event_date: Optional[str] = None,
-        reference_document: Optional[str] = None,
-        input_tlcs: Optional[List[str]] = None,
-        **extra_kdes: Any,
-    ) -> Record:
-        """
-        Create a traceability record for a Critical Tracking Event.
-
-        Args:
-            cte_type: Type of CTE (HARVESTING, COOLING, INITIAL_PACKING, FIRST_LAND_BASED_RECEIVING, SHIPPING, RECEIVING, TRANSFORMATION)
-            tlc: Traceability Lot Code
-            location: GLN of the facility
-            quantity: Amount of product
-            quantity_uom: Unit of measure (default: lbs)
-            product_description: Description of the product
-            event_date: Date of the event (ISO format, defaults to today)
-            reference_document: Associated document reference
-            input_tlcs: For TRANSFORMATION, list of input lot codes
-            **extra_kdes: Additional Key Data Elements
-
-        Returns:
-            Record object with created record details
-        """
-        payload = {
-            "cte_type": cte_type.value if isinstance(cte_type, CTEType) else cte_type,
-            "tlc": tlc,
-            "location": location,
-            "quantity": quantity,
-            "quantity_uom": quantity_uom,
-            "event_date": event_date or date.today().isoformat(),
-            **extra_kdes,
-        }
-        if product_description:
-            payload["product_description"] = product_description
-        if reference_document:
-            payload["reference_document"] = reference_document
-        if input_tlcs:
-            payload["input_tlcs"] = input_tlcs
-
-        data = self._request("POST", "/api/graph/fsma/records", json=payload)
-        return Record(**data)
+    #
+    # WS-11 note: create_record and check_ftl were removed (not deprecated) —
+    # both always raised NotImplementedError because the consolidated API has
+    # no public create-record endpoint (records are written by the ingestion
+    # pipeline) and no per-category FTL lookup (#2531). The client exposes
+    # only methods with real routes behind them.
 
     def get_record(self, tlc: str) -> Record:
         """
-        Retrieve a traceability record by Traceability Lot Code.
+        Retrieve a single traceability record by Traceability Lot Code.
 
         Args:
             tlc: The Traceability Lot Code to look up
 
         Returns:
             Record object with record details
+
+        Raises:
+            NotFoundError: if no record exists for the given TLC.
         """
-        data = self._request("GET", f"/api/graph/fsma/records/{tlc}")
-        return Record(**data)
+        data = self._request(
+            "GET",
+            "/api/v1/records",
+            params={"tlc": tlc, "limit": 1},
+        )
+        events = data.get("events", [])
+        if not events:
+            raise NotFoundError(f"No record found for TLC: {tlc}")
+        return Record(**events[0])
 
     def query_records(
         self,
@@ -288,10 +252,10 @@ class RegEngineClient:
             "limit": limit,
         }
         if cte_type:
-            params["cte_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
+            params["event_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
 
-        data = self._request("GET", "/api/graph/fsma/records", params=params)
-        return [Record(**r) for r in data.get("records", [])]
+        data = self._request("GET", "/api/v1/records", params=params)
+        return [Record(**r) for r in data.get("events", [])]
 
     # =========================================================================
     # Supply Chain Tracing
@@ -318,7 +282,7 @@ class RegEngineClient:
             "max_depth": max_depth,
             "enforce_time_arrow": enforce_time_arrow,
         }
-        data = self._request("GET", f"/api/graph/fsma/trace/forward/{tlc}", params=params)
+        data = self._request("GET", f"/api/v1/fsma/traceability/trace/forward/{tlc}", params=params)
         return TraceResult(**data)
 
     def trace_backward(
@@ -337,7 +301,7 @@ class RegEngineClient:
             TraceResult with source lots and facilities
         """
         params = {"max_depth": max_depth}
-        data = self._request("GET", f"/api/graph/fsma/trace/backward/{tlc}", params=params)
+        data = self._request("GET", f"/api/v1/fsma/traceability/trace/backward/{tlc}", params=params)
         return TraceResult(**data)
 
     def get_timeline(self, tlc: str) -> List[TimelineEvent]:
@@ -350,25 +314,12 @@ class RegEngineClient:
         Returns:
             List of TimelineEvent objects in chronological order
         """
-        data = self._request("GET", f"/api/graph/fsma/timeline/{tlc}")
+        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{tlc}")
         return [TimelineEvent(**e) for e in data.get("events", [])]
 
     # =========================================================================
     # FTL Checker
     # =========================================================================
-
-    def check_ftl(self, product_category: str) -> FTLResult:
-        """
-        Check if a product category is on FDA's Food Traceability List.
-
-        Args:
-            product_category: Category ID (e.g., 'leafy-greens', 'finfish')
-
-        Returns:
-            FTLResult with coverage status, CTEs, and KDEs required
-        """
-        data = self._request("GET", f"/api/compliance/ftl/{product_category}")
-        return FTLResult(**data)
 
     # =========================================================================
     # Recall Management
@@ -396,7 +347,7 @@ class RegEngineClient:
             "type": drill_type,
             "severity": severity,
         }
-        data = self._request("POST", "/api/graph/fsma/recall/drills", json=payload)
+        data = self._request("POST", "/api/v1/fsma/recall/drill", json=payload)
         return RecallDrill(**data)
 
     def get_recall_drills(self, limit: int = 20) -> List[RecallDrill]:
@@ -409,7 +360,7 @@ class RegEngineClient:
         Returns:
             List of RecallDrill objects
         """
-        data = self._request("GET", "/api/graph/fsma/recall/drills", params={"limit": limit})
+        data = self._request("GET", "/api/v1/fsma/recall/history", params={"limit": limit})
         return [RecallDrill(**d) for d in data.get("drills", [])]
 
     def get_readiness_score(self) -> ReadinessScore:
@@ -419,7 +370,7 @@ class RegEngineClient:
         Returns:
             ReadinessScore with score and recommendations
         """
-        data = self._request("GET", "/api/graph/fsma/recall/readiness")
+        data = self._request("GET", "/api/v1/fsma/recall/readiness")
         return ReadinessScore(**data)
 
     # =========================================================================
@@ -451,4 +402,4 @@ class RegEngineClient:
             "start_date": start_date,
             "end_date": end_date,
         }
-        return self._request_bytes("GET", "/api/graph/fsma/export/fda-spreadsheet", params=params)
+        return self._request_bytes("GET", "/api/v1/fsma/compliance/export/fda-request", params=params)

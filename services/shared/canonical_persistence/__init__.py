@@ -8,4 +8,7 @@ Package layout:
 """
 
 from shared.canonical_persistence.models import CanonicalStoreResult  # noqa: F401
+from shared.canonical_persistence.verification import (  # noqa: F401
+    CanonicalChainVerification,
+)
 from shared.canonical_persistence.writer import CanonicalEventStore  # noqa: F401

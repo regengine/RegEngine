@@ -23,8 +23,11 @@ TABLES_EXEMPT is the only escape hatch — add a table here only if it
 genuinely is not tenant-scoped (e.g. lookup tables, system catalogs)
 with a comment explaining why. Keep the list small.
 
-Requires Docker for testcontainers. If Docker is unavailable the test
-module skips cleanly.
+Needs a real Postgres. Reuses ``DATABASE_URL`` when set (CI service
+container), else spins up a disposable testcontainers Postgres. With
+``REGENGINE_REQUIRE_DB=1`` an unavailable Postgres (or a failed
+``alembic upgrade head``) FAILS instead of skipping, so the gate can't pass
+green by skipping in CI (#2530). Without it the module skips cleanly.
 
 Run via:
     pytest tests/migrations/test_rls_coverage.py -v
@@ -38,13 +41,10 @@ from pathlib import Path
 from typing import Iterator, Set
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
-testcontainers = pytest.importorskip("testcontainers")
-pytest.importorskip("testcontainers.postgres")
-
-from sqlalchemy import create_engine, text  # noqa: E402
-from sqlalchemy.engine import Engine  # noqa: E402
-from testcontainers.postgres import PostgresContainer  # noqa: E402
+from tests.migrations.rls_db import rls_postgres_or_skip, skip_or_fail_db
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -115,17 +115,18 @@ def _provision_app_roles(database_url: str) -> None:
 
 @pytest.fixture(scope="module")
 def upgraded_engine() -> Iterator[Engine]:
-    """Spin up PostgreSQL, run ``alembic upgrade head``, yield engine."""
-    try:
-        container = PostgresContainer("postgres:16", driver="psycopg")
-        container.start()
-    except Exception as exc:
-        pytest.skip(f"PostgresContainer unavailable: {exc}")
+    """Acquire a real Postgres, run ``alembic upgrade head``, yield the engine.
 
-    try:
-        url = container.get_connection_url().replace("postgresql+psycopg2://", "postgresql+psycopg://")
+    Reuses ``DATABASE_URL`` (CI service container) when reachable, else a
+    disposable testcontainers Postgres; skips locally / FAILS under
+    ``REGENGINE_REQUIRE_DB=1`` when no Postgres is available (#2530). A failed
+    ``alembic upgrade head`` likewise FAILS under ``REGENGINE_REQUIRE_DB=1`` so a
+    broken migration chain can't quietly green the gate.
+    """
+    with rls_postgres_or_skip() as (plain_url, engine):
+        driver_url = engine.url.render_as_string(hide_password=False)
         env = {
-            "DATABASE_URL": url.replace("postgresql+psycopg", "postgresql"),
+            "DATABASE_URL": plain_url,
             "PATH": subprocess.os.environ["PATH"],
         }
         # alembic needs these env defaults — reuse what the fresh-DB
@@ -138,7 +139,7 @@ def upgraded_engine() -> Iterator[Engine]:
             if v is not None:
                 env[k] = v
 
-        _provision_app_roles(url)
+        _provision_app_roles(driver_url)
         result = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=REPO_ROOT,
@@ -148,19 +149,12 @@ def upgraded_engine() -> Iterator[Engine]:
             timeout=300,
         )
         if result.returncode != 0:
-            pytest.skip(
+            skip_or_fail_db(
                 f"alembic upgrade head failed (returncode={result.returncode}):"
                 f"\nstdout: {result.stdout}\nstderr: {result.stderr}"
             )
 
-        engine = create_engine(url, future=True)
         yield engine
-    finally:
-        try:
-            engine.dispose()  # type: ignore[has-type]
-        except Exception:
-            pass
-        container.stop()
 
 
 def _fsma_tables(engine: Engine) -> list[str]:

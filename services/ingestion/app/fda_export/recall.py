@@ -28,8 +28,12 @@ from .formatters import (
 )
 from .queries import (
     AuditLogWriteError,
+    _verify_chain_for_export,
     build_recall_where_clause,
+    build_recall_where_clause_canonical,
+    export_v1_reads_canonical,
     fetch_recall_events,
+    fetch_recall_events_canonical,
     log_recall_export,
     rows_to_event_dicts,
 )
@@ -113,18 +117,33 @@ async def export_recall_filtered_handler(
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
 
-        # Build dynamic query with parameterized filters
-        where_clause, params = build_recall_where_clause(
-            tenant_id=tenant_id,
-            product=product,
-            location=location,
-            tlc=tlc,
-            event_type=event_type,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-        rows = fetch_recall_events(db_session, where_clause, params)
+        # Build dynamic query with parameterized filters. WS-1b (#1335):
+        # behind FDA_EXPORT_V1_READ_CANONICAL (default off) the same
+        # filters run against fsma.traceability_events via the inverse of
+        # the dual-write mapping — output proven byte-identical by the
+        # golden suite before any environment flips the flag.
+        if export_v1_reads_canonical():
+            where_clause, params = build_recall_where_clause_canonical(
+                tenant_id=tenant_id,
+                product=product,
+                location=location,
+                tlc=tlc,
+                event_type=event_type,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            rows = fetch_recall_events_canonical(db_session, where_clause, params)
+        else:
+            where_clause, params = build_recall_where_clause(
+                tenant_id=tenant_id,
+                product=product,
+                location=location,
+                tlc=tlc,
+                event_type=event_type,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            rows = fetch_recall_events(db_session, where_clause, params)
         if len(rows) > 10000:
             raise HTTPException(
                 status_code=413,
@@ -157,7 +176,7 @@ async def export_recall_filtered_handler(
         events = rows_to_event_dicts(rows)
 
         csv_content, export_hash = generate_csv_and_hash(events, include_pii=include_pii)
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
         _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,

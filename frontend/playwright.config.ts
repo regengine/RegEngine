@@ -77,6 +77,14 @@ delete forwardedEnv.NO_COLOR;
 export default defineConfig({
     testDir: './tests/e2e',
     globalSetup: './tests/e2e/global-setup.ts',
+    /* The local webServer runs `next dev`, which compiles each route on
+     * first hit. A cold compile of a heavy page (dashboard, settings) can
+     * exceed Playwright's default 30s test / 5s expect timeouts on a slow
+     * runner, flaking auth-flow on unrelated PRs. Assertions still have to
+     * genuinely pass — this only stops first-render latency from failing
+     * the gate. */
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
     /* Run tests in files in parallel */
     fullyParallel: true,
     /* Fail the build on CI if you accidentally left test.only in the source code. */

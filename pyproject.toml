@@ -47,6 +47,7 @@ addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
 pythonpath = [".", "services"]
 testpaths = [
     "tests",
+    "regengine/tests",
     "services/admin/tests",
     "services/compliance/tests",
     "services/graph/tests",

@@ -63,6 +63,7 @@ from .formatters import (
 from .merkle import get_merkle_proof_handler, get_merkle_root_handler
 from .queries import (
     AuditLogWriteError,
+    _verify_chain_for_export,
     build_recall_where_clause,
     build_v2_where_clause,
     fetch_export_log_history,
@@ -204,7 +205,14 @@ def _audit_identity(
         },
     },
 )
-async def export_fda_spreadsheet(
+# NOTE: declared ``def`` (not ``async def``) on purpose (#2516). The body
+# opens a synchronous ``SessionLocal()`` and runs blocking psycopg I/O
+# (``query_events_by_tlc`` / ``verify_chain`` / ``log_export``). FastAPI runs
+# plain ``def`` endpoints in its threadpool, so this blocking work never
+# stalls the event loop that serves every other tenant on the consolidated
+# monolith. Do not re-add ``async`` unless the blocking DB calls are first
+# offloaded via ``run_in_threadpool`` / ``to_thread``.
+def export_fda_spreadsheet(
     request: Request,
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
@@ -286,7 +294,7 @@ async def export_fda_spreadsheet(
         # content exactly, so ``verify_export`` can reproduce it.
         csv_content = _generate_csv(events, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
 
         # Enforce the KDE coverage gate (#1222). Callers may bypass by
@@ -489,7 +497,10 @@ async def export_fda_spreadsheet(
         },
     },
 )
-async def export_all_events(
+# Declared ``def`` on purpose (#2516) — runs in FastAPI's threadpool so the
+# synchronous ``SessionLocal()`` + batch query + ``verify_chain`` blocking work
+# never stalls the shared event loop. See ``export_fda_spreadsheet`` above.
+def export_all_events(
     request: Request,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -557,21 +568,26 @@ async def export_all_events(
             limit=_EXPORT_LIMIT,
         )
 
-        # Batch-fetch by distinct TLCs to avoid O(N*M) query amplification
+        # Expand all distinct seed TLCs through transformation_links and fetch
+        # their events in a *bounded* number of DB round-trips (#2515). The
+        # previous implementation looped ``query_events_by_tlc`` once per
+        # distinct TLC — one recursive-CTE traversal + one unbounded events
+        # SELECT per lot — which fanned out into O(distinct_TLCs) sequential
+        # queries on a single pooled connection. ``query_events_by_tlcs`` does
+        # the same transformation-link expansion and event fetch as a single
+        # set-based query, capped at ``_EXPORT_LIMIT`` rows.
         tlcs = list({evt["traceability_lot_code"] for evt in events})
-        full_events = []
-        for tlc_batch_start in range(0, len(tlcs), 50):
-            tlc_batch = tlcs[tlc_batch_start : tlc_batch_start + 50]
-            for tlc in tlc_batch:
-                full = persistence.query_events_by_tlc(
-                    tenant_id=tenant_id,
-                    tlc=tlc,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                full_events.extend(full)
+        full_events = persistence.query_events_by_tlcs(
+            tenant_id=tenant_id,
+            tlcs=tlcs,
+            start_date=start_date,
+            end_date=end_date,
+            limit=_EXPORT_LIMIT,
+        )
 
-        # Deduplicate by event ID
+        # Deduplicate by event ID (defensive — the set-based query returns each
+        # event once, but keep the guard so output is identical to the prior
+        # per-TLC implementation).
         seen = set()
         deduped = []
         for e in full_events:
@@ -592,7 +608,7 @@ async def export_all_events(
 
         csv_content = _generate_csv(deduped, include_pii=include_pii)
         export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(deduped)
 
         # KDE coverage gate (#1222).
@@ -924,7 +940,10 @@ async def verify_export(
         },
     },
 )
-async def export_fda_spreadsheet_v2(
+# Declared ``def`` on purpose (#2516) — runs in FastAPI's threadpool so the
+# synchronous ``SessionLocal()`` + ``fetch_v2_events`` + ``verify_chain``
+# blocking work never stalls the shared event loop. See above.
+def export_fda_spreadsheet_v2(
     request: Request,
     tenant_id: str = Query(..., description="Tenant identifier"),
     tlc: Optional[str] = Query(None, description="Traceability Lot Code filter (exact or partial with %%)"),
@@ -1025,7 +1044,7 @@ async def export_fda_spreadsheet_v2(
 
         # ----- Generate CSV with compliance columns -----
         csv_content, export_hash = generate_csv_v2_and_hash(events, include_pii=include_pii)
-        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
         completeness_summary = _build_completeness_summary(events)
         _enforce_kde_coverage_gate(
             completeness_summary=completeness_summary,
@@ -1228,7 +1247,10 @@ async def get_merkle_proof(
     ),
     tags=["Traceability"],
 )
-async def trace_transformation_graph(
+# Declared ``def`` on purpose (#2516) — runs in FastAPI's threadpool so the
+# synchronous ``SessionLocal()`` + ``fetch_trace_graph_data`` (recursive-CTE
+# walk) blocking work never stalls the shared event loop. See above.
+def trace_transformation_graph(
     tlc: str,
     tenant_id: str = Query(..., description="Tenant identifier"),
     depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),

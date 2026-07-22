@@ -5,7 +5,7 @@ reviews:
   # ── Global Review Instructions ──────────────────────────
   instructions: |
     You are reviewing code for RegEngine, a multi-tenant regulatory compliance platform.
-    Follow the constitution at .agent/CONSTITUTION.md for all reviews.
+    Follow the agent guidance at .github/copilot-instructions.md and AGENTS.md for all reviews.
     
     Key review priorities:
     1. Tenant isolation — every query MUST include tenant_id scoping
@@ -35,38 +35,53 @@ reviews:
         - Bidirectional traversal support
         - Tenant database routing via Neo4jClient
 
-    # Bot-PCOS scope
-    - path: "services/admin/app/pcos/**"
-      instructions: |
-        Payroll calculation engine. Verify:
-        - Decimal type used (not float) for all monetary values
-        - Rate table validation against union_rate_tables.yaml
-        - Fringe benefits itemized separately
-        - Rounding only at final output
-
-    # Bot-Security scope
-    - path: "shared/security/**"
-      instructions: |
-        Security-critical code. EXTRA SCRUTINY required:
-        - No IDOR vulnerabilities
-        - Tenant isolation intact (Double-Lock model)
-        - Input sanitization via Pydantic
-        - Least privilege on API key scopes
-        - Audit logging for security events
-
-    - path: "shared/auth.py"
+    # Bot-Security scope (Double-Lock) — routed at the real security-critical
+    # modules under services/shared/. This is also the interim second-review
+    # control referenced by .github/CODEOWNERS until a second human owner is
+    # onboarded, so these globs must stay in sync with the security-sensitive
+    # entries in CODEOWNERS.
+    - path: "services/shared/auth.py"
       instructions: |
         Authentication module. Verify:
         - API key validation is constant-time
         - Rate limiting applied
         - No secrets in error responses
 
-    - path: "shared/middleware/**"
+    - path: "services/shared/api_authentication.py"
+      instructions: |
+        API-key authentication. EXTRA SCRUTINY required:
+        - Constant-time key comparison, no timing side channels
+        - Least privilege on API key scopes
+        - No secrets echoed in error responses or logs
+
+    - path: "services/shared/tenant_context.py"
+      instructions: |
+        Tenant isolation core (Double-Lock model). EXTRA SCRUTINY required:
+        - RLS GUC (app.tenant_id) set via the canonical set_tenant_guc helpers
+        - No IDOR: every path resolves tenant from trusted context, never from
+          client-supplied identifiers
+        - Fail-hard on missing tenant context, never a silent cross-tenant read
+
+    - path: "services/shared/middleware/**"
       instructions: |
         Middleware layer. Verify:
         - Tenant context set correctly
         - Request ID propagation
         - Context cleared after request
+
+    - path: "services/shared/webhook_security.py"
+      instructions: |
+        Webhook signature verification. EXTRA SCRUTINY required:
+        - Constant-time signature comparison
+        - Replay protection (timestamp/nonce)
+        - Input sanitization via Pydantic
+
+    - path: "services/shared/api_key_store.py"
+      instructions: |
+        API key storage. EXTRA SCRUTINY required:
+        - Keys stored hashed, never in plaintext
+        - Least privilege on key scopes
+        - Audit logging for key issuance/revocation
 
     # Bot-Infra scope
     - path: "infra/**"

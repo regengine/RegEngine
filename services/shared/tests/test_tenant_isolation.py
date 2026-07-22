@@ -150,6 +150,81 @@ class TestTenantDependencies:
         assert "Tenant ID not found" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
+    async def test_db_issued_api_key_resolves_own_tenant(self):
+        """#2524: a DB-issued API key (no env-key match, so middleware leaves
+        request.state.tenant_id=None) must still resolve its own tenant via the
+        principal that require_api_key attaches to request.state.api_key."""
+        from shared.middleware import get_current_tenant_id
+
+        tenant_id = uuid.uuid4()
+        api_key = SimpleNamespace(key_id="db-key-1", tenant_id=str(tenant_id))
+        request = SimpleNamespace(state=SimpleNamespace(tenant_id=None, api_key=api_key))
+
+        result = await get_current_tenant_id(request)
+
+        assert result == tenant_id
+
+    @pytest.mark.asyncio
+    async def test_two_db_keys_resolve_to_own_tenants(self):
+        """#2524: two distinct DB-issued keys resolve to their own tenants — no
+        cross-tenant bleed and no shared-env pinning."""
+        from shared.middleware import get_current_tenant_id
+
+        tenant_a = uuid.uuid4()
+        tenant_b = uuid.uuid4()
+
+        req_a = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="a", tenant_id=str(tenant_a)))
+        )
+        req_b = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="b", tenant_id=str(tenant_b)))
+        )
+
+        assert await get_current_tenant_id(req_a) == tenant_a
+        assert await get_current_tenant_id(req_b) == tenant_b
+        assert tenant_a != tenant_b
+
+    @pytest.mark.asyncio
+    async def test_middleware_tenant_wins_over_principal(self):
+        """When the middleware already resolved a tenant (JWT/internal-header/
+        env key), it is authoritative and the principal fallback is not used."""
+        from shared.middleware import get_current_tenant_id
+
+        mw_tenant = uuid.uuid4()
+        key_tenant = uuid.uuid4()
+        request = SimpleNamespace(
+            state=SimpleNamespace(
+                tenant_id=mw_tenant,
+                api_key=SimpleNamespace(key_id="k", tenant_id=str(key_tenant)),
+            )
+        )
+
+        assert await get_current_tenant_id(request) == mw_tenant
+
+    @pytest.mark.asyncio
+    async def test_api_key_without_tenant_fails_closed(self):
+        """#2524: a principal with no tenant (or an invalid UUID) must still
+        fail closed with 401 — never fall through to a 'None => all tenants'
+        query."""
+        from shared.middleware import get_current_tenant_id
+
+        # Principal present but tenant_id is None.
+        request = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="k", tenant_id=None))
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_tenant_id(request)
+        assert exc_info.value.status_code == 401
+
+        # Principal present but tenant_id is not a valid UUID.
+        request_bad = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="k", tenant_id="not-a-uuid"))
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_tenant_id(request_bad)
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
     async def test_get_optional_tenant_id_present(self):
         """Test optional tenant_id when present."""
         from shared.middleware import get_optional_tenant_id

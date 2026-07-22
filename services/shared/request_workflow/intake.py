@@ -10,6 +10,7 @@ from uuid import uuid4
 from sqlalchemy import text
 
 from .constants import DEFAULT_RESPONSE_HOURS, VALID_REQUEST_CHANNELS, VALID_SCOPE_TYPES
+from .utils import row_to_dict
 
 logger = logging.getLogger("request-workflow")
 
@@ -91,7 +92,7 @@ class IntakeMixin:
             tenant_id=tenant_id,
             due_at=str(due_at),
         )
-        return dict(row)
+        return row_to_dict(row)
 
     def update_scope(
         self,
@@ -153,4 +154,4 @@ class IntakeMixin:
         self._safe_commit()
         row = result.mappings().fetchone()
         logger.info("scope_updated", case_id=request_case_id, tenant_id=tenant_id)
-        return dict(row)
+        return row_to_dict(row)

@@ -91,6 +91,16 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     result = {}
 
+    # TODO(#1335): migrate to fsma.traceability_events. DEFERRED: this scorer
+    # is tightly coupled to the legacy key-value KDE table (fsma.cte_kdes,
+    # joined below for the KDE-completeness ratio) and to the legacy
+    # CTEPersistence.verify_chain. The canonical store keeps KDEs as a JSONB
+    # column with no row-per-field equivalent, so a partial table swap here
+    # would split the score across two stores and change the KDE-completeness
+    # semantics. Migrate the whole scorer (events + KDE JSONB + canonical
+    # verifier) together once the canonical KDE-completeness contract is
+    # defined; until then this reader stays on fsma.cte_events as a unit.
+
     # 1) CTE event stats
     row = db_session.execute(
         text("""
@@ -300,10 +310,18 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     # 6) Chain integrity — full cryptographic verification (last 50 entries)
     try:
+        from shared.canonical_persistence.verification import chain_verify_reads_canonical
         from shared.cte_persistence import CTEPersistence
 
-        persistence = CTEPersistence(db_session)
-        chain_result = persistence.verify_chain(tenant_id)
+        # WS-1b (#1335): behind CHAIN_VERIFY_READ_CANONICAL (default off)
+        # the score verifies the canonical chain instead of the legacy one.
+        if chain_verify_reads_canonical():
+            from shared.canonical_persistence import CanonicalEventStore
+
+            chain_result = CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
+        else:
+            persistence = CTEPersistence(db_session)
+            chain_result = persistence.verify_chain(tenant_id)
         result["chain_verified"] = chain_result.valid
         result["chain_verification_errors"] = chain_result.errors
     except (ImportError, OperationalError, ProgrammingError) as exc:

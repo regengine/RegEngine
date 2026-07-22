@@ -34,12 +34,75 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # ---------------------------------------------------------------------------
-# Target metadata — imports the SQLAlchemy ORM Base so `alembic revision
-# --autogenerate` can detect model↔schema drift automatically.
+# Target metadata — imports EVERY SQLAlchemy ORM Base in the tree so
+# `alembic revision --autogenerate` / `alembic check` can detect
+# model↔schema drift across all of them (WS-2b). Before this, only the
+# admin Base was registered, so ORM models elsewhere silently escaped
+# tracking (e.g. scheduler_seen_items existed only via a runtime
+# create_all with no migration).
+#
+# NOTE: most RegEngine tables (fsma.*, canonical/CTE persistence, RLS
+# infrastructure) are raw-SQL-managed — they have NO ORM model by design.
+# The include_object hook below makes drift detection one-directional:
+# every ORM model must match the migrated schema, but database tables
+# without an ORM counterpart are ignored rather than proposed for DROP.
 # ---------------------------------------------------------------------------
-from services.admin.app.sqlalchemy_models import Base  # noqa: E402
+from services.admin.app.sqlalchemy_models import Base as AdminBase  # noqa: E402
+from services.scheduler.app.state import Base as SchedulerStateBase  # noqa: E402
+from services.shared.agent_operator_models import Base as AgentOperatorBase  # noqa: E402
+from services.shared.api_key_store import Base as ApiKeyStoreBase  # noqa: E402
 
-target_metadata = Base.metadata
+target_metadata = [
+    AdminBase.metadata,
+    AgentOperatorBase.metadata,
+    ApiKeyStoreBase.metadata,
+    SchedulerStateBase.metadata,
+]
+
+
+# WS-2c: the agent-operator ORM overlay is now fully aligned with the
+# v079/v080 DDL (nullability, defaults, comments, unique sets), so the
+# former KNOWN_DRIFT_TABLES quarantine is gone. What remains excluded is
+# a fixed set of DESC-ordered indexes: the database orders their trailing
+# timestamp column DESC, which SQLAlchemy reflection surfaces as an
+# expression element autogenerate can never match. Each verified
+# equivalent by hand against the migrated schema. Do not grow this set.
+DESC_INDEX_QUARANTINE = {
+    "idx_audit_tenant_time",
+    "idx_agent_artifacts_tenant_created",
+    "idx_agent_artifacts_tenant_run",
+    "idx_agent_reviews_tenant_status",
+}
+
+
+def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
+    """One-directional drift contract (WS-2b).
+
+    ``reflected and compare_to is None`` == a table/index that exists in
+    the database but has no ORM counterpart. That is the normal state for
+    the raw-SQL-managed majority of the schema, so it is excluded from
+    autogenerate/check instead of being flagged as a drop candidate.
+    Everything defined on an ORM Base is compared for real.
+    """
+    if type_ in {"table", "index"} and reflected and compare_to is None:
+        return False
+    # Known-equivalent representations that autogenerate cannot compare
+    # faithfully (verified manually against the migrated schema):
+    #   - DESC_INDEX_QUARANTINE — see above.
+    #   - api_keys key_id uniqueness: enforced in the database as a UNIQUE
+    #     constraint (api_keys_key_id_key) while the ORM expresses it as
+    #     unique=True on the column — same guarantee, different object.
+    if type_ == "index" and name in DESC_INDEX_QUARANTINE:
+        return False
+    if type_ == "unique_constraint" and getattr(object_, "table", None) is not None and object_.table.name == "api_keys":
+        return False
+    # FK *option* churn (ondelete/match representation) produces noisy
+    # remove/add pairs on tables that are structurally in sync. Constraint
+    # alignment is tracked by the WS-2c type/constraint audit, not this
+    # structural gate.
+    if type_ == "foreign_key_constraint":
+        return False
+    return True
 
 
 def _guard_baseline_downgrade() -> None:
@@ -80,6 +143,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -103,6 +167,18 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_object=include_object,
+            # ORM models live in both public and fsma schemas — reflect all
+            # schemas so fsma-based models (agent_operator_models) are found
+            # instead of being reported as missing tables.
+            include_schemas=True,
+            # Structural gate only (WS-2b): tables/columns/indexes. Type
+            # representation differences (TEXT vs VARCHAR, ARRAY flavors)
+            # are enforced at boot by verify_orm_db_type_alignment and by
+            # the WS-2c audit — comparing them here double-reports with
+            # different heuristics.
+            compare_type=False,
+            compare_server_default=False,
         )
 
         with context.begin_transaction():

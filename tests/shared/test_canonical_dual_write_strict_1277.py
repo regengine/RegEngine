@@ -73,11 +73,22 @@ class TestDualWriteLegacyStrictContract_Issue1277:
         assert isinstance(result, str)
         assert result == str(event.event_id)
 
-    def test_kde_write_failure_is_still_isolated(self):
-        """Behavior preserved: a single malformed KDE rolls back its
-        savepoint and the CTE event write survives. That inner
-        isolation is intentional (KDEs are annotations), distinct from
-        the outer invariant the #1277 fix protects."""
+    def test_kde_write_failure_now_propagates(self):
+        """#2532: a genuine (non-idempotency) KDE insert failure must
+        now PROPAGATE rather than be swallowed by a per-KDE savepoint.
+
+        The previous implementation wrapped every ``cte_kdes`` INSERT in
+        ``session.begin_nested()`` and caught ``except Exception`` with a
+        debug log, so a failed KDE write was invisible above debug and
+        the legacy ``cte_events`` row landed without its KDEs — silently
+        diverging the legacy table (which FDA export / graph sync read)
+        from the canonical store. Per #2532 the only thing that may be
+        absorbed is the idempotency-race duplicate, which is handled by
+        ``ON CONFLICT (cte_event_id, kde_key) DO NOTHING`` at the SQL
+        layer. Any other exception bubbles up so the surrounding
+        transaction rolls back — restoring "both tables or neither" at
+        KDE granularity.
+        """
         session = FakeSession()
         event = _make_event()
         event.kdes = {"gtin": "ok", "bad_kde": "trouble"}
@@ -89,9 +100,8 @@ class TestDualWriteLegacyStrictContract_Issue1277:
 
         session.add_rule(r"INSERT INTO fsma\.cte_kdes", _sometimes_fail)
 
-        # Must NOT raise — KDE inner savepoint handles it.
-        result = migration.dual_write_legacy(session, event)
-        assert result == str(event.event_id)
+        with pytest.raises(RuntimeError, match="simulated KDE failure"):
+            migration.dual_write_legacy(session, event)
 
 
 # ---------------------------------------------------------------------------

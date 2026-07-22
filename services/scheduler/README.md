@@ -62,6 +62,14 @@ Environment variables:
 - `KAFKA_BOOTSTRAP_SERVERS`: Kafka broker addresses
 - `REDIS_URL`: Redis connection (circuit breaker state itself is in-memory)
 - `WEBHOOK_URLS`: Comma-separated webhook endpoints
+- `WEBHOOK_OUTBOX_PATH`: Filesystem path for the durable webhook dead-letter
+  queue (JSONL). **Required whenever `WEBHOOK_URLS` is set** (#2510). Leave it
+  empty and failed deliveries of HIGH/CRITICAL recall/enforcement alerts are
+  buffered in process memory only and are silently dropped on the next
+  restart/deploy — the drain/retry job also won't register. On Railway (ephemeral
+  container filesystem) this **must** point at a mounted persistent volume.
+  Enabling webhooks without it triggers a startup `webhook_dlq_persistence_disabled`
+  WARNING and is reported as `webhook_dlq.at_risk=true` in `GET /v1/scheduler/status`.
 - `FDA_SCRAPE_INTERVAL_MINUTES`: Polling interval (default: 60)
 
 ## Running

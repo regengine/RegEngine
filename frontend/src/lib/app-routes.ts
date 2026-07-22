@@ -11,7 +11,6 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
   "/fsma",
   "/settings",
   "/onboarding",
-  "/owner",
   "/rules",
   "/records",
   "/exceptions",

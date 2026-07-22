@@ -3,14 +3,27 @@ RegEngine Python SDK
 Official client library for RegEngine FSMA 204 Compliance Platform.
 """
 
-from setuptools import find_packages, setup
+import re
+from pathlib import Path
+
+from setuptools import setup
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
+# Single source of truth for the version: regengine/__init__.py.
+_version_match = re.search(
+    r'^__version__ = "([^"]+)"',
+    Path(__file__).with_name("__init__.py").read_text(encoding="utf-8"),
+    re.MULTILINE,
+)
+if not _version_match:
+    raise RuntimeError("__version__ not found in __init__.py")
+_VERSION = _version_match.group(1)
+
 setup(
     name="regengine",
-    version="0.1.0.dev0",
+    version=_VERSION,
     author="RegEngine",
     author_email="sdk@regengine.co",
     description="Official Python SDK for RegEngine FSMA 204 Compliance Platform",
@@ -36,7 +49,15 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Scientific/Engineering :: Information Analysis",
     ],
-    packages=find_packages(),
+    # setup.py lives INSIDE the package directory, so find_packages() used
+    # to discover the SUBdirectories (swarm/, tests/) as top-level packages
+    # and never installed the client itself — `import regengine` failed in a
+    # clean environment (the sdk-ci import check passed only because it ran
+    # from the repo root, where the source tree shadows site-packages). Map
+    # the package explicitly instead, and keep the legacy swarm framework and
+    # in-repo tests out of the customer artifact.
+    packages=["regengine"],
+    package_dir={"regengine": "."},
     python_requires=">=3.8",
     install_requires=[
         "httpx>=0.27,<1.0",
@@ -53,7 +74,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "regengine-verify=regengine.verify_chain:main",
+            "regengine-verify=regengine.verify_records:main",
         ],
     },
     keywords="regengine fsma fda traceability compliance food-safety supply-chain",

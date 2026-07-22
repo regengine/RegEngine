@@ -376,7 +376,15 @@ def export_audit_logs(
         allowed = [k for k, v in severity_levels.items() if v <= min_level]
         conditions.append(AuditLogModel.severity.in_(allowed))
 
-    stmt = select(AuditLogModel).where(and_(*conditions)).order_by(AuditLogModel.id.asc()).limit(limit)
+    # #2513: order by the contiguous per-tenant sequence so verify_chain
+    # can detect a removed middle row via a gap. id ASC is the tiebreaker
+    # for legacy rows that predate the sequence_num backfill (NULL seq).
+    stmt = (
+        select(AuditLogModel)
+        .where(and_(*conditions))
+        .order_by(AuditLogModel.sequence_num.asc(), AuditLogModel.id.asc())
+        .limit(limit)
+    )
     rows = db.execute(stmt).scalars().all()
 
     anonymized_actor_ids = _load_anonymized_actor_ids(db, tenant_id, rows)
@@ -434,6 +442,10 @@ def export_audit_logs(
                 "integrity": {
                     "prev_hash": row.prev_hash,
                     "hash": row.integrity_hash,
+                    # #2513: sequence_num lets verify_chain check per-tenant
+                    # contiguity (gap == removed/deleted row) and recompute
+                    # the v3 hash.
+                    "sequence_num": row.sequence_num,
                 },
             }
         )
@@ -446,7 +458,15 @@ def export_audit_logs(
     # Log the export itself (audit the auditor). Include the declared
     # purpose and whether raw PII was released so compliance officers
     # can audit the caller. (#1385)
-    AuditLogger.log_event(
+    #
+    # #2522: this self-log is the "audit the auditor" control. log_event
+    # is best-effort and returns None on failure (schema drift, an
+    # already-aborted transaction); if it silently no-ops, a privileged
+    # export — including a raw-PII release — would return 200 with no
+    # record of who exported what. Mirror the mandatory-audit pattern at
+    # supplier_funnel_routes.py: on None, rollback and fail closed (5xx)
+    # so the export never succeeds without its chained audit record.
+    audit_entry_id = AuditLogger.log_event(
         db=db,
         tenant_id=tenant_id,
         event_type="data.bulk.export",
@@ -464,6 +484,20 @@ def export_audit_logs(
             "raw_pii_released": raw_pii_allowed,
         },
     )
+    if audit_entry_id is None:
+        logger.error(
+            "audit_export_self_log_failed_aborting",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+            raw_pii_released=raw_pii_allowed,
+        )
+        # log_event may have left the session in an aborted state; roll
+        # back before raising so no partial/dangling work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="audit-export self-log failed; export aborted to preserve tamper-evidence",
+        )
     db.commit()
 
     # Build response

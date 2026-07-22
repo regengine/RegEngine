@@ -1,148 +1,236 @@
-import json
+"""Phase 2b FSMA-204 ingestion verification — in-process contract tests (#2503).
+
+The previous version of this module drove live HTTP services
+(``localhost:8400`` / ``localhost:8002``) behind a ``_service_available()``
+health gate that skipped the whole test when the stack was down — which was
+always, since no CI job booted it. Its polling flow also targeted
+``/pcos/authorities`` routes that do not exist on any RegEngine entrypoint,
+so even a booted stack could never pass it, and its one hard assertion was
+``assert len(facts) >= 0`` (vacuous).
+
+This rewrite splits the coverage in two:
+
+1. ``TestIngestionPipelineContract`` — in-process, CI-blocking. Exercises
+   the real ingestion submission surface (``POST /v1/ingest/url``) and the
+   job-status surface on the consolidated monolith via TestClient: auth is
+   required, the SSRF guard fails closed (#991), and job status is
+   tenant-scoped (a foreign tenant's job reads as 404). Requires Redis
+   (provided by the backend-ci ``repo-root-suite`` job; locally
+   ``localhost:6379`` or ``REDIS_URL``). No Postgres needed.
+
+2. ``TestGoldenCorpusLiveSmoke`` — the end-to-end FDA golden-corpus run
+   against a deployed stack. Opt-in via ``REGENGINE_LIVE_SMOKE=1``; when
+   the flag is set an unreachable service FAILS the test (never skips).
+"""
+
+from __future__ import annotations
+
 import os
-import time
-from typing import Any, Dict
+import sys
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
-import requests
 
-# Phase 2b: Golden Corpus Verification
-# Validates the end-to-end "Happy Path" for FSMA 204 compliance data.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Service Configuration
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8400")
-INGEST_SERVICE_URL = os.environ.get("INGEST_SERVICE_URL", "http://localhost:8002")
+# Ensure repo root and services/ are importable (mirrors tests/security/conftest.py —
+# this package has no conftest of its own).
+for _p in (str(_REPO_ROOT), str(_REPO_ROOT / "services")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-# Auth
-# Using seeded key from scripts/seed_phase2b_key.py
-API_KEY = os.environ.get("REGENGINE_TEST_API_KEY", "rge_phase2b.testsecret123")
-HEADERS = {
-    "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": os.environ.get("ADMIN_MASTER_KEY", "admin-master-key-dev"),
-    "X-Tenant-ID": "11111111-1111-1111-1111-111111111111",  # Required for PCOS routes
-    "Content-Type": "application/json",
-}
+# The official FDA FSMA 204 Final Rule page — the "golden corpus" source.
+FDA_RULE_URL = (
+    "https://www.fda.gov/food/food-safety-modernization-act-fsma/"
+    "fsma-final-rule-requirements-additional-traceability-records-certain-foods"
+)
 
 
-def _service_available(base_url: str) -> bool:
-    try:
-        response = requests.get(f"{base_url}/health", timeout=2)
-        return response.status_code < 500
-    except requests.RequestException:
-        return False
+# ---------------------------------------------------------------------------
+# In-process contract tests (CI-blocking)
+# ---------------------------------------------------------------------------
 
 
-class TestFSMA204GoldenCorpus:
-    """
-    Phase 2b: Golden Corpus Verification.
+@pytest.fixture(scope="module")
+def monolith():
+    os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-    Executes the ingestion of the FDA FSMA 204 Final Rule and verifies
-    that critical compliance obligations are correctly extracted and mapped.
-    """
+    from services.ingestion.app.config import get_settings as ingestion_settings
 
-    def test_ingestion_pipeline_correctness(self):
+    ingestion_settings.cache_clear()
+
+    import server.main as server_main
+
+    return server_main
+
+
+@pytest.fixture(scope="module")
+def client(monolith):
+    from fastapi.testclient import TestClient
+
+    # No context manager: the lifespan (DB init, workers) must not run.
+    return TestClient(monolith.app, raise_server_exceptions=False)
+
+
+@pytest.fixture(scope="module")
+def bypass_tenant():
+    return os.getenv("AUTH_TEST_BYPASS_TENANT_ID", "11111111-1111-1111-1111-111111111111")
+
+
+@pytest.fixture(scope="module")
+def auth_headers(bypass_tenant):
+    return {
+        "X-RegEngine-API-Key": os.environ["AUTH_TEST_BYPASS_TOKEN"],
+        "X-Tenant-ID": bypass_tenant,
+    }
+
+
+class TestIngestionPipelineContract:
+    """The FSMA-204 ingestion spine's API contract, verified in-process."""
+
+    def test_ingest_url_requires_auth(self, client):
+        response = client.post(
+            "/v1/ingest/url",
+            json={"url": FDA_RULE_URL, "source_system": "fda"},
+        )
+
+        assert response.status_code in (401, 403), (
+            f"Unauthenticated ingestion submission must be rejected, got {response.status_code}"
+        )
+
+    @pytest.mark.parametrize(
+        "ssrf_url",
+        [
+            "http://169.254.169.254/latest/meta-data/",  # cloud metadata
+            "http://127.0.0.1:8080/internal",  # loopback
+            "http://10.0.0.8/admin",  # RFC1918
+            "http://192.168.1.10/router",  # RFC1918
+        ],
+    )
+    def test_ssrf_private_targets_rejected(self, client, auth_headers, ssrf_url):
+        """The SSRF guard (#991) must fail closed on private/loopback targets.
+
+        IP-literal targets only, so no DNS resolution happens in the test.
         """
-        End-to-End verification:
-        1. Submit FDA Rule URL
-        2. Poll for Completion
-        3. Verify Authority Document Created
-        4. Verify Extracted Facts matches "Golden" expectations.
-        """
-        if not _service_available(INGEST_SERVICE_URL):
-            pytest.skip("ingestion service not running")
-        if not _service_available(API_BASE_URL):
-            pytest.skip("admin service not running")
+        response = client.post(
+            "/v1/ingest/url",
+            headers=auth_headers,
+            json={"url": ssrf_url, "source_system": "fda"},
+        )
 
-        # 1. Submit Document
-        # Using the official FDA Final Rule URL (or a specific page for testing)
-        payload = {
-            "url": "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods",
-            "source_system": "fda",
-            "document_type": "regulation",
+        assert 400 <= response.status_code < 500, (
+            f"SSRF target {ssrf_url} must be rejected 4xx, got {response.status_code}: {response.text[:300]}"
+        )
+
+    def test_ssrf_credentialed_url_rejected(self, client, auth_headers):
+        response = client.post(
+            "/v1/ingest/url",
+            headers=auth_headers,
+            json={
+                "url": "http://user:secret@93.184.216.34/doc",  # pragma: allowlist secret
+                "source_system": "fda",
+            },
+        )
+
+        assert 400 <= response.status_code < 500, (
+            f"Credential-embedded URL must be rejected 4xx, got {response.status_code}"
+        )
+
+    def test_ssrf_disallowed_port_rejected(self, client, auth_headers):
+        response = client.post(
+            "/v1/ingest/url",
+            headers=auth_headers,
+            json={"url": "http://93.184.216.34:2222/doc", "source_system": "fda"},
+        )
+
+        assert 400 <= response.status_code < 500, f"Disallowed port must be rejected 4xx, got {response.status_code}"
+
+    def test_unknown_job_status_is_not_found(self, client, auth_headers):
+        response = client.get(f"/v1/ingest/status/{uuid4()}", headers=auth_headers)
+
+        assert response.status_code == 404, (
+            f"Unknown job id must read as 404, got {response.status_code}: {response.text[:300]}"
+        )
+
+    def test_job_status_is_tenant_scoped(self, client, auth_headers, bypass_tenant):
+        """A job owned by another tenant must be indistinguishable from absent."""
+        import redis as redis_lib
+
+        r = redis_lib.from_url(os.environ["REDIS_URL"])
+        own_job = f"phase2b-own-{uuid4()}"
+        foreign_job = f"phase2b-foreign-{uuid4()}"
+        try:
+            r.set(f"ingest:owner:{own_job}", bypass_tenant, ex=120)
+            r.set(f"ingest:status:{own_job}", "completed", ex=120)
+            r.set(f"ingest:owner:{foreign_job}", str(uuid4()), ex=120)
+            r.set(f"ingest:status:{foreign_job}", "completed", ex=120)
+
+            own = client.get(f"/v1/ingest/status/{own_job}", headers=auth_headers)
+            foreign = client.get(f"/v1/ingest/status/{foreign_job}", headers=auth_headers)
+        finally:
+            r.delete(
+                f"ingest:owner:{own_job}",
+                f"ingest:status:{own_job}",
+                f"ingest:owner:{foreign_job}",
+                f"ingest:status:{foreign_job}",
+            )
+
+        assert own.status_code == 200, f"Owner must read their own job, got {own.status_code}: {own.text[:300]}"
+        assert own.json()["status"] == "completed"
+        assert foreign.status_code == 404, (
+            f"Foreign tenant's job must read as 404, got {foreign.status_code} — cross-tenant status leak"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live golden-corpus smoke (opt-in; FAILS — never skips — once opted in)
+# ---------------------------------------------------------------------------
+
+_LIVE_SMOKE = os.getenv("REGENGINE_LIVE_SMOKE", "").strip().lower() in {"1", "true", "yes"}
+
+
+@pytest.mark.skipif(
+    not _LIVE_SMOKE,
+    reason="live golden-corpus smoke is opt-in — set REGENGINE_LIVE_SMOKE=1 against a deployed stack",
+)
+class TestGoldenCorpusLiveSmoke:
+    """End-to-end FDA FSMA-204 rule ingestion against a live stack.
+
+    Once REGENGINE_LIVE_SMOKE=1 is set, an unreachable service is a hard
+    failure: this class can never go green by skipping.
+    """
+
+    def test_fda_rule_ingestion_live(self):
+        import requests
+
+        base_url = os.getenv("INGEST_SERVICE_URL") or os.getenv("API_BASE_URL") or "http://localhost:8000"
+        headers = {
+            "X-RegEngine-API-Key": os.environ.get("REGENGINE_TEST_API_KEY", ""),
+            "X-Tenant-ID": os.environ.get("AUTH_TEST_BYPASS_TENANT_ID", "11111111-1111-1111-1111-111111111111"),
+            "Content-Type": "application/json",
         }
 
-        print(f"\n[Phase 2b] Submitting Ingestion Job to {INGEST_SERVICE_URL}...")
-        response = requests.post(f"{INGEST_SERVICE_URL}/v1/ingest/url", json=payload, headers=HEADERS)
+        try:
+            health = requests.get(f"{base_url}/health", timeout=5)
+        except requests.RequestException as exc:
+            pytest.fail(f"REGENGINE_LIVE_SMOKE=1 but {base_url} is unreachable: {exc}")
+        assert health.status_code < 500, f"{base_url}/health returned {health.status_code}"
 
-        assert response.status_code in [200, 202], f"Ingestion submission failed: {response.text}"
+        response = requests.post(
+            f"{base_url}/v1/ingest/url",
+            json={"url": FDA_RULE_URL, "source_system": "fda", "vertical": "food"},
+            headers=headers,
+            timeout=120,
+        )
+
+        assert response.status_code in (200, 202), (
+            f"Golden-corpus submission failed: {response.status_code} {response.text[:500]}"
+        )
         data = response.json()
-        # API returns 'event_id' and 'job_id' might be internal, but we can use 'event_id' as trace
-        # Actually logic logs show job_id is generated. 'data' is NormalizedEvent.
-        # NormalizedEvent doesn't have job_id field in Pydantic model?
-        # But we need to track the result in Admin API.
-
-        # We can extract document header info from data to search in Admin API
-        print(f"[Phase 2b] Ingestion Synchronous Complete. Data: {data.keys()}")
-
-        # 3. Poll Admin API for Authority Document creation (Async Kafka Consumer)
-        print("[Phase 2b] Polling Admin API for Authority Document (Kafka consumer delay)...")
-
-        found_authority = None
-        start_time = time.time()
-        timeout = 60
-
-        while time.time() - start_time < timeout:
-            try:
-                # Use PCOS route for authorities
-                auth_resp = requests.get(f"{API_BASE_URL}/pcos/authorities", headers=HEADERS)
-                if auth_resp.status_code == 200:
-                    authorities = auth_resp.json()
-                    # Look for authority with 'FDA' or matching source_url
-                    target = next(
-                        (
-                            a
-                            for a in authorities
-                            if "FDA" in str(a.get("issuer_name", "")).upper()
-                            or "FSMA" in str(a.get("document_name", "")).upper()
-                        ),
-                        None,
-                    )
-                    if target:
-                        found_authority = target
-                        print(f"Found Authority: {target['id']} - {target.get('document_name')}")
-                        break
-            except Exception as e:
-                print(f"Polling error: {e}")
-
-            time.sleep(2)
-
-        if not found_authority:
-            print(
-                "Warning: Admin API did not index the Authority within timeout. Kafka consumer might be slow or down."
-            )
-            # We pass checking ingestion if 200 OK, but warn on pipeline
-            # Asserting failure here depends if we want strict pipeline check.
-            # Strict:
-            # pytest.fail("Pipeline verification failed: Authority not found in Admin API")
-            pass
-
-        # 4. Verify Extracted Facts
-        if found_authority:
-            # Assuming endpoint: /pcos/authorities/{id}/facts (Note: Might be 404 if not implemented as GET)
-            facts_resp = requests.get(f"{API_BASE_URL}/pcos/authorities/{found_authority['id']}/facts", headers=HEADERS)
-
-            if facts_resp.status_code != 200:
-                print("Warning: Could not fetch extracted facts.")
-                return
-
-            facts = facts_resp.json()
-            print(f"[Phase 2b] Extracted {len(facts)} facts.")
-
-            # --- Golden Assertions ---
-            # Note: If NLP is 'Generic' or 'Hollow', these might fail.
-            # But we assert "Structure" first.
-
-            # Check invariants
-            assert len(facts) >= 0, "Facts list structure is valid"
-
-            # If we expect real extraction:
-            # Check for ANY retention fact
-            retention_facts = [f for f in facts if "retention" in str(f).lower()]
-            if retention_facts:
-                print(f"Found Retention Facts: {len(retention_facts)}")
-            else:
-                print("Warning: No specific 'Retention' facts extracted locally (NLP might be generic parsers only).")
-
-        # This test "Passes" if the Pipeline runs (Job Completes) and Data Structures are created.
-        # It warns if specific "Smart" extractions are missing, which is expected for Phase 2b
-        # (proving the *pipeline* works, even if the *brain* is still generic).
+        assert data, "Ingestion returned an empty body"
+        # The synchronous path returns a NormalizedEvent — it must carry a
+        # document identity the downstream pipeline can trace.
+        assert any(k in data for k in ("event_id", "document_id", "id")), (
+            f"Ingestion response carries no traceable identity: {sorted(data.keys())}"
+        )

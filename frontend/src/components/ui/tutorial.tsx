@@ -46,20 +46,6 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
     }
   }, [isOpen, step, currentStep]);
 
-  const handleNext = useCallback(() => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleComplete();
-    }
-  }, [currentStep, steps.length]);
-
-  const handlePrev = useCallback(() => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  }, [currentStep]);
-
   const handleComplete = useCallback(() => {
     if (storageKey && dontShowAgain) {
       localStorage.setItem(storageKey, 'true');
@@ -68,6 +54,20 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
     onClose();
     setCurrentStep(0);
   }, [storageKey, dontShowAgain, onComplete, onClose]);
+
+  const handleNext = useCallback(() => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      handleComplete();
+    }
+  }, [currentStep, steps.length, handleComplete]);
+
+  const handlePrev = useCallback(() => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  }, [currentStep]);
 
   const handleSkip = useCallback(() => {
     if (storageKey && dontShowAgain) {

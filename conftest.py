@@ -314,13 +314,13 @@ def pytest_collectstart(collector):  # type: ignore[no-untyped-def]
     _activate_service_for_path(Path(str(fspath)))
 
 
-def pytest_collect_file(file_path, path, parent):  # type: ignore[no-untyped-def]
+def pytest_collect_file(file_path, parent):  # type: ignore[no-untyped-def]
     """Switch service import context before pytest creates a file collector."""
     _activate_service_for_path(Path(str(file_path)))
     return None
 
 
-def pytest_pycollect_makemodule(module_path, path, parent):  # type: ignore[no-untyped-def]
+def pytest_pycollect_makemodule(module_path, parent):  # type: ignore[no-untyped-def]
     """Switch service import context immediately before module import."""
     _activate_service_for_path(Path(str(module_path)))
     return None

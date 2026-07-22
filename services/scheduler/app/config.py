@@ -43,12 +43,6 @@ class SchedulerSettings(BaseServiceSettings):
         description="Topic for FSMA trace events (consumed by graph service)",
     )
 
-    # Redis (for circuit breaker state)
-    redis_url: str = Field(
-        default="rediss://redis:6379/1",
-        description="Redis URL for circuit breaker state",
-    )
-
     # API Keys
     scheduler_api_key: str = Field(
         default="",

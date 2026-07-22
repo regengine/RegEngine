@@ -63,11 +63,14 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                 )
             if length > self.max_bytes:
                 mb = self.max_bytes / (1024 * 1024)
+                # NOTE: this is the stdlib logger, not structlog — kwargs
+                # here raised TypeError, turning every oversized request
+                # into a 500 instead of the intended 413 (#2503).
                 logger.warning(
-                    "request_too_large",
-                    content_length=length,
-                    max_bytes=self.max_bytes,
-                    path=request.url.path,
+                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+                    length,
+                    self.max_bytes,
+                    request.url.path,
                 )
                 return JSONResponse(
                     status_code=413,
@@ -105,11 +108,14 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
                 timeout=self.timeout_seconds,
             )
         except asyncio.TimeoutError:
+            # Same stdlib-logger kwargs bug as above: the structlog-style
+            # call raised TypeError, turning every timed-out request into
+            # a 500 instead of the intended 504 (#2503).
             logger.error(
-                "request_timeout",
-                path=request.url.path,
-                method=request.method,
-                timeout_seconds=self.timeout_seconds,
+                "request_timeout: path=%s method=%s timeout_seconds=%s",
+                request.url.path,
+                request.method,
+                self.timeout_seconds,
             )
             return JSONResponse(
                 status_code=504,

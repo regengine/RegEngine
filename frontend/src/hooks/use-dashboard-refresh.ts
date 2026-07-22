@@ -28,7 +28,9 @@ const DOM_EVENT = 'regengine:dashboard-refresh';
 
 export function useDashboardRefresh(callback: () => void) {
   const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     const invoke = () => callbackRef.current();
