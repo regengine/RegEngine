@@ -21,6 +21,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, validator
 from shared.auth import require_api_key
+from shared.fsma_validation import calculate_gs1_check_digit
 from shared.middleware import get_current_tenant_id
 
 from ..exporters import zpl_safe
@@ -127,9 +128,7 @@ def generate_sscc(gln: str, serial: int) -> str:
     serial_part = str(serial).zfill(5)[-5:]
     base = extension + gln_part + serial_part
 
-    # GS1 Check Digit Algorithm
-    total = sum(int(d) * (3 if i % 2 == 0 else 1) for i, d in enumerate(reversed(base)))
-    check_digit = str((10 - (total % 10)) % 10)
+    check_digit = str(calculate_gs1_check_digit(base))
 
     return base + check_digit
 
