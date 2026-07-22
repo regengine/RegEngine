@@ -66,7 +66,7 @@ export function validateUuid(value: string | undefined | null): string | null {
  *
  * Mirrors `getOpaqueSessionInfo` in `app/api/session/route.ts`.
  */
-async function resolveOpaqueSessionTenantId(sessionToken: string): Promise<string | null> {
+export async function resolveOpaqueSessionTenantId(sessionToken: string): Promise<string | null> {
   const cookieHeader = `__Host-regengine_session=${sessionToken}`;
 
   for (const target of getAdminTargets()) {
