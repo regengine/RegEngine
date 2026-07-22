@@ -1,4 +1,4 @@
-"""v095 -- system-context RLS arm for queue/audit metadata (#2461).
+"""v096 -- system-context RLS arm for queue/audit metadata (#2461).
 
 Background
 ----------
@@ -70,8 +70,8 @@ fail-hard predicate for task_queue; v049/v067's text-compare for
 fsma_audit_trail).
 
 Revision ID: c3a51e2f7b90
-Revises: feb267263e0a
-Create Date: 2026-07-15
+Revises: c7a1e5f2b9d4
+Create Date: 2026-07-15 (rebased onto v095 c7a1e5f2b9d4 on 2026-07-21)
 """
 
 from typing import Sequence, Union
@@ -79,7 +79,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "c3a51e2f7b90"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "feb267263e0a"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "c7a1e5f2b9d4"  # pragma: allowlist secret
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
