@@ -166,7 +166,7 @@ def downgrade() -> None:
             EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_audit ON fsma.fsma_audit_trail';
             EXECUTE $pol$
                 CREATE POLICY tenant_isolation_audit ON fsma.fsma_audit_trail
-                USING (tenant_id::text = current_setting('app.tenant_id', true))
+                USING (tenant_id = get_tenant_context())
             $pol$;
         END
         $mig$;
