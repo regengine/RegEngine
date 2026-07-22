@@ -4,7 +4,7 @@ from typing import Iterator, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, HTTPException, Path, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import PyJWTError as JWTError
 from shared.env import is_production
@@ -15,6 +15,11 @@ from shared.supabase_client import get_supabase
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from .auth.session_auth import (
+    AUTH_SESSION_COOKIE,
+    get_auth_crypto_service,
+    get_current_active_session_context,
+)
 from .auth_utils import check_revoked_async, decode_access_token
 from .database import get_session, get_tenant_session
 from .models import TenantContext
@@ -24,7 +29,7 @@ from .session_store import InMemorySessionStore, RedisSessionStore, redact_conne
 from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/email-code/confirm")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/email-code/confirm", auto_error=False)
 
 logger = structlog.get_logger("auth_dependency")
 
@@ -165,7 +170,10 @@ def get_session_store() -> RedisSessionStore:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    # Plain ``Request`` annotation (FastAPI special-cases it); the None
+    # default only exists so unit tests can call this directly.
+    request: Request = None,  # type: ignore[assignment]
+    token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_session),
     session_store: Optional[RedisSessionStore] = Depends(get_session_store),
 ) -> UserModel:
@@ -175,13 +183,33 @@ async def get_current_user(
     tenant_id = None
     token_version_claim: Optional[int] = None
     local_session_id: Optional[UUID] = None
+    session_cookie_auth = False
+
+    # 0. Passwordless browser sessions carry only the opaque
+    # __Host-regengine_session cookie — no Bearer token is ever issued to
+    # the browser. Resolve the session row exactly like /auth/me does
+    # (revocation, expiry, and user status are enforced by that lookup),
+    # then fall through to the shared tenant/RLS binding below.
+    if not token:
+        # No cookie either → keep the historical bare-401 shape
+        # (WWW-Authenticate: Bearer) that API clients and tests expect.
+        # request is None only when unit tests call this directly.
+        if request is None or not request.cookies.get(AUTH_SESSION_COOKIE):
+            raise credentials_exception
+        context = get_current_active_session_context(
+            request=request,
+            db=db,
+            crypto_service=get_auth_crypto_service(),
+        )
+        user_id = str(context.user.id)
+        session_cookie_auth = True
 
     # 1. Try Supabase Auth first. RegEngine also issues its own signed JWTs
     # from passwordless auth flows, so a Supabase "invalid
     # JWT" response is not final by itself; it may simply mean this is a
     # RegEngine session token. Infrastructure failures still fail closed in
     # production below.
-    sb = get_supabase()
+    sb = get_supabase() if token else None
     if sb:
         try:
             # Supabase validates the JWT signature and expiration against the project
@@ -333,7 +361,9 @@ async def get_current_user(
                 user_tv=user_tv,
             )
             raise credentials_exception
-    elif user_tv > 0:
+    elif user_tv > 0 and not session_cookie_auth:
+        # Cookie sessions never carry a version claim; logout-all kills
+        # them by revoking their SessionModel row instead (sessions_router).
         logger.warning(
             "missing_token_version_rejected",
             user_id=user_id,

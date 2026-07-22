@@ -2,11 +2,11 @@ import { NextRequest } from 'next/server';
 import {
     createStreamProxy,
     applyCookieCredentials,
-    applyFirstPartyServiceCredentials,
     passthroughRequestHeaders,
     isPublicHost,
     stripTrailingSlash,
 } from '@/lib/proxy-factory';
+import { applyInflowWorkbenchReadCredentials } from '@/lib/inflow-workbench-proxy';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
@@ -59,8 +59,8 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         const portalMatch = path.match(/^api\/v1\/portal\/([^/]+)(?:\/(submit|preflight))?$/);
         return Boolean(portalMatch && portalMatch[1] !== 'links');
     },
-    prepareHeaders: (headers: Headers, request: NextRequest) => {
-        return applyFirstPartyServiceCredentials(headers, request);
+    prepareHeaders: (headers: Headers, request: NextRequest, path: string) => {
+        return applyInflowWorkbenchReadCredentials(headers, request, path);
     },
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();

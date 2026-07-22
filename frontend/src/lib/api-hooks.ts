@@ -99,8 +99,12 @@ export interface WorkbenchReadinessSnapshot {
     source: string;
 }
 
-export async function fetchWorkbenchReadinessSummary(_tenantId: string, apiKey?: string | null) {
-    return apiFetch<WorkbenchReadinessSnapshot>('/api/v1/inflow-workbench/readiness/summary', apiKey);
+export async function fetchWorkbenchReadinessSummary(tenantId: string, apiKey?: string | null) {
+    const query = new URLSearchParams({ tenant_id: tenantId });
+    return apiFetch<WorkbenchReadinessSnapshot>(
+        `/api/v1/inflow-workbench/readiness/summary?${query}`,
+        apiKey,
+    );
 }
 
 // ── SOP Generator ──
