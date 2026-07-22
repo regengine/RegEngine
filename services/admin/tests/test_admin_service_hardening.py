@@ -584,7 +584,16 @@ def test_get_tenant_scoped_session_delegates_with_verified_tenant_id():
     import asyncio
 
     from services.admin.app import dependencies as deps_mod
-    from shared.tenant_context import get_rls_tenant_id
+
+    # Resolve get_rls_tenant_id from the SAME module instance that
+    # dependencies.py bound its set_rls_tenant_id from, rather than via a
+    # fresh ``from shared.tenant_context import ...``. The root conftest's
+    # _evict_module() pops shared.* out of sys.modules when it switches
+    # sys.path between service collectors, so a plain re-import here can
+    # hand back a NEW module object with a NEW ContextVar — the dependency
+    # would then write to the old var and this test would read the new one
+    # and see None. Reading through __globals__ pins both to one instance.
+    get_rls_tenant_id = deps_mod.set_rls_tenant_id.__globals__["get_rls_tenant_id"]
 
     tenant_uuid = uuid.UUID("11111111-1111-1111-1111-111111111111")
     fake_session = MagicMock(name="bound_session")
