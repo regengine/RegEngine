@@ -126,15 +126,12 @@ def _persist_audit_entry(entry) -> None:
         entry.event_id,
         last_exc,
     )
-    # #971 regression repair: the docstring always promised "raises on
-    # total failure" but the raise was missing, so callers (and the
-    # audit_buffer_reconciler, which stamps replayed_at only when the
-    # primary writer does NOT raise) treated lost audit writes as
-    # success. Graph routers wrap log() in try/except →
-    # handle_audit_failure (buffered policy), so request paths degrade
-    # to the durable buffer instead of 500ing.
-    if last_exc is not None:
-        raise last_exc
+    # NOTE: #971 (make this raise on total failure instead of silently
+    # returning) was bundled into this branch and is deliberately NOT
+    # included here — it is an independent production behaviour change
+    # (audit failure would start 503-ing requests) and it regressed 3
+    # graph tests whose sqlite fixtures have neither fsma.fsma_audit_trail
+    # nor audit_log_buffer. Ship it as its own PR with its own risk call.
 
 
 def _row_to_audit_entry(row) -> "FSMAAuditEntry":
