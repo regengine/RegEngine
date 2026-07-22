@@ -110,3 +110,20 @@ def test_non_null_values_pass_through_unchanged():
     assert r.rate_limit_per_hour == 2000
     assert r.rate_limit_per_day == 20000
     assert r.total_requests == 42
+
+
+def test_uuid_tenant_id_coerced_to_str():
+    """Prod ``api_keys.tenant_id`` is a uuid column — drivers return
+    ``uuid.UUID`` objects, which must validate against ``Optional[str]``.
+    Regression: tenant-scoped key auth 400'd on readiness/summary."""
+    import uuid
+
+    tenant = uuid.UUID("38e99859-7364-4932-99fa-b1f114bf0202")
+    resp = APIKeyResponse.model_validate(_row(tenant_id=tenant))
+    assert resp.tenant_id == "38e99859-7364-4932-99fa-b1f114bf0202"
+    assert isinstance(resp.tenant_id, str)
+
+
+def test_none_tenant_id_stays_none():
+    resp = APIKeyResponse.model_validate(_row(tenant_id=None))
+    assert resp.tenant_id is None

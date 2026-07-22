@@ -46,11 +46,12 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     select,
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -105,6 +106,25 @@ def api_key_hash_candidates(raw_key: str) -> tuple[str, ...]:
     return (current,) if current == legacy else (current, legacy)
 
 
+class TenantUUIDText(TypeDecorator):
+    """``api_keys.tenant_id`` is ``uuid`` in the production Postgres schema
+    but plain text on SQLite test databases. Bind and return ``str`` on both
+    so pydantic response models and principal comparisons see strings.
+
+    Without this, asyncpg rejects INSERTs (text bind vs uuid column) and
+    reads hand ``uuid.UUID`` objects to ``APIKeyResponse.tenant_id: str``,
+    turning every tenant-scoped key operation into a 500/400.
+    """
+
+    impl = String(36)
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=False))
+        return dialect.type_descriptor(String(36))
+
+
 class APIKeyModel(Base):
     """SQLAlchemy model for API keys stored in PostgreSQL."""
 
@@ -118,7 +138,7 @@ class APIKeyModel(Base):
     description = Column(Text, nullable=True)
 
     # Tenant association
-    tenant_id = Column(String(36), nullable=True, index=True)  # UUID
+    tenant_id = Column(TenantUUIDText(), nullable=True, index=True)  # uuid in prod PG, text on SQLite
 
     # Partner association (white-label / reseller).
     # NULL for non-partner keys (internal admin keys, regular customer
@@ -197,6 +217,15 @@ class APIKeyResponse(BaseModel):
     @classmethod
     def _coerce_none_list(cls, v: object) -> object:
         return [] if v is None else v
+
+    # Production ``api_keys.tenant_id`` is a ``uuid`` column; asyncpg and
+    # psycopg return ``uuid.UUID`` objects, which pydantic v2 rejects against
+    # ``Optional[str]`` — 400'ing every request authenticated by a
+    # tenant-scoped key. Coerce to str before validation.
+    @field_validator("tenant_id", mode="before")
+    @classmethod
+    def _coerce_tenant_id(cls, v: object) -> object:
+        return str(v) if v is not None else None
 
     _INT_DEFAULTS: ClassVar[dict[str, int]] = {
         "rate_limit_per_minute": 60,
