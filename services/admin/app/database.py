@@ -33,6 +33,10 @@ from __future__ import annotations
 import os
 from typing import AsyncIterator, Iterator
 
+# #2461: installs the class-level RLS GUC "begin" hook before the
+# module-level _create_engine() below (see shared/tenant_context.py).
+# ``shared.`` alias on purpose — one module instance, one ContextVar pair.
+import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
 import structlog
 
 # #2512: single shared cloud-marker tuple — keep this in lockstep with the
@@ -190,6 +194,19 @@ def init_db() -> None:
     — Alembic owns all DDL. For SQLite (local dev fallback), we create tables
     directly since Alembic migrations are PostgreSQL-specific.
     """
+    # #2461: probe the ADMIN engine's role posture (it may point at a
+    # different database than the shared engine in dual-DB deployments).
+    # RuntimeError (REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 + inert role) must
+    # propagate; anything else is a best-effort probe.
+    try:
+        from shared.database import check_rls_posture  # noqa: PLC0415
+
+        check_rls_posture(_engine, label="admin")
+    except RuntimeError:
+        raise
+    except Exception as exc:  # pragma: no cover — probe must not block init
+        logger.warning("rls_posture_check_skipped", engine="admin", error=str(exc))
+
     dialect = _engine.dialect.name
 
     if dialect == "sqlite":

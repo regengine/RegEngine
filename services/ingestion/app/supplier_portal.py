@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.env import is_production
 from shared.pagination import PaginationParams
+from shared.tenant_context import tenant_scope
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 from sqlalchemy import text
 
@@ -787,7 +788,12 @@ async def revoke_portal_link(
     link = _db_get_portal_link(portal_id)
     if link is None and _allow_memory_fallback():
         link = _portal_links.get(portal_id)
-    if principal.tenant_id and link and link.get("tenant_id") != principal.tenant_id:
+    if link is None:
+        # #2461: refuse instead of issuing a tenantless UPDATE —
+        # _db_update_portal_link_status(tenant_id=None) can never
+        # succeed under RLS and silently reported failure before.
+        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+    if principal.tenant_id and link.get("tenant_id") != principal.tenant_id:
         raise HTTPException(
             status_code=403,
             detail="Tenant mismatch: your API key does not have access to this tenant.",
@@ -796,7 +802,7 @@ async def revoke_portal_link(
     db_updated = _db_update_portal_link_status(
         portal_id,
         "revoked",
-        link.get("tenant_id") if link else None,
+        link.get("tenant_id"),
     )
     # Remove from in-memory
     _portal_links.pop(portal_id, None)
@@ -815,7 +821,12 @@ async def revoke_portal_link(
 async def get_portal_details(portal_id: str):
     """Get portal link details — used by the frontend to render the form."""
     link = _get_active_portal_link(portal_id)
-    profile = _db_get_integration_profile_summary(link["tenant_id"], link.get("integration_profile_id"))
+    # #2461: public unauthenticated route — the tenant is unknown until
+    # the portal-link row is read (via the SECURITY DEFINER
+    # fsma.get_active_portal_link_by_token). Scope the remainder of the
+    # handler to the link's tenant so the begin-hook covers all queries.
+    with tenant_scope(link["tenant_id"]):
+        profile = _db_get_integration_profile_summary(link["tenant_id"], link.get("integration_profile_id"))
 
     return {
         "portal_id": portal_id,
@@ -839,15 +850,17 @@ async def preflight_supplier_data(
 ) -> SupplierPreflightResult:
     """Run the supplier submission through the Workbench validation gate."""
     link = _get_active_portal_link(portal_id)
-    # Issue #2508 — per-link throttle for CPU-heavy sandbox validation, scoped
-    # to the portal link so it cannot be driven at the full per-IP ceiling.
-    _enforce_portal_rate_limit(
-        portal_id,
-        link["tenant_id"],
-        scope="preflight",
-        limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
-    )
-    return _build_supplier_preflight(portal_id, link, submission)
+    # #2461: public route — scope to the link's tenant (see get_portal_details).
+    with tenant_scope(link["tenant_id"]):
+        # Issue #2508 — per-link throttle for CPU-heavy sandbox validation, scoped
+        # to the portal link so it cannot be driven at the full per-IP ceiling.
+        _enforce_portal_rate_limit(
+            portal_id,
+            link["tenant_id"],
+            scope="preflight",
+            limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
+        )
+        return _build_supplier_preflight(portal_id, link, submission)
 
 
 @router.post(
@@ -866,6 +879,20 @@ async def submit_supplier_data(
     """Process a supplier submission — no auth required (link-based access)."""
     link = _get_active_portal_link(portal_id)
 
+    # #2461: public route — the portal-link row binds the token to exactly
+    # one tenant; scope the remainder of the handler (including the
+    # awaited ingest_events persistence) to it so the Engine begin-hook
+    # applies app.tenant_id on every transaction.
+    with tenant_scope(link["tenant_id"]):
+        return await _submit_supplier_data_inner(portal_id, link, submission)
+
+
+async def _submit_supplier_data_inner(
+    portal_id: str,
+    link: dict,
+    submission: SupplierSubmission,
+) -> SubmissionResult:
+    """Body of submit_supplier_data — runs inside tenant_scope(link tenant)."""
     # Issue #2508 — per-link submission cap. Scoped to the portal link, not the
     # victim tenant's general ingest budget, and enforced BEFORE any persisted
     # write so abuse past the cap never reaches ``ingest_events``.

@@ -390,7 +390,14 @@ async def task_queue_summary(
     current_user: UserModel = Depends(_require_sysadmin),
     db: Session = Depends(get_session),
 ) -> TaskQueueSummaryResponse:
-    """Read-only sysadmin health view for fsma.task_queue."""
+    """Read-only sysadmin health view for fsma.task_queue.
+
+    #2461: deliberately CROSS-TENANT (sysadmin-gated here at the HTTP
+    layer). get_task_queue_summary itself enters system_scope + applies
+    the regengine.system_context GUC so the v095 policy arm admits the
+    scan under the least-privilege role — do NOT scope this to the
+    caller's tenant.
+    """
 
     return TaskQueueSummaryResponse(**get_task_queue_summary(db))
 
@@ -407,7 +414,12 @@ async def replay_task_queue_rows(
     current_user: UserModel = Depends(_require_sysadmin),
     db: Session = Depends(get_session),
 ) -> TaskQueueReplayResponse:
-    """Replay dead fsma.task_queue rows without deleting audit history."""
+    """Replay dead fsma.task_queue rows without deleting audit history.
+
+    #2461: cross-tenant sysadmin operation — replay_dead_tasks enters
+    system_scope + applies the regengine.system_context GUC internally
+    (see get_task_queue_summary note above).
+    """
 
     try:
         replay = replay_dead_tasks(db, ids=body.ids or None, limit=body.limit)

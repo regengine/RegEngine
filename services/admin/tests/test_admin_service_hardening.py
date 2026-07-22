@@ -574,14 +574,30 @@ def test_admin_routes_module_uses_shared_bruteforce_limiter():
 def test_get_tenant_scoped_session_delegates_with_verified_tenant_id():
     """The dep yields the same session ``get_tenant_session(str(tenant_id))``
     yields, after ``verify_path_tenant_matches`` has accepted the tenant_id.
-    The body intentionally does ``yield from get_tenant_session`` so the
-    canonical ``set_tenant_guc`` runs on the underlying session and the
-    cleanup ``rollback`` + ``close`` also run on shutdown.
+    The body drives the sync generator manually (it is an ``async def``
+    since #2461 so its ``set_rls_tenant_id`` seed is visible downstream)
+    so the canonical ``set_tenant_guc`` runs on the underlying session and
+    the cleanup ``rollback`` + ``close`` also run on shutdown. #2461 also
+    requires the RLS contextvar to be seeded with the VERIFIED path tenant
+    before the session is yielded.
     """
+    import asyncio
+
     from services.admin.app import dependencies as deps_mod
+
+    # Resolve get_rls_tenant_id from the SAME module instance that
+    # dependencies.py bound its set_rls_tenant_id from, rather than via a
+    # fresh ``from shared.tenant_context import ...``. The root conftest's
+    # _evict_module() pops shared.* out of sys.modules when it switches
+    # sys.path between service collectors, so a plain re-import here can
+    # hand back a NEW module object with a NEW ContextVar — the dependency
+    # would then write to the old var and this test would read the new one
+    # and see None. Reading through __globals__ pins both to one instance.
+    get_rls_tenant_id = deps_mod.set_rls_tenant_id.__globals__["get_rls_tenant_id"]
 
     tenant_uuid = uuid.UUID("11111111-1111-1111-1111-111111111111")
     fake_session = MagicMock(name="bound_session")
+    seeded: dict[str, object] = {}
 
     def fake_get_tenant_session(tenant_id):
         # Mirror the real generator's shape: yield once, run cleanup on close.
@@ -589,19 +605,26 @@ def test_get_tenant_scoped_session_delegates_with_verified_tenant_id():
             "wrapper must pass the verified UUID through as a string — that's "
             "what set_tenant_guc / set_config('app.tenant_id', :tid, true) expects"
         )
+        # #2461: the contextvar must already carry the verified tenant by
+        # the time the session factory runs.
+        seeded["at_session_open"] = get_rls_tenant_id()
         try:
             yield fake_session
         finally:
             fake_session.cleaned_up = True
 
-    with patch.object(deps_mod, "get_tenant_session", fake_get_tenant_session):
-        gen = deps_mod.get_tenant_scoped_session(tenant_id=tenant_uuid)
-        yielded = next(gen)
+    async def _drive():
+        agen = deps_mod.get_tenant_scoped_session(tenant_id=tenant_uuid)
+        yielded = await agen.__anext__()
         assert yielded is fake_session
         # Drive the generator to completion so the underlying cleanup runs.
-        with pytest.raises(StopIteration):
-            next(gen)
+        with pytest.raises(StopAsyncIteration):
+            await agen.__anext__()
+
+    with patch.object(deps_mod, "get_tenant_session", fake_get_tenant_session):
+        asyncio.run(_drive())
         assert fake_session.cleaned_up is True
+        assert seeded["at_session_open"] == str(tenant_uuid)
 
 
 def test_get_tenant_scoped_session_default_uses_verify_path_tenant_matches():

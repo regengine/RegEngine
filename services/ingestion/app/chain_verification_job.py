@@ -122,58 +122,16 @@ def _run_verification(job_id: str, tenant_id: str) -> None:
         from shared.canonical_persistence import CanonicalEventStore
         from shared.cte_persistence import CTEPersistence
         from shared.database import SessionLocal
+        from shared.tenant_context import tenant_scope
 
-        db = SessionLocal()
-        try:
-            # #2506: walk BOTH stores and combine (see _combine_verifications).
-            canonical_result = CanonicalEventStore(db, dual_write=False).verify_chain_canonical(tenant_id)
-            legacy_result = CTEPersistence(db).verify_chain(tenant_id)
-
-            chain_valid, chain_length, errors = _combine_verifications(canonical_result, legacy_result)
-            completed_at = datetime.now(timezone.utc).isoformat()
-
-            # Try to persist to fsma.chain_verification_log
-            _persist_verification_result(
-                db,
-                job_id,
-                tenant_id,
-                chain_valid,
-                chain_length,
-                errors,
-                completed_at,
-            )
-
-            with _verification_lock:
-                _verification_jobs[job_id].update(
-                    {
-                        "status": "completed",
-                        "completed_at": completed_at,
-                        "chain_valid": chain_valid,
-                        "chain_length": chain_length,
-                        "errors": errors,
-                        "message": (
-                            "Chain integrity verified — no tampering detected"
-                            if chain_valid
-                            else f"Chain integrity FAILED — {len(errors)} error(s) detected"
-                        ),
-                    }
-                )
-
-            logger.info(
-                "chain_verification_complete job_id=%s tenant_id=%s valid=%s length=%d errors=%d",
-                job_id,
-                tenant_id,
-                chain_valid,
-                chain_length,
-                len(errors),
-            )
-
-            # Log to audit system (best-effort, async)
-            _log_verification_audit(tenant_id, job_id, chain_valid, chain_length, errors)
-
-        finally:
-            db.close()
-
+        # #2461: contextvars do NOT inherit into threading.Thread bodies —
+        # seed the tenant here, inside the thread, so the Engine begin-hook
+        # applies app.tenant_id to every transaction below (including the
+        # re-begin after _persist_verification_result's commit/rollback).
+        # This is what makes verify_chain_canonical / verify_chain (both
+        # read RLS-forced fsma.hash_chain) survive the #2461 cutover.
+        with tenant_scope(tenant_id):
+            _run_verification_inner(job_id, tenant_id, CanonicalEventStore, CTEPersistence, SessionLocal)
     except Exception as exc:
         logger.error(
             "chain_verification_failed job_id=%s tenant_id=%s error=%s",
@@ -192,6 +150,60 @@ def _run_verification(job_id: str, tenant_id: str) -> None:
                     "message": f"Verification failed: {exc}",
                 }
             )
+
+
+def _run_verification_inner(job_id: str, tenant_id: str, CanonicalEventStore, CTEPersistence, SessionLocal) -> None:
+    """Body of the verification job — runs inside tenant_scope."""
+    db = SessionLocal()
+    try:
+        # #2506: walk BOTH stores and combine (see _combine_verifications).
+        canonical_result = CanonicalEventStore(db, dual_write=False).verify_chain_canonical(tenant_id)
+        legacy_result = CTEPersistence(db).verify_chain(tenant_id)
+
+        chain_valid, chain_length, errors = _combine_verifications(canonical_result, legacy_result)
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        # Try to persist to fsma.chain_verification_log
+        _persist_verification_result(
+            db,
+            job_id,
+            tenant_id,
+            chain_valid,
+            chain_length,
+            errors,
+            completed_at,
+        )
+
+        with _verification_lock:
+            _verification_jobs[job_id].update(
+                {
+                    "status": "completed",
+                    "completed_at": completed_at,
+                    "chain_valid": chain_valid,
+                    "chain_length": chain_length,
+                    "errors": errors,
+                    "message": (
+                        "Chain integrity verified — no tampering detected"
+                        if chain_valid
+                        else f"Chain integrity FAILED — {len(errors)} error(s) detected"
+                    ),
+                }
+            )
+
+        logger.info(
+            "chain_verification_complete job_id=%s tenant_id=%s valid=%s length=%d errors=%d",
+            job_id,
+            tenant_id,
+            chain_valid,
+            chain_length,
+            len(errors),
+        )
+
+        # Log to audit system (best-effort, async)
+        _log_verification_audit(tenant_id, job_id, chain_valid, chain_length, errors)
+
+    finally:
+        db.close()
 
 
 def _persist_verification_result(

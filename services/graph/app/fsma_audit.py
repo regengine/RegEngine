@@ -69,6 +69,7 @@ def _persist_audit_entry(entry) -> None:
 
     import time as _time
 
+    from shared.tenant_context import system_scope, tenant_scope
     from sqlalchemy import text
 
     _insert_sql = text("""
@@ -100,16 +101,23 @@ def _persist_audit_entry(entry) -> None:
     }
 
     last_exc: Optional[Exception] = None
-    for attempt in range(_PERSIST_MAX_RETRIES):
-        try:
-            with engine.connect() as conn:
-                conn.execute(_insert_sql, _params)
-                conn.commit()
-            return  # success
-        except Exception as e:
-            last_exc = e
-            if attempt < _PERSIST_MAX_RETRIES - 1:
-                _time.sleep(min(2**attempt, 4))
+    # #2461: this module uses a PRIVATE engine, so any GUC set on the
+    # request session never applies here — seed the contextvar so the
+    # class-level begin-hook applies it on these connections instead.
+    # Tenant-bound entries write under the row's own tenant; tenantless
+    # entries run under system_scope (v095 fsma_audit_trail policy arm).
+    _rls_scope = tenant_scope(entry.tenant_id) if entry.tenant_id else system_scope()
+    with _rls_scope:
+        for attempt in range(_PERSIST_MAX_RETRIES):
+            try:
+                with engine.connect() as conn:
+                    conn.execute(_insert_sql, _params)
+                    conn.commit()
+                return  # success
+            except Exception as e:
+                last_exc = e
+                if attempt < _PERSIST_MAX_RETRIES - 1:
+                    _time.sleep(min(2**attempt, 4))
 
     # All retries exhausted — log at ERROR and raise so caller knows
     logging.getLogger("fsma_audit").error(
@@ -118,6 +126,12 @@ def _persist_audit_entry(entry) -> None:
         entry.event_id,
         last_exc,
     )
+    # NOTE: #971 (make this raise on total failure instead of silently
+    # returning) was bundled into this branch and is deliberately NOT
+    # included here — it is an independent production behaviour change
+    # (audit failure would start 503-ing requests) and it regressed 3
+    # graph tests whose sqlite fixtures have neither fsma.fsma_audit_trail
+    # nor audit_log_buffer. Ship it as its own PR with its own risk call.
 
 
 def _row_to_audit_entry(row) -> "FSMAAuditEntry":
@@ -396,9 +410,14 @@ class FSMAAuditLog:
         if engine is None:
             return None
         try:
+            from shared.tenant_context import system_scope
             from sqlalchemy import text
 
-            with engine.connect() as conn:
+            # #2461: the checksum chain is global (cross-tenant BY DESIGN
+            # — decision: keep the global chain and give
+            # fsma.fsma_audit_trail the v095 system arm rather than
+            # re-architecting to per-tenant chains).
+            with system_scope(), engine.connect() as conn:
                 row = conn.execute(
                     text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY created_at DESC LIMIT 1")
                 ).fetchone()
@@ -515,7 +534,12 @@ class FSMAAuditLog:
             tenant_id=tenant_id,
             correlation_id=correlation_id,
         )
-        db_entries = _query_audit_trail(target_id=target_id)
+        from shared.tenant_context import system_scope, tenant_scope
+
+        # #2461: tenant-scoped read when a tenant is supplied; the
+        # tenantless variant is a cross-tenant operator view (system arm).
+        with tenant_scope(tenant_id) if tenant_id else system_scope():
+            db_entries = _query_audit_trail(target_id=target_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -548,7 +572,10 @@ class FSMAAuditLog:
             tenant_id=tenant_id,
             correlation_id=correlation_id,
         )
-        db_entries = _query_audit_trail(tenant_id=tenant_id)
+        from shared.tenant_context import tenant_scope
+
+        with tenant_scope(tenant_id):
+            db_entries = _query_audit_trail(tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -562,7 +589,11 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(action=action.value)
+        from shared.tenant_context import system_scope
+
+        # #2461: cross-tenant chain view by design — system arm.
+        with system_scope():
+            db_entries = _query_audit_trail(action=action.value)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -575,7 +606,10 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(start=start, end=end)
+        from shared.tenant_context import system_scope
+
+        with system_scope():
+            db_entries = _query_audit_trail(start=start, end=end)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -593,7 +627,10 @@ class FSMAAuditLog:
         Reads from PostgreSQL when available so entries survive restarts.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail()
+        from shared.tenant_context import system_scope
+
+        with system_scope():
+            db_entries = _query_audit_trail()
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -614,9 +651,11 @@ class FSMAAuditLog:
         engine = _get_audit_db_engine()
         if engine is not None:
             try:
+                from shared.tenant_context import system_scope
                 from sqlalchemy import text
 
-                with engine.connect() as conn:
+                # #2461: global checksum chain — cross-tenant by design.
+                with system_scope(), engine.connect() as conn:
                     rows = conn.execute(
                         text("""
                             SELECT event_id, actor, actor_type, action, target_type,

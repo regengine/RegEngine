@@ -675,23 +675,29 @@ class SchedulerService:
         """
         try:
             from shared.database import SessionLocal
+            from shared.tenant_context import system_scope  # noqa: PLC0415
             from sqlalchemy import text as _sqltext
 
             db = SessionLocal()
             try:
-                result = db.execute(
-                    _sqltext(
-                        """
-                        DELETE FROM fsma.task_queue
-                        WHERE status IN ('completed', 'dead')
-                          AND COALESCE(completed_at, created_at)
-                              < NOW() - INTERVAL '30 days'
-                        RETURNING id
-                        """
+                # #2461: cross-tenant queue maintenance — system_scope +
+                # begin-hook set regengine.system_context so the v095
+                # task_queue policy arm admits the DELETE under the
+                # least-privilege role.
+                with system_scope():
+                    result = db.execute(
+                        _sqltext(
+                            """
+                            DELETE FROM fsma.task_queue
+                            WHERE status IN ('completed', 'dead')
+                              AND COALESCE(completed_at, created_at)
+                                  < NOW() - INTERVAL '30 days'
+                            RETURNING id
+                            """
+                        )
                     )
-                )
-                rows = result.fetchall()
-                db.commit()
+                    rows = result.fetchall()
+                    db.commit()
                 if rows:
                     logger.info("task_queue_purged", rows=len(rows))
                 else:
@@ -766,26 +772,29 @@ class SchedulerService:
             try:
                 workflow = RequestWorkflow(db)
 
-                # Get all distinct tenant IDs with active cases
-                result = db.execute(
-                    __import__("sqlalchemy").text("""
-                        SELECT DISTINCT tenant_id
-                        FROM fsma.request_cases
-                        WHERE package_status NOT IN ('submitted', 'amended')
-                          AND response_due_at IS NOT NULL
-                    """)
-                )
+                # #2461: tenant discovery must NOT scan the RLS-forced
+                # fsma.request_cases cross-tenant (that query raises
+                # 'app.tenant_id not set' under the least-privilege role
+                # before any per-tenant GUC is set, killing the whole
+                # tick). Iterate public.tenants instead (infra table,
+                # permissive policy per v092) and let per-tenant
+                # check_deadline_status find the active cases.
+                result = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants"))
                 tenant_ids = [str(r[0]) for r in result.fetchall()]
 
                 total_overdue = 0
                 total_critical = 0
 
                 for tid in tenant_ids:
-                    # Set tenant context for RLS before per-tenant queries
-                    from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+                    # Set tenant context for RLS before per-tenant queries.
+                    # tenant_scope drives the #2461 begin-hook (covers every
+                    # transaction, incl. after commit/rollback); the explicit
+                    # set_tenant_guc stays as the idempotent legacy layer.
+                    from shared.tenant_context import set_tenant_guc, tenant_scope  # noqa: PLC0415
 
-                    set_tenant_guc(db, tid)
-                    cases = workflow.check_deadline_status(tid)
+                    with tenant_scope(tid):
+                        set_tenant_guc(db, tid)
+                        cases = workflow.check_deadline_status(tid)
                     overdue = [c for c in cases if c["urgency"] == "overdue"]
                     critical = [c for c in cases if c["urgency"] == "critical"]
                     total_overdue += len(overdue)
@@ -868,17 +877,23 @@ class SchedulerService:
         """
         try:
             from shared.database import SessionLocal
+            from shared.tenant_context import system_scope  # noqa: PLC0415
 
             db = SessionLocal()
             try:
-                # Check that audit trail records within the 24-month window exist
-                result = db.execute(
-                    __import__("sqlalchemy").text("""
-                        SELECT COUNT(*) as cnt
-                        FROM fsma.fsma_audit_trail
-                        WHERE created_at >= NOW() - INTERVAL '24 months'
-                    """)
-                )
+                # Check that audit trail records within the 24-month window
+                # exist. #2461: deliberately cross-tenant (retention guard
+                # over the whole audit chain) — system_scope + the v095
+                # fsma_audit_trail policy arm admit the COUNT under the
+                # least-privilege role.
+                with system_scope():
+                    result = db.execute(
+                        __import__("sqlalchemy").text("""
+                            SELECT COUNT(*) as cnt
+                            FROM fsma.fsma_audit_trail
+                            WHERE created_at >= NOW() - INTERVAL '24 months'
+                        """)
+                    )
                 row = result.fetchone()
                 count = row[0] if row else 0
                 if count == 0:
@@ -903,10 +918,12 @@ class SchedulerService:
         """
         try:
             from shared.database import SessionLocal
+            from shared.tenant_context import tenant_scope  # noqa: PLC0415
 
             db = SessionLocal()
             try:
-                # Archive FDA exports older than 1 year
+                # Archive FDA exports older than 1 year (fsma.fda_exports is
+                # not RLS-forced — cross-tenant DELETE unchanged)
                 result = db.execute(
                     __import__("sqlalchemy").text("""
                         DELETE FROM fsma.fda_exports
@@ -915,16 +932,6 @@ class SchedulerService:
                     """)
                 )
                 deleted_exports = len(result.fetchall())
-
-                # Archive CTE events older than 3 years
-                result = db.execute(
-                    __import__("sqlalchemy").text("""
-                        DELETE FROM fsma.cte_events
-                        WHERE created_at < NOW() - INTERVAL '1095 days'
-                        RETURNING id
-                    """)
-                )
-                deleted_ctes = len(result.fetchall())
 
                 # Archive sysadmin access logs older than 7 years (NIST AU-4, #1009)
                 deleted_audit = 0
@@ -941,6 +948,31 @@ class SchedulerService:
                     pass  # Table may not exist on all databases
 
                 db.commit()
+
+                # Archive CTE events older than 3 years. #2461:
+                # fsma.cte_events is RLS-forced tenant DATA — it gets NO
+                # system arm, so the sweep iterates tenants and deletes
+                # under each tenant's own GUC (tenant_scope + begin-hook).
+                # Under today's BYPASSRLS role the first iteration deletes
+                # everything and the rest are no-ops; under the
+                # least-privilege role each pass is tenant-scoped.
+                deleted_ctes = 0
+                tenant_rows = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants")).fetchall()
+                # End the discovery transaction so each tenant's DELETE
+                # starts a FRESH transaction inside tenant_scope (the
+                # begin-hook only fires at transaction start).
+                db.commit()
+                for tenant_row in tenant_rows:
+                    with tenant_scope(str(tenant_row[0])):
+                        result = db.execute(
+                            __import__("sqlalchemy").text("""
+                                DELETE FROM fsma.cte_events
+                                WHERE created_at < NOW() - INTERVAL '1095 days'
+                                RETURNING id
+                            """)
+                        )
+                        deleted_ctes += len(result.fetchall())
+                        db.commit()
 
                 if deleted_exports > 0 or deleted_ctes > 0 or deleted_audit > 0:
                     logger.info(

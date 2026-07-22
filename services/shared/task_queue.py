@@ -53,6 +53,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+from shared.tenant_context import apply_system_guc, system_scope, tenant_scope
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -238,8 +239,23 @@ def enqueue_task(
 
 
 def get_task_queue_summary(db_session: Any) -> dict[str, Any]:
-    """Return read-only queue health for operator surfaces and metrics."""
+    """Return read-only queue health for operator surfaces and metrics.
 
+    #2461: this is a deliberately CROSS-TENANT operator view of
+    fsma.task_queue (sysadmin-gated at the HTTP layer). It runs under
+    ``system_scope`` so the v095 system arm admits the scan under the
+    least-privilege role; ``apply_system_guc`` additionally covers the
+    case where the caller's session transaction is already open (admin
+    request sessions run auth queries first, so the begin-hook alone
+    would miss the current transaction).
+    """
+
+    with system_scope():
+        apply_system_guc(db_session)
+        return _get_task_queue_summary_inner(db_session)
+
+
+def _get_task_queue_summary_inner(db_session: Any) -> dict[str, Any]:
     count_rows = db_session.execute(
         text(
             """
@@ -294,10 +310,28 @@ def replay_dead_tasks(
     ids: Optional[list[int | str]] = None,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Reset dead task_queue rows to pending without deleting history."""
+    """Reset dead task_queue rows to pending without deleting history.
+
+    #2461: cross-tenant sysadmin operation — see get_task_queue_summary
+    for the system_scope / apply_system_guc rationale. Fixes both the
+    tenantless-sysadmin 500 and the tenant-bound-sysadmin silent-scoping
+    bug under the least-privilege role.
+    """
 
     if limit < 1 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
+
+    with system_scope():
+        apply_system_guc(db_session)
+        return _replay_dead_tasks_inner(db_session, ids=ids, limit=limit)
+
+
+def _replay_dead_tasks_inner(
+    db_session: Any,
+    *,
+    ids: Optional[list[int | str]],
+    limit: int,
+) -> dict[str, Any]:
 
     results: list[dict[str, Any]] = []
     target_ids: list[str]
@@ -584,7 +618,11 @@ class TaskWorker:
 
     def _release_stale_locks(self) -> None:
         """Flip ``processing`` rows whose lock expired back to ``pending``."""
-        with self.engine.begin() as conn:
+        # #2461: queue mechanics are cross-tenant by design (weighted fair
+        # queuing, ADR #1644) — system_scope + the begin-hook set the
+        # regengine.system_context GUC so the v095 task_queue policy arm
+        # admits the scan under the least-privilege role.
+        with system_scope(), self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
@@ -633,7 +671,8 @@ class TaskWorker:
             type_filter = "AND task_type = ANY(:task_types)"
             params["task_types"] = self.task_types
 
-        with self.engine.begin() as conn:
+        # #2461: cross-tenant claim — see _release_stale_locks.
+        with system_scope(), self.engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
@@ -711,7 +750,16 @@ class TaskWorker:
             return
 
         try:
-            self._invoke(handler, task["payload"])
+            # #2461: the claimed row's tenant_id column is the declared
+            # tenant authority (EPIC-A #1651). Seed it around the handler
+            # so every transaction the handler opens carries the tenant
+            # GUC via the begin-hook. Rows without a tenant run unseeded
+            # and fail closed on any RLS-forced table.
+            if task.get("tenant_id"):
+                with tenant_scope(task["tenant_id"]):
+                    self._invoke(handler, task["payload"])
+            else:
+                self._invoke(handler, task["payload"])
         except Exception as exc:
             logger.warning(
                 "task_handler_raised",
@@ -743,7 +791,8 @@ class TaskWorker:
         return handler(**payload)
 
     def _mark_completed(self, task_id: int) -> None:
-        with self.engine.begin() as conn:
+        # #2461: state transitions are queue mechanics — system_scope.
+        with system_scope(), self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
@@ -768,7 +817,7 @@ class TaskWorker:
             return
 
         backoff = compute_backoff_seconds(new_attempts)
-        with self.engine.begin() as conn:
+        with system_scope(), self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
@@ -796,7 +845,7 @@ class TaskWorker:
             )
 
     def _mark_dead(self, task_id: int, error: str, *, attempts: Optional[int] = None) -> None:
-        with self.engine.begin() as conn:
+        with system_scope(), self.engine.begin() as conn:
             conn.execute(
                 text(
                     """
