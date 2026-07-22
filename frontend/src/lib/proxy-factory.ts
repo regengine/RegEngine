@@ -195,7 +195,11 @@ export interface StreamProxyConfig {
     /** Build outbound headers. */
     buildHeaders: (request: NextRequest) => Headers;
     /** Optional post-auth hook to mutate/validate outbound headers before fetch. */
-    prepareHeaders?: (headers: Headers, request: NextRequest, path: string) => NextResponse | null;
+    prepareHeaders?: (
+        headers: Headers,
+        request: NextRequest,
+        path: string,
+    ) => NextResponse | null | Promise<NextResponse | null>;
     /** Upstream response headers to pass through to the client. */
     responseHeaderPassthrough?: string[];
     /** Methods to export. Defaults to GET/POST/PUT/PATCH/DELETE/OPTIONS. */
@@ -338,7 +342,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
 
             const headers = config.buildHeaders(request);
             if (!skipAuth) {
-                const headerError = config.prepareHeaders?.(headers, request, path);
+                const headerError = await config.prepareHeaders?.(headers, request, path);
                 if (headerError) return headerError;
             }
             const fetchOptions: RequestInit = { method, headers };

@@ -15,11 +15,12 @@ describe('internal api hooks', () => {
         vi.clearAllMocks();
     });
 
-    it('fetches workbench readiness through the authenticated proxy without tenant_id in the URL', async () => {
+    it('fetches workbench readiness through the authenticated proxy with explicit tenant context', async () => {
+        const tenantId = '11111111-1111-4111-8111-111111111111';
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,
             json: async () => ({
-                tenant_id: 'tenant-123',
+                tenant_id: tenantId,
                 score: 92,
                 label: 'Ready',
                 run_id: 'run-1',
@@ -31,14 +32,12 @@ describe('internal api hooks', () => {
         });
 
         const { fetchWorkbenchReadinessSummary } = await import('@/lib/api-hooks');
-        await fetchWorkbenchReadinessSummary('tenant-123');
+        await fetchWorkbenchReadinessSummary(tenantId);
 
         expect(fetchWithCsrfMock).toHaveBeenCalledWith(
-            '/api/ingestion/api/v1/inflow-workbench/readiness/summary',
+            `/api/ingestion/api/v1/inflow-workbench/readiness/summary?tenant_id=${tenantId}`,
             expect.objectContaining({ credentials: 'include' }),
         );
-        const [url] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
-        expect(url).not.toContain('tenant_id=');
         const [, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
         expect(new Headers(init.headers).get('X-RegEngine-API-Key')).toBeNull();
     });

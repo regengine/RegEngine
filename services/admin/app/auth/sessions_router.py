@@ -10,11 +10,13 @@ Exposes:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from shared.pagination import PaginationParams
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from ..auth_utils import decode_access_token, revoke_token
@@ -22,7 +24,7 @@ from ..database import get_session
 from ..dependencies import get_current_user, get_session_store
 from ..models import RevokeAllSessionsResponse, SessionListResponse, SessionRevokeResponse
 from ..session_store import RedisSessionStore
-from ..sqlalchemy_models import UserModel
+from ..sqlalchemy_models import SessionModel, UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
 
 router = APIRouter()
@@ -147,6 +149,19 @@ async def revoke_all_sessions(
     # 1. Revoke Redis session rows (future /refresh attempts will 401).
     count = await session_store.revoke_all_user_sessions(current_user.id)
 
+    # 1b. Revoke opaque browser-session rows too. Passwordless sessions
+    # authenticate from the __Host-regengine_session cookie against the
+    # sessions table — they carry no token_version claim, so the bump in
+    # step 2 alone would leave them alive.
+    cookie_sessions_revoked = db.execute(
+        update(SessionModel)
+        .where(
+            SessionModel.user_id == current_user.id,
+            SessionModel.is_revoked.is_(False),
+        )
+        .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+    ).rowcount
+
     # 2. Bump token_version to kill outstanding access tokens immediately.
     user = db.get(UserModel, current_user.id)
     if user is not None:
@@ -164,6 +179,7 @@ async def revoke_all_sessions(
         "all_sessions_revoked",
         user_id=str(current_user.id),
         count=count,
+        cookie_sessions_revoked=cookie_sessions_revoked,
         elevation_tokens_revoked=elevation_revoked,
         new_token_version=new_version,
     )
