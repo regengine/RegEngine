@@ -278,11 +278,11 @@ def init_db() -> None:
             BEGIN
               tid := NULLIF(current_setting('app.tenant_id', true), '');
               IF tid IS NULL THEN
-                RAISE EXCEPTION 'app.tenant_id not set — tenant context required for RLS';
+                RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
               END IF;
               RETURN tid::UUID;
             END;
-            $$ LANGUAGE plpgsql;
+            $$ LANGUAGE plpgsql STABLE;
         """)
         )
         # SECURITY: set_admin_context sets the regengine.is_sysadmin session
