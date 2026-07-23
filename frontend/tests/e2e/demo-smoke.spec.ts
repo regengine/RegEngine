@@ -21,9 +21,16 @@
  *    DEMO_SMOKE_TENANT_ID is required in this mode (in OTP mode the tenant
  *    comes from the authenticated session). The Inflow Lab page and supplier
  *    portal are public routes, so the UI portion works without a user session.
+ *
+ * Independently of auth, the sandbox evaluator is probed at runtime: it is an
+ * experimental router (auto-disabled in production), so on deployments where
+ * it is unmounted the lab page must show its feature gate and the workbench
+ * loop runs from a frozen evaluator result instead of a live evaluation.
  */
 import { expect, test, type APIResponse, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { loginWithEmailOtp } from './auth-helpers';
 
 const DEMO_EMAIL = process.env.DEMO_SMOKE_EMAIL || process.env.TEST_USER_EMAIL || '';
@@ -47,6 +54,18 @@ receiving,TLC-DEMO-SMOKE-001,Romaine Lettuce,103,cases,,2026-04-27T02:04:00Z,Sal
 
 type JsonObject = Record<string, unknown>;
 type AuthMode = 'email_otp' | 'api_key';
+type SandboxMode = 'live' | 'frozen-fixture';
+
+/**
+ * Real evaluator output for MESSY_SUPPLIER_CSV, frozen from
+ * services/ingestion/app/sandbox (5 events, 11 KDE errors, 6 rule failures).
+ * Used when the target deployment does not mount the sandbox router —
+ * it lives in _EXPERIMENTAL_ROUTERS and is auto-disabled in production —
+ * so the workbench persistence loop can still be exercised end to end.
+ */
+const FROZEN_SANDBOX_RESULT = JSON.parse(
+    readFileSync(path.join(__dirname, 'fixtures/demo-smoke-sandbox-result.json'), 'utf-8'),
+) as JsonObject;
 
 function baseOrigin(): string {
     return new URL(
@@ -214,26 +233,39 @@ test.describe('Design-partner demo smoke', () => {
         expect(session.has_api_key, 'ingestion API key cookie should be set').toBe(true);
         expect(String(session.tenant_id || ''), 'session should carry the demo tenant').toBe(tenantId);
 
-        await page.goto('/tools/inflow-lab');
-        await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
-        const tenantInput = page.getByLabel(/^Tenant$/i).first();
-        if (await tenantInput.isVisible()) {
-            await tenantInput.fill(tenantId);
-        }
-        await page.getByRole('button', { name: /Data feeder/i }).click();
-        await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
-        await page.getByRole('button', { name: /Evaluate data/i }).click();
-        await expect(page.getByText('Events evaluated', { exact: true })).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByText('Backend readiness')).toBeVisible({ timeout: 30_000 });
-        await page.getByRole('button', { name: /Save test run/i }).click();
-        await expect(page.getByText(/Persisted as|Saved/i).first()).toBeVisible({ timeout: 30_000 });
+        // The sandbox router lives in _EXPERIMENTAL_ROUTERS and the Inflow Lab
+        // page behind NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES — both are off
+        // in production by default. Probe the router and require the frontend
+        // gate to agree: a half-enabled deployment fails loudly either way.
+        const sandboxProbe = await page.request.post('/api/ingestion/api/v1/sandbox/evaluate', {
+            data: { csv: MESSY_SUPPLIER_CSV },
+        });
+        const sandboxMode: SandboxMode = sandboxProbe.status() === 404 ? 'frozen-fixture' : 'live';
+        const sandboxResult = sandboxMode === 'live'
+            ? await expectJson<JsonObject>(sandboxProbe, 'sandbox evaluation')
+            : FROZEN_SANDBOX_RESULT;
 
-        const sandboxResult = await expectJson<JsonObject>(
-            await page.request.post('/api/ingestion/api/v1/sandbox/evaluate', {
-                data: { csv: MESSY_SUPPLIER_CSV },
-            }),
-            'sandbox evaluation',
-        );
+        await page.goto('/tools/inflow-lab');
+        if (sandboxMode === 'live') {
+            await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
+            const tenantInput = page.getByLabel(/^Tenant$/i).first();
+            if (await tenantInput.isVisible()) {
+                await tenantInput.fill(tenantId);
+            }
+            await page.getByRole('button', { name: /Data feeder/i }).click();
+            await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
+            await page.getByRole('button', { name: /Evaluate data/i }).click();
+            await expect(page.getByText('Events evaluated', { exact: true })).toBeVisible({ timeout: 30_000 });
+            await expect(page.getByText('Backend readiness')).toBeVisible({ timeout: 30_000 });
+            await page.getByRole('button', { name: /Save test run/i }).click();
+            await expect(page.getByText(/Persisted as|Saved/i).first()).toBeVisible({ timeout: 30_000 });
+        } else {
+            await expect(
+                page.getByTestId('feature-not-enabled'),
+                'sandbox router is unmounted, so the lab page must show its feature gate',
+            ).toBeVisible({ timeout: 20_000 });
+        }
+
         expect(sandboxResult.total_events).toBe(5);
         expect(
             Number(sandboxResult.total_kde_errors) + Number(sandboxResult.total_rule_failures),
@@ -348,6 +380,8 @@ test.describe('Design-partner demo smoke', () => {
         await writeSummary(testInfo, {
             base_url: testInfo.project.use.baseURL,
             auth_mode: authMode,
+            sandbox_mode: sandboxMode,
+            lab_ui: sandboxMode === 'live' ? 'exercised' : 'feature-gated',
             tenant_id: tenantId,
             workbench_run_id: savedRun.run_id,
             readiness_score: readiness.score,
