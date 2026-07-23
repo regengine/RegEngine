@@ -32,6 +32,12 @@ UNAUTHENTICATED_ALLOWLIST = frozenset(
         "GET /api/v1/onboarding/steps",
         "GET /api/v1/products/categories/ftl",
         "GET /api/v1/team/roles/definitions",
+        # Supplier correction form — static HTML shell with no tenant data.
+        # The correction link carries the token in the URL fragment (never
+        # sent to the server, keeping it out of access logs); every data
+        # endpoint behind the form (/context, /exchange, /session/*) requires
+        # the token or a bearer session and is rate-limited (#2594 slice).
+        "GET /api/v1/remediation/supplier/form",
         # Sandbox — intentionally public with rate limiting
         "POST /api/v1/sandbox/evaluate",
         # Webhook receivers — use signature verification instead of API keys
