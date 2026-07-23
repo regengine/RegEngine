@@ -73,7 +73,7 @@ function readOutboxRecords(): OutboxRecord[] {
         .map((line) => JSON.parse(line) as OutboxRecord);
 }
 
-async function waitForOtp(email: string): Promise<string> {
+export async function waitForOtp(email: string, challengeId?: string): Promise<string> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
         const record = readOutboxRecords()
@@ -81,6 +81,7 @@ async function waitForOtp(email: string): Promise<string> {
             .find((candidate) => (
                 candidate.kind === 'auth_challenge'
                 && candidate.email === email
+                && (!challengeId || candidate.challenge_id === challengeId)
                 && typeof candidate.code === 'string'
                 && /^\d{6}$/.test(candidate.code)
             ));
