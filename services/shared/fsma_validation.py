@@ -293,7 +293,14 @@ def calculate_gs1_check_digit(digits: str) -> int:
 
 
 def verify_gs1_check_digit(number: str) -> bool:
-    """Return ``True`` if *number*'s last digit is a valid GS1 check digit."""
+    """Return ``True`` if *number*'s last digit is a valid GS1 check digit.
+
+    Formatting separators (spaces, hyphens, parentheses, periods) are
+    tolerated; any other non-digit character (e.g. letters) fails
+    verification rather than being silently stripped.
+    """
+    if re.search(r"[^0-9\s\-().]", number):
+        return False
     clean = re.sub(r"\D", "", number)
     if len(clean) < 2:
         return False
