@@ -88,12 +88,20 @@ export async function resolveOpaqueSessionTenantId(sessionToken: string): Promis
         continue;
       }
 
+      // Resolve the session's TENANT, not its organization. /auth/me returns
+      // both; tenant_id is the identifier ingestion/readiness routes are
+      // scoped by (organization_id is a different entity and is null for
+      // users whose tenancy lives only in the memberships table). Fall back to
+      // organization_id only for backends that predate the tenant_id field.
       const body = await response.json().catch(() => null);
-      const organizationId =
-        body && typeof body === 'object' && typeof (body as Record<string, unknown>).organization_id === 'string'
-          ? ((body as Record<string, unknown>).organization_id as string)
-          : null;
-      return organizationId ? organizationId.toLowerCase() : null;
+      const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+      const tenantId =
+        record && typeof record.tenant_id === 'string'
+          ? record.tenant_id
+          : record && typeof record.organization_id === 'string'
+            ? (record.organization_id as string)
+            : null;
+      return tenantId ? tenantId.toLowerCase() : null;
     } catch {
       // Try the next configured admin target.
     }
