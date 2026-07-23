@@ -399,6 +399,11 @@ export async function DELETE(request: NextRequest) {
         await revokeBackendSession(accessToken);
     }
 
+    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+    if (isUsableCredential(sessionToken)) {
+        await revokeOpaqueSession(sessionToken);
+    }
+
     const response = NextResponse.json({ ok: true });
     response.cookies.delete('re_access_token');
     response.cookies.delete('re_api_key');
@@ -422,6 +427,31 @@ async function revokeBackendSession(accessToken: string): Promise<void> {
             });
 
             if (!shouldRetryAdminProxyResponse(response, 'auth/logout')) {
+                return;
+            }
+        } catch {
+            // Best effort only: local cookie teardown must still complete.
+        }
+    }
+}
+
+async function revokeOpaqueSession(sessionToken: string): Promise<void> {
+    // Passwordless sessions carry no bearer token — the backend authenticates
+    // the opaque cookie itself, so forward it to the session-logout endpoint
+    // to revoke the sessions row server-side. Without this, logout only
+    // deletes the browser cookie and the token stays valid until expiry.
+    const cookieHeader = `${AUTH_SESSION_COOKIE}=${sessionToken}`;
+
+    for (const target of getAdminTargets()) {
+        try {
+            const response = await fetch(`${target}/auth/session/logout`, {
+                method: 'POST',
+                headers: {
+                    cookie: cookieHeader,
+                },
+            });
+
+            if (!shouldRetryAdminProxyResponse(response, 'auth/session/logout')) {
                 return;
             }
         } catch {

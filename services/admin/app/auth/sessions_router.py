@@ -1,7 +1,7 @@
 """Session management routes — extracted from auth_routes.py (Phase 1 sub-split 7/N).
 
 Exposes:
-  router            — APIRouter with /sessions, /sessions/{id}/revoke, /logout, /logout-all
+  router            — APIRouter with /sessions, /sessions/{id}/revoke, /logout, /logout-all, /session/logout
   list_sessions     — re-exported from auth_routes for compat
   revoke_session    — re-exported from auth_routes for compat
   logout            — re-exported from auth_routes for compat
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from shared.pagination import PaginationParams
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ from ..models import RevokeAllSessionsResponse, SessionListResponse, SessionRevo
 from ..session_store import RedisSessionStore
 from ..sqlalchemy_models import SessionModel, UserModel
 from .elevation_helpers import _revoke_all_elevation_tokens_for_user
+from .session_auth import AUTH_SESSION_COOKIE, ActiveSessionContext, get_current_active_session_context
 
 router = APIRouter()
 logger = structlog.get_logger("auth")
@@ -127,6 +128,50 @@ async def logout(
         jti=str(jti) if jti else None,
         session_id=str(sid_raw) if sid_raw else None,
         session_revoked=session_revoked,
+    )
+
+    return {"status": "success"}
+
+
+@router.post("/session/logout")
+async def logout_browser_session(
+    response: Response,
+    context: ActiveSessionContext = Depends(get_current_active_session_context),
+    db: Session = Depends(get_session),
+):
+    """Logout the opaque browser-cookie session (passwordless auth).
+
+    The bearer-token /logout above cannot revoke these: passwordless sessions
+    authenticate from the __Host-regengine_session cookie against the sessions
+    table and carry no JWT. Mark the presented session row revoked so
+    get_current_active_session_context rejects the cookie immediately instead
+    of leaving the row alive until its natural expiry.
+    """
+    revoked = db.execute(
+        update(SessionModel)
+        .where(
+            SessionModel.id == context.session.id,
+            SessionModel.is_revoked.is_(False),
+        )
+        .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+    ).rowcount
+    db.commit()
+
+    # Mirror the set_cookie attributes from challenges_router — a __Host-
+    # prefixed cookie only clears when Secure and Path=/ match.
+    response.delete_cookie(
+        AUTH_SESSION_COOKIE,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+
+    logger.info(
+        "browser_session_logout",
+        user_id=str(context.user.id),
+        session_id=str(context.session.id),
+        session_revoked=bool(revoked),
     )
 
     return {"status": "success"}
