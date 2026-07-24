@@ -32,13 +32,13 @@ class TestGS1CheckDigit:
         [
             # GTIN-8 examples
             ("9638507", 4),  # → 96385074
-            ("1234567", 8),  # → 12345678
+            ("1234567", 0),  # → 12345670
             # GTIN-12 examples
-            ("03600029145", 8),  # → 036000291458
+            ("03600029145", 2),  # → 036000291452 (Diet Coke)
             # GTIN-13 examples
             ("590123412345", 7),  # → 5901234123457
             # GTIN-14 examples
-            ("1034567890123", 1),  # → 10345678901231
+            ("1034567890123", 3),  # → 10345678901233
         ],
     )
     def test_calculate_check_digit(self, digits, expected):
@@ -55,9 +55,9 @@ class TestGS1CheckDigit:
         [
             ("96385074", True),  # Valid GTIN-8
             ("96385075", False),  # Invalid check digit
-            ("036000291458", True),  # Valid GTIN-12
+            ("036000291452", True),  # Valid GTIN-12
             ("5901234123457", True),  # Valid GTIN-13
-            ("10345678901231", True),  # Valid GTIN-14
+            ("10345678901233", True),  # Valid GTIN-14
             ("10345678901239", False),  # Invalid check digit
         ],
     )
@@ -86,9 +86,9 @@ class TestGTINValidation:
         "gtin",
         [
             "96385074",  # GTIN-8
-            "036000291458",  # GTIN-12
+            "036000291452",  # GTIN-12
             "5901234123457",  # GTIN-13
-            "10345678901231",  # GTIN-14
+            "10345678901233",  # GTIN-14
         ],
     )
     def test_valid_gtin(self, gtin):
