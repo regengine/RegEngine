@@ -54,8 +54,7 @@ class _RateLimitServiceProtocol(Protocol):
         email_fingerprint: str,
         browser_binding_hash: str,
         ip_address: str,
-    ) -> object:
-        ...
+    ) -> object: ...
 
 
 async def get_rate_limit_service(
@@ -229,18 +228,22 @@ async def create_auth_challenge(
     browser_nonce = _browser_nonce_for_request(request, crypto_service)
     browser_binding_hash = crypto_service.hash_session_token(browser_nonce)
 
-    try:
-        await rate_limit_service.check_otp_generation(
-            email_fingerprint=email_fingerprint,
-            browser_binding_hash=browser_binding_hash,
-            ip_address=_client_ip(request),
-        )
-    except RateLimitExceededException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please wait before requesting another sign-in code.",
-            headers={"Retry-After": str(exc.retry_after_seconds)},
-        ) from exc
+    # Playwright suites log in dozens of times per run from one IP/email, far
+    # past the human-scale OTP budgets. E2E mode is hard-forbidden in
+    # production (assert_e2e_mode_allowed above), so the bypass cannot leak.
+    if not e2e_mode_enabled():
+        try:
+            await rate_limit_service.check_otp_generation(
+                email_fingerprint=email_fingerprint,
+                browser_binding_hash=browser_binding_hash,
+                ip_address=_client_ip(request),
+            )
+        except RateLimitExceededException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many requests. Please wait before requesting another sign-in code.",
+                headers={"Retry-After": str(exc.retry_after_seconds)},
+            ) from exc
 
     try:
         can_complete_passwordless_login = _has_valid_passwordless_identity(
@@ -326,11 +329,7 @@ def _challenge_is_pending(challenge: AuthChallengeModel, now: datetime) -> bool:
     expires_at = challenge.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    return (
-        challenge.status == "pending"
-        and expires_at > now
-        and int(challenge.failed_attempts or 0) < 5
-    )
+    return challenge.status == "pending" and expires_at > now and int(challenge.failed_attempts or 0) < 5
 
 
 def _browser_binding_matches(

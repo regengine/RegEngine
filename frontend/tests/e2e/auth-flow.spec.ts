@@ -59,7 +59,9 @@ test('WebAuthn step-up registers a passkey and completes the admin policy action
         // The inline timeout must cover that first-render latency (the global
         // expect timeout does not apply once an inline one is set); the session
         // itself is already confirmed webauthn above.
-        await expect(page.getByText('webauthn')).toBeVisible({ timeout: 30_000 });
+        // exact: the admin-policy panel copy ("...require WebAuthn or SSO...")
+        // also substring-matches now that the seeded user has a tenant role.
+        await expect(page.getByText('webauthn', { exact: true })).toBeVisible({ timeout: 30_000 });
         await expect(page.getByText('Ready')).toBeVisible();
 
         await page.getByRole('button', { name: /verify admin policy access/i }).click();

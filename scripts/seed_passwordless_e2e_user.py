@@ -46,8 +46,11 @@ def main() -> int:
     from services.admin.app.auth_crypto import AuthCryptoService
     from services.admin.app.database import SessionLocal, init_db
     from services.admin.app.sqlalchemy_models import (
+        MembershipModel,
         OrganizationMembershipModel,
         OrganizationModel,
+        RoleModel,
+        TenantModel,
         UserEmailModel,
         UserModel,
     )
@@ -80,9 +83,7 @@ def main() -> int:
             organization.domain_verified = True
             organization.enforced_auth_policy = "standard"
 
-        user = db.execute(
-            select(UserModel).where(func.lower(UserModel.email) == email).limit(1)
-        ).scalar_one_or_none()
+        user = db.execute(select(UserModel).where(func.lower(UserModel.email) == email).limit(1)).scalar_one_or_none()
         if user is None:
             user = UserModel(
                 id=uuid.uuid4(),
@@ -134,6 +135,56 @@ def main() -> int:
         else:
             membership.role = membership.role or "owner"
 
+        # Legacy tenant context, mirroring the v094 mapping
+        # (organizations.id == tenants.id): /auth/me and PermissionChecker
+        # resolve the session's tenant and role from tenants/roles/memberships,
+        # so without these rows a passwordless login has no tenant_id and no
+        # permissions on tenant-scoped admin endpoints.
+        tenant = db.get(TenantModel, organization.id)
+        if tenant is None:
+            tenant = TenantModel(
+                id=organization.id,
+                name=org_name,
+                slug=f"e2e-{uuid.uuid4().hex[:12]}",
+                status="active",
+                settings={},
+            )
+            db.add(tenant)
+            db.flush()
+
+        owner_role = db.execute(
+            select(RoleModel).where(RoleModel.tenant_id == tenant.id, RoleModel.name == "Owner").limit(1)
+        ).scalar_one_or_none()
+        if owner_role is None:
+            owner_role = RoleModel(
+                id=uuid.uuid4(),
+                tenant_id=tenant.id,
+                name="Owner",
+                permissions=["*"],
+            )
+            db.add(owner_role)
+            db.flush()
+
+        legacy_membership = db.execute(
+            select(MembershipModel)
+            .where(
+                MembershipModel.user_id == user.id,
+                MembershipModel.tenant_id == tenant.id,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if legacy_membership is None:
+            db.add(
+                MembershipModel(
+                    user_id=user.id,
+                    tenant_id=tenant.id,
+                    role_id=owner_role.id,
+                    is_active=True,
+                )
+            )
+        else:
+            legacy_membership.is_active = True
+
         db.commit()
 
         print(
@@ -143,6 +194,7 @@ def main() -> int:
                     "user_id": str(user.id),
                     "organization_id": str(organization.id),
                     "membership_id": str(membership.id),
+                    "tenant_id": str(tenant.id),
                     "is_sysadmin": bool(user.is_sysadmin),
                 },
                 sort_keys=True,

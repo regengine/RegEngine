@@ -1,40 +1,22 @@
 import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
-import { csrfHeader } from './support/api-auth';
-import { fillPasswordLogin } from './support/ui-auth';
+import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
+import { csrfHeader, loginViaApi, logoutViaApi, type ApiSession } from './support/api-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
-const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
-const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 const ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY || 'playwright-local-admin-master-key-2026';
-const VIEWER_PASSWORD = 'Trace204!Viewer1'; // pragma: allowlist secret
 const DEFAULT_ADMIN_DB = 'sqlite:////tmp/regengine-playwright-admin.db';
 
-async function loginToDashboardInflowLab(page: Page) {
-    await loginAsUser(page, TEST_USER_EMAIL, TEST_PASSWORD);
-}
-
-async function loginAsUser(page: Page, email: string, password: string) {
-    await page.goto('/login?next=/dashboard/inflow-lab');
-    await fillPasswordLogin(page, email, password);
-    await page.click('button[type="submit"]');
+async function loginToDashboardInflowLab(page: Page, email = TEST_USER_EMAIL): Promise<ApiSession> {
+    const session = await loginViaApi(page.context(), email);
+    await page.goto('/dashboard/inflow-lab');
     await page.waitForURL(/\/dashboard\/inflow-lab/, { timeout: 15000 });
+    return session;
 }
 
-async function enableInflowWriteApiKey(page: Page) {
-    const loginResponse = await page.request.post('/api/admin/auth/login', {
-        data: { email: TEST_USER_EMAIL, password: TEST_PASSWORD },
-    });
-    expect(loginResponse.ok(), await loginResponse.text()).toBeTruthy();
-    const loginPayload = await loginResponse.json() as {
-        access_token?: string;
-        tenant_id?: string;
-        user?: unknown;
-    };
-    const tenantId = String(loginPayload.tenant_id || '');
+async function enableInflowWriteApiKey(page: Page, session: ApiSession) {
+    const tenantId = session.tenant_id;
     expect(tenantId, 'Inflow write E2E requires an authenticated tenant').toBeTruthy();
     expect(ADMIN_MASTER_KEY, 'Inflow write E2E requires ADMIN_MASTER_KEY to mint a scoped key').toBeTruthy();
 
@@ -64,10 +46,8 @@ async function enableInflowWriteApiKey(page: Page) {
             ...(await csrfHeader(page.context())),
         },
         data: {
-            access_token: loginPayload.access_token,
             api_key: apiKey,
             tenant_id: tenantId,
-            user: loginPayload.user,
         },
     });
     expect(response.ok(), await response.text()).toBeTruthy();
@@ -98,7 +78,7 @@ function ensureViewerRole(tenantId: string) {
 }
 
 test.describe('Dashboard Inflow Lab', () => {
-    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+    test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
     test('renders the sandbox-first inflow workspace for authenticated users', async ({ page }) => {
         await loginToDashboardInflowLab(page);
@@ -128,8 +108,8 @@ test.describe('Dashboard Inflow Lab', () => {
     });
 
     test('records a saved workbench run only after the explicit save action', async ({ page }) => {
-        await loginToDashboardInflowLab(page);
-        await enableInflowWriteApiKey(page);
+        const session = await loginToDashboardInflowLab(page);
+        await enableInflowWriteApiKey(page, session);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
@@ -181,8 +161,8 @@ test.describe('Dashboard Inflow Lab', () => {
         await expect(page.getByText('Saved to Inflow Workbench as')).toHaveCount(0);
     });
     test('reloads the latest saved workbench run after a successful save', async ({ page }) => {
-        await loginToDashboardInflowLab(page);
-        await enableInflowWriteApiKey(page);
+        const session = await loginToDashboardInflowLab(page);
+        await enableInflowWriteApiKey(page, session);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
@@ -203,41 +183,38 @@ test.describe('Dashboard Inflow Lab', () => {
         await expect(page.getByText(/Last test run ·/)).not.toContainText('never');
     });
 
-    test('disables save before any POST when the logged-in user lacks inflow.write', async ({ page, request }) => {
+    test('disables save before any POST when the logged-in user lacks inflow.write', async ({ page, context }) => {
         const viewerEmail = `e2e-inflow-viewer-${Date.now()}@example.com`;
 
-        const adminLoginResponse = await request.post('/api/admin/auth/login', {
-            data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
-        });
-        expect(adminLoginResponse.ok()).toBeTruthy();
-        const adminLoginPayload = await adminLoginResponse.json();
-        const viewerRoleId = ensureViewerRole(adminLoginPayload.tenant_id as string);
+        // Invite the viewer as the owner over an authenticated session, then
+        // hand the browser context to the viewer for the UI assertions.
+        const adminSession = await loginViaApi(context, TEST_USER_EMAIL);
+        const viewerRoleId = ensureViewerRole(adminSession.tenant_id);
 
-        const inviteResponse = await request.post('/api/admin/v1/admin/invites', {
-            headers: {
-                Authorization: `Bearer ${adminLoginPayload.access_token as string}`,
-            },
+        const inviteResponse = await context.request.post('/api/admin/v1/admin/invites', {
+            headers: await csrfHeader(context),
             data: {
                 email: viewerEmail,
                 role_id: viewerRoleId,
             },
         });
-        expect(inviteResponse.ok()).toBeTruthy();
+        expect(inviteResponse.ok(), await inviteResponse.text()).toBeTruthy();
         const invitePayload = await inviteResponse.json();
         const inviteUrl = new URL(invitePayload.invite_link as string, 'http://localhost');
         const token = new URLSearchParams(inviteUrl.hash.slice(1)).get('token');
         expect(token).toBeTruthy();
 
-        const acceptResponse = await request.post('/api/admin/v1/auth/accept-invite', {
+        const acceptResponse = await context.request.post('/api/admin/v1/auth/accept-invite', {
             data: {
                 token,
-                password: VIEWER_PASSWORD,
                 name: 'E2E Viewer',
             },
         });
-        expect(acceptResponse.ok()).toBeTruthy();
+        expect(acceptResponse.ok(), await acceptResponse.text()).toBeTruthy();
 
-        await loginAsUser(page, viewerEmail, VIEWER_PASSWORD);
+        await logoutViaApi(context);
+        await context.clearCookies();
+        await loginToDashboardInflowLab(page, viewerEmail);
 
         await page.getByRole('button', { name: /Run sandbox test/i }).click();
         await page.getByRole('textbox', { name: 'Inbound CSV data' }).fill(
