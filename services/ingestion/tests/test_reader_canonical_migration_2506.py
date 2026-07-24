@@ -182,17 +182,16 @@ class TestRecallSimulationsRepointedToCanonical:
         assert "fsma.cte_events" not in session.sqls[0]
         assert "fsma.cte_events" not in tlc_sql
 
-    def test_supplier_count_query_left_on_legacy_table_deliberately(self, monkeypatch):
-        # The supplier_id column exists on NEITHER table; this query is a
-        # pre-existing latent bug (raises + swallowed → demo mode) and is
-        # deliberately left on the legacy table with a TODO(#2599). Assert
-        # it was NOT silently repointed to canonical (which would imply a
-        # false migration claim).
+    def test_supplier_count_reads_tenant_suppliers(self, monkeypatch):
+        # Suppliers are counted from fsma.tenant_suppliers (#2599) — the
+        # event tables have no supplier_id column, so neither legacy nor
+        # canonical may appear in this query.
         session = _OrderedScalarSession([5, 2, 3, 1])
         self._run(monkeypatch, session)
         supplier_sql = session.sqls[1]
-        assert "supplier_id" in supplier_sql
-        assert "fsma.cte_events" in supplier_sql
+        assert "fsma.tenant_suppliers" in supplier_sql
+        assert "supplier_id" not in supplier_sql
+        assert "fsma.cte_events" not in supplier_sql
         assert "fsma.traceability_events" not in supplier_sql
 
     def test_golden_output_unchanged_under_dual_write_identity(self, monkeypatch):

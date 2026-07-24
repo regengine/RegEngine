@@ -149,7 +149,12 @@ class TestGetTenantContextBehavior:
     def test_raises_when_guc_unset(self, conn):
         with conn.cursor() as cur:
             # No set_config in this transaction → GUC unset → must RAISE.
-            with pytest.raises(psycopg.errors.RaiseException):
+            # Either SQLSTATE is acceptable: what matters is that it RAISES
+            # at all. v097/admin emit a plain RAISE (P0001); test_rls_coverage's
+            # fixture uses ERRCODE='insufficient_privilege' (42501). No app code
+            # branches on the code, and asserting one made this test fail purely
+            # on how the DB was bootstrapped.
+            with pytest.raises((psycopg.errors.RaiseException, psycopg.errors.InsufficientPrivilege)):
                 cur.execute("SELECT get_tenant_context()")
         conn.rollback()
 
