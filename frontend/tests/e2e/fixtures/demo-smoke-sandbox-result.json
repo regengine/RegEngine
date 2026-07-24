@@ -1,0 +1,1630 @@
+{
+  "blocking_reasons": [
+    "Event 1 (harvesting): Missing required KDE 'harvest_date' for harvesting CTE",
+    "Event 2 (cooling): Missing required KDE 'cooling_date' for cooling CTE",
+    "Event 3 (initial_packing): Missing required KDE 'packing_date' for initial_packing CTE",
+    "Event 3 (initial_packing): Missing required KDE 'harvester_business_name' for initial_packing CTE",
+    "Event 3 (initial_packing): Initial-packing event missing harvest location ref, harvest location, farm reference \u2014 cannot trace back to harvest location (21 CFR \u00a71.1335(b)(3))",
+    "Event 4 (shipping): Missing required KDE 'ship_date' for shipping CTE",
+    "Event 4 (shipping): Missing required KDE 'ship_to_location' for shipping CTE",
+    "Event 4 (shipping): Missing required KDE 'tlc_source_reference' for shipping CTE",
+    "Event 4 (shipping): Shipping event missing to facility reference, ship to location, ship to gln (21 CFR \u00a71.1340(b)(4))",
+    "Event 5 (receiving): Missing required KDE 'receive_date' for receiving CTE",
+    "Event 5 (receiving): Missing required KDE 'receiving_location' for receiving CTE",
+    "Event 5 (receiving): Missing required KDE 'immediate_previous_source' for receiving CTE",
+    "Event 5 (receiving): Missing required KDE 'tlc_source_reference' for receiving CTE",
+    "Event 5 (receiving): Receiving event missing tlc source reference, tlc source gln, from entity reference required by 21 CFR \u00a71.1345(b)(7)",
+    "Event 5 (receiving): Receiving event missing receiving location (21 CFR \u00a71.1345(b)(4))"
+  ],
+  "compliant_events": 0,
+  "duplicate_warnings": [],
+  "entity_warnings": [],
+  "events": [
+    {
+      "all_results": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1327(b)(2)",
+          "evidence": [
+            {
+              "field": "kdes.harvest_date",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "event_timestamp",
+              "present": true,
+              "value": "2026-04-26T15:20:00Z"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Harvesting: Harvest Date Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1327(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Valley Fresh Farms"
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.field_name",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Harvesting: Farm Location Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "traceability_lot_code",
+              "value": "TLC-DEMO-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "TLC Must Be Present",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Product Description Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(2)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "quantity",
+              "value": "104.0"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Quantity and Unit of Measure Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Valley Fresh Farms"
+            },
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Location Identifier Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "identifier_format",
+          "citation": "GS1 General Specifications \u00a73.4.2",
+          "evidence": [
+            {
+              "expected_pattern": "^\\d{13}$|^[^0-9].*$|^$",
+              "field": "from_facility_reference",
+              "matches_pattern": true,
+              "value": "Valley Fresh Farms"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "GLN Format Validation",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1310(c)",
+          "evidence": [
+            {
+              "field": "kdes.reference_document",
+              "present": true,
+              "value": "HARV-SMOKE-001"
+            },
+            {
+              "field": "transport_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Reference Document Required for All CTEs",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1327(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.commodity",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Harvesting: Commodity and Variety Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "ftl_scoping",
+          "citation": "21 CFR \u00a71.1300",
+          "evidence": [
+            {
+              "field": "ftl_covered",
+              "present": true,
+              "value": "True"
+            },
+            {
+              "field": "kdes.ftl_covered",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ftl_category",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "product.category",
+              "present": true,
+              "value": "Leafy Greens"
+            },
+            {
+              "field": "product_category",
+              "present": true,
+              "value": "Leafy Greens"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "FTL Classification: Product Must Be Classified",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Identity Consistency: Product Must Not Change for Same TLC",
+          "severity": "warning",
+          "why_failed": null
+        }
+      ],
+      "blocking_defects": [],
+      "compliant": false,
+      "cte_type": "harvesting",
+      "event_index": 0,
+      "kde_errors": [
+        "Missing required KDE 'harvest_date' for harvesting CTE"
+      ],
+      "product_description": "Romaine Lettuce",
+      "rules_evaluated": 11,
+      "rules_failed": 0,
+      "rules_passed": 11,
+      "rules_warned": 0,
+      "traceability_lot_code": "TLC-DEMO-SMOKE-001"
+    },
+    {
+      "all_results": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1325(b)(5)",
+          "evidence": [
+            {
+              "field": "kdes.cooling_date",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "event_timestamp",
+              "present": true,
+              "value": "2026-04-26T18:12:00Z"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Cooling: Cooling Date Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1325(b)(4)",
+          "evidence": [
+            {
+              "field": "kdes.cooling_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Cooling Hub"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Cooling: Cooling Location Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "operational_quality",
+          "citation": "Operational cold-chain check",
+          "evidence": [
+            {
+              "field": "kdes.temperature",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.temperature_celsius",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.temperature_fahrenheit",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.cooling_temperature",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the temperature achieved during cooling in \u00b0F or \u00b0C",
+          "result": "warn",
+          "rule_title": "Cooling: Temperature Reading Required",
+          "severity": "warning",
+          "why_failed": "Cooling event missing temperature, temperature celsius, temperature fahrenheit, cooling temperature \u2014 temperature reading cannot be audited (Operational cold-chain check)"
+        },
+        {
+          "category": "operational_quality",
+          "citation": "Operational cold-chain check",
+          "evidence": [
+            {
+              "expected_max": 5.0,
+              "expected_min": 0.0,
+              "field": "kdes",
+              "note": null,
+              "unit": "C",
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "skip",
+          "rule_title": "Cooling: Temperature Within Cold-Chain Window",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "traceability_lot_code",
+              "value": "TLC-DEMO-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "TLC Must Be Present",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Product Description Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(2)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "quantity",
+              "value": "104.0"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Quantity and Unit of Measure Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Cooling Hub"
+            },
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Location Identifier Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "identifier_format",
+          "citation": "GS1 General Specifications \u00a73.4.2",
+          "evidence": [
+            {
+              "expected_pattern": "^\\d{13}$|^[^0-9].*$|^$",
+              "field": "from_facility_reference",
+              "matches_pattern": true,
+              "value": "Salinas Cooling Hub"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "GLN Format Validation",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1310(c)",
+          "evidence": [
+            {
+              "field": "kdes.reference_document",
+              "present": true,
+              "value": "COOL-SMOKE-001"
+            },
+            {
+              "field": "transport_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Reference Document Required for All CTEs",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "ftl_scoping",
+          "citation": "21 CFR \u00a71.1300",
+          "evidence": [
+            {
+              "field": "ftl_covered",
+              "present": true,
+              "value": "True"
+            },
+            {
+              "field": "kdes.ftl_covered",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ftl_category",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "product.category",
+              "present": true,
+              "value": "Leafy Greens"
+            },
+            {
+              "field": "product_category",
+              "present": true,
+              "value": "Leafy Greens"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "FTL Classification: Product Must Be Classified",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "temporal_ordering",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Temporal Order: CTE Chronology Must Be Causal",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Identity Consistency: Product Must Not Change for Same TLC",
+          "severity": "warning",
+          "why_failed": null
+        }
+      ],
+      "blocking_defects": [],
+      "compliant": false,
+      "cte_type": "cooling",
+      "event_index": 1,
+      "kde_errors": [
+        "Missing required KDE 'cooling_date' for cooling CTE"
+      ],
+      "product_description": "Romaine Lettuce",
+      "rules_evaluated": 13,
+      "rules_failed": 0,
+      "rules_passed": 11,
+      "rules_warned": 1,
+      "traceability_lot_code": "TLC-DEMO-SMOKE-001"
+    },
+    {
+      "all_results": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1335(b)(4)",
+          "evidence": [
+            {
+              "field": "kdes.packing_date",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "event_timestamp",
+              "present": true,
+              "value": "2026-04-26T20:12:00Z"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Initial Packing: Packing Date Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1335(b)(2)",
+          "evidence": [
+            {
+              "field": "kdes.packing_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Packhouse"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Initial Packing: Packing Location Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1335(b)(3)",
+          "evidence": [
+            {
+              "field": "kdes.harvest_location_ref",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.harvest_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.farm_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the harvest location reference (GLN, farm name, or field identifier) this lot came from",
+          "result": "fail",
+          "rule_title": "Initial Packing: Harvest Location Reference Required",
+          "severity": "critical",
+          "why_failed": "Initial-packing event missing harvest location ref, harvest location, farm reference \u2014 cannot trace back to harvest location (21 CFR \u00a71.1335(b)(3))"
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "traceability_lot_code",
+              "value": "TLC-DEMO-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "TLC Must Be Present",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Product Description Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(2)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "quantity",
+              "value": "103.0"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Quantity and Unit of Measure Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Packhouse"
+            },
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Location Identifier Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "identifier_format",
+          "citation": "GS1 General Specifications \u00a73.4.2",
+          "evidence": [
+            {
+              "expected_pattern": "^\\d{13}$|^[^0-9].*$|^$",
+              "field": "from_facility_reference",
+              "matches_pattern": true,
+              "value": "Salinas Packhouse"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "GLN Format Validation",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1310(c)",
+          "evidence": [
+            {
+              "field": "kdes.reference_document",
+              "present": true,
+              "value": "PACK-SMOKE-001"
+            },
+            {
+              "field": "transport_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Reference Document Required for All CTEs",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1335(b)(8)",
+          "evidence": [
+            {
+              "field": "kdes.harvester_business_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "from_entity_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the harvester's business name and phone number",
+          "result": "fail",
+          "rule_title": "Initial Packing: Harvester Business Name Required",
+          "severity": "warning",
+          "why_failed": "Initial packing event missing harvester business name (21 CFR \u00a71.1335(b)(8))"
+        },
+        {
+          "category": "ftl_scoping",
+          "citation": "21 CFR \u00a71.1300",
+          "evidence": [
+            {
+              "field": "ftl_covered",
+              "present": true,
+              "value": "True"
+            },
+            {
+              "field": "kdes.ftl_covered",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ftl_category",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "product.category",
+              "present": true,
+              "value": "Leafy Greens"
+            },
+            {
+              "field": "product_category",
+              "present": true,
+              "value": "Leafy Greens"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "FTL Classification: Product Must Be Classified",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "temporal_ordering",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Temporal Order: CTE Chronology Must Be Causal",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Identity Consistency: Product Must Not Change for Same TLC",
+          "severity": "warning",
+          "why_failed": null
+        }
+      ],
+      "blocking_defects": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1335(b)(3)",
+          "evidence": [
+            {
+              "field": "kdes.harvest_location_ref",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.harvest_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.farm_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the harvest location reference (GLN, farm name, or field identifier) this lot came from",
+          "result": "fail",
+          "rule_title": "Initial Packing: Harvest Location Reference Required",
+          "severity": "critical",
+          "why_failed": "Initial-packing event missing harvest location ref, harvest location, farm reference \u2014 cannot trace back to harvest location (21 CFR \u00a71.1335(b)(3))"
+        }
+      ],
+      "compliant": false,
+      "cte_type": "initial_packing",
+      "event_index": 2,
+      "kde_errors": [
+        "Missing required KDE 'packing_date' for initial_packing CTE",
+        "Missing required KDE 'harvester_business_name' for initial_packing CTE"
+      ],
+      "product_description": "Romaine Lettuce",
+      "rules_evaluated": 13,
+      "rules_failed": 2,
+      "rules_passed": 11,
+      "rules_warned": 0,
+      "traceability_lot_code": "TLC-DEMO-SMOKE-001"
+    },
+    {
+      "all_results": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1340(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Packhouse"
+            },
+            {
+              "field": "kdes.ship_from_location",
+              "present": true,
+              "value": "Salinas Packhouse"
+            },
+            {
+              "field": "kdes.ship_from_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Shipping: Ship-From Location Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1340(b)(4)",
+          "evidence": [
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ship_to_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ship_to_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the ship-to location (GLN preferred, or location description)",
+          "result": "fail",
+          "rule_title": "Shipping: Ship-To Location Required",
+          "severity": "critical",
+          "why_failed": "Shipping event missing to facility reference, ship to location, ship to gln (21 CFR \u00a71.1340(b)(4))"
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1340(b)(2)",
+          "evidence": [
+            {
+              "field": "kdes.ship_date",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "event_timestamp",
+              "present": true,
+              "value": "2026-04-26T22:41:00Z"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Shipping: Ship Date Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1340(b)(6)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "kdes.reference_document",
+              "value": "BOL-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Shipping: Reference Document Required",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "traceability_lot_code",
+              "value": "TLC-DEMO-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "TLC Must Be Present",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Product Description Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(2)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "quantity",
+              "value": "103.0"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Quantity and Unit of Measure Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Packhouse"
+            },
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Location Identifier Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "identifier_format",
+          "citation": "GS1 General Specifications \u00a73.4.2",
+          "evidence": [
+            {
+              "expected_pattern": "^\\d{13}$|^[^0-9].*$|^$",
+              "field": "from_facility_reference",
+              "matches_pattern": true,
+              "value": "Salinas Packhouse"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "GLN Format Validation",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": "21 CFR \u00a71.1340(b)(7)",
+          "evidence": [
+            {
+              "field": "kdes.tlc_source_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.tlc_source_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the GLN or business name of the entity that assigned the traceability lot code",
+          "result": "fail",
+          "rule_title": "Shipping: TLC Source Reference Required",
+          "severity": "warning",
+          "why_failed": "Shipping event missing TLC source reference (21 CFR \u00a71.1340(b)(7)) \u2014 cannot trace who assigned the lot code"
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1310(c)",
+          "evidence": [
+            {
+              "field": "kdes.reference_document",
+              "present": true,
+              "value": "BOL-SMOKE-001"
+            },
+            {
+              "field": "transport_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Reference Document Required for All CTEs",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "ftl_scoping",
+          "citation": "21 CFR \u00a71.1300",
+          "evidence": [
+            {
+              "field": "ftl_covered",
+              "present": true,
+              "value": "True"
+            },
+            {
+              "field": "kdes.ftl_covered",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ftl_category",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "product.category",
+              "present": true,
+              "value": "Leafy Greens"
+            },
+            {
+              "field": "product_category",
+              "present": true,
+              "value": "Leafy Greens"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "FTL Classification: Product Must Be Classified",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "temporal_ordering",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Temporal Order: CTE Chronology Must Be Causal",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Identity Consistency: Product Must Not Change for Same TLC",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "quantity_consistency",
+          "citation": null,
+          "evidence": [
+            {
+              "tlc": "TLC-DEMO-SMOKE-001",
+              "tolerance_percent": 1.0,
+              "total_input": 207.0,
+              "total_output": 103.0,
+              "units_seen": [
+                "cases"
+              ],
+              "uom_converted": false
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Mass Balance: Output Cannot Exceed Input for Same TLC",
+          "severity": "critical",
+          "why_failed": null
+        }
+      ],
+      "blocking_defects": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1340(b)(4)",
+          "evidence": [
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ship_to_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ship_to_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the ship-to location (GLN preferred, or location description)",
+          "result": "fail",
+          "rule_title": "Shipping: Ship-To Location Required",
+          "severity": "critical",
+          "why_failed": "Shipping event missing to facility reference, ship to location, ship to gln (21 CFR \u00a71.1340(b)(4))"
+        }
+      ],
+      "compliant": false,
+      "cte_type": "shipping",
+      "event_index": 3,
+      "kde_errors": [
+        "Missing required KDE 'ship_date' for shipping CTE",
+        "Missing required KDE 'ship_to_location' for shipping CTE",
+        "Missing required KDE 'tlc_source_reference' for shipping CTE"
+      ],
+      "product_description": "Romaine Lettuce",
+      "rules_evaluated": 15,
+      "rules_failed": 2,
+      "rules_passed": 13,
+      "rules_warned": 0,
+      "traceability_lot_code": "TLC-DEMO-SMOKE-001"
+    },
+    {
+      "all_results": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(7)",
+          "evidence": [
+            {
+              "field": "kdes.tlc_source_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.tlc_source_gln",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "from_entity_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Request the traceability lot code source reference (GLN or business name) from your immediate supplier",
+          "result": "fail",
+          "rule_title": "Receiving: TLC Source Reference Required",
+          "severity": "critical",
+          "why_failed": "Receiving event missing tlc source reference, tlc source gln, from entity reference required by 21 CFR \u00a71.1345(b)(7)"
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(5)",
+          "evidence": [
+            {
+              "field": "from_entity_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.immediate_previous_source",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ship_from_location",
+              "present": true,
+              "value": "Salinas Packout Dock"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Receiving: Immediate Previous Source Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1345(b)(6)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "kdes.reference_document",
+              "value": "REC-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Receiving: Reference Document Required",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(2)",
+          "evidence": [
+            {
+              "field": "kdes.receive_date",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "event_timestamp",
+              "present": true,
+              "value": "2026-04-27T02:04:00Z"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Receiving: Receive Date Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "traceability_lot_code",
+              "value": "TLC-DEMO-SMOKE-001"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "TLC Must Be Present",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(1)",
+          "evidence": [
+            {
+              "field": "product_reference",
+              "present": true,
+              "value": "Romaine Lettuce"
+            },
+            {
+              "field": "kdes.product_description",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Product Description Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(2)",
+          "evidence": [
+            {
+              "actual_present": true,
+              "expected": "not_empty",
+              "field": "quantity",
+              "value": "103.0"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Quantity and Unit of Measure Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1310(b)(3)",
+          "evidence": [
+            {
+              "field": "from_facility_reference",
+              "present": true,
+              "value": "Salinas Packout Dock"
+            },
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_gln",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Location Identifier Required",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "identifier_format",
+          "citation": "GS1 General Specifications \u00a73.4.2",
+          "evidence": [
+            {
+              "expected_pattern": "^\\d{13}$|^[^0-9].*$|^$",
+              "field": "from_facility_reference",
+              "matches_pattern": true,
+              "value": "Salinas Packout Dock"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "GLN Format Validation",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "source_reference",
+          "citation": "21 CFR \u00a71.1310(c)",
+          "evidence": [
+            {
+              "field": "kdes.reference_document",
+              "present": true,
+              "value": "REC-SMOKE-001"
+            },
+            {
+              "field": "transport_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Reference Document Required for All CTEs",
+          "severity": "warning",
+          "why_failed": null
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(4)",
+          "evidence": [
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.receiving_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the location description where food was received (GLN preferred)",
+          "result": "fail",
+          "rule_title": "Receiving: Receiving Location Required",
+          "severity": "critical",
+          "why_failed": "Receiving event missing receiving location (21 CFR \u00a71.1345(b)(4))"
+        },
+        {
+          "category": "ftl_scoping",
+          "citation": "21 CFR \u00a71.1300",
+          "evidence": [
+            {
+              "field": "ftl_covered",
+              "present": true,
+              "value": "True"
+            },
+            {
+              "field": "kdes.ftl_covered",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.ftl_category",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "product.category",
+              "present": true,
+              "value": "Leafy Greens"
+            },
+            {
+              "field": "product_category",
+              "present": true,
+              "value": "Leafy Greens"
+            }
+          ],
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "FTL Classification: Product Must Be Classified",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "temporal_ordering",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Temporal Order: CTE Chronology Must Be Causal",
+          "severity": "critical",
+          "why_failed": null
+        },
+        {
+          "category": "lot_linkage",
+          "citation": null,
+          "evidence": null,
+          "remediation": null,
+          "result": "pass",
+          "rule_title": "Identity Consistency: Product Must Not Change for Same TLC",
+          "severity": "warning",
+          "why_failed": null
+        }
+      ],
+      "blocking_defects": [
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(7)",
+          "evidence": [
+            {
+              "field": "kdes.tlc_source_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.tlc_source_gln",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "from_entity_reference",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Request the traceability lot code source reference (GLN or business name) from your immediate supplier",
+          "result": "fail",
+          "rule_title": "Receiving: TLC Source Reference Required",
+          "severity": "critical",
+          "why_failed": "Receiving event missing tlc source reference, tlc source gln, from entity reference required by 21 CFR \u00a71.1345(b)(7)"
+        },
+        {
+          "category": "kde_presence",
+          "citation": "21 CFR \u00a71.1345(b)(4)",
+          "evidence": [
+            {
+              "field": "to_facility_reference",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.receiving_location",
+              "present": false,
+              "value": null
+            },
+            {
+              "field": "kdes.location_name",
+              "present": false,
+              "value": null
+            }
+          ],
+          "remediation": "Record the location description where food was received (GLN preferred)",
+          "result": "fail",
+          "rule_title": "Receiving: Receiving Location Required",
+          "severity": "critical",
+          "why_failed": "Receiving event missing receiving location (21 CFR \u00a71.1345(b)(4))"
+        }
+      ],
+      "compliant": false,
+      "cte_type": "receiving",
+      "event_index": 4,
+      "kde_errors": [
+        "Missing required KDE 'receive_date' for receiving CTE",
+        "Missing required KDE 'receiving_location' for receiving CTE",
+        "Missing required KDE 'immediate_previous_source' for receiving CTE",
+        "Missing required KDE 'tlc_source_reference' for receiving CTE"
+      ],
+      "product_description": "Romaine Lettuce",
+      "rules_evaluated": 14,
+      "rules_failed": 2,
+      "rules_passed": 12,
+      "rules_warned": 0,
+      "traceability_lot_code": "TLC-DEMO-SMOKE-001"
+    }
+  ],
+  "non_compliant_events": 5,
+  "normalizations": [],
+  "submission_blocked": true,
+  "total_events": 5,
+  "total_kde_errors": 11,
+  "total_rule_failures": 6
+}
