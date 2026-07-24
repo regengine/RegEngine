@@ -295,20 +295,12 @@ def calculate_gs1_check_digit(digits: str) -> int:
 def verify_gs1_check_digit(number: str) -> bool:
     """Return ``True`` if *number*'s last digit is a valid GS1 check digit.
 
-    Formatting separators (spaces, hyphens, parentheses, periods) are
-    tolerated; any other non-digit character (e.g. letters) fails
-    verification rather than being silently stripped.
+    Fails closed: any non-digit character makes the whole input invalid —
+    callers must strip formatting/separators before verifying.
     """
-    if re.search(r"[^0-9\s\-().]", number):
+    if not number or not re.fullmatch(r"\d{2,}", number):
         return False
-    clean = re.sub(r"\D", "", number)
-    if len(clean) < 2:
-        return False
-    try:
-        expected = _gs1_check_digit(clean[:-1])
-    except (ValueError, IndexError):
-        return False
-    return int(clean[-1]) == expected
+    return int(number[-1]) == _gs1_check_digit(number[:-1])
 
 
 def normalize_gtin(gtin: str) -> str:

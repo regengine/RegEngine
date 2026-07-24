@@ -47,20 +47,12 @@ def _query_tenant_recall_metrics(tenant_id: str) -> dict | None:
             if cte_count == 0:
                 return None
 
-            # NOTE: ``supplier_id`` exists on NEITHER fsma.cte_events nor
-            # fsma.traceability_events (it lives only on
-            # fsma.supplier_integration_profiles, V068). This query has always
-            # raised ProgrammingError at runtime and been swallowed by the
-            # outer ``except``, degrading to demo mode. Left on the legacy
-            # table deliberately — migrating the table name changes nothing
-            # (canonical also lacks the column) and the real fix is a separate
-            # supplier-attribution issue.
-            # TODO(#2599): resolve supplier_count source (join supplier
-            #   profiles or from/to entity refs) and migrate to canonical.
+            # Count suppliers from fsma.tenant_suppliers (same source as
+            # recall_report.py) — the event tables carry no supplier
+            # attribution (#2599).
             supplier_count = (
                 db.execute(
-                    text("SELECT COUNT(DISTINCT supplier_id) FROM fsma.cte_events WHERE tenant_id = :tid"),
-                    {"tid": tenant_id},
+                    text("SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"), {"tid": tenant_id}
                 ).scalar()
                 or 0
             )
