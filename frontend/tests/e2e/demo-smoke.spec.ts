@@ -1,14 +1,49 @@
+/**
+ * Design-partner demo smoke — passwordless edition.
+ *
+ * The app has no password login (POST /api/admin/auth/login is gone). Auth here
+ * runs in one of two modes, decided by environment:
+ *
+ * 1. Email-OTP mode (local full stack only). Requires DEMO_SMOKE_EMAIL and
+ *    REGENGINE_E2E_EMAIL_OUTBOX, with the backend started with
+ *    REGENGINE_E2E_MODE=true so the challenges router writes OTPs to the
+ *    outbox fixture (services/admin/app/auth/challenges_router.py). The spec
+ *    drives the real /login UI and hydrates the opaque
+ *    __Host-regengine_session cookie. E2E mode is hard-forbidden in
+ *    production, so this mode can never run against regengine.co.
+ *
+ * 2. API-key mode (live targets, e.g. https://regengine.co from CI). OTPs go
+ *    to a real inbox there, so completing a user login is not automatable.
+ *    Instead the spec (a) probes the passwordless challenge surface —
+ *    POST /auth/challenges must accept and a wrong code must be rejected —
+ *    and (b) runs the workbench loop with an inflow-scoped API key:
+ *    DEMO_SMOKE_API_KEY directly, or one minted via ADMIN_MASTER_KEY.
+ *    DEMO_SMOKE_TENANT_ID is required in this mode (in OTP mode the tenant
+ *    comes from the authenticated session). The Inflow Lab page and supplier
+ *    portal are public routes, so the UI portion works without a user session.
+ *
+ * Independently of auth, the sandbox evaluator is probed at runtime: it is an
+ * experimental router (auto-disabled in production), so on deployments where
+ * it is unmounted the lab page must show its feature gate and the workbench
+ * loop runs from a frozen evaluator result instead of a live evaluation.
+ */
 import { expect, test, type APIResponse, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { loginWithEmailOtp } from './auth-helpers';
 
 const DEMO_EMAIL = process.env.DEMO_SMOKE_EMAIL || process.env.TEST_USER_EMAIL || '';
-const DEMO_PASSWORD = process.env.DEMO_SMOKE_PASSWORD || process.env.TEST_PASSWORD || '';
 const DEMO_API_KEY = process.env.DEMO_SMOKE_API_KEY || '';
 const DEMO_ADMIN_MASTER_KEY =
     process.env.DEMO_SMOKE_ADMIN_MASTER_KEY || process.env.ADMIN_MASTER_KEY || '';
+const DEMO_TENANT_ID = process.env.DEMO_SMOKE_TENANT_ID || '';
+const OTP_OUTBOX = process.env.REGENGINE_E2E_EMAIL_OUTBOX || '';
 const COMMIT_MODE = process.env.DEMO_SMOKE_COMMIT_MODE || 'preflight';
 const ALLOW_PRODUCTION_EVIDENCE = process.env.DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE === 'true'
     || process.env.DEMO_SMOKE_ALLOW_COMMIT === 'true';
+
+const OTP_MODE = Boolean(DEMO_EMAIL && OTP_OUTBOX);
 
 const MESSY_SUPPLIER_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document
 harvesting,TLC-DEMO-SMOKE-001,Romaine Lettuce,104,cases,Valley Fresh Farms,2026-04-26T15:20:00Z,,,HARV-SMOKE-001
@@ -18,41 +53,69 @@ shipping,TLC-DEMO-SMOKE-001,Romaine Lettuce,103,cases,Salinas Packout Dock,2026-
 receiving,TLC-DEMO-SMOKE-001,Romaine Lettuce,103,cases,,2026-04-27T02:04:00Z,Salinas Packout Dock,,REC-SMOKE-001`;
 
 type JsonObject = Record<string, unknown>;
+type AuthMode = 'email_otp' | 'api_key';
+type SandboxMode = 'live' | 'frozen-fixture';
 
-async function login(page: Page): Promise<{ tenantId: string }> {
-    const loginResponse = await expectJson<JsonObject>(
-        await page.request.post('/api/admin/auth/login', {
-            data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
-        }),
-        'admin login',
+/**
+ * Real evaluator output for MESSY_SUPPLIER_CSV, frozen from
+ * services/ingestion/app/sandbox (5 events, 11 KDE errors, 6 rule failures).
+ * Used when the target deployment does not mount the sandbox router —
+ * it lives in _EXPERIMENTAL_ROUTERS and is auto-disabled in production —
+ * so the workbench persistence loop can still be exercised end to end.
+ */
+const FROZEN_SANDBOX_RESULT = JSON.parse(
+    readFileSync(path.join(__dirname, 'fixtures/demo-smoke-sandbox-result.json'), 'utf-8'),
+) as JsonObject;
+
+function baseOrigin(): string {
+    return new URL(
+        process.env.DEMO_SMOKE_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001',
+    ).origin;
+}
+
+async function authenticate(page: Page, context: BrowserContext): Promise<{ tenantId: string; authMode: AuthMode }> {
+    if (OTP_MODE) {
+        await loginWithEmailOtp(page, context, DEMO_EMAIL);
+        const session = await expectJson<JsonObject>(await page.request.get('/api/session'), 'session');
+        expect(session.authenticated, 'OTP login should hydrate an authenticated session').toBe(true);
+        expect(session.auth_method, 'session should be passwordless email OTP').toBe('email_otp');
+        expect(session.tenant_id, 'passwordless session should resolve a tenant_id').toEqual(expect.any(String));
+        return { tenantId: String(session.tenant_id), authMode: 'email_otp' };
+    }
+
+    expect(
+        DEMO_TENANT_ID,
+        'Set DEMO_SMOKE_TENANT_ID to run the demo smoke in api-key mode (no OTP outbox available).',
+    ).toBeTruthy();
+    await verifyPasswordlessSurface(page);
+    return { tenantId: DEMO_TENANT_ID, authMode: 'api_key' };
+}
+
+/**
+ * Live-target stand-in for a full OTP login: the challenge endpoint must
+ * accept (202 + challenge_id — anti-enumeration means a synthetic address
+ * gets the same response and no email is dispatched) and a wrong code must
+ * be rejected with 401.
+ */
+async function verifyPasswordlessSurface(page: Page): Promise<void> {
+    const probeEmail = `demo-smoke-probe+${Date.now()}@example.com`;
+    const challenge = await expectJson<JsonObject>(
+        await page.request.post('/api/admin/auth/challenges', { data: { email: probeEmail } }),
+        'passwordless challenge create',
     );
-    expect(loginResponse.access_token, 'admin login should return an access token').toEqual(expect.any(String));
-    expect(loginResponse.tenant_id, 'admin login should return a tenant_id').toEqual(expect.any(String));
+    expect(challenge.challenge_id, 'challenge create should return a challenge_id').toEqual(expect.any(String));
 
-    await page.request.get('/api/session');
-    await expectJson<JsonObject>(
-        await page.request.post('/api/session', {
-            headers: await csrfHeaders(page.context()),
-            data: {
-                access_token: loginResponse.access_token,
-                tenant_id: loginResponse.tenant_id,
-                user: loginResponse.user,
-            },
-        }),
-        'session cookie bootstrap',
+    const badVerify = await page.request.post(
+        `/api/admin/auth/challenges/${challenge.challenge_id}/verify`,
+        { data: { code: '000000' } },
     );
-
-    const response = await page.request.get('/api/session');
-    const session = await expectJson<JsonObject>(response, 'session');
-    expect(session.authenticated, 'demo account should be authenticated').toBe(true);
-    expect(session.tenant_id, 'demo account should have a tenant_id').toEqual(expect.any(String));
-    return { tenantId: String(session.tenant_id) };
+    expect(badVerify.status(), 'wrong OTP must be rejected').toBe(401);
 }
 
 async function csrfHeaders(context: BrowserContext): Promise<Record<string, string>> {
     const cookies = await context.cookies();
     const csrf = cookies.find((cookie) => cookie.name === 're_csrf')?.value;
-    expect(csrf, 'login should set a readable CSRF cookie').toBeTruthy();
+    expect(csrf, 'GET /api/session should set a readable CSRF cookie').toBeTruthy();
     return {
         'content-type': 'application/json',
         'x-csrf-token': csrf || '',
@@ -75,19 +138,38 @@ async function postWithCsrf(
     });
 }
 
+async function setSessionApiKey(
+    page: Page,
+    context: BrowserContext,
+    apiKey: string,
+    tenantId: string,
+): Promise<void> {
+    await expectJson<JsonObject>(
+        await page.request.post('/api/session', {
+            headers: {
+                ...(await csrfHeaders(context)),
+                // POST /api/session enforces an Origin allowlist in production
+                // (RE-SEC-003); APIRequestContext does not send Origin on its own.
+                origin: baseOrigin(),
+            },
+            data: { api_key: apiKey, tenant_id: tenantId },
+        }),
+        'api key cookie bootstrap',
+    );
+}
+
 async function bootstrapApiKey(
     page: Page,
     context: BrowserContext,
     tenantId: string,
     runPrefix: string,
 ): Promise<string> {
+    // CSRF double-submit cookies are issued on the first GET, for both
+    // authenticated and anonymous visitors.
+    await page.request.get('/api/session');
+
     if (DEMO_API_KEY) {
-        await expectJson<JsonObject>(
-            await page.request.post('/api/session', {
-                data: { api_key: DEMO_API_KEY },
-            }),
-            'api key cookie bootstrap',
-        );
+        await setSessionApiKey(page, context, DEMO_API_KEY, tenantId);
         return DEMO_API_KEY;
     }
 
@@ -114,15 +196,7 @@ async function bootstrapApiKey(
     const apiKey = String(created.api_key || '');
     expect(apiKey, 'API key creation should return a raw key once').toBeTruthy();
 
-    await page.request.get('/api/session');
-    await expectJson<JsonObject>(
-        await page.request.post('/api/session', {
-            headers: await csrfHeaders(context),
-            data: { api_key: apiKey },
-        }),
-        'api key cookie bootstrap',
-    );
-
+    await setSessionApiKey(page, context, apiKey, tenantId);
     return apiKey;
 }
 
@@ -141,36 +215,57 @@ async function writeSummary(testInfo: TestInfo, summary: JsonObject) {
 
 test.describe('Design-partner demo smoke', () => {
     test('runs the Inflow Workbench preflight loop and supplier portal handoff', async ({ page, context }, testInfo) => {
-        test.skip(!DEMO_EMAIL || !DEMO_PASSWORD, 'Set DEMO_SMOKE_EMAIL and DEMO_SMOKE_PASSWORD to run the live demo smoke.');
+        test.skip(
+            !OTP_MODE && !DEMO_API_KEY && !DEMO_ADMIN_MASTER_KEY,
+            'Set DEMO_SMOKE_EMAIL + REGENGINE_E2E_EMAIL_OUTBOX (email-OTP mode) or '
+            + 'DEMO_SMOKE_API_KEY / ADMIN_MASTER_KEY + DEMO_SMOKE_TENANT_ID (api-key mode) to run the demo smoke.',
+        );
         expect(
             COMMIT_MODE !== 'production_evidence' || ALLOW_PRODUCTION_EVIDENCE,
             'production_evidence demo smoke requires DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE=true',
         ).toBe(true);
 
         const runPrefix = `demo-smoke-${Date.now()}`;
-        const { tenantId } = await login(page);
+        const { tenantId, authMode } = await authenticate(page, context);
         const apiKey = await bootstrapApiKey(page, context, tenantId, runPrefix);
 
-        await page.goto('/tools/inflow-lab');
-        await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
-        const tenantInput = page.getByLabel(/^Tenant$/i).first();
-        if (await tenantInput.isVisible()) {
-            await tenantInput.fill(tenantId);
-        }
-        await page.getByRole('button', { name: /Data feeder/i }).click();
-        await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
-        await page.getByRole('button', { name: /Evaluate data/i }).click();
-        await expect(page.getByText('Events evaluated', { exact: true })).toBeVisible({ timeout: 30_000 });
-        await expect(page.getByText('Backend readiness')).toBeVisible({ timeout: 30_000 });
-        await page.getByRole('button', { name: /Save test run/i }).click();
-        await expect(page.getByText(/Persisted as|Saved/i).first()).toBeVisible({ timeout: 30_000 });
+        const session = await expectJson<JsonObject>(await page.request.get('/api/session'), 'session state');
+        expect(session.has_api_key, 'ingestion API key cookie should be set').toBe(true);
+        expect(String(session.tenant_id || ''), 'session should carry the demo tenant').toBe(tenantId);
 
-        const sandboxResult = await expectJson<JsonObject>(
-            await page.request.post('/api/ingestion/api/v1/sandbox/evaluate', {
-                data: { csv: MESSY_SUPPLIER_CSV },
-            }),
-            'sandbox evaluation',
-        );
+        // The sandbox router lives in _EXPERIMENTAL_ROUTERS and the Inflow Lab
+        // page behind NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES — both are off
+        // in production by default. Probe the router and require the frontend
+        // gate to agree: a half-enabled deployment fails loudly either way.
+        const sandboxProbe = await page.request.post('/api/ingestion/api/v1/sandbox/evaluate', {
+            data: { csv: MESSY_SUPPLIER_CSV },
+        });
+        const sandboxMode: SandboxMode = sandboxProbe.status() === 404 ? 'frozen-fixture' : 'live';
+        const sandboxResult = sandboxMode === 'live'
+            ? await expectJson<JsonObject>(sandboxProbe, 'sandbox evaluation')
+            : FROZEN_SANDBOX_RESULT;
+
+        await page.goto('/tools/inflow-lab');
+        if (sandboxMode === 'live') {
+            await expect(page.getByRole('button', { name: /Data feeder/i })).toBeVisible({ timeout: 20_000 });
+            const tenantInput = page.getByLabel(/^Tenant$/i).first();
+            if (await tenantInput.isVisible()) {
+                await tenantInput.fill(tenantId);
+            }
+            await page.getByRole('button', { name: /Data feeder/i }).click();
+            await page.getByLabel('Inbound CSV data').fill(MESSY_SUPPLIER_CSV);
+            await page.getByRole('button', { name: /Evaluate data/i }).click();
+            await expect(page.getByText('Events evaluated', { exact: true })).toBeVisible({ timeout: 30_000 });
+            await expect(page.getByText('Backend readiness')).toBeVisible({ timeout: 30_000 });
+            await page.getByRole('button', { name: /Save test run/i }).click();
+            await expect(page.getByText(/Persisted as|Saved/i).first()).toBeVisible({ timeout: 30_000 });
+        } else {
+            await expect(
+                page.getByTestId('feature-not-enabled'),
+                'sandbox router is unmounted, so the lab page must show its feature gate',
+            ).toBeVisible({ timeout: 20_000 });
+        }
+
         expect(sandboxResult.total_events).toBe(5);
         expect(
             Number(sandboxResult.total_kde_errors) + Number(sandboxResult.total_rule_failures),
@@ -284,6 +379,9 @@ test.describe('Design-partner demo smoke', () => {
 
         await writeSummary(testInfo, {
             base_url: testInfo.project.use.baseURL,
+            auth_mode: authMode,
+            sandbox_mode: sandboxMode,
+            lab_ui: sandboxMode === 'live' ? 'exercised' : 'feature-gated',
             tenant_id: tenantId,
             workbench_run_id: savedRun.run_id,
             readiness_score: readiness.score,
