@@ -187,3 +187,41 @@ class TestCleanup:
         removed = state_manager.cleanup_old_items(days=90)
         assert removed == 0
         assert state_manager.is_new("recent-1", "c1") is False
+
+
+# ─── Boot DDL advisory lock (#multi-worker CREATE INDEX race) ────────────
+
+
+class TestInitializeDdlLock:
+    def test_postgres_takes_advisory_lock_before_ddl(self, monkeypatch):
+        """On Postgres, pg_advisory_xact_lock must be the first statement.
+
+        CREATE {TABLE,INDEX} IF NOT EXISTS races when several gunicorn
+        workers boot at once; the lock serializes the whole DDL block.
+        """
+        from unittest.mock import MagicMock
+
+        from app import state as state_module
+
+        executed = []
+
+        conn = MagicMock()
+        conn.execute.side_effect = lambda clause, *a, **k: executed.append(str(getattr(clause, "text", clause)))
+        engine = MagicMock()
+        engine.dialect.name = "postgresql"
+        engine.connect.return_value.__enter__ = lambda self_: conn
+        engine.connect.return_value.__exit__ = lambda self_, *exc: False
+        monkeypatch.setattr(state_module, "create_engine", lambda *a, **k: engine)
+
+        mgr = StateManager(database_url="postgresql://ignored/ignored")
+        mgr.initialize()
+
+        assert "pg_advisory_xact_lock" in executed[0]
+        assert any("CREATE TABLE" in s for s in executed[1:])
+        assert all("pg_advisory_xact_lock" not in s for s in executed[1:])
+
+    def test_sqlite_skips_advisory_lock(self, tmp_path):
+        """SQLite has no advisory locks; initialize() must not emit one."""
+        mgr = StateManager(database_url=f"sqlite:///{tmp_path / 'lock.db'}")
+        mgr.initialize()  # would raise OperationalError if the lock ran
+        assert mgr._initialized is True

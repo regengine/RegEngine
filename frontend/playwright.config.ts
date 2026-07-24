@@ -64,6 +64,10 @@ if (!externalBaseURL) {
     process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
     process.env.ALLOW_INMEMORY_SESSION_STORE =
         process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
+    // Every seeded passwordless user shares one org/tenant (one organization
+    // per email domain), so the suites' combined traffic exceeds the 100/min
+    // per-tenant production default.
+    process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
     process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
         process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
 }

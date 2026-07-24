@@ -1,234 +1,154 @@
 /**
- * E2E Test: Login → Dashboard Flow
- * 
- * Critical user journey test:
- * 1. Navigate to login page
- * 2. Enter credentials
- * 3. Submit login form
- * 4. Verify redirect to dashboard
- * 5. Verify user is authenticated
+ * E2E Test: Login → Dashboard Flow (passwordless)
+ *
+ * The app has no password login: /login collects an email, POST
+ * /api/admin/auth/challenges issues a sign-in code, and /auth/verify exchanges
+ * the code for the opaque __Host-regengine_session cookie. Locally the backend
+ * runs with REGENGINE_E2E_MODE=true and writes OTPs to the outbox fixture, so
+ * these tests complete real logins end to end.
+ *
+ * Critical user journeys:
+ * 1. Email OTP login lands on the dashboard with a hydrated session
+ * 2. Wrong codes surface an error and never authenticate
+ * 3. Logout tears the session down and protected pages stay gated
  */
 
-import { createHmac } from 'node:crypto';
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
+import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
+import { AUTH_SESSION_COOKIE, loginWithEmailOtp, seedPasswordlessUser } from './auth-helpers';
 import { loginViaApi, logoutViaApi } from './support/api-auth';
-import { fillPasswordLogin, selectPasswordLogin } from './support/ui-auth';
 
-/** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
-async function waitForAuthenticated(page: Page, timeout = 15000) {
-    await page.waitForURL(url => {
-        const pathname = new URL(url).pathname;
-        return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
-    }, { timeout });
+const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
+
+function uniqueEmail(prefix: string): string {
+    return `${prefix}+${Date.now()}@example.com`;
 }
 
-async function reAccessTokenCookie(context: BrowserContext) {
+async function authSessionCookie(context: BrowserContext) {
     const cookies = await context.cookies();
-    return cookies.find(cookie => cookie.name === 're_access_token');
+    return cookies.find(cookie => cookie.name === AUTH_SESSION_COOKIE);
 }
 
-const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
-const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
-const localJwtSigningKey = process.env.JWT_SIGNING_KEY || process.env.AUTH_SECRET_KEY;
-const hasLocalMockedAuth = Boolean(localJwtSigningKey) && !process.env.PLAYWRIGHT_BASE_URL;
-
-function base64UrlJson(value: Record<string, unknown>): string {
-    return Buffer.from(JSON.stringify(value)).toString('base64url');
-}
-
-function signRegEngineJwt(overrides: Record<string, unknown> = {}): string {
-    if (!localJwtSigningKey) {
-        throw new Error('JWT signing key is required for mocked login E2E');
-    }
-
-    const now = Math.floor(Date.now() / 1000);
-    const header = base64UrlJson({ alg: 'HS256', typ: 'JWT' });
-    const payload = base64UrlJson({
-        aud: 'regengine-api',
-        iss: 'regengine-admin',
-        sub: 'playwright-login-ui-user',
-        tenant_id: 'tenant-login-ui',
-        tenant_status: 'active',
-        is_sysadmin: false,
-        iat: now,
-        exp: now + 60 * 60,
-        ...overrides,
-    });
-    const body = `${header}.${payload}`;
-    const signature = createHmac('sha256', localJwtSigningKey).update(body).digest('base64url');
-    return `${body}.${signature}`;
-}
-
-async function installMockedAdminLogin(
-    page: Page,
-    options: { delayMs?: number; failNetwork?: boolean } = {},
-): Promise<() => number> {
-    let loginRequests = 0;
-
-    await page.route('**/api/admin/auth/login', async (route) => {
-        loginRequests += 1;
-        if (options.delayMs) {
-            await new Promise((resolve) => setTimeout(resolve, options.delayMs));
-        }
-        if (options.failNetwork) {
-            await route.abort('failed');
-            return;
-        }
-
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                access_token: signRegEngineJwt(),
-                tenant_id: 'tenant-login-ui',
-                user: {
-                    id: 'playwright-login-ui-user',
-                    email: 'playwright-login-ui@example.com',
-                    is_sysadmin: false,
-                    status: 'active',
-                    role_name: 'member',
-                },
-            }),
-        });
-    });
-
-    await page.route('**/api/admin/v1/tenants/*/onboarding', async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-                workspace_profile: {},
-                onboarding: {},
-                is_complete: true,
-                partner_tier: null,
-            }),
-        });
-    });
-
-    return () => loginRequests;
+async function startChallengeFromLoginPage(page: Page, email: string): Promise<void> {
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { name: /continue to regengine/i })).toBeVisible();
+    await page.getByLabel(/email address/i).fill(email);
+    await page.getByRole('button', { name: /^continue/i }).click();
 }
 
 test.describe('Login → Dashboard Flow', () => {
-    test('successful login redirects to dashboard', async ({ page }) => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+    test('successful email OTP login redirects to dashboard', async ({ page, context }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
-        // Navigate to login page with ?next=/dashboard to bypass the onboarding check
-        // so this test reliably reaches /dashboard regardless of the test user's
-        // onboarding state in the Railway admin service.
-        await page.goto('/login?next=/dashboard');
+        const email = uniqueEmail('playwright-login-dashboard');
+        seedPasswordlessUser(email);
 
-        // Verify login page loaded using user-facing roles instead of brittle
-        // copy tied to a previous marketing iteration.
+        await page.goto('/login');
         await expect(page).toHaveTitle(/RegEngine/);
-        await expect(page.getByRole('heading', { level: 2, name: /^sign in$/i })).toBeVisible();
-        await expect(page.getByRole('textbox', { name: /email address/i })).toBeVisible();
 
-        // Fill in login form
-        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
-
-        // Submit form
-        await page.click('button[type="submit"]');
-
-        // Wait for navigation to an authenticated page (may land on dashboard, sysadmin, or onboarding)
-        await waitForAuthenticated(page);
-
-        // Verify we landed on an authenticated page (pathname-only to avoid false match on ?next= query strings)
-        await expect(page).toHaveURL(url => /^\/(dashboard|sysadmin|onboarding)/.test(new URL(url).pathname));
+        // loginWithEmailOtp asserts the full journey: /login → /auth/verify →
+        // /dashboard plus the opaque session cookie attributes.
+        await loginWithEmailOtp(page, context, email);
     });
 
-    test('invalid credentials show error message', async ({ page }) => {
-        test.setTimeout(60000);
-        await page.goto('/login');
+    test('wrong verification code shows an error and does not authenticate', async ({ page, context }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
-        // Enter invalid credentials
-        await fillPasswordLogin(page, 'invalid@example.com', 'wrongpassword');
+        // Anti-enumeration: unseeded addresses still get a challenge_id, so no
+        // seeding is needed to exercise the failure path.
+        await startChallengeFromLoginPage(page, uniqueEmail('playwright-wrong-code'));
+        await expect(page).toHaveURL(/\/auth\/verify$/);
 
-        // Submit form
-        await page.click('button[type="submit"]');
+        await page.getByLabel(/verification code/i).fill('000000');
+        await page.getByRole('button', { name: /verify and continue/i }).click();
 
-        // Should stay on login page
-        await expect(page).toHaveURL(/\/login/);
-
-        // Error message should appear — the admin service may take several
-        // seconds to respond from Railway, so use a generous timeout.
-        await expect(page.locator('#login-error')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('#login-error')).toContainText(/invalid|error|unavailable|unreachable/i);
+        await expect(page.locator('#otp-error')).toBeVisible();
+        await expect(page.locator('#otp-error')).toContainText(/incorrect or expired/i);
+        await expect(page).toHaveURL(/\/auth\/verify$/);
+        expect(await authSessionCookie(context)).toBeUndefined();
     });
 
     test('login form has proper accessibility and autofill-friendly controls', async ({ page }) => {
         await page.goto('/login');
-        await selectPasswordLogin(page);
 
-        const loginForm = page.locator('form').first();
-        const emailInput = loginForm.locator('#email');
-        const passwordInput = loginForm.locator('#password');
-        const rememberCheckbox = loginForm.getByRole('checkbox', { name: /remember me/i });
-        const submitButton = loginForm.getByRole('button', { name: /^sign in$/i });
+        await expect(page.getByRole('heading', { name: /continue to regengine/i })).toBeVisible();
 
+        const emailInput = page.locator('#email');
         await expect(emailInput).toHaveAttribute('name', 'email');
+        await expect(emailInput).toHaveAttribute('type', 'email');
         await expect(emailInput).toHaveAttribute('autocomplete', 'email');
-        await expect(passwordInput).toHaveAttribute('name', 'password');
-        await expect(passwordInput).toHaveAttribute('autocomplete', 'current-password');
-        await expect(rememberCheckbox).toBeChecked();
 
-        await passwordInput.fill('ToggleKeepsValue123!');
-        await page.getByRole('button', { name: /show password/i }).click();
-        await expect(passwordInput).toHaveAttribute('type', 'text');
-        await expect(passwordInput).toHaveValue('ToggleKeepsValue123!');
-        await page.getByRole('button', { name: /hide password/i }).click();
-        await expect(passwordInput).toHaveAttribute('type', 'password');
-        await expect(passwordInput).toHaveValue('ToggleKeepsValue123!');
+        const continueButton = page.getByRole('button', { name: /^continue/i });
+        await expect(continueButton).toBeEnabled();
+        await expect(page.getByRole('button', { name: /sign in with passkey/i })).toBeVisible();
 
         await emailInput.focus();
         await expect(emailInput).toBeFocused();
         await page.keyboard.press('Tab');
-        await expect(passwordInput).toBeFocused();
-        await page.keyboard.press('Tab');
-        await expect(rememberCheckbox).toBeFocused();
-        await page.keyboard.press('Tab');
-        await expect(submitButton).toBeFocused();
-        await expect(submitButton).toBeEnabled();
+        await expect(continueButton).toBeFocused();
     });
 
-    test('forgot password link is visible at 375px width', async ({ page }) => {
-        await page.setViewportSize({ width: 375, height: 720 });
+    test('rapid double submit starts only one sign-in challenge', async ({ page }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
+
+        let challengeRequests = 0;
+        page.on('request', (request) => {
+            if (request.method() === 'POST' && request.url().includes('/api/admin/auth/challenges')) {
+                challengeRequests += 1;
+            }
+        });
+
         await page.goto('/login');
+        await page.getByLabel(/email address/i).fill(uniqueEmail('playwright-double-submit'));
 
-        const forgotPassword = page.getByRole('link', { name: /forgot password/i });
-        await expect(forgotPassword).toBeVisible();
-        await expect(forgotPassword).toBeInViewport();
+        const continueButton = page.getByRole('button', { name: /^continue/i });
+        const box = await continueButton.boundingBox();
+        expect(box).toBeTruthy();
+        await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2);
+
+        await expect(page).toHaveURL(/\/auth\/verify$/);
+        expect(challengeRequests).toBe(1);
     });
 
-    test('logout from dashboard redirects to login', async ({ page }) => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+    test('challenge network failure keeps the form filled and shows a clear error', async ({ page }) => {
+        await page.route('**/api/admin/auth/challenges', (route) => route.abort('failed'));
+
+        await page.goto('/login');
+        const email = 'network-fail@example.com';
+        await page.getByLabel(/email address/i).fill(email);
+        await page.getByRole('button', { name: /^continue/i }).click();
+
+        await expect(page.locator('#login-error')).toBeVisible();
+        // Chromium surfaces aborted fetches as "Failed to fetch"; the client
+        // falls back to its own copy when the error carries no message.
+        await expect(page.locator('#login-error')).toContainText(/failed to fetch|unable to start sign-in/i);
+        await expect(page).toHaveURL(/\/login/);
+        await expect(page.getByLabel(/email address/i)).toHaveValue(email);
+    });
+
+    test('logout from dashboard redirects to login', async ({ page, context }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
         test.setTimeout(60000);
 
-        // Login first — use ?next=/dashboard to bypass onboarding redirect
-        await page.goto('/login?next=/dashboard');
-        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
-        await page.click('button[type="submit"]');
-        await waitForAuthenticated(page);
+        const email = uniqueEmail('playwright-logout');
+        seedPasswordlessUser(email);
+        await loginWithEmailOtp(page, context, email);
 
-        // Find and click logout button
         const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
         if (await logoutButton.isVisible({ timeout: 5000 })) {
             await logoutButton.click();
-
-            // Should redirect to login (regex handles ?next= query params; 15s for Railway latency)
             await page.waitForURL(/\/login/, { timeout: 15000 });
             await expect(page).toHaveURL(/\/login/);
         }
     });
 
     test('back after logout does not restore a protected dashboard from cache', async ({ page, context }) => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
         test.setTimeout(60000);
 
-        await page.goto('/login?next=/dashboard');
-        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
-        await page.click('button[type="submit"]');
-        await waitForAuthenticated(page);
+        const email = uniqueEmail('playwright-back-cache');
+        seedPasswordlessUser(email);
+        await loginWithEmailOtp(page, context, email);
 
         await logoutViaApi(context);
         await context.clearCookies();
@@ -237,108 +157,57 @@ test.describe('Login → Dashboard Flow', () => {
 
         await page.goBack({ waitUntil: 'domcontentloaded' });
         await page.waitForURL(/\/login/, { timeout: 15000 });
-        await expect(page.getByRole('heading', { level: 2, name: /^sign in$/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /continue to regengine/i })).toBeVisible();
     });
 });
 
-test.describe('Login UI + protected deep links with mocked admin auth', () => {
-    test.beforeEach(() => {
-        test.skip(!hasLocalMockedAuth, 'Requires local Playwright server with a matching JWT signing key.');
-    });
-
-    test('returns to /reports/abc123 after login from a protected deep link', async ({ page }) => {
-        await installMockedAdminLogin(page);
-
+test.describe('Protected deep links', () => {
+    test('unauthenticated deep link redirects to login preserving next', async ({ page }) => {
         await page.goto('/reports/abc123');
         await expect(page).toHaveURL((url) =>
             url.pathname === '/login' && url.searchParams.get('next') === '/reports/abc123',
         );
+    });
 
-        await fillPasswordLogin(page, 'playwright-login-ui@example.com', 'Trace204!Playwright1');
-        await page.locator('form').first().getByRole('button', { name: /^sign in$/i }).click();
+    test('deep link is reachable after API login', async ({ page, context }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
+        await loginViaApi(context, TEST_USER_EMAIL);
+        await page.goto('/reports/abc123');
         await expect(page).toHaveURL((url) => url.pathname === '/reports/abc123', { timeout: 15000 });
-    });
-
-    test('network failure keeps the form filled and shows a clear error', async ({ page }) => {
-        await installMockedAdminLogin(page, { failNetwork: true });
-
-        await page.goto('/login');
-        await fillPasswordLogin(page, 'network-fail@example.com', 'StillPresent123!');
-        const loginForm = page.locator('form').first();
-        const emailInput = loginForm.locator('#email');
-        const passwordInput = loginForm.locator('#password');
-        await loginForm.getByRole('button', { name: /^sign in$/i }).click();
-
-        await expect(page.locator('#login-error')).toBeVisible();
-        await expect(page.locator('#login-error')).toContainText(/unable|unexpected|authentication/i);
-        await expect(emailInput).toHaveValue('network-fail@example.com');
-        await expect(passwordInput).toHaveValue('StillPresent123!');
-    });
-
-    test('slow login cannot be submitted twice from rapid clicks', async ({ page }) => {
-        const loginCount = await installMockedAdminLogin(page, { delayMs: 1000 });
-
-        await page.goto('/login');
-        await fillPasswordLogin(page, 'playwright-login-ui@example.com', 'Trace204!Playwright1');
-        const loginForm = page.locator('form').first();
-
-        const submitButton = loginForm.getByRole('button', { name: /^sign in$/i });
-        const box = await submitButton.boundingBox();
-        expect(box).toBeTruthy();
-        await page.mouse.dblclick(box!.x + box!.width / 2, box!.y + box!.height / 2);
-
-        await expect(page.getByRole('button', { name: /securing session/i })).toBeDisabled();
-        await expect.poll(loginCount).toBe(1);
-        await expect(page).toHaveURL((url) => url.pathname === '/dashboard', { timeout: 15000 });
     });
 });
 
 test.describe('Login session cookie mode', () => {
-    test('remembered sessions set a persistent auth cookie', async ({ context }) => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+    test('email OTP login sets a persistent opaque session cookie', async ({ context }) => {
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
         await context.clearCookies();
-        await loginViaApi(context, TEST_USER_EMAIL, TEST_PASSWORD, { remember: true });
+        await loginViaApi(context, TEST_USER_EMAIL);
 
-        const authCookie = await reAccessTokenCookie(context);
+        // The backend always issues a 7-day opaque session cookie; there is no
+        // remember-me variant (and no re_access_token JWT cookie) anymore.
+        const authCookie = await authSessionCookie(context);
         expect(authCookie).toBeDefined();
+        expect(authCookie?.httpOnly).toBe(true);
         expect(authCookie?.expires).toBeGreaterThan(Math.floor(Date.now() / 1000));
 
         await logoutViaApi(context);
-    });
-
-    test('session-only logins set a browser-session auth cookie', async ({ context }) => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
-
-        await context.clearCookies();
-        await loginViaApi(context, TEST_USER_EMAIL, TEST_PASSWORD, { remember: false });
-
-        const authCookie = await reAccessTokenCookie(context);
-        expect(authCookie).toBeDefined();
-        expect(authCookie?.expires).toBe(-1);
-
-        await logoutViaApi(context);
+        expect(await authSessionCookie(context)).toBeUndefined();
     });
 });
 
 test.describe('Dashboard Features', () => {
-    test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+    test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
 
-    test.beforeEach(async ({ page }) => {
-        // Login before each test — use ?next=/dashboard to bypass onboarding redirect
-        await page.goto('/login?next=/dashboard');
-        await fillPasswordLogin(page, TEST_USER_EMAIL, TEST_PASSWORD);
-        await page.click('button[type="submit"]');
-        await waitForAuthenticated(page);
+    test.beforeEach(async ({ page, context }) => {
+        await loginViaApi(context, TEST_USER_EMAIL);
+        await page.goto('/dashboard');
     });
 
     test('dashboard displays user information', async ({ page }) => {
         test.setTimeout(60000);
 
-        // beforeEach already logged in and waitForAuthenticated verified we landed
-        // on an authenticated page (dashboard, sysadmin, or onboarding).
-        // Don't navigate again — just verify the current page is authenticated.
         await expect(page).not.toHaveURL(/\/login/);
 
         // Verify some authenticated UI rendered — nav, main content, etc.
