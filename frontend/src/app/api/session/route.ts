@@ -39,6 +39,7 @@ type AuthMeResponse = {
     user_id: string;
     email: string;
     organization_id: string | null;
+    tenant_id: string | null;
     role: string | null;
     auth_method: AuthMethod;
 };
@@ -251,6 +252,7 @@ function parseAuthMeResponse(payload: unknown): AuthMeResponse | null {
         user_id: body.user_id,
         email: body.email,
         organization_id: typeof body.organization_id === 'string' ? body.organization_id : null,
+        tenant_id: typeof body.tenant_id === 'string' ? body.tenant_id : null,
         role: typeof body.role === 'string' ? body.role : null,
         auth_method: body.auth_method,
     };
@@ -294,7 +296,10 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
             }
 
             return {
-                tenant_id: profile.organization_id,
+                // Prefer the real tenant_id; fall back to organization_id only
+                // for backward compatibility during rollout (older backends
+                // that predate the tenant_id field on /auth/me).
+                tenant_id: profile.tenant_id ?? profile.organization_id,
                 auth_method: profile.auth_method,
                 user: {
                     id: profile.user_id,

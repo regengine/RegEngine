@@ -62,6 +62,7 @@ from .auth.sessions_router import (  # noqa: F401,E402
     revoke_all_sessions,
     revoke_session,
 )
+
 router.include_router(_challenges_router_mod.router)
 router.include_router(_email_code_router_mod.router)
 router.include_router(_refresh_router_mod.router)
@@ -95,6 +96,27 @@ def _load_active_organization_membership(
     return membership
 
 
+def _resolve_session_tenant_id(*, user_id, db: Session):
+    """Return the tenant this session acts as, or None if ambiguous.
+
+    Mirrors get_current_user's derivation: use the sole active row in the
+    ``memberships`` table. Multiple active memberships are ambiguous without a
+    tenant claim, so we refuse to guess and return None (the frontend then
+    falls back to demo state rather than acting as the wrong tenant).
+    """
+    tenant_ids = (
+        db.execute(
+            select(MembershipModel.tenant_id).where(
+                MembershipModel.user_id == user_id,
+                MembershipModel.is_active == True,  # noqa: E712 (SQLAlchemy needs ==)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tenant_ids[0] if len(tenant_ids) == 1 else None
+
+
 @router.get("/me", response_model=AuthMeResponse)
 def get_me(
     context: ActiveSessionContext = Depends(get_current_active_session_context),
@@ -102,10 +124,12 @@ def get_me(
 ) -> AuthMeResponse:
     """Hydrate the current opaque browser session."""
     membership = _load_active_organization_membership(context=context, db=db)
+    tenant_id = _resolve_session_tenant_id(user_id=context.user.id, db=db)
     return AuthMeResponse(
         user_id=context.user.id,
         email=context.user.email,
         organization_id=membership.organization_id if membership is not None else None,
+        tenant_id=tenant_id,
         role=membership.role if membership is not None else None,
         auth_method=context.session.auth_method,
     )

@@ -53,6 +53,12 @@ class AuthMeResponse(BaseModel):
     user_id: UUID
     email: str
     organization_id: Optional[UUID] = None
+    # The tenant this browser session acts as. Distinct from
+    # ``organization_id`` (a user may belong to an org with no tenant row, and
+    # tenant ids live in the ``memberships`` table). The frontend needs this to
+    # send ``X-Tenant-ID`` on ingestion calls and to gate the readiness proxy;
+    # without it, passwordless dashboards fall back to demo data.
+    tenant_id: Optional[UUID] = None
     role: Optional[str] = None
     auth_method: str
 

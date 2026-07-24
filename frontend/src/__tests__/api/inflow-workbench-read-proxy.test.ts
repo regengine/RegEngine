@@ -91,6 +91,49 @@ describe('Inflow Workbench readiness credential bridge', () => {
         );
     });
 
+    it('resolves the session by tenant_id, not organization_id', async () => {
+        // /auth/me returns BOTH ids and they differ. The bridge must trust
+        // tenant_id (organization_id is null or unrelated for many users).
+        process.env.NEXT_PUBLIC_ADMIN_URL = 'https://admin.example.com';
+        process.env.INFLOW_WORKBENCH_READ_API_KEY = 'scoped-inflow-read-key'; // pragma: allowlist secret
+        const authMeBoth = new Response(JSON.stringify({
+            user_id: '33333333-3333-4333-8333-333333333333',
+            email: 'owner@example.com',
+            organization_id: TENANT_B, // deliberately NOT the requested tenant
+            tenant_id: TENANT_A,
+            role: 'owner',
+            auth_method: 'webauthn',
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authMeBoth));
+        const headers = new Headers({ 'x-tenant-id': TENANT_A });
+
+        const error = await applyInflowWorkbenchReadCredentials(headers, sessionRequest(TENANT_A), READINESS_PATH);
+
+        expect(error).toBeNull();
+        expect(headers.get('x-regengine-api-key')).toBe('scoped-inflow-read-key');
+        expect(headers.get('x-tenant-id')).toBe(TENANT_A);
+    });
+
+    it('rejects when requested tenant matches only the organization_id, not tenant_id', async () => {
+        process.env.NEXT_PUBLIC_ADMIN_URL = 'https://admin.example.com';
+        process.env.INFLOW_WORKBENCH_READ_API_KEY = 'scoped-inflow-read-key'; // pragma: allowlist secret
+        const authMeBoth = new Response(JSON.stringify({
+            user_id: '33333333-3333-4333-8333-333333333333',
+            email: 'owner@example.com',
+            organization_id: TENANT_A,
+            tenant_id: TENANT_B,
+            role: 'owner',
+            auth_method: 'webauthn',
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authMeBoth));
+        const headers = new Headers({ 'x-tenant-id': TENANT_A });
+
+        const error = await applyInflowWorkbenchReadCredentials(headers, sessionRequest(TENANT_A), READINESS_PATH);
+
+        expect(error?.status).toBe(403);
+        expect(headers.get('x-regengine-api-key')).toBeNull();
+    });
+
     it('rejects a tenant that does not match the validated opaque session', async () => {
         process.env.NEXT_PUBLIC_ADMIN_URL = 'https://admin.example.com';
         process.env.INFLOW_WORKBENCH_READ_API_KEY = 'scoped-inflow-read-key'; // pragma: allowlist secret
