@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 HASHING_PY = REPO_ROOT / "services" / "shared" / "cte_persistence" / "hashing.py"
 CORE_PY = REPO_ROOT / "services" / "shared" / "cte_persistence" / "core.py"
 MIGRATION_DIR = REPO_ROOT / "alembic" / "sql"
+VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -221,22 +222,28 @@ class TestValidationStatus:
 
 class TestAppendOnlyMigration:
     def _find_migration(self) -> Optional[Path]:
-        """Find V053 migration (or any migration referencing prevent_cte_mutation)."""
-        # First try the expected filename
-        candidate = MIGRATION_DIR / "V053__cte_append_only_triggers.sql"
-        if candidate.exists():
-            return candidate
-        # Fallback: scan all SQL files
+        """Find the migration that installs prevent_cte_mutation().
+
+        The original companion SQL (V053__cte_append_only_triggers.sql) was
+        archived to docs/archive/migrations/ by WS-2a (#2582); the enforced
+        DDL now lives in the alembic chain (v078 forward-ports). Scan the
+        live chain first, then any remaining companion SQL. The "()" suffix
+        in the marker skips comment-only mentions (e.g. V066's).
+        """
+        for p in sorted(VERSIONS_DIR.glob("*.py")):
+            if "prevent_cte_mutation()" in p.read_text():
+                return p
         for p in sorted(MIGRATION_DIR.glob("V*.sql")):
-            if "prevent_cte_mutation" in p.read_text():
+            if "prevent_cte_mutation()" in p.read_text():
                 return p
         return None
 
     def test_migration_file_exists(self):
         migration = self._find_migration()
         assert migration is not None, (
-            "No migration file found containing prevent_cte_mutation(). "
-            "Expected alembic/sql/V053__cte_append_only_triggers.sql"
+            "No migration found installing prevent_cte_mutation(). "
+            "Expected it in the alembic chain (v078 forward-ports) or a "
+            "companion alembic/sql/V*.sql file"
         )
 
     def test_migration_covers_cte_events(self):
