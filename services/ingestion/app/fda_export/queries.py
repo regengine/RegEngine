@@ -524,7 +524,11 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                     jsonb_agg(
                         jsonb_build_object(
                             'rule_name', rd.title,
-                            'passed', (re.result = 'pass'),
+                            -- only 'fail' is a failure (result is
+                            -- pass/fail/warn/skip) — auditor_router's
+                            -- compliance semantics; = 'pass' would render
+                            -- warn/skip events as FAIL in the FDA CSV
+                            'passed', (re.result <> 'fail'),
                             'why_failed', re.why_failed
                         )
                     ) FILTER (WHERE re.rule_id IS NOT NULL),
