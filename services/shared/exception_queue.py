@@ -206,7 +206,13 @@ class ExceptionQueueService:
                     request_case_id, created_at, updated_at
                 ) VALUES (
                     :case_id, :tenant_id, :severity, 'open',
-                    :linked_event_ids, :linked_rule_evaluation_ids,
+                    -- CAST: psycopg2 renders a Python list[str] as text[],
+                    -- and these columns are uuid[] — without the cast this
+                    -- INSERT fails with DatatypeMismatch on every exception
+                    -- raised during ingest (same class as merging.py, #2629;
+                    -- agent_task_bridge.py already casts).
+                    CAST(:linked_event_ids AS uuid[]),
+                    CAST(:linked_rule_evaluation_ids AS uuid[]),
                     :due_date, :source_supplier, :source_facility_reference,
                     :rule_category, :recommended_remediation,
                     :request_case_id, :now, :now
