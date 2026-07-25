@@ -36,6 +36,7 @@ from app.webhook_models import (
     IngestEvent,
     IngestResponse,
     WebhookCTEType,
+    validate_gln,
 )
 from app.webhook_router_v2.validation import _validate_event_kdes
 from fastapi import FastAPI
@@ -916,6 +917,20 @@ class TestIngestCsv:
 # ---------------------------------------------------------------------------
 
 
+class TestTemplateExampleGLNs:
+    """Every example GLN served in a template must carry a valid GS1 mod-10
+    check digit so example rows survive ingest under STRICT_GLN_VALIDATION
+    (the strict drift guard below depends on this)."""
+
+    def test_example_glns_pass_gs1_check_digit(self):
+        for cte_type, columns in CTE_COLUMNS.items():
+            for name, example, _desc in columns:
+                if not name.endswith("gln"):
+                    continue
+                is_valid, error = validate_gln(example)
+                assert is_valid, f"{cte_type}.{name} example GLN {example!r}: {error}"
+
+
 class TestTemplateExampleRowSurvivesIngest:
     """POST each served template back to /api/v1/ingest/csv and run its
     example row through the REAL reject-path KDE validator
@@ -930,10 +945,9 @@ class TestTemplateExampleRowSurvivesIngest:
     # "growing", whose rows ingest as harvesting and are validated as such.
     @pytest.mark.parametrize("cte_value", sorted(CTE_COLUMNS))
     def test_template_example_row_passes_reject_path_validation(self, cte_value, monkeypatch):
-        # Pre-existing template example GLNs fail the GS1 check digit;
-        # that is a separate defect from KDE drift, so run GLN validation
-        # in warn-only mode to keep this guard focused on KDE coverage.
-        monkeypatch.setenv("STRICT_GLN_VALIDATION", "false")
+        # Strict mode: template example GLNs must carry valid GS1 check
+        # digits, so the example row has to survive strict GLN validation.
+        monkeypatch.setenv("STRICT_GLN_VALIDATION", "true")
 
         captured: dict = {}
 
@@ -982,7 +996,7 @@ class TestTemplateExampleRowSurvivesIngest:
         """The drift-fix columns must reach event.kdes unmodified (they are
         not in the ingest skip_fields set, so no _inject_required_kdes
         mapping is needed — this pins that behavior)."""
-        monkeypatch.setenv("STRICT_GLN_VALIDATION", "false")
+        monkeypatch.setenv("STRICT_GLN_VALIDATION", "true")
 
         captured: dict = {}
 
