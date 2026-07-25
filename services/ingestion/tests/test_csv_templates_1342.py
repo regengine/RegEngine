@@ -926,7 +926,9 @@ class TestTemplateExampleRowSurvivesIngest:
     drift; sample_data/ counterpart fixed in PR #2631).
     """
 
-    @pytest.mark.parametrize("cte_value", sorted(c.value for c in REQUIRED_KDES_BY_CTE))
+    # Parametrized over every served template — including legacy aliases like
+    # "growing", whose rows ingest as harvesting and are validated as such.
+    @pytest.mark.parametrize("cte_value", sorted(CTE_COLUMNS))
     def test_template_example_row_passes_reject_path_validation(self, cte_value, monkeypatch):
         # Pre-existing template example GLNs fail the GS1 check digit;
         # that is a separate defect from KDE drift, so run GLN validation

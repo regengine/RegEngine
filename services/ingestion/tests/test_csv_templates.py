@@ -14,7 +14,7 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
-from app.csv_templates import CTE_COLUMNS, _generate_csv_template, _validate_kde_completeness
+from app.csv_templates import _CTE_TYPE_ALIASES, CTE_COLUMNS, _generate_csv_template, _validate_kde_completeness
 from app.webhook_models import REQUIRED_KDES_BY_CTE, IngestEvent, WebhookCTEType
 
 EXPECTED_CTE_TYPES = {
@@ -102,6 +102,24 @@ class TestTemplateValidatorDrift:
             f"Template example row for '{cte_enum.value}' leaves required KDE(s) "
             f"{empty} empty — the example would be rejected at ingest."
         )
+
+    @pytest.mark.parametrize("template_key", sorted(CTE_COLUMNS))
+    def test_every_served_template_covers_its_effective_cte_kdes(self, template_key):
+        """Templates served under a legacy alias (growing → harvesting) must
+        also cover the required KDEs of the CTE type their rows ingest as —
+        the two tests above only see templates named after a canonical CTE."""
+        effective_cte = WebhookCTEType(_CTE_TYPE_ALIASES[template_key])
+        rows = list(csv.reader(io.StringIO(_generate_csv_template(template_key))))
+        header, example = rows[0], rows[1]
+        example_by_col = dict(zip(header, example))
+        required = REQUIRED_KDES_BY_CTE[effective_cte]
+        missing = set(required) - set(header)
+        assert not missing, (
+            f"Template '{template_key}' ingests as '{effective_cte.value}' but is missing "
+            f"required KDE column(s) {sorted(missing)} — rows built from it would be rejected."
+        )
+        empty = [kde for kde in required if not example_by_col.get(kde, "").strip()]
+        assert not empty, f"Template '{template_key}' example row leaves required KDE(s) {empty} empty."
 
 
 class TestValidateKdeCompleteness:
