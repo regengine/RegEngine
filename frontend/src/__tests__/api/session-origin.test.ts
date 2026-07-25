@@ -399,6 +399,29 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
         );
     });
 
+    it('DELETE forwards the opaque session cookie to backend /auth/session/logout and clears it', async () => {
+        vi.stubEnv('NEXT_PUBLIC_ADMIN_URL', 'https://admin.regengine.test');
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await DELETE(
+            makeRequest({
+                method: 'DELETE',
+                cookies: { '__Host-regengine_session': 'opaque-session-token' },
+            }),
+        );
+
+        expect(fetchMock).toHaveBeenCalledWith('https://admin.regengine.test/auth/session/logout', {
+            method: 'POST',
+            headers: {
+                cookie: '__Host-regengine_session=opaque-session-token',
+            },
+        });
+        expect(response.cookies.get('__Host-regengine_session')).toEqual(
+            expect.objectContaining({ name: '__Host-regengine_session', value: '' }),
+        );
+    });
+
     it('DELETE without an access token skips backend logout and still clears cookies', async () => {
         const fetchMock = vi.fn();
         vi.stubGlobal('fetch', fetchMock);
