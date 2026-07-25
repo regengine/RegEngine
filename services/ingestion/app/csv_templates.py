@@ -50,6 +50,8 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_gln", "0614141000003", "GS1 GLN (optional, 13 digits)"),
         ("growing_coordinates", "36.9107,-121.7569", "GPS coordinates of growing area (optional)"),
         ("grower_name", "Sunrise Organic Farm LLC", "Business name of grower"),
+        ("harvest_date", "2026-04-01", "Date of harvest (YYYY-MM-DD) — growing rows ingest as harvesting"),
+        ("reference_document", "HARV-2026-0401-001", "Harvest record or reference document number"),
     ],
     "harvesting": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Unique lot code for this harvest"),
