@@ -22,6 +22,7 @@ Session-mocked — no real DB required.
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
@@ -77,6 +78,13 @@ class _CapturingSession:
         self.fallback_rows = fallback_rows or []
         self.trigram_raises = trigram_raises
         self.calls: List[Dict[str, Any]] = []
+
+    @contextmanager
+    def begin_nested(self):
+        """SAVEPOINT stand-in — the real one rolls back to the savepoint
+        on error and re-raises; propagating the exception is enough
+        here."""
+        yield
 
     def execute(self, stmt, params=None):
         sql = str(stmt)
