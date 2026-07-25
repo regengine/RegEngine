@@ -102,7 +102,12 @@ def test_fetch_v2_events_executes_against_canonical_schema() -> None:
             """),
             {"rid": rule_id},
         )
-        for result, why in (("pass", None), ("fail", "missing harvest_date")):
+        for result, why in (
+            ("pass", None),
+            ("fail", "missing harvest_date"),
+            ("warn", None),
+            ("skip", None),
+        ):
             session.execute(
                 text("""
                     INSERT INTO fsma.rule_evaluations
@@ -131,9 +136,15 @@ def test_fetch_v2_events_executes_against_canonical_schema() -> None:
         assert event["kdes"] == {"gtin": "09506000134352"}
         assert event["provenance"] == {"ingest": "live-test"}
 
+        # Only result='fail' is a failure — auditor_router's compliance
+        # semantics. 'warn'/'skip' must map to passed=True, or
+        # _event_to_fda_row_v2 renders the event FAIL and lists the warn
+        # rule under "Rule Failures" in the FDA-facing CSV.
         rule_results = sorted(event["rule_results"], key=lambda r: r["passed"])
         assert rule_results == [
             {"rule_name": "KDE completeness", "passed": False, "why_failed": "missing harvest_date"},
+            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
+            {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
             {"rule_name": "KDE completeness", "passed": True, "why_failed": None},
         ]
 
