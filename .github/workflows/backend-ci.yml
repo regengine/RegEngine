@@ -812,7 +812,11 @@ jobs:
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
           # These execute pure-Python assertions (hash-chain audit integrity,
           # canonical-event normalization). No DB, no skips.
+          # test_logging_binding_guard: AST scan banning structlog-style
+          # kwargs on stdlib logging.Logger bindings — the defect class that
+          # shipped twice (sandbox/router.py, then request_workflow/#2625).
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
+            tests/test_logging_binding_guard.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: In-process security & FSMA-204 contract suites (#2503)
@@ -880,6 +884,46 @@ jobs:
           # whole #2461 build-out. Treat any skip as a failure.
           if grep -qE '[0-9]+ skipped' /tmp/rls_live.log; then
             echo "::error::live RLS tests SKIPPED — they must execute, not skip (see #2461)"
+            exit 1
+          fi
+
+      - name: Request-workflow e2e (deadline breach, #2625)
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/request_workflow_e2e
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/request_workflow_e2e
+        run: |
+          set -o pipefail
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # The repo-root request-workflow e2e suites ran in NO job, which is
+          # how services/shared/request_workflow shipped with structlog-style
+          # kwargs on stdlib loggers — every deadline-breach log call raised
+          # TypeError in production and nothing red appeared anywhere (#2625).
+          #
+          # rls_migrated is at alembic head (migrated by test_rls_coverage
+          # above); clone it so e2e case data never leaks into the RLS,
+          # ORM-drift, or schema-parity gates that share this job.
+          psql -h localhost -U postgres \
+            -c "CREATE DATABASE request_workflow_e2e TEMPLATE rls_migrated;"
+          # DELIBERATELY EXCLUDED — these fail on ANY fresh alembic-head DB,
+          # solo, before and after #2625 (they only ever "passed" against
+          # local databases polluted by earlier runs):
+          #   tests/test_e2e_fda_request.py        test_02: rules engine finds
+          #     zero rules — nothing seeds compliance rules on a fresh schema
+          #   tests/test_e2e_identity_ambiguity.py test_06/07: fallback query
+          #     runs on an aborted transaction (matching.py swallows the
+          #     original error, no rollback)
+          #   tests/test_e2e_stale_evaluations.py  test_11/12: stale-marking
+          #     on rule version change never fires on a fresh DB
+          # Wire each one in as its root cause is fixed.
+          pytest tests/test_e2e_deadline_breach.py \
+            -v --no-cov -o "testpaths=tests" | tee /tmp/rw_e2e.log
+          # Same skip-hardening as the RLS live step: a skipped suite is
+          # invisible in the checks UI, and invisible is how this gap lived
+          # for the package's entire life.
+          if grep -qE '[0-9]+ skipped' /tmp/rw_e2e.log; then
+            echo "::error::request-workflow e2e SKIPPED — must execute, not skip (see #2625)"
             exit 1
           fi
 
