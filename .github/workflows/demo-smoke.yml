@@ -7,6 +7,10 @@ on:
         description: 'RegEngine web URL to smoke test'
         required: true
         default: 'https://regengine.co'
+      tenant_id:
+        description: 'Tenant UUID to scope the smoke to (defaults to the DEMO_SMOKE_TENANT_ID secret)'
+        required: false
+        default: ''
       commit_mode:
         description: 'Commit gate mode to verify'
         required: true
@@ -47,13 +51,17 @@ jobs:
 
       - name: Verify demo credentials are configured
         env:
-          DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
-          DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          DEMO_SMOKE_API_KEY: ${{ secrets.DEMO_SMOKE_API_KEY }}
+          ADMIN_MASTER_KEY: ${{ secrets.ADMIN_MASTER_KEY }}
+          DEMO_SMOKE_TENANT_ID: ${{ inputs.tenant_id || secrets.DEMO_SMOKE_TENANT_ID }}
         run: |
-          test -n "${DEMO_SMOKE_EMAIL:-$TEST_USER_EMAIL}" || { echo "Missing DEMO_SMOKE_EMAIL or TEST_USER_EMAIL secret"; exit 1; }
-          test -n "${DEMO_SMOKE_PASSWORD:-$TEST_PASSWORD}" || { echo "Missing DEMO_SMOKE_PASSWORD or TEST_PASSWORD secret"; exit 1; }
+          # The passwordless demo smoke runs in api-key mode against live
+          # targets: it needs an inflow-scoped API key (or the admin master
+          # key to mint one) plus the tenant to scope the workbench loop to.
+          # Email-OTP login is local-only (the OTP outbox is forbidden in
+          # production), so no email/password secrets are involved.
+          test -n "${DEMO_SMOKE_API_KEY:-$ADMIN_MASTER_KEY}" || { echo "Missing DEMO_SMOKE_API_KEY or ADMIN_MASTER_KEY secret"; exit 1; }
+          test -n "$DEMO_SMOKE_TENANT_ID" || { echo "Missing tenant_id input or DEMO_SMOKE_TENANT_ID secret"; exit 1; }
 
       - name: Install dependencies
         run: |
@@ -69,10 +77,9 @@ jobs:
         env:
           DEMO_SMOKE_BASE_URL: ${{ inputs.base_url }}
           PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
-          DEMO_SMOKE_EMAIL: ${{ secrets.DEMO_SMOKE_EMAIL }}
-          DEMO_SMOKE_PASSWORD: ${{ secrets.DEMO_SMOKE_PASSWORD }}
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          DEMO_SMOKE_API_KEY: ${{ secrets.DEMO_SMOKE_API_KEY }}
+          ADMIN_MASTER_KEY: ${{ secrets.ADMIN_MASTER_KEY }}
+          DEMO_SMOKE_TENANT_ID: ${{ inputs.tenant_id || secrets.DEMO_SMOKE_TENANT_ID }}
           DEMO_SMOKE_COMMIT_MODE: ${{ inputs.commit_mode }}
           DEMO_SMOKE_ALLOW_PRODUCTION_EVIDENCE: ${{ inputs.allow_production_evidence }}
         run: |

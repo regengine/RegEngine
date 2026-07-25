@@ -914,7 +914,19 @@ class SchedulerService:
         Retention defaults (from ingestion settings):
         - CTE events: 1095 days (3 years)
         - Audit logs: 2555 days (7 years)
-        - FDA exports: 365 days (1 year)
+
+        NOTE: this job used to open with ``DELETE FROM fsma.fda_exports``,
+        but no migration ever created that table (added speculatively in
+        #1017) — the raw SQL is invisible to the ORM drift gate, so the
+        job failed with UndefinedTable on EVERY prod run and none of the
+        archival below ever executed. FDA exports are generated on demand
+        and streamed to the caller, never persisted server-side (object
+        storage is absent — see DEMO_UNBLOCK_PRD_2026-07-24). The only
+        persisted export artifact is ``fsma.fda_export_log``, which is
+        audit metadata used by chain verification and must NOT be purged
+        on a 1-year clock. If export payload persistence ever lands,
+        re-add its retention here alongside a migration that creates the
+        table.
         """
         try:
             from shared.database import SessionLocal
@@ -922,17 +934,6 @@ class SchedulerService:
 
             db = SessionLocal()
             try:
-                # Archive FDA exports older than 1 year (fsma.fda_exports is
-                # not RLS-forced — cross-tenant DELETE unchanged)
-                result = db.execute(
-                    __import__("sqlalchemy").text("""
-                        DELETE FROM fsma.fda_exports
-                        WHERE created_at < NOW() - INTERVAL '365 days'
-                        RETURNING id
-                    """)
-                )
-                deleted_exports = len(result.fetchall())
-
                 # Archive sysadmin access logs older than 7 years (NIST AU-4, #1009)
                 deleted_audit = 0
                 try:
@@ -956,6 +957,23 @@ class SchedulerService:
                 # Under today's BYPASSRLS role the first iteration deletes
                 # everything and the rest are no-ops; under the
                 # least-privilege role each pass is tenant-scoped.
+                # Ages on ingested_at (record creation, NOT NULL DEFAULT
+                # NOW()) — cte_events has never had a created_at column;
+                # the original filter was UndefinedColumn, masked by the
+                # fda_exports failure above it. event_timestamp is wrong
+                # here: it would purge late-ingested old events before
+                # their FSMA retention clock ran.
+                #
+                # cte_events carries the v078 append-only trigger
+                # (prevent_cte_mutation, FDA 21 CFR 1.1455), so each
+                # per-tenant transaction sets the documented
+                # fsma.allow_mutation break-glass GUC transaction-locally
+                # (set_config is_local=true — clears at COMMIT). Retention
+                # purge past the 1095-day policy is an authorized
+                # mutation; the 24-month FSMA floor is guarded separately
+                # by enforce_kde_retention. Deletes cascade to cte_kdes
+                # and compliance_alerts (ON DELETE CASCADE, no append-only
+                # triggers there).
                 deleted_ctes = 0
                 tenant_rows = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants")).fetchall()
                 # End the discovery transaction so each tenant's DELETE
@@ -964,20 +982,22 @@ class SchedulerService:
                 db.commit()
                 for tenant_row in tenant_rows:
                     with tenant_scope(str(tenant_row[0])):
+                        db.execute(
+                            __import__("sqlalchemy").text("SELECT set_config('fsma.allow_mutation', 'true', true)")
+                        )
                         result = db.execute(
                             __import__("sqlalchemy").text("""
                                 DELETE FROM fsma.cte_events
-                                WHERE created_at < NOW() - INTERVAL '1095 days'
+                                WHERE ingested_at < NOW() - INTERVAL '1095 days'
                                 RETURNING id
                             """)
                         )
                         deleted_ctes += len(result.fetchall())
                         db.commit()
 
-                if deleted_exports > 0 or deleted_ctes > 0 or deleted_audit > 0:
+                if deleted_ctes > 0 or deleted_audit > 0:
                     logger.info(
                         "data_archival_complete",
-                        deleted_exports=deleted_exports,
                         deleted_ctes=deleted_ctes,
                         deleted_audit_logs=deleted_audit,
                     )

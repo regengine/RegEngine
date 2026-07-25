@@ -18,6 +18,13 @@ from .config import get_settings
 
 logger = structlog.get_logger("scheduler.state")
 
+# Serializes the boot DDL below across gunicorn workers. CREATE TABLE/INDEX
+# IF NOT EXISTS is not concurrency-safe in Postgres: two sessions can both
+# pass the existence check and the loser dies with UniqueViolation on
+# pg_class (seen in prod as state_manager_init_failed at every multi-worker
+# boot). Keyspace: 2026050402 = admin DDL init, 4294967295 = leader election.
+_STATE_DDL_LOCK_ID = 2026072301
+
 Base = declarative_base()
 
 
@@ -67,6 +74,12 @@ class StateManager:
 
             # Create table if not exists
             with self.engine.connect() as conn:
+                if self.engine.dialect.name == "postgresql":
+                    # Held until the conn.commit() below, covering all DDL.
+                    conn.execute(
+                        text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                        {"lock_id": _STATE_DDL_LOCK_ID},
+                    )
                 conn.execute(
                     text(
                         """

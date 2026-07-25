@@ -7,6 +7,7 @@ code integrity checks, and the full CSV ingest endpoint.
 
 from __future__ import annotations
 
+import csv
 import io
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,11 +31,14 @@ from app.csv_templates import (
 )
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import (
+    REQUIRED_KDES_BY_CTE,
     EventResult,
     IngestEvent,
     IngestResponse,
     WebhookCTEType,
+    validate_gln,
 )
+from app.webhook_router_v2.validation import _validate_event_kdes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -906,6 +910,135 @@ class TestIngestCsv:
         body = resp.json()
         assert "kde_warnings" in body
         assert any("Missing KDEs" in w for w in body["kde_warnings"])
+
+
+# ---------------------------------------------------------------------------
+# Template <-> validator drift guard (end-to-end)
+# ---------------------------------------------------------------------------
+
+
+class TestTemplateExampleGLNs:
+    """Every example GLN served in a template must carry a valid GS1 mod-10
+    check digit so example rows survive ingest under STRICT_GLN_VALIDATION
+    (the strict drift guard below depends on this)."""
+
+    def test_example_glns_pass_gs1_check_digit(self):
+        for cte_type, columns in CTE_COLUMNS.items():
+            for name, example, _desc in columns:
+                if not name.endswith("gln"):
+                    continue
+                is_valid, error = validate_gln(example)
+                assert is_valid, f"{cte_type}.{name} example GLN {example!r}: {error}"
+
+
+class TestTemplateExampleRowSurvivesIngest:
+    """POST each served template back to /api/v1/ingest/csv and run its
+    example row through the REAL reject-path KDE validator
+    (webhook_router_v2.validation._validate_event_kdes).
+
+    Guards the live failure where rows built from the official template
+    were rejected with "Missing required KDE" (template <-> validator
+    drift; sample_data/ counterpart fixed in PR #2631).
+    """
+
+    # Parametrized over every served template — including legacy aliases like
+    # "growing", whose rows ingest as harvesting and are validated as such.
+    @pytest.mark.parametrize("cte_value", sorted(CTE_COLUMNS))
+    def test_template_example_row_passes_reject_path_validation(self, cte_value, monkeypatch):
+        # Strict mode: template example GLNs must carry valid GS1 check
+        # digits, so the example row has to survive strict GLN validation.
+        monkeypatch.setenv("STRICT_GLN_VALIDATION", "true")
+
+        captured: dict = {}
+
+        async def _fake_ingest(payload, **kwargs):
+            results, errors = [], []
+            for ev in payload.events:
+                ev_errors = _validate_event_kdes(ev)
+                errors.extend(ev_errors)
+                results.append(
+                    EventResult(
+                        traceability_lot_code=ev.traceability_lot_code,
+                        cte_type=ev.cte_type.value,
+                        status="rejected" if ev_errors else "accepted",
+                        errors=ev_errors,
+                    )
+                )
+            captured["errors"] = errors
+            captured["events"] = list(payload.events)
+            rejected = sum(1 for r in results if r.status == "rejected")
+            return IngestResponse(
+                accepted=len(results) - rejected,
+                rejected=rejected,
+                total=len(results),
+                events=results,
+            )
+
+        monkeypatch.setattr(ct, "ingest_events", _fake_ingest)
+
+        template_csv = _generate_csv_template(cte_value)
+        client = TestClient(_build_app())
+        resp = client.post(
+            "/api/v1/ingest/csv",
+            files={"file": (f"{cte_value}.csv", template_csv.encode(), "text/csv")},
+            data={"cte_type": cte_value},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert captured["errors"] == [], (
+            f"Example row of the served '{cte_value}' template is rejected by "
+            f"the ingest KDE validator: {captured['errors']}"
+        )
+        assert body["rejected"] == 0
+        assert body["accepted"] == 1
+
+    def test_new_required_columns_flow_into_kdes(self, monkeypatch):
+        """The drift-fix columns must reach event.kdes unmodified (they are
+        not in the ingest skip_fields set, so no _inject_required_kdes
+        mapping is needed — this pins that behavior)."""
+        monkeypatch.setenv("STRICT_GLN_VALIDATION", "true")
+
+        captured: dict = {}
+
+        async def _fake_ingest(payload, **kwargs):
+            captured["events"] = list(payload.events)
+            return IngestResponse(
+                accepted=len(payload.events),
+                rejected=0,
+                total=len(payload.events),
+                events=[
+                    EventResult(
+                        traceability_lot_code=e.traceability_lot_code,
+                        cte_type=e.cte_type.value,
+                        status="accepted",
+                    )
+                    for e in payload.events
+                ],
+            )
+
+        monkeypatch.setattr(ct, "ingest_events", _fake_ingest)
+        client = TestClient(_build_app())
+
+        for cte_value, kde_col in [
+            ("initial_packing", "harvester_business_name"),
+            ("shipping", "tlc_source_reference"),
+            ("receiving", "tlc_source_reference"),
+            ("harvesting", "reference_document"),
+        ]:
+            captured.clear()
+            template_csv = _generate_csv_template(cte_value)
+            reader = csv.reader(io.StringIO(template_csv))
+            expected = dict(zip(next(reader), next(reader)))
+            resp = client.post(
+                "/api/v1/ingest/csv",
+                files={"file": (f"{cte_value}.csv", template_csv.encode(), "text/csv")},
+                data={"cte_type": cte_value},
+            )
+            assert resp.status_code == 200
+            (event,) = captured["events"]
+            assert event.kdes.get(kde_col) == expected[kde_col], (
+                f"'{kde_col}' from the '{cte_value}' template did not flow into event.kdes"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import structlog
 from sqlalchemy import text
 
 from .constants import DEFAULT_RESPONSE_HOURS, VALID_REQUEST_CHANNELS, VALID_SCOPE_TYPES
 from .utils import row_to_dict
 
-logger = logging.getLogger("request-workflow")
+logger = structlog.get_logger("request-workflow")
 
 
 class IntakeMixin:

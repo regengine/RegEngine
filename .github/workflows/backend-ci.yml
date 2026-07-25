@@ -518,10 +518,14 @@ jobs:
           psql -h localhost -U postgres -d remediation_test <<'EOSQL'
           CREATE OR REPLACE FUNCTION get_tenant_context()
           RETURNS UUID AS $fn$
+          DECLARE
+              tid TEXT;
           BEGIN
-              RETURN current_setting('app.tenant_id', true)::uuid;
-          EXCEPTION WHEN OTHERS THEN
-              RETURN NULL;
+              tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
+              IF tid IS NULL THEN
+                  RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+              END IF;
+              RETURN tid::UUID;
           END;
           $fn$ LANGUAGE plpgsql STABLE;
           EOSQL
@@ -808,7 +812,11 @@ jobs:
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
           # These execute pure-Python assertions (hash-chain audit integrity,
           # canonical-event normalization). No DB, no skips.
+          # test_logging_binding_guard: AST scan banning structlog-style
+          # kwargs on stdlib logging.Logger bindings — the defect class that
+          # shipped twice (sandbox/router.py, then request_workflow/#2625).
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
+            tests/test_logging_binding_guard.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: In-process security & FSMA-204 contract suites (#2503)
@@ -844,7 +852,78 @@ jobs:
             tests/invariants/test_dual_write_parity.py \
             tests/invariants/test_fda_export_v1_golden.py \
             tests/invariants/test_chain_verify_golden.py \
+            tests/migrations/test_v097_pin_get_tenant_context.py \
             -v --no-cov -o "testpaths=tests"
+
+      - name: RLS enforcement e2e (live Postgres — #2461 fail-closed proof)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
+        run: |
+          set -o pipefail
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # services/shared/tests is covered by NO other job — `lint-shared`
+          # runs ruff only — so until now all 12 tests in
+          # test_rls_enforcement_live.py skipped everywhere: locally for want of
+          # DATABASE_URL, and in CI because the step above only passes tests/…
+          # paths. They are the sole end-to-end proof that an unset
+          # app.tenant_id FAILS CLOSED (raises) rather than silently returning
+          # zero rows — the entire premise of the #2461 cutover.
+          #
+          # rls_migrated is already at alembic head (migrated by
+          # test_rls_coverage above), so the suite's schema guard passes and the
+          # tests RUN. Kept as its own step because the root conftest remaps
+          # sys.path per service between collectors, making a mixed
+          # tests/… + services/… invocation fragile.
+          pytest services/shared/tests/test_rls_enforcement_live.py \
+            -v --no-cov -rs -o "testpaths=services/shared/tests" \
+            | tee /tmp/rls_live.log
+          # A skip is visually identical to a pass in the checks UI, and a
+          # skipped RLS suite is exactly how this went unvalidated through the
+          # whole #2461 build-out. Treat any skip as a failure.
+          if grep -qE '[0-9]+ skipped' /tmp/rls_live.log; then
+            echo "::error::live RLS tests SKIPPED — they must execute, not skip (see #2461)"
+            exit 1
+          fi
+
+      - name: Request-workflow e2e (deadline breach, #2625)
+        env:
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/request_workflow_e2e
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/request_workflow_e2e
+        run: |
+          set -o pipefail
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # The repo-root request-workflow e2e suites ran in NO job, which is
+          # how services/shared/request_workflow shipped with structlog-style
+          # kwargs on stdlib loggers — every deadline-breach log call raised
+          # TypeError in production and nothing red appeared anywhere (#2625).
+          #
+          # rls_migrated is at alembic head (migrated by test_rls_coverage
+          # above); clone it so e2e case data never leaks into the RLS,
+          # ORM-drift, or schema-parity gates that share this job.
+          psql -h localhost -U postgres \
+            -c "CREATE DATABASE request_workflow_e2e TEMPLATE rls_migrated;"
+          # All four suites, one invocation, one fresh DB. fda_request /
+          # identity_ambiguity / stale_evaluations previously failed on any
+          # fresh alembic-head DB (unseeded rule_definitions fixtures, the
+          # matching.py aborted-transaction bug, uuid=ANY(text[]) in bulk
+          # merge) — fixed in #2628; rehearsed combined against a fresh
+          # template clone: 44/44.
+          pytest tests/test_e2e_deadline_breach.py \
+            tests/test_e2e_fda_request.py \
+            tests/test_e2e_identity_ambiguity.py \
+            tests/test_e2e_stale_evaluations.py \
+            -v --no-cov -o "testpaths=tests" | tee /tmp/rw_e2e.log
+          # Same skip-hardening as the RLS live step: a skipped suite is
+          # invisible in the checks UI, and invisible is how this gap lived
+          # for the package's entire life.
+          if grep -qE '[0-9]+ skipped' /tmp/rw_e2e.log; then
+            echo "::error::request-workflow e2e SKIPPED — must execute, not skip (see #2625)"
+            exit 1
+          fi
 
       - name: ORM drift gate (alembic check, WS-2b)
         env:

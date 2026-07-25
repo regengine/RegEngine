@@ -79,9 +79,18 @@ def workflow(db_session):
 
 @pytest.fixture(scope="module")
 def rules_engine(db_session):
-    """Create a RulesEngine instance."""
+    """Create a RulesEngine instance with the built-in FSMA rules seeded.
+
+    An alembic-head database has no rule_definitions rows; without seeds
+    every evaluation returns no-verdict and persists nothing, so step 2
+    would persist zero evaluations and the stale-detection steps would
+    never see a stale_evaluations blocker.
+    """
+    from shared.rules import seed_rule_definitions
     from shared.rules_engine import RulesEngine
 
+    seed_rule_definitions(db_session)
+    db_session.commit()
     return RulesEngine(db_session)
 
 
@@ -310,6 +319,7 @@ class TestStaleEvaluationDetection:
 
         # Set amended_at to now (after evaluation time)
         future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
+        self.__class__._amended_at = future_time
         db_session.execute(
             text("""
                 UPDATE fsma.traceability_events
@@ -379,6 +389,26 @@ class TestStaleEvaluationDetection:
             event_dict["kdes"] = json.loads(event_dict["kdes"])
 
         rules_engine.evaluate_event(event_dict, persist=True, tenant_id=tenant_id)
+
+        # The fresh evaluations get evaluated_at = now(), which is frozen at
+        # transaction start and therefore EARLIER than the artificial
+        # amended_at that test_06 set 5 minutes in the future. Stamp them
+        # after the simulated amendment — symmetric with test_06's
+        # simulation — so the re-evaluation actually supersedes it.
+        re_evaluated_at = self.__class__._amended_at + timedelta(seconds=1)
+        db_session.execute(
+            text("""
+                UPDATE fsma.rule_evaluations
+                SET evaluated_at = :ts
+                WHERE event_id = :eid AND tenant_id = :tid
+            """),
+            {
+                "ts": re_evaluated_at.isoformat(),
+                "eid": amended_event_id,
+                "tid": tenant_id,
+            },
+        )
+        db_session.flush()
 
     def test_09_stale_blocker_cleared_after_re_evaluation(self, db_session, tenant_id, workflow):
         """Step 9: After re-evaluation, stale_evaluations blocker should be gone."""

@@ -309,7 +309,10 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
                     role_name: profile.role || undefined,
                     organization_id: profile.organization_id,
                     auth_method: profile.auth_method,
-                    permissions: [],
+                    // permissions intentionally omitted: /auth/me does not
+                    // expose the tenant permission list, and an empty array
+                    // reads as "no permissions" to capability checks
+                    // (hasPermission), not "unknown".
                 },
             };
         } catch {
@@ -410,7 +413,16 @@ export async function DELETE(request: NextRequest) {
     response.cookies.delete('re_admin_key');
     response.cookies.delete('re_tenant_id');
     response.cookies.delete('re_user');
-    response.cookies.delete(AUTH_SESSION_COOKIE);
+    // __Host- prefixed cookies can only be overwritten by a Set-Cookie that
+    // itself carries Secure + Path=/; a bare delete() omits Secure, so the
+    // browser rejects the expiry and the session cookie survives logout.
+    response.cookies.set(AUTH_SESSION_COOKIE, '', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 0,
+    });
     response.cookies.delete(CSRF_COOKIE);
     response.cookies.delete(CSRF_SIG_COOKIE);
     return response;

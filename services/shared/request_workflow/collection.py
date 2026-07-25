@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+import structlog
 from sqlalchemy import text
 
-logger = logging.getLogger("request-workflow")
+logger = structlog.get_logger("request-workflow")
 
 
 class CollectionMixin:

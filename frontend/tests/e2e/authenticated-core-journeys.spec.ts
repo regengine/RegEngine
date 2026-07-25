@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, test, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
-import { authenticatedE2ESkipReason, hasAuthenticatedE2E } from './auth-prereqs';
+import { hasPasswordlessE2E, passwordlessE2ESkipReason } from './auth-prereqs';
 import { csrfHeader, loginViaApi, logoutViaApi } from './support/api-auth';
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
-const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 const DEFAULT_ADMIN_DB = 'sqlite:////tmp/regengine-playwright-admin.db';
 const DEFAULT_EMAIL_OUTBOX = '/tmp/regengine-playwright-email-outbox.jsonl';
 
@@ -51,7 +50,7 @@ async function expectResponseOk(response: APIResponse, label: string): Promise<v
 }
 
 async function login(context: BrowserContext): Promise<CoreSession> {
-    return loginViaApi(context, TEST_USER_EMAIL, TEST_PASSWORD);
+    return loginViaApi(context, TEST_USER_EMAIL);
 }
 
 function ingestionPath(tenantId: string, path: string): string {
@@ -243,7 +242,7 @@ async function openCategoryFilter(page: Page, category: string): Promise<void> {
 
 test.describe.serial('Authenticated core journeys', () => {
     test.beforeEach(() => {
-        test.skip(!hasAuthenticatedE2E, authenticatedE2ESkipReason);
+        test.skip(!hasPasswordlessE2E, passwordlessE2ESkipReason);
     });
 
     test('primary resource create -> list -> open -> edit -> delete with UI and backend assertions', async ({ page, context }) => {
@@ -405,7 +404,6 @@ test.describe.serial('Authenticated core journeys', () => {
         const tenantId = String(session.tenant_id);
         const runId = Date.now();
         const inviteEmail = `e2e-core-invite-${runId}@example.com`;
-        const invitePassword = `Trace204!Invite${runId}`;
         let inviteId: string | undefined;
         let invitedUserId: string | undefined;
 
@@ -429,7 +427,6 @@ test.describe.serial('Authenticated core journeys', () => {
             const accept = await context.request.post('/api/admin/v1/auth/accept-invite', {
                 data: {
                     token,
-                    password: invitePassword,
                     name: 'E2E Core Invitee',
                 },
             });
