@@ -83,6 +83,7 @@ class CanonicalChainVerification:
         "tamper_rows",
         "traceability_events_count",
         "events_without_chain_row",
+        "legacy_chain_rows",
         "store",
     )
 
@@ -148,11 +149,24 @@ class CanonicalChainVerificationMixin:
                        te.event_type, te.traceability_lot_code,
                        te.product_reference, te.quantity, te.unit_of_measure,
                        te.from_facility_reference, te.to_facility_reference,
-                       te.event_timestamp, te.kdes
+                       te.event_timestamp, te.kdes,
+                       ce.id AS matched_legacy_id
                 FROM fsma.hash_chain hc
                 LEFT JOIN fsma.traceability_events te
                     ON te.event_id = hc.cte_event_id
                    AND te.tenant_id = hc.tenant_id
+                -- Existence-only probe of the legacy store: during the WS-1
+                -- dual-write window the ingest path appends TWO chain rows
+                -- per event (one per store — see webhook_compat.ingest_events:
+                -- legacy CTEPersistence.store_event + canonical-only
+                -- CanonicalEventStore). A row is a TRUE orphan only when BOTH
+                -- stores miss it — the rule chain_verification_job's
+                -- _combine_results already documents and applies. No legacy
+                -- business data is read (WS-1 never-do list); WS-1d removes
+                -- this join with the legacy store itself.
+                LEFT JOIN fsma.cte_events ce
+                    ON ce.id = hc.cte_event_id
+                   AND ce.tenant_id = hc.tenant_id
                 WHERE hc.tenant_id = :tid
                 ORDER BY hc.sequence_num ASC
             """),
@@ -174,6 +188,7 @@ class CanonicalChainVerificationMixin:
         errors: List[str] = []
         orphan_chain_rows: List[int] = []
         tamper_rows: List[int] = []
+        legacy_chain_rows: List[int] = []
 
         for i, row in enumerate(rows):
             seq = row[0]
@@ -182,6 +197,7 @@ class CanonicalChainVerificationMixin:
             stored_chain = row[3]
             cte_event_id = row[4]
             matched_event_id = row[5]
+            matched_legacy_id = row[15]
 
             # Sequence continuity.
             expected_seq = i + 1
@@ -211,11 +227,21 @@ class CanonicalChainVerificationMixin:
                     tamper_rows.append(int(seq))
 
             # Orphan: chain row references an event_id with no canonical row.
+            # During the dual-write window a chain row legitimately lives in
+            # only ONE store (the ingest path appends a legacy-id row and a
+            # canonical-id row per event). Per the documented combine rule
+            # (chain_verification_job._combine_results), a row is a TRUE
+            # orphan only when BOTH stores miss it. Legacy-store rows are
+            # counted, skipped for canonical content recompute (a
+            # canonical-only capability), and still fully covered by the
+            # store-agnostic sequence/linkage/chain_hash checks above.
             if matched_event_id is None:
+                if matched_legacy_id is not None:
+                    legacy_chain_rows.append(int(seq))
+                    continue
                 orphan_chain_rows.append(int(seq))
                 errors.append(
-                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} "
-                    f"has no matching fsma.traceability_events row"
+                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} has no matching row in either store"
                 )
                 continue
 
@@ -242,9 +268,11 @@ class CanonicalChainVerificationMixin:
                 )
 
         # EPCIS / skip_chain_write events legitimately have no chain row, so
-        # a positive (events_count - len(rows)) is reported but does NOT, on
-        # its own, flip valid. Only integrity breaks in the existing rows do.
-        events_without_chain_row = max(events_count - len(rows), 0)
+        # a positive (events_count - canonical rows) is reported but does NOT,
+        # on its own, flip valid. Only integrity breaks in the existing rows
+        # do. Legacy-store rows are excluded from the count — they do not
+        # represent canonical events.
+        events_without_chain_row = max(events_count - (len(rows) - len(legacy_chain_rows)), 0)
 
         valid = len(errors) == 0 and not orphan_chain_rows and not tamper_rows
 
@@ -257,5 +285,6 @@ class CanonicalChainVerificationMixin:
             tamper_rows=tamper_rows,
             traceability_events_count=events_count,
             events_without_chain_row=events_without_chain_row,
+            legacy_chain_rows=legacy_chain_rows,
             store="traceability_events",
         )

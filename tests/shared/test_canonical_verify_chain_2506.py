@@ -58,7 +58,7 @@ def _canonical_chain(n: int):
       (sequence_num, event_hash, previous_chain_hash, chain_hash,
        cte_event_id, matched_event_id, event_type, tlc, product_reference,
        quantity, unit_of_measure, from_facility, to_facility,
-       event_timestamp, kdes)
+       event_timestamp, kdes, matched_legacy_id)
     """
     rows = []
     events = []
@@ -84,6 +84,7 @@ def _canonical_chain(n: int):
                 ev.to_facility_reference,
                 ev.event_timestamp,
                 ev.kdes,
+                None,  # matched_legacy_id — canonical-only fake rows
             )
         )
         events.append(ev)
