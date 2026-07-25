@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
+import structlog
 from sqlalchemy import text
 
 from .constants import VALID_SUBMISSION_METHODS, VALID_SUBMISSION_TYPES
 
-logger = logging.getLogger("request-workflow")
+logger = structlog.get_logger("request-workflow")
 
 
 class SubmissionMixin:
