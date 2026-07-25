@@ -168,39 +168,46 @@ class MatchingMixin:
         rows = None
         if not case_sensitive and search_norm:
             try:
-                rows = self.session.execute(
-                    text(
-                        """
-                        SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
-                               ce.gln, ce.gtin, ce.verification_status,
-                               ce.confidence_score, ea.alias_value
-                        FROM fsma.entity_aliases ea
-                        JOIN fsma.canonical_entities ce
-                            ON ce.entity_id = ea.entity_id
-                           AND ce.tenant_id = ea.tenant_id
-                        WHERE ea.tenant_id = :tenant_id
-                          AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
-                          AND ce.is_active = TRUE
-                          AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
-                          AND similarity(lower(ea.alias_value), :q) >= :sim_floor
-                        ORDER BY similarity(lower(ea.alias_value), :q) DESC
-                        LIMIT :cand_limit
-                        """
-                    ),
-                    {
-                        **params,
-                        "q": search_norm,
-                        # Lenient floor — the authoritative cutoff is
-                        # the Python-side ``threshold``. Use ``0.2`` as
-                        # the absolute minimum (roughly "shares at
-                        # least one meaningful trigram") and raise it
-                        # toward the caller's threshold up to 0.8 so
-                        # the caller's stricter threshold translates
-                        # into a smaller candidate pool.
-                        "sim_floor": max(0.2, min(threshold * 0.7, 0.8)),
-                        "cand_limit": candidate_pool,
-                    },
-                ).fetchall()
+                # SAVEPOINT so a failed trgm probe (e.g. pg_trgm missing,
+                # or installed in a schema off the search_path) rolls back
+                # to here instead of aborting the caller's transaction —
+                # otherwise the fallback query below dies with
+                # InFailedSqlTransaction and takes the caller's
+                # uncommitted work with it.
+                with self.session.begin_nested():
+                    rows = self.session.execute(
+                        text(
+                            """
+                            SELECT ce.entity_id, ce.entity_type, ce.canonical_name,
+                                   ce.gln, ce.gtin, ce.verification_status,
+                                   ce.confidence_score, ea.alias_value
+                            FROM fsma.entity_aliases ea
+                            JOIN fsma.canonical_entities ce
+                                ON ce.entity_id = ea.entity_id
+                               AND ce.tenant_id = ea.tenant_id
+                            WHERE ea.tenant_id = :tenant_id
+                              AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
+                              AND ce.is_active = TRUE
+                              AND (:entity_type IS NULL OR ce.entity_type = :entity_type)
+                              AND similarity(lower(ea.alias_value), :q) >= :sim_floor
+                            ORDER BY similarity(lower(ea.alias_value), :q) DESC
+                            LIMIT :cand_limit
+                            """
+                        ),
+                        {
+                            **params,
+                            "q": search_norm,
+                            # Lenient floor — the authoritative cutoff is
+                            # the Python-side ``threshold``. Use ``0.2`` as
+                            # the absolute minimum (roughly "shares at
+                            # least one meaningful trigram") and raise it
+                            # toward the caller's threshold up to 0.8 so
+                            # the caller's stricter threshold translates
+                            # into a smaller candidate pool.
+                            "sim_floor": max(0.2, min(threshold * 0.7, 0.8)),
+                            "cand_limit": candidate_pool,
+                        },
+                    ).fetchall()
             except Exception as exc:
                 logger.debug(
                     "find_potential_matches_trgm_unavailable",
@@ -261,17 +268,19 @@ class MatchingMixin:
                 continue
 
             seen_entities.add(entity_id)
-            scored.append({
-                "entity_id": entity_id,
-                "entity_type": r[1],
-                "canonical_name": r[2],
-                "gln": r[3],
-                "gtin": r[4],
-                "verification_status": r[5],
-                "entity_confidence": float(r[6]) if r[6] is not None else None,
-                "confidence": round(ratio, 4),
-                "matched_alias": alias_value,
-            })
+            scored.append(
+                {
+                    "entity_id": entity_id,
+                    "entity_type": r[1],
+                    "canonical_name": r[2],
+                    "gln": r[3],
+                    "gtin": r[4],
+                    "verification_status": r[5],
+                    "entity_confidence": float(r[6]) if r[6] is not None else None,
+                    "confidence": round(ratio, 4),
+                    "matched_alias": alias_value,
+                }
+            )
 
         scored.sort(key=lambda x: x["confidence"], reverse=True)
         return scored[:limit]
