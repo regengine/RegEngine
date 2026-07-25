@@ -8,16 +8,15 @@ IdentityResolutionService`; they are not a standalone API.
 
 from __future__ import annotations
 
-import logging
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-
+import structlog
 from shared.identity_resolution.constants import VALID_ENTITY_TYPES
 from shared.identity_resolution.normalization import _normalize_identifier
+from sqlalchemy import text
 
-logger = logging.getLogger("identity-resolution")
+logger = structlog.get_logger("identity-resolution")
 
 
 class MatchingMixin:

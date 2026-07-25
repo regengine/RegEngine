@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import structlog
 from sqlalchemy import text
 
 from .constants import REQUIRED_SIGNOFF_TYPES, VALID_SIGNOFF_TYPES
 from .utils import format_countdown, row_to_dict, row_to_serializable
 
-logger = logging.getLogger("request-workflow")
+logger = structlog.get_logger("request-workflow")
 
 
 class AssemblyMixin:

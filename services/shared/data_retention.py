@@ -11,13 +11,13 @@ GitHub Issue #870: Data Retention Enforcement for PII
 import asyncio
 import hashlib
 import json
-import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import UUID
 
+import structlog
 from shared.audit_logging import (
     AuditActor,
     AuditEventCategory,
@@ -30,7 +30,7 @@ from shared.database import engine, get_db
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
