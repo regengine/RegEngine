@@ -62,6 +62,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_gln", "0614141000005", "GS1 GLN (optional, 13 digits)"),
         ("field_id", "FIELD-A7", "Field or growing area identifier"),
         ("harvester_name", "Valley Fresh Farms LLC", "Business name of harvester"),
+        ("reference_document", "HARV-2026-0226-001", "Harvest record or reference document number"),
     ],
     "cooling": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code from harvest"),
@@ -73,6 +74,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Valley Fresh Cooler #2", "Cooling facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("temperature_celsius", "2.1", "Temperature at cooling (optional but recommended)"),
+        ("reference_document", "COOL-2026-0226-014", "Cooling record or reference document number"),
     ],
     "initial_packing": [
         ("traceability_lot_code", "TOM-0226-F3-001", "New lot code assigned at packing"),
@@ -84,6 +86,8 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Valley Fresh Packhouse", "Packing facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
+        ("reference_document", "PACK-2026-0226-007", "Packing record or reference document number"),
+        ("harvester_business_name", "Valley Fresh Farms LLC", "Business name of the harvester"),
     ],
     "shipping": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code being shipped"),
@@ -98,6 +102,12 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("ship_to_gln", "0614141000006", "Destination GLN (optional)"),
         ("carrier_name", "Cold Express Logistics", "Carrier name (optional)"),
         ("po_number", "PO-2026-4521", "Purchase order number (optional)"),
+        ("reference_document", "BOL-2026-0227-042", "Bill of lading or reference document number"),
+        (
+            "tlc_source_reference",
+            "PACK-2026-0226-007",
+            "Reference to where the lot code was assigned (packing record or source location)",
+        ),
     ],
     "receiving": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Lot code received"),
@@ -110,6 +120,12 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("receiving_gln", "0614141000006", "Receiving facility GLN (optional)"),
         ("immediate_previous_source", "Valley Fresh Farms", "Who shipped this to you"),
         ("temperature_celsius", "3.5", "Temp at receipt (optional but recommended)"),
+        ("reference_document", "RCV-2026-0228-011", "Receiving record or reference document number"),
+        (
+            "tlc_source_reference",
+            "PACK-2026-0226-007",
+            "Reference to where the lot code was assigned (packing record or source location)",
+        ),
     ],
     "transformation": [
         ("traceability_lot_code", "SALAD-0226-001", "NEW lot code for output product"),
@@ -121,6 +137,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("location_name", "Metro Processing Plant", "Transformation facility"),
         ("location_gln", "0614141000007", "Facility GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001,LET-0226-A2-003", "ALL input lot codes, comma-separated"),
+        ("reference_document", "PROD-2026-0228-003", "Production record or reference document number"),
     ],
     "first_land_based_receiving": [
         ("traceability_lot_code", "SAL-0301-DOCK4-001", "Lot code assigned at landing"),
