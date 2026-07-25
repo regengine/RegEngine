@@ -135,12 +135,7 @@ class MergeMixin:
             """),
             {"tenant_id": tenant_id, "source_entity_id": source_entity_id},
         ).fetchall()
-        alias_snapshot = {
-            source_entity_id: [
-                {"alias_type": r[0], "alias_value": r[1]}
-                for r in source_aliases_rows
-            ]
-        }
+        alias_snapshot = {source_entity_id: [{"alias_type": r[0], "alias_value": r[1]} for r in source_aliases_rows]}
 
         # Re-point aliases from source to target (skip duplicates)
         self.session.execute(
@@ -148,7 +143,7 @@ class MergeMixin:
                 UPDATE fsma.entity_aliases
                 SET entity_id = :target_entity_id
                 WHERE tenant_id = :tenant_id
-                  AND entity_id = ANY(:source_entity_ids)
+                  AND entity_id = ANY(CAST(:source_entity_ids AS uuid[]))
                   AND (alias_type, alias_value) NOT IN (
                       SELECT alias_type, alias_value
                       FROM fsma.entity_aliases
@@ -169,7 +164,7 @@ class MergeMixin:
             text("""
                 DELETE FROM fsma.entity_aliases
                 WHERE tenant_id = :tenant_id
-                  AND entity_id = ANY(:source_entity_ids)
+                  AND entity_id = ANY(CAST(:source_entity_ids AS uuid[]))
             """),
             {"tenant_id": tenant_id, "source_entity_ids": source_entity_ids},
         )
@@ -180,7 +175,7 @@ class MergeMixin:
                 UPDATE fsma.canonical_entities
                 SET is_active = FALSE, updated_at = :now
                 WHERE tenant_id = :tenant_id
-                  AND entity_id = ANY(:source_entity_ids)
+                  AND entity_id = ANY(CAST(:source_entity_ids AS uuid[]))
             """),
             {
                 "tenant_id": tenant_id,
@@ -226,8 +221,8 @@ class MergeMixin:
                 WHERE tenant_id = :tenant_id
                   AND status = 'pending'
                   AND (
-                      entity_a_id = ANY(:source_entity_ids)
-                      OR entity_b_id = ANY(:source_entity_ids)
+                      entity_a_id = ANY(CAST(:source_entity_ids AS uuid[]))
+                      OR entity_b_id = ANY(CAST(:source_entity_ids AS uuid[]))
                   )
             """),
             {
