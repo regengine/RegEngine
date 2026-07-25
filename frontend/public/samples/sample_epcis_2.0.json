@@ -14,7 +14,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:harvesting",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000001"
+          "id": "urn:epc:id:sgln:0614141000012"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -33,7 +33,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:cooling",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000002"
+          "id": "urn:epc:id:sgln:0614141000029"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -52,7 +52,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:initial_packing",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000003"
+          "id": "urn:epc:id:sgln:0614141000036"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -71,7 +71,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000003"
+          "id": "urn:epc:id:sgln:0614141000036"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -90,7 +90,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000004"
+          "id": "urn:epc:id:sgln:0614141000043"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -109,7 +109,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000004"
+          "id": "urn:epc:id:sgln:0614141000043"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -166,7 +166,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000006"
+          "id": "urn:epc:id:sgln:0614141000050"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -185,7 +185,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:transformation",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000006"
+          "id": "urn:epc:id:sgln:0614141000050"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -204,7 +204,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000006"
+          "id": "urn:epc:id:sgln:0614141000050"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
@@ -223,7 +223,7 @@
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
         "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000007"
+          "id": "urn:epc:id:sgln:0614141000067"
         },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
