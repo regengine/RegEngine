@@ -12,8 +12,8 @@ if str(_services_dir) not in sys.path:
     sys.path.insert(0, str(_services_dir))
 
 import pytest
-from app.csv_templates import CTE_COLUMNS, _validate_kde_completeness
-from app.webhook_models import IngestEvent, WebhookCTEType
+from app.csv_templates import _CTE_TYPE_ALIASES, CTE_COLUMNS, _validate_kde_completeness
+from app.webhook_models import REQUIRED_KDES_BY_CTE, IngestEvent, WebhookCTEType
 
 EXPECTED_CTE_TYPES = {
     "growing",
@@ -53,6 +53,25 @@ class TestCTEColumns:
                 assert isinstance(col[0], str)
                 assert isinstance(col[1], str)
                 assert isinstance(col[2], str)
+
+    @pytest.mark.parametrize("template_key", sorted(CTE_COLUMNS))
+    def test_template_contains_every_required_kde(self, template_key):
+        """Rows built from a served template must not be rejected for missing KDEs.
+
+        The ingest path aliases the CTE type (growing → harvesting) and then
+        validates events against REQUIRED_KDES_BY_CTE, so a template that omits
+        a required column produces rows that are rejected with "Missing
+        required KDE". Guard against that drift here.
+        """
+        effective_cte = WebhookCTEType(_CTE_TYPE_ALIASES[template_key])
+        required = REQUIRED_KDES_BY_CTE[effective_cte]
+        columns = CTE_COLUMNS[template_key]
+        col_names = {col[0] for col in columns}
+        examples = {col[0]: col[1] for col in columns}
+        missing = [kde for kde in required if kde not in col_names]
+        assert not missing, f"{template_key} template missing required KDE columns: {missing}"
+        empty = [kde for kde in required if not examples[kde].strip()]
+        assert not empty, f"{template_key} template has empty example values for required KDEs: {empty}"
 
 
 class TestValidateKdeCompleteness:
