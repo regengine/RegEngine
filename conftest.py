@@ -45,6 +45,7 @@ _TEST_TO_SERVICE_OVERRIDES = {
     "tests/ingestion/test_ingest_url.py": "ingestion",
     "tests/security/test_audit_integrity.py": "admin",
     "tests/security/test_strict_ciam_compliance.py": "admin",
+    "tests/shared/test_fda_export_v2_canonical_columns_live.py": "ingestion",
     "tests/test_trace_engine.py": "ingestion",
     "tests/test_compliance_control_plane_e2e.py": "ingestion",
     "tests/test_rules_engine.py": "ingestion",
