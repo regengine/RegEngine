@@ -490,30 +490,41 @@ def build_v2_where_clause(
 
 
 def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
-    """Execute the v2 canonical-model query with rule evaluations."""
+    """Execute the v2 canonical-model query with rule evaluations.
+
+    ``fsma.traceability_events`` has no ``product_description`` /
+    ``location_gln`` / ``location_name`` / ``source`` / ``provenance``
+    columns — those are legacy ``cte_events`` names. The canonical
+    columns are aliased back to the legacy names here using the same
+    dual-write mapping as :func:`fetch_recall_events_canonical`, so
+    ``v2_rows_to_event_dicts`` and the CSV/package builders consume the
+    rows unchanged. Likewise ``fsma.rule_definitions`` has ``title``
+    (not ``rule_name``) and ``fsma.rule_evaluations`` has a text
+    ``result`` (not a boolean ``passed``).
+    """
     rows = db_session.execute(
         text(f"""
             SELECT
                 e.event_id,
                 e.event_type,
                 e.traceability_lot_code,
-                e.product_description,
+                COALESCE(e.product_reference, '') AS product_description,
                 e.quantity,
                 e.unit_of_measure,
                 e.event_timestamp,
-                e.location_gln,
-                e.location_name,
-                e.source,
+                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_gln,
+                COALESCE(e.from_facility_reference, e.to_facility_reference) AS location_name,
+                e.source_system AS source,
                 e.sha256_hash,
                 e.chain_hash,
                 e.kdes,
-                e.provenance,
+                e.provenance_metadata AS provenance,
                 -- aggregate rule evaluation results per event
                 COALESCE(
                     jsonb_agg(
                         jsonb_build_object(
-                            'rule_name', rd.rule_name,
-                            'passed', re.passed,
+                            'rule_name', rd.title,
+                            'passed', (re.result = 'pass'),
                             'why_failed', re.why_failed
                         )
                     ) FILTER (WHERE re.rule_id IS NOT NULL),
@@ -521,14 +532,16 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 ) AS rule_results,
                 e.ingested_at
             FROM fsma.traceability_events e
-            LEFT JOIN fsma.rule_evaluations re ON re.event_id = e.event_id
+            LEFT JOIN fsma.rule_evaluations re
+                ON re.event_id = e.event_id AND re.tenant_id = e.tenant_id
             LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
             WHERE {where_clause}
             GROUP BY
                 e.event_id, e.event_type, e.traceability_lot_code,
-                e.product_description, e.quantity, e.unit_of_measure,
-                e.event_timestamp, e.location_gln, e.location_name,
-                e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance,
+                e.product_reference, e.quantity, e.unit_of_measure,
+                e.event_timestamp, e.from_facility_reference,
+                e.to_facility_reference, e.source_system, e.sha256_hash,
+                e.chain_hash, e.kdes, e.provenance_metadata,
                 e.ingested_at
             ORDER BY e.event_timestamp ASC
             LIMIT 10001
