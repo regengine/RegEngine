@@ -38,11 +38,11 @@ def test_configure_logging_debug_level(monkeypatch):
     assert logging.root.level == logging.DEBUG
 
 
-def test_configure_logging_development_env():
+def test_configure_logging_development_env(monkeypatch):
     """Test that development environment uses console renderer."""
     from app.logging_config import configure_logging
 
-    os.environ["REGENGINE_ENV"] = "development"
+    monkeypatch.setenv("REGENGINE_ENV", "development")
     configure_logging("INFO")
 
     # Should complete without error
@@ -50,11 +50,11 @@ def test_configure_logging_development_env():
     assert logger is not None
 
 
-def test_configure_logging_production_env():
+def test_configure_logging_production_env(monkeypatch):
     """Test that production environment uses JSON renderer."""
     from app.logging_config import configure_logging
 
-    os.environ["REGENGINE_ENV"] = "production"
+    monkeypatch.setenv("REGENGINE_ENV", "production")
     configure_logging("INFO")
 
     # Should complete without error
