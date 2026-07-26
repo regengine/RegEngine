@@ -187,7 +187,8 @@ def rehearsal() -> Iterator[RehearsalResult]:
             pytest.fail(
                 "seeded mid-chain rehearsal needs an EMPTY database "
                 "(it upgrades from zero to v089 before seeding) — "
-                "point DATABASE_URL at a dedicated database"
+                "point DATABASE_URL (CI) or REGENGINE_MIGRATION_TEST_DB "
+                "(local) at a dedicated database"
             )
 
         _provision_cluster(engine)
