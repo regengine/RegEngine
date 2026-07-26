@@ -24,7 +24,6 @@ Requires:
 """
 
 import json
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
@@ -32,12 +31,13 @@ from typing import Dict, List
 import pytest
 
 from tests.integration_requirements import sqlalchemy_session_or_skip
+from tests.migrations.rls_db import guarded_live_database_url
 
 # Skip if no database configured
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
+DATABASE_URL = guarded_live_database_url()
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
-    reason="DATABASE_URL not set — skipping E2E integration test",
+    reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — skipping E2E integration test",
 )
 
 

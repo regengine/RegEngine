@@ -55,6 +55,27 @@ cd tests/load && locust -f test_load.py
 cd frontend && npm run test:run
 ```
 
+### 3. Database-backed tests (migration gates, RLS suites, e2e/live tests)
+
+These suites run `alembic upgrade head`, seed data, and in some cases delete
+rows in whatever database they reach, so they never reuse an inherited
+`DATABASE_URL` (see `tests/migrations/rls_db.py`):
+
+- **Locally**: point `REGENGINE_MIGRATION_TEST_DB` at a **disposable scratch
+  database** — `DATABASE_URL` is ignored outside CI, and the dev-stack
+  databases (`regengine`, `regengine_admin` on localhost) are refused
+  unconditionally. Without the opt-in, suites fall back to testcontainers
+  (Docker) or skip.
+
+  ```bash
+  createdb rls_scratch
+  export REGENGINE_MIGRATION_TEST_DB=postgresql://postgres:postgres@localhost:5432/rls_scratch  # pragma: allowlist secret
+  pytest tests/migrations/ -v
+  ```
+
+- **In CI**: workflows export `DATABASE_URL` for a job-scoped service
+  container; that path is honored because CI sets `CI=true`.
+
 ---
 
 ## Testing Gaps & Recommendations

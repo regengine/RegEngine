@@ -7,8 +7,11 @@ import os
 
 # Set test environment variables BEFORE pydantic tries to validate
 os.environ.setdefault("ADMIN_MASTER_KEY", "admin-master-key-dev")
-os.environ.setdefault("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine_admin")
-os.environ.setdefault("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine_admin")
+# sqlite, NOT the live dev regengine_admin URL: a Postgres dev default here
+# armed every reachable-DB test against the developer's real database
+# (2026-07-25 incident). CI exports real service-container URLs explicitly.
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("ADMIN_DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENABLE_DB_API_KEYS", "false")  # Use in-memory store in tests (no api_keys table in CI)
 os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")

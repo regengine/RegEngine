@@ -6,7 +6,10 @@ Automatically loads test environment variables before any test imports.
 import os
 
 # Set test environment variables BEFORE pydantic tries to validate
-os.environ.setdefault("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
+# sqlite, NOT the live dev regengine URL: a Postgres dev default here armed
+# every reachable-DB test against the developer's real database (2026-07-25
+# incident). CI exports real service-container URLs explicitly.
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 

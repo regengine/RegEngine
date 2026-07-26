@@ -39,6 +39,7 @@ SCRATCH_URL_PSYCOPG = "postgresql+psycopg://postgres:postgres@localhost:5432/rls
 def _isolated_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Strip ambient env and forbid probing — a probe means the guard leaked."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
     monkeypatch.delenv("REGENGINE_MIGRATION_TEST_DB", raising=False)
     monkeypatch.delenv("CI", raising=False)
 
@@ -125,3 +126,63 @@ def test_non_postgres_database_url_still_ignored(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("CI", "true")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     assert rls_db._usable_database_url() is None
+
+
+# --- guarded_live_database_url: the import-safe policy the live/e2e suites use ---
+
+
+def test_live_dev_default_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", ADMIN_CONFTEST_DEFAULT)
+    with pytest.warns(RuntimeWarning, match="dev stack"):
+        assert rls_db.guarded_live_database_url() is None
+
+
+def test_live_admin_fallback_dev_default_refused_even_in_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The legacy ADMIN_DATABASE_URL fallback must not reintroduce the dev DB."""
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("ADMIN_DATABASE_URL", ADMIN_CONFTEST_DEFAULT)
+    with pytest.warns(RuntimeWarning, match="dev stack"):
+        assert rls_db.guarded_live_database_url() is None
+
+
+def test_live_local_url_requires_explicit_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", SCRATCH_URL)
+    with pytest.warns(RuntimeWarning, match="REGENGINE_MIGRATION_TEST_DB"):
+        assert rls_db.guarded_live_database_url() is None
+
+
+def test_live_ci_reuses_database_url_verbatim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No driver normalization — CI engines must keep their current behavior."""
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("DATABASE_URL", SCRATCH_URL)
+    assert rls_db.guarded_live_database_url() == SCRATCH_URL
+
+
+def test_live_ci_admin_fallback_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("ADMIN_DATABASE_URL", SCRATCH_URL)
+    assert rls_db.guarded_live_database_url() == SCRATCH_URL
+
+
+def test_live_sqlite_conftest_default_skips_to_admin_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The sqlite defaults the service conftests now set are non-postgres → skipped over."""
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("ADMIN_DATABASE_URL", SCRATCH_URL)
+    assert rls_db.guarded_live_database_url() == SCRATCH_URL
+
+
+def test_live_explicit_opt_in_works_locally(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", ADMIN_CONFTEST_DEFAULT)
+    monkeypatch.setenv("REGENGINE_MIGRATION_TEST_DB", SCRATCH_URL)
+    assert rls_db.guarded_live_database_url() == SCRATCH_URL
+
+
+def test_live_explicit_opt_in_refuses_dev_stack_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REGENGINE_MIGRATION_TEST_DB", SCHEDULER_CONFTEST_DEFAULT)
+    with pytest.raises(pytest.fail.Exception, match="dev stack"):
+        rls_db.guarded_live_database_url()
+
+
+def test_live_nothing_set_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert rls_db.guarded_live_database_url() is None

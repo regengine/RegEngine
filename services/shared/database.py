@@ -125,8 +125,10 @@ if not DATABASE_URL.startswith("sqlite"):
 
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
-db_pool_checkedout.set_function(lambda: engine.pool.checkedout())
-db_pool_overflow.set_function(lambda: engine.pool.overflow())
+# SQLite's SingletonThreadPool/StaticPool (test envs, see above) have no
+# checkedout()/overflow(); report 0 instead of failing every metrics scrape.
+db_pool_checkedout.set_function(lambda: getattr(engine.pool, "checkedout", lambda: 0)())
+db_pool_overflow.set_function(lambda: getattr(engine.pool, "overflow", lambda: 0)())
 
 
 # #2461: 1 when the connected role is SUPERUSER/BYPASSRLS (RLS inert),

@@ -96,6 +96,68 @@ def skip_or_fail_db(reason: str) -> None:
     pytest.skip(reason)
 
 
+def _validated_explicit_url() -> str | None:
+    """Return REGENGINE_MIGRATION_TEST_DB after policy checks, or None if unset.
+
+    An explicit opt-in that is misconfigured FAILS loudly — never silently
+    degrades: it must be a ``postgresql://`` URL and must not point at the
+    dev stack. Reachability is the caller's concern (probed by
+    ``_usable_database_url``; surfaced by the suites' own or-skip helpers for
+    ``guarded_live_database_url``).
+    """
+    explicit = os.getenv("REGENGINE_MIGRATION_TEST_DB", "").strip()
+    if not explicit:
+        return None
+    if not explicit.startswith(_PG_PREFIXES):
+        pytest.fail(f"REGENGINE_MIGRATION_TEST_DB must be a postgresql:// URL, got: {explicit!r}")
+    if _is_dev_stack_url(explicit):
+        pytest.fail(
+            f"REGENGINE_MIGRATION_TEST_DB points at the local dev stack ({explicit!r}) — "
+            "the migration gates run `alembic upgrade head` + seeds into their target; "
+            "use a disposable scratch database"
+        )
+    return explicit
+
+
+def guarded_live_database_url() -> str | None:
+    """Reuse policy for suites that run against a live, alembic-managed Postgres.
+
+    Same policy as ``_usable_database_url`` — ``REGENGINE_MIGRATION_TEST_DB``
+    is the explicit local opt-in, ``DATABASE_URL`` (with the legacy
+    ``ADMIN_DATABASE_URL`` fallback these suites always had) is honored only
+    in CI, and dev-stack URLs are refused unconditionally — but with no
+    reachability probe and no testcontainers fallback, so it is safe to call
+    at module import time for a ``skipif`` gate. The URL is returned verbatim
+    (no driver normalization); connection failures surface from the suites'
+    own or-skip helpers.
+    """
+    explicit = _validated_explicit_url()
+    if explicit:
+        return explicit
+    for var in ("DATABASE_URL", "ADMIN_DATABASE_URL"):
+        url = os.getenv(var)
+        if not url or not url.startswith(_PG_PREFIXES):
+            continue
+        if _is_dev_stack_url(url):
+            warnings.warn(
+                f"refusing to run live-DB tests against {var}={url!r}: it matches the local dev "
+                "stack (set REGENGINE_MIGRATION_TEST_DB to a disposable scratch database to opt in)",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        if not _is_ci():
+            warnings.warn(
+                f"ignoring {var}={url!r} for live-DB tests: outside CI these suites only reuse a "
+                "database explicitly designated via REGENGINE_MIGRATION_TEST_DB",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            continue
+        return url
+    return None
+
+
 def _usable_database_url() -> str | None:
     """Return the Postgres URL the gates may reuse, or None (→ testcontainers/skip).
 
@@ -115,16 +177,8 @@ def _usable_database_url() -> str | None:
     actually running falls through to testcontainers/skip rather than raising
     a raw connection error from inside the fixture.
     """
-    explicit = os.getenv("REGENGINE_MIGRATION_TEST_DB", "").strip()
+    explicit = _validated_explicit_url()
     if explicit:
-        if not explicit.startswith(_PG_PREFIXES):
-            pytest.fail(f"REGENGINE_MIGRATION_TEST_DB must be a postgresql:// URL, got: {explicit!r}")
-        if _is_dev_stack_url(explicit):
-            pytest.fail(
-                f"REGENGINE_MIGRATION_TEST_DB points at the local dev stack ({explicit!r}) — "
-                "the migration gates run `alembic upgrade head` + seeds into their target; "
-                "use a disposable scratch database"
-            )
         normalized = _normalize_psycopg(explicit)
         if not _probe_reachable(normalized):
             pytest.fail(f"REGENGINE_MIGRATION_TEST_DB is set but not reachable: {explicit!r}")

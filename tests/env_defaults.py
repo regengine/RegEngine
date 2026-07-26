@@ -11,14 +11,20 @@ Usage in conftest.py:
 
 import os
 
-# Database URLs (local Docker by default; CI overrides via env)
 _DEFAULTS = {
     "REGENGINE_ENV": "test",
     "ENVIRONMENT": "test",
     "LOG_LEVEL": "WARNING",
-    # Database
-    "DATABASE_URL": "postgresql://regengine:regengine@localhost:5432/regengine_admin",
-    "ADMIN_DATABASE_URL": "postgresql+psycopg://regengine:regengine@localhost:5432/regengine_admin",
+    # No DATABASE_URL / ADMIN_DATABASE_URL defaults on purpose: they used to
+    # point at the LIVE local dev database (regengine_admin), which armed
+    # every skipif-DATABASE_URL gate in the suite and let migration/e2e/live
+    # tests silently migrate, seed, and delete rows in the developer's dev DB
+    # (2026-07-25 incident). CI exports real service-container URLs; local
+    # runs designate a disposable database via REGENGINE_MIGRATION_TEST_DB
+    # (see tests/migrations/rls_db.py) or skip.
+    # Lets services/admin/app/database.py build its import-time engine without
+    # ADMIN_DATABASE_URL (honored only with REGENGINE_ENV=test/development).
+    "ADMIN_FALLBACK_SQLITE": "sqlite:///:memory:",
     # Auth
     "AUTH_SECRET_KEY": "dev_secret_key_change_me",
     "ADMIN_MASTER_KEY": "admin-master-key-dev",

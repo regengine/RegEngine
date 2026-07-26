@@ -204,7 +204,13 @@ class TestGetTenantSession:
         """Verify tenant_id is set in session context."""
         from services.admin.app.database import get_tenant_session
 
-        with patch("services.admin.app.database.SessionLocal") as mock_session_class:
+        with (
+            patch("services.admin.app.database.SessionLocal") as mock_session_class,
+            # The GUC is only set on non-sqlite engines; the test env now uses
+            # the sqlite fallback, so present a postgres dialect here.
+            patch("services.admin.app.database._engine") as mock_engine,
+        ):
+            mock_engine.dialect.name = "postgresql"
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
 

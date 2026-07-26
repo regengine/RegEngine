@@ -25,16 +25,20 @@ or function outlives the test.
 from __future__ import annotations
 
 import importlib.util
-import os
 import pathlib
 
 import pytest
 
+from tests.migrations.rls_db import guarded_live_database_url
+
 psycopg = pytest.importorskip("psycopg")
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = guarded_live_database_url()
 
-pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="DATABASE_URL not set — live DB required")
+pytestmark = pytest.mark.skipif(
+    not DATABASE_URL,
+    reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — live DB required",
+)
 
 _PROBE_SCHEMA = "rls_v097_probe"
 

@@ -23,16 +23,17 @@ only the expired rows. Requires DATABASE_URL and skips without it
 
 from __future__ import annotations
 
-import os
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
+from tests.migrations.rls_db import guarded_live_database_url
+
+DATABASE_URL = guarded_live_database_url()
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
-    reason="DATABASE_URL not set — skipping live data_archival job test",
+    reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — skipping live data_archival job test",
 )
 
 
