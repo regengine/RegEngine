@@ -1259,6 +1259,54 @@
       }
     }
   },
+  "fsma.exchange_packages": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "event_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "notification_target": {
+        "nullable": true,
+        "type": "text"
+      },
+      "package_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "payload": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "received_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "receiver_tenant_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "sender_tenant_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "traceability_lot_codes": {
+        "nullable": false,
+        "type": "array"
+      }
+    }
+  },
   "fsma.fda_export_log": {
     "columns": {
       "export_fingerprint": {
@@ -1508,6 +1556,30 @@
       "tenant_id": {
         "nullable": false,
         "type": "uuid"
+      }
+    }
+  },
+  "fsma.incidents": {
+    "columns": {
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "data": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
       }
     }
   },
@@ -4952,6 +5024,30 @@
       "view_count": {
         "nullable": false,
         "type": "integer"
+      }
+    }
+  },
+  "public.scheduler_job_runs": {
+    "columns": {
+      "job_id": {
+        "nullable": false,
+        "type": "varchar(128)"
+      },
+      "last_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "last_run_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "last_status": {
+        "nullable": true,
+        "type": "varchar(32)"
+      },
+      "last_success_at": {
+        "nullable": true,
+        "type": "timestamp"
       }
     }
   },

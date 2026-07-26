@@ -41,8 +41,10 @@ def client() -> TestClient:
 
 @pytest.fixture
 def _postgres_ok(monkeypatch):
-    """DATABASE_URL is set by tests/env_defaults.py; fake the engine so the
-    check passes without a live Postgres."""
+    """Set a placeholder DATABASE_URL (env_defaults deliberately provides none)
+    and fake the engine so the check passes without a live Postgres."""
+    url = "postgresql://probe:probe@localhost:5432/readiness_probe"  # pragma: allowlist secret
+    monkeypatch.setenv("DATABASE_URL", url)
     monkeypatch.setattr(sqlalchemy, "create_engine", lambda *a, **k: MagicMock())
 
 
@@ -161,6 +163,9 @@ def test_neo4j_probed_when_graph_subsystem_active(client, monkeypatch, _postgres
 
 def test_postgres_down_returns_503(client, monkeypatch, _redis_unset):
     """Postgres failures remain fatal regardless of the optional components."""
+    # Configured-but-unreachable (env_defaults deliberately sets no URL).
+    url = "postgresql://probe:probe@localhost:5432/readiness_probe"  # pragma: allowlist secret
+    monkeypatch.setenv("DATABASE_URL", url)
 
     def _pg_down(*args, **kwargs):
         raise ConnectionError("postgres down")
@@ -310,6 +315,9 @@ def test_worker_down_distinguished_from_postgres_down(monkeypatch, _redis_unset)
     """The required-vs-optional contract: postgres-down is 503, worker-down is
     200/degraded. Same probe, different severity (#2518)."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
+    # Configured-but-unreachable (env_defaults deliberately sets no URL).
+    url = "postgresql://probe:probe@localhost:5432/readiness_probe"  # pragma: allowlist secret
+    monkeypatch.setenv("DATABASE_URL", url)
 
     def _pg_down(*args, **kwargs):
         raise ConnectionError("postgres down")
