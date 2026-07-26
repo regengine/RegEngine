@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime, timedelta
 from typing import Callable, Dict, List
 
 import structlog
@@ -441,6 +442,19 @@ class SchedulerService:
                 reason="primary_emission_failed_or_partial",
             )
 
+    @staticmethod
+    def _near_boot_first_run(minutes: int) -> datetime:
+        """First fire time for daily interval jobs.
+
+        ``IntervalTrigger`` first fires at start_time + interval, and the
+        embedded scheduler restarts on every Railway deploy. With deploys
+        landing more than once a day, ``hours=24`` jobs never survive to
+        their first fire — they starve indefinitely unless given an
+        explicit near-boot ``next_run_time``. Staggered per job so the
+        daily jobs don't all land at once right after boot.
+        """
+        return datetime.now(utc) + timedelta(minutes=minutes)
+
     def _add_tracked_job(self, fn: Callable, job_id: str, **kwargs) -> None:
         """Register a job on the APScheduler instance with context propagation.
 
@@ -513,6 +527,7 @@ class SchedulerService:
             self.cleanup_state,
             job_id="state_cleanup",
             trigger=IntervalTrigger(hours=24),
+            next_run_time=self._near_boot_first_run(minutes=4),
             name="State Cleanup (90 days)",
         )
 
@@ -530,6 +545,7 @@ class SchedulerService:
             self.disable_inactive_accounts,
             job_id="inactive_account_sweep",
             trigger=IntervalTrigger(hours=24),
+            next_run_time=self._near_boot_first_run(minutes=6),
             name="Disable Inactive Accounts (90 days)",
         )
         logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
@@ -539,6 +555,7 @@ class SchedulerService:
             self.enforce_kde_retention,
             job_id="kde_retention_enforcement",
             trigger=IntervalTrigger(hours=24),
+            next_run_time=self._near_boot_first_run(minutes=8),
             name="KDE Retention Enforcement (24-month floor)",
         )
         logger.info("job_scheduled", job_id="kde_retention_enforcement", interval_hours=24)
@@ -548,6 +565,7 @@ class SchedulerService:
             self.archive_expired_records,
             job_id="data_archival",
             trigger=IntervalTrigger(hours=24),
+            next_run_time=self._near_boot_first_run(minutes=10),
             name="Archive Expired Records",
         )
         logger.info("job_scheduled", job_id="data_archival", interval_hours=24)
@@ -557,6 +575,7 @@ class SchedulerService:
             self.purge_old_tasks,
             job_id="task_queue_purge",
             trigger=IntervalTrigger(hours=24),
+            next_run_time=self._near_boot_first_run(minutes=12),
             name="Task Queue Retention (30-day purge)",
         )
         logger.info("job_scheduled", job_id="task_queue_purge", interval_hours=24)
