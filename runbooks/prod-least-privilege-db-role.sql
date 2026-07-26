@@ -37,6 +37,9 @@
 --   - CREATE on schemas is granted because several endpoints do runtime DDL
 --     (`CREATE TABLE IF NOT EXISTS` in exchange_api/incident_router/scheduler).
 --     FOLLOW-UP: move that DDL into migrations, then REVOKE CREATE here.
+--     DONE — alembic v098 owns that DDL; after the v098 deploy run
+--     runbooks/prod-revoke-create-after-v098.sql to revoke CREATE and
+--     return scheduler table ownership.
 -- =============================================================================
 
 \set ON_ERROR_STOP on

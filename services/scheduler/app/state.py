@@ -18,13 +18,6 @@ from .config import get_settings
 
 logger = structlog.get_logger("scheduler.state")
 
-# Serializes the boot DDL below across gunicorn workers. CREATE TABLE/INDEX
-# IF NOT EXISTS is not concurrency-safe in Postgres: two sessions can both
-# pass the existence check and the loser dies with UniqueViolation on
-# pg_class (seen in prod as state_manager_init_failed at every multi-worker
-# boot). Keyspace: 2026050402 = admin DDL init, 4294967295 = leader election.
-_STATE_DDL_LOCK_ID = 2026072301
-
 Base = declarative_base()
 
 
@@ -59,7 +52,12 @@ class StateManager:
         self._initialized = False
 
     def initialize(self) -> None:
-        """Initialize database connection and create tables."""
+        """Initialize database connection.
+
+        The backing tables (``scheduler_seen_items``, ``scheduler_job_runs``)
+        are created by alembic migrations (v093/v098) — the app role has no
+        CREATE privilege and must not run DDL (#2461).
+        """
         if self._initialized:
             return
 
@@ -71,64 +69,6 @@ class StateManager:
                 max_overflow=10,
             )
             self.SessionLocal = sessionmaker(bind=self.engine)
-
-            # Create table if not exists
-            with self.engine.connect() as conn:
-                if self.engine.dialect.name == "postgresql":
-                    # Held until the conn.commit() below, covering all DDL.
-                    conn.execute(
-                        text("SELECT pg_advisory_xact_lock(:lock_id)"),
-                        {"lock_id": _STATE_DDL_LOCK_ID},
-                    )
-                conn.execute(
-                    text(
-                        """
-                    CREATE TABLE IF NOT EXISTS scheduler_seen_items (
-                        source_id VARCHAR(255) PRIMARY KEY,
-                        source_type VARCHAR(100) NOT NULL,
-                        content_hash VARCHAR(64) NOT NULL,
-                        title TEXT,
-                        url TEXT,
-                        first_seen_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                        last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL
-                    )
-                """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
-                    CREATE INDEX IF NOT EXISTS idx_seen_items_source_type
-                    ON scheduler_seen_items(source_type)
-                """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
-                    CREATE INDEX IF NOT EXISTS idx_seen_items_last_seen
-                    ON scheduler_seen_items(last_seen_at)
-                """
-                    )
-                )
-
-                # #1144 — persistent per-job last-run tracking. Held as
-                # CREATE IF NOT EXISTS so this initializer is safe to call
-                # repeatedly and survives a fresh DB / rolling deploy.
-                conn.execute(
-                    text(
-                        """
-                    CREATE TABLE IF NOT EXISTS scheduler_job_runs (
-                        job_id         VARCHAR(128) PRIMARY KEY,
-                        last_run_at    TIMESTAMP WITH TIME ZONE,
-                        last_success_at TIMESTAMP WITH TIME ZONE,
-                        last_status    VARCHAR(32),
-                        last_error     TEXT
-                    )
-                    """
-                    )
-                )
-                conn.commit()
 
             self._initialized = True
             logger.info("state_manager_initialized")
@@ -329,8 +269,8 @@ class StateManager:
             by_type = session.execute(
                 text(
                     """
-                    SELECT source_type, COUNT(*) as count 
-                    FROM scheduler_seen_items 
+                    SELECT source_type, COUNT(*) as count
+                    FROM scheduler_seen_items
                     GROUP BY source_type
                 """
                 )
