@@ -23,19 +23,25 @@ Everything is IF NOT EXISTS / ``to_regclass``-guarded: environments where
 the runtime DDL already created these objects (prod) converge to the same
 state as a fresh database.
 
-``fsma.incidents`` and ``fsma.exchange_packages`` additionally get the v092
-client-role lockdown (ENABLE + FORCE RLS, permissive ``app_only`` policy TO
-``regengine``/``regengine_sysadmin``, REVOKE from PUBLIC / ``anon`` /
-``authenticated``, explicit DML grants). v092 applied that treatment only
-where the runtime-created tables happened to exist; on a fresh database the
-tables are born here — after v092 — and would otherwise ship with RLS
-disabled. Tenant isolation for both is enforced at the application layer
-(tenant-scoped WHERE clauses + the ``set_tenant_guc_if_uuid`` backstop); see
-the TABLES_EXEMPT entries in tests/migrations/test_rls_coverage.py.
+All four tables get the v092 client-role lockdown (ENABLE + FORCE RLS,
+permissive ``app_only`` policy TO ``regengine``/``regengine_sysadmin``,
+REVOKE from PUBLIC / ``anon`` / ``authenticated``, explicit DML grants).
+v092 applied that treatment only where the runtime-created tables happened
+to exist; on a fresh database these tables are born here — after v092 —
+and would otherwise ship with RLS disabled. The scheduler tables are the
+same class of app-written public-schema infra table v092 covers
+(``funnel_events``, ``audit_log_buffer``, ...), and the explicit grants
+keep the app role working after the prod follow-up returns their ownership
+to ``postgres`` (runbooks/prod-revoke-create-after-v098.sql). Tenant
+isolation for the two fsma tables is enforced at the application layer
+(tenant-scoped WHERE clauses + the ``set_tenant_guc_if_uuid`` backstop);
+see the TABLES_EXEMPT entries in tests/migrations/test_rls_coverage.py.
+Structural lockdown regression coverage lives in
+tests/migrations/test_client_role_lockdown_v092.py (V098_TABLES).
 
-The scheduler tables also get explicit DML grants so the app role keeps
-access after the prod follow-up returns their ownership to ``postgres``
-(runbooks/prod-revoke-create-after-v098.sql).
+downgrade() drops only rebuildable state (job-run telemetry, boot
+indexes); the data-bearing fsma tables are left in place — see the
+downgrade docstring.
 
 Revision ID: 8b2f4e6a9c31 (random hex, not a credential)
 Revises: e4d7b2a9c561
@@ -147,27 +153,17 @@ def upgrade() -> None:
         """
     )
 
-    # App-role DML on the scheduler tables: in prod they are owned by
-    # regengine today, but the #2461 follow-up returns ownership to
-    # postgres — after which regengine needs explicit grants. Roles are
-    # created idempotently for bare environments (CI containers).
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
-                CREATE ROLE regengine LOGIN;
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                CREATE ROLE regengine_sysadmin LOGIN INHERIT;
-            END IF;
-            GRANT SELECT, INSERT, UPDATE, DELETE ON public.scheduler_seen_items
-                TO regengine, regengine_sysadmin;
-            GRANT SELECT, INSERT, UPDATE, DELETE ON public.scheduler_job_runs
-                TO regengine, regengine_sysadmin;
-        END $$;
-        """
-    )
+    # Client-role lockdown + app-role DML grants for the scheduler tables.
+    # They are app-written public-schema infra tables — exactly the class
+    # v092 locked away from Supabase-style client roles (funnel_events,
+    # audit_log_buffer, ...): scheduler_job_runs.last_error carries internal
+    # error text, and a forged scheduler_seen_items row marks a new
+    # regulatory item as already-seen, silently suppressing ingestion.
+    # The grants also keep regengine working after the #2461 follow-up
+    # returns table ownership to postgres
+    # (runbooks/prod-revoke-create-after-v098.sql).
+    op.execute(_client_role_lockdown_sql("public", "scheduler_seen_items"))
+    op.execute(_client_role_lockdown_sql("public", "scheduler_job_runs"))
 
     # 3. fsma.incidents — mirror the on-first-use DDL from
     #    services/ingestion/app/incident_router.py. pgcrypto for
@@ -225,11 +221,32 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # v093 convention for adopted runtime tables: drop what upgrade()
-    # created — at the previous revision the runtime DDL code paths exist
-    # again and recreate these on demand.
-    op.execute("DROP TABLE IF EXISTS fsma.exchange_packages")
-    op.execute("DROP TABLE IF EXISTS fsma.incidents")
+    # Drop only rebuildable state that the previous revision's runtime DDL
+    # recreates on demand (v093 precedent): the job-run telemetry table and
+    # the seen_items boot indexes. fsma.incidents and fsma.exchange_packages
+    # hold tenant business records (incidents, B2B exchange packages) and
+    # are deliberately LEFT IN PLACE together with their RLS lockdown — on
+    # databases where v098 created them they become out-of-band tables,
+    # exactly like the pre-baseline environments v092 guards with
+    # to_regclass. scheduler_seen_items returns to its v093 state (table
+    # kept, lockdown removed); grants are not revoked, mirroring v092's
+    # downgrade stance.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('public.scheduler_seen_items') IS NULL THEN
+                RETURN;
+            END IF;
+            EXECUTE 'DROP POLICY IF EXISTS app_only_scheduler_seen_items '
+                 || 'ON public.scheduler_seen_items';
+            EXECUTE 'ALTER TABLE public.scheduler_seen_items '
+                 || 'NO FORCE ROW LEVEL SECURITY';
+            EXECUTE 'ALTER TABLE public.scheduler_seen_items '
+                 || 'DISABLE ROW LEVEL SECURITY';
+        END $$;
+        """
+    )
     op.execute("DROP TABLE IF EXISTS public.scheduler_job_runs")
     op.execute("DROP INDEX IF EXISTS public.idx_seen_items_last_seen")
     op.execute("DROP INDEX IF EXISTS public.idx_seen_items_source_type")

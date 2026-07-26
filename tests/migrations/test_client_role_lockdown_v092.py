@@ -53,6 +53,18 @@ V092_TABLES = [
     ("public", "schema_migrations", False),
 ]
 
+# Tables adopted from runtime DDL by v098 with the same lockdown treatment
+# (fsma.incidents is already in V092_TABLES). Without these entries the
+# v098 lockdown would have no structural regression gate at all —
+# test_rls_coverage.py exempts exchange_packages and only scans fsma.*.
+V098_TABLES = [
+    ("fsma", "exchange_packages", True),
+    ("public", "scheduler_seen_items", True),
+    ("public", "scheduler_job_runs", True),
+]
+
+LOCKDOWN_TABLES = V092_TABLES + V098_TABLES
+
 
 @pytest.fixture(scope="module")
 def upgraded_engine() -> Iterator[Engine]:
@@ -88,10 +100,8 @@ def upgraded_engine() -> Iterator[Engine]:
 def _existing(engine: Engine) -> list[tuple[str, str, bool]]:
     with engine.connect() as conn:
         present = []
-        for schema, table, force in V092_TABLES:
-            if conn.execute(
-                text("SELECT to_regclass(:fq)"), {"fq": f"{schema}.{table}"}
-            ).scalar():
+        for schema, table, force in LOCKDOWN_TABLES:
+            if conn.execute(text("SELECT to_regclass(:fq)"), {"fq": f"{schema}.{table}"}).scalar():
                 present.append((schema, table, force))
         return present
 
@@ -128,7 +138,7 @@ def test_v092_tables_have_rls_and_app_only_policy(upgraded_engine: Engine) -> No
             ).scalar()
             if policy != 1:
                 problems.append(f"{schema}.{table}: app_only policy missing")
-    assert not problems, "v092 lockdown drifted:\n" + "\n".join(problems)
+    assert not problems, "v092/v098 lockdown drifted:\n" + "\n".join(problems)
 
 
 def test_client_shaped_role_sees_nothing_app_role_unaffected(
@@ -154,20 +164,13 @@ def test_client_shaped_role_sees_nothing_app_role_unaffected(
                 )
             )
             conn.execute(text(f"GRANT USAGE ON SCHEMA public, fsma TO {role}"))
-            conn.execute(
-                text(
-                    f"GRANT SELECT, INSERT ON fsma.rule_definitions, public.funnel_events TO {role}"
-                )
-            )
+            conn.execute(text(f"GRANT SELECT, INSERT ON fsma.rule_definitions, public.funnel_events TO {role}"))
 
         with engine.connect() as conn:
             conn.execute(text(f"SET ROLE {role}"))
-            visible = conn.execute(
-                text("SELECT count(*) FROM fsma.rule_definitions")
-            ).scalar()
+            visible = conn.execute(text("SELECT count(*) FROM fsma.rule_definitions")).scalar()
             assert visible == 0, (
-                f"client-shaped role can read {visible} rule_definitions rows — "
-                "the rules catalog is still exposed"
+                f"client-shaped role can read {visible} rule_definitions rows — the rules catalog is still exposed"
             )
             with pytest.raises(Exception, match="policy|denied|violates"):
                 conn.execute(
