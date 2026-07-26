@@ -30,7 +30,6 @@ ensure_shared_importable()
 
 import pytest
 from app.state import Base, SeenItem, StateManager
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
@@ -41,6 +40,9 @@ def state_manager(tmp_path):
     db_url = f"sqlite:///{db_path}"
     mgr = StateManager(database_url=db_url)
     mgr.initialize()
+    # Schema comes from alembic in real deployments (v093/v098);
+    # initialize() no longer runs DDL, so create it here.
+    Base.metadata.create_all(mgr.engine)
     return mgr
 
 
@@ -189,39 +191,22 @@ class TestCleanup:
         assert state_manager.is_new("recent-1", "c1") is False
 
 
-# ─── Boot DDL advisory lock (#multi-worker CREATE INDEX race) ────────────
+# ─── initialize() runs no DDL (#2461) ────────────────────────────────────
 
 
-class TestInitializeDdlLock:
-    def test_postgres_takes_advisory_lock_before_ddl(self, monkeypatch):
-        """On Postgres, pg_advisory_xact_lock must be the first statement.
-
-        CREATE {TABLE,INDEX} IF NOT EXISTS races when several gunicorn
-        workers boot at once; the lock serializes the whole DDL block.
-        """
+class TestInitializeNoDdl:
+    def test_initialize_issues_no_statements(self, monkeypatch):
+        """Schema is owned by alembic (v093/v098); the app role has no
+        CREATE privilege, so initialize() must not execute any SQL."""
         from unittest.mock import MagicMock
 
         from app import state as state_module
 
-        executed = []
-
-        conn = MagicMock()
-        conn.execute.side_effect = lambda clause, *a, **k: executed.append(str(getattr(clause, "text", clause)))
         engine = MagicMock()
-        engine.dialect.name = "postgresql"
-        engine.connect.return_value.__enter__ = lambda self_: conn
-        engine.connect.return_value.__exit__ = lambda self_, *exc: False
         monkeypatch.setattr(state_module, "create_engine", lambda *a, **k: engine)
 
         mgr = StateManager(database_url="postgresql://ignored/ignored")
         mgr.initialize()
 
-        assert "pg_advisory_xact_lock" in executed[0]
-        assert any("CREATE TABLE" in s for s in executed[1:])
-        assert all("pg_advisory_xact_lock" not in s for s in executed[1:])
-
-    def test_sqlite_skips_advisory_lock(self, tmp_path):
-        """SQLite has no advisory locks; initialize() must not emit one."""
-        mgr = StateManager(database_url=f"sqlite:///{tmp_path / 'lock.db'}")
-        mgr.initialize()  # would raise OperationalError if the lock ran
         assert mgr._initialized is True
+        engine.connect.assert_not_called()

@@ -122,11 +122,6 @@ async def list_incidents(
     tid = resolve_tenant(tenant_id, principal)
     set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
-    # Use JSONB storage in a general-purpose table for incident data
-    # This avoids adding another migration — incidents are stored as JSONB
-    # in a lightweight incidents table (created on first use)
-    _ensure_incidents_table(db_session)
-
     where_parts = ["tenant_id = :tid"]
     params: Dict[str, Any] = {"tid": tid}
     if status:
@@ -191,7 +186,6 @@ async def open_incident(
 
     tid = resolve_tenant(tenant_id, principal)
     set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
-    _ensure_incidents_table(db_session)
 
     incident_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -246,7 +240,6 @@ async def get_incident(
 
     tid = resolve_tenant(tenant_id, principal)
     set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
-    _ensure_incidents_table(db_session)
 
     row = db_session.execute(
         text("SELECT id, data, created_at, updated_at FROM fsma.incidents WHERE id = :id AND tenant_id = :tid"),
@@ -538,29 +531,7 @@ async def close_incident(
 # ---------------------------------------------------------------------------
 
 
-def _ensure_incidents_table(db_session) -> None:
-    """Create the incidents table if it doesn't exist (lightweight, JSONB-based)."""
-    db_session.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS fsma.incidents (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            tenant_id UUID NOT NULL,
-            data JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    )
-    db_session.execute(
-        text("""
-        CREATE INDEX IF NOT EXISTS idx_incidents_tenant
-            ON fsma.incidents (tenant_id)
-    """)
-    )
-
-
 def _get_incident_data(db_session, incident_id: str, tenant_id: str) -> dict:
-    _ensure_incidents_table(db_session)
     row = db_session.execute(
         text("SELECT data FROM fsma.incidents WHERE id = :id AND tenant_id = :tid"),
         {"id": incident_id, "tid": tenant_id},

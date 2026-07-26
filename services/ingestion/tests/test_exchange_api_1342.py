@@ -37,7 +37,6 @@ from app.exchange_api import (
     _allow_in_memory_fallback,
     _build_package,
     _build_records,
-    _ensure_exchange_table,
     _exchange_store,
     _is_production,
     _load_packages_db,
@@ -202,24 +201,6 @@ class TestAllowInMemoryFallback:
 
         monkeypatch.setattr(env_mod, "is_production", lambda: True)
         assert _allow_in_memory_fallback() is False
-
-
-# ---------------------------------------------------------------------------
-# `_ensure_exchange_table`
-# ---------------------------------------------------------------------------
-
-
-class TestEnsureExchangeTable:
-    def test_issues_create_schema_and_table_ddl(self) -> None:
-        session = _FakeSession()
-        _ensure_exchange_table(session)
-        assert len(session.calls) == 1
-        stmt_str, params = session.calls[0][1]
-        assert "CREATE SCHEMA IF NOT EXISTS fsma" in stmt_str
-        assert "fsma.exchange_packages" in stmt_str
-        assert "idx_exchange_packages_receiver_status" in stmt_str
-        # DDL is a one-shot execute; no bind params.
-        assert params is None
 
 
 # ---------------------------------------------------------------------------
@@ -456,10 +437,10 @@ class TestStorePackageDb:
         assert session.committed is True
         assert session.rolled_back is False
         assert session.closed is True
-        # DDL + INSERT -> exactly two execute calls.
+        # A single INSERT -> exactly one execute call.
         execute_calls = [c for c in session.calls if c[0] == "execute"]
-        assert len(execute_calls) == 2
-        insert_stmt, insert_params = execute_calls[1][1]
+        assert len(execute_calls) == 1
+        insert_stmt, insert_params = execute_calls[0][1]
         assert "INSERT INTO fsma.exchange_packages" in insert_stmt
         assert insert_params["id"] == "pkg-1"
         assert insert_params["sender_tenant_id"] == "tenant-send"
@@ -470,8 +451,8 @@ class TestStorePackageDb:
 
     def test_rolls_back_and_closes_on_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         boom = RuntimeError("boom")
-        # First execute is DDL (ok), second raises.
-        session = _FakeSession(execute_queue=[None, boom])
+        # The INSERT raises.
+        session = _FakeSession(execute_queue=[boom])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         req = ExchangeSendRequest(
             receiver_tenant_id="tenant-recv",
@@ -579,8 +560,7 @@ class TestLoadPackagesDb:
     def test_list_without_package_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         row1 = _db_row(package_id="pkg-a", created_at=datetime(2026, 4, 19, 12, tzinfo=timezone.utc))
         row2 = _db_row(package_id="pkg-b", created_at=datetime(2026, 4, 18, 12, tzinfo=timezone.utc))
-        # DDL then SELECT.
-        session = _FakeSession(execute_queue=[None, [row1, row2]])
+        session = _FakeSession(execute_queue=[[row1, row2]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -596,13 +576,13 @@ class TestLoadPackagesDb:
         assert result[0]["created_at"] == "2026-04-19T12:00:00+00:00"
         assert result[0]["received_at"] is None
         # SELECT was a list query against receiver_tenant_id.
-        _, params = [c for c in session.calls if c[0] == "execute"][1][1]
+        _, params = [c for c in session.calls if c[0] == "execute"][0][1]
         assert params == {"receiver_tenant_id": "tenant-recv", "limit": 10}
 
     def test_includes_payload_when_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
         payload = {"records": [{"cte_event_id": "evt-1"}]}
         row = _db_row(payload=payload)
-        session = _FakeSession(execute_queue=[None, [row]])
+        session = _FakeSession(execute_queue=[[row]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -615,7 +595,7 @@ class TestLoadPackagesDb:
 
     def test_handles_nulls_in_row(self, monkeypatch: pytest.MonkeyPatch) -> None:
         row = _db_row(tlcs=None, created_at=None, received_at=None)
-        session = _FakeSession(execute_queue=[None, [row]])
+        session = _FakeSession(execute_queue=[[row]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -630,7 +610,7 @@ class TestLoadPackagesDb:
 
     def test_single_package_without_mark_received(self, monkeypatch: pytest.MonkeyPatch) -> None:
         row = _db_row(package_id="pkg-single", status="pending")
-        session = _FakeSession(execute_queue=[None, [row]])
+        session = _FakeSession(execute_queue=[[row]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -641,8 +621,8 @@ class TestLoadPackagesDb:
         )
         assert len(result) == 1
         assert result[0]["status"] == "pending"
-        # Only DDL + one SELECT.
-        assert len([c for c in session.calls if c[0] == "execute"]) == 2
+        # Only the one SELECT.
+        assert len([c for c in session.calls if c[0] == "execute"]) == 1
         assert session.committed is False
 
     def test_mark_received_runs_update_and_refetch(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -652,8 +632,8 @@ class TestLoadPackagesDb:
             status="received",
             received_at=datetime(2026, 4, 19, 13, tzinfo=timezone.utc),
         )
-        # DDL, initial SELECT, UPDATE, re-SELECT.
-        session = _FakeSession(execute_queue=[None, [row_before], None, [row_after]])
+        # Initial SELECT, UPDATE, re-SELECT.
+        session = _FakeSession(execute_queue=[[row_before], None, [row_after]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -667,13 +647,13 @@ class TestLoadPackagesDb:
         assert result[0]["received_at"] == "2026-04-19T13:00:00+00:00"
         # Assert the second execute was the UPDATE.
         execute_calls = [c for c in session.calls if c[0] == "execute"]
-        update_stmt, _ = execute_calls[2][1]
+        update_stmt, _ = execute_calls[1][1]
         assert "UPDATE fsma.exchange_packages" in update_stmt
         assert "SET status = 'received'" in update_stmt
 
     def test_mark_received_with_empty_result_skips_update(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # DDL, initial SELECT returns no rows.
-        session = _FakeSession(execute_queue=[None, []])
+        # Initial SELECT returns no rows.
+        session = _FakeSession(execute_queue=[[]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         result = _load_packages_db(
             receiver_tenant_id="tenant-recv",
@@ -684,13 +664,13 @@ class TestLoadPackagesDb:
         )
         assert result == []
         assert session.committed is False
-        # Exactly 2 execute calls (DDL + SELECT), not the UPDATE path.
-        assert len([c for c in session.calls if c[0] == "execute"]) == 2
+        # Exactly 1 execute call (the SELECT), not the UPDATE path.
+        assert len([c for c in session.calls if c[0] == "execute"]) == 1
 
     def test_close_always_runs_on_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
         boom = RuntimeError("db down")
-        # DDL ok, SELECT blows up.
-        session = _FakeSession(execute_queue=[None, boom])
+        # SELECT blows up.
+        session = _FakeSession(execute_queue=[boom])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
         with pytest.raises(RuntimeError, match="db down"):
             _load_packages_db(
@@ -984,7 +964,7 @@ class TestSendReceiverValidation:
 class TestReceiveEndpointDbSuccessPath:
     def test_receive_uses_db_when_healthy(self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
         row = _db_row(package_id="pkg-db", status="pending")
-        session = _FakeSession(execute_queue=[None, [row]])
+        session = _FakeSession(execute_queue=[[row]])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: session)
 
         with TestClient(app_with_scopes) as client:
@@ -1004,7 +984,7 @@ class TestReceiveEndpointDbSuccessPath:
     def test_receive_503_when_fallback_disabled(
         self, app_with_scopes: FastAPI, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        failing_session = _FakeSession(execute_queue=[RuntimeError("boom"), RuntimeError("boom")])
+        failing_session = _FakeSession(execute_queue=[RuntimeError("boom")])
         monkeypatch.setattr(exchange_api, "get_db_safe", lambda: failing_session)
         monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "false")
 
