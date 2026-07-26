@@ -65,6 +65,9 @@ print("DOCS_RESULT_JSON=" + json.dumps({
             if not key.startswith("RAILWAY_")
             and key
             not in {
+                "ADMIN_DATABASE_URL",
+                # Test envs set this; a real Railway deploy never has it.
+                "ADMIN_FALLBACK_SQLITE",
                 "AUTH_TEST_BYPASS_TOKEN",
                 "DATABASE_URL",
                 "ENV",
@@ -74,6 +77,9 @@ print("DOCS_RESULT_JSON=" + json.dumps({
         database_url = "postgresql://regengine_cloud_test:regengine_cloud_test@localhost:5432/regengine_cloud_test"  # pragma: allowlist secret
         env.update(
             {
+                # Railway always provides both DB URLs; without them the admin
+                # engine correctly refuses to boot in a cloud environment.
+                "ADMIN_DATABASE_URL": database_url,
                 "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
                 "DATABASE_URL": database_url,
                 "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
