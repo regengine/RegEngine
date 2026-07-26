@@ -119,7 +119,11 @@ def test_audit_export_metadata_redaction_scrubs_nested_pii():
     payload = json.dumps(redacted, sort_keys=True)
     assert "invitee@example.com" not in payload
     assert "jane@example.com" not in payload
-    assert "415" not in payload
+    # Match the phone with non-hex characters ("(", "-") included: a bare
+    # "415" check flakes whenever a masked:<hex> digest happens to contain
+    # that substring (~1-2% of runs with a random redacted_user_id).
+    assert "(415)" not in payload
+    assert "555-1212" not in payload
     assert "super-secret-token" not in payload
     assert str(erased_user_id) not in payload
     assert redacted["safe"] == "role-change"
