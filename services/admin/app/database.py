@@ -15,8 +15,10 @@ the previous tenant's RLS.
 
 Mitigation (this module): a ``connect`` + ``checkout`` event listener
 on the engine's connection pool runs
-``SELECT set_config('app.tenant_id', '', false)`` and
-``SELECT set_config('regengine.is_sysadmin', 'false', false)``
+``SELECT set_config('app.tenant_id', '', false)`` and resets
+``regengine.is_sysadmin`` to its role-determined baseline ('true' only
+when connected as ``regengine_sysadmin`` — the #2461 control-plane
+arming; 'false' for every other role)
 BEFORE the session sees the connection. This guarantees every route
 starts from a clean slate; authenticated routes re-set tenant context
 as the first step, and unauthenticated paths are genuinely scoped to
@@ -169,9 +171,18 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
             # Clear tenant GUC. Third arg 'false' == session-level set,
             # which matches set_tenant_context's scope.
             cursor.execute("SELECT set_config('app.tenant_id', '', false)")
-            # Defense-in-depth: also clear the sysadmin-context flag so
-            # a stale sysadmin session does not linger in the pool.
-            cursor.execute("SELECT set_config('regengine.is_sysadmin', 'false', false)")
+            # #2461 cutover: the admin engine is the control plane. When it
+            # connects as the audited ``regengine_sysadmin`` role, arm the
+            # sysadmin RLS branch for this connection so pre-auth flows
+            # (login-by-email against FORCE-RLS ``users``/``sessions``) and
+            # cross-tenant admin operations keep their visibility under RLS
+            # enforcement. For any other role this evaluates to 'false' —
+            # identical to the previous unconditional reset (#1381), and the
+            # policies also check ``current_user``, so the GUC alone can
+            # never elevate a non-sysadmin connection.
+            cursor.execute(
+                "SELECT set_config('regengine.is_sysadmin', (current_user = 'regengine_sysadmin')::text, false)"
+            )
         finally:
             cursor.close()
     except Exception as exc:  # noqa: BLE001 -- log and keep going

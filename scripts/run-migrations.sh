@@ -31,6 +31,19 @@ MIGRATION_LOCK_ID=4294967294
 # to leave room for the actual migration + app boot after the lock is acquired.
 MIGRATION_LOCK_TIMEOUT_S=${MIGRATION_LOCK_TIMEOUT_S:-90}
 
+# #2461: after the least-privilege cutover the runtime DATABASE_URL connects
+# as the RLS-enforced `regengine` role, which does not own the schema.
+# Migrations (DDL) must keep running as the owner role, so when
+# MIGRATIONS_DATABASE_URL is set (Railway production) it overrides
+# DATABASE_URL for this runner and the alembic subprocesses it spawns. The
+# override is scoped to this script's process tree — the app that starts
+# after this script still sees the original runtime DATABASE_URL. CI and
+# local dev set only DATABASE_URL; behavior there is unchanged.
+if [ -n "${MIGRATIONS_DATABASE_URL:-}" ]; then
+  DATABASE_URL="${MIGRATIONS_DATABASE_URL}"
+  export DATABASE_URL
+fi
+
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "!! DATABASE_URL must be set before running migrations." >&2
   echo "!! Refusing to fall back to development database defaults in deploy/runtime paths." >&2
