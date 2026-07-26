@@ -67,33 +67,6 @@ _resolve_tenant_id = resolve_tenant_id
 _resolve_principal_tenant_id = resolve_principal_tenant_id
 
 
-def _ensure_exchange_table(db_session) -> None:
-    db_session.execute(
-        text(
-            """
-            CREATE SCHEMA IF NOT EXISTS fsma;
-
-            CREATE TABLE IF NOT EXISTS fsma.exchange_packages (
-                id UUID PRIMARY KEY,
-                sender_tenant_id TEXT NOT NULL,
-                receiver_tenant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'received')),
-                traceability_lot_codes TEXT[] NOT NULL DEFAULT '{}',
-                event_count INTEGER NOT NULL DEFAULT 0,
-                notification_target TEXT,
-                package_hash TEXT NOT NULL,
-                payload JSONB NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                received_at TIMESTAMPTZ
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_exchange_packages_receiver_status
-                ON fsma.exchange_packages (receiver_tenant_id, status, created_at DESC);
-            """
-        )
-    )
-
-
 def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSendRequest) -> list[Any]:
     tlcs = [request.traceability_lot_code] if request.traceability_lot_code else []
     tlcs.extend(code for code in request.lot_codes if code)
@@ -267,7 +240,6 @@ def _store_package_db(
 ) -> None:
     db_session = get_db_safe()
     try:
-        _ensure_exchange_table(db_session)
         db_session.execute(
             text(
                 """
@@ -339,8 +311,6 @@ def _load_packages_db(
 ) -> list[dict[str, Any]]:
     db_session = get_db_safe()
     try:
-        _ensure_exchange_table(db_session)
-
         if package_id:
             rows = db_session.execute(
                 text(

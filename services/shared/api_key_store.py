@@ -374,12 +374,6 @@ class DatabaseAPIKeyStore:
             except ImportError:
                 logger.warning("redis_not_available", message="Install redis for distributed rate limiting")
 
-    async def init_db(self) -> None:
-        """Create database tables if they don't exist."""
-        async with self._engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("database_initialized", tables=["api_keys"])
-
     @asynccontextmanager
     async def _session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get a database session with automatic cleanup."""
@@ -1126,12 +1120,13 @@ _db_key_store: Optional[DatabaseAPIKeyStore] = None
 async def get_db_key_store() -> DatabaseAPIKeyStore:
     """Get the global database-backed API key store instance.
 
-    Initializes on first call.
+    Initializes on first call. The ``api_keys`` table is created by alembic
+    (v076; tenant index forward-ported by v093) — no runtime DDL here, the
+    app role has no CREATE privilege (#2461).
     """
     global _db_key_store
     if _db_key_store is None:
         _db_key_store = DatabaseAPIKeyStore()
-        await _db_key_store.init_db()
     return _db_key_store
 
 

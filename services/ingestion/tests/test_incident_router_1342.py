@@ -142,9 +142,6 @@ def _incident_store_routes(
     """Build a realistic set of routes that round-trip INSERT/SELECT/UPDATE
     through the FakeSession.store so the router sees consistent state."""
 
-    def _noop(params, session):
-        return None
-
     def _insert(params, session):
         session.store[params["id"]] = json.loads(params["data"])
         session.created_at[params["id"]] = datetime.now(timezone.utc)
@@ -192,8 +189,6 @@ def _incident_store_routes(
         return [(iid, data, session.created_at.get(iid), session.updated_at.get(iid)) for iid, data in rows]
 
     routes: Dict[str, Callable[..., Any]] = {
-        r"CREATE TABLE": _noop,
-        r"CREATE INDEX": _noop,
         r"INSERT INTO fsma\.incidents": _insert,
         r"UPDATE fsma\.incidents": _update,
         # Order-sensitive: more specific SELECTs first

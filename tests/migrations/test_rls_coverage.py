@@ -63,6 +63,19 @@ TABLES_EXEMPT: Set[str] = {
     # locks it down instead: FORCE RLS with no policy (deny-all) and
     # REVOKE ALL FROM PUBLIC.
     "cte_kdes_backfill_log_v059",
+    # Adopted from runtime DDL by v098 with the v092 client-role lockdown
+    # (FORCE RLS + permissive app_only policy TO regengine): the incident
+    # endpoints only set the tenant GUC for UUID tenants
+    # (set_tenant_guc_if_uuid backstop), so a get_tenant_context() policy
+    # would 500 the non-GUC paths. Tenant scoping is enforced by the
+    # router's WHERE tenant_id filters; matches the prod state v092 left.
+    "incidents",
+    # Adopted from runtime DDL by v098, same app_only lockdown. Carries
+    # sender_tenant_id/receiver_tenant_id (TEXT) instead of a tenant_id
+    # column — a package row belongs to two tenants at once, so the
+    # single-tenant get_tenant_context() predicate does not fit. Scoping
+    # is enforced by exchange_api's receiver_tenant_id filters.
+    "exchange_packages",
 }
 
 
