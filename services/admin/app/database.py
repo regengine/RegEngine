@@ -44,12 +44,11 @@ import structlog
 # #2512: single shared cloud-marker tuple — keep this in lockstep with the
 # central security gate in shared.env rather than maintaining a divergent copy.
 from shared.env import CLOUD_ENV_VARS as _CLOUD_ENV_MARKERS
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = structlog.get_logger("admin-db")
 
-_ADMIN_DB_INIT_LOCK_ID = 2026050402
 _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
 
 
@@ -199,11 +198,14 @@ if _engine.dialect.name != "sqlite":
 
 
 def init_db() -> None:
-    """Create RLS helper functions on startup. Schema is managed by Alembic.
+    """Probe DB posture on startup. Schema and DDL are managed by Alembic.
 
-    NOTE: Base.metadata.create_all() was removed intentionally for PostgreSQL
-    — Alembic owns all DDL. For SQLite (local dev fallback), we create tables
-    directly since Alembic migrations are PostgreSQL-specific.
+    NOTE: Base.metadata.create_all() and the RLS helper-function DDL were
+    removed intentionally for PostgreSQL — Alembic owns all DDL, including
+    set_tenant_context (v099), get_tenant_context (v056, pinned by v097) and
+    set_admin_context (v051/v056, public copy pinned by v099). For SQLite
+    (local dev fallback), we create tables directly since Alembic migrations
+    are PostgreSQL-specific.
     """
     # #2461: probe the ADMIN engine's role posture (it may point at a
     # different database than the shared engine in dual-DB deployments).
@@ -265,53 +267,13 @@ def init_db() -> None:
         logger.info("database_tables_initialized", dialect="sqlite", tables=len(_core_tables))
         return
 
-    # Create RLS helper functions in Admin DB (use CREATE OR REPLACE to
-    # avoid DROP errors when columns have DEFAULT dependencies on these fns)
-    with _engine.begin() as conn:
-        conn.execute(
-            text("SELECT pg_advisory_xact_lock(:lock_id)"),
-            {"lock_id": _ADMIN_DB_INIT_LOCK_ID},
-        )
-        conn.execute(
-            text("""
-            CREATE OR REPLACE FUNCTION set_tenant_context(tenant_id text) RETURNS void AS $$
-            BEGIN
-              PERFORM set_config('app.tenant_id', tenant_id, false);
-            END;
-            $$ LANGUAGE plpgsql;
-        """)
-        )
-        conn.execute(
-            text("""
-            CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS $$
-            DECLARE
-              tid TEXT;
-            BEGIN
-              tid := NULLIF(current_setting('app.tenant_id', true), '');
-              IF tid IS NULL THEN
-                RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
-              END IF;
-              RETURN tid::UUID;
-            END;
-            $$ LANGUAGE plpgsql STABLE;
-        """)
-        )
-        # SECURITY: set_admin_context sets the regengine.is_sysadmin session
-        # variable. This alone is NOT sufficient for RLS bypass — the RLS
-        # policies also require current_user = 'regengine_sysadmin'.
-        # See: migrations/V048__rls_sysadmin_defense_in_depth.sql
-        conn.execute(
-            text("""
-            CREATE OR REPLACE FUNCTION set_admin_context(p_is_sysadmin boolean) RETURNS void AS $$
-            BEGIN
-              IF p_is_sysadmin AND current_user != 'regengine_sysadmin' THEN
-                RAISE WARNING 'set_admin_context(true) called by non-sysadmin role';
-              END IF;
-              PERFORM set_config('regengine.is_sysadmin', p_is_sysadmin::text, false);
-            END;
-            $$ LANGUAGE plpgsql;
-        """)
-        )
+    # No runtime DDL for PostgreSQL (#2461 follow-up to v098/#2645): the RLS
+    # helper functions this block used to CREATE OR REPLACE are migration-owned
+    # — set_admin_context (v051/v056, public copy pinned by v099),
+    # get_tenant_context (v056, pinned by v097), set_tenant_context (v099).
+    # Under the least-privilege cutover the app role is denied that DDL anyway;
+    # attempting it here only produced the boot-time
+    # admin_database_init_skipped warning.
     logger.info("database_tables_initialized", dialect="postgresql")
 
 

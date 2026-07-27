@@ -126,28 +126,25 @@ class TestInitDb:
 
             mock_create.assert_called_once()
 
-    def test_init_db_serializes_postgresql_helper_function_ddl(self):
-        """PostgreSQL startup DDL must be serialized across worker boot."""
-        import services.admin.app.database as database
+    def test_init_db_postgresql_issues_no_runtime_ddl(self):
+        """PostgreSQL startup must not issue DDL — Alembic owns it (#2461).
 
-        mock_conn = MagicMock()
-        mock_begin = MagicMock()
-        mock_begin.__enter__.return_value = mock_conn
-        mock_begin.__exit__.return_value = False
+        The RLS helper functions init_db used to CREATE OR REPLACE are
+        migration-owned (set_admin_context v051/v056 + v099's public pin,
+        get_tenant_context v056/v097, set_tenant_context v099). Under the
+        least-privilege cutover the app role is denied that DDL, so a runtime
+        attempt only produces the boot-time admin_database_init_skipped
+        warning.
+        """
+        import services.admin.app.database as database
 
         mock_engine = MagicMock()
         mock_engine.dialect.name = "postgresql"
-        mock_engine.begin.return_value = mock_begin
 
         with patch.object(database, "_engine", mock_engine):
             database.init_db()
 
-        executed_sql = [str(call.args[0]) for call in mock_conn.execute.call_args_list]
-        assert "pg_advisory_xact_lock" in executed_sql[0]
-        assert mock_conn.execute.call_args_list[0].args[1] == {
-            "lock_id": database._ADMIN_DB_INIT_LOCK_ID,
-        }
-        assert any("CREATE OR REPLACE FUNCTION set_tenant_context" in statement for statement in executed_sql[1:])
+        mock_engine.begin.assert_not_called()
 
 
 class TestGetSession:
