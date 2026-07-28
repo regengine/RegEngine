@@ -1,4 +1,4 @@
-"""v101 — persist mock FDA audit drills.
+"""v102 — persist mock FDA audit drills.
 
 The mock-audit drill simulator (services/ingestion/app/mock_audit.py) stored
 drills in an in-process dict, so every restart erased the drill history and no
@@ -10,8 +10,13 @@ supplier_integration_profiles): NOT NULL tenant_id, ENABLE + FORCE ROW LEVEL
 SECURITY, and a tenant policy on get_tenant_context() with the sysadmin arm.
 
 Revision ID: 1b10a708e36a
-Revises: 3ba0291a69f2
+Revises: 7c4d9a1f2e8b
 Create Date: 2026-07-28
+
+Reparented (v101 → v102): #2660 and #2661 merged near-simultaneously, both
+parented on 3ba0291a69f2 (v100) and both labeled v101, forking main into two
+heads — the same failure mode the v100 reparent (#2655) fixed. #2660's
+7c4d9a1f2e8b merged first and keeps v101; this revision moves onto it.
 """
 
 from typing import Sequence, Union
@@ -19,7 +24,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "1b10a708e36a"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "3ba0291a69f2"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "7c4d9a1f2e8b"  # pragma: allowlist secret
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
