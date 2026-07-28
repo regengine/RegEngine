@@ -208,6 +208,9 @@ export default function TraceDemo({
                             ? '5 CTEs verified · All KDEs captured · SHA-256 hash chain intact'
                             : 'Source farm isolated · Lot #0412 flagged · All affected shipments identified'}
                     </p>
+                    <p style={{ fontSize: 11, color: T.textMuted, marginTop: 4, marginLeft: 26, fontStyle: 'italic' }}>
+                        Simulated demonstration using synthetic data
+                    </p>
                 </div>
 
                 {/* Replay button */}
