@@ -197,6 +197,36 @@ def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional
         return None
 
 
+def _select_random_target_lot(engine, tenant_id: str) -> Optional[str]:
+    """Pick a random TLC from the tenant's active lots (fsma.cte_events).
+
+    Mirrors the mock-audit target picker: any CTE event with a
+    traceability_lot_code is an eligible drill target. Returns None when the
+    tenant has no lots or the query fails (callers decide how to surface it).
+    """
+    try:
+        from sqlalchemy import text as _text
+
+        with engine.connect() as conn:
+            row = conn.execute(
+                _text("""
+                    SELECT traceability_lot_code
+                    FROM fsma.cte_events
+                    WHERE tenant_id = :tenant_id
+                      AND traceability_lot_code IS NOT NULL
+                    ORDER BY random()
+                    LIMIT 1
+                """),
+                {"tenant_id": tenant_id},
+            ).fetchone()
+        return row[0] if row else None
+    except Exception as exc:  # pragma: no cover
+        import logging
+
+        logging.getLogger("fsma_recall").warning("Failed to select random target lot: %s", exc)
+        return None
+
+
 def _dict_to_recall_drill(d: Dict[str, Any]) -> "RecallDrill":
     """Reconstruct a RecallDrill from its serialized dict (from DB payload)."""
     drill = RecallDrill(
