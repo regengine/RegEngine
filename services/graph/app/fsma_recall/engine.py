@@ -24,6 +24,7 @@ from .persistence import (
     _get_db_engine,
     _load_drill_by_id_from_db,
     _load_drills_from_db,
+    _select_random_target_lot,
     _update_drill_row,
     _upsert_drill_row,
 )
@@ -554,6 +555,25 @@ class MockRecallEngine:
         schedules = self._schedules.get(tenant_id, [])
         return [s for s in schedules if s.enabled and s.next_run <= now]
 
+    def _select_random_target(self, tenant_id: str) -> str:
+        """Select a random TLC from the tenant's active lots.
+
+        Fails loudly (ValueError) rather than silently running an untargeted
+        drill: a scheduled 'random' drill that never touches real lot data
+        would report simulated metrics as if they were the tenant's.
+        """
+        engine = self._get_engine()
+        if engine is None:
+            raise ValueError("random target selection requires a configured database (DATABASE_URL is not set)")
+
+        target_lot = _select_random_target_lot(engine, tenant_id)
+        if target_lot is None:
+            raise ValueError(
+                f"tenant {tenant_id} has no active lots with a traceability lot code; "
+                "cannot select a random drill target"
+            )
+        return target_lot
+
     async def execute_scheduled_drill(
         self,
         schedule: ScheduledDrill,
@@ -568,7 +588,8 @@ class MockRecallEngine:
         if schedule.target_strategy == "specific" and schedule.specific_targets:
             # Use first target (could rotate in future)
             target_lot = schedule.specific_targets[0]
-        # For 'random' strategy, target would be selected from active lots
+        elif schedule.target_strategy == "random":
+            target_lot = self._select_random_target(schedule.tenant_id)
 
         # Create drill from schedule
         drill = self.create_drill(
