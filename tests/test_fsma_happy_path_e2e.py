@@ -32,18 +32,16 @@ from uuid import uuid4
 import pytest
 
 # ---------------------------------------------------------------------------
-# Environment setup — must happen before any app imports
+# Environment setup — applied by the module-scoped ``_module_env`` fixture
+# below, NOT at import time. Test modules are imported during collection, so
+# ``os.environ`` writes here would leak into every other module in the
+# session (setting API_KEY to the bypass token made the "blocked" bypass
+# token authenticate through require_api_key's preshared-master-key branch
+# in tests/security/test_security_audit_fixes.py). The app itself is only
+# imported inside the ``test_client`` fixture, after the env is applied.
 # ---------------------------------------------------------------------------
 
 _BYPASS_TOKEN = "test-token-fsma-happy-path-e2e"
-
-os.environ["REGENGINE_ENV"] = "test"
-os.environ["AUTH_TEST_BYPASS_TOKEN"] = _BYPASS_TOKEN
-os.environ["API_KEY"] = _BYPASS_TOKEN
-# Disable Sentry in tests
-os.environ.setdefault("SENTRY_DSN", "")
-# Suppress noisy middleware
-os.environ.setdefault("DISABLE_RATE_LIMITING", "true")
 
 # Ensure services/ is importable
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -125,8 +123,25 @@ def _split_sql_statements(sql_text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _module_env():
+    """Test env for this module, restored on teardown so nothing leaks."""
+    mp = pytest.MonkeyPatch()
+    mp.setenv("REGENGINE_ENV", "test")
+    mp.setenv("AUTH_TEST_BYPASS_TOKEN", _BYPASS_TOKEN)
+    mp.setenv("API_KEY", _BYPASS_TOKEN)
+    # Disable Sentry in tests
+    if "SENTRY_DSN" not in os.environ:
+        mp.setenv("SENTRY_DSN", "")
+    # Suppress noisy middleware
+    if "DISABLE_RATE_LIMITING" not in os.environ:
+        mp.setenv("DISABLE_RATE_LIMITING", "true")
+    yield mp
+    mp.undo()
+
+
 @pytest.fixture(scope="module")
-def postgres_url():
+def postgres_url(_module_env):
     """
     Start a Postgres 15 container, run migrations, and yield the connection URL.
     The container is torn down after the module.
@@ -161,8 +176,8 @@ def postgres_url():
         engine.dispose()
 
         # Point the app's shared.database at this container
-        os.environ["DATABASE_URL"] = url
-        os.environ["ADMIN_DATABASE_URL"] = url
+        _module_env.setenv("DATABASE_URL", url)
+        _module_env.setenv("ADMIN_DATABASE_URL", url)
 
         yield url
 
