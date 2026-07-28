@@ -18,8 +18,10 @@ works for free.
 These tests lock in the new contract:
 - Exactly one history INSERT per N-way merge.
 - Validation: non-empty, no duplicates, target not in source list.
-- SQL uses ``ANY(:source_entity_ids)`` so one DB round trip updates all
-  sources atomically (not N round trips).
+- SQL uses ``ANY(CAST(:source_entity_ids AS uuid[]))`` so one DB round
+  trip updates all sources atomically (not N round trips). The CAST was
+  added in #2629: psycopg binds a Python list as text[], which uuid
+  columns reject without it.
 - The 1:1 API still works unchanged (backward compat).
 - ``split_entity`` reverses an N-way merge by re-activating every source.
 """
@@ -181,13 +183,14 @@ class TestMergeBulkSingleHistoryRow_Issue1195:
         assert "performed_at" in result
 
 
-# ── SQL uses ANY(:source_entity_ids) — one round trip, not N ───────────────
+# ── SQL uses ANY(CAST(:source_entity_ids AS uuid[])) — one round trip, not N ─
 
 
 class TestMergeBulkSqlUsesAny_Issue1195:
     """A correct N-way implementation must not degrade to N separate
     UPDATEs (one per source) — that defeats atomicity. Lock in that the
-    three mass-mutation statements use ``ANY(:source_entity_ids)``."""
+    three mass-mutation statements use
+    ``ANY(CAST(:source_entity_ids AS uuid[]))``."""
 
     def test_alias_repoint_uses_any_array(self, svc, mock_session):
         _require_entity_all_exist(mock_session)
@@ -199,7 +202,7 @@ class TestMergeBulkSqlUsesAny_Issue1195:
             if "UPDATE fsma.entity_aliases" in str(c[0][0]) and "SET entity_id = :target_entity_id" in str(c[0][0])
         ]
         assert len(alias_updates) == 1
-        assert "ANY(:source_entity_ids)" in str(alias_updates[0][0][0])
+        assert "ANY(CAST(:source_entity_ids AS uuid[]))" in str(alias_updates[0][0][0])
 
     def test_alias_cleanup_uses_any_array(self, svc, mock_session):
         _require_entity_all_exist(mock_session)
@@ -209,7 +212,7 @@ class TestMergeBulkSqlUsesAny_Issue1195:
             c for c in mock_session.execute.call_args_list if "DELETE FROM fsma.entity_aliases" in str(c[0][0])
         ]
         assert len(alias_deletes) == 1
-        assert "ANY(:source_entity_ids)" in str(alias_deletes[0][0][0])
+        assert "ANY(CAST(:source_entity_ids AS uuid[]))" in str(alias_deletes[0][0][0])
 
     def test_deactivate_uses_any_array(self, svc, mock_session):
         _require_entity_all_exist(mock_session)
@@ -221,7 +224,7 @@ class TestMergeBulkSqlUsesAny_Issue1195:
             if "UPDATE fsma.canonical_entities" in str(c[0][0]) and "is_active = FALSE" in str(c[0][0])
         ]
         assert len(deactivations) == 1
-        assert "ANY(:source_entity_ids)" in str(deactivations[0][0][0])
+        assert "ANY(CAST(:source_entity_ids AS uuid[]))" in str(deactivations[0][0][0])
 
     def test_review_queue_resolve_uses_any_array(self, svc, mock_session):
         _require_entity_all_exist(mock_session)
@@ -233,8 +236,8 @@ class TestMergeBulkSqlUsesAny_Issue1195:
         assert len(review_updates) == 1
         sql = str(review_updates[0][0][0])
         # Must match either-side on any source.
-        assert "entity_a_id = ANY(:source_entity_ids)" in sql
-        assert "entity_b_id = ANY(:source_entity_ids)" in sql
+        assert "entity_a_id = ANY(CAST(:source_entity_ids AS uuid[]))" in sql
+        assert "entity_b_id = ANY(CAST(:source_entity_ids AS uuid[]))" in sql
 
 
 # ── _require_entity gates on every participant ──────────────────────────────
