@@ -108,6 +108,10 @@ class SchedulerSettings(BaseServiceSettings):
         default=60,
         description="Interval (seconds) between outbox drain passes",
     )
+    remediation_outbox_drain_interval_seconds: int = Field(
+        default=30,
+        description="Interval (seconds) between remediation notification-outbox drain passes",
+    )
 
     # Circuit breaker
     circuit_breaker_failure_threshold: int = Field(
