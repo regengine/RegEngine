@@ -8,6 +8,7 @@ a realistic request, starts a timer, and grades the response.
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 from datetime import datetime, timedelta, timezone
@@ -47,9 +48,112 @@ def _get_real_tlc(tenant_id: str) -> str | None:
         return None
 
 
+def _persist_drill(drill_id: str, drill: dict) -> None:
+    """Insert a drill row into fsma.mock_audit_drills (best-effort).
+
+    Persistence failures degrade to the in-memory store — the drill API keeps
+    working, but the drill won't survive a restart.
+    """
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+
+        scenario = drill["scenario"]
+        db = SessionLocal()
+        try:
+            db.execute(
+                text(
+                    "INSERT INTO fsma.mock_audit_drills "
+                    "(drill_id, tenant_id, scenario, target_tlc, demo_mode, status, started_at, deadline) "
+                    "VALUES (:drill_id, CAST(:tid AS uuid), CAST(:scenario AS jsonb), :target_tlc, "
+                    ":demo_mode, :status, CAST(:started_at AS timestamptz), CAST(:deadline AS timestamptz)) "
+                    "ON CONFLICT (tenant_id, drill_id) DO NOTHING"
+                ),
+                {
+                    "drill_id": drill_id,
+                    "tid": drill["tenant_id"],
+                    "scenario": json.dumps(scenario),
+                    "target_tlc": scenario.get("target_tlc"),
+                    "demo_mode": scenario.get("demo_mode", False),
+                    "status": drill["status"],
+                    "started_at": drill["started_at"],
+                    "deadline": drill["deadline"],
+                },
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        logger.warning("Mock audit drill persist failed", exc_info=True)
+
+
+def _load_drill(drill_id: str) -> dict | None:
+    """Load a drill row from fsma.mock_audit_drills as an in-memory-shaped dict.
+
+    RLS scopes the read to the caller's tenant at runtime. Returns None when
+    the drill does not exist or the DB is unavailable.
+    """
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            row = db.execute(
+                text(
+                    "SELECT tenant_id, scenario, status, grade, score, started_at, deadline "
+                    "FROM fsma.mock_audit_drills WHERE drill_id = :drill_id LIMIT 1"
+                ),
+                {"drill_id": drill_id},
+            ).fetchone()
+        finally:
+            db.close()
+        if row is None:
+            return None
+        tenant_id, scenario, status, grade, score, started_at, deadline = row
+        return {
+            "tenant_id": str(tenant_id),
+            "scenario": scenario,
+            "started_at": started_at.isoformat(),
+            "deadline": deadline.isoformat(),
+            "status": status,
+            "grade": grade,
+            "score": score,
+        }
+    except Exception:
+        logger.warning("Mock audit drill load failed", exc_info=True)
+        return None
+
+
+def _mark_drill_completed(drill_id: str, tenant_id: str, grade: str, score: int) -> None:
+    """Record a graded submission on the persisted drill row (best-effort)."""
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            db.execute(
+                text(
+                    "UPDATE fsma.mock_audit_drills "
+                    "SET status = 'completed', grade = :grade, score = :score, "
+                    "completed_at = now(), updated_at = now() "
+                    "WHERE drill_id = :drill_id AND tenant_id = CAST(:tid AS uuid)"
+                ),
+                {"drill_id": drill_id, "tid": tenant_id, "grade": grade, "score": score},
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        logger.warning("Mock audit drill completion persist failed", exc_info=True)
+
+
 router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
 
-# In-memory drill store
+# In-process cache of drills created by this process. PostgreSQL
+# (fsma.mock_audit_drills) is the durable store — reads fall back to it so
+# drills survive restarts and build a longitudinal dataset.
 _active_drills: dict[str, dict] = {}
 
 # Simulated FDA request scenarios
@@ -190,6 +294,7 @@ async def start_drill(
         "status": "active",
         "grade": None,
     }
+    _persist_drill(drill_id, _active_drills[drill_id])
 
     logger.info("drill_started", extra={"drill_id": drill_id, "scenario": scenario["scenario"]})
 
@@ -220,7 +325,7 @@ async def start_drill(
 )
 async def get_drill_status(drill_id: str) -> DrillStatus:
     """Get current status of an active drill."""
-    drill = _active_drills.get(drill_id)
+    drill = _active_drills.get(drill_id) or _load_drill(drill_id)
     if not drill:
         raise HTTPException(status_code=404, detail="Drill not found")
 
@@ -266,7 +371,7 @@ async def submit_drill_response(
     ctx: TenantContext = Depends(require_tenant_context),
 ) -> DrillGrade:
     """Grade a drill response."""
-    drill = _active_drills.get(drill_id)
+    drill = _active_drills.get(drill_id) or _load_drill(drill_id)
     if not drill:
         raise HTTPException(status_code=404, detail="Drill not found")
     if drill.get("tenant_id") != ctx.tenant_id:
@@ -361,10 +466,12 @@ async def submit_drill_response(
 
     passed = total >= 70
 
-    # Update drill state
-    _active_drills[drill_id]["status"] = "completed"
-    _active_drills[drill_id]["grade"] = grade
-    _active_drills[drill_id]["score"] = total
+    # Update drill state (drill may have been loaded from DB after a restart)
+    drill["status"] = "completed"
+    drill["grade"] = grade
+    drill["score"] = total
+    _active_drills[drill_id] = drill
+    _mark_drill_completed(drill_id, ctx.tenant_id, grade, total)
 
     if not feedback:
         feedback.append("Perfect score. You're audit-ready.")

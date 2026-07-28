@@ -664,10 +664,54 @@ class SchedulerService:
                 outbox_path=self.settings.webhook_outbox_path,
             )
 
+        # Remediation notification-outbox drain — emails supplier
+        # correction links queued by services/ingestion/app/remediation/
+        # outbox.py. Short cadence on purpose: the product promise is
+        # link delivery within seconds of the buyer issuing it.
+        self._add_tracked_job(
+            self.drain_remediation_notifications,
+            job_id="remediation_notification_drain",
+            trigger=IntervalTrigger(
+                seconds=self.settings.remediation_outbox_drain_interval_seconds,
+            ),
+            name="Remediation Notification Outbox Drain",
+            max_instances=1,  # Never run two drain passes concurrently.
+        )
+        logger.info(
+            "job_scheduled",
+            job_id="remediation_notification_drain",
+            interval_seconds=self.settings.remediation_outbox_drain_interval_seconds,
+        )
+
         logger.info(
             "scheduler_ready",
             scrapers=list(self.scrapers.keys()),
         )
+
+    def drain_remediation_notifications(self) -> None:
+        """Drain the remediation notification outbox once.
+
+        Per-tenant claim under RLS (fsma.notification_outbox is FORCE RLS
+        with no sysadmin bypass); tenant discovery iterates public.tenants
+        like the deadline monitor (#2461). Per-entry failures reschedule
+        with backoff inside the drainer; a tenant-level failure is logged
+        and skipped so one tenant cannot poison the tick.
+        """
+        try:
+            from shared.database import SessionLocal  # noqa: PLC0415
+
+            from services.ingestion.app.remediation.delivery import drain_all_tenants  # noqa: PLC0415
+
+            db = SessionLocal()
+            try:
+                totals = drain_all_tenants(db)
+            finally:
+                db.close()
+        except Exception as exc:  # pragma: no cover — telemetry must not crash
+            logger.exception("remediation_notification_drain_failed", error=str(exc))
+            return
+        if totals["claimed"]:
+            logger.info("remediation_notification_drain_tick", **totals)
 
     def drain_webhook_outbox(self) -> None:
         """Drain the persistent webhook outbox once (#1150).

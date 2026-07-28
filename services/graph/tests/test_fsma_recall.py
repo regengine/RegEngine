@@ -621,12 +621,86 @@ class TestRecallScheduling:
             frequency_days=90,
         )
 
-        drill = await self.engine.execute_scheduled_drill(schedule)
+        with patch.object(self.engine, "_select_random_target", return_value="LOT-RANDOM-001"):
+            drill = await self.engine.execute_scheduled_drill(schedule)
 
         assert drill.status == RecallStatus.COMPLETED
         assert drill.reason == "scheduled_drill"
+        assert drill.target_lot == "LOT-RANDOM-001"
         assert schedule.last_run is not None
         assert schedule.last_result == drill.drill_id
+
+    @pytest.mark.asyncio
+    async def test_execute_scheduled_drill_specific_target(self):
+        """'specific' strategy uses the configured target, no lot lookup."""
+        schedule = self.engine.create_schedule(
+            tenant_id="tenant_1",
+            drill_type=RecallType.FULL_TRACE,
+            target_strategy="specific",
+            specific_targets=["LOT-SPEC-1"],
+        )
+
+        drill = await self.engine.execute_scheduled_drill(schedule)
+
+        assert drill.target_lot == "LOT-SPEC-1"
+
+    @pytest.mark.asyncio
+    async def test_scheduled_random_drill_selects_tenant_lot(self):
+        """'random' strategy pulls a TLC from the tenant's active lots."""
+        schedule = self.engine.create_schedule(
+            tenant_id="tenant_1",
+            drill_type=RecallType.FORWARD_TRACE,
+        )
+        assert schedule.target_strategy == "random"
+
+        with (
+            patch.object(self.engine, "_get_engine", return_value=MagicMock()),
+            patch(
+                "services.graph.app.fsma_recall.engine._select_random_target_lot",
+                return_value="LOT-RND-7",
+            ) as selector,
+        ):
+            drill = await self.engine.execute_scheduled_drill(schedule)
+
+        selector.assert_called_once()
+        assert selector.call_args[0][1] == "tenant_1"
+        assert drill.target_lot == "LOT-RND-7"
+        assert drill.status == RecallStatus.COMPLETED
+
+    def test_random_target_no_db_raises(self):
+        """'random' strategy fails loudly when no database is configured."""
+        with patch.object(self.engine, "_get_engine", return_value=None):
+            with pytest.raises(ValueError, match="DATABASE_URL"):
+                self.engine._select_random_target("tenant_1")
+
+    def test_random_target_no_lots_raises(self):
+        """'random' strategy fails loudly when the tenant has no lots."""
+        with (
+            patch.object(self.engine, "_get_engine", return_value=MagicMock()),
+            patch(
+                "services.graph.app.fsma_recall.engine._select_random_target_lot",
+                return_value=None,
+            ),
+        ):
+            with pytest.raises(ValueError, match="no active lots"):
+                self.engine._select_random_target("tenant_1")
+
+    @pytest.mark.asyncio
+    async def test_scheduled_random_drill_no_lots_does_not_create_drill(self):
+        """A failed target selection must not record a drill."""
+        schedule = self.engine.create_schedule(
+            tenant_id="tenant_1",
+            drill_type=RecallType.FORWARD_TRACE,
+        )
+
+        with (
+            patch.object(self.engine, "_get_engine", return_value=None),
+            pytest.raises(ValueError),
+        ):
+            await self.engine.execute_scheduled_drill(schedule)
+
+        assert self.engine._drills.get("tenant_1", []) == []
+        assert schedule.last_run is None
 
 
 # ============================================================================
@@ -834,3 +908,47 @@ class TestScheduledDrill:
         assert data["severity"] == "class_i"
         assert data["frequency_days"] == 30
         assert data["target_strategy"] == "rotating"
+
+
+# ============================================================================
+# RANDOM TARGET LOT SELECTION (persistence helper)
+# ============================================================================
+
+
+class TestSelectRandomTargetLot:
+    """Tests for _select_random_target_lot against fsma.cte_events."""
+
+    def _mock_engine(self):
+        engine = MagicMock()
+        conn = engine.connect.return_value.__enter__.return_value
+        return engine, conn
+
+    def test_returns_lot_when_row_present(self):
+        from services.graph.app.fsma_recall.persistence import _select_random_target_lot
+
+        engine, conn = self._mock_engine()
+        conn.execute.return_value.fetchone.return_value = ("TLC-9",)
+
+        assert _select_random_target_lot(engine, "tenant_1") == "TLC-9"
+
+        # Tenant-scoped: SQL filters on tenant_id and the bind carries it
+        sql = str(conn.execute.call_args[0][0])
+        assert "tenant_id = :tenant_id" in sql
+        assert "traceability_lot_code IS NOT NULL" in sql
+        assert conn.execute.call_args[0][1] == {"tenant_id": "tenant_1"}
+
+    def test_returns_none_when_tenant_has_no_lots(self):
+        from services.graph.app.fsma_recall.persistence import _select_random_target_lot
+
+        engine, conn = self._mock_engine()
+        conn.execute.return_value.fetchone.return_value = None
+
+        assert _select_random_target_lot(engine, "tenant_1") is None
+
+    def test_returns_none_on_query_error(self):
+        from services.graph.app.fsma_recall.persistence import _select_random_target_lot
+
+        engine, conn = self._mock_engine()
+        conn.execute.side_effect = RuntimeError("db gone")
+
+        assert _select_random_target_lot(engine, "tenant_1") is None
