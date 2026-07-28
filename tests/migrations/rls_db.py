@@ -155,6 +155,17 @@ def guarded_live_database_url() -> str | None:
             )
             continue
         return url
+    if _require_db():
+        # #2530 fail-not-skip contract, extended to the live suites: a job
+        # that sets REGENGINE_REQUIRE_DB=1 has declared a database MUST be
+        # designated — returning None here would let every live module
+        # silently skip, which is the rot the live-db-suite CI job exists
+        # to prevent.
+        pytest.fail(
+            "REGENGINE_REQUIRE_DB=1 but no designated live test DB survived the reuse "
+            "policy (need CI DATABASE_URL/ADMIN_DATABASE_URL pointing at a non-dev-stack "
+            "Postgres, or REGENGINE_MIGRATION_TEST_DB)"
+        )
     return None
 
 

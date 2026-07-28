@@ -21,15 +21,16 @@ tests/shared/test_data_archival_job_live.py); also skips when the
 
 from __future__ import annotations
 
-import os
 import uuid
 
 import pytest
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
+from tests.migrations.rls_db import guarded_live_database_url
+
+DATABASE_URL = guarded_live_database_url()
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL,
-    reason="DATABASE_URL not set — skipping live pre-tenant membership lookup test",
+    reason="no designated live test DB (CI DATABASE_URL or REGENGINE_MIGRATION_TEST_DB) — skipping live pre-tenant membership lookup test",
 )
 
 
@@ -40,25 +41,29 @@ def test_sysadmin_reads_memberships_without_tenant_context() -> None:
     # involved — the point is a connection with NO app.tenant_id GUC at all.
     engine = create_engine(DATABASE_URL)
     try:
+        # One explicit transaction wraps everything: SQLAlchemy 2.x
+        # autobegins on the first execute(), so a later conn.begin() raises
+        # InvalidRequestError — and SET LOCAL needs a transaction anyway.
+        # Everything rolls back at the end.
         with engine.connect() as conn:
-            role_exists = conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'")).scalar()
-            if not role_exists:
-                pytest.skip("regengine_sysadmin role not present in this database")
-
-            policy_exists = conn.execute(
-                text(
-                    "SELECT 1 FROM pg_policies WHERE schemaname = 'public' "
-                    "AND tablename = 'memberships' "
-                    "AND policyname = 'memberships_sysadmin_read'"
-                )
-            ).scalar()
-            assert policy_exists, (
-                "memberships_sysadmin_read policy missing — v100 not applied; "
-                "the /auth/me pre-tenant lookup would 500 under least privilege"
-            )
-
             trans = conn.begin()
             try:
+                role_exists = conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin'")).scalar()
+                if not role_exists:
+                    pytest.skip("regengine_sysadmin role not present in this database")
+
+                policy_exists = conn.execute(
+                    text(
+                        "SELECT 1 FROM pg_policies WHERE schemaname = 'public' "
+                        "AND tablename = 'memberships' "
+                        "AND policyname = 'memberships_sysadmin_read'"
+                    )
+                ).scalar()
+                assert policy_exists, (
+                    "memberships_sysadmin_read policy missing — v100 not applied; "
+                    "the /auth/me pre-tenant lookup would 500 under least privilege"
+                )
+
                 conn.execute(text("SET LOCAL ROLE regengine_sysadmin"))
                 # The exact shape of _resolve_session_tenant_id /
                 # get_current_user's derivation: active memberships by
