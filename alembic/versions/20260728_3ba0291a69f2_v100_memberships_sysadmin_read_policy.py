@@ -25,7 +25,7 @@ Role-guarded like v095's grants: local/CI databases without the
 ``regengine_sysadmin`` role converge to a no-op.
 
 Revision ID: 3ba0291a69f2
-Revises: 8b2f4e6a9c31
+Revises: 2aa607050c84
 Create Date: 2026-07-28
 """
 
@@ -33,7 +33,10 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "3ba0291a69f2"
-down_revision = "8b2f4e6a9c31"
+# v099 (#2649) and v100 (#2654) both merged parented on v098, forking the
+# DAG — reparented onto v099 to restore the single head. No environment had
+# applied either revision at reparent time (prod sat at v098).
+down_revision = "2aa607050c84"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
