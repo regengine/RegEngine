@@ -24,6 +24,7 @@ on:
       - 'requirements.in'
       - 'requirements.lock'
       - 'scripts/**'
+      - 'tests/**'
       - 'sample_data/**'
       - 'demo_exports/**'
       - '.github/workflows/backend-ci.yml'
@@ -42,6 +43,7 @@ on:
       - 'requirements.in'
       - 'requirements.lock'
       - 'scripts/**'
+      - 'tests/**'
       - 'sample_data/**'
       - 'demo_exports/**'
       - '.github/workflows/backend-ci.yml'
@@ -1041,6 +1043,154 @@ jobs:
           pytest tests/migrations/test_seeded_mid_chain_upgrade.py \
             -v --no-cov -o "testpaths=tests"
 
+  # ── Live-DB regression suite (tests/shared/*_live.py) ──
+  live-db-suite:
+    # Two prod incidents (data_archival's phantom fsma.fda_exports table,
+    # 2026-07-24; the least-privilege auth-bootstrap RLS 500s, 2026-07-27)
+    # shipped through green CI because their defects were schema-level and
+    # the tests/shared/*_live.py regression tests that catch them silently
+    # skip without a designated database (#2646 guard). This job provisions
+    # a scratch Postgres, bootstraps the prod role topology, migrates to
+    # alembic head, and runs every live module — hard-failing if ANY module
+    # skips, so the suite can never rot back into silence.
+    name: Live DB suite (migrated scratch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # No-designated-DB must FAIL the suite, never skip it (#2530):
+      # guarded_live_database_url() pytest.fails when this is set and no
+      # usable URL survives its reuse policy. The skip-grep on the final
+      # step is the backstop for runtime skips (e.g. a missing role).
+      REGENGINE_REQUIRE_DB: "1"
+      PYTHONDONTWRITEBYTECODE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Create scratch database (roles + pre-baseline function)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Database name must NOT be regengine/regengine_admin: the #2646
+          # guard (tests/migrations/rls_db.py) refuses loopback URLs with
+          # those names even under CI=true, and the whole job would skip.
+          psql -h localhost -U postgres -c "CREATE DATABASE live_suite;"
+          # Roles must exist BEFORE `alembic upgrade head`: v051 runs
+          # unguarded GRANTs to regengine, and v100's memberships policy
+          # silently no-ops (and stamps) without regengine_sysadmin.
+          # NOLOGIN suffices — tests reach the roles via SET LOCAL ROLE
+          # from the postgres superuser connection.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
+          DO $$
+          BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
+                  CREATE ROLE regengine NOLOGIN;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
+                  CREATE ROLE regengine_sysadmin NOLOGIN INHERIT;
+              END IF;
+          END
+          $$;
+          EOSQL
+          # get_tenant_context() is referenced by baseline RLS policies but
+          # created by NO migration — production Supabase carries it from
+          # pre-baseline state. Seed it exactly as scripts/init-postgres.sh
+          # does for local databases, or `alembic upgrade head` fails.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
+          CREATE OR REPLACE FUNCTION get_tenant_context()
+          RETURNS UUID AS $fn$
+          DECLARE
+              tid TEXT;
+          BEGIN
+              tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
+              IF tid IS NULL THEN
+                  RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+              END IF;
+              RETURN tid::UUID;
+          END;
+          $fn$ LANGUAGE plpgsql STABLE;
+          EOSQL
+
+      - name: Migrate scratch database to alembic head
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          alembic upgrade head
+
+      - name: Apply prod-parity role grants
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Mirror runbooks/prod-least-privilege-db-role.sql EXACTLY: prod
+          # grants DML to regengine ONLY; regengine_sysadmin reaches tables
+          # through v051's GRANT regengine TO regengine_sysadmin membership
+          # (INHERIT). Granting sysadmin directly would mask regressions in
+          # that membership path — the 2026-07-27 incident class.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
+          DO $$
+          DECLARE s TEXT;
+          BEGIN
+              FOREACH s IN ARRAY ARRAY['public','fsma','audit','dlq','ingestion'] LOOP
+                  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = s) THEN
+                      EXECUTE format('GRANT USAGE ON SCHEMA %I TO regengine', s);
+                      EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO regengine', s);
+                      EXECUTE format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA %I TO regengine', s);
+                      EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO regengine', s);
+                  END IF;
+              END LOOP;
+          END
+          $$;
+          EOSQL
+
+      - name: Run live-DB suite (skips are failures)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          set -o pipefail
+          # Glob, not an explicit list: a future tests/shared/*_live.py is
+          # included automatically instead of silently joining the gap this
+          # job exists to close.
+          pytest tests/shared/test_*_live.py \
+            -v -rs --no-cov -o "testpaths=tests" | tee /tmp/live-db-suite.log
+          if grep -qE '[0-9]+ skipped' /tmp/live-db-suite.log; then
+            echo "::error::live-DB tests skipped — this job exists so they always RUN (check the #2646 guard env contract)"
+            exit 1
+          fi
+
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
     # Distinct name from the frontend gate ("Frontend CI Status Gate"). The
@@ -1049,7 +1199,7 @@ jobs:
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -1062,6 +1212,7 @@ jobs:
           echo "Ingestion suite:   ${{ needs.ingestion-full-suite.result }}"
           echo "Repo-root suite:   ${{ needs.repo-root-suite.result }}"
           echo "Seeded rehearsal:  ${{ needs.seeded-migration-rehearsal.result }}"
+          echo "Live DB suite:     ${{ needs.live-db-suite.result }}"
           echo "Docker:            ${{ needs.docker-build.result }}"
           echo "Security:          ${{ needs.security.result }}"
           echo "RLS fallback:      ${{ needs.rls-fallback-check.result }}"
@@ -1081,6 +1232,7 @@ jobs:
              || "${{ needs.ingestion-full-suite.result }}" != "success" \
              || "${{ needs.repo-root-suite.result }}" != "success" \
              || "${{ needs.seeded-migration-rehearsal.result }}" != "success" \
+             || "${{ needs.live-db-suite.result }}" != "success" \
              || "${{ needs.docker-build.result }}" != "success" \
              || "${{ needs.security.result }}" != "success" \
              || "${{ needs.rls-fallback-check.result }}" != "success" \
