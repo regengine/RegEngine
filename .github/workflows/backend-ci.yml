@@ -853,6 +853,7 @@ jobs:
             tests/invariants/test_fda_export_v1_golden.py \
             tests/invariants/test_chain_verify_golden.py \
             tests/migrations/test_v097_pin_get_tenant_context.py \
+            tests/migrations/test_v099_set_tenant_context.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS enforcement e2e (live Postgres — #2461 fail-closed proof)
