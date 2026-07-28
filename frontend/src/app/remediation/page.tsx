@@ -274,13 +274,13 @@ export default function RemediationPage() {
         </Card>
       )}
 
-      {/* Notification previews (FR-10: nothing is ever sent) */}
+      {/* Notification outbox — queued link emails are delivered by the drainer */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" /> Notification previews
+            <Mail className="h-5 w-5" /> Notifications
           </CardTitle>
-          <CardDescription>Local outbox only — no email or SMS is sent in this slice.</CardDescription>
+          <CardDescription>Supplier correction links are emailed automatically after issuing.</CardDescription>
         </CardHeader>
         <CardContent>
           {(outbox.data?.notifications ?? []).length === 0 ? (
@@ -291,6 +291,7 @@ export default function RemediationPage() {
                 <li key={n.id} className="text-sm">
                   <span className="font-medium">{n.subject}</span>
                   <span className="text-muted-foreground"> — {n.body}</span>
+                  <span className="text-muted-foreground"> [{n.status}]</span>
                 </li>
               ))}
             </ul>

@@ -20,7 +20,7 @@ from sqlalchemy import text
 from ..authz import IngestionPrincipal, require_permission
 from ..shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
 from ..tenant_validation import resolve_tenant
-from . import evidence, outbox, service, tokens
+from . import delivery, evidence, outbox, service, tokens
 from .audit_utils import audit_event
 from .schemas import CreateLinkRequest, CreateLinkResponse, ManifestUploadResponse, ReleaseRequest
 from .state import transition
@@ -226,8 +226,10 @@ async def create_link(
         superseded_token_id=revoked[0] if revoked else None,
     )
     # Token rides in the URL FRAGMENT: browsers never send fragments to the
-    # server, so the raw token cannot land in access logs anywhere.
-    correction_url = f"https://regengine.co/api/v1/remediation/supplier/form#{minted['token']}"
+    # server, so the raw token cannot land in access logs anywhere. The URL
+    # shape is shared with the outbox drainer, which re-mints and emails a
+    # fresh link for this entry.
+    correction_url = delivery.correction_url(minted["token"])
 
     if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
         transition(
@@ -343,7 +345,7 @@ async def get_metrics(
     return service.compute_metrics(db, tenant_id=tid)
 
 
-@router.get("/outbox", summary="Notification previews (nothing is ever sent)")
+@router.get("/outbox", summary="Notification outbox (queued entries are emailed by the delivery drainer)")
 async def get_outbox(
     tenant_id: Optional[str] = Query(default=None),
     principal: IngestionPrincipal = Depends(require_permission("remediation.read")),
