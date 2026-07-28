@@ -1,7 +1,9 @@
-"""Local notification outbox — preview only, never delivers.
+"""Local notification outbox — enqueue side.
 
 Enqueue runs in the caller's transaction (transactional-outbox shape from
-webhook_outbox.py); there is deliberately no drainer. When
+webhook_outbox.py). Entries with a recipient are enqueued as 'queued' and
+delivered by the drainer in delivery.py; recipient-less entries (buyer
+in-app notifications) stay preview-only as 'pending'. When
 REGENGINE_E2E_EMAIL_OUTBOX is set the record is also appended to that file
 (dev/e2e parity with the invite-email recorder).
 """
@@ -33,10 +35,10 @@ def enqueue_preview(
         text(
             """
             INSERT INTO fsma.notification_outbox
-                (tenant_id, case_id, recipient, subject, body, payload)
+                (tenant_id, case_id, recipient, subject, body, payload, status)
             VALUES
                 (CAST(:tenant_id AS uuid), CAST(:case_id AS uuid), :recipient,
-                 :subject, :body, CAST(:payload AS jsonb))
+                 :subject, :body, CAST(:payload AS jsonb), :status)
             RETURNING id
             """
         ),
@@ -47,6 +49,7 @@ def enqueue_preview(
             "subject": subject,
             "body": body,
             "payload": json.dumps(payload or {}),
+            "status": "queued" if recipient else "pending",
         },
     ).fetchone()
     outbox_path = os.environ.get("REGENGINE_E2E_EMAIL_OUTBOX")
@@ -64,7 +67,8 @@ def list_previews(db, *, tenant_id: str, limit: int = 50) -> List[Dict[str, Any]
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(
             """
-            SELECT id, case_id, channel, recipient, subject, body, payload, status, created_at
+            SELECT id, case_id, channel, recipient, subject, body, payload, status, created_at,
+                   attempts, sent_at, last_error, provider_message_id
             FROM fsma.notification_outbox
             WHERE tenant_id = CAST(:tenant_id AS uuid)
             ORDER BY created_at DESC
@@ -84,6 +88,10 @@ def list_previews(db, *, tenant_id: str, limit: int = 50) -> List[Dict[str, Any]
             "payload": r[6],
             "status": r[7],
             "created_at": r[8].isoformat() if r[8] else None,
+            "attempts": r[9],
+            "sent_at": r[10].isoformat() if r[10] else None,
+            "last_error": r[11],
+            "provider_message_id": r[12],
         }
         for r in rows
     ]

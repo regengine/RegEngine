@@ -94,7 +94,10 @@ export interface OutboxPreview {
     recipient: string | null;
     subject: string;
     body: string;
+    status: string;
     created_at: string | null;
+    sent_at: string | null;
+    last_error: string | null;
 }
 
 export function useRemediationManifests(tenantId: string) {

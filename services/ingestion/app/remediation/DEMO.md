@@ -39,7 +39,8 @@ curl -sf -X POST "$BASE/api/v1/remediation/manifests/$RUN/release" -H "$AUTH" -d
   -H 'Content-Type: application/json' | jq .
 
 # 4. Issue the scoped correction link (token shown exactly once; only its
-#    hash is stored). A notification preview lands in the outbox.
+#    hash is stored). A notification entry lands in the outbox, queued for
+#    email delivery by the drainer (delivery.py).
 curl -sf -X POST "$BASE/api/v1/remediation/cases/$CASE/link" -H "$AUTH" \
   -H 'Content-Type: application/json' \
   -d '{"supplier_email": "logistics@valleyfarms.example"}' | tee /tmp/link.json
