@@ -2091,8 +2091,68 @@
       }
     }
   },
+  "fsma.mock_audit_drills": {
+    "columns": {
+      "completed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "deadline": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "demo_mode": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "drill_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "grade": {
+        "nullable": true,
+        "type": "text"
+      },
+      "scenario": {
+        "nullable": false,
+        "type": "jsonb"
+      },
+      "score": {
+        "nullable": true,
+        "type": "integer"
+      },
+      "started_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "target_tlc": {
+        "nullable": true,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "updated_at": {
+        "nullable": false,
+        "type": "timestamp"
+      }
+    }
+  },
   "fsma.notification_outbox": {
     "columns": {
+      "attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
       "body": {
         "nullable": false,
         "type": "text"
@@ -2105,6 +2165,10 @@
         "nullable": false,
         "type": "text"
       },
+      "claimed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
       "created_at": {
         "nullable": false,
         "type": "timestamp"
@@ -2113,13 +2177,29 @@
         "nullable": false,
         "type": "uuid"
       },
+      "last_error": {
+        "nullable": true,
+        "type": "text"
+      },
+      "next_attempt_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
       "payload": {
         "nullable": false,
         "type": "jsonb"
       },
+      "provider_message_id": {
+        "nullable": true,
+        "type": "text"
+      },
       "recipient": {
         "nullable": true,
         "type": "text"
+      },
+      "sent_at": {
+        "nullable": true,
+        "type": "timestamp"
       },
       "status": {
         "nullable": false,
