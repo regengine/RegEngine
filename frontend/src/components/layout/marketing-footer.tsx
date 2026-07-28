@@ -34,7 +34,7 @@ export function MarketingFooter() {
                         Food traceability compliance for farms and food companies.
                     </p>
                     <div className="font-mono text-[12px] text-[var(--re-text-tertiary)]">
-                        FSMA 204 Deadline: July 20, 2028
+                        FSMA 204 Enforcement: July 20, 2028
                     </div>
                 </div>
 
