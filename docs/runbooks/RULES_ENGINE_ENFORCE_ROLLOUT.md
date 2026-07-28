@@ -6,7 +6,7 @@
 
 **Owner:** On-call engineer for the rollout window. Hand off to product after broadening.
 
-**Last Updated:** 2026-04-24
+**Last Updated:** 2026-07-28 — SQL and CLI commands refreshed against the live prod schema and the consolidated Railway service. A 2026-07-28 pre-rollout run stopped at gate §1.2 (zero FTL hints on all ingested events — the #1346 propagation gap); the fix is FTL hint derivation in `TraceabilityEvent.prepare_for_persistence` (`shared/rules/ftl.py::infer_ftl_category_from_text`). Re-run §1.2 after that fix is deployed AND at least one event has been ingested post-deploy (enrichment applies at ingest time; pre-existing rows keep their original kdes and hashes).
 
 ---
 
@@ -49,28 +49,30 @@ What does **not** change:
 
 ```sql
 -- Run against Railway production DB.
+-- NOTE (2026-07-28): fsma.rule_definitions is GLOBAL — no tenant_id column.
 SELECT
   rule_id, severity, applicability_conditions->>'cte_types' AS cte_types
 FROM fsma.rule_definitions
-WHERE tenant_id = '<ALPHA_TENANT_UUID>'
-  AND retired_date IS NULL
+WHERE retired_date IS NULL
 ORDER BY severity DESC, rule_id;
 ```
 
-Expected: at least one ``severity = 'critical'`` rule whose ``cte_types`` covers the events the tenant ingests. If zero critical rules exist, the flag is a no-op for this tenant — pick a different alpha or run ``services.shared.rules.seeds.seed_rule_definitions`` against the tenant first.
+Expected: at least one ``severity = 'critical'`` rule whose ``cte_types`` covers the events the tenant ingests. If zero critical rules exist, the flag is a no-op — run ``services.shared.rules.seeds.seed_rule_definitions`` first. (2026-07-28 check: 27 active critical rules, 9 warning — passes.)
 
 ### 1.2 Confirm FTL classification is reaching the engine
 
 The rules engine only evaluates events on the FDA Food Traceability List. If the alpha tenant's events lack ``ftl_covered``, ``ftl_category``, or the inference path for these (#1346), every event gets ``no_verdict_reason="ftl_classification_missing"`` and the flag does nothing.
 
 ```sql
--- Sample 100 recent events from the alpha tenant; expect ftl_covered to be set.
+-- Sample recent events from the alpha tenant; expect ftl_covered to be set.
+-- NOTE (2026-07-28): KDEs live on fsma.traceability_events.kdes — the
+-- cte_events table has no kdes column.
 SELECT
   event_type,
   COUNT(*) AS n,
   COUNT(*) FILTER (WHERE kdes ? 'ftl_covered') AS with_ftl_hint,
   COUNT(*) FILTER (WHERE kdes ? 'ftl_category') AS with_ftl_category
-FROM fsma.cte_events
+FROM fsma.traceability_events
 WHERE tenant_id = '<ALPHA_TENANT_UUID>'
   AND event_timestamp > NOW() - INTERVAL '7 days'
 GROUP BY event_type;
@@ -85,20 +87,25 @@ Note these numbers before flipping (record in the rollout ticket):
 | Metric | Source | Why |
 |---|---|---|
 | Last 24h ingestion volume for alpha tenant | ``SELECT count(*) FROM fsma.cte_events WHERE tenant_id = '<ALPHA>' AND event_timestamp > NOW() - INTERVAL '24 hours'`` | Compare during rollout; sudden drop = rejections |
-| Last 24h exception-queue volume | ``SELECT count(*) FROM fsma.exception_queue WHERE tenant_id = '<ALPHA>' AND created_at > NOW() - INTERVAL '24 hours'`` | Should drop after flip (rejected events don't make exception rows) |
+| Last 24h exception-case volume | ``SELECT count(*) FROM fsma.exception_cases WHERE tenant_id = '<ALPHA>' AND created_at > NOW() - INTERVAL '24 hours'`` — (2026-07-28) the table is ``exception_cases``; ``exception_queue`` no longer exists | Should drop after flip (rejected events don't make exception rows) |
 | Current p95 ingestion latency for alpha tenant | Sentry / structured logs ``ingest_batch`` events | Track any regression — pre-eval adds work even after the [#1929](https://github.com/PetrefiedThunder/RegEngine/pull/1929) optimization |
-| Last 24h ``fsma_validation_status='failed'`` count | ``SELECT count(*) FROM fsma.cte_events WHERE tenant_id = '<ALPHA>' AND fsma_validation_status = 'failed' AND event_timestamp > NOW() - INTERVAL '24 hours'`` | These are events the schema gate already failed; rules engine is a downstream gate. Use as the upper bound on expected new rejections |
+| Last 24h ``validation_status='failed'`` count | ``SELECT count(*) FROM fsma.cte_events WHERE tenant_id = '<ALPHA>' AND validation_status = 'failed' AND event_timestamp > NOW() - INTERVAL '24 hours'`` — (2026-07-28) column is ``validation_status`` | These are events the schema gate already failed; rules engine is a downstream gate. Use as the upper bound on expected new rejections |
 
 ### 1.4 Confirm rollback channel works
 
 Before flipping, verify you can read back ``RULES_ENGINE_ENFORCE`` via Railway and trigger a redeploy:
 
 ```bash
-railway variables  # check current value (should be unset or "off")
-railway up --detach  # redeploy to confirm the pipeline works
+# (2026-07-28) The consolidated monolith service is named "RegEngine" —
+# the per-service "ingestion" target predates consolidation.
+railway variables --service RegEngine  # check current value (should be unset or "off")
+railway redeploy --service RegEngine   # redeploys the CURRENT image; confirms the pipeline works
 ```
 
-If ``railway up`` is broken for any reason, fix that **first**. The whole rollout depends on a working rollback path.
+**Do NOT use ``railway up``** — it deploys your local working copy, not the
+current production image. Use ``railway redeploy`` to re-apply variables to
+the existing deployment. If ``railway redeploy`` is broken for any reason,
+fix that **first**. The whole rollout depends on a working rollback path.
 
 ### 1.5 Notify the alpha tenant
 
@@ -113,19 +120,15 @@ Send the **specific rule IDs** the tenant has seeded (from the §1.1 query) so t
 ## 2. The flip
 
 ```bash
-# Railway: set on the ingestion service only, not all services.
-# (The flag is read by every Python process that imports
-# shared.rules.enforcement, but only the ingestion service has the
-# code paths that consult it. Setting it elsewhere is wasted env
-# variable surface.)
-railway service ingestion
-railway variables set RULES_ENGINE_ENFORCE=cte_only
+# (2026-07-28) Consolidated deployment: the flag goes on the "RegEngine"
+# service — there is no separate ingestion service anymore.
+railway variables --service RegEngine --set RULES_ENGINE_ENFORCE=cte_only
 
-# Redeploy.
-railway up --detach
+# Redeploy the CURRENT image (never `railway up` — that deploys local code).
+railway redeploy --service RegEngine
 
 # Tail logs for the deploy completion.
-railway logs --service ingestion --tail 200
+railway logs --service RegEngine --tail 200
 ```
 
 Wait for ``application started`` (or the equivalent ``uvicorn`` ready line). Note the deploy ID and timestamp in the rollout ticket.
@@ -141,7 +144,7 @@ Open three windows.
 ### 3.1 Live logs
 
 ```bash
-railway logs --service ingestion --tail 500 \
+railway logs --service RegEngine --tail 500 \
   | grep -E 'rule_violation|epcis_rules_preeval_skipped|rules_preeval_skipped|canonical_write_skipped'
 ```
 
@@ -203,22 +206,22 @@ Soft rollback (investigate first, decide):
 Single env-var flip. **No code changes, no migration, no redeploy coordination.**
 
 ```bash
-railway service ingestion
-railway variables set RULES_ENGINE_ENFORCE=off
-railway up --detach
+railway variables --service RegEngine --set RULES_ENGINE_ENFORCE=off
+railway redeploy --service RegEngine
 ```
 
-Or unset entirely (the helper defaults to ``off`` if the var is absent):
+Or unset entirely (the helper defaults to ``off`` if the var is absent — check
+``railway variables --help`` for the delete syntax on the installed CLI version):
 
 ```bash
-railway variables delete RULES_ENGINE_ENFORCE
-railway up --detach
+railway variables --service RegEngine --set RULES_ENGINE_ENFORCE=
+railway redeploy --service RegEngine
 ```
 
 Confirm:
 
 ```bash
-railway logs --service ingestion --tail 100 | grep -i "starting\|ready"
+railway logs --service RegEngine --tail 100 | grep -i "starting\|ready"
 # Then verify by tailing the ingestion path; rule_violation lines should
 # stop appearing.
 ```
