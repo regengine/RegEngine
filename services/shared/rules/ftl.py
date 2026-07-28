@@ -134,6 +134,107 @@ def is_ftl_food(event_data: Dict[str, Any]) -> Optional[bool]:
     return None
 
 
+# Keyword → FTL category table for deriving a classification hint from
+# free-text product descriptions at normalization time (#1346). First
+# match wins, so multi-word entries ("smoked salmon") must precede their
+# broader substrings ("salmon"). Superset of the table in
+# services/ingestion/app/sandbox/csv_parser.py — kept locally owned for
+# the same dependency-direction reason as FTL_CATEGORIES above.
+#
+# Positive-only by design: a miss here means "no hint", never
+# "not FTL" — the FTL includes foods no keyword list can enumerate from
+# arbitrary description text, and a false negative would wrongly exempt
+# a covered food from rule evaluation.
+FTL_KEYWORD_CATEGORIES: tuple = (
+    # Smoked finfish before plain finfish (substring overlap)
+    ("smoked salmon", "Smoked Finfish"),
+    ("smoked trout", "Smoked Finfish"),
+    ("smoked whitefish", "Smoked Finfish"),
+    ("smoked fish", "Smoked Finfish"),
+    ("spinach", "Leafy Greens"),
+    ("romaine", "Leafy Greens"),
+    ("rm hrts", "Leafy Greens"),
+    ("lettuce", "Leafy Greens"),
+    ("kale", "Leafy Greens"),
+    ("chard", "Leafy Greens"),
+    ("arugula", "Leafy Greens"),
+    ("endive", "Leafy Greens"),
+    ("escarole", "Leafy Greens"),
+    ("spring mix", "Leafy Greens"),
+    ("greens", "Leafy Greens"),
+    ("cilantro", "Herbs"),
+    ("parsley", "Herbs"),
+    ("basil", "Herbs"),
+    ("mint", "Herbs"),
+    ("chives", "Herbs"),
+    ("dill", "Herbs"),
+    ("tomato", "Fresh Tomatoes"),
+    ("pepper", "Fresh Peppers"),
+    ("cucumber", "Fresh Cucumbers"),
+    ("cantaloupe", "Fresh Melons"),
+    ("honeydew", "Fresh Melons"),
+    ("melon", "Fresh Melons"),
+    ("sprout", "Fresh Sprouts"),
+    ("salmon", "Finfish"),
+    ("tuna", "Finfish"),
+    ("tilapia", "Finfish"),
+    ("halibut", "Finfish"),
+    ("snapper", "Finfish"),
+    ("trout", "Finfish"),
+    ("cod", "Finfish"),
+    ("finfish", "Finfish"),
+    ("shrimp", "Crustaceans"),
+    ("prawn", "Crustaceans"),
+    ("crab", "Crustaceans"),
+    ("lobster", "Crustaceans"),
+    ("crawfish", "Crustaceans"),
+    ("oyster", "Molluscan Shellfish"),
+    ("clam", "Molluscan Shellfish"),
+    ("mussel", "Molluscan Shellfish"),
+    ("scallop", "Molluscan Shellfish"),
+    ("brie", "Soft Cheeses"),
+    ("camembert", "Soft Cheeses"),
+    ("queso fresco", "Soft Cheeses"),
+    ("burrata", "Soft Cheeses"),
+    ("soft cheese", "Soft Cheeses"),
+    ("soft-ripened", "Soft Cheeses"),
+    ("semi-soft cheese", "Soft Cheeses"),
+    ("shell egg", "Shell Eggs"),
+    ("eggs", "Shell Eggs"),
+    ("peanut butter", "Nut Butters"),
+    ("almond butter", "Nut Butters"),
+    ("cashew butter", "Nut Butters"),
+    ("nut butter", "Nut Butters"),
+    ("deli salad", "Ready-to-Eat Deli Salads"),
+    ("potato salad", "Ready-to-Eat Deli Salads"),
+    ("chicken salad", "Ready-to-Eat Deli Salads"),
+    ("egg salad", "Ready-to-Eat Deli Salads"),
+    ("macaroni salad", "Ready-to-Eat Deli Salads"),
+    ("pasta salad", "Ready-to-Eat Deli Salads"),
+    ("mango", "Tropical Tree Fruits"),
+    ("papaya", "Tropical Tree Fruits"),
+    ("guava", "Tropical Tree Fruits"),
+    ("lychee", "Tropical Tree Fruits"),
+    ("starfruit", "Tropical Tree Fruits"),
+)
+
+
+def infer_ftl_category_from_text(text: Any) -> Optional[str]:
+    """Best-effort FTL category from free-text product description.
+
+    Returns the matched category name (canonical casing from
+    FTL_KEYWORD_CATEGORIES) or None when nothing matches. None means
+    "no hint", not "not FTL" — see the table comment.
+    """
+    normalized = _normalize(text)
+    if normalized is None:
+        return None
+    return next(
+        (category for keyword, category in FTL_KEYWORD_CATEGORIES if keyword in normalized),
+        None,
+    )
+
+
 def rule_applies_to_ftl_category(
     rule_applicability: Dict[str, Any],
     event_ftl_category: Optional[str],

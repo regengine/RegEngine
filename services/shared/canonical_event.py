@@ -554,10 +554,39 @@ class TraceabilityEvent(BaseModel):
         bounds the attacker's blast radius.
         """
         self._enforce_raw_payload_size()
+        self._apply_ftl_hint()
         self.sha256_hash = self.compute_sha256_hash()
         self.idempotency_key = self.compute_idempotency_key()
         self.normalized_payload = self.build_normalized_payload()
         return self
+
+    def _apply_ftl_hint(self) -> None:
+        """Derive an FTL classification hint from product text (#1346).
+
+        Without a hint in kdes, the rules engine skips the event with
+        no_verdict_reason="ftl_classification_missing" and enforcement
+        (RULES_ENGINE_ENFORCE) is a silent no-op. Constraints:
+
+        - Must run BEFORE compute_sha256_hash/compute_idempotency_key —
+          both cover kdes, and chain verification recomputes from the
+          stored kdes, so the hash must be taken over the enriched dict.
+        - Never overrides an explicit signal supplied by the caller
+          (kdes.ftl_covered / kdes.ftl_category, in any casing of intent —
+          including ftl_covered=False).
+        - Positive-only: a keyword miss adds nothing. Absence of a hint
+          stays "cannot classify"; it must not become "not FTL".
+        """
+        from shared.rules.ftl import (  # noqa: PLC0415 — avoid import cycle at module load
+            event_has_ftl_hint,
+            infer_ftl_category_from_text,
+        )
+
+        if event_has_ftl_hint({"kdes": self.kdes}):
+            return
+        category = infer_ftl_category_from_text(self.product_reference or self.kdes.get("product_description"))
+        if category is not None:
+            self.kdes["ftl_category"] = category
+            self.kdes["ftl_covered"] = True
 
     def _enforce_raw_payload_size(self) -> None:
         """Reject oversized ``raw_payload`` (#1290).
