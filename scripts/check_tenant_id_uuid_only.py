@@ -74,6 +74,12 @@ GRANDFATHERED = {
     "alembic/versions/20260420_eaba6af7ae2c_v060_dlq_replay_columns.py",
     "alembic/versions/20260422_85cebda8e7f7_v063_task_queue.py",
     "alembic/versions/20260424_e9f0a1b2c3d4_v067_tenant_id_uuid_standardization.py",
+    # v099: ``tenant_id text`` is the set_tenant_context() FUNCTION PARAMETER,
+    # not a column. Its name and type are pinned by the pre-existing production
+    # function (created by the deleted boot DDL): CREATE OR REPLACE cannot
+    # rename an input parameter, and the body feeds set_config(), whose GUC
+    # value is inherently text. No tenant_id column is involved.
+    "alembic/versions/20260726_2aa607050c84_v099_adopt_set_tenant_context.py",
     # Quarantined incident files, if present in historical checkouts, are
     # skipped by path below. They are not active in any deploy path.
 }

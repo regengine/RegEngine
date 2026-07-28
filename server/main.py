@@ -95,7 +95,8 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("object_storage_probe_failed", error=str(exc))
 
-    # Initialize admin DB (RLS functions, no create_all)
+    # Initialize admin DB (RLS posture probe + SQLite dev tables; all
+    # PostgreSQL DDL, including the RLS helper functions, is Alembic-owned)
     try:
         from services.admin.app.database import init_db
 
