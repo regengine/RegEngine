@@ -397,6 +397,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        # The in-process app dials Redis (idempotency / rate-limit
+        # middleware) on request paths these tests exercise; without it
+        # they 500. Local runs lean on the dev-stack Redis the same way.
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -462,6 +474,7 @@ jobs:
           DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
           ADMIN_DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
           TEST_DB_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          REDIS_URL: redis://localhost:6379/0
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           TEST_API_BASE: ${{ secrets.TEST_API_BASE }}
 
