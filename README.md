@@ -94,7 +94,7 @@ The old independent service entrypoints still exist, for example [services/inges
 Verified from checked-in config and code:
 
 - PostgreSQL is required. Production connection is supplied through `DATABASE_URL`.
-- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL only.
+- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL and Redis (Redis backs the subscription gate, rate limiting, and idempotency caching — without it authenticated ingest fails closed with 503).
 - Redis is used by rate limiting, queues, session/subscription checks, and other runtime paths when configured.
 - Neo4j code and health checks exist, but the default local development stack does not start Neo4j. The deploy-gating `/readiness` probe contacts Neo4j only when the graph subsystem is enabled; with `NEO4J_URI` set but graph routers disabled (the production default) Neo4j is reported `not_probed` and never contacted. Only PostgreSQL failure returns 503 from `/readiness`; Redis/Neo4j errors degrade the payload but still return 200 ([server/main.py](server/main.py)).
 - The frontend is a separate Next.js application with its own package lock and CI workflow.
@@ -177,8 +177,17 @@ export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
 
 export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export REDIS_URL="redis://localhost:6379/0"
 alembic upgrade head
 ```
+
+To exercise the full customer experience against this stack — provisioning a
+tenant and API key, activating billing, ingesting from a simulated customer
+system, and verifying evidence — run the customer-journey harness in the
+[inflow-lab](https://github.com/regengine/inflow-lab) repo
+(`scripts/customer_journey.py --local` with `REGENGINE_ADMIN_KEY` set to this
+stack's `ADMIN_MASTER_KEY`). It seeds `billing:tenant:{tenant_id}` in Redis so
+the subscription gate passes.
 
 Run the persisted Inflow-to-RegEngine proof when you need real local evidence instead of DB-free simulation:
 
