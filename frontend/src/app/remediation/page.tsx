@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -19,6 +20,7 @@ import {
   useRemediationManifests,
   useRemediationMetrics,
   useRemediationOutbox,
+  type OutboxPreview,
 } from '@/hooks/use-remediation';
 
 import { FileWarning, Link2, Mail, PackageCheck, ShieldCheck } from 'lucide-react';
@@ -35,6 +37,33 @@ const CASE_STATUS_LABEL: Record<string, string> = {
   buyer_review: 'Buyer review',
   escalated: 'Escalated',
 };
+
+// Delivery lifecycle of an outbox entry (fsma.notification_outbox.status).
+// 'pending'/'previewed' predate automatic delivery and are never emailed.
+const DELIVERY_LABEL: Record<string, string> = {
+  pending: 'Preview — not emailed',
+  previewed: 'Preview — not emailed',
+  queued: 'Email queued',
+  sending: 'Sending',
+  sent: 'Emailed',
+  failed: 'Email failed',
+  skipped: 'Email skipped',
+};
+
+function DeliveryBadge({ status, reason }: { status: string; reason?: string | null }) {
+  const label = DELIVERY_LABEL[status] ?? status;
+  const title = reason ?? undefined;
+  if (status === 'sent') {
+    return <Badge variant="secondary" className="text-re-success" title={title}>{label}</Badge>;
+  }
+  if (status === 'failed') {
+    return <Badge variant="destructive" title={title}>{label}</Badge>;
+  }
+  if (status === 'queued' || status === 'sending') {
+    return <Badge variant="secondary" title={title}>{label}</Badge>;
+  }
+  return <Badge variant="outline" className="text-muted-foreground" title={title}>{label}</Badge>;
+}
 
 function pct(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -58,7 +87,8 @@ export default function RemediationPage() {
   const tid = tenantId || '';
 
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
-  const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ url: string; email: string | null } | null>(null);
+  const [supplierEmail, setSupplierEmail] = useState('');
 
   const manifests = useRemediationManifests(tid);
   const detail = useRemediationManifest(tid, selectedRun);
@@ -66,6 +96,16 @@ export default function RemediationPage() {
   const outbox = useRemediationOutbox(tid);
   const releaseManifest = useReleaseManifest(tid);
   const issueLink = useIssueCorrectionLink(tid);
+
+  // Latest outbox entry per case (list is newest-first) — the per-case
+  // delivery state shown in the manifest detail table.
+  const outboxByCase = useMemo(() => {
+    const byCase = new Map<string, OutboxPreview>();
+    for (const n of outbox.data?.notifications ?? []) {
+      if (n.case_id && !byCase.has(n.case_id)) byCase.set(n.case_id, n);
+    }
+    return byCase;
+  }, [outbox.data]);
 
   const rows = manifests.data?.manifests ?? [];
   const m = metrics.data;
@@ -192,6 +232,18 @@ export default function RemediationPage() {
             <CardDescription>
               SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… — original bytes preserved verbatim
             </CardDescription>
+            <div className="mt-3 max-w-md">
+              <Input
+                type="email"
+                placeholder="supplier@company.com"
+                value={supplierEmail}
+                onChange={(e) => setSupplierEmail(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Correction links are emailed here automatically when issued. Leave empty to deliver a link
+                manually instead.
+              </p>
+            </div>
           </CardHeader>
           <CardContent>
             {detail.isLoading ? (
@@ -223,9 +275,17 @@ export default function RemediationPage() {
                       <TableCell>{record.release_status}</TableCell>
                       <TableCell>
                         {record.case ? (
-                          <span className="flex items-center gap-1 text-sm">
+                          <span className="flex items-center gap-2 text-sm">
                             {CASE_STATUS_LABEL[record.case.case_status] ?? record.case.case_status}
-                            {record.case.notified && <Mail className="h-3 w-3 text-muted-foreground" />}
+                            {(() => {
+                              const delivery = outboxByCase.get(record.case.case_id);
+                              if (delivery) {
+                                return <DeliveryBadge status={delivery.status} reason={delivery.last_error} />;
+                              }
+                              return record.case.notified ? (
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                              ) : null;
+                            })()}
                           </span>
                         ) : (
                           '—'
@@ -245,12 +305,19 @@ export default function RemediationPage() {
                               size="sm"
                               variant="outline"
                               disabled={issueLink.isPending}
-                              onClick={() =>
+                              onClick={() => {
+                                const email = supplierEmail.trim();
                                 issueLink.mutate(
-                                  { caseId: record.remediation_case_id as string },
-                                  { onSuccess: (data) => setIssuedUrl(data.correction_url) },
-                                )
-                              }
+                                  {
+                                    caseId: record.remediation_case_id as string,
+                                    supplierEmail: email || undefined,
+                                  },
+                                  {
+                                    onSuccess: (data) =>
+                                      setIssued({ url: data.correction_url, email: email || null }),
+                                  },
+                                );
+                              }}
                             >
                               <Link2 className="h-4 w-4 mr-1" /> Issue link
                             </Button>
@@ -261,10 +328,25 @@ export default function RemediationPage() {
                 </TableBody>
               </Table>
             )}
-            {issuedUrl && (
-              <div className="mt-4 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm">
-                <p className="font-medium">Correction link (shown once — only its hash is stored):</p>
-                <code className="break-all">{issuedUrl}</code>
+            {issued && (
+              <div className="mt-4 space-y-1 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm">
+                {issued.email ? (
+                  <>
+                    <p className="font-medium">
+                      Link issued — being emailed to {issued.email} automatically (usually within a minute).
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Do not share the copy below: sending re-issues the link, so this copy stops working the
+                      moment the email goes out. Only its hash is stored.
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-medium">
+                    No supplier email given — this link will NOT be emailed. Copy it now and deliver it
+                    yourself (shown once — only its hash is stored):
+                  </p>
+                )}
+                <code className="break-all">{issued.url}</code>
               </div>
             )}
             {issueLink.error ? (
@@ -280,7 +362,10 @@ export default function RemediationPage() {
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" /> Notifications
           </CardTitle>
-          <CardDescription>Supplier correction links are emailed automatically after issuing.</CardDescription>
+          <CardDescription>
+            Correction-link emails send automatically for entries with a recipient. &ldquo;Preview&rdquo;
+            entries predate automatic delivery or are buyer-facing and are never emailed.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {(outbox.data?.notifications ?? []).length === 0 ? (
@@ -288,10 +373,20 @@ export default function RemediationPage() {
           ) : (
             <ul className="space-y-2">
               {(outbox.data?.notifications ?? []).slice(0, 10).map((n) => (
-                <li key={n.id} className="text-sm">
+                <li key={n.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <DeliveryBadge status={n.status} reason={n.last_error} />
                   <span className="font-medium">{n.subject}</span>
-                  <span className="text-muted-foreground"> — {n.body}</span>
-                  <span className="text-muted-foreground"> [{n.status}]</span>
+                  {n.recipient && <span className="text-muted-foreground">→ {n.recipient}</span>}
+                  <span className="text-xs text-muted-foreground">
+                    {n.sent_at
+                      ? `sent ${new Date(n.sent_at).toLocaleString()}`
+                      : n.created_at
+                        ? new Date(n.created_at).toLocaleString()
+                        : ''}
+                  </span>
+                  {(n.status === 'failed' || n.status === 'skipped') && n.last_error && (
+                    <span className="text-xs text-re-danger">{n.last_error}</span>
+                  )}
                 </li>
               ))}
             </ul>
