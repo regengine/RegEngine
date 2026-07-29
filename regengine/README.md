@@ -91,5 +91,5 @@ The `regengine-verify` tool implements the "Verify, Don't Trust" principle — y
 ---
 
 **Version**: see `regengine.__version__` (source of truth: `__init__.py`)
-**License**: MIT
+**License**: Proprietary, source-visible — same terms as the repository [LICENSE](../LICENSE)
 **Documentation**: https://docs.regengine.co/sdks/python
