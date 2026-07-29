@@ -381,6 +381,34 @@ jobs:
     name: Tenant Isolation & Auth Tests
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # pragma: allowlist secret — throwaway CI-service password
+          POSTGRES_DB: postgres
+        ports:
+          # Host port 5433 matches the tests' default URLs
+          # (postgresql://…@localhost:5433/regengine_admin).
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        # The in-process app dials Redis (idempotency / rate-limit
+        # middleware) on request paths these tests exercise; without it
+        # they 500. Local runs lean on the dev-stack Redis the same way.
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -402,10 +430,51 @@ jobs:
           fi
           pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
 
+      - name: Prepare security test database (roles + pre-baseline function)
+        env:
+          PGPASSWORD: postgres # pragma: allowlist secret
+        run: |
+          # Mirror backend-ci's remediation-db recipe: `regengine` owns the
+          # database and applies the migration chain, so table ownership and
+          # RLS policies match prod. get_tenant_context() is referenced by
+          # baseline RLS policies but created by NO migration — seed the v097
+          # fail-hard body or `alembic upgrade head` fails.
+          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine LOGIN SUPERUSER PASSWORD 'regengine';"  # pragma: allowlist secret — throwaway CI-service password
+          psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE regengine_admin OWNER regengine;"
+          psql -h localhost -p 5433 -U postgres -d regengine_admin <<'EOSQL'
+          CREATE OR REPLACE FUNCTION get_tenant_context()
+          RETURNS UUID AS $fn$
+          DECLARE
+              tid TEXT;
+          BEGIN
+              tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
+              IF tid IS NULL THEN
+                  RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+              END IF;
+              RETURN tid::UUID;
+          END;
+          $fn$ LANGUAGE plpgsql STABLE;
+          EOSQL
+
+      - name: Migrate security test database to alembic head
+        env:
+          DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          alembic upgrade head
+
       - name: Run tenant isolation tests
         run: |
           bash scripts/security/tenant_isolation_test.sh
         env:
+          # The in-process app and direct-DB RLS tests (#2593 killed the
+          # skip theater) need a real migrated Postgres; the secrets-based
+          # URLs remain for the legacy live-API test path.
+          DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          TEST_DB_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          REDIS_URL: redis://localhost:6379/0
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           TEST_API_BASE: ${{ secrets.TEST_API_BASE }}
 
