@@ -36,3 +36,13 @@ from shared.paths import ensure_shared_importable
 
 ensure_shared_importable()
 # ------------------------------
+
+# services/admin/shared is a tracked symlink to ../shared (import
+# convenience for the short `shared.` prefix). Without this, a broad
+# `pytest services/admin` collects every services/shared test a SECOND
+# time through the symlink, where Path(__file__).parents[N]-style
+# assumptions resolve against services/admin/ and 16 tests fail
+# spuriously (they pass at their canonical services/shared path, which
+# is how CI runs them: `cd services/<svc> && pytest tests/`). Collection
+# is skipped; imports through the symlink are unaffected.
+collect_ignore = ["shared"]
