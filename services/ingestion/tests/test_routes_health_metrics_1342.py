@@ -87,6 +87,7 @@ _app_pkg.config = _config_stub
 
 from app import routes_health_metrics as rhm  # noqa: E402
 from app.routes_health_metrics import health, router  # noqa: E402
+from app.webhook_models import INFLOW_CONTRACT_VERSION  # noqa: E402
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -159,6 +160,7 @@ class TestHealthKafkaUnconfigured:
             "service": "regengine",
             "kafka": "not_configured",
             "webhook_hmac_configured": False,
+            "inflow_contract_version": INFLOW_CONTRACT_VERSION,
         }
         # kafka_health_check must not be called when unconfigured.
         assert _kafka_health_calls == []
@@ -203,6 +205,7 @@ class TestHealthKafkaAvailable:
             "service": "regengine",
             "kafka": "available",
             "webhook_hmac_configured": False,
+            "inflow_contract_version": INFLOW_CONTRACT_VERSION,
         }
 
     def test_forwards_configured_bootstrap_servers_and_timeout(self, monkeypatch):
@@ -238,6 +241,7 @@ class TestHealthKafkaUnavailable:
             "service": "regengine",
             "kafka": "unavailable",
             "webhook_hmac_configured": False,
+            "inflow_contract_version": INFLOW_CONTRACT_VERSION,
         }
 
     def test_unknown_status_also_degrades(self, monkeypatch):

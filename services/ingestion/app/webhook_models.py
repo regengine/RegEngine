@@ -85,6 +85,17 @@ VALID_UNITS_OF_MEASURE = {
 }
 
 
+# The ingest contract version advertised to integrators (notably the
+# inflow-lab simulator, which pins the same value in app/contract.py).
+# Bump BOTH sides together whenever the wire contract changes in a way an
+# integrator must react to: this REQUIRED_KDES_BY_CTE table, required
+# headers (API key / tenant / Idempotency-Key / HMAC), payload shape, or
+# validation semantics. Exposed via /health as inflow_contract_version so
+# deployed instances can detect skew; the Inflow Lab Contract CI asserts
+# cross-repo equality.
+INFLOW_CONTRACT_VERSION = "1"
+
+
 # Required KDEs per CTE type (§1.1325–§1.1350)
 REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
     WebhookCTEType.HARVESTING: [
