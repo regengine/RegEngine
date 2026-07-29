@@ -103,6 +103,29 @@ def test_list_exceptions_returns_cases(client, mock_svc):
     assert call_kwargs["tenant_id"] == TENANT
 
 
+def test_list_exceptions_serializes_real_dtos(client, mock_svc):
+    """Regression: the service returns ExceptionCase ``__slots__`` objects, not
+    dicts. FastAPI cannot encode them directly (no ``__dict__``, not iterable),
+    which raised a ValueError surfaced as an opaque 400 for every tenant with
+    >=1 exception. The router must call ``to_dict()`` on each DTO."""
+    from shared.exception_queue import ExceptionCase
+
+    mock_svc.list_exceptions.return_value = [
+        ExceptionCase(
+            case_id="exc-1", tenant_id=TENANT, severity="critical", status="open",
+            linked_event_ids=["ev-1"], rule_category="mass_balance",
+        ),
+        ExceptionCase(case_id="exc-2", tenant_id=TENANT, severity="warning", status="open"),
+    ]
+    resp = client.get("/api/v1/exceptions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert data["cases"][0]["case_id"] == "exc-1"
+    assert data["cases"][0]["severity"] == "critical"
+    assert data["cases"][0]["rule_category"] == "mass_balance"
+
+
 def test_list_exceptions_passes_filters(client, mock_svc):
     mock_svc.list_exceptions.return_value = []
     resp = client.get(
