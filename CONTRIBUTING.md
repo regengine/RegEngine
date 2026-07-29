@@ -1,10 +1,19 @@
 # Contributing to RegEngine
 
-Thank you for your interest in contributing to RegEngine.
+> **External contributions are not accepted at this time.** RegEngine is
+> proprietary, source-visible software (see [LICENSE](LICENSE)). The
+> repository is public for transparency and audit, not as an open-source
+> project — unsolicited pull requests from outside RegEngine Inc. will be
+> closed without review, because merging third-party code without a
+> contributor agreement is an IP problem for a proprietary codebase.
+> Found a bug or security issue? Open an issue, or see [SECURITY.md](SECURITY.md).
+
+The rest of this document is the development workflow for RegEngine Inc.
+engineers and authorized agents.
 
 ## Getting Started
 
-1. **Fork** the repository and clone your fork
+1. **Clone** the repository
 2. **Install dependencies**: see `README.md` for setup instructions
 3. **Create a branch**: `git checkout -b fix/your-description`
 4. **Make your changes** following the guidelines below

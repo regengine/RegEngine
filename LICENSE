@@ -9,4 +9,11 @@ The Software is provided under a commercial license. You may not use, copy,
 modify, merge, publish, distribute, sublicense, or sell copies of the
 Software without a valid license agreement with RegEngine Inc.
 
+Source-visible notice: this repository is published for transparency,
+audit, and evaluation. Permission is granted to view the source code, and
+to clone or fork it solely as necessary for such inspection (GitHub's
+Terms of Service independently permit viewing and forking of public
+repositories). No other rights — including use, modification,
+redistribution, or operation of the Software — are granted.
+
 For licensing inquiries, contact: legal@regengine.co

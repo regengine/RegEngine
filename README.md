@@ -332,6 +332,10 @@ These are current repo facts, not speculation:
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
 - [docs/runbooks/](docs/runbooks) - operational runbooks.
 
+## License
+
+RegEngine is proprietary, source-visible software — all rights reserved by RegEngine Inc. ([LICENSE](LICENSE)). The repository is public for transparency and audit (see the public proof surface above), not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+
 ## Contributing
 
 Before changing schema, ingestion, auth, tenant isolation, or audit logic, start with:
