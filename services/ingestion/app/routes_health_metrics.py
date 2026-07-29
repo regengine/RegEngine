@@ -62,11 +62,17 @@ def health() -> dict[str, object]:
     except Exception:  # pragma: no cover - never break /health on import error
         hmac_configured = False
 
+    # Advertise the ingest contract version so integrators (inflow-lab's
+    # test-connection probe, the Inflow Lab Contract CI) can detect
+    # cross-deploy contract skew instead of failing silently on live posts.
+    from .webhook_models import INFLOW_CONTRACT_VERSION
+
     return {
         "status": overall_status,
         "service": "regengine",
         "kafka": kafka_status,
         "webhook_hmac_configured": hmac_configured,
+        "inflow_contract_version": INFLOW_CONTRACT_VERSION,
     }
 
 

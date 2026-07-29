@@ -911,7 +911,13 @@ app.include_router(scheduler_status_router)
 @app.get("/health", tags=["system"], operation_id="root_liveness_health")
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
-    return {"status": "healthy", "service": "regengine"}
+    from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION
+
+    return {
+        "status": "healthy",
+        "service": "regengine",
+        "inflow_contract_version": INFLOW_CONTRACT_VERSION,
+    }
 
 
 @app.get("/readiness", tags=["system"])
