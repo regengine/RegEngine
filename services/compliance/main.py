@@ -52,6 +52,7 @@ configure_logging(service_name="compliance-service")
 from shared.env import is_production
 
 from services.compliance.app.routes import router as fsma_router
+from services.compliance.app.snapshots import router as snapshots_router
 
 _is_prod = is_production()
 
@@ -129,6 +130,7 @@ async def root() -> dict:
 
 
 app.include_router(fsma_router)
+app.include_router(snapshots_router)
 
 # Standardized Health & Readiness
 health = HealthCheck(service_name="compliance-service")

@@ -883,8 +883,10 @@ if _router_enabled("nlp"):
 # =====================================================================
 if _router_enabled("fsma_compliance"):
     from services.compliance.app.routes import router as fsma_router
+    from services.compliance.app.snapshots import router as snapshots_router
 
     app.include_router(fsma_router, tags=["FSMA Compliance"])
+    app.include_router(snapshots_router)
 
 
 # ── Root endpoint ────────────────────────────────────────────────
