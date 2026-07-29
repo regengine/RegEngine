@@ -256,8 +256,11 @@ jobs:
 
       - name: Assert contract versions match across repos
         run: |
-          regengine_version=$(curl -fsS http://127.0.0.1:8002/health | python3 -c "import json,sys; print(json.load(sys.stdin).get('inflow_contract_version',''))")
-          inflow_version=$(curl -fsS http://127.0.0.1:8010/api/healthz | python3 -c "import json,sys; print(json.load(sys.stdin).get('contract_version',''))")
+          # Download to files first (no curl-into-interpreter piping).
+          curl -fsS -o /tmp/regengine-health.json http://127.0.0.1:8002/health
+          curl -fsS -o /tmp/inflow-healthz.json http://127.0.0.1:8010/api/healthz
+          regengine_version=$(python3 -c "import json; print(json.load(open('/tmp/regengine-health.json')).get('inflow_contract_version',''))")
+          inflow_version=$(python3 -c "import json; print(json.load(open('/tmp/inflow-healthz.json')).get('contract_version',''))")
           echo "RegEngine advertises inflow_contract_version=${regengine_version}"
           echo "Inflow Lab advertises contract_version=${inflow_version}"
           if [ -z "${regengine_version}" ] || [ -z "${inflow_version}" ]; then
