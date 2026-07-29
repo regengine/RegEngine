@@ -1,4 +1,4 @@
-"""v101 -- fsma.compliance_evidence_snapshots (Compliance Snapshots backend).
+"""v103 -- fsma.compliance_evidence_snapshots (Compliance Snapshots backend).
 
 The Compliance Snapshots UI (frontend/src/app/compliance/snapshots/page.tsx)
 ships freeze / attest / verify / refreeze / audit-pack flows whose proxies
@@ -20,9 +20,13 @@ policy (satisfies tests/migrations/test_rls_coverage.py). Client-role
 lockdown mirrors v092/v098: REVOKE from PUBLIC/anon/authenticated, DML
 grants to the regengine app roles only.
 
+Originally authored as v101 on 3ba0291a69f2 (v100); PR #2673/#2672 landed
+v101 (7c4d9a1f2e8b) and v102 (1b10a708e36a) first, so this reparents onto
+the v102 head as v103 — same content, new position in the chain.
+
 Revision ID: fcf558aeb1e2 (random hex, not a credential)
-Revises: 3ba0291a69f2
-Create Date: 2026-07-28
+Revises: 1b10a708e36a
+Create Date: 2026-07-29
 """
 
 from typing import Sequence, Union
@@ -30,7 +34,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "fcf558aeb1e2"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "3ba0291a69f2"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "1b10a708e36a"  # pragma: allowlist secret
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

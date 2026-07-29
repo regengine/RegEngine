@@ -195,7 +195,7 @@ def _require_db(db: Any) -> Any:
 def _fetch_snapshot(db: Any, tenant_id: str, snapshot_id: UUID) -> Mapping[str, Any]:
     row = (
         db.execute(
-            text(f"SELECT {_COLUMNS} FROM {_TABLE} WHERE tenant_id = :tid AND id = :sid"),
+            text("SELECT " + _COLUMNS + " FROM " + _TABLE + " WHERE tenant_id = :tid AND id = :sid"),
             {"tid": tenant_id, "sid": str(snapshot_id)},
         )
         .mappings()
@@ -221,7 +221,7 @@ def list_snapshots(
     db = _require_db(db)
     rows = (
         db.execute(
-            text(f"SELECT {_COLUMNS} FROM {_TABLE} WHERE tenant_id = :tid ORDER BY captured_at DESC"),
+            text("SELECT " + _COLUMNS + " FROM " + _TABLE + " WHERE tenant_id = :tid ORDER BY captured_at DESC"),
             {"tid": ctx.tenant_id},
         )
         .mappings()
@@ -250,13 +250,10 @@ def create_snapshot(
     )
     db.execute(
         text(
-            f"""
-            INSERT INTO {_TABLE}
-                (id, tenant_id, snapshot_name, snapshot_reason, created_by,
-                 content_hash, captured_at)
-            VALUES
-                (:id, :tid, :name, :reason, :created_by, :hash, :captured_at)
-            """
+            "INSERT INTO " + _TABLE + " "
+            "(id, tenant_id, snapshot_name, snapshot_reason, created_by, "
+            "content_hash, captured_at) "
+            "VALUES (:id, :tid, :name, :reason, :created_by, :hash, :captured_at)"
         ),
         {
             "id": str(snapshot_id),
@@ -359,14 +356,12 @@ def attest_snapshot(
     db = _require_db(db)
     result = db.execute(
         text(
-            f"""
-            UPDATE {_TABLE}
-               SET is_attested = :attested,
-                   attested_by = :attested_by,
-                   attestation_title = :title,
-                   attested_at = :attested_at
-             WHERE tenant_id = :tid AND id = :sid
-            """
+            "UPDATE " + _TABLE + " "
+            "SET is_attested = :attested, "
+            "attested_by = :attested_by, "
+            "attestation_title = :title, "
+            "attested_at = :attested_at "
+            "WHERE tenant_id = :tid AND id = :sid"
         ),
         {
             "attested": True,
@@ -408,15 +403,13 @@ def refreeze_snapshot(
     )
     db.execute(
         text(
-            f"""
-            UPDATE {_TABLE}
-               SET created_by = :created_by,
-                   content_hash = :hash,
-                   captured_at = :captured_at,
-                   snapshot_state = 'VALID',
-                   degradation_reason = NULL
-             WHERE tenant_id = :tid AND id = :sid
-            """
+            "UPDATE " + _TABLE + " "
+            "SET created_by = :created_by, "
+            "content_hash = :hash, "
+            "captured_at = :captured_at, "
+            "snapshot_state = 'VALID', "
+            "degradation_reason = NULL "
+            "WHERE tenant_id = :tid AND id = :sid"
         ),
         {
             "created_by": created_by,

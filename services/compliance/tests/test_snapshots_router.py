@@ -43,7 +43,7 @@ from services.compliance.app.snapshots import router as snapshots_router  # noqa
 TENANT_A = str(uuid4())
 TENANT_B = str(uuid4())
 
-# SQLite mirror of the v101 DDL (fcf558aeb1e2): TEXT ids/timestamps,
+# SQLite mirror of the v103 DDL (fcf558aeb1e2): TEXT ids/timestamps,
 # INTEGER booleans — the router binds ISO strings and coerces on read.
 _SQLITE_DDL = """
 CREATE TABLE fsma.compliance_evidence_snapshots (
