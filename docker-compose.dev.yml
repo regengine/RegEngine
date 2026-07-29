@@ -1,8 +1,14 @@
-# Minimal dev stack — just Postgres. Run backend services locally.
+# Minimal dev stack — Postgres + Redis. Run backend services locally.
 # Usage: docker compose -f docker-compose.dev.yml up -d
 #
 # Production uses Supabase (Postgres 17). This provides a local Postgres
 # for running tests and backend services without a Supabase project.
+#
+# Redis backs the subscription gate, rate limiting, and idempotency
+# caching. Without it every authenticated ingest returns 503 (the gate
+# fails closed), so a local end-to-end run — e.g. the inflow-lab customer
+# journey — needs it. Seed a tenant's billing status with:
+#   redis-cli HSET billing:tenant:<tenant_id> status trialing
 #
 # Legacy infrastructure is intentionally not part of the default dev stack.
 
@@ -26,6 +32,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

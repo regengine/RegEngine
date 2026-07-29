@@ -50,6 +50,18 @@ def _get_service(db_session):
     return ExceptionQueueService(db_session)
 
 
+def _as_dict(obj):
+    """Serialize a queue DTO for the JSON response.
+
+    ``ExceptionQueueService`` returns ``__slots__`` objects (ExceptionCase,
+    ExceptionComment) that FastAPI's encoder cannot serialize directly — they
+    have no ``__dict__`` and aren't iterable, so encoding raised a ValueError
+    that the shared handler masked as an opaque 400 for every tenant with at
+    least one row. Call ``to_dict()`` when present; pass plain dicts through.
+    """
+    return obj.to_dict() if hasattr(obj, "to_dict") else obj
+
+
 # ---------------------------------------------------------------------------
 # Request/Response Models
 # ---------------------------------------------------------------------------
@@ -121,7 +133,13 @@ async def list_exceptions(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return {"tenant_id": tid, "cases": cases, "total": len(cases), "skip": pagination.skip, "limit": pagination.limit}
+    return {
+        "tenant_id": tid,
+        "cases": [_as_dict(c) for c in cases],
+        "total": len(cases),
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 
 @router.get(
@@ -155,7 +173,7 @@ async def get_exception(
     case = svc.get_exception(tid, case_id)
     if not case:
         raise HTTPException(status_code=404, detail="Exception case not found")
-    return case
+    return _as_dict(case)
 
 
 @router.post(
@@ -249,7 +267,7 @@ async def list_comments(
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
     comments = svc.list_comments(tid, case_id)
-    return {"case_id": case_id, "comments": comments, "total": len(comments)}
+    return {"case_id": case_id, "comments": [_as_dict(c) for c in comments], "total": len(comments)}
 
 
 @router.post(

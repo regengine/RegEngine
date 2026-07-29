@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """
 verify_records.py - Independent Hash Verification for RegEngine Records
 
@@ -22,7 +23,8 @@ the public URL https://regengine.co/sdk/verify_chain.py, which external
 auditors curl (renaming it would break published instructions). A
 deprecation shim remains at ``regengine.verify_chain``.
 
-License: MIT
+License: Apache-2.0 — see the repository LICENSE's permissive-exceptions
+clause. Previously MIT; copies received under MIT remain MIT-licensed.
 """
 
 import argparse

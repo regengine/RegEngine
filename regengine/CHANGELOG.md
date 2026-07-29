@@ -25,7 +25,10 @@ Pre-PyPI development line. Not yet published.
   `ValidationError`, `RegEngineError`).
 - Read/trace surface: `get_record`, `trace_forward`, `trace_backward`,
   `get_timeline`, `export_fda`, `start_recall_drill`, `get_readiness_score`.
-- `regengine-verify` CLI (`regengine/verify_records.py`) — MIT-licensed,
+- `regengine-verify` CLI (`regengine/verify_records.py`) — Apache-2.0-licensed
+  (originally announced as MIT; relicensed pre-release to match the repository
+  LICENSE's permissive-exceptions clause — copies received under MIT remain
+  MIT-licensed),
   dependency-light offline verifier for canonical record hashes, pinned
   byte-for-byte to the server's hash by a golden-digest test (#2507).
 

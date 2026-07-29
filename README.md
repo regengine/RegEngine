@@ -41,7 +41,7 @@ Verified product capabilities in the current tree:
 | GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
 | Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
 | Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
-| Supplier CSV manifest remediation: byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
+| Supplier CSV manifest remediation: byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
 | Buyer remediation dashboard (manifest list, per-record case status, release and correction-link actions) | [frontend/src/app/remediation/page.tsx](frontend/src/app/remediation/page.tsx) |
 | CTE persistence, hash-chain storage, and verification (legacy and canonical stores; dual-write retirement mid-cutover) | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py), [services/shared/canonical_persistence/writer.py](services/shared/canonical_persistence/writer.py), [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) |
 | Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
@@ -52,7 +52,7 @@ Verified product capabilities in the current tree:
 | Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
 | Passwordless email-OTP and passkey login | [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts) |
 | Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
-| Scheduler jobs and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
+| Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
 | Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
 
 ## Production Spine
@@ -94,7 +94,7 @@ The old independent service entrypoints still exist, for example [services/inges
 Verified from checked-in config and code:
 
 - PostgreSQL is required. Production connection is supplied through `DATABASE_URL`.
-- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL only.
+- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL and Redis (Redis backs the subscription gate, rate limiting, and idempotency caching — without it authenticated ingest fails closed with 503).
 - Redis is used by rate limiting, queues, session/subscription checks, and other runtime paths when configured.
 - Neo4j code and health checks exist, but the default local development stack does not start Neo4j. The deploy-gating `/readiness` probe contacts Neo4j only when the graph subsystem is enabled; with `NEO4J_URI` set but graph routers disabled (the production default) Neo4j is reported `not_probed` and never contacted. Only PostgreSQL failure returns 503 from `/readiness`; Redis/Neo4j errors degrade the payload but still return 200 ([server/main.py](server/main.py)).
 - The frontend is a separate Next.js application with its own package lock and CI workflow.
@@ -105,6 +105,7 @@ Verified from checked-in config and code:
 - Root migration config: [alembic.ini](alembic.ini).
 - Migration files: [alembic/versions/](alembic/versions/).
 - Deploy migration runner: [scripts/run-migrations.sh](scripts/run-migrations.sh).
+- Runtime DDL is fully owned by Alembic as of v098/v099: application boot performs no schema DDL, the boot-time RLS function definitions were dropped in favor of migration-pinned `set_tenant_context` / `set_admin_context`, and the app role can run without `CREATE` privilege (a startup `admin_database_init_skipped` warning is expected under least privilege). One-transaction revoke runbooks: [runbooks/prod-revoke-create-after-v098.sql](runbooks/prod-revoke-create-after-v098.sql), [runbooks/prod-least-privilege-db-role.sql](runbooks/prod-least-privilege-db-role.sql).
 - Legacy Flyway-style SQL migrations under service directories have been removed (meta-issue #2004); [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py) is a CI guard that keeps orphan migrations at zero, rejects any reintroduced top-level Flyway tree, and enforces the `alembic/sql` reference contract in both directions: an `alembic/sql` file referenced by no Alembic revision fails CI (archive it under [docs/archive/migrations/](docs/archive/migrations/) instead), and a revision referencing a missing SQL file fails CI. Superseded companion SQL already archived: see [docs/archive/migrations/README.md](docs/archive/migrations/README.md).
 
 Schema-related CI guards include:
@@ -135,6 +136,7 @@ Verified controls in the codebase:
 - The accepted API key is stored on `request.state.api_key`, and ingestion RBAC stores the accepted principal on `request.state.principal`.
 - [services/shared/tenant_context.py](services/shared/tenant_context.py) is the canonical resolver for tenant-scoped request authority.
 - Transaction-scoped setting of the PostgreSQL RLS tenant GUC (`app.tenant_id`) is converged on the canonical `set_tenant_guc` / `set_tenant_guc_if_uuid` helpers in [services/shared/tenant_context.py](services/shared/tenant_context.py); the `adhoc-tenant-guc-set-config` Semgrep rule in [.semgrep/tenant-trust.yaml](.semgrep/tenant-trust.yaml) fails CI ([.github/workflows/security.yml](.github/workflows/security.yml)) on inline `set_config('app.tenant_id', ...)` call sites. Two deliberate session-scoped exceptions set the GUC through the SQL `set_tenant_context()` function instead: [services/admin/app/models.py](services/admin/app/models.py) and [services/ingestion/regengine_ingestion/storage/database.py](services/ingestion/regengine_ingestion/storage/database.py). The Semgrep rule is defense-in-depth; the fail-hard RLS predicate remains the enforcement layer.
+- The tenant GUC is propagated app-wide through a SQLAlchemy Engine begin hook in [services/shared/database.py](services/shared/database.py), and an RLS enforcement boot guard (`REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`) fails startup if the connected database role is SUPERUSER or BYPASSRLS — so while the flag is set, pointing `DATABASE_URL` back at a bypassing role fails the deploy instead of silently making RLS policies decorative. Without the flag the inert posture is logged and exported as a metric but boot continues.
 - Ingestion authorization helpers live in [services/ingestion/app/authz.py](services/ingestion/app/authz.py).
 - Legacy ingestion routers use [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) to authenticate API keys and resolve `TenantContext` before route handlers read or write tenant data.
 - Admin auth routes and MFA code live under [services/admin/app/](services/admin/app/).
@@ -143,7 +145,7 @@ Verified controls in the codebase:
 - Rate limiting code exists for multiple surfaces, including tenant-scoped ingestion limits and auth-related limits.
 - Paid endpoint access uses [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) and derives tenant from authenticated principal state, not request tenant claims.
 - Admin tenant creation through `POST /v1/admin/tenants` persists a `TenantModel` row with active status before returning the tenant UUID.
-- Primary frontend login is passwordless: email one-time-code and WebAuthn passkey login, issued through HTTP-only cookie sessions. See [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts), and [frontend/src/app/login/PasswordlessEntryClient.tsx](frontend/src/app/login/PasswordlessEntryClient.tsx). OTP codes are delivered by Resend. In local E2E mode only (`REGENGINE_E2E_MODE` plus `REGENGINE_E2E_EMAIL_OUTBOX`; hard-blocked in production by [services/admin/app/e2e_safety.py](services/admin/app/e2e_safety.py)), codes are also written to a Playwright outbox file. If `RESEND_API_KEY` is unset outside E2E mode, codes are not delivered at all — the challenge flow drops the code with only an error log.
+- Primary frontend login is passwordless: email one-time-code and WebAuthn passkey login, issued through HTTP-only cookie sessions. See [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts), and [frontend/src/app/login/PasswordlessEntryClient.tsx](frontend/src/app/login/PasswordlessEntryClient.tsx). OTP codes are delivered by Resend. In local E2E mode only (`REGENGINE_E2E_MODE` plus `REGENGINE_E2E_EMAIL_OUTBOX`; hard-blocked in production by [services/admin/app/e2e_safety.py](services/admin/app/e2e_safety.py)), codes are also written to a Playwright outbox file. If `RESEND_API_KEY` is unset outside E2E mode, codes are not delivered at all — the challenge flow drops the code with only an error log. Logout revokes the opaque browser session server-side, not just client-side cookie clearing.
 - Sign-in code emails are eligibility-gated: the challenge flow only dispatches a code when the address maps to a verified `user_emails` row with a keyed email fingerprint, an active user, and an `organization_memberships` row (`_load_valid_identity` in [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py)). Ineligible addresses receive the same accepted challenge response but no email (logged as `auth_challenge_email_suppressed_ineligible_identity`). Identity rows are provisioned at invite acceptance via [services/admin/app/auth/identity_helpers.py](services/admin/app/auth/identity_helpers.py); users predating that provisioning are backfilled by Alembic v094 ([alembic/versions/20260715_feb267263e0a_v094_passwordless_identity_backfill.py](alembic/versions/20260715_feb267263e0a_v094_passwordless_identity_backfill.py)), which hard-fails in production if `AUTH_OTP_HMAC_SECRET` is unset.
 - A legacy Supabase-session code path still exists in [frontend/src/proxy.ts](frontend/src/proxy.ts) alongside the passwordless flow; do not assume it has been fully removed. [frontend/src/lib/auth-context.tsx](frontend/src/lib/auth-context.tsx) is now cookie-session only.
 - A public, unauthenticated lead-capture surface exists under `/api/v1/tools` ([services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py)): email in, 6-digit code out, verified leads stored in `tool_leads`, plus public GDPR lead-erasure endpoints. Endpoints are rate limited. Tool-access JWTs are signed with a dedicated `TOOL_ACCESS_SECRET` that is never shared with session keys; startup raises in production if it is unset.
@@ -175,8 +177,17 @@ export POSTGRES_PASSWORD=regengine
 docker compose -f docker-compose.dev.yml up -d
 
 export DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengine"
+export REDIS_URL="redis://localhost:6379/0"
 alembic upgrade head
 ```
+
+To exercise the full customer experience against this stack — provisioning a
+tenant and API key, activating billing, ingesting from a simulated customer
+system, and verifying evidence — run the customer-journey harness in the
+[inflow-lab](https://github.com/regengine/inflow-lab) repo
+(`scripts/customer_journey.py --local` with `REGENGINE_ADMIN_KEY` set to this
+stack's `ADMIN_MASTER_KEY`). It seeds `billing:tenant:{tenant_id}` in Redis so
+the subscription gate passes.
 
 Run the persisted Inflow-to-RegEngine proof when you need real local evidence instead of DB-free simulation:
 
@@ -273,11 +284,12 @@ Backend CI ([.github/workflows/backend-ci.yml](.github/workflows/backend-ci.yml)
 - seeded mid-chain migration rehearsal (upgrade over seeded rows; app-roles-only and Supabase-like client-role matrix)
 - ingestion full suite hard gate; the same job also runs the supplier-remediation integration tests in [services/ingestion/tests/remediation/](services/ingestion/tests/remediation/) single-process against a second Alembic-migrated Postgres database, with `REGENGINE_REQUIRE_DB=1` so an unreachable database fails the gate instead of skipping
 - repo-root security/RLS/isolation suite hard gate, including the in-process security and FSMA-204 contract suites ([tests/security/test_security_audit_fixes.py](tests/security/test_security_audit_fixes.py), [tests/data_integrity/test_fsma_204_verification_phase2b.py](tests/data_integrity/test_fsma_204_verification_phase2b.py)) run against the consolidated app
+- live-DB regression suite: every `tests/shared/test_*_live.py` file (glob, not an explicit list) runs against an Alembic-migrated scratch Postgres on every PR and nightly, with skips treated as fatal — added after two incidents where live-DB tests silently skipped in CI and regressions reached production (#2658)
 - final `ci-status` gate
 
 Backend and frontend CI also run nightly on a cron schedule, plus manual `workflow_dispatch`. Because the push/pull-request triggers are path-filtered, stretches of merges that miss the filters leave gates unexercised; the nightly run surfaces gate drift on `main` as a red run within 24 hours. Scheduled runs use their own concurrency group so a nightly cannot cancel an in-flight push-triggered run.
 
-The security workflow ([.github/workflows/security.yml](.github/workflows/security.yml)) separately runs the tenant-trust Semgrep gate (zero findings allowed), gitleaks and detect-secrets secrets scanning, and a workflow tool-pinning gate that rejects non-SHA-pinned action refs and unpinned semgrep/pip-audit/Railway-CLI installs across every workflow file in [.github/workflows/](.github/workflows/); these run outside the backend `ci-status` gate.
+The security workflow ([.github/workflows/security.yml](.github/workflows/security.yml)) separately runs blocking Semgrep gates (the OWASP top-ten and security-audit registry rulesets plus the repo's tenant-trust rules — zero blocking findings allowed), gitleaks and detect-secrets secrets scanning, and a workflow tool-pinning gate that rejects non-SHA-pinned action refs and unpinned semgrep/pip-audit/Railway-CLI installs across every workflow file in [.github/workflows/](.github/workflows/); these run outside the backend `ci-status` gate.
 
 Frontend CI is separate in [.github/workflows/frontend-ci.yml](.github/workflows/frontend-ci.yml).
 
@@ -314,7 +326,7 @@ These are current repo facts, not speculation:
 - Some architecture documentation is older than the current Dockerfile/server wiring; verify against code before using docs as operational truth.
 - Neo4j, Redis, Redpanda/Kafka-compatible code paths exist, but the default local dev compose file starts only PostgreSQL.
 - [services/ingestion/app/webhook_compat.py](services/ingestion/app/webhook_compat.py) still exposes an internal non-HTTP `ingest_events()` helper that requires a tenant-bearing payload because it has no request context. HTTP and router callers should derive that payload tenant from authenticated tenant context.
-- Supplier remediation notifications are preview-only. [services/ingestion/app/remediation/outbox.py](services/ingestion/app/remediation/outbox.py) enqueues notification records with deliberately no drainer, so correction-link emails are never sent by the system; the buyer must deliver correction links out of band.
+- Supplier remediation notification delivery is recipient-gated. [services/ingestion/app/remediation/delivery.py](services/ingestion/app/remediation/delivery.py) drains the notification outbox and sends correction-link emails via Resend from the scheduler leader (v101 added delivery-status columns). Only rows enqueued with a recipient are delivered; rows without a recipient remain previews, and legacy pre-v101 `pending` rows are never drained — draining them would revoke links buyers already shared out of band. At send time the drainer re-validates the referenced token and follows the buyer reissue path, so a delivered email never carries a revoked or superseded link.
 - This repository does not prove broad production adoption, paid customer status, regulatory approval, or FDA certification.
 
 ## Documentation Map
@@ -328,6 +340,12 @@ These are current repo facts, not speculation:
 - [CHANGELOG.md](CHANGELOG.md) - change history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow.
 - [docs/runbooks/](docs/runbooks) - operational runbooks.
+
+## License
+
+RegEngine is proprietary, source-visible software — all rights reserved by RegEngine Inc. ([LICENSE](LICENSE)). The repository is public for transparency and audit (see the public proof surface above), not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+
+Permissive exceptions — the public verifier tools are **Apache 2.0** (declared in [LICENSE](LICENSE)) so anyone can use, copy, and embed them: the `/proof` Merkle bundle verifier ([frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py)) and the `regengine-verify` per-record CLI ([regengine/verify_records.py](regengine/verify_records.py)). [Inflow Lab](https://github.com/regengine/inflow-lab), the integration simulator, is Apache 2.0 in its own repository for the same reason.
 
 ## Contributing
 

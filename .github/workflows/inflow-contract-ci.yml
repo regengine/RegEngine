@@ -20,8 +20,10 @@ env:
   PYTHON_VERSION: '3.11'
   INFLOW_LAB_REPOSITORY: regengine/inflow-lab
   # Verified Inflow Lab guardrail candidate; update this pin when simulator
-  # contract fixtures intentionally change.
-  INFLOW_LAB_REF: 9914a4541786bc1dc511f35d16744656b0b70d83  # pragma: allowlist secret
+  # contract fixtures intentionally change. This ref must advertise
+  # contract_version via /api/healthz (inflow-lab main @ #73 or later) for
+  # the cross-repo contract-version assertion below.
+  INFLOW_LAB_REF: 4651e1a8e3562e44eadf65a67935276d754325a3  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret
@@ -251,6 +253,24 @@ jobs:
           done
           cat /tmp/inflow-lab.log
           exit 1
+
+      - name: Assert contract versions match across repos
+        run: |
+          # Download to files first (no curl-into-interpreter piping).
+          curl -fsS -o /tmp/regengine-health.json http://127.0.0.1:8002/health
+          curl -fsS -o /tmp/inflow-healthz.json http://127.0.0.1:8010/api/healthz
+          regengine_version=$(python3 -c "import json; print(json.load(open('/tmp/regengine-health.json')).get('inflow_contract_version',''))")
+          inflow_version=$(python3 -c "import json; print(json.load(open('/tmp/inflow-healthz.json')).get('contract_version',''))")
+          echo "RegEngine advertises inflow_contract_version=${regengine_version}"
+          echo "Inflow Lab advertises contract_version=${inflow_version}"
+          if [ -z "${regengine_version}" ] || [ -z "${inflow_version}" ]; then
+            echo "::error::One side does not advertise a contract version (RegEngine webhook_models.INFLOW_CONTRACT_VERSION / inflow-lab app/contract.py)."
+            exit 1
+          fi
+          if [ "${regengine_version}" != "${inflow_version}" ]; then
+            echo "::error::Contract version skew: RegEngine v${regengine_version} vs Inflow Lab v${inflow_version}. Bump both repos together and update INFLOW_LAB_REF."
+            exit 1
+          fi
 
       - name: Run one-batch signed live ingest contract
         working-directory: inflow-lab
