@@ -91,5 +91,5 @@ The `regengine-verify` tool implements the "Verify, Don't Trust" principle — y
 ---
 
 **Version**: see `regengine.__version__` (source of truth: `__init__.py`)
-**License**: Proprietary, source-visible — same terms as the repository [LICENSE](../LICENSE)
+**License**: Proprietary, source-visible — same terms as the repository [LICENSE](../LICENSE), except the `regengine-verify` CLI (`verify_records.py`), which is Apache 2.0 per that file's permissive-exceptions clause
 **Documentation**: https://docs.regengine.co/sdks/python

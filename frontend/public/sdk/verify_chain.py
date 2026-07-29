@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """RegEngine /proof bundle verifier.
 
 Recomputes every per-file SHA-256 and the Merkle root inside an audit
@@ -12,6 +13,10 @@ The Merkle algorithm matches services/shared/merkle_tree.py in production:
 
 Usage:
     python verify_chain.py audit-bundle.zip
+
+Copyright (c) 2024-2026 RegEngine Inc.
+License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0) —
+free to use, copy, modify, embed, and redistribute.
 """
 
 from __future__ import annotations
