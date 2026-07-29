@@ -523,6 +523,90 @@
       }
     }
   },
+  "fsma.compliance_evidence_snapshots": {
+    "columns": {
+      "active_alert_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "attestation_title": {
+        "nullable": true,
+        "type": "text"
+      },
+      "attested_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "attested_by": {
+        "nullable": true,
+        "type": "text"
+      },
+      "captured_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "compliance_status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "content_hash": {
+        "nullable": false,
+        "type": "text"
+      },
+      "created_by": {
+        "nullable": false,
+        "type": "text"
+      },
+      "critical_alert_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "deadline": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "degradation_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "is_attested": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "is_auto_created": {
+        "nullable": false,
+        "type": "boolean"
+      },
+      "regulatory_citation": {
+        "nullable": true,
+        "type": "text"
+      },
+      "snapshot_name": {
+        "nullable": false,
+        "type": "text"
+      },
+      "snapshot_reason": {
+        "nullable": true,
+        "type": "text"
+      },
+      "snapshot_state": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "trigger_alert_id": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
   "fsma.compliance_snapshots": {
     "columns": {
       "created_at": {
