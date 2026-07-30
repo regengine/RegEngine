@@ -1,9 +1,15 @@
 name: Deploy to Railway
 
 on:
-  # Railway rollout healthchecks are currently failing for unchanged backend
-  # images while the live service remains healthy. Keep deploys explicit until
-  # platform/startup logs are reviewed and automatic deploys are re-enabled.
+  # Push deploys re-enabled 2026-07-30. They were made explicit-only when
+  # Railway rollout healthchecks were failing for unchanged backend images;
+  # the four rollouts between 2026-07-23 and 2026-07-29 (CI + CLI paths) all
+  # passed /readiness on the first attempt, and per-container memory sits at
+  # ~1.3 GB against a 24 GB replica limit. The wait-for-ci job below still
+  # blocks any SHA without a green Backend CI Status Gate, and the
+  # cancel-in-progress concurrency group collapses push storms.
+  push:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
