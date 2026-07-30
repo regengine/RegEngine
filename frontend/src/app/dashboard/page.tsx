@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
-import { useOrganizations } from "@/hooks/use-organizations";
 import { useSystemStatus } from "@/hooks/use-api";
 import { SystemHealthWidget } from "@/components/dashboard/system-health-widget";
 import { MetricsOverviewWidget } from "@/components/dashboard/metrics-overview-widget";
@@ -247,27 +246,16 @@ export default function DashboardPage() {
     }
   }, [isHydrated, effectiveUser, router]);
 
-  // Get the current org from Supabase
-  const { organizations } = useOrganizations();
-  const currentOrg = organizations.find(
-    (o) => o.id === (effectiveTenantId || tenantId),
-  );
-
   // Check design partner status from tenant settings
   const { data: onboardingData } = useOnboardingStatus(effectiveTenantId);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
-  // Derive tenant type from org plan or default to 'retailer'
-  // Organization type is not in the schema yet, so use plan as a heuristic
-  const tenantType = useMemo((): "retailer" | "supplier" | "system" => {
-    if (currentOrg?.plan === "system" || currentOrg?.plan === "admin")
-      return "system";
-    if (currentOrg?.plan === "supplier") return "supplier";
-    return "retailer";
-  }, [currentOrg?.plan]);
+  // Default to 'retailer' quick actions. (Previously derived from a Supabase
+  // org-plan lookup that resolved to undefined in production — the org id
+  // space never matched tenant_id — so 'retailer' is the effective behavior.)
   const quickActions = useMemo(() => {
-    return getQuickActions(tenantType);
-  }, [tenantType]);
+    return getQuickActions("retailer");
+  }, []);
 
   const { data: workbenchReadiness } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
@@ -292,9 +280,7 @@ export default function DashboardPage() {
                 <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
               </div>
               <p className="text-muted-foreground mt-1">
-                {currentOrg
-                  ? `Welcome, ${currentOrg.name}. Here's your compliance overview.`
-                  : "Welcome to RegEngine. Here's your compliance overview."}
+                Welcome to RegEngine. Here&apos;s your compliance overview.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -304,15 +290,6 @@ export default function DashboardPage() {
                   className="bg-re-surface-elevated text-re-brand border border-[var(--re-surface-border)]"
                 >
                   Founding Partner
-                </Badge>
-              )}
-              {currentOrg?.plan && currentOrg.plan !== "free" && (
-                <Badge
-                  variant="secondary"
-                  className="bg-re-surface-elevated text-re-warning border border-[var(--re-surface-border)]"
-                >
-                  {currentOrg.plan.charAt(0).toUpperCase() +
-                    currentOrg.plan.slice(1)}
                 </Badge>
               )}
               {healthStatus === "loading" ? (

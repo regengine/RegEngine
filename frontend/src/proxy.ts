@@ -333,11 +333,29 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
                         },
                     }
                 );
-                const { data: tenantRow } = await supabase
+                const { data: tenantRow, error } = await supabase
                     .from('tenants')
                     .select('status')
                     .eq('id', tenantId)
                     .maybeSingle();
+                if (error) {
+                    // Query FAILED — distinct from "no such tenant": the
+                    // tenants RLS policy is USING(true), so a missing row
+                    // returns data:null/error:null, not an error. Previously
+                    // `error` was ignored, so a failure looked identical to
+                    // "status is fine" and the suspension gate below was
+                    // skipped (fail-open). Fail closed instead, and do NOT
+                    // cache — caching null here would turn a one-request blip
+                    // into a full-TTL (10 min) gate bypass. Skipping the cache
+                    // write means the next request retries.
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.warn(`[middleware] tenant status query failed for ${tenantId}: ${error.message}`);
+                    }
+                    const url = request.nextUrl.clone();
+                    url.pathname = '/login';
+                    url.searchParams.set('error', 'tenant_status_unavailable');
+                    return NextResponse.redirect(url);
+                }
                 const freshStatus: string | null = tenantRow?.status ?? null;
                 setTenantStatusCached(tenantId, freshStatus);
                 cached = freshStatus;
@@ -384,11 +402,24 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
                             },
                         }
                     );
-                    const { data: profile } = await supabase
+                    const { data: profile, error } = await supabase
                         .from('developer_profiles')
                         .select('is_sysadmin')
                         .eq('auth_user_id', userId)
                         .maybeSingle();
+
+                    if (error) {
+                        // Cannot confirm sysadmin — fail closed (redirect to
+                        // /dashboard, same as a non-sysadmin) and do NOT cache
+                        // the failure, so the next request retries rather than
+                        // locking a real sysadmin out for the full TTL. This
+                        // path previously ignored `error`, so it failed closed
+                        // by accident with no signal.
+                        if (process.env.NODE_ENV !== 'production') {
+                            console.warn(`[middleware] sysadmin lookup failed for ${userId}: ${error.message}`);
+                        }
+                        return NextResponse.redirect(new URL('/dashboard', request.url));
+                    }
 
                     isSysadmin = !!profile?.is_sysadmin;
                     setSysadminCached(userId, isSysadmin);

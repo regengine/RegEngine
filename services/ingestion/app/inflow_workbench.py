@@ -254,7 +254,16 @@ def _db_session_for_tenant(tenant_id: str):
         from shared.database import SessionLocal
 
         return SessionLocal()
-    except Exception:
+    except Exception as exc:
+        # Connect/import failure is the common "transient blip" outage. In
+        # production that must not silently degrade reads to the /tmp store.
+        if _is_production():
+            _raise_persistence_unavailable("session_init", tenant_id)
+        logger.debug(
+            "inflow workbench: DB session unavailable in non-prod (tenant_id=%s): %s",
+            tenant_id,
+            exc,
+        )
         return None
 
 
@@ -273,6 +282,26 @@ def _is_production() -> bool:
     from shared.env import is_production
 
     return is_production()
+
+
+def _raise_persistence_unavailable(op: str, tenant_id: str) -> None:
+    """Log and raise 503 when the workbench DB is unreachable in production.
+
+    In production the ephemeral, per-worker ``/tmp`` file store is NOT a valid
+    durability fallback for READS: serving it on a DB failure makes an outage
+    look like "no saved data" (an empty list, or a 404) instead of an error,
+    and different gunicorn workers disagree. Fail loudly so the outage is
+    visible — mirroring the write-path guard (#2519, ``save_run`` /
+    ``create_scenario``). Dev/test keep the file-store fallback so the suite
+    runs without a database.
+    """
+    logger.error(
+        "inflow workbench %s could not reach the DB in production (tenant_id=%s); "
+        "refusing ephemeral file-store fallback",
+        op,
+        tenant_id,
+    )
+    raise HTTPException(status_code=503, detail="Workbench persistence unavailable")
 
 
 def _tenant_store_slug(tenant_id: str) -> str:
@@ -366,6 +395,8 @@ def _db_list_scenarios(tenant_id: str) -> Optional[list[WorkbenchScenario]]:
     except Exception:
         db.rollback()
         logger.exception("inflow workbench DB list_scenarios failed (tenant_id=%s)", tenant_id)
+        if _is_production():
+            _raise_persistence_unavailable("list_scenarios", tenant_id)
         return None
     finally:
         db.close()
@@ -586,6 +617,8 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
             tenant_uuid,
             run_id,
         )
+        if _is_production():
+            _raise_persistence_unavailable("get_run", tenant_uuid)
         return None
     finally:
         db.close()
@@ -657,6 +690,8 @@ def _db_list_fix_queue(tenant_id: str, run_id: Optional[str] = None) -> Optional
             tenant_uuid,
             run_id,
         )
+        if _is_production():
+            _raise_persistence_unavailable("list_fix_queue", tenant_uuid)
         return None
     finally:
         db.close()
@@ -693,6 +728,8 @@ def _db_update_fix_item(item_id: str, tenant_id: str, payload: UpdateFixItemRequ
             tenant_uuid,
             item_id,
         )
+        if _is_production():
+            _raise_persistence_unavailable("update_fix_item", tenant_uuid)
         return None
     finally:
         db.close()
@@ -755,6 +792,8 @@ def _db_readiness_snapshot(tenant_id: str) -> Optional[WorkbenchReadinessSnapsho
     except Exception:
         db.rollback()
         logger.exception("inflow workbench DB readiness_snapshot failed (tenant_id=%s)", tenant_uuid)
+        if _is_production():
+            _raise_persistence_unavailable("readiness_snapshot", tenant_uuid)
         return None
     finally:
         db.close()

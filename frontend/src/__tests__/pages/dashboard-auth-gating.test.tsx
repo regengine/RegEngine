@@ -5,7 +5,6 @@ import { render, waitFor } from '@testing-library/react';
 const fetchWithCsrfMock = vi.hoisted(() => vi.fn());
 const mockUseAuth = vi.hoisted(() => vi.fn());
 const mockUseTenant = vi.hoisted(() => vi.fn());
-const mockUseOrganizations = vi.hoisted(() => vi.fn());
 const mockUseCurrentSubscription = vi.hoisted(() => vi.fn());
 
 function createWrapper() {
@@ -30,10 +29,6 @@ vi.mock('@/lib/auth-context', () => ({
 
 vi.mock('@/lib/tenant-context', () => ({
     useTenant: () => mockUseTenant(),
-}));
-
-vi.mock('@/hooks/use-organizations', () => ({
-    useOrganizations: () => mockUseOrganizations(),
 }));
 
 vi.mock('@/hooks/use-billing', () => ({
@@ -142,9 +137,6 @@ function mockAuthenticatedSession() {
         apiKey: null,
     });
     mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
-    mockUseOrganizations.mockReturnValue({
-        organizations: [{ id: 'tenant-123', name: 'Acme Foods' }],
-    });
     mockUseCurrentSubscription.mockReturnValue({
         data: null,
         isLoading: false,
