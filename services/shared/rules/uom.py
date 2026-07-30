@@ -10,8 +10,11 @@ authoritative tenant/product container-weight mapping — a "24 lb case" of
 lettuce, shrimp, and berries are not the same mass (#2520). For compliance
 decisions, use ``normalize_to_mass`` (which only converts true mass units
 unless a ``weights`` mapping is supplied) and ``is_mass_uom`` to classify
-units. ``normalize_to_lbs`` retains the legacy approximations and is used only
-by the non-evidence sandbox/preflight diagnosis path.
+units. ``normalize_to_lbs`` retains the legacy container approximations and is
+kept only as a public helper — it has no internal caller as of #2520's
+follow-up, which switched the sandbox/preflight diagnosis path to
+``normalize_to_mass`` so preflight and the compliance verdict agree on when a
+comparison must be declined ("not comparable").
 
 Temperature (#1364): converts Fahrenheit↔Celsius so numeric-range evaluators
 can compare a recorded reading against an operational cold-chain threshold
