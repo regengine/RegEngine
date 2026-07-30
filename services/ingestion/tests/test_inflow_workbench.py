@@ -591,6 +591,89 @@ def test_db_save_run_failure_logs_exception_with_tenant_and_run(tmp_path, monkey
     assert "run-abc123" in failure.getMessage()
 
 
+_PROD_UUID_TENANT = "44444444-4444-4444-4444-444444444444"
+
+
+class _BoomSession:
+    """A DB session whose tenant-context/query step will fail (see boom below)."""
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def _force_db_read_failure(monkeypatch):
+    """Make every _db_* helper hit its exception path as if the DB errored
+    mid-read (a reachable session with a failing query). A UUID tenant is
+    required so the helpers pass their _tenant_uuid() guard and actually reach
+    the DB path — in production tenant ids are always UUIDs."""
+
+    def boom(_db, _tenant):
+        raise RuntimeError("simulated DB read outage")
+
+    monkeypatch.setattr(workbench, "_set_tenant_context", boom)
+    monkeypatch.setattr(workbench, "_db_session_for_tenant", lambda _tid: _BoomSession())
+
+
+def test_production_db_read_failure_returns_503_not_silent_empty(tmp_path, monkeypatch, caplog):
+    """A read that fails against the DB in production must 503, not fall back to
+    the per-worker /tmp store and render as "no saved scenarios" (empty list)."""
+    monkeypatch.setattr(workbench, "_is_production", lambda: True)
+    _force_db_read_failure(monkeypatch)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.read"], tenant_id=_PROD_UUID_TENANT),
+    )
+
+    with caplog.at_level("ERROR", logger="inflow-workbench"):
+        response = client.get("/api/v1/inflow-workbench/scenarios")
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Workbench persistence unavailable"
+    assert any("could not reach the DB in production" in rec.message for rec in caplog.records)
+
+
+def test_production_db_failure_update_fix_item_returns_503_not_404(tmp_path, monkeypatch):
+    """Regression: update_fix_item was left out of the #2519 write-path gate, so
+    a DB outage in production surfaced as 404 "not found" instead of 503. It is a
+    write endpoint and must fail loudly like save_run/create_scenario."""
+    monkeypatch.setattr(workbench, "_is_production", lambda: True)
+    _force_db_read_failure(monkeypatch)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.write"], tenant_id=_PROD_UUID_TENANT),
+    )
+
+    response = client.patch(
+        "/api/v1/inflow-workbench/fix-queue/fix-does-not-matter",
+        json={"status": "corrected"},
+    )
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Workbench persistence unavailable"
+
+
+def test_non_production_read_failure_still_falls_back_to_file_store(tmp_path, monkeypatch):
+    """The DB-less dev/test path is preserved: outside production a failing DB
+    read falls back to the file store (built-in scenarios still returned)."""
+    monkeypatch.setattr(workbench, "_is_production", lambda: False)
+    _force_db_read_failure(monkeypatch)
+    client = _client(
+        tmp_path,
+        monkeypatch,
+        principal=_principal(scopes=["inflow.read"], tenant_id=_PROD_UUID_TENANT),
+    )
+
+    response = client.get("/api/v1/inflow-workbench/scenarios")
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()) >= len(workbench.BUILT_IN_SCENARIOS)
+
+
 def test_dev_file_store_isolates_tenants(tmp_path, monkeypatch):
     """#2519 acceptance: in dev (non-prod), two tenants saving runs must not
     share one commingled file. Tenant B cannot read tenant A's run."""

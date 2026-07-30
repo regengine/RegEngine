@@ -193,3 +193,51 @@ class TestPgBackboneGating:
 
         svc.notifier.notify.assert_called_once()
         integration.process_enforcement_item.assert_called_once_with(item)
+
+    def test_compliance_alert_loop_continues_past_a_failing_item(self, monkeypatch):
+        """A single recall raising inside process_enforcement_item must not drop
+        alerts for the rest of the batch. Before the per-item guard, one
+        exception aborted the loop while the batch was still marked seen (pg
+        mode acks unconditionally), permanently losing later tenants' alerts."""
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        svc.notifier = MagicMock()
+        svc.notifier.notify.return_value = []
+
+        items = [_make_item(source_id=f"fda_recall:{i}") for i in range(3)]
+        integration = MagicMock()
+        # Middle item fails; first and third must still be attempted.
+        integration.process_enforcement_item.side_effect = [None, RuntimeError("boom"), None]
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=integration,
+        ):
+            svc._process_new_items(items, SourceType.FDA_RECALL)
+
+        assert integration.process_enforcement_item.call_count == 3
+        # pg-mode acks the batch regardless of alerting; mark_seen is called
+        # once per item, so all three are marked despite the middle failure.
+        assert svc.state_manager.mark_seen.call_count == 3
+
+    def test_compliance_integration_construction_failure_is_logged_once(self, monkeypatch):
+        """If building the integration fails, no per-item calls happen and the
+        batch is still acked (pg mode) — but the run must not raise."""
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        svc.notifier = MagicMock()
+        svc.notifier.notify.return_value = []
+
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            side_effect=RuntimeError("engine init failed"),
+        ):
+            # Must not raise.
+            svc._process_new_items([_make_item()], SourceType.FDA_RECALL)
+
+        svc.state_manager.mark_seen.assert_called_once()

@@ -1,3 +1,17 @@
+# DASHBOARD ARTIFACT BUILDER — NOT A MERGE GATE.
+#
+# Every test/install step here is `continue-on-error: true` by design: this job
+# builds a redacted QA-health JSON artifact for the sysadmin dashboard
+# (consumed by services/admin/app/qa_health.py via GET /v1/system/qa-health),
+# not a pass/fail gate. It cannot fail on a test regression and must not be
+# added to branch protection's required checks. main deliberately carries an
+# honest-red rollup when suites are failing (#2614).
+#
+# The real merge/deploy gates live elsewhere: "Backend CI Status Gate"
+# (backend-ci.yml) and "Frontend CI Status Gate" (frontend-ci.yml), surfaced to
+# branch protection via the always-on "PR Gate: *" checks in pr-gate.yml. The
+# repo already answered the "qa-health doesn't gate" gap by building those
+# separate real gates rather than making this one blocking (#2502).
 name: QA Health Summary
 
 on:
