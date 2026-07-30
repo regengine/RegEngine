@@ -10,6 +10,27 @@ on:
   # cancel-in-progress concurrency group collapses push storms.
   push:
     branches: ["main"]
+    # Deploy only on backend-relevant changes. This list MUST stay a subset
+    # of backend-ci.yml's push paths: a path that triggers deploy without
+    # triggering backend-ci leaves the SHA with no "Backend CI Status Gate",
+    # and wait-for-ci then fails after its 45-minute discovery window
+    # (fail-on-no-checks, #2537) — a guaranteed-red run for e.g. a
+    # frontend-only merge (first observed on 98de9bd5, 2026-07-30).
+    paths:
+      - 'alembic/**'
+      - 'server/**'
+      - 'services/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'plugins/fsma/**'
+      - 'Dockerfile'
+      - 'railway.toml'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'sample_data/**'
+      - 'demo_exports/**'
   workflow_dispatch:
 
 permissions:
