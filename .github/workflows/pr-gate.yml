@@ -60,8 +60,12 @@ jobs:
               ".github/workflows/deploy.yml",
           ]
           base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+          # Three-dot (merge-base..head) = only THIS PR's changes. Two-dot
+          # would also include everything that landed on the base branch after
+          # this PR diverged, so once main advances the gate over-detects and
+          # waits for a real gate that never runs (spurious red).
           changed = subprocess.run(
-              ["git", "diff", "--name-only", base, head],
+              ["git", "diff", "--name-only", f"{base}...{head}"],
               check=True, capture_output=True, text=True,
           ).stdout.split()
 
@@ -126,8 +130,12 @@ jobs:
               ".github/workflows/frontend-ci.yml",
           ]
           base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+          # Three-dot (merge-base..head) = only THIS PR's changes. Two-dot
+          # would also include everything that landed on the base branch after
+          # this PR diverged, so once main advances the gate over-detects and
+          # waits for a real gate that never runs (spurious red).
           changed = subprocess.run(
-              ["git", "diff", "--name-only", base, head],
+              ["git", "diff", "--name-only", f"{base}...{head}"],
               check=True, capture_output=True, text=True,
           ).stdout.split()
 
