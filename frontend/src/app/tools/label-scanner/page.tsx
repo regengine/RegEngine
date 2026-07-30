@@ -25,7 +25,7 @@ import { getServiceURL } from '@/lib/api-config';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { useAuth } from '@/lib/auth-context';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
-import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { isExperimentalToolEnabled } from '@/lib/experimental-features';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -77,7 +77,7 @@ const DEMO_FIELDS: { key: keyof LabelResult; label: string; icon: typeof Package
 /*  Page component                                               */
 /* ────────────────────────────────────────────────────────────── */
 export default function LabelScannerPage() {
-    if (!experimentalFeaturesEnabled()) {
+    if (!isExperimentalToolEnabled('label-scanner')) {
         return (
             <FeatureNotEnabled
                 featureName="AI Label Scanner"

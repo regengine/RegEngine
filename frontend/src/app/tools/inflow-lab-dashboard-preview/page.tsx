@@ -2,7 +2,7 @@ import { Metadata } from "next";
 
 import { DashboardInflowLab } from "@/app/tools/inflow-lab/components/DashboardInflowLab";
 import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
-import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
+import { isExperimentalToolEnabled } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "Inflow Lab Dashboard Preview | RegEngine",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function InflowLabDashboardPreviewPage() {
-    if (!experimentalFeaturesEnabled()) {
+    if (!isExperimentalToolEnabled("inflow-lab-dashboard-preview")) {
         return (
             <FeatureNotEnabled
                 featureName="Inflow Lab Dashboard Preview"

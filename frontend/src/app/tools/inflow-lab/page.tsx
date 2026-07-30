@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { InflowLabClient } from "./components/InflowLabClient";
 import { FeatureNotEnabled } from "@/components/experimental/FeatureNotEnabled";
-import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
+import { isExperimentalToolEnabled } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export default function InflowLabPage() {
-    if (!experimentalFeaturesEnabled()) {
+    if (!isExperimentalToolEnabled("inflow-lab")) {
         return (
             <FeatureNotEnabled
                 featureName="Inflow Lab"
