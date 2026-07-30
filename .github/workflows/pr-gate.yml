@@ -1,0 +1,158 @@
+# PR merge gate — always-on shim so branch protection can require CI.
+#
+# WHY THIS EXISTS
+# backend-ci.yml and frontend-ci.yml are path-filtered on `pull_request`, so a
+# frontend-only PR never produces "Backend CI Status Gate" and a backend-only
+# PR never produces "Frontend CI Status Gate". Making those job names required
+# contexts directly would leave cross-area PRs waiting forever on a check that
+# will never post. This workflow is NOT path-filtered: it always runs on every
+# PR to main and posts two checks — "PR Gate: Backend" and "PR Gate: Frontend" —
+# which are the names branch protection requires.
+#
+# For each area the gate either:
+#   * passes vacuously when that area's paths were not touched (the real
+#     workflow legitimately did not run), or
+#   * waits for and mirrors that area's real gate when the paths were touched.
+#
+# The per-area path lists below MUST mirror the `pull_request: paths:` blocks in
+# backend-ci.yml and frontend-ci.yml. If they drift, the failure is biased safe:
+# over-detection makes this gate wait for a real gate that never appears and
+# time out (a spurious block, recoverable by an admin), while the dangerous
+# direction — passing an area whose real gate actually failed — only happens on
+# under-detection, so keep these lists a faithful copy. deploy.yml continues to
+# wait on "Backend CI Status Gate" directly and is unaffected by this shim.
+
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+
+jobs:
+  backend:
+    name: "PR Gate: Backend"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+      - name: Detect backend-relevant changes
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, subprocess
+
+          # Mirror of backend-ci.yml `pull_request: paths:` — keep in sync.
+          PATHS = [
+              "alembic/**", "server/**", "services/**", "shared/**", "kernel/**",
+              "plugins/fsma/**", "Dockerfile", "railway.toml", "requirements.in",
+              "requirements.lock", "scripts/**", "tests/**", "sample_data/**",
+              "demo_exports/**", ".github/workflows/backend-ci.yml",
+              ".github/workflows/deploy.yml",
+          ]
+          base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+          changed = subprocess.run(
+              ["git", "diff", "--name-only", base, head],
+              check=True, capture_output=True, text=True,
+          ).stdout.split()
+
+          def matches(f):
+              for p in PATHS:
+                  if p.endswith("/**"):
+                      if f.startswith(p[:-2]):
+                          return True
+                  elif f == p:
+                      return True
+              return False
+
+          hit = any(matches(f) for f in changed)
+          print(f"changed={'true' if hit else 'false'}")
+          PY
+      - name: Wait for Backend CI Status Gate
+        if: steps.detect.outputs.changed == 'true'
+        uses: lewagon/wait-on-check-action@1d57e2c51a58d812d2765e036a028b6bdb5a6154  # v1.8.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          check-name: "Backend CI Status Gate"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: "PR Gate: Backend"
+          wait-interval: 30
+          allowed-conclusions: success
+      - name: No backend-relevant changes
+        if: steps.detect.outputs.changed != 'true'
+        run: echo "No backend-relevant paths changed; Backend CI legitimately did not run. Gate vacuously green."
+
+  frontend:
+    name: "PR Gate: Frontend"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+      - name: Detect frontend-relevant changes
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, subprocess
+
+          # Mirror of frontend-ci.yml `pull_request: paths:` — keep in sync.
+          PATHS = [
+              "frontend/**", "docs/**", "sales/**", "sales_enablement/**",
+              "frontend/public/**", "services/admin/app/auth/**",
+              "services/admin/app/e2e_safety.py",
+              "services/admin/app/session_store.py",
+              "services/admin/app/rate_limit_service.py",
+              "services/admin/app/sqlalchemy_models.py",
+              "services/admin/tests/test_e2e_safety.py",
+              "services/admin/tests/test_webauthn_router.py",
+              "scripts/seed_passwordless_e2e_user.py",
+              "scripts/generate_openapi.py", "scripts/start-e2e-backend.sh",
+              "requirements.in", "requirements.lock",
+              "scripts/check_trust_safety_copy.py",
+              "scripts/trust_safety_copy_allowlist.txt",
+              ".github/workflows/frontend-ci.yml",
+          ]
+          base, head = os.environ["BASE_SHA"], os.environ["HEAD_SHA"]
+          changed = subprocess.run(
+              ["git", "diff", "--name-only", base, head],
+              check=True, capture_output=True, text=True,
+          ).stdout.split()
+
+          def matches(f):
+              for p in PATHS:
+                  if p.endswith("/**"):
+                      if f.startswith(p[:-2]):
+                          return True
+                  elif f == p:
+                      return True
+              return False
+
+          hit = any(matches(f) for f in changed)
+          print(f"changed={'true' if hit else 'false'}")
+          PY
+      - name: Wait for Frontend CI Status Gate
+        if: steps.detect.outputs.changed == 'true'
+        uses: lewagon/wait-on-check-action@1d57e2c51a58d812d2765e036a028b6bdb5a6154  # v1.8.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          check-name: "Frontend CI Status Gate"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: "PR Gate: Frontend"
+          wait-interval: 30
+          allowed-conclusions: success
+      - name: No frontend-relevant changes
+        if: steps.detect.outputs.changed != 'true'
+        run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
