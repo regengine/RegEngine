@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
-import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { isExperimentalToolEnabled } from '@/lib/experimental-features';
 
 // Types
 interface QueryResult {
@@ -328,7 +328,7 @@ const examples = [
 ];
 
 export default function AskPage() {
-  if (!experimentalFeaturesEnabled()) {
+  if (!isExperimentalToolEnabled('ask')) {
     return (
       <FeatureNotEnabled
         featureName="Traceability Query Engine"

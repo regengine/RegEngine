@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { experimentalFeaturesEnabled, isExperimentalToolHref } from "@/lib/experimental-features";
+import { isExperimentalToolHrefHidden } from "@/lib/experimental-features";
 import { ToolsLandingClient } from "./components/ToolsLandingClient";
 import { JSONLD } from "@/components/seo/json-ld";
 
@@ -34,7 +34,7 @@ const jsonLd = {
             { "url": "https://regengine.co/tools/roi-calculator", "name": "FSMA 204 Savings Estimator" },
             { "url": "https://regengine.co/tools/inflow-lab", "name": "Inflow Lab" },
         ]
-            .filter((item) => experimentalFeaturesEnabled() || !isExperimentalToolHref(item.url.replace("https://regengine.co", "")))
+            .filter((item) => !isExperimentalToolHrefHidden(item.url.replace("https://regengine.co", "")))
             .map((item, index) => ({ "@type": "ListItem", "position": index + 1, ...item }))
     }
 };
