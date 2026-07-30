@@ -13,13 +13,17 @@
 -- every lead's name/email/phone/revenue; the Supabase linter does not flag
 -- SELECT USING(true), so it was invisible in the advisor report.
 --
--- Verified after apply (as the anon role, via supabase-js):
+-- Verified after apply, and re-verified after the transitional INSERT path was
+-- dropped (as the anon role, via supabase-js against the live project):
 --   RPC insert            -> ok
 --   RPC enrich (dedupe)   -> ok, single row, fields merged
 --   direct table SELECT   -> blocked, 42501
+--   direct table INSERT   -> blocked, 42501
 --   direct table DELETE   -> blocked, 42501
+-- End state: one policy (service_role_full_access) and zero privileges for
+-- anon/authenticated on assessment_submissions.
 
--- ── assessment_submissions: public roles may only insert a new lead ─────
+-- ── assessment_submissions: RPC is the only write door ──────────────────
 DROP POLICY IF EXISTS "Service role full access" ON public.assessment_submissions;
 DROP POLICY IF EXISTS "Allow public select for duplicate check" ON public.assessment_submissions;
 DROP POLICY IF EXISTS "Anon update enrichment" ON public.assessment_submissions;
@@ -29,14 +33,23 @@ DROP POLICY IF EXISTS "Anon insert only" ON public.assessment_submissions;
 CREATE POLICY "service_role_full_access" ON public.assessment_submissions
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- Kept so lead capture survived the window between this apply and the
--- frontend deploy that switched to the RPC. Safe to drop once deployed:
---   DROP POLICY "public_lead_capture_insert" ON public.assessment_submissions;
---   REVOKE INSERT ON public.assessment_submissions FROM anon, authenticated;
-CREATE POLICY "public_lead_capture_insert" ON public.assessment_submissions
-    FOR INSERT TO anon, authenticated WITH CHECK (true);
+-- A transitional "public_lead_capture_insert" policy (INSERT TO anon,
+-- authenticated) carried lead capture through the window between the first
+-- apply and the frontend deploy that switched to the RPC. DROPPED 2026-07-30
+-- once PR #2682 merged (06b6fe1a) and prod deployment
+-- dpl_GadM61PCwi7NTVFFSRxCK44sxSHH went READY. Do not recreate it: the RPC
+-- covers the flow, and a direct-INSERT grant would let any publishable-key
+-- holder write arbitrary lead rows.
+--
+-- ROLLBACK NOTE: reverting prod to a deployment older than 06b6fe1a restores
+-- the direct-insert code path, which now fails closed (42501, logged by the
+-- server action as "Assessment submission error") — leads would be dropped
+-- silently. Recreate the policy and grant if you must run older frontend code:
+--   CREATE POLICY "public_lead_capture_insert" ON public.assessment_submissions
+--       FOR INSERT TO anon, authenticated WITH CHECK (true);
+--   GRANT INSERT ON public.assessment_submissions TO anon, authenticated;
 
-REVOKE SELECT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
     ON public.assessment_submissions FROM anon, authenticated;
 
 -- ── Write-only door for the submit flow ────────────────────────────────
