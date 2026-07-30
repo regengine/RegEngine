@@ -47,6 +47,7 @@ from pytz import utc
 from shared.event_backbone import kafka_enabled
 from shared.observability import setup_standalone_observability
 from shared.observability.context import wrap_job_with_new_correlation
+from sqlalchemy.exc import SQLAlchemyError
 
 from services.scheduler.app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
 from services.scheduler.app.config import get_settings
@@ -412,11 +413,48 @@ class SchedulerService:
                 from services.scheduler.app.compliance_integration import get_compliance_integration
 
                 integration = get_compliance_integration()
-                for item in items:
-                    integration.process_enforcement_item(item)
-                logger.info("compliance_integration_processed", count=len(items))
             except Exception as e:
-                logger.error("compliance_integration_failed", error=str(e))
+                # Constructing the integration (engine init / import) failed —
+                # no item can be processed. Log once, not per item.
+                logger.error(
+                    "compliance_integration_unavailable",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                integration = None
+
+            if integration is not None:
+                # Per-item try/except so one bad recall does not drop alerts for
+                # the rest of the batch. Previously a single exception aborted
+                # the whole loop while the batch was still marked seen below
+                # (pg mode acks unconditionally), permanently losing the
+                # remaining tenants' alerts. Narrow exception tuple + error_type
+                # mirrors the per-tenant handler in compliance_integration.py
+                # (RE-SCH-002); process_enforcement_item is idempotent
+                # (ON CONFLICT DO NOTHING) so a future re-run is safe.
+                processed = 0
+                failed = 0
+                for item in items:
+                    try:
+                        integration.process_enforcement_item(item)
+                        processed += 1
+                    except (SQLAlchemyError, ValueError, KeyError, TypeError, RuntimeError) as e:
+                        failed += 1
+                        logger.error(
+                            "compliance_integration_item_failed",
+                            source_id=getattr(item, "source_id", None),
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
+                if failed:
+                    logger.error(
+                        "compliance_integration_partial_failure",
+                        processed=processed,
+                        failed=failed,
+                        total=len(items),
+                    )
+                else:
+                    logger.info("compliance_integration_processed", count=processed)
 
         # Log high-priority items
         for item in items:
