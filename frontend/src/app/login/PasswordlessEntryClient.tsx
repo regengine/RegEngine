@@ -203,6 +203,18 @@ export default function PasswordlessEntryClient() {
               </div>
             )}
 
+            {queryError === 'tenant_suspended' && (
+              <div className="mb-4 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm text-[var(--re-text-secondary)]" role="status">
+                Your account is not active. Contact your administrator or RegEngine support to restore access.
+              </div>
+            )}
+
+            {queryError === 'tenant_status_unavailable' && (
+              <div className="mb-4 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm text-[var(--re-text-secondary)]" role="status">
+                We couldn&apos;t verify your account status just now. Please sign in again.
+              </div>
+            )}
+
             {statusMessage && (
               <div className="mb-4 border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-3 text-sm text-[var(--re-text-secondary)]" role="status">
                 {statusMessage}
