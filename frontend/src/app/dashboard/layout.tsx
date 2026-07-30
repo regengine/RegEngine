@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
 import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 import { useAuth } from '@/lib/auth-context';
-import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
+import { experimentalFeaturesEnabled, isExperimentalPageEnabled } from '@/lib/experimental-features';
 import {
     BarChart3,
     Archive,
@@ -49,6 +49,8 @@ interface NavItem {
     sysadminOnly?: boolean;
     /** Hidden unless NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES is set (backend router auto-disabled in prod) */
     experimental?: boolean;
+    /** Gated app page that also honors its per-tool override (see isExperimentalPageEnabled) */
+    experimentalPage?: boolean;
 }
 
 interface CollapsibleSection {
@@ -64,7 +66,7 @@ interface CollapsibleSection {
 /** Always-visible top-level items (max 5) */
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
-    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimental: true },
+    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimentalPage: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
     { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
@@ -134,6 +136,7 @@ const MOBILE_NAV_ITEMS = TOP_ITEMS;
 function isNavItemVisible(item: NavItem, isSysadmin: boolean): boolean {
     if (item.sysadminOnly && !isSysadmin) return false;
     if (item.experimental && !experimentalFeaturesEnabled()) return false;
+    if (item.experimentalPage && !isExperimentalPageEnabled(item.href)) return false;
     return true;
 }
 

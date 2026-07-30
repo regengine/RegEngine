@@ -59,12 +59,30 @@ export function filterExperimentalToolLinks<T extends { href: string }>(tools: T
 
 /** Non-/tools pages gated behind the flag (each has its own page-level guard). */
 export const EXPERIMENTAL_PAGE_HREFS: ReadonlySet<string> = new Set([
-    '/dashboard/inflow-lab', // sandbox-backed Inflow Lab dashboard
+    '/dashboard/inflow-lab', // Inflow Lab dashboard (per-tool override: 'inflow-lab')
     '/dashboard/scan', // launcher (QR + link) for /fsma/field-capture
     '/ingest/curation', // discovery-router curation queue
     '/fsma', // graph-service readiness dashboard
     '/fsma/field-capture', // vision analyze-label capture (label_vision router)
 ]);
+
+// Gated app pages whose core data path is the standalone Inflow Lab service
+// (via the /api/inflow-lab proxy) rather than the experimental backend
+// routers. They honor the same per-tool override as their /tools sibling, so
+// e.g. NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS=inflow-lab exposes the
+// dashboard tab in production while ENABLE_EXPERIMENTAL_ROUTERS stays off
+// (the sandbox-evaluate feeder inside the page degrades to an inline error).
+const EXPERIMENTAL_PAGE_TOOL_SLUGS: ReadonlyMap<string, string> = new Map([
+    ['/dashboard/inflow-lab', 'inflow-lab'],
+]);
+
+/** True when a gated app page (EXPERIMENTAL_PAGE_HREFS) is enabled. */
+export function isExperimentalPageEnabled(href: string): boolean {
+    const path = href.split(/[?#]/)[0];
+    const toolSlug = EXPERIMENTAL_PAGE_TOOL_SLUGS.get(path);
+    if (toolSlug !== undefined) return isExperimentalToolEnabled(toolSlug);
+    return experimentalFeaturesEnabled();
+}
 
 export function isExperimentalHref(href: string): boolean {
     const path = href.split(/[?#]/)[0];
@@ -75,10 +93,8 @@ export function isExperimentalHref(href: string): boolean {
 export function filterExperimentalLinks<T extends { href: string }>(links: T[]): T[] {
     return links.filter((link) => {
         if (isExperimentalToolHrefHidden(link.href)) return false;
-        // Non-tool experimental pages depend on the experimental backend
-        // routers, so they stay behind the global flag only.
         const path = link.href.split(/[?#]/)[0];
-        if (EXPERIMENTAL_PAGE_HREFS.has(path)) return experimentalFeaturesEnabled();
+        if (EXPERIMENTAL_PAGE_HREFS.has(path)) return isExperimentalPageEnabled(path);
         return true;
     });
 }

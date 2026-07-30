@@ -4,6 +4,7 @@ import {
     filterExperimentalLinks,
     filterExperimentalToolLinks,
     isExperimentalHref,
+    isExperimentalPageEnabled,
     isExperimentalToolHref,
 } from '@/lib/experimental-features';
 
@@ -105,6 +106,38 @@ describe('experimental-features', () => {
         it('passes everything through when the flag is on', () => {
             vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
             expect(filterExperimentalLinks(links)).toEqual(links);
+        });
+
+        it('keeps the Inflow Lab dashboard when only its per-tool override is set', () => {
+            vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
+            vi.stubEnv('NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS', 'inflow-lab');
+            expect(filterExperimentalLinks(links).map((l) => l.href)).toEqual([
+                '/dashboard/suppliers',
+                '/dashboard/inflow-lab',
+            ]);
+        });
+    });
+
+    describe('isExperimentalPageEnabled', () => {
+        it('is false for gated pages when nothing is enabled', () => {
+            vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
+            vi.stubEnv('NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS', '');
+            expect(isExperimentalPageEnabled('/dashboard/inflow-lab')).toBe(false);
+            expect(isExperimentalPageEnabled('/ingest/curation')).toBe(false);
+        });
+
+        it('is true for every gated page when the global flag is on', () => {
+            vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
+            expect(isExperimentalPageEnabled('/dashboard/inflow-lab')).toBe(true);
+            expect(isExperimentalPageEnabled('/ingest/curation')).toBe(true);
+        });
+
+        it('honors the inflow-lab per-tool override without the global flag', () => {
+            vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
+            vi.stubEnv('NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS', 'inflow-lab');
+            expect(isExperimentalPageEnabled('/dashboard/inflow-lab')).toBe(true);
+            // Router-backed pages stay behind the global flag.
+            expect(isExperimentalPageEnabled('/ingest/curation')).toBe(false);
         });
     });
 });
