@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { useOrganizations } from '@/hooks/use-organizations';
 import { useCurrentSubscription } from '@/hooks/use-billing';
 import {
     AlertTriangle, Settings, Building2, Key, Database, Plug,
@@ -65,9 +64,7 @@ type SettingsResponse = {
 export default function SettingsPage() {
     const { user, isAuthenticated } = useAuth();
     const { tenantId, isSystemTenant } = useTenant();
-    const { organizations } = useOrganizations();
     const effectiveTenantId = isSystemTenant ? null : tenantId;
-    const currentOrg = organizations.find(o => o.id === effectiveTenantId);
     const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(effectiveTenantId ?? undefined);
 
     const [saved, setSaved] = useState(false);
@@ -99,19 +96,17 @@ export default function SettingsPage() {
         retry: false,
     });
 
-    // Populate profile from org context / auth user when available
+    // Seed contact email from the authenticated user until the authoritative
+    // settings response below hydrates the full profile.
     useEffect(() => {
-        const orgName = currentOrg?.name || '';
         const contactEmail = user?.email || '';
-
-        if (orgName || contactEmail) {
+        if (contactEmail) {
             setProfile(prev => ({
                 ...prev,
-                company_name: orgName || prev.company_name,
                 contact_email: contactEmail || prev.contact_email,
             }));
         }
-    }, [currentOrg, user]);
+    }, [user]);
 
     useEffect(() => {
         const savedProfile = settingsData?.profile;
