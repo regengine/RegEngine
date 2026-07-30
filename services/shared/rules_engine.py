@@ -38,6 +38,5 @@ from shared.rules.types import (  # noqa: F401
 )
 from shared.rules.uom import (  # noqa: F401
     CTE_LIFECYCLE_ORDER as _CTE_LIFECYCLE_ORDER,
-    normalize_to_lbs as _normalize_to_lbs,
 )
 from shared.rules.utils import get_nested_value as _get_nested_value  # noqa: F401
