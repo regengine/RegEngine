@@ -62,9 +62,17 @@ class TestCheckoutGucReset:
         assert "regengine.is_sysadmin" in executed
         cursor.close.assert_called_once()
 
-    def test_sqlite_engine_skips_silently(self):
-        # Default test engine is sqlite — listener is a no-op and must not
-        # touch the connection.
+    def test_sqlite_engine_skips_silently(self, monkeypatch):
+        # SQLite does not honor set_config and does not use RLS — the
+        # listener is a no-op and must not touch the connection. Patch the
+        # dialect explicitly rather than relying on the ambient engine: CI
+        # runs these tests against Postgres, where the unpatched listener
+        # legitimately opens a cursor.
+        monkeypatch.setattr(
+            admin_database,
+            "_engine",
+            SimpleNamespace(dialect=SimpleNamespace(name="sqlite")),
+        )
         dbapi_connection = MagicMock()
         admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
         dbapi_connection.cursor.assert_not_called()
