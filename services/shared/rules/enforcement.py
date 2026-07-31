@@ -60,6 +60,10 @@ ENFORCEMENT_AWARE_CALL_SITES: tuple[str, ...] = (
 
 _VALID_MODES = frozenset({EnforcementMode.OFF, EnforcementMode.CTE_ONLY, EnforcementMode.ALL})
 
+# Unrecognized RULES_ENGINE_ENFORCE values already reported this process —
+# log once per distinct bad value, not once per request.
+_reported_invalid_modes: set[str] = set()
+
 
 def current_mode() -> str:
     """Read ``RULES_ENGINE_ENFORCE`` at call time.
@@ -67,12 +71,29 @@ def current_mode() -> str:
     Intentionally not cached — reading per-call costs ~microseconds and
     lets operators flip the flag (via Railway env update + redeploy) and
     have the change take effect on the next request without restart
-    coordination. Unknown values fall back to ``off`` — fail-safe for
-    typos or misconfigured environments.
+    coordination.
+
+    Unset or empty means ``off`` (the prod default). A PRESENT but
+    unrecognized value (e.g. ``true``, ``on``, ``cte-only``) fails CLOSED
+    to ``all`` with an error log: an operator who set the variable
+    intended enforcement, and silently reverting to ``off`` on a typo
+    disables the compliance gate while everyone believes it is on (the
+    #2662 failure shape).
     """
     raw = os.getenv("RULES_ENGINE_ENFORCE", EnforcementMode.OFF).strip().lower()
-    if raw not in _VALID_MODES:
+    if not raw:
         return EnforcementMode.OFF
+    if raw not in _VALID_MODES:
+        if raw not in _reported_invalid_modes:
+            _reported_invalid_modes.add(raw)
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).error(
+                "rules_enforce_invalid_value value=%r valid=%s — failing closed to 'all'",
+                raw,
+                sorted(_VALID_MODES),
+            )
+        return EnforcementMode.ALL
     return raw
 
 

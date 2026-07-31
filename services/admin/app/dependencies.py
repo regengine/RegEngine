@@ -27,7 +27,7 @@ from .models import TenantContext
 
 # Redis Session Store
 from .session_store import InMemorySessionStore, RedisSessionStore, redact_connection_url
-from .sqlalchemy_models import MembershipModel, RoleModel, UserModel
+from .sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/email-code/confirm", auto_error=False)
@@ -454,6 +454,43 @@ async def get_current_user(
         except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
             logger.error("tenant_context_error", error=str(e))
             raise credentials_exception
+
+        # SECURITY (#2687 follow-up): enforce live tenant status on the opaque
+        # __Host-regengine_session path. JWT paths carry a mint-time
+        # tenant_status claim that the edge middleware checks, but an opaque
+        # cookie is unreadable at the edge and carries no claims — without
+        # this check a suspended tenant's browser session retained full
+        # access. Fail closed: a status read error denies (503), it never
+        # allows. Global sysadmins are exempt — suspension is a tenant-level
+        # control, not an operator control, and sysadmins must retain access
+        # to manage suspended tenants.
+        if session_cookie_auth and not user.is_sysadmin:
+            try:
+                # populate_existing: always read live status from the DB —
+                # an identity-map hit could serve a stale "active".
+                tenant = db.get(TenantModel, UUID(tenant_id), populate_existing=True)
+            except Exception as exc:
+                logger.error(
+                    "tenant_status_lookup_failed",
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    error=str(exc),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Authentication service temporarily unavailable",
+                ) from exc
+            tenant_status = getattr(tenant, "status", None) if tenant is not None else None
+            if tenant_status not in ("active", "trial"):
+                # Uniform 401 body — same as every other credential failure,
+                # so responses expose no tenant-existence or status oracle.
+                logger.warning(
+                    "suspended_tenant_session_rejected",
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    tenant_status=tenant_status,
+                )
+                raise credentials_exception
 
     return user
 

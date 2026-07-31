@@ -1463,3 +1463,62 @@ class TestPydanticModels:
                 grade="A",
                 breakdown={},
             )
+
+
+# ---------------------------------------------------------------------------
+# Silent-failure sweep: fail-closed flags for poisoned scoring inputs
+# ---------------------------------------------------------------------------
+
+
+class TestComputeScoresFailClosedFlags:
+    """A failed scoring-input read must poison its dimension, never
+    impersonate a healthy default (zero alerts earned a +20 bonus; a
+    chain-verification crash routed to the 90-point gap fallback)."""
+
+    def test_obligation_data_error_zeroes_dimension(self):
+        scores = _compute_scores(_base_data(obligation_data_error=True))
+        assert scores["obligation_coverage"][0] == 0
+        assert "could not be read" in scores["obligation_coverage"][1]
+
+    def test_obligation_data_error_beats_unseeded_branch(self):
+        # Without the flag, zeroed counts route to the flat 50-point
+        # "rules not loaded" branch — the fabricated default.
+        scores = _compute_scores(
+            _base_data(
+                obligation_data_error=True,
+                applicable_obligation_rules=0,
+                total_obligation_rules=0,
+            )
+        )
+        assert scores["obligation_coverage"][0] == 0
+
+    def test_obligation_data_error_never_awards_zero_alert_bonus(self):
+        poisoned = _compute_scores(_base_data(obligation_data_error=True, open_obligation_alerts=0))
+        healthy = _compute_scores(_base_data(open_obligation_alerts=0))
+        assert poisoned["obligation_coverage"][0] < healthy["obligation_coverage"][0]
+
+    def test_chain_verification_error_zeroes_chain_dimension(self):
+        scores = _compute_scores(
+            _base_data(
+                chain_verified=None,
+                chain_verification_error=True,
+                chain_gaps=0,
+            )
+        )
+        assert scores["chain_integrity"][0] == 0
+        assert "fail-closed" in scores["chain_integrity"][1]
+
+    def test_chain_verification_error_denies_export_chain_credit(self):
+        errored = _compute_scores(
+            _base_data(chain_verified=None, chain_verification_error=True, chain_gaps=0)
+        )
+        # The pre-fix fallback: verification "pending" with no gaps earned
+        # +30 export credit; an errored verification must earn none.
+        pending = _compute_scores(_base_data(chain_verified=None, chain_gaps=0))
+        assert errored["export_readiness"][0] == pending["export_readiness"][0] - 30
+        assert "chain verification unavailable" in errored["export_readiness"][1]
+
+    def test_no_flags_preserves_gap_fallback(self):
+        # The legacy gap-detection fallback (no error flag) is unchanged.
+        scores = _compute_scores(_base_data(chain_verified=None, chain_gaps=0))
+        assert scores["chain_integrity"][0] == 90

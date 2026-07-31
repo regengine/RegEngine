@@ -1,11 +1,22 @@
 name: security
 
+# Six jobs here emit branch-protection required contexts (Privileged Workflow
+# Tool Pinning, Secrets Scan (gitleaks), Secrets Audit (detect-secrets),
+# Browser Storage PII Guard, SAST (Semgrep), Dependency Audit). A required
+# context MUST be able to post on every PR, so the `pull_request:` trigger
+# below is deliberately UNFILTERED — see docs/runbooks/BRANCH_PROTECTION.md and
+# scripts/check_workflow_inventory.py, which fails CI if a filter reappears.
+#
+# It previously carried `paths-ignore: ['**/*.md', 'docs/**', ...]`, which made
+# every docs-only PR structurally unmergeable: six required checks never
+# posted, so the PR sat in "Expected — waiting for status" forever and could
+# only land via admin override. Scanning docs is also correct on its own
+# merits — secrets get pasted into markdown runbooks, and gitleaks /
+# detect-secrets are exactly the gates that catch it.
+#
+# The `push:` trigger keeps its filter: main-branch runs are not gating merges.
 on:
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
   push:
     branches: ["main"]
     paths-ignore:
