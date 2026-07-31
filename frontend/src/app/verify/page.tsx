@@ -433,7 +433,7 @@ export default function VerifyPage() {
                         style={{ background: T.accentDim, color: T.accent }}
                     >
                         <ShieldCheck size={14} />
-                        Open Source • MIT License
+                        Open Source • Apache 2.0 License
                     </div>
 
                     <h1
@@ -549,7 +549,7 @@ export default function VerifyPage() {
                         {
                             icon: <FileCode size={20} />,
                             title: 'Open Source',
-                            desc: 'The verification script is MIT-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
+                            desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
                         },
                         {
                             icon: <ShieldCheck size={20} />,
@@ -843,7 +843,7 @@ export default function VerifyPage() {
 
                 {/* Fine print */}
                 <p className="mt-6 text-xs" style={{ color: T.textMuted }}>
-                    verify_chain.py v1.0.0 • MIT License • Python 3.8+ • Zero dependencies for offline mode
+                    verify_chain.py v1.0.0 • Apache 2.0 License • Python 3.8+ • Zero dependencies for offline mode
                 </p>
             </section>
         </div>
