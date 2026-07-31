@@ -118,9 +118,32 @@ class TestCurrentMode:
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", value)
         assert current_mode() == expected
 
-    @pytest.mark.parametrize("bad", ["on", "yes", "true", "1", "strict", ""])
-    def test_unknown_values_fall_back_to_off(self, monkeypatch, bad):
+    @pytest.mark.parametrize("bad", ["on", "yes", "true", "1", "strict", "cte-only"])
+    def test_unknown_values_fail_closed_to_all(self, monkeypatch, bad):
+        """A PRESENT but unrecognized value means the operator intended
+        enforcement — silently reverting to ``off`` on a typo disables the
+        compliance gate while everyone believes it is on (#2662 shape).
+        Fail closed to the strictest mode instead."""
         monkeypatch.setenv("RULES_ENGINE_ENFORCE", bad)
+        assert current_mode() == EnforcementMode.ALL
+
+    def test_unknown_value_logs_error_once_per_value(self, monkeypatch, caplog):
+        import logging
+
+        from shared.rules import enforcement as enf
+
+        monkeypatch.setattr(enf, "_reported_invalid_modes", set())
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "definitely-bogus")
+        with caplog.at_level(logging.ERROR):
+            assert current_mode() == EnforcementMode.ALL
+            assert current_mode() == EnforcementMode.ALL
+        errors = [r for r in caplog.records if "rules_enforce_invalid_value" in r.getMessage()]
+        assert len(errors) == 1
+
+    def test_empty_value_means_off(self, monkeypatch):
+        """Empty string is 'unset-ish' (RULES_ENGINE_ENFORCE= in an env
+        file), not a typo'd enforcement request — stays off."""
+        monkeypatch.setenv("RULES_ENGINE_ENFORCE", "")
         assert current_mode() == EnforcementMode.OFF
 
     def test_reads_env_on_each_call_not_cached(self, monkeypatch):

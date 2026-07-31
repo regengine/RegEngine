@@ -591,7 +591,12 @@ def _build_chain_verification_payload(
     missing_chain_hashes = sum(1 for event in events if not event.get("chain_hash"))
 
     verification_status = "VERIFIED" if chain_verification.valid else "UNVERIFIED"
-    if missing_record_hashes or missing_chain_hashes:
+    # PARTIAL only ever downgrades a VERIFIED chain (some exported rows lack
+    # row/chain hashes). A failed verification must never be promoted to
+    # PARTIAL: the package README instructs consumers to accept VERIFIED or
+    # PARTIAL, so promoting UNVERIFIED would mask a failed chain behind an
+    # acceptable headline status.
+    if chain_verification.valid and (missing_record_hashes or missing_chain_hashes):
         verification_status = "PARTIAL"
 
     return {

@@ -272,9 +272,14 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
             result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
         except (OperationalError, ProgrammingError) as _obl_cov_err:
+            # Fail closed: a read error must poison the obligation dimension,
+            # not impersonate an unseeded tenant (zeroed counts route to the
+            # flat 50-point "rules not loaded" branch — a fabricated default).
+            logger.error("compliance_score: obligation-rule read failed: %s", _obl_cov_err)
             db_session.rollback()
             result["applicable_obligation_rules"] = 0
             result["total_obligation_rules"] = 0
+            result["obligation_data_error"] = True
 
         # Count active compliance alerts (unfixed obligation gaps)
         try:
@@ -289,8 +294,13 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             ).fetchone()
             result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
         except (OperationalError, ProgrammingError) as _alert_err:
+            # Fail closed: "could not read alerts" must never look like
+            # "zero alerts" — that path awards the +20 zero-alert bonus, so
+            # a failed read would strictly INCREASE the compliance grade.
+            logger.error("compliance_score: alert read failed: %s", _alert_err)
             db_session.rollback()
             result["open_obligation_alerts"] = 0
+            result["obligation_data_error"] = True
     else:
         result["applicable_obligation_rules"] = 0
         result["total_obligation_rules"] = 0
@@ -325,9 +335,14 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         result["chain_verified"] = chain_result.valid
         result["chain_verification_errors"] = chain_result.errors
     except (ImportError, OperationalError, ProgrammingError) as exc:
-        logger.warning("chain_verification_in_scoring_failed: %s", exc)
+        # Fail closed: verification failing to RUN must not route to the
+        # permissive gap-detection fallback (up to 90 points + export
+        # credit) — a tampered-but-contiguous chain would score 90 while
+        # the TAMPER branch never fires.
+        logger.error("chain_verification_in_scoring_failed: %s", exc)
         result["chain_verified"] = None  # unknown
         result["chain_verification_errors"] = []
+        result["chain_verification_error"] = True
 
     return result
 
@@ -361,6 +376,13 @@ def _compute_scores(data: dict) -> dict:
         if errors:
             detail += f" — {errors[0][:80]}"
         scores["chain_integrity"] = (max(0, 100 - penalty), detail)
+    elif data.get("chain_verification_error"):
+        # Fail closed: verification errored out — award nothing rather than
+        # fall back to gap detection, which cannot see tampering.
+        scores["chain_integrity"] = (
+            0,
+            "Chain verification could not run — score withheld until verification succeeds (fail-closed)",
+        )
     else:
         # Verification couldn't run (DB issue) — use gap detection fallback
         if data["chain_gaps"] > 0:
@@ -448,7 +470,16 @@ def _compute_scores(data: dict) -> dict:
     applicable_rules = data.get("applicable_obligation_rules", 0)
     open_alerts = data.get("open_obligation_alerts", 0)
 
-    if data["event_count"] == 0:
+    if data.get("obligation_data_error"):
+        # Fail closed: an obligation-data read error poisons this dimension.
+        # Zeroed defaults would either route to the flat 50-point "not
+        # loaded" branch or award the +20 zero-alert bonus — both fabricate
+        # a better grade out of a failed read.
+        scores["obligation_coverage"] = (
+            0,
+            "Obligation data could not be read — score withheld until reads succeed (fail-closed)",
+        )
+    elif data["event_count"] == 0:
         scores["obligation_coverage"] = (0, "No events — obligations not yet assessed")
     elif total_rules == 0:
         scores["obligation_coverage"] = (50, "Obligation rules not loaded — seed regulatory data")
@@ -479,6 +510,9 @@ def _compute_scores(data: dict) -> dict:
         # Chain must be intact
         if data.get("chain_verified") is True:
             export_score += 40
+        elif data.get("chain_verification_error"):
+            # Fail closed: no chain credit when verification failed to run.
+            issues.append("chain verification unavailable")
         elif data["chain_length"] > 0 and data["chain_gaps"] == 0:
             export_score += 30
             issues.append("chain not cryptographically verified")

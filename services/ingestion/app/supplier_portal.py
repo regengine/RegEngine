@@ -105,27 +105,48 @@ def _portal_subscription_active(tenant_id: str) -> Optional[bool]:
       * ``False`` — Redis is reachable but the tenant has no active subscription
         (block before persistence).
       * ``None``  — subscription checking is not configured for this deploy
-        (no Redis); the caller skips the gate rather than failing closed, so
-        local/dev submissions are not broken. Production runs with Redis, where
-        the gate is meaningful.
+        (no Redis) OUTSIDE production; the caller skips the gate so local/dev
+        submissions are not broken.
+
+    In production, uncertainty is never permissive: an unreachable Redis, an
+    open circuit, an unexpected error, or an unset ``REDIS_URL`` raises 503
+    rather than skipping the gate. This matches the documented contract for
+    every other paid surface — "Redis/circuit uncertainty returns 503 because
+    the service cannot confirm entitlement state" (README, Security And Tenant
+    Boundaries) and ``subscription_gate.require_active_subscription``. Before
+    this, a Redis incident silently downgraded the portal to ungated and
+    persisted supplier evidence for tenants with no active subscription.
 
     Mirrors ``subscription_gate.require_active_subscription`` but is callable
     with the link's tenant_id, since the portal has no authenticated principal.
     """
     if not os.getenv("REDIS_URL"):
+        if is_production():
+            raise _portal_entitlement_unavailable("redis_not_configured")
         return None
     from .subscription_gate import _check_subscription_and_redis_health
 
     try:
         status, redis_available = _check_subscription_and_redis_health(tenant_id)
-    except Exception:
-        # Circuit open / unexpected error — cannot confirm state. Treat as
-        # unconfigured so a Redis incident does not hard-block suppliers; the
-        # per-link rate limit still caps abuse.
+    except Exception as exc:
+        # Circuit open / unexpected error — cannot confirm entitlement state.
+        if is_production():
+            raise _portal_entitlement_unavailable("subscription_check_failed") from exc
         return None
     if not redis_available:
+        if is_production():
+            raise _portal_entitlement_unavailable("redis_unavailable")
         return None
     return (status or "").lower() in {"active", "trialing"}
+
+
+def _portal_entitlement_unavailable(reason: str) -> HTTPException:
+    logger.error("portal_subscription_check_unavailable", extra={"reason": reason})
+    return HTTPException(
+        status_code=503,
+        detail="Subscription status cannot be confirmed right now — submission not accepted. Please retry shortly.",
+        headers={"Retry-After": "30"},
+    )
 
 
 def _set_tenant_context(db, tenant_id: str) -> None:
