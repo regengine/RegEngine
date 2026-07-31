@@ -20,6 +20,24 @@ from sqlalchemy.exc import (
 )
 
 
+def _is_missing_table_error(exc: DatabaseError) -> bool:
+    """True only for "relation/table does not exist" — the documented
+    fresh-DB bootstrap case.
+
+    Postgres: UndefinedTable, pgcode ``42P01`` (a ``ProgrammingError``).
+    SQLite: "no such table" (an ``OperationalError``). Anything else —
+    transient connectivity loss, permission/privilege errors, undefined
+    columns — is NOT a bootstrap condition and must fail closed.
+    """
+    orig = getattr(exc, "orig", None)
+    if getattr(orig, "pgcode", None) == "42P01":
+        return True
+    msg = str(orig if orig is not None else exc).lower()
+    if "no such table" in msg:
+        return True
+    return "relation" in msg and "does not exist" in msg
+
+
 class QueryPathMixin:
     """Read-path methods — mixed into :class:`core.CTEPersistence`."""
 
@@ -57,12 +75,14 @@ class QueryPathMixin:
                 tests can raise/lower it without patching the signature
                 (#1322).
 
-        Falls back to ``[seed_tlc]`` if the transformation_links table
-        does not exist (fresh DB bootstrapping) or is unreachable.  All
-        other SQL errors are re-raised so they surface in callers
-        instead of silently truncating the trace — prior code swallowed
-        ``except Exception`` here which masked real FDA export bugs
-        (#1322).
+        Falls back to ``[seed_tlc]`` ONLY when the transformation_links
+        table does not exist (fresh DB bootstrapping). Every other SQL
+        error — including transient connectivity loss mid-export — is
+        re-raised so it surfaces in callers instead of silently
+        truncating the trace to the seed lot while the export renders as
+        complete. Prior code swallowed ``except Exception`` here, which
+        masked real FDA export bugs (#1322); the unreachable-DB carve-out
+        was removed for the same reason.
         """
         from . import core as _core
 
@@ -97,31 +117,31 @@ class QueryPathMixin:
                 {"tid": tenant_id, "tlc": seed_tlc, "max_depth": max_depth},
             ).fetchall()
             return [r[0] for r in rows] if rows else [seed_tlc]
-        except ProgrammingError as e:
+        except (ProgrammingError, OperationalError) as e:
+            if not _is_missing_table_error(e):
+                # Fail closed (#1322 spirit): transient connectivity loss or
+                # permission errors mid-traversal must surface as an export
+                # failure, not silently truncate the trace to the seed lot
+                # while the export renders 200-complete.
+                _core.logger.error(
+                    "transformation_links_traversal_failed",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "seed_tlc": seed_tlc,
+                        "error": str(e),
+                    },
+                )
+                try:
+                    self.session.rollback()
+                except DatabaseError:
+                    _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
+                raise
             # The transformation_links table does not exist — typical on
             # environments that have not run the v043+ migrations yet.
             # Degrade gracefully to "no graph" rather than failing the
             # FDA export entirely.  Rollback so the session is reusable.
             _core.logger.info(
                 "transformation_links_table_missing",
-                extra={
-                    "tenant_id": tenant_id,
-                    "seed_tlc": seed_tlc,
-                    "error": str(e),
-                },
-            )
-            try:
-                self.session.rollback()
-            except DatabaseError:
-                _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
-            return [seed_tlc]
-        except OperationalError as e:
-            # Transient DB connectivity issue — same degradation
-            # (legacy behaviour) but with a proper warning rather than
-            # a silent debug log.  Unknown DatabaseErrors below fall
-            # through to re-raise.
-            _core.logger.warning(
-                "transformation_links_traversal_db_unavailable",
                 extra={
                     "tenant_id": tenant_id,
                     "seed_tlc": seed_tlc,
@@ -308,9 +328,10 @@ class QueryPathMixin:
         are identical to the single-seed method. Returns the full reachable TLC
         set (including the seeds), de-duplicated.
 
-        Degrades to ``list(set(seed_tlcs))`` if ``transformation_links`` does
-        not exist or the DB is transiently unreachable — mirroring the
-        single-seed fallback so a fresh/booting environment still exports.
+        Degrades to the seed set ONLY when ``transformation_links`` does not
+        exist (fresh DB bootstrapping) — mirroring the single-seed fallback.
+        Any other SQL error, including transient connectivity loss, is
+        re-raised (fail closed) rather than silently truncating the trace.
         """
         from . import core as _core
 
@@ -354,23 +375,24 @@ class QueryPathMixin:
                 params,
             ).fetchall()
             return [r[0] for r in rows] if rows else seeds
-        except ProgrammingError as e:
+        except (ProgrammingError, OperationalError) as e:
+            if not _is_missing_table_error(e):
+                # Fail closed — see the single-seed twin above.
+                _core.logger.error(
+                    "transformation_links_traversal_failed",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "seed_count": len(seeds),
+                        "error": str(e),
+                    },
+                )
+                try:
+                    self.session.rollback()
+                except DatabaseError:
+                    _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
+                raise
             _core.logger.info(
                 "transformation_links_table_missing",
-                extra={
-                    "tenant_id": tenant_id,
-                    "seed_count": len(seeds),
-                    "error": str(e),
-                },
-            )
-            try:
-                self.session.rollback()
-            except DatabaseError:
-                _core.logger.debug("Rollback failed in recovery handler", exc_info=True)
-            return seeds
-        except OperationalError as e:
-            _core.logger.warning(
-                "transformation_links_traversal_db_unavailable",
                 extra={
                     "tenant_id": tenant_id,
                     "seed_count": len(seeds),

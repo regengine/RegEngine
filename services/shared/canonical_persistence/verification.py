@@ -29,6 +29,13 @@ verifier reports ``events_without_chain_row`` for visibility but does
 NOT flip ``valid`` on that count alone, because canonical-only mode
 legitimately leaves some events unchained. A break in the rows that DO
 exist (orphan / tamper / linkage) still flips ``valid=False``.
+
+One degenerate case fails closed (#1314, canonical twin): ZERO chain
+rows while non-rejected events exist returns ``valid=False`` with
+``no_chain_evidence=True`` — nothing was walked, so there is no basis
+for a VERIFIED claim, and an unreadable/emptied chain is
+indistinguishable from chain-less ingestion. The error text explicitly
+marks this as a no-evidence condition, not a tamper verdict.
 """
 
 from __future__ import annotations
@@ -85,6 +92,7 @@ class CanonicalChainVerification:
         "events_without_chain_row",
         "legacy_chain_rows",
         "store",
+        "no_chain_evidence",
     )
 
     def __init__(self, **kwargs):
@@ -274,6 +282,23 @@ class CanonicalChainVerificationMixin:
         # represent canonical events.
         events_without_chain_row = max(events_count - (len(rows) - len(legacy_chain_rows)), 0)
 
+        # Fail closed on the degenerate case (#1314, canonical twin): ZERO
+        # chain rows while non-rejected events exist. The store keeps no
+        # per-event marker distinguishing skip_chain_write ingestion from an
+        # unreadable (RLS-denied) or emptied chain, so "VERIFIED" here would
+        # be a claim made after walking zero rows of evidence. This is NOT a
+        # tamper verdict — the error text says so — but the headline must
+        # not read VERIFIED. A tenant with SOME chain rows and some
+        # legitimately-unchained EPCIS events is unaffected.
+        no_chain_evidence = len(rows) == 0 and events_count > 0
+        if no_chain_evidence:
+            errors.append(
+                f"No chain rows exist for tenant with {events_count} non-rejected canonical "
+                "events — an unreadable or emptied chain is indistinguishable from chain-less "
+                "ingestion, so chain integrity cannot be attested (nothing was walked). "
+                "Not a tamper verdict; failing closed rather than reporting VERIFIED."
+            )
+
         valid = len(errors) == 0 and not orphan_chain_rows and not tamper_rows
 
         return CanonicalChainVerification(
@@ -287,4 +312,5 @@ class CanonicalChainVerificationMixin:
             events_without_chain_row=events_without_chain_row,
             legacy_chain_rows=legacy_chain_rows,
             store="traceability_events",
+            no_chain_evidence=no_chain_evidence,
         )

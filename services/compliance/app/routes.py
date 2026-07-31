@@ -731,7 +731,29 @@ async def fsma_audit_spreadsheet(
 
                 has_more = bool(data.get("has_more"))
                 next_cursor = data.get("next_cursor")
-                if not has_more or not next_cursor or not page:
+                if has_more and (not next_cursor or not page):
+                    # Upstream says more records exist but gave us no way to
+                    # fetch them. Breaking here would render the accumulated
+                    # PARTIAL list into an official FDA spreadsheet with no
+                    # marker — exactly the silent truncation the hard-cap
+                    # logic above refuses. Fail closed like the other
+                    # malformed-upstream cases.
+                    correlation_id = str(uuid.uuid4())
+                    _logger.error(
+                        "graph_service_malformed_pagination",
+                        extra={
+                            "has_more": has_more,
+                            "next_cursor": next_cursor,
+                            "page_size": len(page),
+                            "accumulated": len(events),
+                            "correlation_id": correlation_id,
+                        },
+                    )
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Upstream pagination malformed — export aborted (ref: {correlation_id})",
+                    )
+                if not has_more:
                     break
     except CircuitOpenError as exc:
         raise HTTPException(
