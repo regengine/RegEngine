@@ -27,6 +27,7 @@ from services.admin.app.sqlalchemy_models import (
     MembershipModel,
     RoleModel,
     SessionModel,
+    TenantModel,
     UserModel,
 )
 
@@ -56,6 +57,7 @@ def db_session() -> Session:
     )
     table_bindings = [
         UserModel.__table__,
+        TenantModel.__table__,
         RoleModel.__table__,
         MembershipModel.__table__,
         SessionModel.__table__,
@@ -76,7 +78,9 @@ def db_session() -> Session:
     finally:
         session.close()
         for table in reversed(table_bindings):
-            table.drop(bind=engine)
+            # checkfirst: the fail-closed test drops ``tenants`` mid-test to
+            # simulate a status-lookup failure.
+            table.drop(bind=engine, checkfirst=True)
         engine.dispose()
 
 
@@ -103,13 +107,21 @@ def client(db_session):
 
 @pytest.fixture
 def seeded(db_session):
-    """User with one active membership and a live opaque-cookie session.
+    """User with one active membership, an active tenant, and a live
+    opaque-cookie session.
 
-    No TenantModel row: conftest's mock ``tenants`` table lacks the real
-    columns, and the auth path only reads memberships — a bare UUID is
-    enough for tenant scoping here.
+    A real TenantModel row is required since the #2687 follow-up: the
+    opaque-cookie path now reads ``tenants.status`` and fails closed when the
+    row is missing or unreadable (this fixture's private engine creates the
+    real ORM table, unlike the shared conftest mock).
     """
     tenant_id = uuid.uuid4()
+    tenant = TenantModel(
+        id=tenant_id,
+        name="Cookie Fallback Tenant",
+        slug=f"cookie-fallback-{uuid.uuid4().hex[:8]}",
+        status="active",
+    )
     user = UserModel(
         id=uuid.uuid4(),
         email=f"cookie-fallback-{uuid.uuid4().hex[:8]}@example.com",
@@ -136,9 +148,9 @@ def seeded(db_session):
         is_revoked=False,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=8),
     )
-    db_session.add_all([user, role, membership, session_row])
+    db_session.add_all([tenant, user, role, membership, session_row])
     db_session.commit()
-    return {"tenant_id": tenant_id, "user": user, "session": session_row}
+    return {"tenant_id": tenant_id, "tenant": tenant, "user": user, "session": session_row}
 
 
 def _cookie(value: str = RAW_SESSION_TOKEN) -> dict[str, str]:
@@ -188,6 +200,59 @@ class TestSessionCookieFallback:
         db_session.commit()
         resp = client.get("/protected", cookies=_cookie())
         assert resp.status_code == 401
+
+
+class TestTenantSuspensionGate:
+    """#2687 follow-up: the opaque-cookie path enforces live tenant status.
+
+    The JWT strategies check a mint-time tenant_status claim at the edge; an
+    opaque session carries no claims and is unreadable by the middleware, so
+    the backend resolution point is the only place this gate can live.
+    """
+
+    def test_active_tenant_session_passes(self, client, seeded):
+        assert client.get("/protected", cookies=_cookie()).status_code == 200
+
+    def test_trial_tenant_session_passes(self, client, seeded, db_session):
+        seeded["tenant"].status = "trial"
+        db_session.commit()
+        assert client.get("/protected", cookies=_cookie()).status_code == 200
+
+    def test_suspended_tenant_session_rejected(self, client, seeded, db_session):
+        seeded["tenant"].status = "suspended"
+        db_session.commit()
+        resp = client.get("/protected", cookies=_cookie())
+        assert resp.status_code == 401
+        # Uniform body — same as any other credential failure (no status oracle).
+        assert resp.json()["detail"] == "Could not validate credentials"
+
+    def test_archived_tenant_session_rejected(self, client, seeded, db_session):
+        seeded["tenant"].status = "archived"
+        db_session.commit()
+        assert client.get("/protected", cookies=_cookie()).status_code == 401
+
+    def test_missing_tenant_row_rejected(self, client, seeded, db_session):
+        db_session.delete(seeded["tenant"])
+        db_session.commit()
+        assert client.get("/protected", cookies=_cookie()).status_code == 401
+
+    def test_status_lookup_failure_fails_closed(self, client, seeded, db_session):
+        # Simulate an unreadable tenants table: the status check must DENY
+        # (503), never fall through to an allow.
+        from sqlalchemy import text
+
+        db_session.execute(text("DROP TABLE tenants"))
+        db_session.commit()
+        resp = client.get("/protected", cookies=_cookie())
+        assert resp.status_code == 503
+
+    def test_sysadmin_exempt_from_suspension_gate(self, client, seeded, db_session):
+        # Suspension is a tenant-level control; global sysadmins must retain
+        # access to manage (e.g. un-suspend) the tenant.
+        seeded["tenant"].status = "suspended"
+        seeded["user"].is_sysadmin = True
+        db_session.commit()
+        assert client.get("/protected", cookies=_cookie()).status_code == 200
 
 
 class TestLogoutAllRevokesCookieSessions:
