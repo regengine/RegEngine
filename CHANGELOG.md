@@ -1,6 +1,32 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This file tracks **marketing-site and frontend product-surface releases**
+(`v0.x` — accessibility, onboarding UX, billing platform, design system).
+That is the scope every entry below already has; it is not a whole-repo
+history and is not versioned with the backend.
+
+Backend change history lives where it is authoritative, not here:
+
+- **Schema** — [alembic/versions/](alembic/versions/), one revision per
+  change, currently at v104. The revision DAG is the schema's real
+  history; `scripts/check_alembic_revisions.py` keeps it single-headed.
+- **Everything else** — git history and the pull requests it references.
+  `git log --oneline` with conventional-commit prefixes (`fix:`, `feat:`,
+  `ci:`, `docs:`) is the backend changelog.
+- **Operational state** — [docs/runbooks/](docs/runbooks/) for what is
+  deployed and how, and
+  [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)
+  for in-flight migrations.
+
+Backfilling ~100 backend migrations into this file would create a second
+history to keep in sync with the first — a new drift source, not a fix.
+Per the maintenance rule in
+[docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) ("Any product
+description elsewhere — site, deck, kit, repo doc — must align to this
+file or link here"), a doc that cannot carry the whole truth should point
+at what does. Scope note + pointers, not duplication.
+
+All notable changes to the frontend product surface are documented below.
 
 ## v0.7.0 — Phase 4 Accessibility Polish (WCAG 2.1 AA)
 
