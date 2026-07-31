@@ -420,3 +420,38 @@ def test_valid_request_returns_csv(client):
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/csv")
     assert "TLC-001" in r.text
+
+
+def test_malformed_pagination_returns_502_not_partial_csv(client):
+    """Silent-failure sweep: ``has_more=true`` with a missing
+    ``next_cursor`` previously broke the loop and rendered the
+    accumulated PARTIAL event list into an official FDA spreadsheet
+    with no marker. Fail closed like the other malformed-upstream
+    cases."""
+    page_1 = [_make_event(i) for i in range(10)]
+    pages = [
+        {"events": page_1, "has_more": True, "next_cursor": None},
+    ]
+    with _patch_graph_paginated(client, pages):
+        r = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
+        )
+    assert r.status_code == 502
+    assert "pagination" in r.json()["detail"].lower()
+
+
+def test_malformed_pagination_empty_page_returns_502(client):
+    """``has_more=true`` with an empty page is the same malformed
+    upstream shape — abort, do not render a partial export."""
+    page_1 = [_make_event(i) for i in range(10)]
+    pages = [
+        {"events": page_1, "has_more": True, "next_cursor": "cursor-abc"},
+        {"events": [], "has_more": True, "next_cursor": "cursor-def"},
+    ]
+    with _patch_graph_paginated(client, pages):
+        r = client.get(
+            "/v1/fsma/audit/spreadsheet",
+            params={"start_date": "2026-04-01", "end_date": "2026-04-17"},
+        )
+    assert r.status_code == 502

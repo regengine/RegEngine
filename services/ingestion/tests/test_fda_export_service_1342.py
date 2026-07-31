@@ -532,6 +532,26 @@ class TestBuildChainVerificationPayload:
         assert payload["verification_status"] == "PARTIAL"
         assert payload["row_hash_coverage"]["missing_record_hashes"] == 1
 
+    def test_failed_verification_never_promoted_to_partial(self) -> None:
+        """Silent-failure sweep: the package README instructs consumers to
+        accept VERIFIED or PARTIAL, so an invalid chain co-occurring with
+        missing row hashes must stay UNVERIFIED — PARTIAL only ever
+        downgrades a VERIFIED chain."""
+        events = [{"sha256_hash": "", "chain_hash": ""}]
+        payload = svc._build_chain_verification_payload(
+            tenant_id="t",
+            tlc=None,
+            events=events,
+            csv_hash="c",
+            chain_verification=_chain_result(valid=False, errors=["chain break"]),
+            completeness_summary={
+                "required_kde_coverage_ratio": 1.0,
+                "events_with_missing_required_fields": 0,
+            },
+        )
+        assert payload["verification_status"] == "UNVERIFIED"
+        assert payload["row_hash_coverage"]["missing_record_hashes"] == 1
+
     def test_privacy_block_reflects_include_pii(self) -> None:
         payload = svc._build_chain_verification_payload(
             tenant_id="t",

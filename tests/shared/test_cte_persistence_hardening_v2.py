@@ -189,14 +189,14 @@ class TestTraversalDepth_Issue1322:
                 depth=-1,
             )
 
-    def test_programming_error_degrades_to_seed_tlc_only(self):
-        """If the transformation_links table is missing the traversal
-        must return [seed_tlc] instead of raising — graceful
-        degradation for fresh-DB bootstrapping."""
+    def test_missing_table_degrades_to_seed_tlc_only(self):
+        """If the transformation_links table is missing (fresh-DB
+        bootstrapping — pg 42P01 wording) the traversal must return
+        [seed_tlc] instead of raising."""
         session = FakeSession()
 
         def _raise_programming(sql, params):
-            raise ProgrammingError("stmt", {}, Exception("table missing"))
+            raise ProgrammingError("stmt", {}, Exception('relation "fsma.transformation_links" does not exist'))
 
         session.add_rule(r"RECURSIVE tlc_graph", _raise_programming)
 
@@ -207,13 +207,12 @@ class TestTraversalDepth_Issue1322:
         )
         assert result == ["TLC-X"]
 
-    def test_operational_error_degrades_to_seed_tlc_only(self):
-        """Transient DB connectivity errors also degrade to seed-only;
-        we do not want one dead replica to DoS FDA export."""
+    def test_sqlite_missing_table_degrades_to_seed_tlc_only(self):
+        """SQLite spells missing-table as an OperationalError."""
         session = FakeSession()
 
         def _raise_operational(sql, params):
-            raise OperationalError("stmt", {}, Exception("conn refused"))
+            raise OperationalError("stmt", {}, Exception("no such table: fsma.transformation_links"))
 
         session.add_rule(r"RECURSIVE tlc_graph", _raise_operational)
 
@@ -223,6 +222,42 @@ class TestTraversalDepth_Issue1322:
             seed_tlc="TLC-X",
         )
         assert result == ["TLC-X"]
+
+    def test_generic_programming_error_propagates(self):
+        """Non-missing-table ProgrammingError (e.g. permission denied)
+        must FAIL CLOSED — silently truncating to the seed lot renders
+        an incomplete FDA trace as complete (silent-failure sweep)."""
+        session = FakeSession()
+
+        def _raise_programming(sql, params):
+            raise ProgrammingError("stmt", {}, Exception("permission denied for table transformation_links"))
+
+        session.add_rule(r"RECURSIVE tlc_graph", _raise_programming)
+
+        p = CTEPersistence(session=session)
+        with pytest.raises(ProgrammingError):
+            p._expand_tlcs_via_transformation_links(
+                tenant_id=TENANT_A,
+                seed_tlc="TLC-X",
+            )
+
+    def test_operational_error_propagates(self):
+        """Transient DB connectivity errors mid-traversal must FAIL
+        CLOSED (previously degraded to seed-only: a mid-export blip
+        silently dropped linked lots from the recall scope)."""
+        session = FakeSession()
+
+        def _raise_operational(sql, params):
+            raise OperationalError("stmt", {}, Exception("conn refused"))
+
+        session.add_rule(r"RECURSIVE tlc_graph", _raise_operational)
+
+        p = CTEPersistence(session=session)
+        with pytest.raises(OperationalError):
+            p._expand_tlcs_via_transformation_links(
+                tenant_id=TENANT_A,
+                seed_tlc="TLC-X",
+            )
 
     def test_unexpected_exception_propagates(self):
         """Regression guard against the original bare ``except

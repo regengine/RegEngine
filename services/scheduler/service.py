@@ -407,7 +407,12 @@ class SchedulerService:
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("webhook_notification_failed", error=str(e))
 
-        # Tenant recall matching — activate ComplianceIntegration for FDA recalls
+        # Tenant recall matching — activate ComplianceIntegration for FDA recalls.
+        # #2689 follow-up: source_ids whose tenant alerting failed are excluded
+        # from the seen-ack below, so exactly those items retry next tick —
+        # one failing item can neither drop the others' alerts nor force the
+        # succeeded ones to re-emit.
+        failed_alert_source_ids: set = set()
         if source_type == SourceType.FDA_RECALL and items:
             try:
                 from services.scheduler.app.compliance_integration import get_compliance_integration
@@ -415,13 +420,15 @@ class SchedulerService:
                 integration = get_compliance_integration()
             except Exception as e:
                 # Constructing the integration (engine init / import) failed —
-                # no item can be processed. Log once, not per item.
+                # no item can be processed. Log once, not per item, and
+                # withhold every ack so the whole batch retries next tick.
                 logger.error(
                     "compliance_integration_unavailable",
                     error=str(e),
                     error_type=type(e).__name__,
                 )
                 integration = None
+                failed_alert_source_ids = {item.source_id for item in items}
 
             if integration is not None:
                 # Per-item try/except so one bad recall does not drop alerts for
@@ -440,6 +447,7 @@ class SchedulerService:
                         processed += 1
                     except (SQLAlchemyError, ValueError, KeyError, TypeError, RuntimeError) as e:
                         failed += 1
+                        failed_alert_source_ids.add(item.source_id)
                         logger.error(
                             "compliance_integration_item_failed",
                             source_id=getattr(item, "source_id", None),
@@ -470,8 +478,25 @@ class SchedulerService:
         # FINAL: mark items seen only if the primary emission succeeded
         # cleanly. If Kafka was down the items stay un-marked and the next
         # scheduler tick will re-discover and re-emit them (#1136).
+        # #2689 follow-up: additionally withhold the ack for exactly the
+        # recall items whose tenant alerting failed, so those retry next
+        # tick while the succeeded items ack once (no re-storm). The retry
+        # re-runs the full pipeline for withheld items — downstream is
+        # idempotent on source_id (documented at-least-once contract).
         if primary_emit_succeeded:
-            self._mark_items_seen(items, source_type)
+            if failed_alert_source_ids:
+                to_ack = [i for i in items if i.source_id not in failed_alert_source_ids]
+                logger.warning(
+                    "recall_alert_ack_withheld",
+                    source_type=source_type.value,
+                    withheld=len(items) - len(to_ack),
+                    acked=len(to_ack),
+                    reason="compliance_alerting_failed_for_item",
+                )
+                if to_ack:
+                    self._mark_items_seen(to_ack, source_type)
+            else:
+                self._mark_items_seen(items, source_type)
         else:
             logger.warning(
                 "items_not_marked_seen_will_retry",

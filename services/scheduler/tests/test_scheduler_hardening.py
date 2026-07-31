@@ -100,7 +100,13 @@ class TestEmitThenAckInvariant:
         svc.notifier.notify.return_value = []
 
         item = _make_item()
-        svc._process_new_items([item], SourceType.FDA_RECALL)
+        # Alerting succeeds — this test pins the Kafka emit/ack contract,
+        # and a real (unstubbed) integration failure would withhold the ack.
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=MagicMock(),
+        ):
+            svc._process_new_items([item], SourceType.FDA_RECALL)
 
         svc.state_manager.mark_seen.assert_called_once()
         kwargs = svc.state_manager.mark_seen.call_args.kwargs
@@ -166,7 +172,13 @@ class TestPgBackboneGating:
         svc.notifier.notify.return_value = []
 
         item = _make_item()
-        svc._process_new_items([item], SourceType.FDA_RECALL)
+        # Alerting succeeds — this test pins pg-mode Kafka gating/acking,
+        # and a real (unstubbed) integration failure would withhold the ack.
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=MagicMock(),
+        ):
+            svc._process_new_items([item], SourceType.FDA_RECALL)
 
         # No Kafka traffic at all in pg mode...
         svc.kafka_producer.emit_batch.assert_not_called()
@@ -198,7 +210,10 @@ class TestPgBackboneGating:
         """A single recall raising inside process_enforcement_item must not drop
         alerts for the rest of the batch. Before the per-item guard, one
         exception aborted the loop while the batch was still marked seen (pg
-        mode acks unconditionally), permanently losing later tenants' alerts."""
+        mode acks unconditionally), permanently losing later tenants' alerts.
+
+        #2689 follow-up: the FAILED item's ack is now withheld so it retries
+        next tick — only the succeeded items are marked seen."""
         monkeypatch.delenv("EVENT_BACKBONE", raising=False)
 
         svc = _build_scheduler_service_without_init()
@@ -218,13 +233,17 @@ class TestPgBackboneGating:
             svc._process_new_items(items, SourceType.FDA_RECALL)
 
         assert integration.process_enforcement_item.call_count == 3
-        # pg-mode acks the batch regardless of alerting; mark_seen is called
-        # once per item, so all three are marked despite the middle failure.
-        assert svc.state_manager.mark_seen.call_count == 3
+        # Succeeded items ack once (no re-storm); the failed one is withheld
+        # and will be re-discovered next tick.
+        assert svc.state_manager.mark_seen.call_count == 2
+        acked = {c.kwargs["source_id"] for c in svc.state_manager.mark_seen.call_args_list}
+        assert acked == {"fda_recall:0", "fda_recall:2"}
 
-    def test_compliance_integration_construction_failure_is_logged_once(self, monkeypatch):
-        """If building the integration fails, no per-item calls happen and the
-        batch is still acked (pg mode) — but the run must not raise."""
+    def test_compliance_integration_construction_failure_withholds_all_acks(self, monkeypatch):
+        """If building the integration fails, no alert was attempted for any
+        item — every ack is withheld so the whole batch retries next tick.
+        The run must still not raise (#2689 follow-up; previously the batch
+        was acked anyway and all alerts were lost permanently)."""
         monkeypatch.delenv("EVENT_BACKBONE", raising=False)
 
         svc = _build_scheduler_service_without_init()
@@ -239,5 +258,41 @@ class TestPgBackboneGating:
         ):
             # Must not raise.
             svc._process_new_items([_make_item()], SourceType.FDA_RECALL)
+
+        svc.state_manager.mark_seen.assert_not_called()
+
+    def test_all_alerts_succeeding_acks_every_item(self, monkeypatch):
+        """No alerting failures → every item is acked exactly once."""
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        svc.notifier = MagicMock()
+        svc.notifier.notify.return_value = []
+
+        items = [_make_item(source_id=f"fda_recall:{i}") for i in range(3)]
+        integration = MagicMock()
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=integration,
+        ):
+            svc._process_new_items(items, SourceType.FDA_RECALL)
+
+        assert svc.state_manager.mark_seen.call_count == 3
+
+    def test_non_recall_sources_ack_normally(self, monkeypatch):
+        """The withholding logic is recall-specific — other source types
+        never enter the compliance loop and ack the full batch."""
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        svc.notifier = MagicMock()
+        svc.notifier.notify.return_value = []
+
+        item = _make_item(source_id="warning_letter:001")
+        svc._process_new_items([item], SourceType.FDA_WARNING_LETTER)
 
         svc.state_manager.mark_seen.assert_called_once()

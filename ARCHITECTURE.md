@@ -1,6 +1,9 @@
 # RegEngine Architecture
 
-Last verified: 2026-05-23
+Last verified: 2026-07-31 — deployment model, runtime shape, infrastructure,
+dependency management, and the debt table were re-checked against code on
+this date. Sections carry their own dates where a claim was verified
+earlier and not re-checked.
 
 ## Deployment Model
 
@@ -37,9 +40,17 @@ useful decomposition seams in the codebase:
   `railway.toml`.
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
-- **Database:** PostgreSQL via `DATABASE_URL`.
-- **Runtime helpers:** Redis is used by rate limiting, session/JWT paths, and
-  task-processing helpers when configured.
+- **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
+  Alembic (`alembic/versions/`, currently v104); the app performs no runtime
+  DDL as of v098/v099. The newest tables are
+  `fsma.compliance_evidence_snapshots` (v103, backs the Compliance Snapshots
+  surface) and the v102 mock-audit drill records.
+- **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
+  subscription/entitlement checks, idempotency caching, and task-processing
+  helpers when configured. The local dev stack
+  (`docker-compose.dev.yml`) starts PostgreSQL **and** Redis — without Redis
+  the subscription gate fails closed with 503, so authenticated ingest does
+  not work locally.
 - **Async/event backbone:** the consolidated deploy path uses PostgreSQL-backed
   task processing via `server/workers/task_processor.py` and
   `services/shared/task_queue.py`. Legacy Kafka/Redpanda code paths still exist
@@ -93,19 +104,36 @@ application is validated in its own workflow.
 
 ### Large Modules
 
-Representative source modules above 1,000 lines as of 2026-05-23:
+Source modules above 1,000 lines, re-measured 2026-07-31 (`wc -l`,
+excluding tests):
 
 | File | Lines | Area | Likely split direction |
 | --- | ---: | --- | --- |
-| `services/shared/cte_persistence/core.py` | 2067 | shared persistence | extract query builder, batch ops, and verification helpers |
-| `services/shared/identity_resolution/service.py` | 1987 | shared identity resolution | extract matcher, scorer, and orchestration paths |
-| `services/nlp/app/consumer.py` | 1905 | NLP ingestion worker | separate consumer loop, auth, DLQ, and routing concerns |
-| `services/ingestion/app/webhook_router_v2.py` | 1757 | ingestion API | extract auth, validation, persistence, and response shaping |
-| `services/nlp/app/extractors/fsma_extractor.py` | 1670 | NLP extraction | split entity resolution, classifiers, and mapping logic |
-| `services/ingestion/app/fda_export/router.py` | 1294 | export API | separate query, bundle assembly, and format writers |
-| `services/scheduler/main.py` | 1290 | scheduler runtime | split job registration, health, and retention flows |
-| `services/shared/canonical_persistence/writer.py` | 1155 | shared persistence | extract write-path helpers and transaction orchestration |
-| `services/shared/api_key_store.py` | 1077 | shared auth | split storage adapters from validation helpers |
-| `services/admin/app/metrics.py` | 1058 | admin observability | separate metric definitions from collectors/endpoints |
+| `services/ingestion/app/fda_export/router.py` | 1312 | export API | separate query, bundle assembly, and format writers |
+| `services/scheduler/service.py` | 1268 | scheduler runtime | split scrape orchestration, emission/ack, and job registration |
+| `services/shared/canonical_persistence/writer.py` | 1228 | shared persistence | extract write-path helpers and transaction orchestration |
+| `services/ingestion/app/inflow_workbench.py` | 1216 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
+| `services/shared/api_key_store.py` | 1180 | shared auth | split storage adapters from validation helpers |
+| `services/ingestion/app/routes_ingest.py` | 1118 | ingestion API | separate route wiring from validation and persistence |
+| `services/graph/app/routers/fsma/compliance.py` | 1094 | graph API | split query builders from response shaping |
+| `server/main.py` | 1088 | app composition | extract router registration and startup checks from lifespan |
+| `services/shared/canonical_event.py` | 1074 | shared model | split schema, hashing, and conversion helpers |
+| `server/workers/task_processor.py` | 1063 | async worker | separate queue polling, dispatch, and retry policy |
+| `services/admin/app/metrics.py` | 1046 | admin observability | separate metric definitions from collectors/endpoints |
+| `services/admin/app/session_store.py` | 1042 | admin auth | split Redis and in-memory backends from session policy |
+| `services/graph/app/fsma_audit.py` | 1020 | graph audit | separate traversal from audit-record assembly |
 
-These are refactor candidates, not proof of broken behavior by themselves. The 2026-05-06 list also included `kernel/reporting/fsma_engine.py` (since removed) and `services/ingestion/app/routes.py` (since split — now ~100 lines).
+These are refactor candidates, not proof of broken behavior by
+themselves.
+
+Resolved since the 2026-05-23 list (verified 2026-07-31): three entries
+no longer exist as files — `services/nlp/app/consumer.py`,
+`services/ingestion/app/webhook_router_v2.py`, and
+`services/nlp/app/extractors/fsma_extractor.py` are now packages of the
+same name. Four shrank below the threshold:
+`services/shared/cte_persistence/core.py` (2067 → 387, split into
+`queries`/`verification`/mixins), `services/shared/identity_resolution/service.py`
+(1987 → 146), and `services/scheduler/main.py` (1290 → 231, with the
+runtime now in `service.py`). The earlier 2026-05-06 list also included
+`kernel/reporting/fsma_engine.py` (since removed) and
+`services/ingestion/app/routes.py` (since split — now ~100 lines).
