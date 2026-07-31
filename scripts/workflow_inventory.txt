@@ -1,0 +1,61 @@
+# Workflow inventory — the checked-in contract between .github/workflows/
+# and branch protection. Enforced by scripts/check_workflow_inventory.py.
+#
+# WHY: branch protection requires status-check CONTEXTS by name. A context
+# is just a string; GitHub has no idea which workflow is supposed to emit
+# it. Rename or delete the emitting job and the requirement silently
+# becomes unsatisfiable — every PR waits forever on a check that will
+# never post, and the only way to merge is an admin override. That is
+# exactly what happened between #2551 and 2026-07-31: the required context
+# "CI Status Gate" was emitted by nothing at all.
+#
+# Two sections, both enforced:
+#
+#   [workflows]        every .github/workflows/*.yml file, one per line.
+#                      Adding, renaming, or deleting a workflow without
+#                      updating this list fails CI.
+#
+#   [required-contexts] every context in the `main` branch-protection
+#                      required list, one per line. Each MUST be emitted
+#                      as a job `name:` by some workflow, and that
+#                      workflow MUST run on every pull request (a
+#                      `pull_request:` trigger with no `paths:` /
+#                      `paths-ignore:` filter) — otherwise the check
+#                      cannot post on PRs that miss the filter and the
+#                      requirement is unsatisfiable for them.
+#
+# Changing branch protection is a settings-UI action. When you change it,
+# update [required-contexts] in the SAME PR so the guard keeps matching
+# reality. See docs/runbooks/BRANCH_PROTECTION.md.
+
+[workflows]
+agent-sweep.yml
+backend-ci.yml
+bundle-analysis.yml
+demo-smoke.yml
+deploy.yml
+frontend-ci.yml
+inflow-contract-ci.yml
+infra-k8s-ci.yml
+legacy-code-scan.yml
+openapi-public-spec.yml
+pr-gate.yml
+pr-quality.yml
+proxy-smoke.yml
+qa-health.yml
+qa-pipeline.yml
+review-gates.yml
+sdk-ci.yml
+security.yml
+sentinel.yml
+test-suite-check.yml
+
+[required-contexts]
+CI Status Gate
+Contract Status Gate
+Privileged Workflow Tool Pinning
+Secrets Scan (gitleaks)
+Secrets Audit (detect-secrets)
+Browser Storage PII Guard
+SAST (Semgrep)
+Dependency Audit

@@ -87,10 +87,7 @@ def _write_migration(
     """Write a minimal Alembic migration file with the given revision ID."""
     f = tmp_path / filename
     f.write_text(
-        f'revision: str = "{rev_id}"\n'
-        f"down_revision = {down_revision}\n"
-        "branch_labels = None\n"
-        "depends_on = None\n"
+        f'revision: str = "{rev_id}"\ndown_revision = {down_revision}\nbranch_labels = None\ndepends_on = None\n'
     )
     return f
 
@@ -176,3 +173,94 @@ class TestCollectRevisions:
         assert result == 0
         out = capsys.readouterr().out
         assert f"Head(s): {merge}" in out
+
+
+class TestMultipleHeadsGuard:
+    """Proof fixtures for the second-head guard (Phase 3 CI governance).
+
+    Three head-forks landed on main inside 48h (v099/v100, v101/v102, and
+    the v101/v102 -> v103 reparent). The MULTIPLE HEADS check already
+    existed; these fixtures prove it actually fails CI, so the guard
+    cannot silently rot.
+    """
+
+    def _patch(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(_mod, "VERSIONS_DIR", tmp_path)
+        monkeypatch.setattr(_mod, "REPO_ROOT", tmp_path.parent)
+
+    def test_second_head_fails_main(self, tmp_path, monkeypatch, capsys):
+        """The exact v099/v100 shape: two migrations sharing one parent and
+        neither pointed at — two heads, ambiguous `alembic upgrade head`."""
+        self._patch(monkeypatch, tmp_path)
+        base = "3f7a1c9e2b84"  # pragma: allowlist secret
+        fork_a = "4a8c2f91d0b3"  # pragma: allowlist secret
+        fork_b = "5b9d3a02c1e4"  # pragma: allowlist secret
+
+        _write_migration(tmp_path, "001_base.py", base)
+        _write_migration(tmp_path, "002_fork_a.py", fork_a, f'"{base}"')
+        _write_migration(tmp_path, "003_fork_b.py", fork_b, f'"{base}"')
+
+        assert _mod.main() == 1
+        out = capsys.readouterr().out
+        assert "MULTIPLE HEADS (2)" in out
+        # Both offending revisions are named so the fix is actionable.
+        assert fork_a in out
+        assert fork_b in out
+        assert "alembic merge" in out
+
+    def test_three_heads_fails_main(self, tmp_path, monkeypatch, capsys):
+        self._patch(monkeypatch, tmp_path)
+        base = "3f7a1c9e2b84"  # pragma: allowlist secret
+        for i, fork in enumerate(
+            ("4a8c2f91d0b3", "5b9d3a02c1e4", "6c0e4b13d2f5"),  # pragma: allowlist secret
+            start=2,
+        ):
+            _write_migration(tmp_path, f"00{i}_fork.py", fork, f'"{base}"')
+        _write_migration(tmp_path, "001_base.py", base)
+
+        assert _mod.main() == 1
+        assert "MULTIPLE HEADS (3)" in capsys.readouterr().out
+
+    def test_merging_the_fork_restores_single_head(self, tmp_path, monkeypatch, capsys):
+        """The documented remedy (`alembic merge`) makes the guard pass —
+        proving the failure is actionable, not a dead end."""
+        self._patch(monkeypatch, tmp_path)
+        base = "3f7a1c9e2b84"  # pragma: allowlist secret
+        fork_a = "4a8c2f91d0b3"  # pragma: allowlist secret
+        fork_b = "5b9d3a02c1e4"  # pragma: allowlist secret
+        merge = "6c0e4b13d2f5"  # pragma: allowlist secret
+
+        _write_migration(tmp_path, "001_base.py", base)
+        _write_migration(tmp_path, "002_fork_a.py", fork_a, f'"{base}"')
+        _write_migration(tmp_path, "003_fork_b.py", fork_b, f'"{base}"')
+        _write_migration(tmp_path, "004_merge.py", merge, f'("{fork_a}", "{fork_b}")')
+
+        assert _mod.main() == 0
+        assert f"Head(s): {merge}" in capsys.readouterr().out
+
+    def test_reparent_leaving_two_heads_fails(self, tmp_path, monkeypatch, capsys):
+        """The v101/v102 -> v103 reparent shape: a later migration is
+        re-pointed at one fork, leaving the other fork still a head."""
+        self._patch(monkeypatch, tmp_path)
+        base = "3f7a1c9e2b84"  # pragma: allowlist secret
+        fork_a = "4a8c2f91d0b3"  # pragma: allowlist secret
+        fork_b = "5b9d3a02c1e4"  # pragma: allowlist secret
+        later = "6c0e4b13d2f5"  # pragma: allowlist secret
+
+        _write_migration(tmp_path, "001_base.py", base)
+        _write_migration(tmp_path, "002_fork_a.py", fork_a, f'"{base}"')
+        _write_migration(tmp_path, "003_fork_b.py", fork_b, f'"{base}"')
+        # Reparented onto fork_a only — fork_b is still an unmerged head.
+        _write_migration(tmp_path, "004_later.py", later, f'"{fork_a}"')
+
+        assert _mod.main() == 1
+        out = capsys.readouterr().out
+        assert "MULTIPLE HEADS (2)" in out
+        assert fork_b in out
+
+    def test_real_repo_dag_has_exactly_one_head(self, capsys):
+        """The live alembic/versions/ tree must have a single head. Runs
+        against the REAL directory (no monkeypatch), so a merged PR that
+        forks the DAG fails this test as well as the CI script."""
+        assert _mod.main() == 0
+        assert "single head" in capsys.readouterr().out

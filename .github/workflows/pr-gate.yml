@@ -21,6 +21,24 @@
 # direction — passing an area whose real gate actually failed — only happens on
 # under-detection, so keep these lists a faithful copy. deploy.yml continues to
 # wait on "Backend CI Status Gate" directly and is unaffected by this shim.
+#
+# ---------------------------------------------------------------------------
+# REQUIRED CONTEXT — DO NOT RENAME THE `CI Status Gate` JOB
+# ---------------------------------------------------------------------------
+# `main` branch protection requires the context "CI Status Gate" (exact
+# string). The aggregate job at the bottom of this file is the ONLY job in the
+# repository that emits it — the per-area jobs are named "PR Gate: Backend" /
+# "PR Gate: Frontend" and are NOT required contexts.
+#
+# Before this file gained that aggregate job, "CI Status Gate" was required but
+# emitted by nothing (the real gates are "Backend CI Status Gate" and
+# "Frontend CI Status Gate"), so every PR waited forever on a check that could
+# never post and merges proceeded via admin override.
+#
+# Renaming this job, deleting this workflow, or adding a path filter to its
+# `pull_request:` trigger re-breaks branch protection for EVERY PR.
+# scripts/check_workflow_inventory.py fails CI if you do; the full contract is
+# in docs/runbooks/BRANCH_PROTECTION.md.
 
 name: PR Gate
 
@@ -164,3 +182,49 @@ jobs:
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
+
+  # Workflow / branch-protection contract guard. Lives here rather than in
+  # backend-ci.yml because that workflow is path-filtered: renaming a workflow
+  # this guard is meant to catch (say qa-health.yml) touches none of its paths,
+  # so the guard would not run on exactly the PR that breaks the contract.
+  # pr-gate.yml is unfiltered by construction.
+  workflow-contract:
+    name: "PR Gate: Workflow Contract"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML
+        run: pip install --disable-pip-version-check "pyyaml==6.0.2"
+      - name: Check workflow inventory and required contexts
+        run: python3 scripts/check_workflow_inventory.py
+
+  # The single required context. Aggregates the per-area jobs so branch
+  # protection has one always-posted check to require, on every PR, whatever
+  # paths it touches. `needs` + an explicit result check (not just implicit
+  # success) so a cancelled or skipped dependency fails closed rather than
+  # reporting green.
+  ci-status-gate:
+    name: "CI Status Gate"
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, workflow-contract]
+    if: always()
+    steps:
+      - name: Verify all area gates passed
+        env:
+          BACKEND: ${{ needs.backend.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          CONTRACT: ${{ needs.workflow-contract.result }}
+        run: |
+          echo "PR Gate: Backend           = $BACKEND"
+          echo "PR Gate: Frontend          = $FRONTEND"
+          echo "PR Gate: Workflow Contract = $CONTRACT"
+          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ]; then
+            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT"
+            exit 1
+          fi
+          echo "All area gates green."
