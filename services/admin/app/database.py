@@ -45,6 +45,7 @@ import structlog
 # central security gate in shared.env rather than maintaining a divergent copy.
 from shared.env import CLOUD_ENV_VARS as _CLOUD_ENV_MARKERS
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import DisconnectionError
 from sqlalchemy.orm import Session, sessionmaker
 
 logger = structlog.get_logger("admin-db")
@@ -184,13 +185,18 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
             )
         finally:
             cursor.close()
-    except Exception as exc:  # noqa: BLE001 -- log and keep going
-        # Do not fail the whole request if the RESET fails; log loudly
-        # so the pool-bleed mitigation is visible if it ever regresses.
-        logger.warning(
+    except Exception as exc:  # noqa: BLE001
+        # Fail closed: a connection whose GUC reset failed may still carry
+        # the previous tenant's session-scoped app.tenant_id — handing it
+        # out would scope RLS reads to the WRONG tenant (#1381 re-opened on
+        # the mitigation's own error path). DisconnectionError makes the
+        # pool discard this connection and retry the checkout on a fresh
+        # one instead of proceeding with a possibly-stale tenant scope.
+        logger.error(
             "pool_checkout_tenant_reset_failed",
             error=str(exc),
         )
+        raise DisconnectionError("tenant GUC reset failed on pool checkout; discarding connection") from exc
 
 
 if _engine.dialect.name != "sqlite":

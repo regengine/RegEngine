@@ -219,6 +219,28 @@ class TestEpcisSkipChainWrite_Issue2506:
         assert result.valid is True
         assert result.chain_length == 0
         assert result.events_without_chain_row == 0
+        assert result.no_chain_evidence is False
+
+    def test_empty_chain_with_events_fails_closed(self):
+        """Silent-failure sweep (#1314 canonical twin): ZERO chain rows
+        while non-rejected events exist must NOT report VERIFIED — an
+        unreadable (RLS-denied) or emptied chain is indistinguishable
+        from chain-less ingestion, and nothing was walked."""
+        store = CanonicalEventStore(_CanonicalSession([], event_count=5), dual_write=False)
+        result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
+        assert result.valid is False
+        assert result.no_chain_evidence is True
+        assert result.chain_length == 0
+        # Explicitly a no-evidence condition, not a tamper verdict.
+        assert result.tamper_rows == []
+        assert any("Not a tamper verdict" in e for e in result.errors)
+
+    def test_partial_chain_with_events_keeps_no_evidence_false(self):
+        rows, _ = _canonical_chain(1)
+        store = CanonicalEventStore(_CanonicalSession(rows, event_count=4), dual_write=False)
+        result = store.verify_chain_canonical("22222222-2222-2222-2222-222222222222")
+        assert result.valid is True
+        assert result.no_chain_evidence is False
 
 
 # ---------------------------------------------------------------------------
