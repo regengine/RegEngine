@@ -109,6 +109,15 @@ jobs:
           running-workflow-name: "PR Gate: Backend"
           wait-interval: 30
           allowed-conclusions: success
+          # The action's DEFAULT is 60s, which is how long it waits for the
+          # target check to EXIST before giving up with "The requested check
+          # was never run against this ref". "Backend CI Status Gate" is the
+          # final aggregate job of backend-ci.yml — it is not created until
+          # every other backend job finishes (~8 min on a green run), so the
+          # 60s default guaranteed a false red on every PR that actually
+          # touched backend paths. Wait up to 30 min for it to appear; the
+          # job's own timeout-minutes: 45 remains the hard bound.
+          checks-discovery-timeout: 1800
       - name: No backend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No backend-relevant paths changed; Backend CI legitimately did not run. Gate vacuously green."
@@ -179,6 +188,9 @@ jobs:
           running-workflow-name: "PR Gate: Frontend"
           wait-interval: 30
           allowed-conclusions: success
+          # See the backend job above — the 60s default discovery window is
+          # shorter than the time it takes the real gate job to be created.
+          checks-discovery-timeout: 1800
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
