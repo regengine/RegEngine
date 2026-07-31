@@ -106,10 +106,39 @@ group is filed as a GitHub issue linked in the PR.
 
 ### Billing gates & rate limits
 
-The first-pass auditor for this dimension stalled; a re-run auditor's
-findings are recorded below.
+**Verified fail-closed (no finding).** `subscription_gate.py:141-199`
+matches its documented contract exactly: `CircuitOpenError` → 503,
+`redis_available=False` (including unset `REDIS_URL`) → 503, missing key
+→ 402, non-active status → 402, no tenant context → 401. The only bypass
+is `SUBSCRIPTION_GATE_FAIL_OPEN`, default off and logged at CRITICAL on
+every request. Also verified closed: `admin/app/rate_limit_service.py`
+(Redis errors propagate → 500, never an OTP-flood allow),
+`tool_verification_routes.py:114-182` (every Redis failure → 503 in
+production/cloud), `e2e_safety.py` (E2E mode raises in production),
+`stripe_billing/state.py:117-139` (mapping errors propagate → Stripe
+retries), and every 429-raising call site.
 
-<!-- GATES-SECTION -->
+| Path | Sev | Behavior | Disposition |
+| --- | --- | --- | --- |
+| `services/ingestion/app/supplier_portal.py:119` `_portal_subscription_active` | **H** | Redis error / open circuit / unreachable Redis returned `None`, and the caller only blocks on `is False` — so the entitlement gate was **skipped** and the portal persisted supplier evidence for a tenant with no active subscription. Contradicted both `subscription_gate`'s 503 contract and the README claim that Redis/circuit uncertainty returns 503. | **FIXED (this PR)**: in production, uncertainty (unset `REDIS_URL`, unreachable Redis, open circuit, unexpected error) raises 503 with `Retry-After`. Outside production the dev skip is preserved. |
+| `services/shared/tenant_rate_limiting.py:103` `_RedisBucket.is_allowed` | M | `redis.RedisError` → per-process in-memory bucket that starts empty, so the effective limit becomes `limit × workers × replicas`. Backend for ingestion RBAC, webhook, portal-link, and supplier-token limits. | issue — **not** a fix-here: this degrades the limit, it does not remove it, and converting a Redis blip into 429/503 across all ingestion is an availability change that needs an explicit decision (see #2699). The first-pass audit rated it high; downgraded on review because abuse control remains in force. |
+| `services/shared/rate_limit.py:129,150` `BruteForceLimiter` | M | Same shape for the admin master-key lockout. The first-pass claim that guessing "continues unbounded" is **wrong** — the in-memory fallback still blocks after `max_failures` per process, so the budget is multiplied by worker count, not removed. | documented-intentional (inline rationale) + issue #2699 |
+| `services/shared/tenant_rate_limiting.py:119`, `rate_limit.py:35,104` | M | Missing `RATE_LIMIT_STORAGE_URI`/`REDIS_URL` at import → in-memory limiter for the process lifetime (slowapi decorators included, e.g. the "1/day" GDPR export limit). Startup warning only; README asserts Redis-backed rate limiting. | issue #2699 |
+| `services/ingestion/app/stripe_billing/webhooks.py:259` | M | Corrupt stored `last_event_created` → `last_seen = 0`, so the #1196 reorder guard passes and a **stale** event can overwrite current subscription status (a stale `active` over `canceled` is then read by the entitlement gate). | issue #2699 |
+| `stripe_billing/rate_limiting.py:81`, `sandbox/rate_limiting.py:73` | M | Sticky `_redis_failed = True` on first failure → never retries Redis for the process lifetime; logged at DEBUG only (invisible in prod). | issue #2699 |
+| `services/ingestion/app/authz.py:30-52` | M | Ingestion auth-failure block (15/5min) is a module-level dict with no Redis path and no fallback warning — the call site was never migrated to `BruteForceLimiter` (the #1392 fix for the admin key). | issue #2699 |
+| `services/shared/idempotency.py:190,215,91` | M | Cache read error → treated as cache miss (re-execute); unresolvable tenant → dedup silently skipped; API-key→tenant DB error → DEBUG log and `None`. Mitigated by the DB-level `UNIQUE (tenant_id, idempotency_key)` index (v072) that catches duplicate evidence writes. | issue #2699 (module docstring documents graceful degradation) |
+| `services/shared/circuit_breaker_store.py:148` | M | `CIRCUIT_BREAKER_BACKEND=redis` explicitly configured but Redis init fails → silently substitutes the memory store; circuit state stops being shared across replicas. Not permissive itself (the gate still 503s), only slower to trip. | issue #2699 |
+| `services/ingestion/app/stripe_billing/state.py:105,88` | M/L | Redis error on the webhook dedup claim → `True` (allow re-processing). | documented-intentional (explicit trade-off analysis in the docstring: fail-closed would make Stripe retry-amplify and could mark a paying tenant `past_due`) |
+| `services/ingestion/app/sandbox/router.py:274` | L | Public sandbox share limit is a module-level dict, per-process, with unbounded key growth. | issue #2699 |
+
+Adjacent (not a silent-failure path, so not fixed or filed under this
+sweep): `tenant_rate_limiting.py:156` buckets on the raw unauthenticated
+`X-Tenant-ID` header and `remediation/supplier_router.py:47` on the
+unvalidated first `X-Forwarded-For` hop (acknowledged in its own
+docstring), so a caller can mint a fresh bucket per request by rotating
+the header. That is *evasion of a working limiter*, a different class
+than a failure degrading to permissive — noted here so it is not lost.
 
 ## Cross-cutting observations
 

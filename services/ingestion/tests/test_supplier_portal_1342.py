@@ -24,11 +24,14 @@ from app.supplier_portal import (
     _db_store_portal_link,
     _db_update_portal_link_status,
     _get_active_portal_link,
+    # Bound before the autouse fixture stubs the module attribute, so the
+    # fail-closed tests below exercise the REAL gate.
+    _portal_subscription_active as _real_portal_subscription_active,
     router,
 )
 from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 
@@ -1044,6 +1047,63 @@ class TestPortalAbuseControls:
         resp = client.post("/api/v1/portal/tok/submit", json=self._payload())
         assert resp.status_code == 200
         assert resp.json()["status"] == "accepted"
+
+    def test_subscription_uncertainty_fails_closed_in_production(self, monkeypatch):
+        """Silent-failure sweep: a Redis incident used to make the portal's
+        entitlement gate return None (skip), so an unpaid tenant's portal
+        persisted supplier evidence. Production must 503 instead —
+        matching subscription_gate and the documented README contract."""
+        monkeypatch.setenv("REDIS_URL", "redis://unused")
+        monkeypatch.setattr(sp, "is_production", lambda: True)
+
+        def _boom(_tenant_id):
+            raise RuntimeError("circuit open")
+
+        import app.subscription_gate as gate
+
+        monkeypatch.setattr(gate, "_check_subscription_and_redis_health", _boom)
+
+        with pytest.raises(HTTPException) as exc:
+            _real_portal_subscription_active("tenant-x")
+        assert exc.value.status_code == 503
+
+    def test_subscription_redis_unavailable_fails_closed_in_production(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://unused")
+        monkeypatch.setattr(sp, "is_production", lambda: True)
+
+        import app.subscription_gate as gate
+
+        monkeypatch.setattr(gate, "_check_subscription_and_redis_health", lambda _t: (None, False))
+
+        with pytest.raises(HTTPException) as exc:
+            _real_portal_subscription_active("tenant-x")
+        assert exc.value.status_code == 503
+
+    def test_unset_redis_url_fails_closed_in_production(self, monkeypatch):
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setattr(sp, "is_production", lambda: True)
+
+        with pytest.raises(HTTPException) as exc:
+            _real_portal_subscription_active("tenant-x")
+        assert exc.value.status_code == 503
+
+    def test_uncertainty_still_skips_outside_production(self, monkeypatch):
+        """Local/dev submissions are not broken by the fail-closed change."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setattr(sp, "is_production", lambda: False)
+        assert _real_portal_subscription_active("tenant-x") is None
+
+    def test_active_subscription_still_allows_in_production(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://unused")
+        monkeypatch.setattr(sp, "is_production", lambda: True)
+
+        import app.subscription_gate as gate
+
+        monkeypatch.setattr(gate, "_check_subscription_and_redis_health", lambda _t: ("active", True))
+        assert _real_portal_subscription_active("tenant-x") is True
+
+        monkeypatch.setattr(gate, "_check_subscription_and_redis_health", lambda _t: ("canceled", True))
+        assert _real_portal_subscription_active("tenant-x") is False
 
     def test_per_link_buckets_are_independent(self, monkeypatch):
         # Two links on the SAME tenant get independent buckets keyed on
