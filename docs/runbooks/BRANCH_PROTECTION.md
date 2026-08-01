@@ -77,6 +77,15 @@ do not merge past it.
 > required check. Turning `enforce_admins` on in the settings UI would
 > make the rule mechanical — that is an operator decision, deliberately
 > not changed by the verification pass that recorded this.
+>
+> **Decision (2026-08-01): stays OFF for now.** The protection also
+> requires 1 approving review, and PR authors cannot approve their own
+> PRs — with a single maintainer, every merge necessarily uses the admin
+> path to satisfy the review requirement (with green checks). Enabling
+> `enforce_admins` today would therefore hard-block ALL merges, not just
+> overrides of red checks. Revisit when a second reviewer exists, or if
+> the review requirement is dropped to 0 (then `enforce_admins` can be
+> enabled and the no-override rule becomes fully mechanical).
 
 Two incidents came from overrides:
 
