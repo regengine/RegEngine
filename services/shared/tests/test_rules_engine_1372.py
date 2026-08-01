@@ -48,23 +48,50 @@ def test_persist_evaluations_uses_single_executemany_insert() -> None:
     savepoint.rollback.assert_not_called()
 
 
-def test_persist_evaluations_rolls_back_savepoint_and_marks_event_on_error() -> None:
-    """A failed insert should roll back the savepoint and mark the event."""
+def test_persist_evaluations_salvages_rows_on_error() -> None:
+    """A failed executemany is salvaged row-by-row (#2695/#2709): rows that
+    succeed individually need no marker; rows that still fail are marked
+    AND dead-lettered."""
     session = MagicMock()
-    savepoint = MagicMock()
-    session.begin_nested.return_value = savepoint
+    # executemany fails; the single salvage row then succeeds.
     session.execute.side_effect = [RuntimeError("db write failed"), None]
 
     engine = RulesEngine(session)
     engine._persist_evaluations("tenant-1", "event-1", [_result("r1")])
 
-    savepoint.rollback.assert_called_once()
+    assert session.begin_nested.return_value.rollback.call_count == 1
     assert session.execute.call_count == 2
-    marker_stmt, marker_params = session.execute.call_args_list[1].args
-    assert "UPDATE fsma.traceability_events" in str(marker_stmt)
-    assert marker_params["tenant_id"] == "tenant-1"
-    assert marker_params["event_id"] == "event-1"
-    assert marker_params["error_message"] == "db write failed"
+    salvage_stmt, salvage_params = session.execute.call_args_list[1].args
+    assert "INSERT INTO fsma.rule_evaluations" in str(salvage_stmt)
+    assert salvage_params["event_id"] == "event-1"
+    # Row salvaged — no marker, no dead-letter.
+    assert not any("UPDATE fsma.traceability_events" in str(c.args[0]) for c in session.execute.call_args_list)
+
+
+def test_persist_evaluations_marks_and_deadletters_still_failing_row() -> None:
+    """A row that fails even individually gets the marker + dead-letter copy."""
+    session = MagicMock()
+
+    def _execute(stmt, params=None):
+        sql = str(stmt)
+        if "INSERT INTO fsma.rule_evaluations" in sql and "deadletter" not in sql:
+            raise RuntimeError("db write failed")
+        return None
+
+    session.execute.side_effect = _execute
+
+    engine = RulesEngine(session)
+    engine._persist_evaluations("tenant-1", "event-1", [_result("r1")])
+
+    marker_calls = [c for c in session.execute.call_args_list if "UPDATE fsma.traceability_events" in str(c.args[0])]
+    assert len(marker_calls) == 1
+    assert marker_calls[0].args[1]["error_message"] == "db write failed"
+    deadletter_calls = [
+        c for c in session.execute.call_args_list if "fsma.rule_evaluation_deadletter" in str(c.args[0])
+    ]
+    assert len(deadletter_calls) == 1
+    assert deadletter_calls[0].args[1]["persist_error"] == "db write failed"
+    assert deadletter_calls[0].args[1]["rule_id"] == "r1"
 
 
 def test_batch_persist_evaluations_150_rows_uses_2_inserts() -> None:
