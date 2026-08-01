@@ -24,10 +24,13 @@ import time
 from collections import defaultdict
 from typing import Optional, Protocol
 
+import structlog
 from fastapi import FastAPI
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+
+logger = structlog.get_logger("shared.rate_limit")
 
 # ---------------------------------------------------------------------------
 # slowapi route-level limiter (unchanged public API)
@@ -94,6 +97,8 @@ class BruteForceLimiter:
         # Used when no Redis connection is available (local dev, tests).
         self._mem_failures: dict[str, list[float]] = defaultdict(list)
         self._mem_lock = threading.Lock()
+        # #2699: True while the last Redis call failed (per-activation log).
+        self._degraded = False
 
     @staticmethod
     def _try_connect_redis() -> Optional[_RedisLike]:
@@ -114,22 +119,52 @@ class BruteForceLimiter:
     def _key(self, subject: str) -> str:
         return f"{self._namespace}:{subject}"
 
+    def _note_redis_failure(self, op: str, exc: Exception) -> None:
+        """Per-activation degrade logging (#2699) — never silent."""
+        if not self._degraded:
+            self._degraded = True
+            logger.warning(
+                "brute_force_limiter_backend_unavailable",
+                namespace=self._namespace,
+                op=op,
+                error=str(exc),
+                fail_mode=self._fail_mode(),
+                fallback="in_memory" if self._fail_mode() == "degrade" else "deny",
+            )
+
+    @staticmethod
+    def _fail_mode() -> str:
+        from shared.tenant_rate_limiting import rate_limit_fail_mode
+
+        return rate_limit_fail_mode()
+
     def is_limited(self, subject: str) -> bool:
         """Return True if this subject has exceeded the threshold."""
         if self._redis is not None:
             try:
                 raw = self._redis.get(self._key(subject))
                 if raw is None:
+                    if self._degraded:
+                        self._degraded = False
+                        logger.info("brute_force_limiter_backend_recovered", namespace=self._namespace)
                     return False
                 try:
                     count = int(raw)
                 except (ValueError, TypeError):
                     return False
+                if self._degraded:
+                    self._degraded = False
+                    logger.info("brute_force_limiter_backend_recovered", namespace=self._namespace)
                 return count >= self._max
-            except Exception:
-                # Redis failure -- fall through to in-memory to avoid
-                # a DoS on the auth path when Redis is flaky.
-                pass
+            except Exception as exc:
+                # #2699: RATE_LIMIT_FAIL_MODE=closed treats Redis
+                # uncertainty as limited (deny) — an attacker cannot use a
+                # Redis blip to reset the lockout. Default degrade falls
+                # through to the per-process counter (budget × workers, a
+                # documented trade-off) — but never silently anymore.
+                self._note_redis_failure("is_limited", exc)
+                if self._fail_mode() == "closed":
+                    return True
 
         # In-memory fallback (per-process, matches legacy behavior)
         now = time.time()
@@ -147,8 +182,10 @@ class BruteForceLimiter:
                     # First failure in this window -- arm the TTL.
                     self._redis.expire(key, self._window)
                 return int(count)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Failures are still recorded in the per-process counter
+                # below in BOTH modes — closed mode only affects reads.
+                self._note_redis_failure("record_failure", exc)
 
         # In-memory fallback
         now = time.time()

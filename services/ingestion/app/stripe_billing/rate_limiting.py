@@ -10,6 +10,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Dict
@@ -49,6 +50,11 @@ def _check_in_memory(client_ip: str, now: float) -> int:
 
 _redis_client = None
 _redis_failed = False
+# #2699: retry Redis after a cooldown instead of never for the process
+# lifetime (the old sticky flag), and log the fallback at WARNING so it
+# is visible at prod log levels.
+_REDIS_RETRY_COOLDOWN_SECONDS = 30.0
+_redis_retry_at = 0.0
 
 # Atomic sliding-window check, evaluated server-side so the trim → count →
 # admit/reject → add sequence cannot interleave across concurrent requests
@@ -79,9 +85,12 @@ return 0
 
 
 def _get_redis():
-    global _redis_client, _redis_failed
+    global _redis_client, _redis_failed, _redis_retry_at
     if _redis_failed:
-        return None
+        # #2699: retry after the cooldown rather than never.
+        if time.time() < _redis_retry_at:
+            return None
+        _redis_failed = False
     if _redis_client is not None:
         return _redis_client
     try:
@@ -97,9 +106,15 @@ def _get_redis():
         )
         _redis_client.ping()
         return _redis_client
-    except Exception:
-        logger.debug("Redis unavailable for stripe webhook rate limiting, using in-memory fallback")
+    except Exception as exc:
+        logger.warning(
+            "Redis unavailable for stripe webhook rate limiting, using in-memory fallback (retry in %ss): %s",
+            _REDIS_RETRY_COOLDOWN_SECONDS,
+            exc,
+        )
         _redis_failed = True
+        _redis_retry_at = time.time() + _REDIS_RETRY_COOLDOWN_SECONDS
+        _redis_client = None
         return None
 
 

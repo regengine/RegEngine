@@ -149,11 +149,25 @@ def get_store() -> CircuitStore:
         try:
             _global_store = RedisCircuitStore()
         except Exception as exc:
-            logger.warning("redis_store_fallback_to_memory", error=str(exc))
             from shared.redis_health import report_redis_fallback
 
             report_redis_fallback("circuit_breaker", str(exc))
-            _global_store = MemoryCircuitStore()
+            # #2699: the redis backend was EXPLICITLY requested — silently
+            # substituting the memory store stops circuit state being
+            # shared across replicas (each must independently accumulate
+            # failures). Fail loudly instead; the escape hatch restores
+            # the old degrade for operators who prefer availability.
+            if os.getenv("CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK") == "1":
+                logger.warning("redis_store_fallback_to_memory", error=str(exc), escape_hatch=True)
+                _global_store = MemoryCircuitStore()
+            else:
+                logger.error("circuit_breaker_redis_init_failed", error=str(exc))
+                raise RuntimeError(
+                    "CIRCUIT_BREAKER_BACKEND=redis was explicitly configured but Redis "
+                    f"init failed ({exc}). Fix Redis connectivity, unset the backend, or "
+                    "set CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK=1 to accept per-replica "
+                    "circuit state."
+                ) from exc
     else:
         _global_store = MemoryCircuitStore()
 
