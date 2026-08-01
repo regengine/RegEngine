@@ -33,9 +33,46 @@ from slowapi.util import get_remote_address
 logger = structlog.get_logger("shared.rate_limit")
 
 # ---------------------------------------------------------------------------
-# slowapi route-level limiter (unchanged public API)
+# slowapi route-level limiter
+#
+# #2711: previously constructed with NO storage_uri, so every slowapi
+# decorator (e.g. the 1/day GDPR export limit, the 10/min proof-verify
+# limits) was per-process for the process lifetime even when Redis was
+# configured — contradicting the README's "Redis-backed" claim. The
+# storage now follows the same env resolution as the tenant limiter, with
+# slowapi's in-memory fallback enabled so a Redis blip degrades instead
+# of erroring. /readiness reports the backend via
+# ``slowapi_storage_backend()``.
 # ---------------------------------------------------------------------------
-limiter = Limiter(key_func=get_remote_address)
+_SLOWAPI_STORAGE_URI = (
+    os.getenv("RATE_LIMIT_STORAGE_URI") or os.getenv("REGENGINE_REDIS_URL") or os.getenv("REDIS_URL") or "memory://"
+)
+
+try:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri=_SLOWAPI_STORAGE_URI,
+        in_memory_fallback_enabled=_SLOWAPI_STORAGE_URI != "memory://",
+    )
+except Exception as _limiter_init_err:  # pragma: no cover — defensive
+    import structlog as _structlog
+
+    _structlog.get_logger("shared.rate_limit").error(
+        "slowapi_storage_init_failed",
+        error=str(_limiter_init_err),
+        fallback="memory",
+    )
+    _SLOWAPI_STORAGE_URI = "memory://"
+    limiter = Limiter(key_func=get_remote_address)
+
+
+def slowapi_storage_backend() -> str:
+    """``redis`` when slowapi limits are backed by shared storage, else ``memory``.
+
+    Exposed for /readiness (#2711): production with ``memory`` means every
+    slowapi-decorated limit is per-process — budget × workers × replicas.
+    """
+    return "memory" if _SLOWAPI_STORAGE_URI == "memory://" else "redis"
 
 
 def add_rate_limiting(app: FastAPI):

@@ -382,15 +382,14 @@ class TestEntitlementGateUntouched:
         RATE_LIMIT_FAIL_MODE; the gate must never consult it. Behavior
         regression is covered by the existing subscription-gate suites
         (services/ingestion/tests/test_subscription_gate*.py)."""
-        import inspect
-        import sys
         from pathlib import Path
 
-        ingestion_dir = Path(__file__).resolve().parent.parent.parent / "services" / "ingestion"
-        if str(ingestion_dir) not in sys.path:
-            sys.path.insert(0, str(ingestion_dir))
-        from app import subscription_gate
-
-        source = inspect.getsource(subscription_gate)
+        # Read the file directly — importing `app.subscription_gate` here is
+        # order-dependent (the root conftest switches which service owns the
+        # `app` package as suites run).
+        gate_path = (
+            Path(__file__).resolve().parent.parent.parent / "services" / "ingestion" / "app" / "subscription_gate.py"
+        )
+        source = gate_path.read_text()
         assert "RATE_LIMIT_FAIL_MODE" not in source
         assert "IDEMPOTENCY_FAIL_MODE" not in source
