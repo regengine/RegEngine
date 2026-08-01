@@ -17,6 +17,41 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _isolate_observability_context():
+    """Restore correlation/tenant/request contextvars after every test.
+
+    Several tests here invoke the job wrappers *directly in the pytest
+    thread* (rather than in a worker thread), and
+    ``_restore_observability_context`` intentionally seeds contextvars and
+    structlog bindings without resetting them — in production the next job
+    on a pooled thread rebinds on entry. Without this fixture that seeded
+    state leaks into every later test in the same pytest process (it broke
+    tests/shared/test_observability_correlation.py, which asserts on the
+    default contextvar state).
+    """
+    import structlog
+    from shared.observability import context as obs_context
+    from shared.observability.correlation import correlation_id_ctx
+
+    saved_structlog = dict(structlog.contextvars.get_contextvars())
+    # set(get()) yields a token that restores the pre-test value on reset,
+    # regardless of how many times the test re-sets the var.
+    cid_token = correlation_id_ctx.set(correlation_id_ctx.get())
+    tenant_token = obs_context._tenant_id_ctx.set(obs_context._tenant_id_ctx.get())
+    request_token = obs_context._request_id_ctx.set(obs_context._request_id_ctx.get())
+    try:
+        yield
+    finally:
+        correlation_id_ctx.reset(cid_token)
+        obs_context._tenant_id_ctx.reset(tenant_token)
+        obs_context._request_id_ctx.reset(request_token)
+        structlog.contextvars.clear_contextvars()
+        if saved_structlog:
+            structlog.contextvars.bind_contextvars(**saved_structlog)
+
+
 # ---------------------------------------------------------------------------
 # shared.observability.context unit tests
 # ---------------------------------------------------------------------------
