@@ -241,6 +241,33 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         db_session.rollback()
         result["obligation_count"] = 0
 
+    # #2708 fail closed: an RLS deny-all EMPTY read (0 rows, no exception)
+    # is indistinguishable from an unseeded tenant — unless the seed-state
+    # marker (written by seed_obligations_for_tenant, v106) says obligations
+    # exist. Marker present + zero live rows = a read/policy regression, not
+    # an unseeded tenant: poison the dimension instead of serving the
+    # 50-point assumed default. Marker read failures are logged and treated
+    # as no-signal — the marker is corroborating evidence, not a gate.
+    if result["obligation_count"] == 0 and not result.get("obligation_data_error"):
+        try:
+            marker_row = db_session.execute(
+                text("""
+                    SELECT obligation_count FROM fsma.tenant_seed_state
+                    WHERE tenant_id = CAST(:tid AS uuid)
+                """),
+                {"tid": tenant_id},
+            ).fetchone()
+            if marker_row and (marker_row[0] or 0) > 0:
+                logger.error(
+                    "compliance_score: obligations empty read contradicts seed marker "
+                    "(marker says %d seeded) — treating as read failure, not unseeded tenant",
+                    marker_row[0],
+                )
+                result["obligation_data_error"] = True
+        except (OperationalError, ProgrammingError) as _marker_err:
+            logger.warning("compliance_score: seed-marker read failed: %s", _marker_err)
+            db_session.rollback()
+
     # Count obligation rules that are satisfied vs total checkable rules
     if result["event_count"] > 0:
         try:
