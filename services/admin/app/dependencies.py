@@ -323,11 +323,17 @@ async def get_current_user(
     if db.bind:
         try:
             TenantContext.clear_tenant_context(db)
-        except (RuntimeError, OSError, AttributeError):  # pragma: no cover
+        except (RuntimeError, OSError, AttributeError) as exc:  # pragma: no cover
             # If the clear call itself fails we still proceed — the
             # subsequent set_tenant_context (or, absent that, the RLS
             # fail-closed default from #1091) is the primary guard.
-            pass
+            # #2696: but never silently — a failing hygiene clear on a
+            # pooled connection is exactly the #1383 condition.
+            logger.warning(
+                "stale_tenant_context_clear_failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
     if db.bind and db.bind.dialect.name != "sqlite":

@@ -315,8 +315,13 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         ).fetchone()
         result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
     except (OperationalError, ProgrammingError) as _ftl_err:
+        # Fail closed (#2694): a failed FTL read must poison the product
+        # coverage dimension, not impersonate "FTL mapping needed" — the
+        # zeroed count routes to the 50-point assumed default.
+        logger.error("compliance_score: FTL category read failed: %s", _ftl_err)
         db_session.rollback()
         result["ftl_category_count"] = 0
+        result["ftl_data_error"] = True
 
     # 6) Chain integrity — full cryptographic verification (last 50 entries)
     try:
@@ -450,7 +455,14 @@ def _compute_scores(data: dict) -> dict:
 
     # --- 4) Product Coverage (10% weight) ---
     # Based on whether events cover FTL food categories
-    if data["event_count"] == 0:
+    if data.get("ftl_data_error"):
+        # Fail closed (#2694): the FTL read errored — withhold the score
+        # rather than serve the 50-point "mapping needed" assumed default.
+        scores["product_coverage"] = (
+            0,
+            "FTL category data could not be read — score withheld until reads succeed (fail-closed)",
+        )
+    elif data["event_count"] == 0:
         scores["product_coverage"] = (0, "No products mapped to FTL categories")
     elif data["ftl_category_count"] == 0:
         scores["product_coverage"] = (50, "Events exist but FTL category mapping needed")
@@ -843,13 +855,14 @@ async def get_pending_reviews(
 
         db_session = SessionLocal()
     except (ImportError, OSError, OperationalError) as exc:
-        logger.warning("pending_reviews: DB unavailable (%s)", exc)
-        return {
-            "tenant_id": tenant_id,
-            "pending_reviews": 0,
-            "breakdown": {},
-            "db_available": False,
-        }
+        # Fail closed (#2694): "DB unavailable" must never render as
+        # "0 items awaiting review" on the dashboard.
+        logger.error("pending_reviews: DB unavailable (%s)", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Pending-review counts cannot be read right now. Please retry shortly.",
+            headers={"Retry-After": "30"},
+        )
 
     try:
         # 1. Unresolved exception cases
@@ -931,15 +944,17 @@ async def get_pending_reviews(
             "db_available": True,
         }
 
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.warning("pending_reviews: query failed: %s", exc)
-        return {
-            "tenant_id": tenant_id,
-            "pending_reviews": 0,
-            "breakdown": {},
-            "db_available": False,
-            "error": str(exc),
-        }
+        # Fail closed (#2694): a failed count query must not return HTTP 200
+        # with pending_reviews=0 — that hides items awaiting review.
+        logger.error("pending_reviews: query failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Pending-review counts cannot be read right now. Please retry shortly.",
+            headers={"Retry-After": "30"},
+        )
     finally:
         if db_session:
             db_session.close()

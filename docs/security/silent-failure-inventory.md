@@ -27,6 +27,12 @@
 > `documented-intentional`: the permissive degrade is deliberate and
 > documented; citation given. `refuted`: the adversarial pass showed the
 > degrade does not occur as reported.
+>
+> **2026-08-01 follow-up (#2705)**: the medium/low items filed as #2694–
+> #2698 were dispositioned — `FIXED (#2705)` / `PARTIAL FIX (#2705)` /
+> `deferred (#2705)` in the tables below. The #2699 rate-limit /
+> idempotency / billing-state group is handled separately (see #2699 and
+> docs/runbooks/RATE_LIMIT_DEGRADATION.md).
 
 ## Severity-high findings
 
@@ -43,8 +49,8 @@
 | `services/admin/app/database.py:187` `_reset_tenant_guc_on_checkout` | Exception while clearing `app.tenant_id` on pool checkout | Warned and handed the pooled connection out anyway — **carrying the previous tenant's session-scoped GUC**, so RLS reads ran under the wrong tenant on exactly the error path of the #1381 isolation mitigation. Narrow window (pool_pre_ping runs first), but the class is tenant isolation. | CONFIRMED | **FIXED (this PR)**: raises `DisconnectionError` so the pool discards the connection and retries checkout on a fresh one. |
 | `services/scheduler/service.py:473` `_process_new_items` (recall ack) | Per-item compliance-alert failures / webhook failures acked anyway in pg mode | — | REFUTED as reported: (a) the #2689 follow-up in this PR withholds acks per failed `source_id` (constructor failure withholds all); (b) webhook per-URL failures are dead-lettered to the durable outbox and drained by `webhook_outbox_drain` — acking despite webhook failure is DLQ-backed by design; (c) payload-construction errors propagate (ValidationError not in the catch tuple). | **FIXED (this PR)** for (a) — the mandated #2689 follow-up; (b)/(c) fail closed already. |
 | `services/scheduler/app/compliance_integration.py:147` `_find_matching_tenants` | DB error on the Tier-1 lot-code query | Reported as "silently degrades to Tier-2/3 keyword matching + permanent ack". | REFUTED: the handler never rolls back, so the very next Tier-2/3 query on the same session raises (`PendingRollbackError`), propagates to the per-item handler, and the item's ack is withheld — net behavior is loud failure + retry. A future forced-RLS deny would be a silent zero-row read, which the class docstring (lines 39–46) pre-documents as requiring a maintenance-role exemption. | refuted (downgraded to low; no change) |
-| `services/shared/database.py:176` `check_rls_posture` | Probe exception during the boot-time RLS posture check | Returns `"unknown"` and boot proceeds — even under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`, silently bypassing the one-way boot guard. | DOWNGRADED high → medium by the adversarial pass: the probe only *detects* posture; a failed probe blinds the detector but does not alter RLS enforcement, and the realistic trigger (transient boot-time blip) does not coincide with the misconfiguration the guard exists to catch. | issue (fail-closed under REQUIRE=1: retry then abort boot) |
-| `services/shared/rules/enforcement.py:93` `should_reject` | Zero applicable rules / unclassifiable event → no-verdict → accept, in every enforcement mode | An unseeded tenant under `RULES_ENGINE_ENFORCE=all` has every event accepted. | CONFIRMED mechanically, but **documented-intentional**: module docstring (#1346/#1347) — "blocking an event on non-evaluation would silently break ingestion for tenants without seeded rules and for non-FTL products". | documented-intentional (revisit at enforcement GA; see issues) |
+| `services/shared/database.py:176` `check_rls_posture` | Probe exception during the boot-time RLS posture check | Returns `"unknown"` and boot proceeds — even under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1`, silently bypassing the one-way boot guard. | DOWNGRADED high → medium by the adversarial pass: the probe only *detects* posture; a failed probe blinds the detector but does not alter RLS enforcement, and the realistic trigger (transient boot-time blip) does not coincide with the misconfiguration the guard exists to catch. | **FIXED (#2705)**: under REQUIRE=1 the probe retries 3× then aborts boot; outside REQUIRE=1 the single-shot never-crash-boot contract is unchanged. |
+| `services/shared/rules/enforcement.py:93` `should_reject` | Zero applicable rules / unclassifiable event → no-verdict → accept, in every enforcement mode | An unseeded tenant under `RULES_ENGINE_ENFORCE=all` has every event accepted. | CONFIRMED mechanically, but **documented-intentional**: module docstring (#1346/#1347) — "blocking an event on non-evaluation would silently break ingestion for tenants without seeded rules and for non-FTL products". | documented-intentional (revisit at enforcement GA; revisit-conditions comment added at `should_reject` in #2705) |
 
 ## Medium / low findings
 
@@ -55,17 +61,17 @@ group is filed as a GitHub issue linked in the PR.
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `compliance_score.py:307` (FTL category count) | M | DB error → `ftl_category_count=0` → 50-point assumed default for product coverage | issue |
-| `compliance_score.py:900` `get_pending_reviews` | M | Any exception → HTTP 200 with `pending_reviews: 0` — dashboard shows nothing awaiting review | issue |
-| `compliance_score.py` obligation empty-read ambiguity | M | RLS deny-all empty read (no exception) is indistinguishable from an unseeded tenant → 50-point branch | issue (needs a distinguishing signal, e.g. seeded-marker or policy probe) |
+| `compliance_score.py:307` (FTL category count) | M | DB error → `ftl_category_count=0` → 50-point assumed default for product coverage | **FIXED (#2705)**: `ftl_data_error` poisons the product-coverage dimension (0, fail-closed detail) |
+| `compliance_score.py:900` `get_pending_reviews` | M | Any exception → HTTP 200 with `pending_reviews: 0` — dashboard shows nothing awaiting review | **FIXED (#2705)**: 503 + Retry-After on DB/query failure |
+| `compliance_score.py` obligation empty-read ambiguity | M | RLS deny-all empty read (no exception) is indistinguishable from an unseeded tenant → 50-point branch | still open — deferred in #2705: a distinguishing signal needs a seeded-marker row (schema change, avoided) or a privilege-dependent policy probe; design needed before coding |
 | `routes.py:504` `validate_compliance` | M | Caller omits config → 200 `valid=true`, `rules_evaluated=0` | documented-intentional (advisory endpoint; response carries `rules_evaluated`) |
 
 ### Rules engine (`services/shared/rules/`)
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `engine.py:787` `_batch_persist_evaluations` | M | Failed 100-row chunk logged and skipped — accepted events with no evaluation record (audit-trail gap) | issue |
-| `engine.py:704` `_persist_evaluations` | M | Savepoint rollback swallows persist failure after accept | documented-intentional (comment on the savepoint contract); listed in the same issue for durability follow-up |
+| `engine.py:787` `_batch_persist_evaluations` | M | Failed 100-row chunk logged and skipped — accepted events with no evaluation record (audit-trail gap) | **PARTIAL FIX (#2705)**: failed chunk salvaged row-by-row; still-failing rows marked via `evaluation_error`. Durable dead-letter deferred to WS-8 |
+| `engine.py:704` `_persist_evaluations` | M | Savepoint rollback swallows persist failure after accept | documented-intentional (inventory-citing comment added in #2705); durability follow-up rides the WS-8 design |
 | `rejection_audit.py:128` `record_rejection` | M | Durable rejection-audit row dropped on DB error (error log + Sentry; reject decision itself stands) | documented-intentional |
 | `enforcement.py:135` `handle_preeval_exception` (OFF mode) | M | Pre-eval crash → warn + accept in OFF mode | documented-intentional (docstring: OFF is log-and-accept by contract; enforcement modes fail closed with 500) |
 | `evaluators/relational.py:458,486` mass-balance | M | UOM mix without container weights, or zero input events → `warn`, not `fail` | documented-intentional (warn-tier design; revisit when mass-balance goes critical-blocking) |
@@ -75,33 +81,33 @@ group is filed as a GitHub issue linked in the PR.
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `shared/database.py:176` `check_rls_posture` | M (downgraded from H) | Probe error → `"unknown"` → boot proceeds under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` | issue (retry-then-abort under REQUIRE=1) |
-| `admin/app/dependencies.py:326` stale-context clear | M | #1383 hygiene clear failure silently `pass`es — not even a log | issue |
-| `shared/middleware/tenant_context.py:170` | M | Malformed tenant claim in a *validated* JWT → warning + treated as absent claim | issue |
-| `admin/app/database.py:303` `get_tenant_session` | L | Falsy tenant_id → yields session with no GUC instead of raising | issue |
+| `shared/database.py:176` `check_rls_posture` | M (downgraded from H) | Probe error → `"unknown"` → boot proceeds under `REGENGINE_REQUIRE_RLS_ENFORCEMENT=1` | **FIXED (#2705)**: retry-then-abort under REQUIRE=1 |
+| `admin/app/dependencies.py:326` stale-context clear | M | #1383 hygiene clear failure silently `pass`es — not even a log | **FIXED (#2705)**: `stale_tenant_context_clear_failed` warning; request still proceeds (RLS fail-closed default is the primary guard) |
+| `shared/middleware/tenant_context.py:170` | M | Malformed tenant claim in a *validated* JWT → warning + treated as absent claim | **FIXED (#2705)**: rejected — 401 on protected paths, exempt paths proceed tenant-less |
+| `admin/app/database.py:303` `get_tenant_session` | L | Falsy tenant_id → yields session with no GUC instead of raising | **FIXED (#2705)**: raises ValueError |
 | `shared/tenant_context.py:452,650` slug-tenant GUC skips | M | Non-UUID tenant id → RLS GUC backstop silently absent | documented-intentional (slug tolerance, #2458 / begin-hook `skipped_non_uuid` metric; fail-hard predicate remains the enforcement layer) |
-| `shared/tenant_context.py:247,274` claim collection | L | Exceptions reading query params / body → claim treated as absent (409 defense-in-depth check skipped) | issue |
+| `shared/tenant_context.py:247,274` claim collection | L | Exceptions reading query params / body → claim treated as absent (409 defense-in-depth check skipped) | **FIXED (#2705)**: logged (warning for query-param, debug for body parse); claim-absent behavior kept |
 | `shared/middleware/tenant_context.py:139`, `shared/tenant_context.py:558` | L | Exempt-path extraction errors → `tenant_id=None`; RLS-GUC metric counter failures swallowed | documented-intentional |
 
 ### Scheduler & probes (`services/scheduler/`, `server/main.py`)
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `server/main.py:1062` readiness scheduler check | M | Embedded-scheduler daemon thread dying after a successful start is never detected — `/readiness` reports `ok` forever | issue |
-| `service.py:854` `run_fsma_nightly_sync` (also `:748` drain) | M | Job catches all exceptions and returns → APScheduler records EVENT_JOB_EXECUTED (success); #1144 listener never fires | issue |
-| `notifications.py:424` outbox rewrite | M | Corrupt JSONL line skipped, then the file is rewritten from parsed entries only — the corrupt entry is permanently destroyed | issue |
-| `kafka_producer.py:273` `_send` | M | Returns True on local enqueue; async delivery failure + swallowed flush error → items acked (kafka backbone only, non-default) | issue |
-| `service.py:388` FSMA graph emission | M | fsma emission failures / transform exceptions never gate the ack | issue |
-| `scrapers/fda_warning_letters.py:96` | M | RSS 404 + zero scrape results → `success=True, items_found=0`; coverage can be dead indefinitely with no alarm (feeds known bot-blocked) | issue |
-| `scrapers/fda_recalls.py:137` | L | Row missing `recall_number` dropped with no log | issue |
+| `server/main.py:1062` readiness scheduler check | M | Embedded-scheduler daemon thread dying after a successful start is never detected — `/readiness` reports `ok` forever | **FIXED (#2705)**: `thread_alive` probe → `scheduler: error` (degraded-200). Residual: detects a dead thread, not a hung one |
+| `service.py:854` `run_fsma_nightly_sync` (also `:748` drain) | M | Job catches all exceptions and returns → APScheduler records EVENT_JOB_EXECUTED (success); #1144 listener never fires | **FIXED (#2705)**: both jobs log then re-raise → EVENT_JOB_ERROR recorded |
+| `notifications.py:424` outbox rewrite | M | Corrupt JSONL line skipped, then the file is rewritten from parsed entries only — the corrupt entry is permanently destroyed | **FIXED (#2705)**: corrupt lines quarantined to `<outbox>.quarantine`; on quarantine failure the raw line is re-appended verbatim by the rewrite |
+| `kafka_producer.py:273` `_send` | M | Returns True on local enqueue; async delivery failure + swallowed flush error → items acked (kafka backbone only, non-default) | deferred (#2705): KNOWN GAP docstring added; fix means per-message future checks — do before the kafka path becomes production-default |
+| `service.py:388` FSMA graph emission | M | fsma emission failures / transform exceptions never gate the ack | **PARTIAL FIX (#2705)**: failures escalate to error log + `record_kafka_emit_failure` metric. Ack-gating deliberately not added (reprocessing-loop risk for a best-effort mirror) |
+| `scrapers/fda_warning_letters.py:96` | M | RSS 404 + zero scrape results → `success=True, items_found=0`; coverage can be dead indefinitely with no alarm (feeds known bot-blocked) | **FIXED (#2705)**: `scrape_coverage_stale` error after 7 consecutive zero-item successful runs (in-memory streak; resets on leader failover) |
+| `scrapers/fda_recalls.py:137` | L | Row missing `recall_number` dropped with no log | **FIXED (#2705)**: dropped rows log identifying hints |
 | `graph/audit_buffer_reconciler.py:406`, `notifications.py:402`, `service.py:672`, `service.py:340`, `server/main.py:980,1058`, `app/metrics.py:120` | M/L | Reconciler-tick swallow, outbox-append OSError, unset outbox path, pg-mode kafka skip, readiness degraded-200 for Redis/Neo4j/worker-start, metrics no-op without prometheus_client | documented-intentional (in-code comments; README documents the readiness degrade contract; outbox-path warning at boot) |
 
 ### FDA export & chain verification (`services/ingestion/app/fda_export*`, `services/shared/`)
 
 | Path | Sev | Behavior | Disposition |
 | --- | --- | --- | --- |
-| `fda_export_service.py:518` `_build_completeness_summary` | M | Events whose type isn't a `WebhookCTEType` member are assumed fully covered (`ratio 1.0`) — an export where nothing was checked reports 100% KDE coverage | issue |
-| `cte_persistence/verification.py:250` `verify_chain_merkle` | M | Empty chain read → `MerkleVerification(valid=True, chain_length=0)` surfaced verbatim by the export routes | issue (canonical twin fixed in this PR; legacy Merkle path needs the same guard or retirement at WS-1d) |
+| `fda_export_service.py:518` `_build_completeness_summary` | M | Events whose type isn't a `WebhookCTEType` member are assumed fully covered (`ratio 1.0`) — an export where nothing was checked reports 100% KDE coverage | **FIXED (#2705)**: unknown types counted as unchecked (`events_unchecked_type`), ratio 0.0 when nothing was checked; surfaced in the verification payload |
+| `cte_persistence/verification.py:250` `verify_chain_merkle` | M | Empty chain read → `MerkleVerification(valid=True, chain_length=0)` surfaced verbatim by the export routes | **FIXED (#2705)**: `valid=False` + `no_chain_evidence=True` when non-rejected events exist (canonical twin fixed in #2700) |
 | `cte_persistence/queries.py:100` broad `ProgrammingError` catch | M | — | **FIXED (this PR)** as part of the `:118` fix (narrowed to missing-table) |
 
 ### Billing gates & rate limits

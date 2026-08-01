@@ -243,7 +243,10 @@ def _collect_claimed_tenant_ids(request: Request):
 
     try:
         qp_tenant = request.query_params.get("tenant_id")
-    except Exception:
+    except Exception as exc:
+        # #2696 (low): claim-absent on error skips the 409 mismatch
+        # defense-in-depth check — say so instead of staying silent.
+        logger.warning("tenant_claim_query_param_read_failed", error=str(exc))
         qp_tenant = None
     if qp_tenant:
         yield ("query_param.tenant_id", qp_tenant)
@@ -270,7 +273,11 @@ async def _collect_json_body_tenant_ids(request: Request) -> list[tuple[str, str
 
     try:
         body = await request.json()
-    except Exception:
+    except Exception as exc:
+        # #2696 (low): unparseable JSON is common (the endpoint will 422),
+        # but log at debug so a systematic parse failure that skips the 409
+        # mismatch check is at least observable.
+        logger.debug("tenant_claim_body_parse_failed", error=str(exc))
         return []
 
     if not isinstance(body, dict):

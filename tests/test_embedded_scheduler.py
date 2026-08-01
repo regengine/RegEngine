@@ -141,3 +141,41 @@ class TestRunnerLifecycle:
         runner.stop()
 
         service.scheduler.shutdown.assert_not_called()
+
+
+class TestThreadAliveProbe:
+    """#2697: /readiness uses thread_alive to detect a dead scheduler thread."""
+
+    def test_unstarted_runner_reports_not_alive(self):
+        assert EmbeddedSchedulerRunner().thread_alive is False
+
+    def test_dead_thread_reports_not_alive(self):
+        runner = EmbeddedSchedulerRunner()
+        with patch(
+            "services.scheduler.service.SchedulerService",
+            side_effect=ValueError("config error"),
+        ):
+            runner.start()
+            runner._thread.join(timeout=5)
+        assert runner.thread_alive is False
+
+    def test_live_thread_reports_alive(self):
+        import threading as _threading
+
+        runner = EmbeddedSchedulerRunner()
+        release = _threading.Event()
+
+        service = MagicMock()
+        service.start.side_effect = release.wait
+
+        with patch(
+            "services.scheduler.service.SchedulerService",
+            return_value=service,
+        ):
+            runner.start()
+            try:
+                assert runner.thread_alive is True
+            finally:
+                release.set()
+                runner.stop()
+                runner._thread.join(timeout=5)

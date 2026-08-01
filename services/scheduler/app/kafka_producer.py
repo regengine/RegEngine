@@ -260,6 +260,13 @@ class KafkaEventProducer:
         ``headers`` may be passed pre-built by callers that already
         attached signing/correlation headers (e.g. emit_fsma_event). When
         None, correlation headers are attached by default.
+
+        KNOWN GAP (#2697, deferred): True here means locally ENQUEUED, not
+        delivered — async delivery failures surface only via flush() logs,
+        and callers ack on this return value. The kafka backbone is
+        non-default in prod (pg mode is the default seen-ack path); fixing
+        the ack semantics means checking the send future per message and is
+        deferred until the kafka path is production-default.
         """
         try:
             producer = self._get_producer()

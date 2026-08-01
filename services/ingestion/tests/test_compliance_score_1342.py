@@ -1070,6 +1070,9 @@ class TestQueryScoringDataDegrades:
 
         data = _query_scoring_data(session, "t1")
         assert data["ftl_category_count"] == 0
+        # #2694 fail-closed: the failed read must poison the dimension, not
+        # impersonate "FTL mapping needed" (the 50-point assumed default).
+        assert data["ftl_data_error"] is True
 
     def test_verify_chain_fails_gracefully(self, monkeypatch):
         session = _RouteSession(
@@ -1322,11 +1325,11 @@ class TestGetPendingReviewsEndpoint:
 
         monkeypatch.setattr(builtins, "__import__", _bad_import)
 
+        # #2694 fail-closed: DB unavailable must be a 503, never HTTP 200
+        # with pending_reviews=0 (which hides items awaiting review).
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["pending_reviews"] == 0
-        assert body["db_available"] is False
+        assert r.status_code == 503
+        assert r.headers.get("Retry-After") == "30"
 
     def test_happy_path(self, client, monkeypatch):
         # NOTE: match on unique substrings because the rule_evaluations query
@@ -1375,7 +1378,9 @@ class TestGetPendingReviewsEndpoint:
         assert body["breakdown"]["identity_reviews"] == 0
         assert body["pending_reviews"] == 3  # 2+0+1+0
 
-    def test_outer_query_exception_returns_error_body(self, client, monkeypatch):
+    def test_outer_query_exception_returns_503(self, client, monkeypatch):
+        """#2694 fail-closed: a failed count query is a 503, never a 200
+        with pending_reviews=0."""
         session = _RouteSession(
             raise_on={"status NOT IN ('resolved', 'waived')": RuntimeError("boom")},
         )
@@ -1385,11 +1390,8 @@ class TestGetPendingReviewsEndpoint:
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: session)
 
         r = client.get("/api/v1/compliance/pending-reviews/00000000-0000-0000-0000-000000000001")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["pending_reviews"] == 0
-        assert body["db_available"] is False
-        assert "error" in body
+        assert r.status_code == 503
+        assert r.headers.get("Retry-After") == "30"
         assert session.closed  # finally block still closes
 
     def test_scalar_returns_none_coalesces_to_zero(self, client, monkeypatch):
@@ -1509,9 +1511,7 @@ class TestComputeScoresFailClosedFlags:
         assert "fail-closed" in scores["chain_integrity"][1]
 
     def test_chain_verification_error_denies_export_chain_credit(self):
-        errored = _compute_scores(
-            _base_data(chain_verified=None, chain_verification_error=True, chain_gaps=0)
-        )
+        errored = _compute_scores(_base_data(chain_verified=None, chain_verification_error=True, chain_gaps=0))
         # The pre-fix fallback: verification "pending" with no gaps earned
         # +30 export credit; an errored verification must earn none.
         pending = _compute_scores(_base_data(chain_verified=None, chain_gaps=0))
@@ -1522,3 +1522,23 @@ class TestComputeScoresFailClosedFlags:
         # The legacy gap-detection fallback (no error flag) is unchanged.
         scores = _compute_scores(_base_data(chain_verified=None, chain_gaps=0))
         assert scores["chain_integrity"][0] == 90
+
+    # --- #2694 follow-ups -------------------------------------------------
+
+    def test_ftl_data_error_zeroes_product_coverage(self):
+        """A failed FTL read poisons product coverage instead of routing to
+        the 50-point "mapping needed" assumed default (#2694)."""
+        scores = _compute_scores(_base_data(ftl_data_error=True, ftl_category_count=0))
+        assert scores["product_coverage"][0] == 0
+        assert "fail-closed" in scores["product_coverage"][1]
+
+    def test_ftl_data_error_beats_assumed_default(self):
+        poisoned = _compute_scores(_base_data(ftl_data_error=True, ftl_category_count=0, event_count=5))
+        unmapped = _compute_scores(_base_data(ftl_category_count=0, event_count=5))
+        # Without the flag, zeroed count earns the 50-point assumed default.
+        assert unmapped["product_coverage"][0] == 50
+        assert poisoned["product_coverage"][0] == 0
+
+    def test_no_ftl_flag_preserves_assumed_default(self):
+        scores = _compute_scores(_base_data(ftl_category_count=0, event_count=5))
+        assert scores["product_coverage"][0] == 50

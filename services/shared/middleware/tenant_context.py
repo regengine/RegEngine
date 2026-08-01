@@ -167,7 +167,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 try:
                     return uuid.UUID(tenant_id_str)
                 except ValueError:
-                    logger.warning(f"Invalid tenant_id in JWT: {tenant_id_str}")
+                    # #2696: a tenant claim that fails UUID parsing inside a
+                    # VALIDATED token is a signal (minting bug or tampering),
+                    # not noise. Re-raise instead of falling through to
+                    # weaker sources — dispatch converts this to a 401 on
+                    # protected paths (exempt paths proceed tenant-less).
+                    logger.error("Malformed tenant_id claim in validated JWT: %r", tenant_id_str)
+                    raise
 
         # Method 2: From custom header (Internal/Service-to-service ONLY)
         # WARNING: This is a potential spoofing vector if not stripped at the gateway.

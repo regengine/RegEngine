@@ -36,6 +36,9 @@ async def get_merkle_root_handler(tenant_id: str) -> dict:
             "tree_depth": result.tree_depth,
             "errors": result.errors,
             "checked_at": result.checked_at,
+            # #2698: expose the empty-chain fail-closed marker so consumers
+            # can tell "no evidence" apart from a tamper verdict.
+            "no_chain_evidence": bool(getattr(result, "no_chain_evidence", False)),
         }
 
     except HTTPException:

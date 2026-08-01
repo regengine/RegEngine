@@ -487,12 +487,20 @@ def _build_completeness_summary(events: list[dict]) -> dict:
     missing_by_event: list[dict[str, Any]] = []
     checks_total = 0
     checks_missing = 0
+    unchecked_events = 0
+    unchecked_event_types: set[str] = set()
 
     for event in events:
         raw_event_type = str(event.get("event_type", "")).upper()
         required_fields = []
         if raw_event_type in WebhookCTEType.__members__:
             required_fields = REQUIRED_KDES_BY_CTE[WebhookCTEType[raw_event_type]]
+        else:
+            # #2698: an event type outside WebhookCTEType (canonical /
+            # EPCIS-ingested types, typos) has NO required-KDE checklist —
+            # count it as UNCHECKED rather than silently fully-covered.
+            unchecked_events += 1
+            unchecked_event_types.add(str(event.get("event_type", "")))
 
         missing_fields = []
         for required_field in required_fields:
@@ -515,7 +523,14 @@ def _build_completeness_summary(events: list[dict]) -> dict:
             )
 
     checks_passed = checks_total - checks_missing
-    coverage_ratio = 1.0 if checks_total == 0 else round(checks_passed / checks_total, 4)
+    # #2698 fail-closed: the ratio only claims coverage over events that were
+    # actually checked. When events exist but ZERO checks ran (all types
+    # unknown), report 0.0 — never 1.0 for an export where nothing was
+    # checked. A truly empty export (no events) stays vacuously 1.0.
+    if checks_total == 0:
+        coverage_ratio = 0.0 if unchecked_events > 0 else 1.0
+    else:
+        coverage_ratio = round(checks_passed / checks_total, 4)
 
     return {
         "required_checks_total": checks_total,
@@ -525,6 +540,10 @@ def _build_completeness_summary(events: list[dict]) -> dict:
         "events_with_missing_required_fields": len(missing_by_event),
         "missing_required_by_field": missing_by_field,
         "missing_required_events": missing_by_event[:250],
+        # #2698: events whose type has no required-KDE checklist. The ratio
+        # above excludes them; consumers must not read it as covering these.
+        "events_unchecked_type": unchecked_events,
+        "unchecked_event_types": sorted(unchecked_event_types),
     }
 
 
@@ -624,6 +643,10 @@ def _build_chain_verification_payload(
         "completeness": {
             "required_kde_coverage_ratio": completeness_summary["required_kde_coverage_ratio"],
             "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
+            # #2698: the ratio excludes unchecked-type events; surface them
+            # so the artifact cannot silently claim coverage it never ran.
+            "events_unchecked_type": completeness_summary.get("events_unchecked_type", 0),
+            "unchecked_event_types": completeness_summary.get("unchecked_event_types", []),
         },
         # Issue #1219: record PII redaction posture so a chain-verifier can
         # distinguish "CSV with redacted names" from "CSV with full names"

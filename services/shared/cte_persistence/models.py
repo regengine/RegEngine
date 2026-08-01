@@ -135,7 +135,13 @@ class ChainVerification:
 
 
 class MerkleVerification:
-    """Result of Merkle tree verification for a tenant's hash chain."""
+    """Result of Merkle tree verification for a tenant's hash chain.
+
+    ``no_chain_evidence`` (#2698): True when zero chain rows were read
+    while non-rejected events exist — nothing was walked, so ``valid`` is
+    False without implying tampering (mirrors the canonical verifier's
+    #1314 degenerate-case guard).
+    """
 
     __slots__ = (
         "valid",
@@ -144,6 +150,7 @@ class MerkleVerification:
         "tree_depth",
         "errors",
         "checked_at",
+        "no_chain_evidence",
     )
 
     def __init__(self, **kwargs):

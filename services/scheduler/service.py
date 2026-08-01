@@ -74,6 +74,11 @@ _tracer = setup_standalone_observability("scheduler")
 
 logger = structlog.get_logger("scheduler")
 
+# #2697: alert after this many consecutive successful-but-zero-item scrapes
+# of the same source (and again at every multiple, to re-page without
+# spamming every run).
+_STALE_COVERAGE_ZERO_RUNS = 7
+
 
 class SchedulerService:
     """Main scheduler service orchestrating all components."""
@@ -136,6 +141,10 @@ class SchedulerService:
             ),
         }
         self.last_results: Dict[SourceType, ScrapeResult] = {}
+        # #2697: consecutive successful-but-empty scrapes per source. A dead
+        # feed (RSS 404 + empty API fallback) reports success=True,
+        # items_found=0 forever; alert when coverage looks stale.
+        self._consecutive_zero_scrapes: Dict[SourceType, int] = {}
 
     def initialize(self) -> None:
         """Initialize all components."""
@@ -193,6 +202,23 @@ class SchedulerService:
 
             if result.success:
                 circuit_breaker.record_success()
+
+                # #2697: stale-coverage alert. success=True with zero items
+                # is normal occasionally, but N consecutive empty runs means
+                # the feed is probably dead (bot-blocked / defunct RSS) and
+                # coverage has silently stopped.
+                if result.items_found == 0:
+                    streak = self._consecutive_zero_scrapes.get(source_type, 0) + 1
+                    self._consecutive_zero_scrapes[source_type] = streak
+                    if streak >= _STALE_COVERAGE_ZERO_RUNS and streak % _STALE_COVERAGE_ZERO_RUNS == 0:
+                        logger.error(
+                            "scrape_coverage_stale",
+                            source_type=source_type.value,
+                            consecutive_zero_item_runs=streak,
+                            note="scraper reports success but has returned 0 items repeatedly — feed may be dead or bot-blocked",
+                        )
+                else:
+                    self._consecutive_zero_scrapes[source_type] = 0
 
                 # Process new items
                 new_items = self._filter_new_items(result.items, source_type)
@@ -386,14 +412,36 @@ class SchedulerService:
 
                 if fsma_events:
                     fsma_success, fsma_failures = self.kafka_producer.emit_fsma_batch(fsma_events)
-                    logger.info(
-                        "fsma_events_emitted",
-                        success=fsma_success,
-                        failures=fsma_failures,
-                        topic="fsma.events.extracted",
-                    )
+                    if fsma_failures > 0:
+                        # #2697: fsma emission failures do not gate the
+                        # seen-ack (gating risks reprocessing loops for a
+                        # best-effort mirror) — but they must be loud, not
+                        # an info line.
+                        logger.error(
+                            "fsma_events_emit_failures",
+                            success=fsma_success,
+                            failures=fsma_failures,
+                            topic="fsma.events.extracted",
+                        )
+                        metrics.record_kafka_emit_failure(
+                            source_type=source_type.value,
+                            failure_mode="fsma_partial_batch",
+                            count=fsma_failures,
+                        )
+                    else:
+                        logger.info(
+                            "fsma_events_emitted",
+                            success=fsma_success,
+                            failures=fsma_failures,
+                            topic="fsma.events.extracted",
+                        )
             except (ValueError, TypeError, KeyError, RuntimeError) as e:
                 logger.error("fsma_transformation_failed", error=str(e))
+                metrics.record_kafka_emit_failure(
+                    source_type=source_type.value,
+                    failure_mode="fsma_transform_exception",
+                    count=len(items),
+                )
 
         # Send webhook notifications
         try:
@@ -770,9 +818,12 @@ class SchedulerService:
                 totals = drain_all_tenants(db)
             finally:
                 db.close()
-        except Exception as exc:  # pragma: no cover — telemetry must not crash
+        except Exception as exc:
+            # #2697: log, then RE-RAISE so APScheduler fires EVENT_JOB_ERROR
+            # and the #1144 listener records the failure in
+            # scheduler_job_runs — swallowing here recorded success.
             logger.exception("remediation_notification_drain_failed", error=str(exc))
-            return
+            raise
         if totals["claimed"]:
             logger.info("remediation_notification_drain_tick", **totals)
 
@@ -877,7 +928,12 @@ class SchedulerService:
             else:
                 logger.info("fsma_nightly_sync_complete", **log_fields)
         except Exception as exc:
+            # #2697: log, then RE-RAISE so APScheduler fires EVENT_JOB_ERROR
+            # and the #1144 listener records the failure — returning
+            # normally recorded EVENT_JOB_EXECUTED (success) in
+            # scheduler_job_runs while the sync had crashed.
             logger.error("fsma_nightly_sync_failed", error=str(exc))
+            raise
 
     def check_request_deadlines(self) -> None:
         """Check all tenants for overdue/critical FDA request deadlines.
