@@ -50,10 +50,12 @@ def _reset_module_state():
     """
     rate_limiting._redis_client = None
     rate_limiting._redis_failed = False
+    rate_limiting._redis_retry_at = 0.0
     rate_limiting._rate_buckets.clear()
     yield
     rate_limiting._redis_client = None
     rate_limiting._redis_failed = False
+    rate_limiting._redis_retry_at = 0.0
     rate_limiting._rate_buckets.clear()
 
 
@@ -137,8 +139,12 @@ class TestGetRedis:
     """Lazy Redis-client caching + failure latching."""
 
     def test_returns_none_once_failed_flag_set(self):
-        """After a failure, subsequent calls short-circuit to None."""
+        """Within the retry cooldown, calls short-circuit to None (#2699:
+        the flag is no longer sticky forever — a future retry_at gates it)."""
+        import time as _time
+
         rate_limiting._redis_failed = True
+        rate_limiting._redis_retry_at = _time.time() + 300
         assert _get_redis() is None
 
     def test_reuses_cached_client(self):
