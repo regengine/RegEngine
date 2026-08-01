@@ -103,8 +103,7 @@ class ChainVerificationMixin:
                     cte_events_count=0,
                 )
             errors = [
-                f"Empty chain but {cte_events_count} non-rejected events "
-                f"exist ({len(missing_ids)} missing chain rows)"
+                f"Empty chain but {cte_events_count} non-rejected events exist ({len(missing_ids)} missing chain rows)"
             ]
             return _core.ChainVerification(
                 valid=False,
@@ -126,16 +125,12 @@ class ChainVerificationMixin:
             # Check sequence continuity
             expected_seq = i + 1
             if seq != expected_seq:
-                errors.append(
-                    f"Sequence gap: expected {expected_seq}, got {seq}"
-                )
+                errors.append(f"Sequence gap: expected {expected_seq}, got {seq}")
 
             # Check previous_chain_hash linkage
             if i == 0:
                 if stored_prev is not None:
-                    errors.append(
-                        f"Genesis entry (seq={seq}) has non-null previous_chain_hash"
-                    )
+                    errors.append(f"Genesis entry (seq={seq}) has non-null previous_chain_hash")
                 expected_prev = None
             else:
                 expected_prev = rows[i - 1][3]  # chain_hash of previous row
@@ -161,8 +156,7 @@ class ChainVerificationMixin:
             if matched_event_id is None:
                 orphan_chain_rows.append(int(seq))
                 errors.append(
-                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} "
-                    f"has no matching fsma.cte_events row"
+                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} has no matching fsma.cte_events row"
                 )
 
         # #1314: cross-check the row counts. chain rows should equal
@@ -181,11 +175,7 @@ class ChainVerificationMixin:
                 )
 
         return _core.ChainVerification(
-            valid=(
-                len(errors) == 0
-                and not orphan_chain_rows
-                and not missing_chain_rows
-            ),
+            valid=(len(errors) == 0 and not orphan_chain_rows and not missing_chain_rows),
             chain_length=len(rows),
             errors=errors,
             checked_at=checked_at,
@@ -247,6 +237,38 @@ class ChainVerificationMixin:
         ).fetchall()
 
         if not rows:
+            # Fail closed on the degenerate case (#2698, mirroring the
+            # canonical verifier's #1314 guard): ZERO chain rows while
+            # non-rejected events exist. An unreadable (RLS-denied) or
+            # emptied chain is indistinguishable from chain-less ingestion,
+            # so a `valid=True, chain_length=0` claim — surfaced verbatim by
+            # the FDA verification routes — would attest integrity after
+            # walking zero rows of evidence. Not a tamper verdict.
+            events_count = (
+                self.session.execute(
+                    text("""
+                        SELECT COUNT(*) FROM fsma.cte_events
+                        WHERE tenant_id = :tid
+                          AND validation_status != 'rejected'
+                    """),
+                    {"tid": tenant_id},
+                ).scalar()
+                or 0
+            )
+            if events_count > 0:
+                return _core.MerkleVerification(
+                    valid=False,
+                    merkle_root=None,
+                    chain_length=0,
+                    tree_depth=0,
+                    errors=[
+                        f"No chain rows exist for tenant with {events_count} non-rejected "
+                        "events — chain integrity cannot be attested (nothing was walked). "
+                        "Not a tamper verdict; failing closed rather than reporting valid."
+                    ],
+                    checked_at=datetime.now(timezone.utc).isoformat(),
+                    no_chain_evidence=True,
+                )
             return _core.MerkleVerification(
                 valid=True,
                 merkle_root=None,
@@ -282,14 +304,10 @@ class ChainVerificationMixin:
             try:
                 proof = tree.generate_proof(i)
                 if not MerkleTree.verify_proof(event_hash, proof, merkle_root):
-                    errors.append(
-                        f"Merkle proof verification failed for event at index {i}"
-                    )
+                    errors.append(f"Merkle proof verification failed for event at index {i}")
             except Exception as e:
                 _core.logger.warning(f"Merkle proof generation failed at index {i}", exc_info=True)
-                errors.append(
-                    f"Merkle proof generation failed at index {i}: {e}"
-                )
+                errors.append(f"Merkle proof generation failed at index {i}: {e}")
 
         return _core.MerkleVerification(
             valid=len(errors) == 0,
@@ -301,7 +319,9 @@ class ChainVerificationMixin:
         )
 
     def get_merkle_proof(
-        self, tenant_id: str, event_id: str,
+        self,
+        tenant_id: str,
+        event_id: str,
     ) -> Optional[Dict[str, Any]]:
         """
         Generate a Merkle inclusion proof for a specific event.

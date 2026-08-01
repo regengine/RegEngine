@@ -92,26 +92,26 @@ def test_batch_persist_evaluations_150_rows_uses_2_inserts() -> None:
     savepoint.rollback.assert_not_called()
 
 
-def test_batch_persist_evaluations_mid_batch_exception_isolates_chunk() -> None:
-    """First chunk succeeds, second fails → first committed, second logged, no partial second batch."""
+def test_batch_persist_evaluations_mid_batch_exception_salvages_rows() -> None:
+    """First chunk succeeds, second fails → the failed chunk is salvaged
+    row-by-row (#2695) instead of silently dropped (audit-trail gap)."""
     session = MagicMock()
-    savepoint_1 = MagicMock()
-    savepoint_2 = MagicMock()
-    session.begin_nested.side_effect = [savepoint_1, savepoint_2]
     session.execute.side_effect = [
-        None,  # first chunk INSERT succeeds
-        RuntimeError("disk full"),  # second chunk INSERT fails
-    ]
+        None,  # first chunk INSERT (100 rows) succeeds
+        RuntimeError("disk full"),  # second chunk INSERT (50 rows) fails
+    ] + [None] * 50  # 50 row-level salvage INSERTs succeed
 
     engine = RulesEngine(session)
     results = [("event-x", _result(f"r{i}")) for i in range(150)]
     engine._batch_persist_evaluations("tenant-1", results)
 
-    assert session.begin_nested.call_count == 2
-    savepoint_1.rollback.assert_not_called()
-    savepoint_2.rollback.assert_called_once()
-    # Only 2 execute calls — no partial row from the failed chunk.
-    assert session.execute.call_count == 2
+    # 2 chunk savepoints + 50 row-salvage savepoints
+    assert session.begin_nested.call_count == 52
+    assert session.execute.call_count == 52
+    # Only the failed chunk's savepoint rolled back (same mock instance).
+    assert session.begin_nested.return_value.rollback.call_count == 1
+    # Every salvage insert succeeded — no evaluation_error markers.
+    assert not any("UPDATE fsma.traceability_events" in str(c.args[0]) for c in session.execute.call_args_list)
 
 
 def test_batch_persist_evaluations_empty_is_noop() -> None:
@@ -128,30 +128,59 @@ def test_batch_persist_evaluations_empty_is_noop() -> None:
 def test_batch_persist_isolates_failures_per_chunk() -> None:
     """A chunk failure rolls back only that chunk; subsequent chunks still run.
 
-    Two events each with 100 rows → 2 chunks.  First chunk fails, second
-    succeeds.  Each chunk gets its own savepoint; only the first is rolled back.
+    Two events each with 100 rows → 2 chunks.  First chunk fails (then is
+    salvaged row-by-row, #2695), second chunk succeeds untouched.
     """
     session = MagicMock()
-    savepoint_1 = MagicMock()
-    savepoint_2 = MagicMock()
-    session.begin_nested.side_effect = [savepoint_1, savepoint_2]
-    session.execute.side_effect = [
-        RuntimeError("first chunk broke"),
-        None,  # second chunk INSERT succeeds
-    ]
+    session.execute.side_effect = (
+        [
+            RuntimeError("first chunk broke"),
+        ]
+        + [None] * 100
+        + [None]
+    )  # 100 row salvages, then chunk 2 INSERT
 
     engine = RulesEngine(session)
     # 100 rows for event-a → chunk 1, 100 rows for event-b → chunk 2
     results = [("event-a", _result(f"r{i}")) for i in range(100)] + [("event-b", _result(f"s{i}")) for i in range(100)]
     engine._batch_persist_evaluations("tenant-1", results)
 
-    assert session.begin_nested.call_count == 2
-    savepoint_1.rollback.assert_called_once()
-    savepoint_2.rollback.assert_not_called()
+    # chunk 1 + 100 row salvages + chunk 2
+    assert session.begin_nested.call_count == 102
+    assert session.begin_nested.return_value.rollback.call_count == 1
 
     execute_calls = session.execute.call_args_list
-    assert len(execute_calls) == 2
+    assert len(execute_calls) == 102
     assert "INSERT INTO fsma.rule_evaluations" in str(execute_calls[0].args[0])
-    assert "INSERT INTO fsma.rule_evaluations" in str(execute_calls[1].args[0])
+    # Salvage inserts carry single-row dict params for event-a.
+    assert all(execute_calls[i].args[1]["event_id"] == "event-a" for i in range(1, 101))
     # Second chunk rows all belong to event-b
-    assert all(row["event_id"] == "event-b" for row in execute_calls[1].args[1])
+    assert all(row["event_id"] == "event-b" for row in execute_calls[101].args[1])
+
+
+def test_batch_salvage_marks_still_failing_rows() -> None:
+    """A row that fails even individually is marked via evaluation_error
+    (#2695) — same operator-visible marker as the single-row path."""
+    session = MagicMock()
+
+    def _execute(stmt, params=None):
+        sql = str(stmt)
+        if "INSERT INTO fsma.rule_evaluations" in sql:
+            if isinstance(params, list):
+                raise RuntimeError("chunk broke")
+            if params["rule_id"] == "r-poisoned":
+                raise RuntimeError("row poisoned")
+        return None
+
+    session.execute.side_effect = _execute
+
+    engine = RulesEngine(session)
+    engine._batch_persist_evaluations(
+        "tenant-1",
+        [("event-a", _result("r-poisoned")), ("event-b", _result("r-fine"))],
+    )
+
+    marker_calls = [c for c in session.execute.call_args_list if "UPDATE fsma.traceability_events" in str(c.args[0])]
+    assert len(marker_calls) == 1
+    assert marker_calls[0].args[1]["event_id"] == "event-a"
+    assert marker_calls[0].args[1]["error_message"] == "row poisoned"

@@ -164,15 +164,37 @@ def check_rls_posture(target_engine=None, *, label: str = "shared") -> str:
     regressing to a BYPASSRLS role.
     """
     eng = target_engine if target_engine is not None else engine
-    try:
-        if eng.dialect.name != "postgresql":
-            return "unknown"
-        with eng.connect() as conn:
-            row = conn.execute(
-                text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-            ).fetchone()
-    except Exception as exc:
-        logger.warning("rls_posture_probe_failed", engine=label, error=str(exc))
+    require_enforcement = os.getenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT") == "1"
+    if eng.dialect.name != "postgresql":
+        return "unknown"
+
+    # #2696: under REQUIRE=1 a probe failure must not silently bypass the
+    # one-way boot guard — retry (transient boot-time blips), then abort
+    # boot rather than proceed blind. Outside REQUIRE=1 the original
+    # probe-failure-must-never-crash-boot contract stands.
+    attempts = 3 if require_enforcement else 1
+    row = None
+    probe_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with eng.connect() as conn:
+                row = conn.execute(
+                    text("SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+                ).fetchone()
+            probe_error = None
+            break
+        except Exception as exc:
+            probe_error = exc
+            logger.warning("rls_posture_probe_failed", engine=label, attempt=attempt, attempts=attempts, error=str(exc))
+            if attempt < attempts:
+                time.sleep(min(2 ** (attempt - 1), 4))
+    if probe_error is not None:
+        if require_enforcement:
+            raise RuntimeError(
+                f"RLS enforcement required but the posture probe for the '{label}' engine "
+                f"failed after {attempts} attempts ({probe_error}) — refusing to boot blind. "
+                "Fix DB connectivity or unset REGENGINE_REQUIRE_RLS_ENFORCEMENT."
+            ) from probe_error
         return "unknown"
 
     if row is None:  # pragma: no cover — current_user always resolves
