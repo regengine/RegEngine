@@ -702,31 +702,46 @@ class RulesEngine:
         try:
             self.session.execute(insert_stmt, insert_params)
         except Exception as e:
+            # Documented-intentional degrade (silent-failure inventory,
+            # #2695): the accept decision stands and the persist failure is
+            # absorbed by the savepoint — the event is marked via
+            # ``evaluation_error`` for operator-driven re-evaluation. Full
+            # durability (retry + durable dead-letter) is the WS-8 /#2695
+            # follow-up design.
             savepoint.rollback()
             logger.error(
                 "evaluation_persist_failed",
                 extra={"event_id": event_id, "error": str(e)},
             )
             # Mark the event so operators can see it needs re-evaluation.
-            try:
-                self.session.execute(
-                    text(
-                        "UPDATE fsma.traceability_events"
-                        " SET evaluation_error = :error_message,"
-                        "     evaluated_at = NOW()"
-                        " WHERE tenant_id = :tenant_id AND event_id = :event_id"
-                    ),
-                    {
-                        "tenant_id": tenant_id,
-                        "event_id": event_id,
-                        "error_message": str(e),
-                    },
-                )
-            except Exception as mark_err:
-                logger.error(
-                    "evaluation_persist_marker_failed",
-                    extra={"event_id": event_id, "error": str(mark_err)},
-                )
+            self._mark_event_evaluation_error(tenant_id, event_id, str(e))
+
+    def _mark_event_evaluation_error(self, tenant_id: str, event_id: str, error_message: str) -> None:
+        """Best-effort ``evaluation_error`` marker on the event row.
+
+        Shared by the single-row and batch-salvage persist paths so every
+        event whose evaluation record could not be written stays visible
+        for re-evaluation.
+        """
+        try:
+            self.session.execute(
+                text(
+                    "UPDATE fsma.traceability_events"
+                    " SET evaluation_error = :error_message,"
+                    "     evaluated_at = NOW()"
+                    " WHERE tenant_id = :tenant_id AND event_id = :event_id"
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "event_id": event_id,
+                    "error_message": error_message,
+                },
+            )
+        except Exception as mark_err:
+            logger.error(
+                "evaluation_persist_marker_failed",
+                extra={"event_id": event_id, "error": str(mark_err)},
+            )
 
     _BATCH_CHUNK_SIZE: int = 100
 
@@ -798,3 +813,26 @@ class RulesEngine:
                         "error_type": type(e).__name__,
                     },
                 )
+                # #2695: salvage the chunk row-by-row so one poisoned row
+                # does not drop the evaluation records of the other 99
+                # (accepted events with no evaluation record = audit-trail
+                # gap). Rows that still fail are marked on the event via
+                # ``evaluation_error`` — same operator-visible marker as
+                # the single-row path — so they can be re-evaluated.
+                for (event_id, _r), row_params in zip(chunk, value_dicts):
+                    row_savepoint = self.session.begin_nested()
+                    try:
+                        self.session.execute(insert_stmt, row_params)
+                    except (SQLAlchemyError, Exception) as row_err:
+                        row_savepoint.rollback()
+                        logger.error(
+                            "evaluation_row_persist_failed",
+                            extra={
+                                "tenant_id": tenant_id,
+                                "event_id": event_id,
+                                "rule_id": row_params.get("rule_id"),
+                                "error": str(row_err),
+                                "error_type": type(row_err).__name__,
+                            },
+                        )
+                        self._mark_event_evaluation_error(tenant_id, event_id, str(row_err))

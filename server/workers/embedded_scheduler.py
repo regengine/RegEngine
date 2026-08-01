@@ -109,6 +109,17 @@ class EmbeddedSchedulerRunner:
         return self._service
 
     @property
+    def thread_alive(self) -> bool:
+        """True while the runner's daemon thread is running (#2697).
+
+        The thread exits permanently on an init/config failure (see
+        ``_run``); /readiness uses this to surface a dead scheduler thread
+        instead of reporting ``ok`` forever off the start-time success.
+        """
+        thread = self._thread
+        return bool(thread is not None and thread.is_alive())
+
+    @property
     def is_leader(self) -> bool:
         """True only when this worker holds the advisory lock and its
         APScheduler is running (i.e. it is the one driving the jobs)."""

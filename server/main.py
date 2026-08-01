@@ -1058,6 +1058,11 @@ async def readiness(request: Request):
         checks["scheduler"] = {"status": "error", "error": "embedded scheduler failed to start"}
     elif getattr(state, "embedded_scheduler", None) is None:
         checks["scheduler"] = {"status": "disabled"}
+    elif not getattr(state.embedded_scheduler, "thread_alive", True):
+        # #2697: the daemon thread can die after a successful start (init
+        # failure inside the thread) — "started ok" alone must not report
+        # ok forever. Degrades the payload; never 503 (documented contract).
+        checks["scheduler"] = {"status": "error", "error": "embedded scheduler thread is not alive"}
     else:
         checks["scheduler"] = {"status": "ok"}
 

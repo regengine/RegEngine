@@ -111,6 +111,11 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
         return False, None
     # No-verdict (compliant is None) is never a reject in any mode —
     # "we didn't evaluate" is not the same as "the event violates a rule".
+    # Documented-intentional (#1346/#1347; silent-failure inventory): under
+    # ``all`` a tenant with an empty/unreadable fsma.rule_definitions has
+    # every event accepted. Revisit before enforcement is marketed as
+    # blocking (#2695): either require seeded rules under ``all`` or keep
+    # this contract with a loud per-tenant metric.
     if summary.compliant is None:
         return False, None
     if mode == EnforcementMode.CTE_ONLY:

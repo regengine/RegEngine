@@ -303,10 +303,17 @@ def get_session() -> Iterator[Session]:
 def get_tenant_session(
     tenant_id: str,
 ) -> Iterator[Session]:
-    """Provide a tenant-aware SQLAlchemy session (Admin DB)."""
+    """Provide a tenant-aware SQLAlchemy session (Admin DB).
+
+    Raises ValueError on a falsy ``tenant_id`` (#2696): silently yielding a
+    session with no ``app.tenant_id`` GUC would rely solely on the RLS
+    fail-closed predicate and hide the caller's bug.
+    """
+    if not tenant_id:
+        raise ValueError("get_tenant_session requires a non-empty tenant_id")
     session = SessionLocal()
     try:
-        if tenant_id and _engine.dialect.name != "sqlite":
+        if _engine.dialect.name != "sqlite":
             from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
 
             set_tenant_guc(session, tenant_id)
