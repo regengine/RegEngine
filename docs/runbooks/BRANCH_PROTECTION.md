@@ -1,8 +1,10 @@
 # Branch protection — required contexts and the rules around them
 
-Last verified: 2026-07-31 against the live `main` protection settings
+Last verified: 2026-08-01 against the live `main` protection settings
 (`gh api repos/regengine/RegEngine/branches/main/protection`) and
-`.github/workflows/`.
+`.github/workflows/`. The eight required contexts and strict mode match
+the table below and `scripts/workflow_inventory.txt` exactly; see the
+`enforce_admins` caveat under "No admin-override merges".
 
 ## Required contexts
 
@@ -64,7 +66,19 @@ under-detection.
 ### No admin-override merges
 
 If a required check cannot pass, fix the check or fix branch protection —
-do not merge past it. Two incidents came from overrides:
+do not merge past it.
+
+> **Caveat (verified 2026-08-01): this rule is currently POLICY, not a
+> setting.** The live protection has `"enforce_admins": {"enabled": false}`
+> (from `gh api repos/regengine/RegEngine/branches/main/protection`:
+> `{"strict": true, "contexts": [the 8 above], "enforce_admins": false,
+> "required_approving_review_count": 1, "allow_force_pushes": false,
+> "allow_deletions": false}`), so an admin CAN still merge past a red
+> required check. Turning `enforce_admins` on in the settings UI would
+> make the rule mechanical — that is an operator decision, deliberately
+> not changed by the verification pass that recorded this.
+
+Two incidents came from overrides:
 
 * **The phantom context.** From #2551 until 2026-07-31, `CI Status Gate`
   was required but emitted by *nothing* (the real jobs are named `Backend
