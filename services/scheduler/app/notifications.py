@@ -173,6 +173,10 @@ class WebhookNotifier:
         # #1150: persistence
         self._outbox_path: Optional[Path] = Path(outbox_path) if outbox_path else None
         self._outbox_lock = Lock()
+        # #2697: corrupt outbox lines that could not be written to the
+        # quarantine file — preserved verbatim across the next rewrite so
+        # they are never destroyed.
+        self._unquarantined_corrupt_lines: List[str] = []
         # #1150: per-URL consecutive-failure counter. Operators tail
         # `webhook_failure_streak` logs to see which endpoints are flaky.
         self._failure_streak: Dict[str, int] = {}
@@ -422,12 +426,12 @@ class WebhookNotifier:
                         try:
                             entries.append(OutboxEntry.from_dict(json.loads(raw)))
                         except (json.JSONDecodeError, KeyError, ValueError) as parse_err:
-                            logger.warning(
-                                "webhook_outbox_corrupt_line_skipped",
-                                path=str(self._outbox_path),
-                                line=line_no,
-                                error=str(parse_err),
-                            )
+                            # #2697: quarantine instead of skip — the
+                            # retry pass REWRITES the outbox from parsed
+                            # entries, which used to permanently destroy
+                            # the corrupt entry (a HIGH/CRITICAL alert
+                            # delivery).
+                            self._quarantine_corrupt_line(raw, line_no, parse_err)
             except OSError as disk_err:
                 logger.error(
                     "webhook_outbox_read_failed",
@@ -435,6 +439,39 @@ class WebhookNotifier:
                     error=str(disk_err),
                 )
         return entries
+
+    def _quarantine_corrupt_line(self, raw: str, line_no: int, parse_err: Exception) -> None:
+        """Preserve an unparseable outbox line in a quarantine file (#2697).
+
+        The retry pass rewrites the outbox from parsed entries only, so a
+        skipped corrupt line would otherwise be destroyed. If the
+        quarantine write itself fails, the raw line is kept in memory and
+        re-appended verbatim by the next ``_write_outbox`` so it survives
+        the rewrite either way.
+        """
+        assert self._outbox_path is not None
+        quarantine_path = self._outbox_path.with_suffix(self._outbox_path.suffix + ".quarantine")
+        try:
+            with open(quarantine_path, "a", encoding="utf-8") as fp:
+                fp.write(raw)
+                fp.write("\n")
+        except OSError as disk_err:
+            logger.critical(
+                "webhook_outbox_quarantine_failed",
+                path=str(self._outbox_path),
+                quarantine=str(quarantine_path),
+                line=line_no,
+                error=str(disk_err),
+            )
+            self._unquarantined_corrupt_lines.append(raw)
+            return
+        logger.error(
+            "webhook_outbox_corrupt_line_quarantined",
+            path=str(self._outbox_path),
+            quarantine=str(quarantine_path),
+            line=line_no,
+            error=str(parse_err),
+        )
 
     def _write_outbox(self, entries: List[OutboxEntry]) -> None:
         """Rewrite the outbox file atomically (write tmp then rename)."""
@@ -447,7 +484,13 @@ class WebhookNotifier:
                     for entry in entries:
                         fp.write(json.dumps(entry.to_dict(), default=str))
                         fp.write("\n")
+                    # #2697: corrupt lines that failed quarantine are
+                    # re-appended verbatim — never destroyed by the rewrite.
+                    for raw in self._unquarantined_corrupt_lines:
+                        fp.write(raw)
+                        fp.write("\n")
                 os.replace(tmp_path, self._outbox_path)
+                self._unquarantined_corrupt_lines = []
         except OSError as disk_err:
             logger.error(
                 "webhook_outbox_write_failed",

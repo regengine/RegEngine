@@ -135,6 +135,15 @@ class FDARecallsScraper(BaseScraper):
         """Parse a single recall from API response."""
         recall_number = result.get("recall_number", "")
         if not recall_number:
+            # #2697: dropped rows must leave a trace — log identifying
+            # hints (not the full row) so a systematic upstream schema
+            # change is visible.
+            logger.warning(
+                "recall_row_missing_recall_number_dropped",
+                report_date=result.get("report_date", ""),
+                classification=result.get("classification", ""),
+                product_hint=str(result.get("product_description", ""))[:80],
+            )
             return None
 
         source_id = self._create_source_id("fda_recall", recall_number)

@@ -119,6 +119,8 @@ class TestMerkleRootHandler:
             "tree_depth": 3,
             "errors": [],
             "checked_at": "2026-04-19T00:00:00Z",
+            # #2698: empty-chain fail-closed marker (False on happy path).
+            "no_chain_evidence": False,
         }
         # Session closed on success
         assert stub_deps.session.closed is True

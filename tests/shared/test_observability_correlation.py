@@ -7,6 +7,16 @@ Covers:
 * structlog _inject_context includes correlation_id in every log record.
 * Kafka propagation helpers round-trip the ID through headers.
 * bind_correlation_context re-hydrates the contextvar in consumer handlers.
+
+Isolation contract: these tests assert on the DEFAULT state of the
+correlation/tenant contextvars (e.g. "correlation_id is unset outside a
+request"), so they are only meaningful from a clean slate. The autouse
+``_clean_observability_context`` fixture below establishes that slate per
+test and restores whatever state existed before, making this file
+order-independent. Any test elsewhere that seeds these contextvars in the
+main pytest thread must reset them (see the fixture in
+services/scheduler/tests/test_correlation_propagation_1329.py, the
+polluter that originally broke this file).
 """
 
 from __future__ import annotations
@@ -18,6 +28,29 @@ import pytest
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def _clean_observability_context():
+    """Start each test from default contextvar state; restore on exit."""
+    from shared.observability import context as obs_context
+    from shared.observability.correlation import correlation_id_ctx
+
+    saved_structlog = dict(structlog.contextvars.get_contextvars())
+    structlog.contextvars.clear_contextvars()
+    cid_token = correlation_id_ctx.set(None)
+    tenant_token = obs_context._tenant_id_ctx.set("unknown")
+    request_token = obs_context._request_id_ctx.set("unknown")
+    try:
+        yield
+    finally:
+        correlation_id_ctx.reset(cid_token)
+        obs_context._tenant_id_ctx.reset(tenant_token)
+        obs_context._request_id_ctx.reset(request_token)
+        structlog.contextvars.clear_contextvars()
+        if saved_structlog:
+            structlog.contextvars.bind_contextvars(**saved_structlog)
+
 
 # ---------------------------------------------------------------------------
 # HTTP middleware

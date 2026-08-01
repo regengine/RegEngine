@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -33,6 +34,7 @@ def _make_request(ip: str = "1.2.3.4") -> MagicMock:
 def test_rate_limit_allows_requests_under_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
     """Requests below the limit should pass without raising."""
     monkeypatch.setattr(rl, "_redis_failed", True)  # force in-memory path
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})  # fresh state
     req = _make_request("10.0.0.1")
 
@@ -44,6 +46,7 @@ def test_rate_limit_allows_requests_under_threshold(monkeypatch: pytest.MonkeyPa
 def test_rate_limit_blocks_after_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
     """After exceeding the per-IP limit a 429 must be raised."""
     monkeypatch.setattr(rl, "_redis_failed", True)
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})
     monkeypatch.setattr(rl, "_WEBHOOK_RATE_LIMIT", 5)  # lower limit for speed
 
@@ -64,6 +67,7 @@ def test_rate_limit_blocks_after_threshold(monkeypatch: pytest.MonkeyPatch) -> N
 def test_rate_limit_is_per_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     """Different IPs must not share the same bucket."""
     monkeypatch.setattr(rl, "_redis_failed", True)
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})
     monkeypatch.setattr(rl, "_WEBHOOK_RATE_LIMIT", 3)
 
@@ -86,6 +90,7 @@ def test_rate_limit_uses_x_forwarded_for_when_peer_trusted(
 ) -> None:
     """X-Forwarded-For must be honored ONLY when the peer is a trusted proxy."""
     monkeypatch.setattr(rl, "_redis_failed", True)
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})
     monkeypatch.setattr(rl, "_WEBHOOK_RATE_LIMIT", 2)
     monkeypatch.setenv("STRIPE_TRUSTED_PROXY_CIDRS", "10.0.0.0/8")
@@ -162,6 +167,7 @@ def test_xff_ignored_when_peer_not_trusted(monkeypatch: pytest.MonkeyPatch) -> N
     threshold.
     """
     monkeypatch.setattr(rl, "_redis_failed", True)
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})
     monkeypatch.setattr(rl, "_WEBHOOK_RATE_LIMIT", 3)
     monkeypatch.delenv("STRIPE_TRUSTED_PROXY_CIDRS", raising=False)

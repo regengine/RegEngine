@@ -213,12 +213,32 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                         headers=dict(cached_response.get("headers", {})),
                     )
             except Exception as exc:
+                fail_mode = os.getenv("IDEMPOTENCY_FAIL_MODE", "degrade").strip().lower()
                 logger.warning(
                     "idempotency_cache_read_error",
                     idempotency_key=idempotency_key,
                     tenant_id=tenant_id,
                     error=str(exc),
+                    fail_mode=fail_mode,
                 )
+                # #2699: IDEMPOTENCY_FAIL_MODE=closed refuses the request
+                # (503 + Retry-After) instead of re-executing it on a cache
+                # read error. Default degrade re-executes — duplicate
+                # evidence writes are still blocked by the DB-level
+                # UNIQUE (tenant_id, idempotency_key) index (v072), which
+                # is why degrade is acceptable here.
+                if fail_mode == "closed":
+                    return Response(
+                        content=json.dumps(
+                            {
+                                "error": "idempotency_backend_unavailable",
+                                "detail": "Idempotency cache unavailable — request not accepted. Please retry shortly.",
+                            }
+                        ),
+                        status_code=503,
+                        media_type="application/json",
+                        headers={"Retry-After": "30"},
+                    )
                 # Continue to process request on cache read error
 
         # Request proceeds normally

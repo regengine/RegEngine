@@ -260,7 +260,19 @@ def _update_subscription_status(
         try:
             last_seen = int(existing.get("last_event_created") or 0)
         except (ValueError, TypeError):
-            last_seen = 0
+            # #2699 fail closed: corrupt stored state must not become
+            # last_seen=0 — that lets a STALE event (e.g. an old `active`)
+            # overwrite current subscription status, which the entitlement
+            # gate then reads. Refuse the update and alert; Stripe retries,
+            # and the operator repairs the corrupt mapping.
+            logger.error(
+                "stripe_subscription_state_corrupt",
+                tenant_id=tenant_id,
+                subscription_id=subscription_id,
+                last_event_created_raw=str(existing.get("last_event_created"))[:64],
+                refused_status=status,
+            )
+            return
         if int(event_created) < last_seen:
             logger.info(
                 "stripe_webhook_event_out_of_order_ignored",

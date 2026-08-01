@@ -399,9 +399,13 @@ class TestUpdateSubscriptionStatus:
         # The out-of-order log fired.
         assert any("stripe_webhook_event_out_of_order_ignored" in call[1] for call in _stub_logger.calls)
 
-    def test_reorder_guard_handles_corrupt_last_event_created(self, fake_redis: _FakeRedis) -> None:
-        """Lines 247-248: malformed ``last_event_created`` defaults to 0
-        so the update is accepted (not dropped)."""
+    def test_reorder_guard_refuses_corrupt_last_event_created(
+        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
+    ) -> None:
+        """#2699 fail closed: malformed ``last_event_created`` must NOT
+        default to 0 (which let a STALE event overwrite current status —
+        read by the entitlement gate). The update is refused with an
+        error log; Stripe retries and the operator repairs the mapping."""
         fake_redis.hashes["billing:tenant:tenant-corrupt"] = {
             "tenant_id": "tenant-corrupt",
             "status": "active",
@@ -415,7 +419,10 @@ class TestUpdateSubscriptionStatus:
             status="past_due",
             event_created=100,
         )
-        assert fake_redis.hashes["billing:tenant:tenant-corrupt"]["status"] == "past_due"
+        # Status NOT overwritten.
+        assert fake_redis.hashes["billing:tenant:tenant-corrupt"]["status"] == "active"
+        # The corrupt-state alert fired.
+        assert any("stripe_subscription_state_corrupt" in call[1] for call in _stub_logger.calls)
 
     def test_happy_path_updates_all_fields(self, fake_redis: _FakeRedis) -> None:
         """Lines 258-275: the full update path, exercising every

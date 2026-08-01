@@ -103,8 +103,11 @@ class TestNightlyFsmaSyncExecution:
 
         ingest.assert_called_once_with()
 
-    def test_run_fsma_nightly_sync_swallows_ingest_errors(self):
-        """A failing sweep must not crash the APScheduler job thread."""
+    def test_run_fsma_nightly_sync_reraises_ingest_errors(self):
+        """#2697: a failing sweep RE-RAISES after logging so APScheduler
+        fires EVENT_JOB_ERROR and the #1144 listener records the failure
+        (an exception in a job never crashes the scheduler thread — the
+        executor catches it and dispatches the error event)."""
         svc = _build_scheduler_service_without_init()
 
         async def _boom():
@@ -114,7 +117,8 @@ class TestNightlyFsmaSyncExecution:
             "services.ingestion.app.routes_scraping.run_all_regulations_ingest",
             side_effect=_boom,
         ):
-            svc.run_fsma_nightly_sync()  # must not raise
+            with pytest.raises(RuntimeError, match="source exploded"):
+                svc.run_fsma_nightly_sync()
 
     def test_run_fsma_nightly_sync_does_not_use_http(self):
         """The HTTP-to-self path is gone — no POST, no internal secret."""

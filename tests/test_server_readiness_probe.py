@@ -351,3 +351,46 @@ def test_minimal_app_without_state_reports_not_configured(monkeypatch, _postgres
     assert body["status"] == "ready"
     assert body["checks"]["worker"]["status"] == "not_configured"
     assert body["checks"]["scheduler"]["status"] == "not_configured"
+
+
+def test_scheduler_dead_thread_is_error(monkeypatch, _postgres_ok, _redis_unset):
+    """#2697: a scheduler runner whose daemon thread died after a successful
+    start must degrade the payload instead of reporting ok forever."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+
+    class _DeadRunner:
+        thread_alive = False
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=_DeadRunner(),
+    )
+
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200  # degraded, never 503 (documented contract)
+    body = resp.json()
+    assert body["checks"]["scheduler"]["status"] == "error"
+    assert "not alive" in body["checks"]["scheduler"]["error"]
+    assert body["status"] == "degraded"
+
+
+def test_scheduler_live_thread_is_ok(monkeypatch, _postgres_ok, _redis_unset):
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+
+    class _LiveRunner:
+        thread_alive = True
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=_LiveRunner(),
+    )
+
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    assert resp.json()["checks"]["scheduler"]["status"] == "ok"
