@@ -702,19 +702,85 @@ class RulesEngine:
         try:
             self.session.execute(insert_stmt, insert_params)
         except Exception as e:
-            # Documented-intentional degrade (silent-failure inventory,
-            # #2695): the accept decision stands and the persist failure is
-            # absorbed by the savepoint — the event is marked via
-            # ``evaluation_error`` for operator-driven re-evaluation. Full
-            # durability (retry + durable dead-letter) is the WS-8 /#2695
-            # follow-up design.
+            # The accept decision stands and the persist failure is absorbed
+            # by the savepoint (#1372) — but the rows are salvaged
+            # individually and any that still fail are copied to the durable
+            # dead-letter (WS-8, #2709) instead of being dropped.
             savepoint.rollback()
             logger.error(
                 "evaluation_persist_failed",
                 extra={"event_id": event_id, "error": str(e)},
             )
-            # Mark the event so operators can see it needs re-evaluation.
-            self._mark_event_evaluation_error(tenant_id, event_id, str(e))
+            self._salvage_rows(tenant_id, [(event_id, p) for p in insert_params], insert_stmt)
+
+    def _salvage_rows(self, tenant_id: str, rows: List[tuple], insert_stmt) -> None:
+        """Retry failed evaluation rows one-by-one (#2695), dead-lettering
+        rows that still fail (#2709).
+
+        ``rows`` is a list of ``(event_id, insert_params_dict)``. Each row
+        gets its own savepoint so one poisoned row cannot drop the others.
+        A row that fails individually is (a) marked on the event via
+        ``evaluation_error`` for re-evaluation visibility, and (b) copied
+        verbatim into ``fsma.rule_evaluation_deadletter`` so the verdict
+        itself survives for the replay job.
+        """
+        from sqlalchemy.exc import SQLAlchemyError
+
+        for event_id, row_params in rows:
+            row_savepoint = self.session.begin_nested()
+            try:
+                self.session.execute(insert_stmt, row_params)
+            except (SQLAlchemyError, Exception) as row_err:
+                row_savepoint.rollback()
+                logger.error(
+                    "evaluation_row_persist_failed",
+                    extra={
+                        "tenant_id": tenant_id,
+                        "event_id": event_id,
+                        "rule_id": row_params.get("rule_id"),
+                        "error": str(row_err),
+                        "error_type": type(row_err).__name__,
+                    },
+                )
+                self._mark_event_evaluation_error(tenant_id, event_id, str(row_err))
+                self._write_evaluation_deadletter(row_params, str(row_err))
+
+    def _write_evaluation_deadletter(self, row_params: dict, persist_error: str) -> None:
+        """Copy a persist-failed evaluation row into the durable dead-letter.
+
+        The dead-letter insert avoids whatever poisoned the original row
+        (the payload lands in plain/jsonb columns with no FK), so the
+        realistic failure class — row-specific constraint/data problems —
+        is durably captured. Its own savepoint; if even this fails the
+        loss is logged at CRITICAL rather than silently.
+        """
+        savepoint = self.session.begin_nested()
+        try:
+            self.session.execute(
+                text(
+                    "INSERT INTO fsma.rule_evaluation_deadletter ("
+                    "    tenant_id, evaluation_id, event_id, rule_id,"
+                    "    rule_version, result, why_failed, evidence,"
+                    "    confidence, persist_error"
+                    ") VALUES ("
+                    "    :tenant_id, :eval_id, :event_id, :rule_id,"
+                    "    :rule_version, :result, :why_failed, CAST(:evidence AS jsonb),"
+                    "    :confidence, :persist_error"
+                    ")"
+                ),
+                {**row_params, "persist_error": persist_error},
+            )
+        except Exception as dl_err:
+            savepoint.rollback()
+            logger.critical(
+                "evaluation_deadletter_write_failed",
+                extra={
+                    "tenant_id": row_params.get("tenant_id"),
+                    "event_id": row_params.get("event_id"),
+                    "rule_id": row_params.get("rule_id"),
+                    "error": str(dl_err),
+                },
+            )
 
     def _mark_event_evaluation_error(self, tenant_id: str, event_id: str, error_message: str) -> None:
         """Best-effort ``evaluation_error`` marker on the event row.
@@ -814,25 +880,10 @@ class RulesEngine:
                     },
                 )
                 # #2695: salvage the chunk row-by-row so one poisoned row
-                # does not drop the evaluation records of the other 99
-                # (accepted events with no evaluation record = audit-trail
-                # gap). Rows that still fail are marked on the event via
-                # ``evaluation_error`` — same operator-visible marker as
-                # the single-row path — so they can be re-evaluated.
-                for (event_id, _r), row_params in zip(chunk, value_dicts):
-                    row_savepoint = self.session.begin_nested()
-                    try:
-                        self.session.execute(insert_stmt, row_params)
-                    except (SQLAlchemyError, Exception) as row_err:
-                        row_savepoint.rollback()
-                        logger.error(
-                            "evaluation_row_persist_failed",
-                            extra={
-                                "tenant_id": tenant_id,
-                                "event_id": event_id,
-                                "rule_id": row_params.get("rule_id"),
-                                "error": str(row_err),
-                                "error_type": type(row_err).__name__,
-                            },
-                        )
-                        self._mark_event_evaluation_error(tenant_id, event_id, str(row_err))
+                # does not drop the evaluation records of the other 99;
+                # rows that still fail are marked AND dead-lettered (#2709).
+                self._salvage_rows(
+                    tenant_id,
+                    [(event_id, row_params) for (event_id, _r), row_params in zip(chunk, value_dicts)],
+                    insert_stmt,
+                )

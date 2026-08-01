@@ -794,6 +794,23 @@ class SchedulerService:
             interval_seconds=self.settings.remediation_outbox_drain_interval_seconds,
         )
 
+        # WS-8 (#2709): replay dead-lettered rule evaluations into
+        # fsma.rule_evaluations so the audit trail self-heals.
+        self._add_tracked_job(
+            self.replay_rule_eval_deadletter,
+            job_id="rule_eval_deadletter_replay",
+            trigger=IntervalTrigger(
+                seconds=self.settings.rule_eval_deadletter_replay_interval_seconds,
+            ),
+            name="Rule Evaluation Dead-Letter Replay (#2709)",
+            max_instances=1,  # Never run two replay passes concurrently.
+        )
+        logger.info(
+            "job_scheduled",
+            job_id="rule_eval_deadletter_replay",
+            interval_seconds=self.settings.rule_eval_deadletter_replay_interval_seconds,
+        )
+
         logger.info(
             "scheduler_ready",
             scrapers=list(self.scrapers.keys()),
@@ -826,6 +843,32 @@ class SchedulerService:
             raise
         if totals["claimed"]:
             logger.info("remediation_notification_drain_tick", **totals)
+
+    def replay_rule_eval_deadletter(self) -> None:
+        """Replay dead-lettered rule evaluations once (WS-8, #2709).
+
+        Per-tenant claim under RLS (fsma.rule_evaluation_deadletter is
+        FORCE RLS); tenant discovery iterates public.tenants like the
+        remediation drain. Per-row failures bump replay_attempts inside
+        the replayer; a tenant-level failure is logged and skipped so one
+        tenant cannot poison the tick.
+        """
+        try:
+            from shared.database import SessionLocal  # noqa: PLC0415
+            from shared.rules.deadletter_replay import replay_all_tenants  # noqa: PLC0415
+
+            db = SessionLocal()
+            try:
+                totals = replay_all_tenants(db)
+            finally:
+                db.close()
+        except Exception as exc:
+            # #2697 convention: log, then RE-RAISE so the #1144 listener
+            # records the failure instead of a phantom success.
+            logger.exception("rule_eval_deadletter_replay_failed", error=str(exc))
+            raise
+        if totals["attempted"]:
+            logger.info("rule_eval_deadletter_replay_tick", **totals)
 
     def drain_webhook_outbox(self) -> None:
         """Drain the persistent webhook outbox once (#1150).
