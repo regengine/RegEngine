@@ -82,6 +82,10 @@ class SignoffRequest(BaseModel):
 
 
 class SubmitRequest(BaseModel):
+    package_id: Optional[str] = Field(
+        default=None,
+        description="Package version to submit. Defaults to the case's latest assembled package.",
+    )
     submitted_to: Optional[str] = None
     submitted_by: str
     submission_method: str = "export"
@@ -273,7 +277,9 @@ async def assemble_package(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    package = svc.assemble_response_package(tid, request_case_id, generated_by)
+    # generated_by is keyword-only on AssemblyMixin — passing it positionally
+    # raised TypeError and 500'd the dashboard's Assemble action.
+    package = svc.assemble_response_package(tid, request_case_id, generated_by=generated_by)
     return {
         "request_case_id": request_case_id,
         "package_id": package.get("package_id"),
@@ -320,10 +326,32 @@ async def submit_package(
 ):
     tid = resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
+    # SubmissionMixin.submit_package requires a package_id; the route never
+    # passed one, so every submit raised TypeError (500). Default to the
+    # case's latest assembled version when the caller does not pin one.
+    package_id = body.package_id
+    if not package_id:
+        from sqlalchemy import text
+
+        row = db_session.execute(
+            text(
+                "SELECT package_id FROM fsma.response_packages"
+                " WHERE tenant_id = :tenant_id AND request_case_id = :case_id"
+                " ORDER BY version_number DESC LIMIT 1"
+            ),
+            {"tenant_id": tid, "case_id": request_case_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=409,
+                detail="No assembled package to submit — run assemble first.",
+            )
+        package_id = str(row[0])
     try:
         result = svc.submit_package(
             tenant_id=tid,
             request_case_id=request_case_id,
+            package_id=package_id,
             submitted_to=body.submitted_to,
             submitted_by=body.submitted_by,
             submission_method=body.submission_method,

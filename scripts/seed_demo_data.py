@@ -604,6 +604,9 @@ def main() -> int:
             {
                 "event_id": str(e.event_id),
                 "event_type": e.event_type.value,
+                # Required by the temporal_order relational rule — omitting
+                # it made the evaluator compare datetime > None.
+                "event_timestamp": e.event_timestamp,
                 "traceability_lot_code": e.traceability_lot_code,
                 "product_reference": e.product_reference,
                 "quantity": e.quantity,
