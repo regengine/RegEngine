@@ -146,7 +146,7 @@ def _make_event(
     ).prepare_for_persistence()
 
 
-def build_demo_events() -> list[TraceabilityEvent]:
+def build_demo_events(tenant_id: str = DEMO_TENANT_ID) -> list[TraceabilityEvent]:
     """Build 24 realistic supply chain events across 4 products."""
     events = []
 
@@ -504,6 +504,12 @@ def build_demo_events() -> list[TraceabilityEvent]:
         )
     )
 
+    # --tenant-id used to apply only to RLS context and rule evaluations;
+    # the event payloads themselves stayed on DEMO_TENANT_ID, splitting the
+    # seed across two tenants. Retag here so everything lands together.
+    if tenant_id != DEMO_TENANT_ID:
+        events = [e.model_copy(update={"tenant_id": tenant_id}) for e in events]
+
     return events
 
 
@@ -550,7 +556,7 @@ def main() -> int:
     parser.add_argument("--tenant-id", default=DEMO_TENANT_ID, help="Tenant UUID")
     args = parser.parse_args()
 
-    events = build_demo_events()
+    events = build_demo_events(args.tenant_id)
     print_summary(events)
 
     if args.dry_run:
@@ -627,7 +633,8 @@ def main() -> int:
         exc_count = 0
         for summary in summaries:
             if not summary.compliant:
-                exc_count += exc_svc.create_exceptions_from_evaluation(args.tenant_id, summary)
+                # create_exceptions_from_evaluation returns List[ExceptionCase]
+                exc_count += len(exc_svc.create_exceptions_from_evaluation(args.tenant_id, summary))
         db.commit()
         print(f"  {exc_count} exception cases created")
 

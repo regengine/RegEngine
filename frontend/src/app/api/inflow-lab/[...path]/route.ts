@@ -146,6 +146,22 @@ function upstreamMessage(payload: unknown) {
     for (const key of ["error", "detail", "message"]) {
         const value = record[key];
         if (typeof value === "string" && value.trim()) return value;
+        // FastAPI validation errors (422) ship detail as a list of
+        // {loc, msg, type} objects — flatten to something readable instead
+        // of dropping it and showing the generic proxy message.
+        if (Array.isArray(value)) {
+            const messages = value
+                .map((item) => {
+                    if (!item || typeof item !== "object") return null;
+                    const entry = item as Record<string, unknown>;
+                    const loc = Array.isArray(entry.loc) ? entry.loc.join(".") : null;
+                    const msg = typeof entry.msg === "string" ? entry.msg : null;
+                    if (loc && msg) return `${loc}: ${msg}`;
+                    return msg;
+                })
+                .filter(Boolean);
+            if (messages.length) return messages.join("; ");
+        }
     }
     return null;
 }
@@ -305,7 +321,7 @@ async function proxyInflowLab(request: NextRequest, params: Promise<{ path?: str
             502,
             "SERVICE_UNAVAILABLE",
             {
-                hint: `Set INFLOW_LAB_SERVICE_URL or start the simulator at ${DEFAULT_LOCAL_INFLOW_LAB_URL}`,
+                hint: `Set INFLOW_LAB_SERVICE_URL or start the simulator at ${serviceBaseUrl()}`,
                 contract,
                 correlationId,
             }

@@ -652,8 +652,14 @@ class APIClient {
   }
 
   async listSupplierFacilities(): Promise<SupplierFacility[]> {
-    const { data } = await this.adminClient.get<SupplierFacility[]>('/v1/supplier/facilities');
-    return data || [];
+    // The backend paginates this route ({ items, total, skip, limit });
+    // treating the envelope as the array made every downstream .map throw
+    // and locked the Suppliers page on its error banner.
+    const { data } = await this.adminClient.get<
+      SupplierFacility[] | { items?: SupplierFacility[] }
+    >('/v1/supplier/facilities');
+    if (Array.isArray(data)) return data;
+    return data?.items ?? [];
   }
 
   async createSupplierFacility(request: SupplierFacilityCreateRequest): Promise<SupplierFacility> {
