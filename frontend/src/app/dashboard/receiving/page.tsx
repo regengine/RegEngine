@@ -132,6 +132,12 @@ export default function ReceivingDockPage() {
         const parsed = parseGS1(raw);
         const scannedGtin = parsed.gtin || '';
         const scannedLot = parsed.tlc || '';
+        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+        // extracts values from AI-encoded / Digital Link strings — so a user
+        // typing exactly what the Expected Items list displays never matched
+        // and every scan landed in Unexpected Items. Compare the raw string
+        // directly as a fallback.
+        const rawValue = raw.trim();
         const now = new Date().toISOString();
 
         // Try to match against expected items
@@ -140,8 +146,12 @@ export default function ReceivingDockPage() {
 
         for (const item of updated.expectedItems) {
             if (item.status !== 'pending') continue;
-            const gtinMatch = item.gtin && scannedGtin && item.gtin === scannedGtin;
-            const lotMatch = item.lotCode && scannedLot && item.lotCode === scannedLot;
+            const gtinMatch =
+                (item.gtin && scannedGtin && item.gtin === scannedGtin) ||
+                (item.gtin && rawValue && item.gtin === rawValue);
+            const lotMatch =
+                (item.lotCode && scannedLot && item.lotCode === scannedLot) ||
+                (item.lotCode && rawValue && item.lotCode === rawValue);
             if (gtinMatch || lotMatch) {
                 item.status = 'scanned';
                 item.scannedAt = now;
@@ -236,7 +246,23 @@ export default function ReceivingDockPage() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Ingest failed');
+            if (!res.ok) {
+                // Same billing gate as FDA export: surface the reason
+                // instead of an opaque "Error: Ingest failed".
+                if (res.status === 402) {
+                    throw new Error(
+                        'Ingestion requires an active plan. Choose one under Settings → Manage Plan, then retry.'
+                    );
+                }
+                let detail = '';
+                try {
+                    const payload = await res.json();
+                    detail = payload?.error?.message || payload?.detail || '';
+                } catch {
+                    /* non-JSON body */
+                }
+                throw new Error(detail || `The ingestion service returned status ${res.status}.`);
+            }
             const data = await res.json();
             setSession({ ...session, status: 'completed' });
             notifyDashboardRefresh();
@@ -245,7 +271,11 @@ export default function ReceivingDockPage() {
                 description: `${data.accepted} items ingested into trace pipeline`,
             });
         } catch (err) {
-            toast({ title: 'Ingest Failed', description: String(err), variant: 'destructive' });
+            toast({
+                title: 'Ingest Failed',
+                description: err instanceof Error ? err.message : String(err),
+                variant: 'destructive',
+            });
         } finally {
             setIngesting(false);
         }

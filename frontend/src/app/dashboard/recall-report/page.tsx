@@ -197,7 +197,25 @@ export default function RecallReportPage() {
                                         `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
                                         { credentials: 'include' }
                                     );
-                                    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+                                    if (!res.ok) {
+                                        // Surface the real reason instead of a bare status
+                                        // code — 402 is the billing gate, and users saw
+                                        // "Export failed: Export failed: 402" with no way
+                                        // to tell what to do about it.
+                                        if (res.status === 402) {
+                                            throw new Error(
+                                                'FDA export requires an active plan. Choose one under Settings → Manage Plan, then retry.'
+                                            );
+                                        }
+                                        let detail = '';
+                                        try {
+                                            const payload = await res.json();
+                                            detail = payload?.error?.message || payload?.detail || '';
+                                        } catch {
+                                            /* non-JSON body */
+                                        }
+                                        throw new Error(detail || `The export service returned status ${res.status}. Try again or check system health.`);
+                                    }
                                     const blob = await res.blob();
                                     const url = window.URL.createObjectURL(blob);
                                     const a = document.createElement('a');
@@ -227,7 +245,7 @@ export default function RecallReportPage() {
                 {exportError && (
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-xs">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span>Export failed: {exportError}</span>
+                        <span>{exportError}</span>
                     </div>
                 )}
 

@@ -267,10 +267,19 @@ export default function SupplierDashboardPage() {
             setInviteSupplierEmail('');
             setInviteProfileId('');
             setShowInviteForm(false);
-            // Auto-copy the link
-            await navigator.clipboard.writeText(newLink.portal_url);
-            setCopiedLinkId(newLink.portal_id);
-            setTimeout(() => setCopiedLinkId(null), 3000);
+            // Auto-copy the link — best-effort only. clipboard.writeText
+            // rejects whenever the document is unfocused or permission is
+            // denied; sharing the API call's catch made a SUCCESSFUL link
+            // creation render as "Unable to create portal link", inviting
+            // retries that mint duplicate live links. The link row's Copy
+            // button remains the fallback.
+            try {
+                await navigator.clipboard.writeText(newLink.portal_url);
+                setCopiedLinkId(newLink.portal_id);
+                setTimeout(() => setCopiedLinkId(null), 3000);
+            } catch {
+                /* copy manually from the list */
+            }
         } catch (err: unknown) {
             setError(friendlyError(err, 'Unable to create portal link. Please try again.'));
         } finally {
