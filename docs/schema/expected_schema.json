@@ -3427,6 +3427,22 @@
       }
     }
   },
+  "fsma.tenant_seed_state": {
+    "columns": {
+      "obligation_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "obligations_seeded_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    }
+  },
   "fsma.tenant_settings": {
     "columns": {
       "created_at": {
