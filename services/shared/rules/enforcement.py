@@ -65,6 +65,64 @@ _VALID_MODES = frozenset({EnforcementMode.OFF, EnforcementMode.CTE_ONLY, Enforce
 _reported_invalid_modes: set[str] = set()
 
 
+def _safe_counter(name: str, description: str, labelnames: list[str]):
+    """Return an existing Prometheus Counter when this module is re-imported."""
+    from prometheus_client import REGISTRY, Counter
+
+    try:
+        return Counter(name, description, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(name[:-6])  # type: ignore[attr-defined]
+        if collector is not None:
+            return collector
+        return Counter(name, description, labelnames, registry=None)
+
+
+# #2710 (enforcement-GA decision): the no-verdict accept contract stays —
+# blocking on non-evaluation would break unseeded tenants and non-FTL
+# products (#1346/#1347) — but under an enforcement mode it must be LOUD:
+# with RULES_ENGINE_ENFORCE=all, a tenant with an empty or unreadable rule
+# set has every event accepted, and this counter is the alarm for that.
+rules_no_verdict_accepted_total = _safe_counter(
+    "rules_no_verdict_accepted_total",
+    "Events accepted with NO rule verdict while an enforcement mode was active",
+    ["mode", "tenant_id"],
+)
+
+# Tenants already warned about this process — warn once per (tenant, mode),
+# not once per event (the counter carries the volume).
+_no_verdict_warned: set[tuple[str, str]] = set()
+
+
+def _record_no_verdict_accept(mode: str) -> None:
+    """Metric + once-per-tenant warning for an enforcement-mode no-verdict accept."""
+    tenant = "unknown"
+    try:
+        from shared.tenant_context import get_rls_tenant_id
+
+        tenant = str(get_rls_tenant_id() or "unknown")
+    except Exception:
+        pass
+    try:
+        rules_no_verdict_accepted_total.labels(mode=mode, tenant_id=tenant).inc()
+    except Exception:  # pragma: no cover — metrics must never affect the decision
+        pass
+    key = (tenant, mode)
+    if key not in _no_verdict_warned:
+        _no_verdict_warned.add(key)
+        import logging  # noqa: PLC0415
+
+        logging.getLogger(__name__).warning(
+            "rules_no_verdict_accepted mode=%s tenant_id=%s — event accepted without any rule "
+            "verdict while enforcement is active; empty/unreadable rule sets are invisible to "
+            "enforcement (#1346/#1347, revisit #2710)",
+            mode,
+            tenant,
+        )
+
+
 def current_mode() -> str:
     """Read ``RULES_ENGINE_ENFORCE`` at call time.
 
@@ -110,13 +168,13 @@ def should_reject(summary: EvaluationSummary) -> Tuple[bool, Optional[str]]:
     if mode == EnforcementMode.OFF:
         return False, None
     # No-verdict (compliant is None) is never a reject in any mode —
-    # "we didn't evaluate" is not the same as "the event violates a rule".
-    # Documented-intentional (#1346/#1347; silent-failure inventory): under
-    # ``all`` a tenant with an empty/unreadable fsma.rule_definitions has
-    # every event accepted. Revisit before enforcement is marketed as
-    # blocking (#2695): either require seeded rules under ``all`` or keep
-    # this contract with a loud per-tenant metric.
+    # "we didn't evaluate" is not the same as "the event violates a rule"
+    # (#1346/#1347). Decision recorded in #2710: the accept contract stays,
+    # but under an active enforcement mode the accept is now counted
+    # per-tenant and warned once — the alarm for an empty/unreadable rule
+    # set silently bypassing enforcement.
     if summary.compliant is None:
+        _record_no_verdict_accept(mode)
         return False, None
     if mode == EnforcementMode.CTE_ONLY:
         if summary.critical_failures:
