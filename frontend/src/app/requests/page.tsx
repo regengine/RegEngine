@@ -9,12 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/use-toast';
 import { Progress } from '@/components/ui/progress';
 
 import { useAuth } from '@/lib/auth-context';
 import {
   useRequestCases,
   useCreateRequestCase,
+  useApproveScope,
+  useCollectRecords,
+  useRunGapAnalysis,
   useAssemblePackage,
   useSubmitPackage,
 } from '@/hooks/use-control-plane';
@@ -47,6 +51,18 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; progress: nu
 export default function RequestWorkflowPage() {
   const { tenantId } = useAuth();
   const tid = tenantId || '';
+  const { toast } = useToast();
+
+  // Review finding: the workflow mutations swallowed failures — react-query
+  // captures the thrown cpFetch error in mutation.error, which nothing read,
+  // so a failed action (stale-status race, network, auth) left the card
+  // unchanged with zero feedback. Every action button passes this handler.
+  const notifyActionError = (action: string) => (err: unknown) =>
+    toast({
+      title: `${action} failed`,
+      description: err instanceof Error ? err.message : String(err),
+      variant: 'destructive',
+    });
 
   const [showCreate, setShowCreate] = useState(false);
   const [newRequestParty, setNewRequestParty] = useState('FDA');
@@ -54,6 +70,9 @@ export default function RequestWorkflowPage() {
 
   const requests = useRequestCases(tid);
   const createRequest = useCreateRequestCase(tid);
+  const approveScope = useApproveScope(tid);
+  const collectRecords = useCollectRecords(tid);
+  const runGapAnalysis = useRunGapAnalysis(tid);
   const assemblePackage = useAssemblePackage(tid);
   const submitPackage = useSubmitPackage(tid);
 
@@ -237,20 +256,60 @@ export default function RequestWorkflowPage() {
                                 requestCaseId: rc.request_case_id,
                                 submitted_by: 'dashboard_user',
                                 submitted_to: rc.requesting_party,
-                              })}
+                              }, { onError: notifyActionError('Submit') })}
                             >
                               <Send className="h-3.5 w-3.5 mr-1" />
                               Submit
                             </Button>
                           )}
-                          {!['ready', 'submitted'].includes(rc.package_status) && (
+                          {/* Status-aware next step. The card used to show
+                              Assemble for every pre-ready status, but the
+                              backend rejects assemble outside gap_analysis/
+                              exception_triage/assembling/internal_review —
+                              from intake the only offered action was a
+                              guaranteed 400. Walk the state machine instead. */}
+                          {rc.package_status === 'intake' && (
                             <Button
                               size="sm"
                               variant="outline"
+                              disabled={approveScope.isPending}
+                              onClick={() => approveScope.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Approve Scope') })}
+                            >
+                              <PlayCircle className="h-3.5 w-3.5 mr-1" />
+                              Approve Scope
+                            </Button>
+                          )}
+                          {['scoping'].includes(rc.package_status) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={collectRecords.isPending}
+                              onClick={() => collectRecords.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Collect Records') })}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1" />
+                              Collect Records
+                            </Button>
+                          )}
+                          {['collecting'].includes(rc.package_status) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={runGapAnalysis.isPending}
+                              onClick={() => runGapAnalysis.mutate({ requestCaseId: rc.request_case_id }, { onError: notifyActionError('Run Gap Analysis') })}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                              Run Gap Analysis
+                            </Button>
+                          )}
+                          {['gap_analysis', 'exception_triage', 'assembling', 'internal_review'].includes(rc.package_status) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={assemblePackage.isPending}
                               onClick={() => assemblePackage.mutate({
                                 requestCaseId: rc.request_case_id,
                                 generatedBy: 'dashboard_user',
-                              })}
+                              }, { onError: notifyActionError('Assemble') })}
                             >
                               <Package className="h-3.5 w-3.5 mr-1" />
                               Assemble

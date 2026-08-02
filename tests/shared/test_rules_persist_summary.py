@@ -236,9 +236,16 @@ class TestFailurePath:
 
         engine.persist_summary(_populated_summary(), tenant_id="t-1")
 
-        # Savepoint was opened and rolled back.
-        assert len(savepoints) == 1
-        assert savepoints[0].rolled_back is True
+        # Every savepoint opened by the failure path (outer persist, salvage
+        # row, marker UPDATE, dead-letter INSERT — each guards its own
+        # statement so one failure cannot abort the outer transaction) was
+        # explicitly released or rolled back; none left dangling.
+        assert len(savepoints) >= 1
+        assert all(sp.rolled_back or sp.committed for sp in savepoints)
+        # The failed INSERT's savepoints rolled back, the successful marker
+        # and dead-letter savepoints committed.
+        assert any(sp.rolled_back for sp in savepoints)
+        assert any(sp.committed for sp in savepoints)
 
         # Two execute() calls: the failed INSERT and the marker UPDATE.
         update_calls = [(stmt, params) for stmt, params in executes if "UPDATE fsma.traceability_events" in str(stmt)]

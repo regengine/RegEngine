@@ -770,6 +770,7 @@ class RulesEngine:
                 ),
                 {**row_params, "persist_error": persist_error},
             )
+            savepoint.commit()
         except Exception as dl_err:
             savepoint.rollback()
             logger.critical(
@@ -788,7 +789,13 @@ class RulesEngine:
         Shared by the single-row and batch-salvage persist paths so every
         event whose evaluation record could not be written stays visible
         for re-evaluation.
+
+        Runs inside its own savepoint: a plain execute here that failed
+        (e.g. schema drift) aborted the OUTER transaction, which then made
+        the dead-letter write below it fail too — the exact loss WS-8 was
+        built to prevent.
         """
+        savepoint = self.session.begin_nested()
         try:
             self.session.execute(
                 text(
@@ -803,7 +810,9 @@ class RulesEngine:
                     "error_message": error_message,
                 },
             )
+            savepoint.commit()
         except Exception as mark_err:
+            savepoint.rollback()
             logger.error(
                 "evaluation_persist_marker_failed",
                 extra={"event_id": event_id, "error": str(mark_err)},

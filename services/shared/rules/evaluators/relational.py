@@ -151,6 +151,20 @@ def evaluate_temporal_order(
     current_ts = event_data.get("event_timestamp")
     if isinstance(current_ts, str):
         current_ts = datetime.fromisoformat(current_ts.replace("Z", "+00:00"))
+    if current_ts is None:
+        # A None timestamp crashed the ``other_ts > current_ts`` comparisons
+        # below (TypeError), turning a data gap into an evaluator crash —
+        # and via result="error" into a lost evaluation batch. Chronology
+        # cannot be assessed without a timestamp; skip explicitly instead.
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="skip",
+            why_failed="event_timestamp missing — temporal order cannot be evaluated",
+            category=rule.category,
+        )
 
     current_stage = CTE_LIFECYCLE_ORDER.get(current_type)
     if current_stage is None:
@@ -174,6 +188,8 @@ def evaluate_temporal_order(
         other_ts = evt["event_timestamp"]
         if isinstance(other_ts, str):
             other_ts = datetime.fromisoformat(other_ts.replace("Z", "+00:00"))
+        if other_ts is None:
+            continue
 
         if other_stage < current_stage and other_ts > current_ts:
             violations.append(

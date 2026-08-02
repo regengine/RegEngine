@@ -370,3 +370,70 @@ def test_read_only_blocks_submit(monkeypatch):
         json={"submitted_by": "user-1"},
     )
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Submit — package_id resolution (route-level; regression for the missing
+# positional-arg 500 and the default-to-latest lookup added with it)
+# ---------------------------------------------------------------------------
+
+
+def _build_client_with_db(principal: IngestionPrincipal, mock_svc: MagicMock, fake_db: MagicMock) -> TestClient:
+    """Same shape as _build_client but with a caller-controlled db session,
+    so tests can drive the route's latest-package lookup."""
+    app = FastAPI()
+    app.include_router(request_workflow_router.router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: principal
+    app.dependency_overrides[request_workflow_router._get_db_session] = lambda: fake_db
+    request_workflow_router._get_service = lambda db_session: mock_svc  # type: ignore[assignment]
+    return TestClient(app)
+
+
+def test_submit_defaults_to_latest_assembled_package(mock_svc):
+    fake_db = MagicMock()
+    fake_db.execute.return_value.fetchone.return_value = ("pkg-latest-v3",)
+    mock_svc.submit_package.return_value = {"submission_id": "sub-2"}
+    c = _build_client_with_db(_make_principal(), mock_svc, fake_db)
+
+    resp = c.post(
+        "/api/v1/requests/rc-1/submit",
+        json={"submitted_by": "user-1"},
+    )
+
+    assert resp.status_code == 200
+    kw = mock_svc.submit_package.call_args.kwargs
+    assert kw["package_id"] == "pkg-latest-v3"
+    # The lookup must be scoped to the caller's tenant and this case.
+    params = fake_db.execute.call_args.args[1]
+    assert params == {"tenant_id": TENANT, "case_id": "rc-1"}
+
+
+def test_submit_without_assembled_package_returns_409(mock_svc):
+    fake_db = MagicMock()
+    fake_db.execute.return_value.fetchone.return_value = None
+    c = _build_client_with_db(_make_principal(), mock_svc, fake_db)
+
+    resp = c.post(
+        "/api/v1/requests/rc-1/submit",
+        json={"submitted_by": "user-1"},
+    )
+
+    assert resp.status_code == 409
+    assert "assemble" in resp.json()["detail"].lower()
+    mock_svc.submit_package.assert_not_called()
+
+
+def test_submit_with_explicit_package_id_skips_lookup(mock_svc):
+    fake_db = MagicMock()
+    mock_svc.submit_package.return_value = {"submission_id": "sub-3"}
+    c = _build_client_with_db(_make_principal(), mock_svc, fake_db)
+
+    resp = c.post(
+        "/api/v1/requests/rc-1/submit",
+        json={"submitted_by": "user-1", "package_id": "pkg-pinned"},
+    )
+
+    assert resp.status_code == 200
+    kw = mock_svc.submit_package.call_args.kwargs
+    assert kw["package_id"] == "pkg-pinned"
+    fake_db.execute.assert_not_called()

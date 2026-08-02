@@ -39,7 +39,10 @@ async function cpFetch<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    // Backend errors arrive as {detail} (FastAPI HTTPException) or as the
+    // monolith envelope {error: {type, message}} — read both so callers'
+    // toasts show the domain message instead of a bare "HTTP 400".
+    throw new Error(error.detail || error?.error?.message || `HTTP ${response.status}`);
   }
 
   const data = await response.json();
@@ -214,6 +217,43 @@ export function useCreateRequestCase(tenantId: string) {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
+export function useApproveScope(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'scope'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/scope`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
+export function useCollectRecords(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'collect'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/collect`, {
+        method: 'POST',
+      }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
+export function useRunGapAnalysis(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'gap-analysis'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/gap-analysis`, {
+        method: 'POST',
+      }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 }

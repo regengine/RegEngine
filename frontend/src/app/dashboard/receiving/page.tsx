@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
 import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
+import { scanMatchesItem } from '@/lib/scan-match';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ─── Types ─── */
@@ -132,6 +133,13 @@ export default function ReceivingDockPage() {
         const parsed = parseGS1(raw);
         const scannedGtin = parsed.gtin || '';
         const scannedLot = parsed.tlc || '';
+        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+        // extracts values from AI-encoded / Digital Link strings — so a user
+        // typing exactly what the Expected Items list displays never matched
+        // and every scan landed in Unexpected Items. scanMatchesItem also
+        // compares the raw string directly (matrix unit-tested in
+        // lib/scan-match.test.ts).
+        const scanCandidate = { gtin: parsed.gtin, lot: parsed.tlc, raw };
         const now = new Date().toISOString();
 
         // Try to match against expected items
@@ -140,9 +148,7 @@ export default function ReceivingDockPage() {
 
         for (const item of updated.expectedItems) {
             if (item.status !== 'pending') continue;
-            const gtinMatch = item.gtin && scannedGtin && item.gtin === scannedGtin;
-            const lotMatch = item.lotCode && scannedLot && item.lotCode === scannedLot;
-            if (gtinMatch || lotMatch) {
+            if (scanMatchesItem(item, scanCandidate)) {
                 item.status = 'scanned';
                 item.scannedAt = now;
                 if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;
@@ -236,7 +242,23 @@ export default function ReceivingDockPage() {
                 }),
             });
 
-            if (!res.ok) throw new Error('Ingest failed');
+            if (!res.ok) {
+                // Same billing gate as FDA export: surface the reason
+                // instead of an opaque "Error: Ingest failed".
+                if (res.status === 402) {
+                    throw new Error(
+                        'Ingestion requires an active plan. Choose one under Settings → Manage Plan, then retry.'
+                    );
+                }
+                let detail = '';
+                try {
+                    const payload = await res.json();
+                    detail = payload?.error?.message || payload?.detail || '';
+                } catch {
+                    /* non-JSON body */
+                }
+                throw new Error(detail || `The ingestion service returned status ${res.status}.`);
+            }
             const data = await res.json();
             setSession({ ...session, status: 'completed' });
             notifyDashboardRefresh();
@@ -245,7 +267,11 @@ export default function ReceivingDockPage() {
                 description: `${data.accepted} items ingested into trace pipeline`,
             });
         } catch (err) {
-            toast({ title: 'Ingest Failed', description: String(err), variant: 'destructive' });
+            toast({
+                title: 'Ingest Failed',
+                description: err instanceof Error ? err.message : String(err),
+                variant: 'destructive',
+            });
         } finally {
             setIngesting(false);
         }

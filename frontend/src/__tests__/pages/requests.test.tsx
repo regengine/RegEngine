@@ -34,11 +34,17 @@ vi.mock('@/lib/auth-context', () => ({
 const mockCreateMutateAsync = vi.fn().mockResolvedValue({});
 const mockAssembleMutate = vi.fn();
 const mockSubmitMutate = vi.fn();
+const mockApproveScopeMutate = vi.fn();
+const mockCollectRecordsMutate = vi.fn();
+const mockRunGapAnalysisMutate = vi.fn();
 const mockUseRequestCases = vi.fn();
 
 vi.mock('@/hooks/use-control-plane', () => ({
   useRequestCases: (...args: any[]) => mockUseRequestCases(...args),
   useCreateRequestCase: () => ({ mutateAsync: mockCreateMutateAsync, isPending: false }),
+  useApproveScope: () => ({ mutate: mockApproveScopeMutate, isPending: false }),
+  useCollectRecords: () => ({ mutate: mockCollectRecordsMutate, isPending: false }),
+  useRunGapAnalysis: () => ({ mutate: mockRunGapAnalysisMutate, isPending: false }),
   useAssemblePackage: () => ({ mutate: mockAssembleMutate, isPending: false }),
   useSubmitPackage: () => ({ mutate: mockSubmitMutate, isPending: false }),
 }));
@@ -188,7 +194,7 @@ describe('RequestWorkflowPage', () => {
     });
   });
 
-  it('shows Submit button for ready cases and Assemble for non-ready', () => {
+  it('shows the status-appropriate action per case', () => {
     setupCases();
     render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
@@ -196,9 +202,27 @@ describe('RequestWorkflowPage', () => {
     const submitButtons = screen.getAllByRole('button', { name: /submit/i });
     expect(submitButtons.length).toBeGreaterThanOrEqual(1);
 
-    // Assemble button for the collecting case
-    const assembleButtons = screen.getAllByRole('button', { name: /assemble/i });
-    expect(assembleButtons.length).toBeGreaterThanOrEqual(1);
+    // The collecting case advances via gap analysis — Assemble is only
+    // offered in statuses the backend accepts it from, so it must NOT
+    // render for a collecting case (it was a guaranteed 400 before).
+    expect(screen.getByRole('button', { name: /run gap analysis/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /assemble/i })).not.toBeInTheDocument();
+  });
+
+  it('offers Assemble only from assemble-eligible statuses', () => {
+    setupCases([{ ...ACTIVE_CASE, package_status: 'gap_analysis' }]);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole('button', { name: /assemble/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /run gap analysis/i })).not.toBeInTheDocument();
+  });
+
+  it('offers Approve Scope from intake', () => {
+    setupCases([{ ...ACTIVE_CASE, package_status: 'intake' }]);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
+
+    expect(screen.getByRole('button', { name: /approve scope/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /assemble/i })).not.toBeInTheDocument();
   });
 
   it('shows loading skeletons while loading', () => {
