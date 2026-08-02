@@ -7,7 +7,6 @@ import importlib
 import logging
 import os
 import threading
-import time
 import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -26,30 +25,44 @@ logger = logging.getLogger("authz")
 
 # ---------------------------------------------------------------------------
 # Auth failure rate limiting — blocks IPs after repeated failed auth attempts
+#
+# #2711: backed by shared.rate_limit.BruteForceLimiter (the #1392 admin
+# master-key pattern) instead of a bare module-level dict, so the failure
+# budget is shared across workers/replicas when Redis is available and
+# honors RATE_LIMIT_FAIL_MODE on Redis uncertainty. Falls back to a
+# per-process counter (with a loud per-activation warning) when it isn't.
 # ---------------------------------------------------------------------------
 _AUTH_FAIL_WINDOW = 300  # 5-minute window
 _AUTH_FAIL_MAX = 15  # max failures before blocking
-_auth_failures: dict[str, list[float]] = {}
-_auth_failures_lock = threading.Lock()
+_auth_limiter = None
+_auth_limiter_lock = threading.Lock()
+
+
+def _get_auth_limiter():
+    global _auth_limiter
+    if _auth_limiter is None:
+        with _auth_limiter_lock:
+            if _auth_limiter is None:
+                from shared.rate_limit import BruteForceLimiter
+
+                _auth_limiter = BruteForceLimiter(
+                    namespace="ingestion_auth_fail",
+                    max_failures=_AUTH_FAIL_MAX,
+                    window_seconds=_AUTH_FAIL_WINDOW,
+                )
+    return _auth_limiter
 
 
 def _check_auth_rate_limit(client_ip: str) -> None:
     """Raise 429 if client_ip has exceeded auth failure threshold."""
-    now = time.time()
-    cutoff = now - _AUTH_FAIL_WINDOW
-    with _auth_failures_lock:
-        attempts = _auth_failures.get(client_ip, [])
-        attempts = [t for t in attempts if t > cutoff]
-        _auth_failures[client_ip] = attempts
-        if len(attempts) >= _AUTH_FAIL_MAX:
-            logger.warning("auth_rate_limit_blocked: %s (%d failures)", client_ip, len(attempts))
-            raise HTTPException(status_code=429, detail="Too many authentication failures")
+    if _get_auth_limiter().is_limited(client_ip):
+        logger.warning("auth_rate_limit_blocked: %s", client_ip)
+        raise HTTPException(status_code=429, detail="Too many authentication failures")
 
 
 def _record_auth_failure(client_ip: str) -> None:
     """Record a failed auth attempt for rate limiting."""
-    with _auth_failures_lock:
-        _auth_failures.setdefault(client_ip, []).append(time.time())
+    _get_auth_limiter().record_failure(client_ip)
 
 
 def _is_dev_env() -> bool:

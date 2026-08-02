@@ -52,13 +52,20 @@ from shared.api_key_store import api_key_hash_candidates
 
 
 @pytest.fixture(autouse=True)
-def _reset_auth_failures():
-    """Strip the module-level IP→failures dict between tests."""
-    with authz._auth_failures_lock:
-        authz._auth_failures.clear()
+def _reset_auth_failures(monkeypatch):
+    """#2711: give every test a fresh per-process BruteForceLimiter (no
+    Redis) so failure state cannot leak between tests."""
+    from shared.rate_limit import BruteForceLimiter
+
+    limiter = BruteForceLimiter(
+        namespace="test-authz-1342",
+        max_failures=authz._AUTH_FAIL_MAX,
+        window_seconds=authz._AUTH_FAIL_WINDOW,
+        redis_client=None,
+    )
+    limiter._redis = None  # ignore any env-provided Redis
+    monkeypatch.setattr(authz, "_auth_limiter", limiter)
     yield
-    with authz._auth_failures_lock:
-        authz._auth_failures.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -92,12 +99,12 @@ def _strip_env(monkeypatch):
 class TestAuthFailureRateLimit:
     def test_record_adds_timestamp(self):
         _record_auth_failure("1.2.3.4")
-        assert len(authz._auth_failures["1.2.3.4"]) == 1
+        assert len(authz._auth_limiter._mem_failures["1.2.3.4"]) == 1
 
     def test_record_accumulates(self):
         for _ in range(5):
             _record_auth_failure("1.2.3.4")
-        assert len(authz._auth_failures["1.2.3.4"]) == 5
+        assert len(authz._auth_limiter._mem_failures["1.2.3.4"]) == 5
 
     def test_check_below_threshold_allows(self):
         for _ in range(authz._AUTH_FAIL_MAX - 1):
@@ -114,10 +121,10 @@ class TestAuthFailureRateLimit:
 
     def test_check_prunes_expired_entries(self):
         old = time.time() - authz._AUTH_FAIL_WINDOW - 10
-        authz._auth_failures["1.2.3.4"] = [old] * authz._AUTH_FAIL_MAX
+        authz._auth_limiter._mem_failures["1.2.3.4"] = [old] * authz._AUTH_FAIL_MAX
         # Even though 15 timestamps exist, all are stale → not blocked
         _check_auth_rate_limit("1.2.3.4")
-        assert authz._auth_failures["1.2.3.4"] == []
+        assert authz._auth_limiter._mem_failures["1.2.3.4"] == []
 
     def test_check_unseen_ip_ok(self):
         _check_auth_rate_limit("8.8.8.8")  # no state → no raise
@@ -717,8 +724,8 @@ class TestGetIngestionPrincipal:
         client = TestClient(app)
         resp = client.get("/whoami")
         assert resp.status_code == 401
-        # Failure was recorded
-        assert len(authz._auth_failures.get("testclient", [])) == 1
+        # Failure was recorded (#2711: BruteForceLimiter memory fallback)
+        assert len(authz._auth_limiter._mem_failures.get("testclient", [])) == 1
 
     def test_invalid_header_falls_through_to_require_then_db_then_401(self, _strip_env, monkeypatch):
         from app import config as cfg
@@ -892,8 +899,7 @@ class TestGetIngestionPrincipal:
 
         # Pre-populate the failure log past threshold for the TestClient IP
         now = time.time()
-        with authz._auth_failures_lock:
-            authz._auth_failures["testclient"] = [now] * authz._AUTH_FAIL_MAX
+        authz._auth_limiter._mem_failures["testclient"] = [now] * authz._AUTH_FAIL_MAX
 
         app = _build_app()
         client = TestClient(app)

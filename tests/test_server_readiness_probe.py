@@ -394,3 +394,64 @@ def test_scheduler_live_thread_is_ok(monkeypatch, _postgres_ok, _redis_unset):
 
     assert resp.status_code == 200
     assert resp.json()["checks"]["scheduler"]["status"] == "ok"
+
+
+def test_rate_limiter_memory_in_prod_degrades(monkeypatch, _postgres_ok, _redis_unset):
+    """#2711: production on memory:// slowapi storage must be visible."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    import shared.env as env_mod
+    import shared.rate_limit as rl_mod
+
+    monkeypatch.setattr(rl_mod, "slowapi_storage_backend", lambda: "memory")
+    monkeypatch.setattr(env_mod, "is_production", lambda: True)
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=object(),
+    )
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200  # degraded, never 503
+    body = resp.json()
+    assert body["checks"]["rate_limiter"]["status"] == "error"
+    assert body["status"] == "degraded"
+
+
+def test_rate_limiter_redis_backend_is_ok(monkeypatch, _postgres_ok, _redis_unset):
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    import shared.rate_limit as rl_mod
+
+    monkeypatch.setattr(rl_mod, "slowapi_storage_backend", lambda: "redis")
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=object(),
+    )
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    assert resp.json()["checks"]["rate_limiter"] == {"status": "ok", "backend": "redis"}
+
+
+def test_rate_limiter_memory_outside_prod_is_ok(monkeypatch, _postgres_ok, _redis_unset):
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    import shared.env as env_mod
+    import shared.rate_limit as rl_mod
+
+    monkeypatch.setattr(rl_mod, "slowapi_storage_backend", lambda: "memory")
+    monkeypatch.setattr(env_mod, "is_production", lambda: False)
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=object(),
+    )
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    assert resp.json()["checks"]["rate_limiter"]["status"] == "ok"

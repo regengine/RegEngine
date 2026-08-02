@@ -1066,6 +1066,27 @@ async def readiness(request: Request):
     else:
         checks["scheduler"] = {"status": "ok"}
 
+    # --- Rate-limiter storage (#2711) ---
+    # slowapi decorators (1/day GDPR export, 10/min proof-verify, …) bind to
+    # whatever storage existed at import. README asserts Redis-backed rate
+    # limiting; production running on memory:// means every such budget is
+    # per-process (× workers × replicas). Degrades the payload; never 503.
+    try:
+        from shared.env import is_production as _is_prod_env
+        from shared.rate_limit import slowapi_storage_backend
+
+        _rl_backend = slowapi_storage_backend()
+        if _rl_backend == "memory" and _is_prod_env():
+            checks["rate_limiter"] = {
+                "status": "error",
+                "backend": _rl_backend,
+                "error": "slowapi rate limits are per-process (no Redis storage configured)",
+            }
+        else:
+            checks["rate_limiter"] = {"status": "ok", "backend": _rl_backend}
+    except Exception as exc:
+        checks["rate_limiter"] = {"status": "error", "error": str(exc)[:200]}
+
     # --- Determine overall status ---
     # Postgres is required for the consolidated API to serve production traffic.
     # Missing DATABASE_URL must fail readiness so deploy health checks do not

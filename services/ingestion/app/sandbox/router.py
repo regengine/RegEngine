@@ -275,6 +275,19 @@ async def sandbox_trace(payload: SandboxTraceRequest, request: Request) -> Trace
 _share_buckets: Dict[str, list] = {}
 _SHARE_RATE_LIMIT = 10
 _SHARE_WINDOW = 3600
+# #2711: cap unbounded key growth — when exceeded, evict buckets whose
+# newest entry has aged out of the window (an IP that never returns
+# otherwise keeps its bucket forever).
+_SHARE_BUCKET_CAP = 10000
+
+
+def _evict_stale_share_buckets(now: float) -> None:
+    """Drop empty/aged-out share buckets once the dict exceeds the cap (#2711)."""
+    if len(_share_buckets) <= _SHARE_BUCKET_CAP:
+        return
+    cutoff = now - _SHARE_WINDOW
+    for stale_key in [k for k, v in _share_buckets.items() if not v or v[-1] < cutoff]:
+        _share_buckets.pop(stale_key, None)
 
 
 @router.post(
@@ -293,6 +306,7 @@ async def sandbox_share(payload: SandboxShareRequest, request: Request) -> Sandb
     if len(bucket) >= _SHARE_RATE_LIMIT:
         raise HTTPException(status_code=429, detail="Share rate limit exceeded. Try again later.")
     bucket.append(now)
+    _evict_stale_share_buckets(now)
 
     share_id = secrets.token_urlsafe(12)
     ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]

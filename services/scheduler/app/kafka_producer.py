@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from functools import lru_cache
 from typing import Optional
 
@@ -37,6 +38,28 @@ class KafkaEventProducer:
         self.topic_fsma = settings.kafka_topic_fsma
         self._producer: Optional[KafkaProducerLib] = None
         self._initialized = False
+        # #2711: async delivery failures observed via send-future errbacks.
+        # Reconciled into (success, failures) after flush() by the batch
+        # emitters — local ENQUEUE success is not delivery success.
+        self._delivery_failures = 0
+        self._delivery_lock = threading.Lock()
+
+    def _note_delivery_failure(self, topic: str, exc: BaseException) -> None:
+        """Errback for send futures: count + log an async delivery failure."""
+        with self._delivery_lock:
+            self._delivery_failures += 1
+        logger.error(
+            "kafka_delivery_failed",
+            topic=topic,
+            error=str(exc),
+        )
+
+    def take_delivery_failures(self) -> int:
+        """Return and reset the async delivery-failure count (post-flush)."""
+        with self._delivery_lock:
+            count = self._delivery_failures
+            self._delivery_failures = 0
+            return count
 
     def _get_producer(self) -> KafkaProducerLib:
         """Get or create Kafka producer.
@@ -185,6 +208,14 @@ class KafkaEventProducer:
         # Flush to ensure all messages are sent
         self.flush()
 
+        # #2711: reconcile async delivery failures surfaced during flush —
+        # enqueue success is not delivery success. Covers every message
+        # flushed in this window (including high-priority alert sends).
+        undelivered = self.take_delivery_failures()
+        if undelivered:
+            failures += undelivered
+            success = max(0, success - undelivered)
+
         return success, failures
 
     def emit_fsma_event(self, fsma_event: dict) -> bool:
@@ -239,6 +270,12 @@ class KafkaEventProducer:
 
         self.flush()
 
+        # #2711: reconcile async delivery failures surfaced during flush.
+        undelivered = self.take_delivery_failures()
+        if undelivered:
+            failures += undelivered
+            success = max(0, success - undelivered)
+
         logger.info(
             "fsma_batch_emitted",
             success=success,
@@ -276,7 +313,13 @@ class KafkaEventProducer:
                 # request (#1318).
                 headers = inject_correlation_headers_tuples()
             future = producer.send(topic, key=key, value=value, headers=headers)
-            # Don't block here - let caller flush if needed
+            # Don't block here - let caller flush if needed. Async delivery
+            # failures surface via the errback and are reconciled by the
+            # batch emitters after flush() (#2711).
+            try:
+                future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
+            except Exception:  # pragma: no cover — test doubles without futures
+                pass
             return True
 
         except KafkaError as e:
