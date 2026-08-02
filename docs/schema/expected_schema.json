@@ -3601,6 +3601,14 @@
         "nullable": true,
         "type": "text"
       },
+      "evaluated_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "evaluation_error": {
+        "nullable": true,
+        "type": "text"
+      },
       "event_id": {
         "nullable": false,
         "type": "uuid"
