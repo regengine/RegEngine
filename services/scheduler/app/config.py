@@ -112,6 +112,13 @@ class SchedulerSettings(BaseServiceSettings):
         default=30,
         description="Interval (seconds) between remediation notification-outbox drain passes",
     )
+    # WS-8 (#2709) — dead-lettered rule evaluations are replayed on this
+    # cadence. 15 min: the rows are already durable, so latency only
+    # affects how quickly the audit trail self-heals.
+    rule_eval_deadletter_replay_interval_seconds: int = Field(
+        default=900,
+        description="Interval (seconds) between rule-evaluation dead-letter replay passes",
+    )
 
     # Circuit breaker
     circuit_breaker_failure_threshold: int = Field(

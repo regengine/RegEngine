@@ -2831,6 +2831,66 @@
       }
     }
   },
+  "fsma.rule_evaluation_deadletter": {
+    "columns": {
+      "confidence": {
+        "nullable": true,
+        "type": "double precision"
+      },
+      "created_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "evaluation_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "event_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "evidence": {
+        "nullable": true,
+        "type": "jsonb"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "persist_error": {
+        "nullable": false,
+        "type": "text"
+      },
+      "replay_attempts": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "replayed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "result": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rule_id": {
+        "nullable": false,
+        "type": "text"
+      },
+      "rule_version": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "why_failed": {
+        "nullable": true,
+        "type": "text"
+      }
+    }
+  },
   "fsma.rule_evaluations": {
     "columns": {
       "confidence": {
@@ -3364,6 +3424,22 @@
       "updated_at": {
         "nullable": false,
         "type": "timestamp"
+      }
+    }
+  },
+  "fsma.tenant_seed_state": {
+    "columns": {
+      "obligation_count": {
+        "nullable": false,
+        "type": "integer"
+      },
+      "obligations_seeded_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
       }
     }
   },
