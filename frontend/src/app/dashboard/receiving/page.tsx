@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
 import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
+import { scanMatchesItem } from '@/lib/scan-match';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ─── Types ─── */
@@ -135,9 +136,10 @@ export default function ReceivingDockPage() {
         // The input invites typing a bare GTIN or lot code, but parseGS1 only
         // extracts values from AI-encoded / Digital Link strings — so a user
         // typing exactly what the Expected Items list displays never matched
-        // and every scan landed in Unexpected Items. Compare the raw string
-        // directly as a fallback.
-        const rawValue = raw.trim();
+        // and every scan landed in Unexpected Items. scanMatchesItem also
+        // compares the raw string directly (matrix unit-tested in
+        // lib/scan-match.test.ts).
+        const scanCandidate = { gtin: parsed.gtin, lot: parsed.tlc, raw };
         const now = new Date().toISOString();
 
         // Try to match against expected items
@@ -146,13 +148,7 @@ export default function ReceivingDockPage() {
 
         for (const item of updated.expectedItems) {
             if (item.status !== 'pending') continue;
-            const gtinMatch =
-                (item.gtin && scannedGtin && item.gtin === scannedGtin) ||
-                (item.gtin && rawValue && item.gtin === rawValue);
-            const lotMatch =
-                (item.lotCode && scannedLot && item.lotCode === scannedLot) ||
-                (item.lotCode && rawValue && item.lotCode === rawValue);
-            if (gtinMatch || lotMatch) {
+            if (scanMatchesItem(item, scanCandidate)) {
                 item.status = 'scanned';
                 item.scannedAt = now;
                 if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;

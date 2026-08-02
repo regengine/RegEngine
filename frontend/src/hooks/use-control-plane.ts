@@ -39,7 +39,10 @@ async function cpFetch<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    // Backend errors arrive as {detail} (FastAPI HTTPException) or as the
+    // monolith envelope {error: {type, message}} — read both so callers'
+    // toasts show the domain message instead of a bare "HTTP 400".
+    throw new Error(error.detail || error?.error?.message || `HTTP ${response.status}`);
   }
 
   const data = await response.json();
