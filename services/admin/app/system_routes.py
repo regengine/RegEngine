@@ -8,6 +8,7 @@ import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from shared.circuit_breaker import CircuitOpenError
 from shared.resilient_http import resilient_client
 from shared.task_queue import get_task_queue_summary, replay_dead_tasks
 from sqlalchemy import select, text
@@ -256,31 +257,38 @@ async def get_system_metrics(
             "X-Tenant-ID": tenant,
         }
 
-    async with resilient_client(timeout=12.0, circuit_name="ingestion-service") as client:
-        score_task = client.get(
-            f"{base}/api/v1/compliance/score/{tenant}",
-            headers=ingestion_headers or None,
-        )
-        chain_task = client.get(
-            f"{base}/api/v1/webhooks/chain/verify",
-            params={"tenant_id": tenant},
-            headers=ingestion_headers or None,
-        )
-        score_resp, chain_resp = await asyncio.gather(
-            score_task,
-            chain_task,
-            return_exceptions=True,
-        )
+    # CircuitOpenError raises at client creation (fail-fast), outside the
+    # per-request return_exceptions=True net — uncaught it turned the whole
+    # metrics endpoint into a 500 whenever the ingestion circuit was open,
+    # instead of degrading to the DB-backed counts below.
+    try:
+        async with resilient_client(timeout=12.0, circuit_name="ingestion-service") as client:
+            score_task = client.get(
+                f"{base}/api/v1/compliance/score/{tenant}",
+                headers=ingestion_headers or None,
+            )
+            chain_task = client.get(
+                f"{base}/api/v1/webhooks/chain/verify",
+                params={"tenant_id": tenant},
+                headers=ingestion_headers or None,
+            )
+            score_resp, chain_resp = await asyncio.gather(
+                score_task,
+                chain_task,
+                return_exceptions=True,
+            )
 
-        if isinstance(score_resp, Exception):
-            logger.warning("metrics_score_fetch_failed", error=str(score_resp))
-        elif score_resp.status_code == 200:
-            score_data = score_resp.json()
+            if isinstance(score_resp, Exception):
+                logger.warning("metrics_score_fetch_failed", error=str(score_resp))
+            elif score_resp.status_code == 200:
+                score_data = score_resp.json()
 
-        if isinstance(chain_resp, Exception):
-            logger.warning("metrics_chain_fetch_failed", error=str(chain_resp))
-        elif chain_resp.status_code == 200:
-            chain_data = chain_resp.json()
+            if isinstance(chain_resp, Exception):
+                logger.warning("metrics_chain_fetch_failed", error=str(chain_resp))
+            elif chain_resp.status_code == 200:
+                chain_data = chain_resp.json()
+    except CircuitOpenError as exc:
+        logger.warning("metrics_ingestion_circuit_open", error=str(exc))
 
     ingestion_events = score_data.get("events_analyzed", 0)
 
@@ -289,8 +297,12 @@ async def get_system_metrics(
     supplier_facility_count = 0
     supplier_chain_length = 0
     try:
-        from app.sqlalchemy_models import SupplierCTEEventModel, SupplierFacilityModel
+        # Relative import — ``app.sqlalchemy_models`` only resolves when the
+        # admin service runs standalone; in the monolith it raised
+        # ImportError on every call and silently zeroed the supplier counts.
         from sqlalchemy import func as sql_func
+
+        from .sqlalchemy_models import SupplierCTEEventModel, SupplierFacilityModel
 
         tenant_uuid = uuid_module.UUID(tenant)
         supplier_event_count = (
@@ -452,8 +464,11 @@ async def replay_task_queue_rows(
 )
 async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
     """Rotate the JWT signing key (sysadmin only)."""
-    from app.auth_utils import _sync_keys_from_registry
+    # Relative import — same monolith-vs-standalone resolution issue as the
+    # supplier-metrics import above; ``app.auth_utils`` fails in the monolith.
     from shared.jwt_key_registry import get_key_registry
+
+    from .auth_utils import _sync_keys_from_registry
 
     try:
         registry = await get_key_registry()

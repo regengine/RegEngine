@@ -22,6 +22,11 @@ TRUSTED_HOST_ALLOWLIST = [
     "*.up.railway.app",
     "*.railway.internal",
     "localhost",
+    # Loopback IPs: local dev self-calls (e.g. system-metrics → ingestion
+    # with *_SERVICE_URL=http://127.0.0.1:8000) 400'd with "Invalid host
+    # header" because only the "localhost" spelling was allowed.
+    "127.0.0.1",
+    "::1",
     "testserver",
     "ingestion-service",
     "admin-api",

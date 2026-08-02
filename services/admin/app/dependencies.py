@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
+import httpx
 import structlog
 from fastapi import Depends, HTTPException, Path, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -242,9 +243,16 @@ async def get_current_user(
                 # is not a valid RegEngine session token either, the local
                 # decode path below returns the same 401.
             else:
+                # httpx transport failures (ConnectError, timeouts, …) are
+                # infrastructure errors, not token verdicts — without this
+                # they re-raise as 500s on every JWT-authed route whenever
+                # Supabase is unreachable, instead of the fail-closed 401
+                # (prod) / local-JWT fallback (dev) below.
                 if not (
                     _is_supabase_transient_exception(e)
-                    or isinstance(e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError))
+                    or isinstance(
+                        e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError, httpx.HTTPError)
+                    )
                 ):
                     raise
                 logger.warning("supabase_auth_failed", error=str(e))

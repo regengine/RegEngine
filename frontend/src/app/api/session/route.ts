@@ -382,7 +382,13 @@ export async function GET(request: NextRequest) {
     // login form has these cookies in place before submitting.
     //
     // Idempotent: if the cookies already exist, we leave them alone.
-    if (!request.cookies.get(CSRF_COOKIE) || !request.cookies.get(CSRF_SIG_COOKIE)) {
+    //
+    // Presence is checked on VALUE, not the cookie object: a browser stuck
+    // with an emptied cookie (e.g. `re_csrf_sig=`) otherwise never gets a
+    // fresh pair — the proxy rejects every mutating request with "Missing
+    // CSRF token" and this bootstrap skips re-issue forever, bricking login
+    // until the user manually clears cookies.
+    if (!request.cookies.get(CSRF_COOKIE)?.value || !request.cookies.get(CSRF_SIG_COOKIE)?.value) {
         const csrfToken = generateCsrfToken();
         const csrfSig = await signCsrfToken(csrfToken);
 
