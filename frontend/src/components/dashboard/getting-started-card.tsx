@@ -19,6 +19,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useTenant } from '@/lib/tenant-context';
 import { useOnboardingStatus, useUpdateOnboarding } from '@/hooks/use-onboarding';
+import { useSystemMetrics } from '@/hooks/use-api';
 
 interface ChecklistItem {
   id: string;
@@ -86,6 +87,7 @@ function GettingStartedSlot({ pulse = false }: { pulse?: boolean }) {
 export function GettingStartedCard() {
   const { tenantId } = useTenant();
   const { data: status, isLoading } = useOnboardingStatus(tenantId);
+  const { data: metrics } = useSystemMetrics();
   const updateOnboarding = useUpdateOnboarding(tenantId);
   const [dismissing, setDismissing] = useState(false);
 
@@ -112,10 +114,19 @@ export function GettingStartedCard() {
   // Don't show if dismissed
   if (onboarding.dismissed_at) return <GettingStartedSlot />;
 
-  const completedCount = CHECKLIST.filter((item) => {
+  // The import step used to key ONLY on the data-import tool's settings
+  // flag, so tenants whose first records arrived via webhook, supplier
+  // portal, or receiving saw "Import your first document" unchecked
+  // forever despite having live traceability data. Data presence counts.
+  const hasIngestedEvents = (metrics?.events_ingested ?? 0) > 0;
+
+  const isItemDone = (item: (typeof CHECKLIST)[number]): boolean => {
     if (item.alwaysComplete) return true;
-    return item.settingsKey && onboarding[item.settingsKey];
-  }).length;
+    if (item.id === 'import' && hasIngestedEvents) return true;
+    return Boolean(item.settingsKey && onboarding[item.settingsKey]);
+  };
+
+  const completedCount = CHECKLIST.filter(isItemDone).length;
 
   // Don't show if all complete
   if (completedCount === CHECKLIST.length) return <GettingStartedSlot />;
@@ -166,7 +177,7 @@ export function GettingStartedCard() {
         {/* Checklist */}
         <ul className="space-y-1">
           {CHECKLIST.map((item) => {
-            const done = item.alwaysComplete || (item.settingsKey && onboarding[item.settingsKey]);
+            const done = isItemDone(item);
 
             return (
               <li key={item.id}>

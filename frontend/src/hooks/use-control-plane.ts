@@ -218,6 +218,43 @@ export function useCreateRequestCase(tenantId: string) {
   });
 }
 
+export function useApproveScope(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'scope'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/scope`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
+export function useCollectRecords(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'collect'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/collect`, {
+        method: 'POST',
+      }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
+export function useRunGapAnalysis(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: ['requests', tenantId, 'gap-analysis'],
+    mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
+      cpFetch(`/api/v1/requests/${requestCaseId}/gap-analysis`, {
+        method: 'POST',
+      }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
+  });
+}
+
 export function useAssemblePackage(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({
