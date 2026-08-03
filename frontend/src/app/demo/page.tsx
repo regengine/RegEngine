@@ -49,7 +49,7 @@ const SUPPLIER_SCORES = [
 const CTE_BREAKDOWN = [
   { cte: 'Harvesting', icon: Leaf, count: 3420, compliant: 3388, pct: 99.1 },
   { cte: 'Cooling', icon: Clock, count: 1856, compliant: 1820, pct: 98.1 },
-  { cte: 'Packing', icon: Package, count: 2104, compliant: 2055, pct: 97.7 },
+  { cte: 'Initial Packing', icon: Package, count: 2104, compliant: 2055, pct: 97.7 },
   { cte: 'Shipping', icon: Truck, count: 2680, compliant: 2450, pct: 91.4 },
   { cte: 'Receiving', icon: Building2, count: 2187, compliant: 1989, pct: 90.9 },
   { cte: 'Transformation', icon: Zap, count: 480, compliant: 400, pct: 83.3 },

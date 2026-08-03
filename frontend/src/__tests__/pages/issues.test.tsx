@@ -146,7 +146,7 @@ describe('IssuesPage', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
         render(<IssuesPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Issues & Blockers')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Issues' })).toBeInTheDocument();
     });
 
     it('renders data when fetches succeed', async () => {

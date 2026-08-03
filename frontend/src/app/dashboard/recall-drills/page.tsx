@@ -96,7 +96,7 @@ export default function RecallDrillsPage() {
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
                             <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Recall Drill Workspace
+                            Recall Drills
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Run customer lots through the current drill contract, capture elapsed time, and review generated export artifacts before a regulator or retailer request.

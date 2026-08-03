@@ -80,7 +80,7 @@ const evidenceCards = [
   },
   {
     title: "Evidence Chain",
-    description: "Carry every accepted record forward with provenance, tenant scope, validation history, and hash verification.",
+    description: "Carry every accepted record forward with provenance, workspace scope, validation history, and hash verification.",
     state: "committed" as const,
     meta: "Evidence ledger",
     icon: GitBranch,
@@ -209,7 +209,7 @@ function CommandCenterPreview() {
           title="Export eligibility gate"
           description="The FDA package can build after missing ship-to locations are corrected and revalidated."
           criteria={[
-            { label: "Tenant identity resolved", passed: true },
+            { label: "Workspace identity resolved", passed: true },
             { label: "CTE/KDE coverage above threshold", passed: true },
             { label: "Supplier gaps cleared", passed: false, detail: "FreshPack Central has 3 unresolved shipping lots." },
           ]}

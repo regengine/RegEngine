@@ -122,7 +122,7 @@ export default function UserSettingsPage() {
     };
 
     const handleDeactivate = async (userId: string) => {
-        if (!confirm("Are you sure you want to remove this user from the tenant?")) return;
+        if (!confirm("Are you sure you want to remove this user from this workspace?")) return;
         try {
             await apiClient.deactivateUser(userId);
             toast({ title: "User Removed" });
@@ -221,7 +221,7 @@ export default function UserSettingsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Active Members</CardTitle>
-                            <CardDescription>Users with access to this tenant.</CardDescription>
+                            <CardDescription>People with access to this workspace.</CardDescription>
                         </CardHeader>
                         <CardContent className="overflow-x-auto">
                             <Table>

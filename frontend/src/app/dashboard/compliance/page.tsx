@@ -590,7 +590,7 @@ export default function ComplianceDashboardPage() {
                                     <Link href="/dashboard/recall-drills">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
                                             <Timer className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs font-medium">Mock Drill</span>
+                                            <span className="text-xs font-medium">Recall Drill</span>
                                             <span className="text-[9px] text-muted-foreground">24-hr simulation</span>
                                         </Button>
                                     </Link>
@@ -751,7 +751,7 @@ export default function ComplianceDashboardPage() {
                                 </div>
                                 <Link href="/dashboard/scan">
                                     <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white text-xs whitespace-nowrap">
-                                        Ingest Data <ArrowRight className="ml-1 h-3 w-3" />
+                                        Import Data <ArrowRight className="ml-1 h-3 w-3" />
                                     </Button>
                                 </Link>
                             </motion.div>

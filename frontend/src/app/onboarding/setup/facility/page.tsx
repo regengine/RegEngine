@@ -143,7 +143,7 @@ export default function FacilityPage() {
               Register Your First Facility
             </h1>
             <p className="text-sm text-[var(--re-text-muted)]">
-              You can add more facilities later in Settings.
+              You can add more facilities later under Suppliers.
             </p>
           </div>
         </div>

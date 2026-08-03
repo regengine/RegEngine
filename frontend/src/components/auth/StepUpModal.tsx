@@ -101,7 +101,7 @@ export function StepUpModal() {
               </>
             ) : (
               <>
-                Authenticate with Passkey
+                Sign in with passkey
                 <Fingerprint className="h-4 w-4" aria-hidden="true" />
               </>
             )}

@@ -177,10 +177,10 @@ export default function SettingsPage() {
                         <CardHeader>
                             <div className="flex items-center gap-2">
                                 <Archive className="h-5 w-5 text-primary" />
-                                <CardTitle>Archive & Retention</CardTitle>
+                                <CardTitle>FDA Export</CardTitle>
                             </div>
                             <CardDescription>
-                                Manage recurring export jobs and external archive posture
+                                Export and retention jobs
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
@@ -192,7 +192,7 @@ export default function SettingsPage() {
                             </div>
                             <Link href="/dashboard/export-jobs">
                                 <Button variant="outline" className="w-full">
-                                    Open Archive Jobs
+                                    Open FDA Export
                                 </Button>
                             </Link>
                         </CardContent>

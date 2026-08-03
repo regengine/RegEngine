@@ -214,7 +214,7 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
         {/* Action Button */}
         {onStartDrill && (
           <Button className="w-full" onClick={onStartDrill}>
-            Start Mock Recall Drill
+            Run Recall Drill
           </Button>
         )}
       </CardContent>

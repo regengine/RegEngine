@@ -117,7 +117,7 @@ export default function FSMA204AssessmentPage() {
                         </Card>
                         <Card>
                             <CardContent className="pt-6">
-                                <h3 className="font-semibold mb-2">Mock Recall Drill</h3>
+                                <h3 className="font-semibold mb-2">Recall Drill</h3>
                                 <p className="text-sm text-muted-foreground mb-4">
                                     Test your 24-hour FDA response capability with a simulation.
                                 </p>

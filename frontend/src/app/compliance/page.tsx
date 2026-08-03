@@ -68,8 +68,8 @@ export default function CompliancePage() {
                       </p>
                       <p className="text-sm text-re-info dark:text-blue-300 mt-1">
                         {isAuthenticated
-                          ? 'Connect a tenant workspace to validate these checklists against your live configuration.'
-                          : 'Sign in to connect a tenant workspace and validate these checklists against your live configuration.'}
+                          ? 'Connect a workspace to validate these checklists against your live configuration.'
+                          : 'Sign in to connect a workspace and validate these checklists against your live configuration.'}
                       </p>
                       <Link href={setupHref}>
                         <Button size="sm" variant="outline" className="mt-3">
