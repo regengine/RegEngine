@@ -79,12 +79,12 @@ export default function SettingsPage() {
                                 <CardTitle>Security</CardTitle>
                             </div>
                             <CardDescription>
-                                Password and two-factor authentication settings
+                                Passkeys, sign-in codes, and session security
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="text-sm">
-                                <div className="font-medium mb-1">Password & Security</div>
+                                <div className="font-medium mb-1">Sign-in & Security</div>
                                 <p className="text-muted-foreground text-xs">
                                     Manage passkeys and sessions
                                 </p>

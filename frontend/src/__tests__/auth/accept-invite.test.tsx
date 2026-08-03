@@ -45,20 +45,11 @@ describe("AcceptInviteClient", () => {
     });
 
     await user.type(screen.getByLabelText(/full name/i), "Invite User");
-    await user.type(
-      screen.getByLabelText(/^create password$/i),
-      "StrongInvite123!",
-    );
-    await user.type(
-      screen.getByLabelText(/confirm password/i),
-      "StrongInvite123!",
-    );
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       expect(acceptInviteMock).toHaveBeenCalledWith({
         token: "fragment-secret",
-        password: "StrongInvite123!", // pragma: allowlist secret
         name: "Invite User",
       });
     });
@@ -66,8 +57,17 @@ describe("AcceptInviteClient", () => {
       await screen.findByRole("heading", { level: 1, name: /welcome aboard/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
-      /your account has been created successfully/i,
+      /we'll email you a sign-in code when you log in/i,
     );
+  });
+
+  it("does not render password fields", async () => {
+    window.history.replaceState(null, "", "/accept-invite#token=some-token");
+
+    render(<AcceptInviteClient />);
+
+    await screen.findByRole("button", { name: /create account/i });
+    expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
   it("scrubs legacy query token and email values without using email for auto-login", async () => {
