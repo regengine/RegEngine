@@ -75,7 +75,7 @@ export default function FoodLogiQCompare() {
         </div>
 
         {/* Why teams switch */}
-        <h2 className="text-xl font-bold mb-6">Why teams switch from FoodLogiQ to RegEngine</h2>
+        <h2 className="text-xl font-bold mb-6">Why you might choose RegEngine over FoodLogiQ</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
             <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">

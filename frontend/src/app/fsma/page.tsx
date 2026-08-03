@@ -483,12 +483,6 @@ function FSMADashboardContent() {
                       Readiness Assessment
                     </Button>
                   </Link>
-                  <Link href="/fsma/market">
-                    <Button variant="outline" className="w-full justify-start">
-                      <Building2 className="w-4 h-4 mr-2" />
-                      Browse Target Market
-                    </Button>
-                  </Link>
                   <Link href="/fsma/integration">
                     <Button variant="outline" className="w-full justify-start">
                       <ArrowRight className="w-4 h-4 mr-2" />
