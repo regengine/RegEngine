@@ -7,7 +7,7 @@ const OPERATIONS = [
   { id: 'ingest', label: 'Ingest Webhook Events', method: 'POST', path: '/api/v1/webhooks/ingest' },
   { id: 'fda-export', label: 'FDA Export (by TLC)', method: 'GET', path: '/api/v1/fda/export' },
   { id: 'fda-export-all', label: 'FDA Export (full tenant)', method: 'GET', path: '/api/v1/fda/export/all' },
-  { id: 'compliance', label: 'Get Self-Check Score (advisory)', method: 'GET', path: '/api/v1/compliance/score/{tenant_id}' },
+  { id: 'compliance', label: 'Get FSMA Readiness Score (advisory)', method: 'GET', path: '/api/v1/compliance/score/{tenant_id}' },
   { id: 'chain-verify', label: 'Verify Chain Integrity', method: 'POST', path: '/api/v1/chain/verify-all' },
   { id: 'sla-dashboard', label: 'SLA Dashboard', method: 'GET', path: '/api/v1/sla/dashboard/{tenant_id}' },
   { id: 'health', label: 'Health Check', method: 'GET', path: '/api/v1/monitoring/health/{tenant_id}' },

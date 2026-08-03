@@ -59,7 +59,7 @@ export function MetricsOverviewWidget() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-1 sm:p-6 sm:pb-2">
             <CardTitle className="text-xs font-medium sm:text-sm">
-              Self-Check Score
+              FSMA Readiness Score
             </CardTitle>
             <Shield className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground sm:h-4 sm:w-4" />
           </CardHeader>

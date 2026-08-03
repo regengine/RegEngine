@@ -23,7 +23,7 @@ async def list_export_jobs() -> dict[str, object]:
         "jobs": [],
         "meta": {
             "status": "not_connected",
-            "message": "Export job scheduling is not yet configured for this account.",
+            "message": "Export job scheduling is not yet available — this capability is still in development.",
         },
     }
 
@@ -34,6 +34,6 @@ async def list_field_mappings() -> dict[str, object]:
         "items": [],
         "meta": {
             "status": "not_connected",
-            "message": "Field mapping review is not yet configured for this account.",
+            "message": "Field mapping review is not yet available — this capability is still in development.",
         },
     }

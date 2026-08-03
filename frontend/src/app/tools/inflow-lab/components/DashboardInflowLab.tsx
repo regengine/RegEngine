@@ -1416,7 +1416,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                                        Readiness
+                                        Data Preflight Score
                                     </div>
                                     <div className="mt-1 flex items-baseline gap-2">
                                         <span className="text-3xl font-semibold text-slate-950">{compositeScore}</span>

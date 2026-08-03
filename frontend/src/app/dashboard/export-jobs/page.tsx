@@ -63,7 +63,7 @@ export default function ExportJobsPage() {
                 }),
             });
             if (response.status === 501) {
-                throw new Error('Export job scheduling is not yet available. Connect your supply chain data to enable this feature.');
+                throw new Error('Export job scheduling is not yet available — it is still in development. Records remain exportable on demand from FDA Export.');
             }
             if (!response.ok) throw new Error('Failed to create export job');
             return (await response.json()) as { job: ArchiveExportJob };
@@ -98,7 +98,7 @@ export default function ExportJobsPage() {
     const exportPrereqs = filterExperimentalLinks([
         {
             title: 'Connect source data',
-            detail: 'Use Inflow Lab or import tools so export jobs have accepted records to package.',
+            detail: 'Use Inflow Lab or import tools to build the record set export jobs will package once scheduling ships.',
             href: '/dashboard/inflow-lab',
             action: 'Open Inflow Lab',
             icon: Database,
@@ -147,9 +147,9 @@ export default function ExportJobsPage() {
                         <div className="flex items-start gap-3">
                             <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
                             <div>
-                                <p className="font-semibold">Export scheduling is waiting for connected supply-chain data.</p>
+                                <p className="font-semibold">Scheduled export jobs aren&apos;t available on this workspace yet.</p>
                                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                    Create jobs after at least one supplier feed, import, or validated Inflow Lab run exists. This keeps empty schedules from looking like audit evidence.
+                                    Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
                                 </p>
                             </div>
                         </div>
@@ -288,7 +288,7 @@ export default function ExportJobsPage() {
                                 </div>
                         </div>
                     )}
-                    {status !== 'loading' && jobs.length === 0 && (
+                    {status !== 'loading' && jobs.length === 0 && !notConnected && (
                         <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-5 sm:p-6">
                             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
                                 <div>
@@ -297,7 +297,7 @@ export default function ExportJobsPage() {
                                         <div>
                                             <p className="text-sm font-semibold">No export jobs yet</p>
                                             <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence once this workspace has a connected evidence path. After the first successful job, run timing and manifest details will appear here.
+                                                Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here.
                                             </p>
                                         </div>
                                     </div>

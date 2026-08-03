@@ -206,8 +206,11 @@ describe('DashboardPage', () => {
             ];
 
             await waitFor(() => {
+                // queryAllByRole: multiple links may legitimately match a
+                // pattern (e.g. "FSMA Readiness Score" + "FSMA Export") —
+                // queryByRole throws on >1 match.
                 const hasAtLeastOneLink = commonLinks.some(pattern =>
-                    screen.queryByRole('link', { name: pattern })
+                    screen.queryAllByRole('link', { name: pattern }).length > 0
                 );
                 expect(hasAtLeastOneLink).toBe(true);
             });

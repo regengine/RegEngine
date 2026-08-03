@@ -55,15 +55,27 @@ def client(app):
     return TestClient(app)
 
 
-def _mock_db_session(rows=None, raise_on_execute=False):
-    """Return a MagicMock session that behaves like a SQLAlchemy Session."""
+def _mock_db_session(rows=None, raise_on_execute=False, membership_rows=None):
+    """Return a MagicMock session that behaves like a SQLAlchemy Session.
+
+    ``_db_get_team`` issues two queries — the explicit
+    ``fsma.tenant_team_members`` read and the ``fsma.get_team_roster`` merge —
+    so the mock dispatches on the SQL text instead of replaying one result.
+    """
     session = MagicMock()
     if raise_on_execute:
         session.execute.side_effect = RuntimeError("boom")
     else:
-        result = MagicMock()
-        result.fetchall.return_value = rows or []
-        session.execute.return_value = result
+
+        def _execute(stmt, params=None):
+            result = MagicMock()
+            if "get_team_roster" in str(stmt):
+                result.fetchall.return_value = membership_rows or []
+            else:
+                result.fetchall.return_value = rows or []
+            return result
+
+        session.execute.side_effect = _execute
     return session
 
 
@@ -164,6 +176,35 @@ class TestDbGetTeam:
         result = _db_get_team("t1")
         assert result == []
         session.close.assert_called_once()
+
+    def test_merges_auth_memberships_not_in_team_table(self, monkeypatch):
+        """Signed-in operators from public.memberships appear even when the
+        explicit team table has no row for them (the founder's own account
+        used to render as "0 active")."""
+        session = _mock_db_session(
+            rows=[],
+            membership_rows=[
+                ("u1", "founder@x.com", "Owner", "active", "2026-08-01T00:00:00Z", "2026-07-01T00:00:00Z"),
+            ],
+        )
+        monkeypatch.setattr(tm, "get_db_safe", lambda: session)
+        result = _db_get_team("t1")
+        assert len(result) == 1
+        assert result[0].email == "founder@x.com"
+        assert result[0].role == "owner"
+        assert result[0].status == "active"
+        assert result[0].is_sample is False
+
+    def test_explicit_team_row_wins_over_membership_duplicate(self, monkeypatch):
+        session = _mock_db_session(
+            rows=[("m1", "Alice Smith", "a@x.com", "admin", "active", None, None)],
+            membership_rows=[("u9", "a@x.com", "Viewer", "active", None, None)],
+        )
+        monkeypatch.setattr(tm, "get_db_safe", lambda: session)
+        result = _db_get_team("t1")
+        assert len(result) == 1
+        assert result[0].id == "m1"
+        assert result[0].role == "admin"
 
     def test_maps_rows_to_team_members(self, monkeypatch):
         session = _mock_db_session(

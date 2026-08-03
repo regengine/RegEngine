@@ -119,6 +119,50 @@ def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
                     is_sample=False,
                 )
             )
+
+        # Auth memberships are the canonical signed-in-operator roster, but
+        # they live in public.memberships — fsma.tenant_team_members only
+        # holds explicitly invited/sample rows, so real accounts (including
+        # the tenant's own founder login) rendered as "0 active" on the Team
+        # page. Merge both sources, keyed by email; explicit team rows win.
+        try:
+            # fsma.get_team_roster (v109) is SECURITY DEFINER: a direct JOIN
+            # to public.users returns zero rows under the enforced-RLS app
+            # role because user_self_isolation keys on the regengine.user_id
+            # GUC, which this service never sets. The function reads with
+            # definer rights but is tenant-fail-closed (raises unless the
+            # requested tenant matches the session's app.tenant_id context).
+            auth_rows = db.execute(
+                text("SELECT * FROM fsma.get_team_roster(CAST(:tid AS uuid))"),
+                {"tid": tenant_id},
+            ).fetchall()
+        except Exception as exc:
+            # Non-UUID tenant ids (dev slugs), a pre-v109 schema, or a
+            # missing tenant context degrade to the explicit-team rows
+            # rather than failing the page.
+            logger.warning("membership_read_failed error=%s", str(exc))
+            auth_rows = []
+
+        seen_emails = {m.email.lower() for m in members if m.email}
+        for row in auth_rows:
+            email = row[1] or ""
+            if email.lower() in seen_emails:
+                continue
+            display = email.split("@")[0].replace(".", " ").title() if email else "Member"
+            initials = "".join(w[0].upper() for w in display.split()[:2]) if display else ""
+            members.append(
+                TeamMember(
+                    id=row[0],
+                    name=display,
+                    email=email,
+                    role=(row[2] or "Member").lower(),
+                    status=row[3],
+                    last_active=row[4],
+                    invited_at=row[5],
+                    avatar_initials=initials,
+                    is_sample=False,
+                )
+            )
         return members
     except Exception as exc:
         logger.warning("db_read_failed error=%s", str(exc))

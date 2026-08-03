@@ -59,7 +59,7 @@ export default function RecallDrillsPage() {
                 }),
             });
             if (response.status === 501) {
-                throw new Error('Recall drill automation is not yet available. Connect your supply chain data to enable this feature.');
+                throw new Error('Recall drill automation is not yet available — it is still in development. Run a manual drill from the Requests workflow in the meantime.');
             }
             if (!response.ok) throw new Error('Failed to start drill');
             return (await response.json()) as { drill: RecallDrillRun };
@@ -116,7 +116,7 @@ export default function RecallDrillsPage() {
                     <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
                         <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
                         <span>
-                            No recall drills have been run yet. Recall drill automation activates once your supply chain data is connected.
+                            Automated drill scheduling is still in development. You can run a full manual drill today: open Requests, create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit.
                         </span>
                     </div>
                 )}
@@ -125,7 +125,7 @@ export default function RecallDrillsPage() {
                     <CardHeader>
                         <CardTitle>Launch a drill</CardTitle>
                         <CardDescription>
-                            Choose the lots, date range, and scenario you want to test. Drills run against your connected supply chain data and generate a timestamped audit artifact.
+                            Choose the lots, date range, and scenario you want to test. When drill automation ships, runs will generate a timestamped audit artifact; today, use the Requests workflow for a full manual drill.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">

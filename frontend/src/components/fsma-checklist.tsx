@@ -207,7 +207,7 @@ export default function FSMAChecklist() {
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 sm:p-5 mb-8 flex items-center justify-between gap-4">
                     <div>
                         <div className="text-xs sm:text-sm text-[#64748b] mb-2 font-medium">
-                            Self-Check Score
+                            FSMA Readiness Score
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span

@@ -470,7 +470,7 @@ export default function RecallReportPage() {
                             <Card className="border-[var(--re-border-default)] overflow-hidden">
                                 <div className="h-1 bg-gradient-to-r from-[var(--re-brand)] to-blue-500" />
                                 <CardContent className="py-5 sm:py-6">
-                                    <div className="text-xs text-muted-foreground mb-1">Overall Readiness</div>
+                                    <div className="text-xs text-muted-foreground mb-1">Recall Response Readiness</div>
                                     <div className="flex items-baseline gap-3">
                                         <span className="text-4xl sm:text-5xl font-bold" style={{ color: gradeColor(overallGrade) }}>
                                             {overallScore}
