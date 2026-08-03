@@ -785,7 +785,7 @@ export default function BulkUploadPage() {
                   }`}>
                     {clientValidation.completenessScore}%
                   </span>
-                  <span className="text-[11px] text-[var(--re-text-muted)]">compliance score</span>
+                  <span className="text-[11px] text-[var(--re-text-muted)]">data completeness</span>
                 </div>
               </div>
 

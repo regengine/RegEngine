@@ -163,7 +163,7 @@ describe('AuditLogPage', () => {
         expect(new Headers(init?.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
-    it('supplements sparse audit data with supplier facility events', async () => {
+    it('renders only API-returned entries without injecting synthetic facility rows', async () => {
         mockAuditFetch([
             {
                 id: 'event-1',
@@ -185,9 +185,11 @@ describe('AuditLogPage', () => {
         render(<AuditLogPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
-            expect(screen.getByText('facility_created')).toBeInTheDocument();
+            expect(screen.getByText('Generated export')).toBeInTheDocument();
         });
-        expect(screen.getByText('North Packing House')).toBeInTheDocument();
+        expect(screen.queryByText('facility_created')).not.toBeInTheDocument();
+        expect(screen.queryByText('North Packing House')).not.toBeInTheDocument();
+        expect(mockListSupplierFacilities).not.toHaveBeenCalled();
     });
 
     it('does not fetch when the user is signed out', () => {

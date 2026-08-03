@@ -129,37 +129,7 @@ export default function AuditLogPage() {
         queryKey: ['audit-log', effectiveTenantId, page, pageSize],
         queryFn: async () => {
             const data = await fetchAuditLog(effectiveTenantId!, page, pageSize);
-            const fetchedEntries = data.entries || [];
-
-            if (fetchedEntries.length > 1 || page > 1) {
-                return { entries: fetchedEntries, total: data.total || 0 };
-            }
-
-            // Supplement with supplier facility events from bulk upload
-            try {
-                const { apiClient } = await import('@/lib/api-client');
-                const facilities = await apiClient.listSupplierFacilities();
-                const supplemental: AuditEntry[] = [...fetchedEntries];
-
-                for (const f of facilities) {
-                    supplemental.push({
-                        id: `facility-${f.id}`,
-                        event_type: 'facility_created',
-                        action: 'facility_created',
-                        category: 'cte',
-                        actor: 'bulk_upload',
-                        resource: f.name,
-                        timestamp: new Date().toISOString(),
-                        details: { source: 'bulk_upload', facility_id: f.id },
-                        ip_address: '',
-                        hash: '',
-                    });
-                }
-
-                return { entries: supplemental, total: supplemental.length };
-            } catch {
-                return { entries: fetchedEntries, total: data.total || 0 };
-            }
+            return { entries: data.entries || [], total: data.total || 0 };
         },
         enabled: isLoggedIn && !!effectiveTenantId,
         retry: false,
@@ -191,12 +161,12 @@ export default function AuditLogPage() {
 
     // Summary stats
     const stats = useMemo(() => {
-        const now = Date.now();
+        const now = dataUpdatedAt || 0;
         const today = entries.filter(e => now - new Date(e.timestamp).getTime() < 86400000).length;
         const typeCounts: Record<string, number> = {};
         entries.forEach(e => { typeCounts[e.event_type] = (typeCounts[e.event_type] || 0) + 1; });
         return { today, typeCounts };
-    }, [entries]);
+    }, [entries, dataUpdatedAt]);
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
@@ -230,7 +200,7 @@ export default function AuditLogPage() {
                             <Download className="h-3 w-3 mr-1" /> Export
                         </Button>
                         <Badge variant="outline" className="text-[10px] py-1 hidden sm:inline-flex">
-                            <Shield className="h-3 w-3 mr-1 text-[var(--re-brand)]" /> Tamper-proof
+                            <Shield className="h-3 w-3 mr-1 text-[var(--re-brand)]" /> Hash-chained
                         </Badge>
                     </div>
                 </div>
@@ -247,7 +217,7 @@ export default function AuditLogPage() {
                 {/* Summary Stats */}
                 {isLoggedIn && entries.length > 0 && (
                     <motion.div
-                        className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3"
+                        className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                     >
@@ -258,12 +228,6 @@ export default function AuditLogPage() {
                         <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
                             <div className="text-2xl sm:text-3xl font-bold tabular-nums text-[var(--re-brand)]">{stats.today}</div>
                             <div className="text-[11px] text-muted-foreground mt-0.5">Today</div>
-                        </div>
-                        <div className="p-3 sm:p-4 rounded-xl bg-re-brand/[0.06] border border-re-brand/20 text-center">
-                            <div className="text-2xl sm:text-3xl font-bold text-re-brand flex items-center justify-center gap-1">
-                                <ShieldCheck className="h-5 w-5" />
-                            </div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">Chain Verified</div>
                         </div>
                         <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
                             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{Object.keys(stats.typeCounts).length}</div>
@@ -493,7 +457,7 @@ export default function AuditLogPage() {
                                 <div className="text-xs text-muted-foreground leading-relaxed">
                                     <span className="font-medium text-foreground">Tamper-evident audit trail: </span>
                                     Every entry is cryptographically chained using SHA-256. Database triggers prevent modification or deletion.
-                                    Compliant with 21 CFR Part 11 electronic records requirements and SOX 7-year retention.
+                                    Designed to support 21 CFR Part 11-style record controls and long-term retention.
                                 </div>
                             </div>
                         </CardContent>
