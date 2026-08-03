@@ -536,50 +536,6 @@ export default function IngestPage() {
                   </Button>
                 </form>
 
-                {/* Success Viewer */}
-                {(ingestMutation.isSuccess || ingestFileMutation.isSuccess) && jobStatus === 'completed' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-6"
-                  >
-                    {jobId === 'demo-job-123' && (
-                      <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
-                        <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
-                        <p className="text-sm font-medium text-re-warning dark:text-re-warning">
-                          Simulated walkthrough — sample output
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-5 w-5 text-re-brand" />
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                          Document Successfully Normalized
-                        </h3>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setUrl('');
-                          setFile(null);
-                          setJobId(null);
-                          setJobStatus('queued');
-                          ingestMutation.reset();
-                          ingestFileMutation.reset();
-                        }}
-                      >
-                        Ingest Another
-                      </Button>
-                    </div>
-
-                    <NormalizedDocumentViewer
-                      documentId={ingestMutation.data?.document_id || ingestFileMutation.data?.document_id || 'DEMO-DOC-ID'}
-                    />
-                  </motion.div>
-                )}
-
                 {jobId && (
                   <div className="mt-6 p-4 rounded-lg border bg-muted/40">
                     {jobId === 'demo-job-123' && (
@@ -671,7 +627,52 @@ export default function IngestPage() {
                 )}
               </CardContent>
             </Card>
-          ) : null}
+          ) : (
+            <Card className="mb-8">
+              <CardContent className="pt-6">
+                {/* Success Viewer */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  {jobId === 'demo-job-123' && (
+                    <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
+                      <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
+                      <p className="text-sm font-medium text-re-warning dark:text-re-warning">
+                        Simulated walkthrough — sample output
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-re-brand" />
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                        Document Successfully Normalized
+                      </h3>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setUrl('');
+                        setFile(null);
+                        setJobId(null);
+                        setJobStatus('queued');
+                        ingestMutation.reset();
+                        ingestFileMutation.reset();
+                      }}
+                    >
+                      Ingest Another
+                    </Button>
+                  </div>
+
+                  <NormalizedDocumentViewer
+                    documentId={ingestMutation.data?.document_id || ingestFileMutation.data?.document_id || 'DEMO-DOC-ID'}
+                  />
+                </motion.div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Features */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
