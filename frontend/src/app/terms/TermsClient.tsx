@@ -7,7 +7,7 @@ const sections = [
     {
         id: 'what-regengine-is',
         title: '1. What RegEngine Is',
-        content: `RegEngine Inc. provides API-first regulatory compliance tools, starting with FSMA 204 food traceability. We help food companies manage Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs) to meet FDA requirements.
+        content: `RegEngine LLC provides API-first regulatory compliance tools, starting with FSMA 204 food traceability. We help food companies manage Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs) to meet FDA requirements.
 
 Features may change without notice, and we may suspend or modify access during staged rollouts, maintenance windows, or broader service updates.
 
@@ -20,7 +20,7 @@ We are a software tool. We are not a law firm, compliance consultancy, or govern
 
 We may suspend accounts that violate these terms, engage in fraudulent activity, or attempt to access other tenants' data.
 
-We may also suspend or restrict access to the Service if required to do so by law, court order, government request, or if continued operation poses a material legal, regulatory, or security risk to RegEngine Inc. or other customers.`,
+We may also suspend or restrict access to the Service if required to do so by law, court order, government request, or if continued operation poses a material legal, regulatory, or security risk to RegEngine LLC or other customers.`,
     },    {
         id: 'your-data',
         title: '3. Your Data',
@@ -28,7 +28,7 @@ We may also suspend or restrict access to the Service if required to do so by la
 
 We store and process Customer Data to provide, secure, support, and improve RegEngine services as described in the Privacy Policy and applicable agreement. We do not claim ownership of your compliance data, traceability records, or exported reports.
 
-You can export your data through the API, dashboard, or enabled workflow surfaces available to your plan and agreement. If you cancel your subscription or if RegEngine Inc. terminates your account, your export and deletion window follows the active customer agreement and workspace operating posture.
+You can export your data through the API, dashboard, or enabled workflow surfaces available to your plan and agreement. If you cancel your subscription or if RegEngine LLC terminates your account, your export and deletion window follows the active customer agreement and workspace operating posture.
 
 If you have statutory or contractual retention obligations, you are responsible for maintaining an off-platform archive or recurring export process that meets those obligations.
 
@@ -40,7 +40,7 @@ You grant us a limited license to store, process, and display Customer Data as n
         title: '4. Free Tools',
         content: `The FTL Coverage Checker, Retailer Readiness Assessment, and other free tools are provided as-is with no warranty. They are informational tools based on our reading of public FDA regulations.
 
-Free tools are provided without warranties of any kind, including merchantability, fitness for a particular purpose, or non-infringement, and RegEngine Inc. shall have no liability arising from reliance on free tools.
+Free tools are provided without warranties of any kind, including merchantability, fitness for a particular purpose, or non-infringement, and RegEngine LLC shall have no liability arising from reliance on free tools.
 
 Free tools do not require an account. We do not store your selections or results unless you explicitly submit your email for follow-up, in which case we use that contact information for that request.
 
@@ -96,11 +96,11 @@ You are responsible for keeping your API keys and account credentials secure. If
 
 We reserve the right to suspend or terminate accounts that violate these terms.
 
-You agree to defend, indemnify, and hold harmless RegEngine Inc., its officers, employees, and affiliates from any claims, damages, liabilities, and expenses (including reasonable attorneys' fees) arising out of your misuse of the Service, violation of these Terms, or violation of applicable laws or third-party rights.`,
+You agree to defend, indemnify, and hold harmless RegEngine LLC, its officers, employees, and affiliates from any claims, damages, liabilities, and expenses (including reasonable attorneys' fees) arising out of your misuse of the Service, violation of these Terms, or violation of applicable laws or third-party rights.`,
     },    {
         id: 'force-majeure',
         title: '11. Force Majeure',
-        content: `RegEngine Inc. shall not be liable for failure or delay in performance resulting from events beyond its reasonable control, including acts of God, natural disasters, government actions (including FDA system outages), labor disputes, internet or cloud service outages, pandemics, or failures of third-party infrastructure providers.
+        content: `RegEngine LLC shall not be liable for failure or delay in performance resulting from events beyond its reasonable control, including acts of God, natural disasters, government actions (including FDA system outages), labor disputes, internet or cloud service outages, pandemics, or failures of third-party infrastructure providers.
 
 In the event of a force majeure lasting more than 30 days, either party may terminate the agreement without penalty.`,
     },
@@ -138,7 +138,7 @@ Notwithstanding the above, either party may seek injunctive relief in any court 
         title: '16. Contact',
         content: `Questions about these terms? legal@regengine.co
 
-RegEngine Inc.
+RegEngine LLC
 Los Angeles, California`,
     },
 ];

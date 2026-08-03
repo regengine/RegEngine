@@ -123,7 +123,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
         title: 'Settings',
         items: [
             { label: 'Settings', href: '/dashboard/settings', icon: Settings },
-            { label: 'Team', href: '/dashboard/team', icon: UserCog },
+            { label: 'Team', href: '/settings/users', icon: UserCog },
             { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
         ],

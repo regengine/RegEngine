@@ -3,12 +3,12 @@
 > **External contributions are not accepted at this time.** RegEngine is
 > proprietary, source-visible software (see [LICENSE](LICENSE)). The
 > repository is public for transparency and audit, not as an open-source
-> project — unsolicited pull requests from outside RegEngine Inc. will be
+> project — unsolicited pull requests from outside RegEngine LLC will be
 > closed without review, because merging third-party code without a
 > contributor agreement is an IP problem for a proprietary codebase.
 > Found a bug or security issue? Open an issue, or see [SECURITY.md](SECURITY.md).
 
-The rest of this document is the development workflow for RegEngine Inc.
+The rest of this document is the development workflow for RegEngine LLC
 engineers and authorized agents.
 
 ## Getting Started
@@ -75,5 +75,5 @@ Be respectful, constructive, and professional in all interactions.
 ## License
 
 RegEngine is proprietary software. By contributing, you agree that your
-contributions become the property of RegEngine Inc. under the terms of
+contributions become the property of RegEngine LLC under the terms of
 the project license. See [LICENSE](LICENSE) for details.

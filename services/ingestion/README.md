@@ -487,4 +487,4 @@ See: [CONTRIBUTING.md](../../CONTRIBUTING.md)
 ## License
 
 Proprietary - RegEngine Platform  
-Copyright © 2026 RegEngine Inc.
+Copyright © 2026 RegEngine LLC

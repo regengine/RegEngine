@@ -18,7 +18,19 @@ import {
     Save, CheckCircle2, CreditCard,
     Shield, Clock, ExternalLink,
     Zap, Globe, ArrowRight, Lock, Loader2,
+    User, UserCog, Bell, LifeBuoy,
 } from 'lucide-react';
+
+/* ── Account & workspace quick links ── */
+// Single settings hub: these link out to the account-level pages that live
+// under /settings/* plus the live notification preferences page.
+const ACCOUNT_LINKS = [
+    { label: 'Profile', desc: 'Name, email, and account details', href: '/settings/profile', icon: User },
+    { label: 'Sign-in & Security', desc: 'Passkeys, sign-in codes, and sessions', href: '/settings/security', icon: Lock },
+    { label: 'People', desc: 'Invite teammates and manage roles', href: '/settings/users', icon: UserCog },
+    { label: 'Notifications', desc: 'Alert channels and delivery preferences', href: '/dashboard/notifications', icon: Bell },
+    { label: 'Support', desc: 'Response windows and recall escalation', href: '/settings/support', icon: LifeBuoy },
+];
 
 /* ── Available Integrations Catalog ── */
 // Integration catalog — status is updated from API if available
@@ -200,7 +212,7 @@ export default function SettingsPage() {
                             <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Account Settings
                         </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">Manage your organization, API keys, and integrations</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Manage your organization, account, team, and integrations</p>
                     </div>
                     <Button onClick={handleSave} disabled={saving} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
                         {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</> : saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
@@ -250,6 +262,22 @@ export default function SettingsPage() {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Account & workspace quick links */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {ACCOUNT_LINKS.map((item) => (
+                        <Link key={item.href} href={item.href}>
+                            <div className="flex items-start gap-3 p-4 rounded-xl border border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-colors h-full min-h-[48px]">
+                                <item.icon className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
+                                <div className="min-w-0">
+                                    <div className="text-sm font-medium">{item.label}</div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
+                                </div>
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+
                 {/* Tabs */}
                 <div className="flex gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1">
                     {TABS.map((tab) => {
@@ -329,7 +357,7 @@ export default function SettingsPage() {
                                         <div>
                                             <h4 className="text-sm font-semibold">No API credentials shown</h4>
                                             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                                                RegEngine provisions API keys during developer preview or implementation onboarding. This workspace does not have workspace-visible credentials enabled yet.
+                                                API credentials are provisioned with your agreement — contact us to enable API access. Once enabled for this workspace, keys appear here. Sandbox keys for exploration are available in the developer preview.
                                             </p>
                                         </div>
                                     </div>
