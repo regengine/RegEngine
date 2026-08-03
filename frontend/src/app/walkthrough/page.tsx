@@ -143,9 +143,9 @@ export default function WalkthroughPage() {
             {TIMELINE.map((step, i) => {
               const StepIcon = step.icon;
               const colorMap: Record<string, string> = {
-                red: 'border-re-danger/30 bg-re-danger-muted0/10 text-re-danger',
-                amber: 'border-re-warning/30 bg-re-warning-muted0/10 text-re-warning',
-                blue: 'border-re-info/30 bg-re-info-muted0/10 text-re-info',
+                red: 'border-re-danger/30 bg-re-danger/10 text-re-danger',
+                amber: 'border-re-warning/30 bg-re-warning/10 text-re-warning',
+                blue: 'border-re-info/30 bg-re-info/10 text-re-info',
                 emerald: 'border-re-brand/30 bg-re-brand-muted text-re-brand',
                 brand: 'border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 text-[var(--re-brand)]',
               };
@@ -181,7 +181,7 @@ export default function WalkthroughPage() {
 
                     {/* Blocking defects list */}
                     {step.defects && (
-                      <div className="rounded-xl border-2 border-re-danger/20 bg-re-danger-muted0/5 p-4 space-y-2">
+                      <div className="rounded-xl border-2 border-re-danger/20 bg-re-danger/5 p-4 space-y-2">
                         {step.defects.map((d, j) => (
                           <div key={j} className="flex items-start gap-2">
                             <XCircle className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
@@ -232,7 +232,7 @@ export default function WalkthroughPage() {
               { rule: 'Evaluations are stale', example: 'Event amended after last rule evaluation' },
               { rule: 'Deadline has been breached', example: 'Response window expired (24 hours from request)' },
             ].map((item) => (
-              <div key={item.rule} className="rounded-xl border border-re-danger/20 bg-re-danger-muted0/5 p-4">
+              <div key={item.rule} className="rounded-xl border border-re-danger/20 bg-re-danger/5 p-4">
                 <div className="flex items-start gap-2 mb-1">
                   <ShieldAlert className="w-4 h-4 text-re-danger mt-0.5 flex-shrink-0" />
                   <span className="text-[0.85rem] font-medium text-re-text-primary">{item.rule}</span>

@@ -235,7 +235,7 @@ export default function NotificationPrefsPage() {
                                     <Bell className="h-4 w-4 text-[var(--re-brand)]" />
                                     Delivery Channels
                                 </CardTitle>
-                                <CardDescription>Only channels configured for this tenant appear here.</CardDescription>
+                                <CardDescription>Only channels configured for this workspace appear here.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2 sm:space-y-3">
                                 {effectivePrefs.channels.map((ch) => {

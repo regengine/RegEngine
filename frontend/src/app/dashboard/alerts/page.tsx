@@ -191,7 +191,7 @@ export default function AlertsDashboardPage() {
                             <div className="flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-3 text-re-danger dark:text-re-danger">
                                     <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                    <p className="text-sm font-medium">Unable to load alerts. Your compliance status may have changed.</p>
+                                    <p className="text-sm font-medium">Couldn&apos;t load alerts. Check your connection and retry.</p>
                                 </div>
                                 <Button
                                     variant="outline"
@@ -262,6 +262,13 @@ export default function AlertsDashboardPage() {
                                 </button>
                             )}
                         </div>
+
+                        {ackError && (
+                            <p className="text-xs text-re-danger flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                Couldn&apos;t acknowledge — retry.
+                            </p>
+                        )}
 
                         {/* Alert List */}
                         <div className="space-y-3">

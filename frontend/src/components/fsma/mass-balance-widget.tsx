@@ -143,7 +143,7 @@ export function MassBalanceWidget({ result, isLoading, notImplemented, className
             </div>
             <div className="h-4 bg-muted rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-re-info-muted0 rounded-full"
+                className="h-full bg-re-info rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${inputPercent}%` }}
                 transition={{ duration: 0.5 }}

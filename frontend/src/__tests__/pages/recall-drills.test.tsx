@@ -125,7 +125,7 @@ describe('RecallDrillsPage', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
         render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Recall Drill Workspace')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Recall Drills' })).toBeInTheDocument();
     });
 
     it('uses cookie-backed customer-readiness routes without browser auth headers', async () => {

@@ -138,7 +138,7 @@ describe('ExportJobsPage', () => {
         mockFetchSuccess([]);
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Archive & Export Jobs')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'FDA Export' })).toBeInTheDocument();
     });
 
     it('loads export jobs without a placeholder apiKey or browser auth header', async () => {

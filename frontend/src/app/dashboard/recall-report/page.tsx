@@ -116,8 +116,8 @@ function gradeColor(grade: string) {
 }
 
 function riskBadge(risk: string) {
-    if (risk === 'high') return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20';
-    if (risk === 'medium') return 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20';
+    if (risk === 'high') return 'bg-re-danger/10 text-re-danger border-re-danger/20';
+    if (risk === 'medium') return 'bg-re-warning/10 text-re-warning border-re-warning/20';
     return 'bg-re-brand-muted text-re-brand border-re-brand/20';
 }
 
@@ -160,7 +160,7 @@ export default function RecallReportPage() {
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
                             <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-danger" />
-                            Recall Investigation
+                            Recall Report
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             FSMA 204 Traceability Response &amp; Readiness Assessment
@@ -179,7 +179,7 @@ export default function RecallReportPage() {
                         </Button>
                         <Link href="/dashboard/recall-drills">
                             <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
-                                <Play className="h-3.5 w-3.5 mr-1.5" /> Run Mock Drill
+                                <Play className="h-3.5 w-3.5 mr-1.5" /> Run Recall Drill
                             </Button>
                         </Link>
                         <Button
@@ -243,7 +243,7 @@ export default function RecallReportPage() {
 
                 {/* Export error */}
                 {exportError && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-re-danger text-xs">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>{exportError}</span>
                     </div>
@@ -259,11 +259,11 @@ export default function RecallReportPage() {
 
                 {/* Demo notice */}
                 {isDemo && !isLoading && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-blue-300 text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-blue-300 text-xs">
                         <Info className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>
                             {report?.demo_disclaimer ??
-                                'Sample scenario only. Live recall evidence appears after tenant data and export workflows are connected for this workspace.'}
+                                'Sample scenario only. Live recall evidence appears after data and export workflows are connected for this workspace.'}
                         </span>
                     </div>
                 )}
@@ -284,15 +284,15 @@ export default function RecallReportPage() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{DEMO_INVESTIGATION.lots_at_risk}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Lots at Risk</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning-muted0/[0.06] border border-re-warning/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning/[0.06] border border-re-warning/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{DEMO_INVESTIGATION.suppliers_impacted}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Suppliers Impacted</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{DEMO_INVESTIGATION.facilities_in_chain}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Facilities in Chain</div>
                                 </div>
@@ -452,13 +452,13 @@ export default function RecallReportPage() {
                                 animate={{ opacity: 1 }}
                             >
                                 <ShieldCheck className="h-12 w-12 text-re-brand/40 mb-4" />
-                                <h2 className="text-lg font-semibold">No Active Recall Investigation</h2>
+                                <h2 className="text-lg font-semibold">No Active Recall Report</h2>
                                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                                    This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a mock drill to validate your team&apos;s response speed.
+This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team&apos;s response speed.
                                 </p>
                                 <Link href="/dashboard/recall-drills">
                                     <Button size="sm" className="mt-4 rounded-xl min-h-[44px]">
-                                        <Play className="mr-1.5 h-3.5 w-3.5" /> Simulate Recall Drill
+                                        <Play className="mr-1.5 h-3.5 w-3.5" /> Run Recall Drill
                                     </Button>
                                 </Link>
                             </motion.div>
@@ -595,9 +595,9 @@ export default function RecallReportPage() {
                                                 transition={{ delay: 0.05 * i }}
                                             >
                                                 <Badge variant="secondary" className={`text-[9px] px-2 flex-shrink-0 uppercase tracking-widest ${
-                                                    item.priority === 'HIGH' ? 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20' :
-                                                    item.priority === 'MEDIUM' ? 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20' :
-                                                    'bg-re-info-muted0/10 text-re-info border-re-info/20'
+                                                    item.priority === 'HIGH' ? 'bg-re-danger/10 text-re-danger border-re-danger/20' :
+                                                    item.priority === 'MEDIUM' ? 'bg-re-warning/10 text-re-warning border-re-warning/20' :
+                                                    'bg-re-info/10 text-re-info border-re-info/20'
                                                 }`}>
                                                     {item.priority}
                                                 </Badge>

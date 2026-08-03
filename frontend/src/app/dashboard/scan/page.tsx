@@ -116,8 +116,8 @@ function ScanPageContent() {
                 </p>
                 <p className="text-xs text-[var(--re-text-disabled)] mt-2">
                     {safeTenantId
-                        ? `Shared capture links stay scoped to tenant ${safeTenantId}.`
-                        : 'Shared capture links use the active dashboard tenant once a session is established.'}
+                        ? `Shared capture links stay scoped to workspace ${safeTenantId}.`
+                        : 'Shared capture links use the active dashboard workspace once a session is established.'}
                 </p>
             </div>
 

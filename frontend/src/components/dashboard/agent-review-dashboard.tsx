@@ -729,8 +729,8 @@ export function AgentReviewDashboard() {
                         {!queryEnabled ? (
                             <EmptyState
                                 icon={ShieldAlert}
-                                title="Tenant context required"
-                                body="Select a tenant or sign in with a tenant-scoped operator session."
+                                title="Workspace context required"
+                                body="Select a workspace or sign in with a workspace-scoped operator session."
                             />
                         ) : query.isLoading ? (
                             <div className="flex min-h-[340px] flex-col items-center justify-center gap-3 text-[var(--re-text-muted)]">

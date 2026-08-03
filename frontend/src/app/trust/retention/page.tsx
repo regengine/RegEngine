@@ -42,14 +42,14 @@ const RETENTION_TIMELINE = [
         phase: 'Post-cancellation window',
         duration: 'Contract-defined window',
         icon: Clock,
-        color: 'bg-re-warning-muted0/15 text-re-warning',
+        color: 'bg-re-warning/15 text-re-warning',
         detail: 'The post-cancellation export window is set by the active commercial agreement and operating workflow for the workspace.',
     },
     {
         phase: 'Deletion',
         duration: 'After the contract-defined window',
         icon: Trash2,
-        color: 'bg-re-danger-muted0/15 text-re-danger',
+        color: 'bg-re-danger/15 text-re-danger',
         detail: 'Tenant data is scheduled for deletion from active systems after the contract-defined window. Provider backups, immutable logs, and disaster recovery copies expire on their normal cycles, and legal or regulatory holds may require longer retention.',
     },
 ];
