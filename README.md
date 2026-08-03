@@ -343,7 +343,7 @@ These are current repo facts, not speculation:
 
 ## License
 
-RegEngine is proprietary, source-visible software — all rights reserved by RegEngine Inc. ([LICENSE](LICENSE)). The repository is public for transparency and audit (see the public proof surface above), not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+RegEngine is proprietary, source-visible software — all rights reserved by RegEngine LLC ([LICENSE](LICENSE)). The repository is public for transparency and audit (see the public proof surface above), not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
 
 Permissive exceptions — the public verifier tools are **Apache 2.0** (declared in [LICENSE](LICENSE)) so anyone can use, copy, and embed them: the `/proof` Merkle bundle verifier ([frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py)) and the `regengine-verify` per-record CLI ([regengine/verify_records.py](regengine/verify_records.py)). [Inflow Lab](https://github.com/regengine/inflow-lab), the integration simulator, is Apache 2.0 in its own repository for the same reason.
 
