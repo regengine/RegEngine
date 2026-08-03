@@ -7,6 +7,7 @@ import {
     CheckCircle2,
     ChevronRight,
     ClipboardList,
+    GraduationCap,
     Lightbulb,
     Lock,
     Mail,
@@ -21,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Tutorial } from "@/components/ui/tutorial";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import { useAuth } from "@/lib/auth-context";
 import { hasPermission } from "@/lib/permissions";
@@ -33,6 +35,11 @@ import {
     summarizeSourceSuppliers,
     type ExceptionPatternId,
 } from "../lib/exception-grouping";
+import {
+    INFLOW_LAB_TUTORIAL_STEPS,
+    INFLOW_LAB_TUTORIAL_STORAGE_KEY,
+    InflowLabTutorialBanner,
+} from "./InflowLabTutorial";
 
 type CteState = "complete" | "missing";
 type LotReadinessState = "ready" | "warning" | "blocked";
@@ -561,6 +568,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     const [selectedLotIds, setSelectedLotIds] = useState<Record<string, boolean>>({});
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
+    const [isTutorialOpen, setIsTutorialOpen] = useState(false);
     const [proofLeadPulse, setProofLeadPulse] = useState(0);
     const [isProofLeadHighlighted, setIsProofLeadHighlighted] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1056,7 +1064,15 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             See exactly why a supplier lot will fail before it reaches production export.
                         </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2" data-tutorial="inflow-load-data">
+                        <Button
+                            variant="ghost"
+                            className="h-9 text-slate-600"
+                            onClick={() => setIsTutorialOpen(true)}
+                        >
+                            <GraduationCap className="mr-2 h-4 w-4" />
+                            How to use
+                        </Button>
                         <Button asChild variant="ghost" className="h-9 text-slate-600">
                             <Link href="/dashboard/integrations">
                                 <Settings2 className="mr-2 h-4 w-4" />
@@ -1098,6 +1114,8 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                         What runs in sandbox →
                     </Link>
                 </div>
+
+                <InflowLabTutorialBanner onStart={() => setIsTutorialOpen(true)} />
 
                 {serviceError && (
                     <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
@@ -1172,7 +1190,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             Load a fabricated sample based on a common farm-to-DC trace so buyers can see the input
                             shape, the caught break, and the fix path before any production feed is connected.
                         </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <div className="mt-3 flex flex-wrap items-center gap-2" data-tutorial="inflow-guided-proof">
                             <Button
                                 type="button"
                                 className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
@@ -1412,7 +1430,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
 
                 <section className="grid grid-cols-12 gap-4">
                     <div className="col-span-12 space-y-4 xl:col-span-8">
-                        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div
+                            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                            data-tutorial="inflow-readiness"
+                        >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
@@ -1494,6 +1515,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                 isProofLeadHighlighted && "border-rose-300 shadow-[0_0_0_2px_rgba(244,63,94,0.12)]"
                             )}
                             data-proof-lead-highlight={isProofLeadHighlighted ? "true" : "false"}
+                            data-tutorial="inflow-exceptions"
                         >
                             <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between">
                                 <div>
@@ -1926,6 +1948,13 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     </section>
                 )}
             </div>
+
+            <Tutorial
+                steps={INFLOW_LAB_TUTORIAL_STEPS}
+                isOpen={isTutorialOpen}
+                onClose={() => setIsTutorialOpen(false)}
+                storageKey={INFLOW_LAB_TUTORIAL_STORAGE_KEY}
+            />
         </main>
     );
 }
