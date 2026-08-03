@@ -36,7 +36,7 @@ const TOOLS = [
     ['readiness-assessment', 'FSMA 204 Readiness Assessment', 'Score product coverage, event capture, KDEs, and systems.', ShieldCheck, 'assess'],
     ['recall-readiness', 'FSMA 204 Readiness Self-Check', 'Self-check whether you can answer a §1.1455(c) 24-hour records request.', Timer, 'assess'],
     ['inflow-lab', 'Inflow Lab', 'Preflight messy supplier data and review the commit gate.', Database, 'simulate'],
-    ['fsma-unified', 'Cold Chain Anomaly Detector', 'Find temperature and supplier-risk anomalies in cold-chain records.', BarChart3, 'simulate'],
+    ['fsma-unified', 'Cold Chain Anomaly Simulator', 'Explore anomaly detection on synthetic cold-chain data.', BarChart3, 'simulate'],
     ['roi-calculator', 'FSMA 204 Savings Estimator', 'Illustrative comparison of manual compliance effort vs automated traceability — not a forecast.', BarChart3, 'assess'],
     ['data-import', 'Data Import Assistant', 'Map existing spreadsheets into FSMA-ready CTE/KDE structures.', Upload, 'operate'],
     ['scan', 'GS1 Barcode Scanner', 'Scan GS1 identifiers and fill traceability fields in the browser.', ScanBarcode, 'operate'],

@@ -126,7 +126,7 @@ export function SupplyChainGraph({
 
                 {/* Affected indicator */}
                 {isAffected && (
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center bg-re-danger-muted0 text-white rounded-full">
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 flex items-center justify-center bg-re-danger text-white rounded-full">
                     <AlertTriangle className="w-3 h-3" />
                   </span>
                 )}

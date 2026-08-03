@@ -107,7 +107,10 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
         signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Audit log fetch failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't load the audit log. Check your connection and retry.");
+    }
     return res.json();
 }
 
@@ -249,14 +252,19 @@ export default function AuditLogPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-re-danger/30 bg-re-danger-muted0/[0.03]">
+                    <Card className="border-re-danger/30 bg-re-danger/[0.03]">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-re-danger">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm font-medium">Failed to load audit log</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 text-re-danger">
+                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-medium">Couldn&apos;t load the audit log</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">Check your connection and retry.</p>
+                                    </div>
                                 </div>
+                                <Button variant="outline" size="sm" className="rounded-xl text-xs flex-shrink-0 min-h-[44px]" onClick={() => loadLog()} disabled={loading}>
+                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>

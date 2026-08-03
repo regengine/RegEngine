@@ -209,7 +209,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
 
             {/* Status Banner */}
             {result.submission_blocked && (
-              <div className="rounded-lg border-2 border-re-danger/30 bg-re-danger-muted0/10 p-4">
+              <div className="rounded-lg border-2 border-re-danger/30 bg-re-danger/10 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <ShieldAlert className="w-5 h-5 text-re-danger" />
                   <span className="text-[0.8rem] font-semibold text-re-danger">
@@ -239,7 +239,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
             )}
 
             {!result.submission_blocked && result.non_compliant_events > 0 && (
-              <div className="rounded-lg border-2 border-re-warning/30 bg-re-warning-muted0/10 p-4">
+              <div className="rounded-lg border-2 border-re-warning/30 bg-re-warning/10 p-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-re-warning" />
                   <span className="text-[0.8rem] font-semibold text-re-warning">

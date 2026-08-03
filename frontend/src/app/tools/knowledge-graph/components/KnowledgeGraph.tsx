@@ -148,7 +148,7 @@ function getConfidenceDescriptor(confidence: number) {
     if (confidence >= 0.7) {
         return {
             label: "medium",
-            className: "bg-re-warning-muted0/20 text-re-warning border-re-warning/30",
+            className: "bg-re-warning/20 text-re-warning border-re-warning/30",
         };
     }
     return {
@@ -466,7 +466,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
                                 </div>
 
                                 {showWarningBanner && (
-                                    <div className="rounded-2xl border border-re-warning/40 bg-re-warning-muted0/10 p-3 text-re-warning">
+                                    <div className="rounded-2xl border border-re-warning/40 bg-re-warning/10 p-3 text-re-warning">
                                         <div className="mb-1 inline-flex items-center gap-2 text-sm font-medium">
                                             <AlertTriangle className="h-4 w-4" />
                                             Query warnings

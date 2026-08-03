@@ -120,7 +120,7 @@ export default function NoticeValidatorPage() {
     const summaryColor = (gaps?: number) => {
         if (gaps === 0) return 'text-re-brand border-re-brand/40 bg-re-brand-muted';
         if (gaps && gaps <= 1) return 'text-sky-500 border-sky-500/40 bg-sky-500/10';
-        if (gaps && gaps <= 2) return 'text-re-warning border-re-warning/40 bg-re-warning-muted0/10';
+        if (gaps && gaps <= 2) return 'text-re-warning border-re-warning/40 bg-re-warning/10';
         return 'text-rose-500 border-rose-500/40 bg-rose-500/10';
     };
 

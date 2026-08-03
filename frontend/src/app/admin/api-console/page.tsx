@@ -103,10 +103,10 @@ const categoryColors: Record<string, string> = {
 };
 
 const methodColors = {
-    GET: 'bg-re-info-muted0/10 text-re-info border-re-info/30',
-    POST: 'bg-re-success-muted0/10 text-re-success border-green-500/30',
+    GET: 'bg-re-info/10 text-re-info border-re-info/30',
+    POST: 'bg-re-success/10 text-re-success border-green-500/30',
     PUT: 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-    DELETE: 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30',
+    DELETE: 'bg-re-danger/10 text-re-danger border-re-danger/30',
     PATCH: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
 };
 
@@ -138,7 +138,7 @@ export default function AdminAPIConsolePage() {
             {/* Animated background */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 -left-48 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-re-info-muted0/20 rounded-full blur-3xl animate-pulse delay-1000" />
+                <div className="absolute bottom-1/4 -right-48 w-96 h-96 bg-re-info/20 rounded-full blur-3xl animate-pulse delay-1000" />
                 <div className="absolute top-3/4 left-1/3 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-500" />
             </div>
 
@@ -340,7 +340,7 @@ export default function AdminAPIConsolePage() {
                                                         {selectedEndpoint.method}
                                                     </Badge>
                                                     {selectedEndpoint.requiresAuth && (
-                                                        <Badge className="bg-re-warning-muted0/10 text-re-warning border-re-warning/30">
+                                                        <Badge className="bg-re-warning/10 text-re-warning border-re-warning/30">
                                                             <Lock className="w-3 h-3 mr-1" />
                                                             Auth Required
                                                         </Badge>

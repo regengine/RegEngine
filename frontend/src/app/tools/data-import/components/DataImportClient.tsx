@@ -400,7 +400,7 @@ export function DataImportClient() {
                                             className={`p-4 rounded-xl border text-sm ${
                                                 uploadState === 'success'
                                                     ? 'border-re-brand/30 bg-re-brand/5'
-                                                    : 'border-re-danger/30 bg-re-danger-muted0/5'
+                                                    : 'border-re-danger/30 bg-re-danger/5'
                                             }`}
                                         >
                                             <div className="flex items-center gap-2 font-medium mb-1">
@@ -463,7 +463,7 @@ export function DataImportClient() {
                                                 className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
                                                     step.ok
                                                         ? 'border-re-brand/20 bg-re-brand/5'
-                                                        : 'border-re-danger/20 bg-re-danger-muted0/5'
+                                                        : 'border-re-danger/20 bg-re-danger/5'
                                                 }`}
                                             >
                                                 {step.ok ? (

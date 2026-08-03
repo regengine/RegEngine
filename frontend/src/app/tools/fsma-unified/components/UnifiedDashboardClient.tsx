@@ -21,14 +21,14 @@ import { LeadGate } from "@/components/lead-gate/LeadGate";
 export function UnifiedDashboardClient() {
     return (
         <FreeToolPageShell
-            title="Automated Cold Chain Monitor"
-            subtitle="Detect temperature excursions and supply chain anomalies before they become recalls."
+            title="Cold Chain Anomaly Simulator"
+            subtitle="Explore detection algorithms on synthetic cold-chain data"
             relatedToolIds={['knowledge-graph', 'ftl-checker', 'roi-calculator', 'recall-readiness']}
         >
             <LeadGate
                 source="fsma-unified"
                 headline="Unlock the Anomaly Detection Simulator"
-                subheadline="Run multi-algorithm detection on 90 days of cold-chain data with precision/recall tuning and supplier risk scoring."
+                subheadline="Run multi-algorithm detection on 90 days of synthetic cold-chain data with precision/recall tuning and supplier risk scoring."
                 ctaText="Launch Simulator"
                 teaser={
                     <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8 text-center">

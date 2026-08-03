@@ -8,7 +8,7 @@ import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Unified Dashboard | Anomaly Detection & Knowledge Graph | RegEngine",
-    description: "Unified command center for FSMA 204 compliance. Monitor supply chain anomalies, explore knowledge graphs, and benchmark readiness — all in one free dashboard.",
+    description: "Unified command center for FSMA 204 compliance. Monitor supply chain anomalies and explore knowledge graphs — all in one free dashboard.",
     alternates: {
         canonical: "https://regengine.co/tools/fsma-unified",
     },

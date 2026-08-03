@@ -47,7 +47,7 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
           </p>
           {status !== "healthy" && details?.error != null && (
             <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
-              {String(details.error)}
+              This service is not responding right now. Check again shortly.
             </p>
           )}
         </div>
@@ -108,10 +108,10 @@ export function SystemHealthWidget() {
           <span
             className={`h-2 w-2 ${
               overallStatus === "healthy"
-                ? "bg-re-success-muted0"
+                ? "bg-re-success"
                 : overallStatus === "degraded"
                   ? "bg-re-warning"
-                  : "bg-re-danger-muted0"
+                  : "bg-re-danger"
             }`}
           />
           <span className="text-xs text-muted-foreground capitalize">
