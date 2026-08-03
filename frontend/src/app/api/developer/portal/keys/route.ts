@@ -12,6 +12,12 @@ type ApiKeyRow = {
     revoked_at: string | null;
 };
 
+// Portal keys are SANDBOX-ONLY by design: they live in the Supabase
+// developer_api_keys table, which no backend service reads, so an `rge_test_`
+// key can never authenticate a live API request. Live `rge_live_` keys come
+// from the backend key store (services/shared/api_key_store.py, minted via
+// POST /v1/admin/keys); wiring the portal to it is blocked on per-developer
+// tenant provisioning. Keep the portal UI's sandbox labeling in sync with this.
 function generateApiKey(): string {
     // CSPRNG, not Math.random() — these are real credentials (hashed + stored).
     // Rejection-sample to avoid modulo bias against the 62-char alphabet.

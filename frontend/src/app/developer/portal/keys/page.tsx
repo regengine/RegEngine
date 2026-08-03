@@ -93,9 +93,9 @@ export default function ApiKeysPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>API Keys</h1>
+                    <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>Sandbox API Keys</h1>
                     <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
-                        Generate and manage your API keys. Keys are shown once — store them securely.
+                        Generate and manage sandbox keys for exploring the portal. Keys are shown once — store them securely.
                     </p>
                 </div>
                 <Button
@@ -106,12 +106,24 @@ export default function ApiKeysPage() {
                 </Button>
             </div>
 
+            {/* Sandbox-only notice */}
+            <Card style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+                <CardContent className="py-3">
+                    <p className="text-sm m-0" style={{ color: '#60a5fa' }}>
+                        Keys created here are <code className="font-mono">rge_test_</code> sandbox credentials — they
+                        cannot authenticate requests to the live RegEngine API. Live{' '}
+                        <code className="font-mono">rge_live_</code> keys are provisioned by the RegEngine team during
+                        onboarding.
+                    </p>
+                </CardContent>
+            </Card>
+
             {/* Revealed key banner */}
             {revealedKey && (
                 <Card style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
                     <CardContent className="py-4">
                         <p className="text-sm font-medium mb-2" style={{ color: 'var(--re-brand)' }}>
-                            Your new API key (copy it now — it won't be shown again):
+                            Your new sandbox key (copy it now — it won't be shown again):
                         </p>
                         <div className="flex items-center gap-2">
                             <code className="flex-1 text-xs font-mono px-3 py-2 rounded" style={{ background: 'rgba(0,0,0,0.3)', color: 'var(--re-text-primary)' }}>
@@ -142,7 +154,7 @@ export default function ApiKeysPage() {
                             <div className="flex-1">
                                 <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--re-text-muted)' }}>Key Name</label>
                                 <Input
-                                    placeholder="e.g. Production, Staging, CI/CD"
+                                    placeholder="e.g. Local testing, CI experiments"
                                     value={newKeyName}
                                     onChange={(e) => setNewKeyName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && createKey()}

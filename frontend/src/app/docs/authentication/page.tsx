@@ -61,7 +61,7 @@ export default function AuthenticationDocsPage() {
                                 <div className="space-y-3 text-sm">
                                     <div className="flex gap-3">
                                         <div className="w-24 font-medium text-muted-foreground">Create</div>
-                                        <div>Generate keys from the developer portal.</div>
+                                        <div>Live keys are provisioned by the RegEngine team during onboarding. Keys created in the developer portal sandbox cannot authenticate live API requests.</div>
                                     </div>
                                     <div className="flex gap-3">
                                         <div className="w-24 font-medium text-muted-foreground">Revoke</div>
