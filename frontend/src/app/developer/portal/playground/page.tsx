@@ -470,6 +470,10 @@ export default function APIPlayground() {
             Demo Mode
           </span>
           <button
+            type="button"
+            role="switch"
+            aria-checked={demoMode}
+            aria-label="Demo Mode"
             onClick={() => handleDemoToggle(!demoMode)}
             disabled={isGuest}
             title={isGuest ? 'Live mode requires an API key provisioned by the RegEngine team' : (demoMode ? 'Switch to live API' : 'Switch to demo sandbox')}
@@ -670,7 +674,7 @@ export default function APIPlayground() {
                 opacity: loading || !apiKey ? 0.6 : 1,
               }}
             >
-              {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {loading ? 'Sending...' : (demoMode ? 'Send Demo Request' : 'Send Request')}
             </Button>
           </div>
@@ -697,7 +701,7 @@ export default function APIPlayground() {
 
               {loading && (
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '24px', textAlign: 'center', color: 'var(--re-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '300px' }}>
-                  <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--re-brand)' }} />
+                  <Loader2 size={16} className="animate-spin" style={{ color: 'var(--re-brand)' }} />
                   <span>Processing request...</span>
                 </div>
               )}
@@ -750,17 +754,6 @@ export default function APIPlayground() {
           </div>
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 768px) {
-          [style*="grid"] {
-            grid-template-columns: 1fr !important;
-          }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

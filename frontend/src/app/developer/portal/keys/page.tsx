@@ -30,51 +30,80 @@ export default function ApiKeysPage() {
     const [revealedKey, setRevealedKey] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [developerId, setDeveloperId] = useState<string | null>(null);
+    const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const loadKeys = useCallback(async () => {
         if (!authUser) return;
 
-        const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
-        if (!response.ok) {
+        try {
+            const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
+            if (!response.ok) {
+                setError('Could not load your API keys. Refresh to try again.');
+                return;
+            }
+            const data = await response.json();
+            setDeveloperId(data.developerId);
+            setKeys(data.keys || []);
+        } catch {
+            setError('Could not load your API keys. Refresh to try again.');
+        } finally {
             setIsLoading(false);
-            return;
         }
-        const data = await response.json();
-        setDeveloperId(data.developerId);
-        setKeys(data.keys || []);
-        setIsLoading(false);
     }, [authUser]);
 
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
     async function createKey() {
-        if (!developerId || !newKeyName.trim()) return;
+        if (!developerId || !newKeyName.trim() || isCreating) return;
         setIsCreating(true);
+        setError(null);
 
-        const response = await fetchWithCsrf('/api/developer/portal/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ name: newKeyName.trim() }),
-        });
+        try {
+            const response = await fetchWithCsrf('/api/developer/portal/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name: newKeyName.trim() }),
+            });
 
-        if (response.ok) {
+            if (!response.ok) {
+                setError('Key creation failed. Check your connection and try again.');
+                return;
+            }
+
             const data = await response.json();
             setRevealedKey(data.rawKey);
             setNewKeyName('');
             setShowCreate(false);
             setKeys(data.keys || []);
+        } catch {
+            setError('Key creation failed. Check your connection and try again.');
+        } finally {
+            setIsCreating(false);
         }
-
-        setIsCreating(false);
     }
 
     async function revokeKey(keyId: string) {
-        await fetchWithCsrf(`/api/developer/portal/keys/${encodeURIComponent(keyId)}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-        await loadKeys();
+        if (revokingKeyId) return;
+        setRevokingKeyId(keyId);
+        setError(null);
+
+        try {
+            const response = await fetchWithCsrf(`/api/developer/portal/keys/${encodeURIComponent(keyId)}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            if (!response.ok) {
+                setError('Revoking that key failed. It is still active — try again.');
+                return;
+            }
+            await loadKeys();
+        } catch {
+            setError('Revoking that key failed. It is still active — try again.');
+        } finally {
+            setRevokingKeyId(null);
+        }
     }
 
     function copyKey() {
@@ -117,6 +146,14 @@ export default function ApiKeysPage() {
                     </p>
                 </CardContent>
             </Card>
+
+            {error && (
+                <Card role="alert" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                    <CardContent className="py-3">
+                        <p className="text-sm m-0 text-re-danger">{error}</p>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Revealed key banner */}
             {revealedKey && (
@@ -163,7 +200,7 @@ export default function ApiKeysPage() {
                             </div>
                             <Button
                                 onClick={createKey}
-                                disabled={!newKeyName.trim() || isCreating}
+                                disabled={!newKeyName.trim() || isCreating || !developerId}
                                 style={{ background: 'var(--re-brand)', color: '#000', fontWeight: 600 }}
                             >
                                 {isCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -213,9 +250,13 @@ export default function ApiKeysPage() {
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => revokeKey(key.id)}
+                                        disabled={revokingKeyId !== null}
+                                        aria-label={`Revoke ${key.name}`}
                                         className="text-re-danger hover:text-re-danger hover:bg-re-danger/10"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        {revokingKeyId === key.id
+                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                            : <Trash2 className="w-4 h-4" />}
                                     </Button>
                                 )}
                             </CardContent>
