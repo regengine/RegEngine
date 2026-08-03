@@ -23,6 +23,12 @@ const EXPECTED_CSRF_EXEMPT_PREFIXES = [
     '/api/admin/v1/auth/accept-invite',
     '/api/webhooks/',
     '/api/v1/webhooks/',
+    // Public read API rewrites (next.config.js): API-key scheme
+    // (X-RegEngine-API-Key), never cookies — the double-submit check can
+    // never pass for these callers and the backend routers are the auth
+    // layer (require_permission scopes + tenant cross-check).
+    '/api/v1/records/',
+    '/api/v1/fda/',
     '/api/ingestion/api/v1/sandbox/',
     '/api/ingestion/api/v1/proof/',
     '/api/inflow-lab/',

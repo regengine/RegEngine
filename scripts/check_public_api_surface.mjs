@@ -36,14 +36,30 @@ const EXPECTATIONS = [
   {
     method: 'GET',
     url: 'https://regengine.co/api/v1/records',
-    expect: [404],
-    note: 'NOT publicly wired yet — docs mark the read API "provisioned endpoint" (#2743). When the public rewrite ships (option B), flip this to expect 401 JSON.',
+    expect: [401],
+    mustBeJson: true,
+    mustStayOnHost: true,
+    note: 'Public read API (records rewrite): backend API-key auth must answer (401 JSON), never an edge 404. Bare path must proxy via the exact rewrite — a redirect here leaks the backend host (FastAPI redirect_slashes on the trailing-slash :path* render).',
+  },
+  {
+    method: 'GET',
+    url: 'https://regengine.co/api/v1/fda/export',
+    expect: [401],
+    mustBeJson: true,
+    note: 'Public FDA trace/export API rewrite: backend API-key auth must answer (401 JSON).',
+  },
+  {
+    method: 'POST',
+    url: 'https://regengine.co/api/v1/fda/export/verify',
+    expect: [401],
+    mustBeJson: true,
+    note: 'Mutating FDA endpoint must reach the backend (401 JSON), not the CSRF 403 — guards the /api/v1/fda/ entry in CSRF_EXEMPT_PREFIXES.',
   },
 ];
 
 let failures = 0;
-for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
-  let status, contentType;
+for (const { method, url, expect, mustBeJson, mustStayOnHost, note } of EXPECTATIONS) {
+  let status, contentType, finalUrl;
   try {
     const res = await fetch(url, {
       method,
@@ -53,6 +69,7 @@ for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
     });
     status = res.status;
     contentType = res.headers.get('content-type') || '';
+    finalUrl = res.url;
   } catch (err) {
     console.error(`FAIL ${method} ${url} — request error: ${err.message}`);
     failures += 1;
@@ -60,11 +77,14 @@ for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
   }
   const statusOk = expect.includes(status);
   const jsonOk = !mustBeJson || contentType.includes('application/json');
-  if (statusOk && jsonOk) {
+  // Rewrites must proxy transparently; a followed redirect that lands off
+  // regengine.co leaks the backend host to callers.
+  const hostOk = !mustStayOnHost || new URL(finalUrl).hostname.endsWith('regengine.co');
+  if (statusOk && jsonOk && hostOk) {
     console.log(`ok   ${method} ${url} -> ${status}`);
   } else {
-    console.error(`FAIL ${method} ${url} -> ${status} (${contentType})`);
-    console.error(`     expected ${expect.join('/')}${mustBeJson ? ' with application/json' : ''} — ${note}`);
+    console.error(`FAIL ${method} ${url} -> ${status} (${contentType}) final=${finalUrl}`);
+    console.error(`     expected ${expect.join('/')}${mustBeJson ? ' with application/json' : ''}${mustStayOnHost ? ' staying on regengine.co' : ''} — ${note}`);
     failures += 1;
   }
 }
