@@ -105,7 +105,7 @@ export function MarketingFooter() {
             </div>
             <div className="max-w-[1200px] mx-auto px-6 py-5 border-t border-[var(--re-border-subtle)] flex flex-wrap justify-between items-center gap-4">
                 <span className="text-[0.72rem] text-[var(--re-text-muted)]">
-                    &copy; 2026 RegEngine Inc. All rights reserved.
+                    &copy; 2026 RegEngine LLC All rights reserved.
                 </span>
                 <div className="flex flex-wrap items-center gap-4">
                     <Link href="/dpa" className="text-[0.72rem] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] transition-colors no-underline">

@@ -449,4 +449,4 @@ redis-cli -n 2 FLUSHDB
 ## License
 
 Proprietary - RegEngine Platform  
-Copyright © 2026 RegEngine Inc.
+Copyright © 2026 RegEngine LLC
