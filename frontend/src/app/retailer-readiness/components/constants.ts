@@ -56,6 +56,7 @@ export const PRICING_TIERS = [
         revenue: '1 facility',
         price: '$425',
         period: '/mo',
+        gaPrice: '$849',
         note: 'Save ~15% vs monthly billing',
         features: ['Up to 500 CTEs/month', '1 facility', 'FSMA 204 traceability workspace', 'FDA-oriented sortable export'],
     },
@@ -63,6 +64,7 @@ export const PRICING_TIERS = [
         revenue: '2–3 facilities',
         price: '$549',
         period: '/mo',
+        gaPrice: '$1,099',
         note: 'Save ~15% vs monthly billing',
         features: ['No per-CTE caps (fair use)', '2–3 facilities', 'Everything in Base', 'Retailer-specific benchmarks', 'EPCIS 2.0 export'],
         highlighted: true,
@@ -71,6 +73,7 @@ export const PRICING_TIERS = [
         revenue: '4+ facilities',
         price: '$639',
         period: '/mo',
+        gaPrice: '$1,275',
         note: 'Save ~15% vs monthly billing',
         features: ['No per-CTE caps (fair use)', '4+ facilities', 'Everything in Standard', 'Shared Slack channel (per agreement)', 'Quarterly compliance review (scheduled per agreement)'],
     },
@@ -110,12 +113,12 @@ export const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 export const COMPETITORS = [
-    { feature: 'Starting price', regengine: 'List price from $849/mo (partner from $425/mo)', foodlogiq: 'Contact sales', repositrak: 'Custom retailer quotes' },
-    { feature: 'Onboarding model', regengine: 'Self-serve', foodlogiq: 'Sales-led implementation', repositrak: 'Retailer-coordinated' },
-    { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
-    { feature: 'FDA-oriented export', regengine: '✓ Built-in', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
-    { feature: 'Trace lookup', regengine: 'Indexed lookup', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
-    { feature: 'Contract length', regengine: 'No multi-year lock-in', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'Starting price', regengine: 'List price from $849/mo (partner from $425/mo)', trustwell: 'Contact sales', repositrak: 'Custom retailer quotes' },
+    { feature: 'Onboarding model', regengine: 'Self-serve', trustwell: 'Sales-led implementation', repositrak: 'Retailer-coordinated' },
+    { feature: 'API-first', regengine: '✓ Full REST API', trustwell: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'FDA-oriented export', regengine: '✓ Built-in', trustwell: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'Trace lookup', regengine: 'Indexed lookup', trustwell: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'Contract length', regengine: 'No multi-year lock-in', trustwell: 'Verify with vendor', repositrak: 'Verify with vendor' },
 ];
 
 /* ─────────────────────────────────────────────────────────────

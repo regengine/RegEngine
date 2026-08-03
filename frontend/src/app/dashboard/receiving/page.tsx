@@ -412,7 +412,7 @@ export default function ReceivingDockPage() {
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-base">Expected Items</CardTitle>
                                 <Button variant="outline" size="sm" onClick={() => setShowAddExpected(!showAddExpected)}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add Item
+                                    <Plus className="h-3 w-3 mr-1" /> Add expected item
                                 </Button>
                             </div>
                         </CardHeader>

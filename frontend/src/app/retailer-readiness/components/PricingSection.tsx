@@ -63,6 +63,7 @@ export default function PricingSection({ revealRef, visible }: PricingSectionPro
                             <p style={{ fontSize: 'clamp(28px, 5vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 24 }}>
                                 {tier.price}
                                 {tier.period && <span style={{ fontSize: 14, fontWeight: 400, color: T.textMuted }}>{tier.period}</span>}
+                                {tier.gaPrice && <span style={{ fontSize: 15, fontWeight: 400, color: T.textDim, textDecoration: 'line-through', marginLeft: 8 }}>{tier.gaPrice}/mo</span>}
                             </p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                 {tier.features.map((f, j) => (

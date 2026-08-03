@@ -131,7 +131,7 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                     </div>
                     <button
                         onClick={handleLogout}
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger-muted0/10 no-underline"
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger/10 no-underline"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
                         <LogOut className="w-3.5 h-3.5" />

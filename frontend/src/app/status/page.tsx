@@ -51,8 +51,8 @@ export default function StatusPage() {
             >
               support@regengine.co
             </a>
-            . We aim to respond within one business day during pilot programs. For urgent
-            ingestion or auth issues, include your tenant slug and the timestamp
+. We aim to respond within one business day during pilot programs. For urgent
+            ingestion or auth issues, include your workspace slug and the timestamp
             of the request so we can correlate with logs.
           </p>
           <div className="grid gap-3 sm:grid-cols-3 mt-4">

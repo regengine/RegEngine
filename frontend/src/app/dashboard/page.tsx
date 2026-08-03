@@ -113,7 +113,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
         bg: "bg-re-warning-muted dark:bg-re-warning/30",
       },
       {
-        title: "Archive Jobs",
+        title: "FDA Export",
         description: "Recurring export retention",
         icon: Upload,
         href: "/dashboard/export-jobs",
@@ -129,7 +129,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
         bg: "bg-re-surface-elevated",
       },
       {
-        title: "Mock Drill",
+        title: "Recall Drill",
         description: "FDA recall simulation",
         icon: Truck,
         href: "/dashboard/recall-drills",
@@ -166,7 +166,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
       bg: "bg-re-surface-elevated",
     },
     {
-      title: "Archive Jobs",
+      title: "FDA Export",
       description: "Retention & export scheduling",
       icon: Upload,
       href: "/dashboard/export-jobs",

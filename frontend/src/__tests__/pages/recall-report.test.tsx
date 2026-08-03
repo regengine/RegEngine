@@ -146,7 +146,7 @@ describe('RecallReportPage', () => {
 
   it('renders page heading', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
-    expect(screen.getByText('Recall Investigation')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recall Report' })).toBeInTheDocument();
   });
 
   it('fetches the recall report without a placeholder apiKey', async () => {

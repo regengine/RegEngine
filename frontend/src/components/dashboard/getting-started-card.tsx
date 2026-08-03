@@ -55,7 +55,7 @@ const CHECKLIST: ChecklistItem[] = [
   {
     id: 'import',
     label: 'Import your first document',
-    href: '/tools/data-import',
+    href: '/ingest',
     icon: Upload,
     settingsKey: 'first_document_imported',
   },

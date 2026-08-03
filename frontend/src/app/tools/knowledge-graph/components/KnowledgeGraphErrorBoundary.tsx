@@ -41,9 +41,9 @@ export class KnowledgeGraphErrorBoundary extends Component<Props, State> {
                             <AlertTriangle className="h-10 w-10 text-destructive" />
                         </div>
                         <div className="space-y-2">
-                            <h3 className="text-xl font-bold">Physics Engine Halted</h3>
+                            <h3 className="text-xl font-bold">The graph couldn&apos;t render</h3>
                             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                                The Supply Chain Knowledge Graph encountered a rendering error. This usually happens when the WebGL/Canvas context is overwhelmed or invalid data is passed.
+                                Reload to try again.
                             </p>
                         </div>
                         <Button 
@@ -52,7 +52,7 @@ export class KnowledgeGraphErrorBoundary extends Component<Props, State> {
                             onClick={this.handleReset}
                         >
                             <RotateCcw className="mr-2 h-4 w-4" />
-                            Reinitialize Graph
+                            Try again
                         </Button>
                     </CardContent>
                 </Card>

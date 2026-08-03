@@ -59,7 +59,7 @@ export default function ExitIntentPopup({ showExitIntent, setShowExitIntent, tra
                         padding: '12px 16px', minHeight: 48,
                     }}
                 >
-                    No thanks, I&apos;ll risk it
+                    No thanks
                 </button>
             </div>
         </div>

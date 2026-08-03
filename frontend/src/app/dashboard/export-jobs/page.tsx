@@ -126,7 +126,7 @@ export default function ExportJobsPage() {
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
                             <Archive className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Archive &amp; Export Jobs
+                            FDA Export
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone.
@@ -138,7 +138,7 @@ export default function ExportJobsPage() {
                         disabled={status === 'saving' || status === 'loading' || notConnected}
                     >
                         <PlusCircle className="h-4 w-4 mr-1" />
-                        {status === 'saving' ? 'Saving...' : 'Save Export Job'}
+                        {status === 'saving' ? 'Saving...' : 'Save export job'}
                     </Button>
                 </div>
 
@@ -178,7 +178,7 @@ export default function ExportJobsPage() {
                         <CardContent className="pt-4 sm:pt-6">
                             <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Integrity model</div>
                             <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Manifest hash per run</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Each generated bundle can include tenant context, timestamps, and integrity metadata for that run.</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Each generated bundle can include workspace context, timestamps, and integrity metadata for that run.</div>
                         </CardContent>
                     </Card>
                 </div>

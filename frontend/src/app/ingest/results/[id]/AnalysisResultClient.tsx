@@ -87,7 +87,7 @@ export default function AnalysisResultClient() {
                         <div className="relative border-l-2 border-muted ml-3 space-y-8 py-2">
                             {steps.map((step, i) => (
                                 <div key={i} className="pl-8 relative">
-                                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${step.status === 'complete' ? 'bg-re-success-muted0' : 'bg-re-surface-elevated'}`} />
+                                    <div className={`absolute -left-[9px] top-1 h-4 w-4 rounded-full ${step.status === 'complete' ? 'bg-re-success' : 'bg-re-surface-elevated'}`} />
                                     <div className="flex items-center justify-between mb-1">
                                         <h3 className="font-semibold">{step.title}</h3>
                                         <span className="text-xs text-muted-foreground font-mono">{step.time}</span>

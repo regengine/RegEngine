@@ -231,7 +231,7 @@ export default function SupplierCompliancePage() {
                     Need your suppliers to submit traceability data?
                 </h2>
                 <p className="text-[var(--re-text-muted)] mb-6 leading-relaxed max-w-[500px] mx-auto">
-                    Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly — no account needed, no training required. Data flows into your tenant automatically.
+                    Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly — no account needed, no training required. Data flows into your workspace automatically.
                 </p>
                 <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="/onboarding">

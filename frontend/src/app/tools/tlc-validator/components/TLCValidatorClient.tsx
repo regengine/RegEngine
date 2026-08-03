@@ -44,7 +44,7 @@ export function TLCValidatorClient() {
 
         // 1. GS1 Compatibility Check
         if (tlc.includes('(10)') || tlc.startsWith('10')) {
-            findings.push({ severity: 'LOW', label: 'GS1 AI 10 detected (Standard compatible)', icon: CheckCircle2 });
+            findings.push({ severity: 'LOW', label: "Starts with '10' — may be a GS1 AI (10) batch/lot prefix; verify against your GS1 spec.", icon: CheckCircle2 });
             score += 5; // Bonus for standard alignment
         } else if (!/^[A-Z0-9]+$/.test(tlc)) {
             findings.push({ severity: 'MEDIUM', label: 'Non-alphanumeric chars detected (GS1 preference is clean alphanumeric)', icon: Search });
@@ -63,9 +63,9 @@ export function TLCValidatorClient() {
             score -= 20;
         }
 
-        // 4. Parseability (Ambiguous Chars)
-        if (/[0OI1l]/.test(tlc)) {
-            findings.push({ severity: 'MEDIUM', label: 'Ambiguous characters detected (0/O, 1/I) - Risks manual entry errors', icon: Search });
+        // 4. Parseability (easily-confused letters O/I/l, which read like 0/1)
+        if (/[OIl]/.test(tlc)) {
+            findings.push({ severity: 'MEDIUM', label: 'Consider avoiding easily-confused characters (O/0, I/1, l/1) to reduce manual entry errors', icon: Search });
             score -= 10;
         }
 

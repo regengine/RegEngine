@@ -64,7 +64,7 @@ const PRINCIPLES = [
     Icon: Shield,
     title: "Verifiable, not just claimed",
     description:
-      "Compliance records are cryptographically hashed and append-oriented after ingest. Customers can independently verify export-bundle integrity using our published verify_chain.py script. Downstream signature verification across the message bus is rolling out.",
+      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
   },
   {
     Icon: Lightbulb,
@@ -121,7 +121,7 @@ export default function AboutPage() {
                 Christopher Sellers
               </h2>
               <p className="text-sm font-mono text-[var(--re-brand)] mt-1">
-                Founder &amp; Builder
+                Founder
               </p>
               <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-4">
                 I built RegEngine because I kept seeing the same pattern: FSMA
