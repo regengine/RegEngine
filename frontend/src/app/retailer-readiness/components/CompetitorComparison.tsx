@@ -49,7 +49,7 @@ export default function CompetitorComparison({ revealRef, visible }: CompetitorC
                     }}>
                         <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{row.feature}</span>
                         <span style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>{row.regengine}</span>
-                        <span style={{ fontSize: 13, color: T.textDim }}>{row.foodlogiq}</span>
+                        <span style={{ fontSize: 13, color: T.textDim }}>{row.trustwell}</span>
                         <span style={{ fontSize: 13, color: T.textDim }}>{row.repositrak}</span>
                     </div>
                 ))}
