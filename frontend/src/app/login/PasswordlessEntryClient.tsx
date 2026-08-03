@@ -44,7 +44,7 @@ function resolveSsoRedirect(organizationId?: string | null): string {
 export default function PasswordlessEntryClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isHydrated } = useAuth();
+  const { isAuthenticated, isHydrated } = useAuth();
   const [email, setEmail] = useState('');
   const [passkeyEmail, setPasskeyEmail] = useState('');
   const [showPasskeyPrompt, setShowPasskeyPrompt] = useState(false);
@@ -58,9 +58,14 @@ export default function PasswordlessEntryClient() {
   const queryError = searchParams.get('error');
 
   useEffect(() => {
-    if (!isHydrated || !user) return;
+    // Gate on isAuthenticated (user + cookie-backed access token), not user
+    // alone: `user` hydrates from localStorage and can outlive the
+    // re_access_token cookie. Forwarding on stale user state ping-pongs with
+    // the server-side auth gates (e.g. /developer/portal layout), producing
+    // an infinite login <-> next-path redirect loop.
+    if (!isHydrated || !isAuthenticated) return;
     router.push(nextPath);
-  }, [isHydrated, nextPath, router, user]);
+  }, [isHydrated, nextPath, router, isAuthenticated]);
 
   const handleEmailSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

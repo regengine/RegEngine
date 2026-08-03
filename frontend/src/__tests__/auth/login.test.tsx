@@ -28,11 +28,14 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+const authState = vi.hoisted(() => ({
+  user: null as { id: string; email: string } | null,
+  isAuthenticated: false,
+  isHydrated: true,
+}));
+
 vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({
-    user: null,
-    isHydrated: true,
-  }),
+  useAuth: () => authState,
 }));
 
 vi.mock('@/lib/passwordless-auth', () => ({
@@ -62,6 +65,9 @@ function mockLocationAssign() {
 describe('passwordless login', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user = null;
+    authState.isAuthenticated = false;
+    authState.isHydrated = true;
     mocks.searchParamGet.mockReturnValue(null);
     mocks.startEmailChallenge.mockResolvedValue({
       detail: 'If this address is eligible, a sign-in code is on its way.',
@@ -69,6 +75,36 @@ describe('passwordless login', () => {
     });
     mocks.performPasskeyLogin.mockResolvedValue(undefined);
     mocks.verifyEmailChallenge.mockResolvedValue(undefined);
+  });
+
+  it('does not auto-forward on stale localStorage user without a cookie session (redirect loop regression)', () => {
+    // A user object hydrated from localStorage can outlive the re_access_token
+    // cookie. Auto-forwarding to ?next= in that state ping-pongs with the
+    // server-side auth gate on the target page (login -> portal -> login ...).
+    authState.user = { id: 'stale', email: 'stale@example.com' };
+    authState.isAuthenticated = false;
+    mocks.searchParamGet.mockImplementation((key: string) =>
+      key === 'next' ? '/developer/portal' : null,
+    );
+
+    render(<LoginPage />);
+
+    expect(mocks.routerPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+  });
+
+  it('auto-forwards to the next path when the cookie session is authenticated', async () => {
+    authState.user = { id: 'live', email: 'live@example.com' };
+    authState.isAuthenticated = true;
+    mocks.searchParamGet.mockImplementation((key: string) =>
+      key === 'next' ? '/developer/portal' : null,
+    );
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(mocks.routerPush).toHaveBeenCalledWith('/developer/portal');
+    });
   });
 
   it('renders a single email entry point with passkey sign-in and no password field', () => {
