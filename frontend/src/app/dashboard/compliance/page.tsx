@@ -490,7 +490,7 @@ export default function ComplianceDashboardPage() {
                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base">Overall Readiness</CardTitle>
+                                    <CardTitle className="text-base">FSMA Readiness Score</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <ScoreGauge score={score.overall_score} grade={score.grade} />

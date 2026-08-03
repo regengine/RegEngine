@@ -31,7 +31,7 @@ export async function POST() {
     return NextResponse.json(
         {
             error: 'Not Implemented',
-            message: 'Export job scheduling is not yet available. Connect your supply chain data to enable this feature.',
+            message: 'Export job scheduling is not yet available — it is still in development. Records remain exportable on demand from FDA Export.',
         },
         { status: 501 }
     );

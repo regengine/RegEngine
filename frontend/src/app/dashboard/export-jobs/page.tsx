@@ -147,9 +147,9 @@ export default function ExportJobsPage() {
                         <div className="flex items-start gap-3">
                             <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
                             <div>
-                                <p className="font-semibold">Export scheduling is waiting for connected supply-chain data.</p>
+                                <p className="font-semibold">Scheduled export jobs aren&apos;t available on this workspace yet.</p>
                                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                    Create jobs after at least one supplier feed, import, or validated Inflow Lab run exists. This keeps empty schedules from looking like audit evidence.
+                                    Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
                                 </p>
                             </div>
                         </div>

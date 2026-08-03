@@ -31,7 +31,7 @@ export async function POST() {
     return NextResponse.json(
         {
             error: 'Not Implemented',
-            message: 'Field mapping submission is not yet available. Connect your supply chain data to enable this feature.',
+            message: 'Field mapping submission is not yet available — it is still in development.',
         },
         { status: 501 }
     );

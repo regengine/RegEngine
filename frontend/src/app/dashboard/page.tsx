@@ -45,7 +45,7 @@ import { useOnboardingStatus } from "@/hooks/use-onboarding";
 const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
   const commonActions = [
     {
-      title: "Self-Check Score",
+      title: "FSMA Readiness Score",
       description: "View your advisory readiness indicator",
       icon: Shield,
       href: "/dashboard/compliance",
@@ -216,7 +216,7 @@ function DashboardPageSkeleton() {
 
 export default function DashboardPage() {
   const { user, isHydrated, isAuthenticated } = useAuth();
-  const { tenantId } = useTenant();
+  const { tenantId, isTenantReady } = useTenant();
   const router = useRouter();
 
   const effectiveUser = user;
@@ -246,8 +246,10 @@ export default function DashboardPage() {
     }
   }, [isHydrated, effectiveUser, router]);
 
-  // Check design partner status from tenant settings
-  const { data: onboardingData } = useOnboardingStatus(effectiveTenantId);
+  // Check design partner status from tenant settings. Wait for tenant
+  // hydration — pre-hydration the id is the DEFAULT_TENANT_ID placeholder
+  // and every cold load fired a doomed onboarding call against it.
+  const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
   // Default to 'retailer' quick actions. (Previously derived from a Supabase
@@ -260,7 +262,7 @@ export default function DashboardPage() {
   const { data: workbenchReadiness } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
-    enabled: !!effectiveTenantId && isAuthenticated,
+    enabled: !!effectiveTenantId && isAuthenticated && isTenantReady,
     staleTime: 60_000,
     retry: false,
   });

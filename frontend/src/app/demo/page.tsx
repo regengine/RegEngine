@@ -77,7 +77,7 @@ export default function DemoPage() {
       {/* Top stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard
-          label="Self-Check Score"
+          label="FSMA Readiness Score"
           value={`${COMPLIANCE_SCORE}%`}
           icon={<Shield className="w-5 h-5" />}
           color="text-[var(--re-brand)]"

@@ -17,6 +17,14 @@ interface TenantContextType {
     tenantId: string;
     setTenantId: (id: string) => void;
     isSystemTenant: boolean;
+    /**
+     * False until the tenant id is trustworthy: either a stored tenant was
+     * found at mount, or auth hydration finished. Before that, `tenantId`
+     * is the DEFAULT_TENANT_ID placeholder — data hooks that key requests
+     * on the tenant should wait for this flag or they fire doomed calls
+     * against the placeholder on every cold load.
+     */
+    isTenantReady: boolean;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -44,6 +52,7 @@ function readStoredTenantId(): string | null {
 export function TenantProvider({ children }: { children: React.ReactNode }) {
     const { tenantId: authTenantId, isHydrated } = useAuth();
     const [tenantId, setTenantId] = useState<string>(() => readStoredTenantId() || DEFAULT_TENANT_ID);
+    const [hadStoredTenant] = useState<boolean>(() => Boolean(readStoredTenantId()));
 
     // Load from local storage on mount
     useEffect(() => {
@@ -89,10 +98,18 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         apiClient.setCurrentTenant(safeTenantId);
     };
 
+    // Ready only once the id is settled: hydration finishing is not enough,
+    // because the auth tenant is applied by an effect one render AFTER
+    // isHydrated flips — in that gap tenantId is still the placeholder and
+    // gated hooks would fire against it anyway.
+    const authResolvedTenantId = isHydrated && isSafeTenantId(authTenantId) ? authTenantId : null;
+    const awaitingAuthSwap = Boolean(authResolvedTenantId && authResolvedTenantId !== tenantId);
+
     const value = {
         tenantId,
         setTenantId: updateTenant,
         isSystemTenant: tenantId === DEFAULT_TENANT_ID,
+        isTenantReady: (hadStoredTenant || isHydrated) && !awaitingAuthSwap,
     };
 
     return (

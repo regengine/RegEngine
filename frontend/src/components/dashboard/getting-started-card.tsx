@@ -85,8 +85,8 @@ function GettingStartedSlot({ pulse = false }: { pulse?: boolean }) {
 }
 
 export function GettingStartedCard() {
-  const { tenantId } = useTenant();
-  const { data: status, isLoading } = useOnboardingStatus(tenantId);
+  const { tenantId, isTenantReady } = useTenant();
+  const { data: status, isLoading } = useOnboardingStatus(isTenantReady ? tenantId : null);
   const { data: metrics } = useSystemMetrics();
   const updateOnboarding = useUpdateOnboarding(tenantId);
   const [dismissing, setDismissing] = useState(false);
