@@ -125,7 +125,7 @@ export default function RecallDrillsPage() {
                     <CardHeader>
                         <CardTitle>Launch a drill</CardTitle>
                         <CardDescription>
-                            Choose the lots, date range, and scenario you want to test. Drills run against your connected supply chain data and generate a timestamped audit artifact.
+                            Choose the lots, date range, and scenario you want to test. When drill automation ships, runs will generate a timestamped audit artifact; today, use the Requests workflow for a full manual drill.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">

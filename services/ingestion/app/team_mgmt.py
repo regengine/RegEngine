@@ -126,22 +126,20 @@ def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
         # the tenant's own founder login) rendered as "0 active" on the Team
         # page. Merge both sources, keyed by email; explicit team rows win.
         try:
+            # fsma.get_team_roster (v109) is SECURITY DEFINER: a direct JOIN
+            # to public.users returns zero rows under the enforced-RLS app
+            # role because user_self_isolation keys on the regengine.user_id
+            # GUC, which this service never sets. The function reads with
+            # definer rights but is tenant-fail-closed (raises unless the
+            # requested tenant matches the session's app.tenant_id context).
             auth_rows = db.execute(
-                text(
-                    "SELECT u.id::text, u.email,"
-                    "       COALESCE(r.name, 'Member') AS role_name,"
-                    "       CASE WHEN m.is_active THEN 'active' ELSE 'deactivated' END AS status,"
-                    "       u.last_login_at::text, m.created_at::text"
-                    " FROM public.memberships m"
-                    " JOIN public.users u ON u.id = m.user_id"
-                    " LEFT JOIN public.roles r ON r.id = m.role_id"
-                    " WHERE m.tenant_id = CAST(:tid AS uuid)"
-                ),
+                text("SELECT * FROM fsma.get_team_roster(CAST(:tid AS uuid))"),
                 {"tid": tenant_id},
             ).fetchall()
         except Exception as exc:
-            # Non-UUID tenant ids (dev slugs) or restricted membership reads
-            # degrade to the explicit-team rows rather than failing the page.
+            # Non-UUID tenant ids (dev slugs), a pre-v109 schema, or a
+            # missing tenant context degrade to the explicit-team rows
+            # rather than failing the page.
             logger.warning("membership_read_failed error=%s", str(exc))
             auth_rows = []
 

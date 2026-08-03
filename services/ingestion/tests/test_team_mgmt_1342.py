@@ -59,7 +59,7 @@ def _mock_db_session(rows=None, raise_on_execute=False, membership_rows=None):
     """Return a MagicMock session that behaves like a SQLAlchemy Session.
 
     ``_db_get_team`` issues two queries — the explicit
-    ``fsma.tenant_team_members`` read and the ``public.memberships`` merge —
+    ``fsma.tenant_team_members`` read and the ``fsma.get_team_roster`` merge —
     so the mock dispatches on the SQL text instead of replaying one result.
     """
     session = MagicMock()
@@ -69,7 +69,7 @@ def _mock_db_session(rows=None, raise_on_execute=False, membership_rows=None):
 
         def _execute(stmt, params=None):
             result = MagicMock()
-            if "public.memberships" in str(stmt):
+            if "get_team_roster" in str(stmt):
                 result.fetchall.return_value = membership_rows or []
             else:
                 result.fetchall.return_value = rows or []
