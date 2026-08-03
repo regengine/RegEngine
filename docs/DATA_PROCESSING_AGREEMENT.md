@@ -1,6 +1,6 @@
 # Data Processing Agreement (DPA)
 
-**RegEngine, Inc. — Standard Data Processing Agreement**
+**RegEngine LLC — Standard Data Processing Agreement**
 
 *Version 1.0 — Effective Date: [INSERT DATE]*
 
@@ -9,7 +9,7 @@
 This Data Processing Agreement ("DPA") is entered into between:
 
 - **Controller**: The entity identified in the RegEngine subscription agreement ("Customer")
-- **Processor**: RegEngine, Inc., a Delaware corporation ("RegEngine")
+- **Processor**: RegEngine LLC, a California limited liability company ("RegEngine")
 
 This DPA supplements and forms part of the RegEngine Terms of Service or Master Service Agreement between Customer and RegEngine (the "Agreement").
 

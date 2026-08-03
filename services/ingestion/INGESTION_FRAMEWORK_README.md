@@ -218,7 +218,7 @@ black regengine_ingestion/
 
 ## License
 
-Proprietary - RegEngine Inc.
+Proprietary - RegEngine LLC
 
 ## Support
 
