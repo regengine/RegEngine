@@ -45,7 +45,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
     },
     {
         feature: 'Transparent, Published Pricing',
-        regengine: 'GA from $849/mo (partner rates from $425/mo)',
+        regengine: 'List price from $849/mo (partner rates from $425/mo)',
         trustwell: 'Contact sales',
         safetychain: 'Contact sales',
         repositrak: 'Contact sales',

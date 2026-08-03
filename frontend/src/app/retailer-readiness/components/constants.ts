@@ -110,7 +110,7 @@ export const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 export const COMPETITORS = [
-    { feature: 'Starting price', regengine: 'GA from $849/mo (partner from $425/mo)', foodlogiq: 'Contact sales', repositrak: 'Custom retailer quotes' },
+    { feature: 'Starting price', regengine: 'List price from $849/mo (partner from $425/mo)', foodlogiq: 'Contact sales', repositrak: 'Custom retailer quotes' },
     { feature: 'Onboarding model', regengine: 'Self-serve', foodlogiq: 'Sales-led implementation', repositrak: 'Retailer-coordinated' },
     { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
     { feature: 'FDA-oriented export', regengine: '✓ Built-in', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },

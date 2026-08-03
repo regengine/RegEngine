@@ -17,7 +17,7 @@ const FEATURES = [
   { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "GA from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom enterprise quotes" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom enterprise quotes" },
   { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
