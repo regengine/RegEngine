@@ -193,7 +193,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Truck,
                                 title: 'What you must record',
-                                body: 'Key Data Elements (KDEs) at Critical Tracking Events (CTEs): harvesting, cooling, packing, receiving, shipping, and transformation. Required fields include traceability lot codes, product descriptions, quantities, locations, and dates.',
+                                body: 'Key Data Elements (KDEs) at Critical Tracking Events (CTEs): harvesting, cooling, packing, first land-based receiving, shipping, receiving, and transformation. Required fields include traceability lot codes, product descriptions, quantities, locations, and dates.',
                             },
                             {
                                 icon: Clock,

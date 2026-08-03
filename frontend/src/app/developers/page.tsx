@@ -11,7 +11,7 @@ import { API_BASE } from '@/lib/api-base';
 export const metadata: Metadata = {
     title: 'Developers | RegEngine — FSMA 204 Compliance API',
     description:
-        'Build on the RegEngine API: webhook ingestion with KDE validation, 25+ FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
+        'Build on the RegEngine API: webhook ingestion with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
     openGraph: {
         title: 'Developers | RegEngine — FSMA 204 Compliance API',
         description:
@@ -31,7 +31,7 @@ const capabilities = [
     {
         Icon: Cog,
         title: 'Rules Engine',
-        description: '25+ FSMA 204 validation rules evaluate every ingested event. Missing required KDEs, invalid TLCs, and schema violations surface as exceptions in the dashboard.',
+        description: '36 FSMA 204 validation rules (33 stateless + 3 cross-event) evaluate every ingested event. Missing required KDEs, invalid TLCs, and schema violations surface as exceptions in the dashboard.',
     },
     {
         Icon: Users,

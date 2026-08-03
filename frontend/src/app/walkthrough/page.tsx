@@ -38,7 +38,7 @@ const TIMELINE = [
     time: 'T+0:05',
     title: 'Data quality gaps surface',
     icon: Search,
-    description: 'The rules engine evaluates all 47 events against 25 FSMA 204 validation rules. Results: 38 pass, 6 have warnings, 3 have blocking defects.',
+    description: 'The rules engine evaluates all 47 events against 36 FSMA 204 validation rules (33 stateless + 3 cross-event). Results: 38 pass, 6 have warnings, 3 have blocking defects.',
     detail: null,
     color: 'amber',
   },
@@ -264,7 +264,7 @@ export default function WalkthroughPage() {
         <div className="flex gap-3 justify-center flex-wrap">
           <Link href="/pricing">
             <button className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)]">
-              Join the Founding Cohort
+              Become a Founding Design Partner
               <ArrowRight className="w-4 h-4" />
             </button>
           </Link>

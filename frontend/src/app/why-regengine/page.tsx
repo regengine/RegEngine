@@ -30,95 +30,95 @@ export const metadata: Metadata = {
 interface ComparisonRow {
     feature: string;
     regengine: boolean | string;
-    foodlogiq: boolean | string;
+    trustwell: boolean | string;
     safetychain: boolean | string;
-    reositrak: boolean | string;
+    repositrak: boolean | string;
 }
 
 const COMPARISON_DATA: ComparisonRow[] = [
     {
         feature: 'REST API + Webhooks',
         regengine: true,
-        foodlogiq: false,
+        trustwell: false,
         safetychain: false,
-        reositrak: false,
+        repositrak: false,
     },
     {
         feature: 'Transparent, Published Pricing',
-        regengine: '$425/mo',
-        foodlogiq: 'Contact sales',
+        regengine: 'List price from $849/mo (partner rates from $425/mo)',
+        trustwell: 'Contact sales',
         safetychain: 'Contact sales',
-        reositrak: 'Contact sales',
+        repositrak: 'Contact sales',
     },
     {
         feature: 'Time to first export',
         regengine: 'Days (self-serve)',
-        foodlogiq: 'Sales-led implementation',
+        trustwell: 'Sales-led implementation',
         safetychain: 'Sales-led implementation',
-        reositrak: 'Retailer-coordinated',
+        repositrak: 'Retailer-coordinated',
     },
     {
         feature: 'All 7 FSMA 204 CTE Types',
         regengine: 'Full coverage',
-        foodlogiq: 'Verify with vendor',
+        trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
-        reositrak: 'Verify with vendor',
+        repositrak: 'Verify with vendor',
     },
     {
         feature: 'EPCIS 2.0 Native',
         regengine: true,
-        foodlogiq: 'Verify with vendor',
+        trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
-        reositrak: 'Verify with vendor',
+        repositrak: 'Verify with vendor',
     },
     {
         feature: 'CSV Import + Mapping',
         regengine: true,
-        foodlogiq: true,
+        trustwell: true,
         safetychain: true,
-        reositrak: true,
+        repositrak: true,
     },
     {
         feature: 'Works with Existing ERP/WMS',
         regengine: 'By design',
-        foodlogiq: 'Verify with vendor',
+        trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
-        reositrak: 'Verify with vendor',
+        repositrak: 'Verify with vendor',
     },
     {
         feature: 'Self-Serve Onboarding',
         regengine: true,
-        foodlogiq: 'Sales-led',
+        trustwell: 'Sales-led',
         safetychain: 'Sales-led',
-        reositrak: 'Retailer-mediated',
+        repositrak: 'Retailer-mediated',
     },
     {
         feature: 'Per-CTE KDE Validation',
         regengine: true,
-        foodlogiq: 'Verify with vendor',
+        trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
-        reositrak: 'Verify with vendor',
+        repositrak: 'Verify with vendor',
     },
     {
     feature: 'FDA-Oriented Sortable Export',
         regengine: true,
-        foodlogiq: true,
+        trustwell: true,
         safetychain: true,
-        reositrak: true,
+        repositrak: true,
     },
     {
         feature: 'Recall Drill Workflows',
         regengine: true,
-        foodlogiq: true,
+        trustwell: true,
         safetychain: true,
-        reositrak: false,
+        repositrak: false,
     },
     {
-        feature: 'No Long-Term Contracts',
+        feature: 'No Multi-Year Lock-In',
         regengine: true,
-        foodlogiq: false,
+        trustwell: false,
         safetychain: false,
-        reositrak: false,
+        repositrak: false,
     },
 ];
 
@@ -134,7 +134,7 @@ const DIFFERENTIATORS = [
         icon: DollarSign,
         title: 'Transparent Pricing',
         description:
-            'No hidden sales calls. Plans from $425/mo (billed annually) for Design Partners. Pricing is published — no "contact sales" required.',
+            'No hidden sales calls. Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.',
         detail: 'Compare directly to competitors who make you "contact sales." We believe pricing transparency builds trust and moves faster.',
     },
     {
@@ -175,7 +175,7 @@ export default function WhyRegEnginePage() {
                 <div className="max-w-5xl mx-auto">
                     <div className="inline-flex items-center gap-2 mb-6">
                         <Badge variant="outline" className="bg-[var(--re-surface-elevated)] border-[var(--re-border-subtle)] text-[var(--re-text-primary)]">
-                            Built Different
+                            Built for FSMA 204
                         </Badge>
                     </div>
                     <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-[var(--re-text-primary)] mb-6 leading-tight">
@@ -302,15 +302,15 @@ export default function WhyRegEnginePage() {
                                             )}
                                         </td>
                                         <td className="text-center py-4 px-4">
-                                            {typeof row.foodlogiq === 'boolean' ? (
-                                                row.foodlogiq ? (
+                                            {typeof row.trustwell === 'boolean' ? (
+                                                row.trustwell ? (
                                                     <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
                                                     <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
                                                 <span className="text-xs text-re-text-tertiary">
-                                                    {row.foodlogiq}
+                                                    {row.trustwell}
                                                 </span>
                                             )}
                                         </td>
@@ -328,15 +328,15 @@ export default function WhyRegEnginePage() {
                                             )}
                                         </td>
                                         <td className="text-center py-4 px-4">
-                                            {typeof row.reositrak === 'boolean' ? (
-                                                row.reositrak ? (
+                                            {typeof row.repositrak === 'boolean' ? (
+                                                row.repositrak ? (
                                                     <Check className="h-5 w-5 text-re-success mx-auto" />
                                                 ) : (
                                                     <X className="h-5 w-5 text-re-danger mx-auto" />
                                                 )
                                             ) : (
                                                 <span className="text-xs text-re-text-tertiary">
-                                                    {row.reositrak}
+                                                    {row.repositrak}
                                                 </span>
                                             )}
                                         </td>
@@ -420,18 +420,18 @@ HTTP 201
                             <div className="space-y-4">
                                 <div className="rounded-lg bg-re-info/20 p-4 border border-re-info/30">
                                     <p className="text-sm text-re-text-tertiary mb-1">Base Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$425/mo</p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$425/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$849/mo</span></p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
                                 </div>
                                 <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
                                     <p className="text-sm text-re-text-tertiary mb-1">Standard Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$549/mo</p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$549/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$1,099/mo</span></p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
                                 </div>
                                 <div className="rounded-lg bg-[var(--re-surface-elevated)] p-4 border border-[var(--re-surface-border)]">
                                     <p className="text-sm text-re-text-tertiary mb-1">Premium Plan</p>
-                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$639/mo</p>
-                                    <p className="text-xs text-re-text-tertiary mt-2">Billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
+                                    <p className="text-3xl font-bold text-[var(--re-text-primary)]">$639/mo <span className="text-sm font-normal text-re-text-tertiary line-through opacity-60">$1,275/mo</span></p>
+                                    <p className="text-xs text-re-text-tertiary mt-2">Founding design partner rate, billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
                                 </div>
                             </div>
                         </div>
@@ -447,9 +447,8 @@ HTTP 201
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Month-to-month billing, no long-term contracts',
-                                    'Free API access across all plans',
-                                    'Volume discounts for 10+ facilities',
+                                    'Simple design-partner agreements — no multi-year lock-in',
+                                    'API access for contracted workspaces',
                                     'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
@@ -616,7 +615,7 @@ HTTP 201
                             <p className="text-sm text-re-text-tertiary mb-4">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
-                                    'Regional produce distributors ($5M–$50M ARR)',
+                                    'Regional produce distributors ($5M–$50M annual revenue)',
                                     'Specialty food brands and co-packers',
                                     'Organic/specialty retailers and wholesalers',
                                     'Small farms and grower cooperatives',
@@ -637,13 +636,13 @@ HTTP 201
                                 Compliance shouldn't require a 50-person implementation team. You need FSMA 204 compliance, fast and cheap. Self-serve signup, no minimums, no sales calls.
                             </p>
                             <p className="text-re-text-tertiary text-sm mb-6">
-                                Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 facility to 1000. You start small; you grow without ripping out the platform.
+                                Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 to 1,000 facilities. You start small; you grow without ripping out the platform.
                             </p>
                             <ul className="space-y-2">
                                 {[
                                     'Self-serve signup with onboarding support when needed',
                                     'No implementation services required',
-                                    'Scales from 1 to 10,000 facilities',
+                                    'Scales from 1 to 1,000 facilities',
                                     'Direct support channel based on plan and rollout scope',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-re-text-secondary">
@@ -683,7 +682,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We do NOT lock you in',
-                                    detail: 'Month-to-month billing. Export all your data anytime. Your data is yours.',
+                                    detail: 'Simple design-partner agreements — no multi-year lock-in. Export all your data anytime. Your data is yours.',
                                 },
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
@@ -725,7 +724,7 @@ HTTP 201
                             {
                                 emoji: '🚀',
                                 title: 'Founders & SMBs',
-                                detail: 'You need compliance but can\'t afford enterprise fees. $425/mo (billed annually) gets you live. Scale as you grow.',
+                                detail: 'You need compliance but can\'t afford enterprise fees. Founding Design Partner rates from $425/mo (billed annually) get you live. Scale as you grow.',
                             },
                             {
                                 emoji: '⚖️',
@@ -755,7 +754,7 @@ HTTP 201
                         Ready to Get Compliant?
                     </h2>
                     <p className="text-re-text-secondary text-lg mb-8 max-w-2xl mx-auto">
-                        Sign up in minutes. Start with the onboarding path that fits your team. No long-term contracts.
+                        Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements — no multi-year lock-in.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Button asChild size="lg" className="bg-re-info hover:bg-re-info text-[var(--re-text-primary)]">

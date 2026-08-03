@@ -37,7 +37,7 @@ export default function FounderCredibility({ revealRef, visible }: FounderCredib
                         Christopher Sellers
                     </h3>
                     <p style={{ fontSize: 13, color: T.accent, fontWeight: 500, marginBottom: 16 }}>
-                        Founder & CEO, RegEngine
+                        Founder, RegEngine
                     </p>
                     <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.8, marginBottom: 16 }}>
                         Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
@@ -49,7 +49,7 @@ export default function FounderCredibility({ revealRef, visible }: FounderCredib
                         {[
                             { value: '10+', label: 'Years across compliance & policy' },
                             { value: 'FTL', label: 'Coverage across FDA Food Traceability List groupings' },
-                            { value: '< 24hr', label: 'Assessment turnaround' },
+                            { value: '1 business day', label: 'Assessment turnaround' },
                         ].map((stat, i) => (
                             <div key={i}>
                                 <p style={{ fontSize: 18, fontWeight: 700, color: T.heading, fontFamily: "'JetBrains Mono', monospace" }}>

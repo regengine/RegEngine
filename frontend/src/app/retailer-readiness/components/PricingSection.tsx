@@ -25,7 +25,7 @@ export default function PricingSection({ revealRef, visible }: PricingSectionPro
                     Simple, Transparent Pricing
                 </h2>
                 <p style={{ fontSize: 15, color: T.textMuted }}>
-                    Based on company size. No hidden fees. Cancel anytime.
+                    Based on facility count. No hidden fees. Founding Design Partner rates shown.
                 </p>
             </div>
 
