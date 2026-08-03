@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -29,7 +28,6 @@ import {
   Package,
   Search,
   Users,
-  XCircle,
 } from 'lucide-react';
 
 interface Entity {
@@ -313,18 +311,6 @@ export default function IdentityResolutionPage() {
                               </div>
                             </div>
                           </div>
-                          {isPending && (
-                            <div className="flex flex-col gap-1">
-                              <Button size="sm" variant="outline" className="text-xs h-7">
-                                <CheckCircle className="h-3 w-3 mr-1 text-re-success" />
-                                Match
-                              </Button>
-                              <Button size="sm" variant="outline" className="text-xs h-7">
-                                <XCircle className="h-3 w-3 mr-1 text-re-danger" />
-                                Distinct
-                              </Button>
-                            </div>
-                          )}
                           {!isPending && (
                             <Badge variant="outline" className="text-xs">
                               {review.status?.replace(/_/g, ' ')}

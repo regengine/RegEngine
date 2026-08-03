@@ -95,8 +95,8 @@ export default function FoodLogiQCompare() {
             Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds. No signup required.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/#sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              Try the Sandbox <ArrowRight className="w-4 h-4" />
+            <Link href="/demo" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+              Explore the interactive demo <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">
               See Pricing

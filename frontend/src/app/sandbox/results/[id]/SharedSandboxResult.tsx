@@ -104,7 +104,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
             </span>
           </div>
           <Link
-            href="/#sandbox"
+            href="/demo"
             className="text-[0.75rem] text-[var(--re-brand)] hover:underline"
           >
             Try your own data &rarr;
@@ -338,7 +338,7 @@ export function SharedSandboxResult({ result, shareId }: { result: SandboxResult
                 Ready to turn this diagnosis into an operational test run?
               </p>
               <Link
-                href="/#sandbox"
+                href="/demo"
                 className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2 rounded-lg text-[0.8rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)]"
               >
                 Try Your Own Data

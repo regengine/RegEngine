@@ -103,9 +103,11 @@ export default function FSMA204AssessmentPage() {
                                 <p className="text-sm text-muted-foreground mb-4">
                                     Learn which foods are covered by FSMA 204 traceability requirements.
                                 </p>
-                                <Button variant="outline" size="sm" className="w-full">
-                                    View FTL Categories
-                                </Button>
+                                <Link href="/tools/ftl-checker">
+                                    <Button variant="outline" size="sm" className="w-full">
+                                        View FTL Categories
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
                         <Card>
@@ -114,9 +116,11 @@ export default function FSMA204AssessmentPage() {
                                 <p className="text-sm text-muted-foreground mb-4">
                                     Critical Tracking Events and Key Data Elements explained.
                                 </p>
-                                <Button variant="outline" size="sm" className="w-full">
-                                    View Reference Guide
-                                </Button>
+                                <Link href="/docs/fsma-204">
+                                    <Button variant="outline" size="sm" className="w-full">
+                                        View Reference Guide
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
                         <Card>
@@ -125,7 +129,7 @@ export default function FSMA204AssessmentPage() {
                                 <p className="text-sm text-muted-foreground mb-4">
                                     Test your 24-hour FDA response capability with a simulation.
                                 </p>
-                                <Link href="/fsma">
+                                <Link href="/tools/drill-simulator">
                                     <Button variant="outline" size="sm" className="w-full">
                                         Start Drill
                                     </Button>

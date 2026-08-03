@@ -390,8 +390,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {demoMode && (
                 <div className="bg-re-warning-muted0/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
                     <span>Sandbox mode — using sample data for demonstration.</span>
-                    <Link href="/dashboard/settings" className="underline hover:no-underline">
-                        Disable in Settings
+                    <Link href="/ingest" className="underline hover:no-underline">
+                        Connect real data to exit sample mode
                     </Link>
                 </div>
             )}
