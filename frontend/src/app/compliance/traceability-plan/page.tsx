@@ -192,7 +192,7 @@ export default function TraceabilityPlanPage() {
                 <div>
                   <h1 className="text-3xl font-bold">Traceability Plan Generated</h1>
                   <p className="text-muted-foreground">
-                    {firmData.firm_name} &mdash; FSMA 204 Compliant
+                    {firmData.firm_name} &mdash; FSMA 204 Traceability Plan
                   </p>
                 </div>
               </div>

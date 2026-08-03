@@ -74,7 +74,7 @@ export default function FoodLogiQCompare() {
           ))}
         </div>
 
-        {/* Why teams switch */}
+        {/* Why choose RegEngine */}
         <h2 className="text-xl font-bold mb-6">Why you might choose RegEngine over FoodLogiQ</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
