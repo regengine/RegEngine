@@ -52,9 +52,6 @@ const INFLOW_CONNECTOR = CAPABILITY_REGISTRY.find((item) => item.id === 'inflow-
 
 const INFLOW_FACTS = [
     ['Public slug', 'inflow-lab'],
-    ['Backend id', 'inflow_lab'],
-    ['Repository', 'regengine/inflow-lab'],
-    ['Contract CI', 'Live ingest replay'],
 ];
 
 const INFLOW_PATH = [
@@ -215,7 +212,7 @@ export default function DashboardIntegrationsPage() {
                 if (!cancelled) {
                     setProfiles([]);
                     setProfilesStatus('error');
-                    setProfileError('Unable to load saved integration profiles for this tenant.');
+                    setProfileError('Unable to load saved integration profiles for this workspace.');
                 }
             }
         }
@@ -260,7 +257,7 @@ export default function DashboardIntegrationsPage() {
             setSupplierName('');
             setProfileNotes('');
         } catch {
-            setProfileError('Unable to save the integration profile. Check tenant access and try again.');
+            setProfileError('Unable to save the integration profile. Check workspace access and try again.');
         } finally {
             setSavingProfile(false);
         }
@@ -379,7 +376,7 @@ export default function DashboardIntegrationsPage() {
 
                         {!isAuthenticated && (
                             <div className={styles.warningBox}>
-                                Sign in to create tenant-scoped supplier profiles and attach them to portal invites.
+                                Sign in to create workspace-scoped supplier profiles and attach them to portal invites.
                             </div>
                         )}
                         {profileError && <div className={styles.errorBox}>{profileError}</div>}
@@ -485,12 +482,12 @@ export default function DashboardIntegrationsPage() {
                             <div className={styles.profileListPanel}>
                                 <div className={styles.pathHeader}>
                                     <div>
-                                        <h3 className={styles.pathTitle}>Tenant profiles</h3>
+                                        <h3 className={styles.pathTitle}>Workspace profiles</h3>
                                         <p className={styles.muted}>Attach one when you invite a supplier from Supplier Management.</p>
                                     </div>
                                     <span className={styles.verifiedBadge}>
                                         <ShieldCheck className={styles.badgeIcon} />
-                                        Tenant-scoped
+                                        Workspace-scoped
                                     </span>
                                 </div>
 
@@ -743,7 +740,7 @@ export default function DashboardIntegrationsPage() {
                         )}
                         {status === 'error' && (
                             <div className={styles.errorBox}>
-                                The mapping review contract route did not respond. Public status copy still renders from the shared registry above.
+                                Mapping review is temporarily unavailable. Connector statuses above are still current.
                             </div>
                         )}
                         <div className={styles.infoBox}>

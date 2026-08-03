@@ -50,7 +50,7 @@ describe('ScanPage', () => {
     it('scopes shared capture links to the active dashboard tenant', () => {
         render(<ScanPage />);
 
-        expect(screen.getByText('Shared capture links stay scoped to tenant tenant-123.')).toBeInTheDocument();
+        expect(screen.getByText('Shared capture links stay scoped to workspace tenant-123.')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: /open scanner in new tab/i })).toHaveAttribute(
             'href',
             '/fsma/field-capture?tenant_id=tenant-123',

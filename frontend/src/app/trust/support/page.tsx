@@ -37,7 +37,7 @@ const ESCALATION_PATH = [
         title: 'Self-serve documentation',
         description: 'FSMA 204 Guide, API docs, FTL Checker, and compliance dashboard. Most operational questions are answered here without waiting for a human.',
         icon: LifeBuoy,
-        color: 'bg-re-info-muted0/15 text-re-info',
+        color: 'bg-re-info/15 text-re-info',
         availability: 'Always available',
     },
     {
@@ -52,7 +52,7 @@ const ESCALATION_PATH = [
         step: '3',
         title: 'Priority queue',
         description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',        icon: Zap,
-        color: 'bg-re-warning-muted0/15 text-re-warning',
+        color: 'bg-re-warning/15 text-re-warning',
         availability: 'Standard and Premium',
     },
     {
@@ -60,7 +60,7 @@ const ESCALATION_PATH = [
         title: 'Recall-response coordination',
         description: 'Customers with a recall-response addendum receive coordinated support on data exports and evidence packaging during active FDA investigations or live recall events, per the terms of that agreement. RegEngine does not own recall timeline management.',
         icon: Siren,
-        color: 'bg-re-danger-muted0/15 text-re-danger',
+        color: 'bg-re-danger/15 text-re-danger',
         availability: 'Per contract',
     },
 ];
@@ -168,9 +168,9 @@ export default function SupportPage() {
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response — your recall-readiness plan owns that.
                     </p>
-                    <div className={`${card} p-6 border-re-danger/20 bg-re-danger-muted0/[0.02]`}>
+                    <div className={`${card} p-6 border-re-danger/20 bg-re-danger/[0.02]`}>
                         <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-re-danger-muted0/15 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-re-danger/15 flex items-center justify-center flex-shrink-0">
                                 <ShieldAlert className="h-5 w-5 text-re-danger" />
                             </div>
                             <div>
@@ -186,7 +186,7 @@ export default function SupportPage() {
                     </div>
                     <div className={`${card} p-6 mt-3`}>
                         <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-re-warning-muted0/15 flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-re-warning/15 flex items-center justify-center flex-shrink-0">
                                 <AlertTriangle className="h-5 w-5 text-re-warning" />
                             </div>
                             <div>
@@ -213,7 +213,7 @@ export default function SupportPage() {
                                 {group.items.map((item, i) => (
                                     <li key={i} className="flex items-start gap-2 text-sm text-[var(--re-text-muted)]">
                                         <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                                            group.title.includes('not') ? 'bg-re-danger-muted0/50' : 'bg-re-brand/50'
+                                            group.title.includes('not') ? 'bg-re-danger/50' : 'bg-re-brand/50'
                                         }`} />
                                         {item}
                                     </li>

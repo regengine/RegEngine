@@ -279,7 +279,7 @@ function CurationDashboardContent() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
                             <CardContent className="pt-6 flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-re-info-muted0/10">
+                                <div className="p-2 rounded-lg bg-re-info/10">
                                     <Clock className="h-5 w-5 text-re-info" />
                                 </div>
                                 <div>
@@ -290,11 +290,11 @@ function CurationDashboardContent() {
                         </Card>
                         <Card className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-800">
                             <CardContent className="pt-6 flex items-center gap-4">
-                                <div className="p-2 rounded-lg bg-re-warning-muted0/10">
+                                <div className="p-2 rounded-lg bg-re-warning/10">
                                     <AlertTriangle className="h-5 w-5 text-re-warning" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-slate-500">High Risk Domains</p>
+                                    <p className="text-sm font-medium text-slate-500">Unique Source Domains</p>
                                     <p className="text-2xl font-bold">
                                         {new Set(items.map(i => {
                                             try { return new URL(i.url).hostname; }

@@ -291,7 +291,7 @@ export default function PasswordlessEntryClient() {
               }}
             >
               <Fingerprint className="h-4 w-4" aria-hidden="true" />
-              Sign in with Passkey
+              Sign in with passkey
             </Button>
 
             {showPasskeyPrompt && (
@@ -316,7 +316,7 @@ export default function PasswordlessEntryClient() {
                     </>
                   ) : (
                     <>
-                      Use Passkey
+                      Sign in with passkey
                       <Fingerprint className="h-4 w-4" aria-hidden="true" />
                     </>
                   )}

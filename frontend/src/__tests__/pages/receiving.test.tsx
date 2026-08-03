@@ -63,7 +63,7 @@ describe('ReceivingDockPage', () => {
         render(<ReceivingDockPage />);
 
         fireEvent.click(screen.getByRole('button', { name: /load sample po/i }));
-        fireEvent.click(screen.getByRole('button', { name: /add item/i }));
+        fireEvent.click(screen.getByRole('button', { name: /add expected item/i }));
         fireEvent.change(screen.getByPlaceholderText('Barcode / GTIN'), {
             target: { value: '01234567' },
         });
@@ -144,7 +144,7 @@ describe('ReceivingDockPage', () => {
         render(<ReceivingDockPage />);
 
         fireEvent.click(screen.getByRole('button', { name: /load sample po/i }));
-        fireEvent.click(screen.getByRole('button', { name: /add item/i }));
+        fireEvent.click(screen.getByRole('button', { name: /add expected item/i }));
         fireEvent.change(screen.getByPlaceholderText('Barcode / GTIN'), {
             target: { value: '01234567' },
         });

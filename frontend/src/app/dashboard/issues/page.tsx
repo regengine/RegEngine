@@ -168,7 +168,7 @@ export default function IssuesPage() {
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
                             <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-warning" />
-                            Issues & Blockers
+                            Issues
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             Everything preventing compliant submission — fix these first.

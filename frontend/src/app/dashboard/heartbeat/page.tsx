@@ -103,10 +103,10 @@ function scoreRingTrack(score: number): string {
 function severityConfig(severity: string) {
     const map: Record<string, { bg: string; border: string; text: string; dot: string }> = {
         critical: {
-            bg: 'bg-re-danger-muted0/10',
+            bg: 'bg-re-danger/10',
             border: 'border-l-red-500',
             text: 'text-re-danger',
-            dot: 'bg-re-danger-muted0',
+            dot: 'bg-re-danger',
         },
         high: {
             bg: 'bg-orange-500/10',
@@ -121,10 +121,10 @@ function severityConfig(severity: string) {
             dot: 'bg-re-warning',
         },
         low: {
-            bg: 'bg-re-info-muted0/10',
+            bg: 'bg-re-info/10',
             border: 'border-l-blue-500',
             text: 'text-re-info',
-            dot: 'bg-re-info-muted0',
+            dot: 'bg-re-info',
         },
     };
     return map[severity] || map.low;
@@ -215,7 +215,7 @@ function BreakdownBar({ label, value, detail, delay = 0 }: { label: string; valu
                     : 'from-red-500 to-red-400';
 
     const dotColor =
-        value >= 80 ? 'bg-re-brand' : value >= 60 ? 'bg-re-warning' : value >= 40 ? 'bg-orange-500' : 'bg-re-danger-muted0';
+        value >= 80 ? 'bg-re-brand' : value >= 60 ? 'bg-re-warning' : value >= 40 ? 'bg-orange-500' : 'bg-re-danger';
 
     return (
         <motion.div
@@ -258,7 +258,7 @@ function StatusRow({ icon: Icon, label, value, status }: {
 }) {
     const statusColors = {
         good: 'bg-re-brand-muted border-re-brand/20',
-        warn: 'bg-re-warning-muted0/10 border-re-warning/20',
+        warn: 'bg-re-warning/10 border-re-warning/20',
         neutral: 'bg-muted/30 border-transparent',
     };
     const iconColors = {
@@ -368,13 +368,15 @@ export default function HeartbeatPage() {
             if (scoreData.status === 'fulfilled') {
                 compliance = scoreData.value as ComplianceData;
             } else {
-                errors.push(`Compliance score: ${scoreData.reason?.message || 'Failed to load'}`);
+                console.error('Compliance score fetch failed:', scoreData.reason);
+                errors.push("Couldn't load your compliance score");
             }
             if (alertsData.status === 'fulfilled') {
                 const raw = alertsData.value as Alert[] | { alerts: Alert[] };
                 alerts = Array.isArray(raw) ? raw : raw?.alerts ?? [];
             } else {
-                errors.push(`Alerts: ${alertsData.reason?.message || 'Failed to load'}`);
+                console.error('Alerts fetch failed:', alertsData.reason);
+                errors.push("Couldn't load alerts");
             }
 
             // If both calls failed, throw so react-query surfaces the error
@@ -494,7 +496,7 @@ export default function HeartbeatPage() {
                                         animate={{ opacity: 1, height: 'auto' }}
                                         exit={{ opacity: 0, height: 0 }}
                                     >
-                                        <Card className="border-re-danger/30 bg-re-danger-muted0/5">
+                                        <Card className="border-re-danger/30 bg-re-danger/5">
                                             <CardContent className="py-3">
                                                 <div className="flex items-center gap-2 text-re-danger">
                                                     <XCircle className="h-4 w-4 flex-shrink-0" />
@@ -517,7 +519,7 @@ export default function HeartbeatPage() {
                                             <p className="text-base font-medium mb-1">No heartbeat data available</p>
                                             <p className="text-sm text-muted-foreground/60 max-w-md">
                                                 This workspace does not yet have enough connected evidence to render the heartbeat view.
-                                                Import traceability events or contact support if you expected tenant data to appear here.
+                                                Import traceability events or contact support if you expected workspace data to appear here.
                                             </p>
                                             <div className="flex gap-3 mt-5">
                                                 <Link href="/ingest">
@@ -537,10 +539,10 @@ export default function HeartbeatPage() {
                             )}
 
                             {heartbeatError && !compliance && !showEmptyState && (
-                                <Card className="border-re-danger/30 bg-re-danger-muted0/5">
+                                <Card className="border-re-danger/30 bg-re-danger/5">
                                     <CardContent className="py-16">
                                         <div className="flex flex-col items-center text-center">
-                                            <div className="w-16 h-16 rounded-2xl bg-re-danger-muted0/10 flex items-center justify-center mb-4">
+                                            <div className="w-16 h-16 rounded-2xl bg-re-danger/10 flex items-center justify-center mb-4">
                                                 <XCircle className="h-8 w-8 text-re-danger opacity-60" />
                                             </div>
                                             <p className="text-base font-medium text-re-danger mb-1">Unable to load heartbeat data</p>
@@ -719,7 +721,7 @@ export default function HeartbeatPage() {
                                                 <AlertTriangle className="h-4 w-4 text-re-warning" />
                                                 Recent Alerts
                                                 {criticalAlerts.length > 0 && (
-                                                    <Badge className="text-[10px] px-1.5 py-0 bg-re-danger-muted0/15 text-re-danger border-re-danger/20 ml-1">
+                                                    <Badge className="text-[10px] px-1.5 py-0 bg-re-danger/15 text-re-danger border-re-danger/20 ml-1">
                                                         {criticalAlerts.length} urgent
                                                     </Badge>
                                                 )}
@@ -789,10 +791,10 @@ export default function HeartbeatPage() {
                                                     >
                                                         <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-bold flex-shrink-0 mt-0.5 ${
                                                             action.priority === 'HIGH'
-                                                                ? 'bg-re-danger-muted0/15 text-re-danger'
+                                                                ? 'bg-re-danger/15 text-re-danger'
                                                                 : action.priority === 'MEDIUM'
                                                                     ? 'bg-re-warning/15 text-re-warning'
-                                                                    : 'bg-re-info-muted0/15 text-re-info'
+                                                                    : 'bg-re-info/15 text-re-info'
                                                         }`}>
                                                             {i + 1}
                                                         </span>
@@ -826,9 +828,9 @@ export default function HeartbeatPage() {
                             >
                                 {[
                                     { label: 'Full Dashboard', href: '/dashboard', icon: BarChart3 },
-                                    { label: 'Import Data', href: '/tools/data-import', icon: Upload },
+                                    { label: 'Import Data', href: '/ingest', icon: Upload },
                                     { label: 'Audit Log', href: '/dashboard/audit-log', icon: FileText },
-                                    { label: 'Mock Drill', href: '/dashboard/recall-drills', icon: ShieldCheck },
+                                    { label: 'Recall Drill', href: '/dashboard/recall-drills', icon: ShieldCheck },
                                 ].map(link => {
                                     const LinkIcon = link.icon;
                                     return (

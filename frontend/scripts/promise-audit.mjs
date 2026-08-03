@@ -17,6 +17,20 @@ const BANNED_SOURCE_PATTERNS = [
   { label: 'Overclaim: 14-day free trial', pattern: /14-day free trial/g },
   { label: 'Overclaim: Get API Access', pattern: /Get API Access/g },
   { label: 'Overclaim: community Slack', pattern: /community Slack/g },
+  // Copy-remediation program 2026-08 (see COPY_AUDIT.md) — keep these dead:
+  { label: 'Placeholder API host', pattern: /your-preview-host/g },
+  { label: 'Fabricated evidence: customer interviews', pattern: /customer interviews/g },
+  { label: 'Implied customers: Why teams switch', pattern: /Why teams switch/g },
+  { label: 'Implied third parties: we have identified', pattern: /we have identified/g },
+  { label: 'Legal verdict: FSMA 204 Compliant', pattern: /FSMA 204 Compliant/g },
+  { label: 'Overclaim: tamper-proof', pattern: /[Tt]amper-proof/g },
+  { label: 'Overclaim: unbreakable', pattern: /unbreakable/g },
+  { label: 'Fake verification: Integrity Status: VERIFIED', pattern: /Integrity Status: VERIFIED/g },
+  { label: 'Password-auth copy', pattern: /Create Password|Confirm Password|Reset your password/g },
+  { label: 'Dead anchor: /#sandbox', pattern: /\/#sandbox/g },
+  { label: 'Invented uptime stat', pattern: /uptime_percent/g },
+  { label: 'Stale version promise: Coming in v1.1', pattern: /Coming in v1\.1/g },
+  { label: 'Fake audit actor: dashboard_user', pattern: /dashboard_user/g },
 ];
 
 const SOURCE_GLOBS = [

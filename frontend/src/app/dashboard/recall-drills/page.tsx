@@ -96,7 +96,7 @@ export default function RecallDrillsPage() {
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
                             <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Recall Drill Workspace
+                            Recall Drills
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Run customer lots through the current drill contract, capture elapsed time, and review generated export artifacts before a regulator or retailer request.
@@ -113,7 +113,7 @@ export default function RecallDrillsPage() {
                 </div>
 
                 {notConnected && (
-                    <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
+                    <div className="rounded-xl border border-re-warning/20 bg-re-warning/[0.06] p-4 text-sm text-re-warning flex items-start gap-3">
                         <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-re-warning" />
                         <span>
                             Automated drill scheduling is still in development. You can run a full manual drill today: open Requests, create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit.
@@ -198,7 +198,7 @@ export default function RecallDrillsPage() {
                                     <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)]" /> {run.artifacts.join(', ')}</span>
                                 </div>
                                 {run.warnings.length > 0 && (
-                                    <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning-muted0/10 p-3 text-sm text-re-warning">
+                                    <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning/10 p-3 text-sm text-re-warning">
                                         {run.warnings.join(' · ')}
                                     </div>
                                 )}
@@ -219,7 +219,7 @@ export default function RecallDrillsPage() {
                             </div>
                         )}
                         {status === 'error' && (
-                            <div className="rounded-xl border border-re-warning/20 bg-re-warning-muted0/10 p-4 text-sm text-re-warning">
+                            <div className="rounded-xl border border-re-warning/20 bg-re-warning/10 p-4 text-sm text-re-warning">
                                 {startDrillMutation.error?.message ?? 'Could not start the drill. Please check your inputs and try again.'}
                             </div>
                         )}

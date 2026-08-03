@@ -114,7 +114,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'QA Health', href: '/dashboard/qa-health', icon: ShieldAlert, sysadminOnly: true },
             { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
             { label: 'Readiness', href: '/fsma', icon: ShieldCheck, experimental: true },
-            { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },
+            { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
             { label: 'Controls', href: '/compliance/profile', icon: FileText },
         ],
     },
@@ -491,7 +491,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <Zap className="h-3 w-3 text-[var(--re-brand)]" />
                             </div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Tenant, team, and billing controls</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">Workspace and billing settings</div>
                     </Link>
                     <div className="flex items-center gap-2 mt-2">
                         <Link
