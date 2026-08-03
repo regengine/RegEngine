@@ -114,12 +114,24 @@ regression tests assert it.
   refuses the update with an error log instead of assuming `0` (which
   let a stale `active` overwrite `canceled`).
 
-## Deferred (still open under #2699's area)
+## Follow-up fixes (#2715, closing #2711)
 
-* `services/ingestion/app/authz.py` module-level auth-failure dict: never
-  migrated to `BruteForceLimiter` (#1392 did the admin key); needs its
-  own migration PR.
-* slowapi decorators (e.g. the 1/day GDPR export limit) still bind to
-  whatever storage existed at import; a readiness check asserting
-  Redis-backed rate limiting in prod remains open.
-* Public sandbox share limit dict (unbounded growth, low).
+* `services/ingestion/app/authz.py` ingestion auth-failure block:
+  migrated from the module-level dict to `shared.rate_limit.
+  BruteForceLimiter` (the #1392 admin-key pattern) — Redis-backed when
+  available, honors `RATE_LIMIT_FAIL_MODE` on Redis uncertainty, falls
+  back to a per-process counter with the standard activation warning.
+* slowapi storage: resolution order is `RATE_LIMIT_STORAGE_URI` →
+  `REGENGINE_REDIS_URL` → `REDIS_URL` → `memory://`, and `/readiness`
+  now reports the live backend via `slowapi_storage_backend()` —
+  production running on `memory://` flags `rate_limiter: error` in the
+  readiness payload (degraded-200, never a 503).
+* Public sandbox share limit: stale-bucket eviction
+  (`_evict_stale_share_buckets`) caps the module-level dict at 10k keys.
+* Kafka producer (same PR, tracked in the inventory): send futures carry
+  errbacks; `emit_fsma_batch` reconciles async delivery failures after
+  flush, so enqueue success is no longer reported as delivery success.
+
+## Deferred
+
+Nothing currently deferred under #2699's area (as of #2715, 2026-08-02).
