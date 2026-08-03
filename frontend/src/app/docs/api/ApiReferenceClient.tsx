@@ -31,7 +31,7 @@ interface Endpoint {
 }
 
 // API Endpoint Documentation
-const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{ className?: string }>; description: string; endpoints: Endpoint[] }[] = [
+const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{ className?: string }>; description: string; provisioned?: boolean; endpoints: Endpoint[] }[] = [
     {
         name: 'Webhook Ingestion API',
         baseUrl: '/api/v1/webhooks',
@@ -105,6 +105,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         baseUrl: '/v1/fsma',
         icon: Leaf,
         description: 'Supply chain tracing, mock recalls, and FDA 24-hour exports',
+        provisioned: true,
         endpoints: [
             {
                 method: 'GET',
@@ -408,9 +409,17 @@ export function ApiReferenceClient() {
                                         Base URL: {API_SERVICES[selectedService].baseUrl}
                                     </Badge>
                                     <Badge variant="outline" className="font-mono">
-                                        regengine.co
+                                        {API_SERVICES[selectedService].provisioned ? 'provisioned endpoint' : 'regengine.co'}
                                     </Badge>
                                 </div>
+                                {API_SERVICES[selectedService].provisioned && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Available on contracted workspaces. These endpoints are served from your
+                                        workspace&apos;s provisioned endpoint URL (supplied during onboarding), not the
+                                        public regengine.co base URL. Webhook ingestion above is the publicly
+                                        reachable surface.
+                                    </p>
+                                )}
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {API_SERVICES[selectedService].endpoints.map((endpoint, i) => (
@@ -459,11 +468,11 @@ export function ApiReferenceClient() {
                                 </div>
                                 <div className="bg-white dark:bg-re-surface-base rounded p-3">
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Records</h4>
-                                    <CodeBlock code={`# First page
-GET /api/v1/records?limit=20
+                                    <CodeBlock code={`# First page (any paginated endpoint)
+GET <endpoint>?limit=20
 
 # Next page
-GET /api/v1/records?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
+GET <endpoint>?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
                                 </div>
                             </div>
                         </CardContent>
