@@ -43,10 +43,6 @@ const EXAMPLE_URLS = [
     label: 'FDA Regulations (21 CFR)',
     url: 'https://www.ecfr.gov/api/versioner/v1/full/2024-01-01/title-21.xml?chapter=I&subchapter=A&part=1',
   },
-  {
-    label: 'SEC Regulations',
-    url: 'https://www.sec.gov/rules/final/2023/33-11216.pdf',
-  },
 ];
 
 const STATUS_STEPS = [
@@ -405,7 +401,7 @@ export default function IngestPage() {
                   <div>
                     <CardTitle>Ingest New Document</CardTitle>
                     <CardDescription className="mt-1.5 max-w-[500px]">
-                      Provide a URL to a regulatory document. Our system will fetch, normalize, and extract regulatory entities with 100% unbreakable provenance linking.
+                      Provide a URL to a regulatory document. Our system will fetch, normalize, and extract regulatory entities with SHA-256 provenance manifests for every extraction.
                     </CardDescription>
                   </div>
                   <div className="flex gap-3 pt-1">
@@ -547,6 +543,14 @@ export default function IngestPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mt-6"
                   >
+                    {jobId === 'demo-job-123' && (
+                      <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
+                        <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
+                        <p className="text-sm font-medium text-re-warning dark:text-re-warning">
+                          Simulated walkthrough — sample output
+                        </p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="h-5 w-5 text-re-brand" />
@@ -578,6 +582,14 @@ export default function IngestPage() {
 
                 {jobId && (
                   <div className="mt-6 p-4 rounded-lg border bg-muted/40">
+                    {jobId === 'demo-job-123' && (
+                      <div className="mb-4 flex items-center gap-2 rounded-lg border border-re-warning bg-re-warning-muted dark:bg-re-warning/20 px-3 py-2">
+                        <AlertTriangle className="h-4 w-4 text-re-warning dark:text-re-warning" />
+                        <p className="text-sm font-medium text-re-warning dark:text-re-warning">
+                          Simulated walkthrough — sample output
+                        </p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-sm font-semibold">Ingestion Progress</p>
                       <Badge variant="secondary">Job {jobId}</Badge>
@@ -651,7 +663,7 @@ export default function IngestPage() {
                         <ul className="text-sm text-re-danger dark:text-re-danger list-disc list-inside">
                           <li>Invalid or expired API key</li>
                           <li>URL is not publicly accessible</li>
-                          <li>Document format not supported (use PDF, HTML, or JSON)</li>
+                          <li>Document format not supported (see the Supported Document Formats list below)</li>
                         </ul>
                       </div>
                     </div>
@@ -707,7 +719,7 @@ export default function IngestPage() {
                 <Badge variant="outline">EDI (X12/EDIFACT)</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-3">
-                Documents must be publicly accessible via URL. For private documents, use the API directly with file upload.
+                URL ingestion requires the document to be publicly accessible. For private documents, use the File Upload tab above.
               </p>
             </CardContent>
           </Card>

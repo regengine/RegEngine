@@ -66,24 +66,10 @@ export default function AnalysisResultClient() {
                     <p className="text-muted-foreground">Document ID: <code className="bg-muted p-1 rounded">{data.document_id}</code></p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => window.print()}
-                        className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2"
-                    >
-                        <Shield className="mr-2 h-4 w-4" /> Export Signed Report
-                    </button>
                     <Badge variant={data.risk_score > 50 ? 'destructive' : 'default'} className="text-lg px-4 py-2">
                         Risk Score: {data.risk_score}/100
                     </Badge>
                 </div>
-            </div>
-
-            {/* Print Header (Only visible when printing) */}
-            <div className="hidden print:block mb-8 border-b pb-4">
-                <h1 className="text-2xl font-bold">RegEngine Compliance Audit Report</h1>
-                <p className="text-sm text-re-text-muted">Generated: {new Date().toLocaleString()}</p>
-                <p className="text-sm text-re-text-muted">Document ID: {data.document_id}</p>
-                <p className="text-sm font-bold mt-2">Integrity Status: VERIFIED</p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 print:grid-cols-1">
@@ -93,6 +79,9 @@ export default function AnalysisResultClient() {
                             <Shield className="h-5 w-5 text-re-info" />
                             Cryptographic Timeline
                         </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                            Simulated example — not a verification record
+                        </p>
                     </CardHeader>
                     <CardContent>
                         <div className="relative border-l-2 border-muted ml-3 space-y-8 py-2">
