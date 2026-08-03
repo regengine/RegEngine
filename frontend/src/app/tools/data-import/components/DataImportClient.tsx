@@ -63,7 +63,7 @@ const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \
 
 // Synthetic FSMA 204 traceability dataset — mirrors test_data/regengine_test_traceability.csv
 const SAMPLE_EVENTS = [
-    { event_type: 'CREATION',       event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
+    { event_type: 'HARVESTING',     event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
     { event_type: 'RECEIVING',      event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Salinas Cold Storage, Salinas, CA',           product_description: 'Romaine Lettuce', gtin: '09524000059109' },
     { event_type: 'INITIAL_PACKING',event_date: '2026-03-11', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
     { event_type: 'SHIPPING',       event_date: '2026-03-12', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
@@ -173,7 +173,7 @@ export function DataImportClient() {
 
         // Map sample events to webhook format
         const CTE_MAP: Record<string, string> = {
-            CREATION: 'harvesting', RECEIVING: 'receiving',
+            HARVESTING: 'harvesting', RECEIVING: 'receiving',
             INITIAL_PACKING: 'initial_packing', SHIPPING: 'shipping',
         };
 

@@ -9,13 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
+import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
 
 export default function FSMA204AssessmentPage() {
-    // Calculate days until compliance deadline (July 2028)
-    const deadline = new Date('2028-07-01');
+    // Calculate days until FDA enforcement of the Food Traceability Rule begins
+    const enforcementDate = new Date(FSMA_ENFORCEMENT_DATE);
     const today = new Date();
-    const daysUntilDeadline = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const monthsUntilDeadline = Math.floor(daysUntilDeadline / 30);
+    const daysUntilEnforcement = Math.ceil((enforcementDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const monthsUntilEnforcement = Math.floor(daysUntilEnforcement / 30);
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -47,16 +48,16 @@ export default function FSMA204AssessmentPage() {
                             </div>
                         </div>
 
-                        {/* Deadline Countdown */}
+                        {/* Enforcement Countdown */}
                         <Card className="border-primary/30 bg-primary/5">
                             <CardContent className="py-3 px-4">
                                 <div className="flex items-center gap-3">
                                     <Calendar className="h-5 w-5 text-primary" />
                                     <div>
-                                        <p className="text-sm font-medium">Compliance Deadline</p>
+                                        <p className="text-sm font-medium">FDA enforcement horizon</p>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-lg font-bold text-primary">{monthsUntilDeadline} months</span>
-                                            <Badge variant="outline" className="text-xs">July 2028</Badge>
+                                            <span className="text-lg font-bold text-primary">{monthsUntilEnforcement} months</span>
+                                            <Badge variant="outline" className="text-xs">{FSMA_ENFORCEMENT_DATE}</Badge>
                                         </div>
                                     </div>
                                 </div>
@@ -82,6 +83,9 @@ export default function FSMA204AssessmentPage() {
                                         This assessment evaluates your organization&apos;s readiness for FDA FSMA Section 204
                                         Food Traceability requirements. Answer questions about your products, operations,
                                         and current traceability practices to receive a personalized readiness score.
+                                    </p>
+                                    <p className="text-sm text-muted-foreground mt-2">
+                                        {FSMA_ENFORCEMENT_FRAMING}
                                     </p>
                                 </div>
                             </div>
