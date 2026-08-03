@@ -44,17 +44,13 @@ export default function AuthenticationDocsPage() {
                                 </p>
                             </div>
 
-                            {/* Key Types */}
+                            {/* Key Format */}
                             <div className="mt-6">
-                                <h4 className="font-semibold mb-3">Key Types</h4>
+                                <h4 className="font-semibold mb-3">Key Format</h4>
                                 <div className="grid gap-3">
                                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                                         <code className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-bold">rge_live_</code>
-                                        <span className="text-sm">Production key — access to your production tenant data</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                                        <code className="bg-orange-500/10 text-orange-600 px-2 py-1 rounded text-xs font-bold">rge_test_</code>
-                                        <span className="text-sm">Test key — non-production testing environment, no production tenant data</span>
+                                        <span className="text-sm">Every API key starts with this prefix and is scoped to your tenant. There is no separate test-key environment.</span>
                                     </div>
                                 </div>
                             </div>
@@ -65,11 +61,7 @@ export default function AuthenticationDocsPage() {
                                 <div className="space-y-3 text-sm">
                                     <div className="flex gap-3">
                                         <div className="w-24 font-medium text-muted-foreground">Create</div>
-                                        <div>Generate keys from the dashboard. You can create up to 5 keys per environment.</div>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <div className="w-24 font-medium text-muted-foreground">Rotate</div>
-                                        <div>Rotate keys every 90 days. The old key remains valid for 24 hours after rotation.</div>
+                                        <div>Generate keys from the developer portal.</div>
                                     </div>
                                     <div className="flex gap-3">
                                         <div className="w-24 font-medium text-muted-foreground">Revoke</div>
@@ -81,13 +73,16 @@ export default function AuthenticationDocsPage() {
                             {/* Scopes */}
                             <div className="mt-6">
                                 <h4 className="font-semibold mb-3">Scopes</h4>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                    Keys carry scopes in a <code className="bg-muted px-1 py-0.5 rounded text-xs">resource.action</code> vocabulary.
+                                    The <code className="bg-muted px-1 py-0.5 rounded text-xs">.</code> and <code className="bg-muted px-1 py-0.5 rounded text-xs">:</code> separators
+                                    are equivalent — <code className="bg-muted px-1 py-0.5 rounded text-xs">records.read</code> and{' '}
+                                    <code className="bg-muted px-1 py-0.5 rounded text-xs">records:read</code> name the same scope. Examples:
+                                </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                                    <code className="bg-muted px-2 py-1 rounded">records:read</code>
-                                    <code className="bg-muted px-2 py-1 rounded">records:write</code>
-                                    <code className="bg-muted px-2 py-1 rounded">trace:read</code>
-                                    <code className="bg-muted px-2 py-1 rounded">exports:write</code>
-                                    <code className="bg-muted px-2 py-1 rounded">recall:read</code>
-                                    <code className="bg-muted px-2 py-1 rounded">recall:write</code>
+                                    <code className="bg-muted px-2 py-1 rounded">records.read</code>
+                                    <code className="bg-muted px-2 py-1 rounded">webhooks.ingest</code>
+                                    <code className="bg-muted px-2 py-1 rounded">fda.export</code>
                                 </div>
                             </div>
                         </CardContent>

@@ -189,6 +189,7 @@ export default function FSMA204GuidePage() {
                             <code>{`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",
