@@ -494,7 +494,7 @@ export default async function CTELandingPage({
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link
-              href="/sandbox"
+              href="/demo"
               className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
             >
               Try it now — free
