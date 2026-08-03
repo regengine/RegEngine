@@ -368,7 +368,7 @@ export default function FSMA204GuidePage() {
                         Supply Chain Tracing
                     </h2>
                     <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                        RegEngine uses a graph database to trace products forward and backward through your supply chain:
+                        RegEngine performs graph-based tracing over your event data to trace products forward and backward through your supply chain:
                     </p>
 
                     {/* Forward Trace */}
@@ -420,7 +420,6 @@ export default function FSMA204GuidePage() {
                         Ingested events are SHA-256 hashed and chain-linked, and export bundles ship with a
                         timestamped manifest. You can verify a downloaded bundle out-of-band via{' '}
                         <Link href="/verify" className="text-[var(--re-brand)] hover:underline">/verify</Link>.
-                        Strict downstream signature verification across the message bus is rolling out.
                     </p>
                 </section>
 

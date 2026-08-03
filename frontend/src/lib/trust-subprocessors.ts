@@ -13,8 +13,8 @@ export interface TrustSubprocessor {
 export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   {
     name: 'Supabase',
-    purpose: 'PostgreSQL database, authentication, and row-level policy enforcement for core workspace data. Authentication email (password reset, magic-link, and one-time code) is delivered via Resend SMTP where custom SMTP is configured.',
-    dataProcessed: 'Workspace records, user accounts, authentication metadata, and evidence ledger rows.',
+    purpose: 'Authentication for developer-portal accounts and a legacy session-validation path; stores developer-portal API-key records and pre-sales assessment leads. Core tenant workspace data is stored in PostgreSQL managed by Railway.',
+    dataProcessed: 'Developer-portal account records, API-key records, pre-sales assessment leads, and authentication metadata.',
     location: 'United States; project region per executed agreement/current DPA',
     link: 'https://supabase.com/privacy',
     availability: 'default',
@@ -22,8 +22,8 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   },
   {
     name: 'Railway',
-    purpose: 'Backend API hosting for RegEngine application services.',
-    dataProcessed: 'API requests, application logs, and workflow metadata.',
+    purpose: 'Platform hosting the RegEngine application and the core PostgreSQL database for tenant workspace data.',
+    dataProcessed: 'Workspace records, evidence ledger rows, API requests, application logs, and workflow metadata.',
     location: 'United States',
     link: 'https://railway.app/legal/privacy',
     availability: 'default',

@@ -2,7 +2,7 @@
 name = "regengine"
 version = "0.4.0"
 description = "RegEngine: The Regulatory Intelligence Platform"
-authors = [{ name = "RegEngine Engineering", email = "admin@regengine.io" }]
+authors = [{ name = "RegEngine Engineering", email = "admin@regengine.co" }]
 license = { text = "Proprietary" }
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
