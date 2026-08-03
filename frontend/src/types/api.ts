@@ -251,7 +251,6 @@ export interface InviteCreate {
 
 export interface AcceptInviteRequest {
     token: string;
-    password: string;
     name: string;
 }
 

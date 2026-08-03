@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowLeft, Clock, Fingerprint, Key, Loader2, Shield, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowLeft, Clock, Fingerprint, Key, Loader2, Shield, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -107,15 +107,9 @@ export default function SecuritySettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="border border-[var(--re-info-border)] bg-[var(--re-info-bg)] p-4 text-sm leading-6 text-[var(--re-text-secondary)]">
-              Password changes are no longer available because passwords are no longer accepted for sign-in.
+              You sign in with an email code or a passkey — there is no password to manage.
               Use a passkey when prompted for high-assurance routes.
             </div>
-            <Button asChild className="gap-2">
-              <Link href="/login">
-                <Smartphone className="h-4 w-4" aria-hidden="true" />
-                Manage sign-in from login
-              </Link>
-            </Button>
             <Button
               type="button"
               variant="outline"
