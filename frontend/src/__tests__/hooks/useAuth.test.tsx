@@ -763,6 +763,211 @@ describe('useAuth Hook', () => {
         });
     });
 
+    describe('Stale session cleanup (hydration)', () => {
+        const staleUser = {
+            id: 'stale-user',
+            email: 'stale@example.com',
+            is_sysadmin: false,
+            status: 'active',
+            role_name: 'member',
+        };
+
+        it('clears the localStorage-hydrated user when the session reports unauthenticated', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+            // Default beforeEach mock: GET /api/session → authenticated: false
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(apiClient.setUser).toHaveBeenLastCalledWith(null);
+        });
+
+        it('does not re-persist a session user echoed back from a stale re_user cookie', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+
+            // re_access_token expired but the non-httpOnly re_user cookie
+            // survived — the route echoes it back with authenticated: false.
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_admin_key: false,
+                            has_credentials: false,
+                            tenant_id: null,
+                            user: staleUser,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user).toBeNull();
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+        });
+
+        it('keeps the hydrated user when the session check fails with a network error', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session') &&
+                    (!options?.method || options.method === 'GET')) {
+                    return Promise.reject(new Error('network down'));
+                }
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user?.id).toBe('stale-user');
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+        });
+
+        it('keeps the hydrated user when the session check returns a non-2xx response', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session') &&
+                    (!options?.method || options.method === 'GET')) {
+                    return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+                }
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user?.id).toBe('stale-user');
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+        });
+
+        it('still clears a stale user on an admin-key-only session without dropping admin capability', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: false,
+                            has_api_key: false,
+                            has_admin_key: true,
+                            has_credentials: true,
+                            tenant_id: null,
+                            user: null,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user).toBeNull();
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(result.current.hasAdminSession).toBe(true);
+        });
+
+        it('does not wipe a login that completed while the hydrate session check was in flight', async () => {
+            const mockUser = {
+                id: 'fresh-user',
+                email: 'fresh@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'member',
+            };
+
+            // Pre-seed the CSRF cookie so login()'s setSessionCookies skips
+            // its bootstrap GET — the only GET is then the hydrate session
+            // check, which the test holds open below.
+            document.cookie = 're_csrf=test-token';
+
+            type GetResponse = { ok: boolean; json: () => Promise<unknown> };
+            let resolveGet: ((value: GetResponse) => void) | undefined;
+
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    // Hold the hydrate GET until the test resolves it
+                    return new Promise<GetResponse>((resolve) => {
+                        resolveGet = resolve;
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            // Magic-link style auto-login completes while GET is pending
+            await act(async () => {
+                await result.current.login('fresh-token', mockUser as any, 'tenant-123');
+            });
+
+            expect(result.current.user?.id).toBe('fresh-user');
+
+            // Now the stale GET resolves with "unauthenticated" — it must not
+            // clobber the session login() just established.
+            if (!resolveGet) {
+                throw new Error('Expected deferred session GET resolver to be set');
+            }
+            await act(async () => {
+                resolveGet!({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        authenticated: false,
+                        has_api_key: false,
+                        has_admin_key: false,
+                        has_credentials: false,
+                        tenant_id: null,
+                        user: null,
+                    }),
+                });
+            });
+
+            await waitFor(() => {
+                expect(result.current.isHydrated).toBe(true);
+            });
+
+            expect(result.current.user?.id).toBe('fresh-user');
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+
+            document.cookie = 're_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        });
+    });
+
     describe('Error Handling', () => {
         it('handles corrupted localStorage data gracefully', async () => {
             localStorageMock.setItem('regengine_user', 'invalid-json');

@@ -233,6 +233,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const logoutInProgressRef = useRef(false);
+  // Set once login() has established a cookie session. Guards the hydrate
+  // effect's stale-state cleanup: if the /api/session GET was in flight while
+  // a login completed (magic-link / auto-login on mount), its stale
+  // "unauthenticated" answer must not wipe the freshly logged-in user.
+  const loginCompletedRef = useRef(false);
 
   // ---- Hydration: migrate localStorage, then hydrate from cookie session ----
   useEffect(() => {
@@ -287,15 +292,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setTenantIdState(null);
           localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
         }
-        if (session.user) {
-          const normalizedSessionUser = normalizeUserProfile(session.user);
-          setUserState(normalizedSessionUser);
-          apiClient.setUser(normalizedSessionUser);
-          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
-        }
         if (session.authenticated) {
+          if (session.user) {
+            const normalizedSessionUser = normalizeUserProfile(session.user);
+            setUserState(normalizedSessionUser);
+            apiClient.setUser(normalizedSessionUser);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
+          }
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+        } else if (!loginCompletedRef.current) {
+          // Definitive unauthenticated answer — the cookie session expired or
+          // was cleared server-side. Drop the localStorage-hydrated user (and
+          // ignore any session.user echoed back from a stale re_user cookie)
+          // so pages can't render an authenticated shell from stale state.
+          // Key-only sessions (has_api_key / has_admin_key) never store a
+          // user profile, so this doesn't affect them.
+          setUserState(null);
+          apiClient.setUser(null);
+          localStorage.removeItem(STORAGE_KEYS.USER);
         }
         if (session.has_api_key) {
           setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
@@ -304,7 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
         }
       } else {
-        // No cookie session — user is unauthenticated.
+        // The session check itself failed (network error or non-2xx —
+        // /api/session GET otherwise always answers 200 with an
+        // `authenticated` boolean). Indeterminate: keep the
+        // localStorage-hydrated state rather than logging the user out of
+        // the UI shell over a transient failure.
         // NEXT_PUBLIC_API_KEY fallback removed: proxy routes inject
         // server-side API keys; baking secrets into the JS bundle is unsafe.
         setAuthMethodState(null);
@@ -421,6 +440,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!cookiesOk) {
       throw new Error('Session could not be established. Please try again.');
     }
+
+    loginCompletedRef.current = true;
 
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie should be stored in the browser at this point.
