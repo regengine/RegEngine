@@ -677,6 +677,52 @@ describe('Dashboard Inflow Lab', () => {
         expect(link).toHaveAttribute('href', '/exceptions');
     });
 
+    it('shows a clickable tutorial banner that opens the step-by-step walkthrough', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        const banner = await screen.findByTestId('inflow-tutorial-banner');
+        expect(banner).toHaveTextContent('New to Inflow Lab? Learn to operate it step by step');
+
+        await user.click(
+            within(banner).getByRole('button', { name: /Learn to operate it step by step/i }),
+        );
+
+        expect(await screen.findByText('Step 1 of 7')).toBeInTheDocument();
+        expect(screen.getByText('Bring supplier data in')).toBeInTheDocument();
+    });
+
+    it('walks forward through the tutorial steps', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        const banner = await screen.findByTestId('inflow-tutorial-banner');
+        await user.click(
+            within(banner).getByRole('button', { name: /Learn to operate it step by step/i }),
+        );
+        await screen.findByText('Step 1 of 7');
+
+        await user.click(screen.getByRole('button', { name: /Next/i }));
+        expect(await screen.findByText('Step 2 of 7')).toBeInTheDocument();
+        expect(screen.getByText('Know what the lab does')).toBeInTheDocument();
+    });
+
+    it('dismisses the tutorial banner without disabling the How to use entry point', async () => {
+        const user = userEvent.setup();
+        renderDashboardInflowLabPage();
+
+        const banner = await screen.findByTestId('inflow-tutorial-banner');
+        await user.click(within(banner).getByRole('button', { name: 'Dismiss tutorial banner' }));
+
+        await waitFor(() => {
+            expect(screen.queryByTestId('inflow-tutorial-banner')).not.toBeInTheDocument();
+        });
+
+        // The walkthrough must stay reachable from the header after dismissal.
+        await user.click(screen.getByRole('button', { name: /How to use/i }));
+        expect(await screen.findByText('Step 1 of 7')).toBeInTheDocument();
+    });
+
     it('exposes filter chips for all/handoff/source/mixed', async () => {
         renderDashboardInflowLabPage();
         await waitFor(() => {
