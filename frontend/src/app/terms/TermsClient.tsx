@@ -48,7 +48,7 @@ Free tools may be modified, updated, or discontinued at any time.`,
     },    {
         id: 'paid-services',
         title: '5. Paid Services',
-        content: `Unless otherwise stated in a signed order form or customer agreement, paid plans are billed monthly or annually as selected. Prices are listed on our pricing page and may change with 30 days' notice.
+        content: `Unless otherwise stated in a signed order form or customer agreement, paid plans are billed monthly or annually as selected. Prices are listed on our pricing page and may change with reasonable advance notice.
 
 You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time — no cancellation fees.
 
@@ -92,7 +92,7 @@ You are responsible for keeping your API keys and account credentials secure. If
     {
         id: 'acceptable-use',
         title: '10. Acceptable Use',
-        content: `Don't use RegEngine to: violate laws or regulations (ironic, we know), attempt to access other tenants' data, reverse engineer the platform, send spam through our systems, store data unrelated to regulatory compliance, or impersonate others.
+        content: `Don't use RegEngine to: violate laws or regulations, attempt to access other tenants' data, reverse engineer the platform, send spam through our systems, store data unrelated to regulatory compliance, or impersonate others.
 
 We reserve the right to suspend or terminate accounts that violate these terms.
 
@@ -109,12 +109,12 @@ In the event of a force majeure lasting more than 30 days, either party may term
         title: '12. Termination',
         content: `You can close your account at any time. We can terminate your account for material breach of these terms with 30 days' notice (or immediately for security-related violations).
 
-Upon termination: your export and deletion window follows the active customer agreement and workspace operating posture. Any prepaid annual fees will be prorated and refunded for unused months.`,
+Upon termination: your export and deletion window follows the active customer agreement and workspace operating posture. Any prepaid annual fees will be prorated and refunded for unused months, except where termination results from your uncured material breach.`,
     },
     {
         id: 'changes',
         title: '13. Changes to These Terms',
-        content: `We may update these terms. Unless a signed order form or customer agreement controls changes for your workspace, material changes get 30 days' email notice and continued use after changes take effect constitutes acceptance.
+        content: `We may update these terms. Unless a signed order form or customer agreement controls changes for your workspace, material changes get reasonable advance notice by email and continued use after changes take effect constitutes acceptance.
 
 If you disagree with changes, you can close your account before the updated terms take effect.`,
     },

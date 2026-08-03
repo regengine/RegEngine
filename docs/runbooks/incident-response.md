@@ -1,3 +1,5 @@
+> **SUPERSEDED** — see `docs/operations/INCIDENT_RESPONSE.md` (canonical). The escalation path below references On-Call Engineer / Engineering Manager / CTO roles that do not exist — RegEngine is operated by a single founder-operator.
+
 # Incident Response Runbook
 
 ## 1. Severity Levels

@@ -1,3 +1,5 @@
+> **SUPERSEDED** — see `docs/operations/INCIDENT_RESPONSE.md` (canonical incident response procedure).
+
 # Incident Response Plan
 
 ## Purpose

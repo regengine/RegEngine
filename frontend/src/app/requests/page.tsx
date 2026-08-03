@@ -49,8 +49,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; progress: nu
 };
 
 export default function RequestWorkflowPage() {
-  const { tenantId } = useAuth();
+  const { tenantId, user } = useAuth();
   const tid = tenantId || '';
+  const actor = user?.email || user?.id || 'unknown';
   const { toast } = useToast();
 
   // Review finding: the workflow mutations swallowed failures — react-query
@@ -254,7 +255,7 @@ export default function RequestWorkflowPage() {
                               size="sm"
                               onClick={() => submitPackage.mutate({
                                 requestCaseId: rc.request_case_id,
-                                submitted_by: 'dashboard_user',
+                                submitted_by: actor,
                                 submitted_to: rc.requesting_party,
                               }, { onError: notifyActionError('Submit') })}
                             >
@@ -308,7 +309,7 @@ export default function RequestWorkflowPage() {
                               disabled={assemblePackage.isPending}
                               onClick={() => assemblePackage.mutate({
                                 requestCaseId: rc.request_case_id,
-                                generatedBy: 'dashboard_user',
+                                generatedBy: actor,
                               }, { onError: notifyActionError('Assemble') })}
                             >
                               <Package className="h-3.5 w-3.5 mr-1" />

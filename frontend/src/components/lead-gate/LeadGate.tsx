@@ -44,7 +44,7 @@ const selectClass = inputClass;
 export function LeadGate({
     source,
     headline = 'Unlock Your Full Results',
-    subheadline = 'Our founder personally reviews every submission within 24 hours.',
+    subheadline = 'The founder personally reviews every submission — typically within one business day.',
     ctaText = 'Unlock Full Results',
     toolContext,
     teaser,

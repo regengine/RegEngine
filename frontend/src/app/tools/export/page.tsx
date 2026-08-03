@@ -11,16 +11,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Sample CTE data for demo
 const SAMPLE_RECORDS = [
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvest', location: 'Farm A - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'pack', location: 'Facility B - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'transport', location: 'Distribution Center C - Nevada' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvest', location: 'Farm D - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'pack', location: 'Facility E - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'transport', location: 'Hub F - Georgia' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvest', location: 'Farm G - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'pack', location: 'Facility H - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'quality_check', location: 'Lab I - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'transport', location: 'Distribution Center J - Oklahoma' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A - California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B - California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C - Nevada' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D - Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E - Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F - Georgia' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G - Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H - Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H - Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J - Oklahoma' },
 ];
 
 interface GeneratedPackage {
@@ -584,7 +584,7 @@ export default function ExportPage() {
             </div>
             <h3 className="font-semibold">Hash Each Event</h3>
             <p className="text-sm text-re-text-disabled">
-              Each CTE event (harvest, pack, transport, etc.) is converted to a deterministic SHA-256 hash. Same data always produces same hash.
+              Each CTE event (harvesting, initial packing, shipping, receiving, transformation) is converted to a deterministic SHA-256 hash. Same data always produces same hash.
             </p>
             <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
               event_data → SHA-256 → hash
@@ -602,7 +602,7 @@ export default function ExportPage() {
             </div>
             <h3 className="font-semibold">Form Chain Links</h3>
             <p className="text-sm text-re-text-disabled">
-              Each new event includes the previous hash. This creates an unbreakable chain where every event is cryptographically bound to its history.
+              Each new event includes the previous hash. This links every event to its history, so any alteration of an earlier record is detectable.
             </p>
             <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
               prev_hash + event → SHA-256 → chain_hash

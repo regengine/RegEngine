@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
     FileText,
-    Download,
     CheckCircle2,
     Plus,
     X,
@@ -302,11 +301,8 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                         >
                             <div className="space-y-4">
                                 <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" className="rounded-xl">
-                                        <Download className="h-3 w-3 mr-1" /> Download Full PDF
-                                    </Button>
-                                    <Button variant="outline" size="sm" className="rounded-xl">
-                                        <Printer className="h-3 w-3 mr-1" /> Print
+                                    <Button variant="outline" size="sm" className="rounded-xl" onClick={() => window.print()}>
+                                        <Printer className="h-3 w-3 mr-1" /> Print / Save as PDF
                                     </Button>
                                 </div>
                                 <Card className="border-[var(--re-border-default)]">

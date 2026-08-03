@@ -83,16 +83,16 @@ export default function SupplierCompliancePage() {
             <section className="max-w-[900px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16 text-center">
                 <div className="inline-flex items-center gap-2 bg-re-warning-muted dark:bg-re-warning text-re-warning dark:text-re-warning border border-re-warning dark:border-re-warning px-4 py-2 rounded-xl text-sm font-medium mb-6">
                     <AlertTriangle className="h-4 w-4" />
-                    Your buyer requires FSMA 204 compliance
+                    Did your buyer ask about FSMA 204?
                 </div>
 
                 <h1 className="font-serif text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6">
-                    Get compliant in minutes,{' '}
-                    <em className="font-medium text-[var(--re-brand-dark)]">not months.</em>
+                    Start submitting traceability data{' '}
+                    <em className="font-medium text-[var(--re-brand-dark)]">in minutes.</em>
                 </h1>
 
                 <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-8 leading-relaxed">
-                    Major retailers are already enforcing FSMA 204 traceability requirements on their suppliers — ahead of the July 2028 FDA deadline. Non-compliant suppliers risk losing shelf access.
+                    Major retailers are signaling traceability expectations ahead of the July 2028 FDA date. Non-compliant suppliers risk losing shelf access.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -116,7 +116,7 @@ export default function SupplierCompliancePage() {
                 <div className="max-w-[900px] mx-auto">
                     <div className="text-center mb-8">
                         <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">
-                            These retailers are already enforcing compliance
+                            Retailers are signaling traceability expectations
                         </h2>
                         <p className="text-[var(--re-text-muted)]">
                             Suppliers who cannot demonstrate FSMA 204 traceability risk losing contracts.
@@ -193,7 +193,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Truck,
                                 title: 'What you must record',
-                                body: 'Key Data Elements (KDEs) at Critical Tracking Events (CTEs): harvesting, cooling, packing, receiving, shipping, and transformation. Required fields include traceability lot codes, product descriptions, quantities, locations, and dates.',
+                                body: 'Key Data Elements (KDEs) at Critical Tracking Events (CTEs): harvesting, cooling, packing, first land-based receiving, shipping, receiving, and transformation. Required fields include traceability lot codes, product descriptions, quantities, locations, and dates.',
                             },
                             {
                                 icon: Clock,

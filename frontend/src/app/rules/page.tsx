@@ -96,7 +96,7 @@ export default function RulesDashboardPage() {
             onClick={() => seedRules.mutate()}
             disabled={seedRules.isPending}
           >
-            {seedRules.isPending ? 'Seeding...' : 'Seed Rules'}
+            {seedRules.isPending ? 'Loading...' : 'Load Rules'}
           </Button>
           <Badge variant="outline" className="text-sm px-3 py-1">
             {ruleList.length} rules
@@ -177,7 +177,7 @@ export default function RulesDashboardPage() {
               <p className="font-medium">No rules found</p>
               <p className="text-sm">
                 {ruleList.length === 0
-                  ? 'Click "Seed Rules" to load the 25 built-in FSMA rules'
+                  ? 'Click "Load Rules" to load the 36 built-in FSMA 204 rules'
                   : 'Adjust filters to see matching rules'}
               </p>
             </CardContent>

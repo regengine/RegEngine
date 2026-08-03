@@ -3,11 +3,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-    Server,
     Key,
     FileText,
-    Search,
-    Shield,
     ChevronDown,
     ChevronRight,
     Copy,
@@ -34,119 +31,9 @@ interface Endpoint {
 }
 
 // API Endpoint Documentation
-const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.ComponentType<{ className?: string }>; description: string; endpoints: Endpoint[] }[] = [
-    {
-        name: 'Ingestion API',
-        port: 8000,
-        baseUrl: '/api/ingestion',
-        icon: FileText,
-        description: 'Document fetching, normalization, and processing',
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/health',
-                description: 'Service health check',
-                auth: false,
-                response: '{ "status": "healthy" }',
-            },
-            {
-                method: 'POST',
-                path: '/v1/ingest/url',
-                description: 'Ingest a document from URL',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                body: '{ "url": "https://example.com/document.pdf", "source_system": "generic" }',
-                response: '{ "job_id": "uuid", "status": "queued" }',
-            },
-            {
-                method: 'GET',
-                path: '/v1/ingest/status/{job_id}',
-                description: 'Get ingestion job status',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                response: '{ "job_id": "uuid", "status": "completed", "step": "extraction" }',
-            },
-        ],
-    },
-    {
-        name: 'Compliance API',
-        port: 8500,
-        baseUrl: '/api/compliance',
-        icon: Shield,
-        description: 'Checklists, validation, and gap analysis',
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/health',
-                description: 'Service health check',
-                auth: false,
-                response: '{ "status": "healthy" }',
-            },
-            {
-                method: 'GET',
-                path: '/checklists',
-                description: 'Get compliance checklists',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                params: ['industry=food'],
-                response: '{ "checklists": [...], "total": 10 }',
-            },
-            {
-                method: 'GET',
-                path: '/checklists/{checklistId}',
-                description: 'Get specific checklist details',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                response: '{ "id": "uuid", "name": "FSMA 204", "items": [...] }',
-            },
-            {
-                method: 'POST',
-                path: '/validate',
-                description:
-                    'Validate a CTE configuration against the versioned FSMA 204 rules engine (FTL-scoped)',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                body: '{ "ftl_commodity": "leafy greens", "config": { "cte_type": "HARVESTING", "tlc": "...", "kdes": {...} }, "strict": false }',
-                response: '{ "valid": true, "ftl_commodity": "leafy greens", "errors": [], "warnings": [...], "rules_evaluated": 5, "no_verdict_reason": null }',
-            },
-            {
-                method: 'GET',
-                path: '/industries',
-                description: 'List supported food compliance domains',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                response: '{ "industries": ["food"], "total": 1 }',
-            },
-        ],
-    },
-    {
-        name: 'Graph API',
-        port: 8200,
-        baseUrl: '/api/graph',
-        icon: Search,
-        description: 'FSMA labels, supply chain tracing, and knowledge graph',
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/v1/labels/health',
-                description: 'Labels service health check',
-                auth: false,
-                response: '{ "status": "healthy" }',
-            },
-            {
-                method: 'POST',
-                path: '/v1/labels/batch/init',
-                description: 'Initialize a label batch for FSMA traceability',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                body: '{ "batch_id": "uuid", "product_description": "Romaine Lettuce" }',
-                response: '{ "batch_id": "uuid", "status": "initialized" }',
-            },
-        ],
-    },
+const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{ className?: string }>; description: string; endpoints: Endpoint[] }[] = [
     {
         name: 'Webhook Ingestion API',
-        port: 8002,
         baseUrl: '/api/v1/webhooks',
         icon: FileText,
         description: 'Primary FSMA event ingestion endpoint for CTE batches',
@@ -215,7 +102,6 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
     },
     {
         name: 'FSMA Traceability API',
-        port: 8200,
         baseUrl: '/v1/fsma',
         icon: Leaf,
         description: 'Supply chain tracing, mock recalls, and FDA 24-hour exports',
@@ -281,7 +167,7 @@ const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.C
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
                 response: JSON.stringify({
                     readiness_score: 85,
-                    grade: "B+",
+                    gaps: ["recall_drill_cadence", "facility_gln_coverage"],
                     recommendations: [
                         { priority: "high", action: "Run quarterly recall drill", impact: "+5 points" },
                         { priority: "medium", action: "Add GLN to 3 facilities", impact: "+3 points" }
@@ -522,7 +408,7 @@ export function ApiReferenceClient() {
                                         Base URL: {API_SERVICES[selectedService].baseUrl}
                                     </Badge>
                                     <Badge variant="outline" className="font-mono">
-                                        www.regengine.co
+                                        regengine.co
                                     </Badge>
                                 </div>
                             </CardHeader>
@@ -572,12 +458,12 @@ export function ApiReferenceClient() {
 }`} language="json" />
                                 </div>
                                 <div className="bg-white dark:bg-re-surface-base rounded p-3">
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Compliance Checklists</h4>
+                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Records</h4>
                                     <CodeBlock code={`# First page
-GET /checklists?industry=food?limit=20
+GET /api/v1/records?limit=20
 
 # Next page
-GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
+GET /api/v1/records?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
                                 </div>
                             </div>
                         </CardContent>
@@ -612,11 +498,10 @@ GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http"
                                     </p>
                                 </div>
                             </div>
-                            <div className="bg-re-warning-muted dark:bg-re-warning/20 border border-re-warning dark:border-re-warning rounded p-3 mt-3">
-                                <p className="text-xs text-re-warning dark:text-re-warning">
-                                    <strong>Tier Limits:</strong> Growth (500/min), Scale (1,000/min), Enterprise (custom)
-                                </p>
-                            </div>
+                            <p className="text-xs text-muted-foreground mt-3">
+                                Limits are enforced per API key; your current window is reported in the headers above.
+                                See <a href="/docs/rate-limits" className="underline">Rate Limits</a> for details.
+                            </p>
                         </CardContent>
                     </Card>
 

@@ -154,7 +154,7 @@ describe('RulesDashboardPage', () => {
     const user = userEvent.setup();
     render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
-    const seedButton = screen.getByRole('button', { name: /seed rules/i });
+    const seedButton = screen.getByRole('button', { name: /load rules/i });
     await user.click(seedButton);
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
@@ -194,6 +194,6 @@ describe('RulesDashboardPage', () => {
     render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No rules found')).toBeInTheDocument();
-    expect(screen.getByText(/Click.*Seed Rules.*to load/)).toBeInTheDocument();
+    expect(screen.getByText(/Click.*Load Rules.*to load/)).toBeInTheDocument();
   });
 });

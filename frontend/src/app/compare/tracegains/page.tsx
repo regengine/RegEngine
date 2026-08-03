@@ -10,22 +10,22 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs enterprise setup" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Public account creation vs enterprise onboarding" },
+  { feature: "Self-serve signup", regengine: "partial", competitor: "x", note: "Staged rollout vs enterprise onboarding" },
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify TraceGains' current integration surface" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; confirm TraceGains' current FSMA 204 coverage" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event" },
   { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify TraceGains' current ingestion options" },
   { feature: "Supplier document management (COAs, specs)", regengine: "partial", competitor: "check", note: "TraceGains' core strength" },
   { feature: "Supplier onboarding portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom quotes" },
-  { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom quotes" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
   { title: "CTE-level traceability", icon: Zap, desc: "TraceGains is strong at COA and supplier-spec collection. FSMA 204 also requires CTE-level KDE traceability \u2014 confirm coverage with each vendor for your commodities." },
-  { title: "Per-event rule evaluation", icon: Shield, desc: "RegEngine evaluates events against 31+ FSMA 204 rules as part of ingestion. Verify TraceGains' current validation features directly with their team." },
+  { title: "Per-event rule evaluation", icon: Shield, desc: "RegEngine evaluates events against 36 FSMA 204 validation rules (33 stateless + 3 cross-event) as part of ingestion. Verify TraceGains' current validation features directly with their team." },
   { title: "Built for FTL commodities", icon: FileText, desc: "TraceGains is positioned for CPG supplier quality management. RegEngine is built for produce, seafood, and other FTL-covered commodities." },
-  { title: "Complement, don't replace", icon: Users, desc: "Many teams use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
+  { title: "Complement, don't replace", icon: Users, desc: "You can use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
 ];
 
 export default function TraceGainsCompare() {
@@ -66,7 +66,7 @@ export default function TraceGainsCompare() {
           ))}
         </div>
 
-        <h2 className="text-xl font-bold mb-6">Why teams add RegEngine alongside TraceGains</h2>
+        <h2 className="text-xl font-bold mb-6">Why you might run RegEngine alongside TraceGains</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
             <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
@@ -83,8 +83,8 @@ export default function TraceGainsCompare() {
           <h2 className="text-xl font-bold mb-2">See the difference yourself</h2>
           <p className="text-[var(--re-text-muted)] text-sm mb-6">Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds.</p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/#sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              Try the Sandbox <ArrowRight className="w-4 h-4" />
+            <Link href="/demo" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+              Explore the interactive demo <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">See Pricing</Link>
           </div>

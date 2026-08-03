@@ -741,14 +741,8 @@ export default function BulkUploadPage() {
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
                       style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
                     >
-                      Sign In to Validate
+                      Continue with email
                       <ArrowRight className="w-4 h-4" />
-                    </Link>
-                    <Link
-                      href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
-                    >
-                      Create an Account
                     </Link>
                   </div>
                 </div>
@@ -785,7 +779,7 @@ export default function BulkUploadPage() {
                   }`}>
                     {clientValidation.completenessScore}%
                   </span>
-                  <span className="text-[11px] text-[var(--re-text-muted)]">compliance score</span>
+                  <span className="text-[11px] text-[var(--re-text-muted)]">data completeness</span>
                 </div>
               </div>
 
@@ -932,14 +926,8 @@ export default function BulkUploadPage() {
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
                       style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
                     >
-                      Sign In to Commit
+                      Continue with email
                       <ArrowRight className="w-4 h-4" />
-                    </Link>
-                    <Link
-                      href="/login?next=/onboarding/bulk-upload"
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
-                    >
-                      Create an Account
                     </Link>
                   </div>
                 </div>

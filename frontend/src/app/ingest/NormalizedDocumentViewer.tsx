@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, FileText, Share2, Search, Link2, CheckCircle2 } from 'lucide-react';
+import { BookOpen, FileText, Share2, Search, CheckCircle2 } from 'lucide-react';
 
 interface ExtractedFact {
     id: string;
@@ -24,9 +24,9 @@ Except as specified in § 1.1305, the requirements of this subpart apply to pers
 
 § 1.1305 What foods and persons are exempt from this subpart?
 (a) Exemptions for certain farms. (1) This subpart does not apply to a farm, or the farm's activities, with respect to produce that is completely packaged on the farm.
-(2) This subpart does not apply to a farm, or the farm's activities, with respect to produce that is grown on a farm that had an average annual monetary value of produce sold during the previous 3-year period of no more than $25,000 (on a rolling basis), adjusted for inflation using 2011 as the baseline year for calculating the adjustment.
+(2) This subpart does not apply to a farm, or the farm's activities, with respect to produce that is grown on a farm that had an average annual monetary value of produce sold during the previous 3-year period of no more than $25,000 (on a rolling basis), adjusted for inflation using 2020 as the baseline year for calculating the adjustment.
 
-§ 1.1330 What records must I keep and provide when I receive a food on the Food Traceability List?
+§ 1.1345 What records must I keep and provide when I receive a food on the Food Traceability List?
 (a) General requirements. For each traceability lot of a food on the Food Traceability List you receive, you must maintain records containing the following information and linking this information to the traceability lot code for the food:
 (1) The location description for the immediate previous source (other than a transporter) of the food;
 (2) The location description for where the food was received;
@@ -44,7 +44,7 @@ const DEMO_FACTS: ExtractedFact[] = [
         title: 'Maintain receiving records',
         description: 'Must maintain records linking information to the traceability lot code when receiving food on the FTL.',
         confidence: 0.98,
-        highlightId: 'h-1.1330-a',
+        highlightId: 'h-1.1345-a',
     },
     {
         id: 'f2',
@@ -78,9 +78,9 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
             { id: 'none1', text: 'PART 1—GENERAL ENFORCEMENT REGULATIONS\nSubpart S—Additional Traceability Records for Certain Foods\n\n§ 1.1300 Who is subject to this subpart?\n' },
             { id: 'h-1.1300', text: 'Except as specified in § 1.1305, the requirements of this subpart apply to persons who manufacture, process, pack, or hold foods that appear on the list of foods for which additional traceability records are required in accordance with section 204(d)(2) of the FDA Food Safety Modernization Act (Food Traceability List).' },
             { id: 'none2', text: '\n\n§ 1.1305 What foods and persons are exempt from this subpart?\n(a) Exemptions for certain farms. (1) This subpart does not apply to a farm, or the farm\'s activities, with respect to produce that is completely packaged on the farm.\n' },
-            { id: 'h-1.1305-a-2', text: '(2) This subpart does not apply to a farm, or the farm\'s activities, with respect to produce that is grown on a farm that had an average annual monetary value of produce sold during the previous 3-year period of no more than $25,000 (on a rolling basis), adjusted for inflation using 2011 as the baseline year for calculating the adjustment.' },
-            { id: 'none3', text: '\n\n§ 1.1330 What records must I keep and provide when I receive a food on the Food Traceability List?\n' },
-            { id: 'h-1.1330-a', text: '(a) General requirements. For each traceability lot of a food on the Food Traceability List you receive, you must maintain records containing the following information and linking this information to the traceability lot code for the food:\n(1) The location description for the immediate previous source (other than a transporter) of the food;\n(2) The location description for where the food was received;\n(3) The date you received the food;\n(4) The quantity and unit of measure of the food;\n(5) The traceability lot code for the food;\n(6) The location description for the traceability lot code source, or the traceability lot code source reference;\n(7) The reference document type and reference document number.' },
+            { id: 'h-1.1305-a-2', text: '(2) This subpart does not apply to a farm, or the farm\'s activities, with respect to produce that is grown on a farm that had an average annual monetary value of produce sold during the previous 3-year period of no more than $25,000 (on a rolling basis), adjusted for inflation using 2020 as the baseline year for calculating the adjustment.' },
+            { id: 'none3', text: '\n\n§ 1.1345 What records must I keep and provide when I receive a food on the Food Traceability List?\n' },
+            { id: 'h-1.1345-a', text: '(a) General requirements. For each traceability lot of a food on the Food Traceability List you receive, you must maintain records containing the following information and linking this information to the traceability lot code for the food:\n(1) The location description for the immediate previous source (other than a transporter) of the food;\n(2) The location description for where the food was received;\n(3) The date you received the food;\n(4) The quantity and unit of measure of the food;\n(5) The traceability lot code for the food;\n(6) The location description for the traceability lot code source, or the traceability lot code source reference;\n(7) The reference document type and reference document number.' },
             { id: 'none4', text: '\n' }
         ];
 
@@ -138,9 +138,14 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                             normalized_facts.json
                         </span>
                     </div>
-                    <Badge className="bg-re-brand text-white hover:bg-re-brand text-[10px]">
-                        {DEMO_FACTS.length} Extracted Items
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] uppercase font-mono border-re-warning text-re-warning dark:text-re-warning">
+                            Sample data
+                        </Badge>
+                        <Badge className="bg-re-brand text-white hover:bg-re-brand text-[10px]">
+                            {DEMO_FACTS.length} Extracted Items
+                        </Badge>
+                    </div>
                 </div>
 
                 <ScrollArea className="flex-1 p-4">
@@ -179,16 +184,9 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                                     <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 mb-1">
                                         {fact.title}
                                     </h4>
-                                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
                                         {fact.description}
                                     </p>
-
-                                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                                        <div className="flex items-center gap-1.5 text-xs font-mono text-re-brand-dark dark:text-re-brand bg-re-brand-muted dark:bg-re-brand/30 px-2 py-1 rounded">
-                                            <Link2 className="h-3 w-3" />
-                                            View Source Lineage
-                                        </div>
-                                    </div>
                                 </div>
                             );
                         })}

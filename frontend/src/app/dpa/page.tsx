@@ -88,17 +88,17 @@ const SECURITY_MEASURES = [
   {
     Icon: Server,
     title: 'Access Controls',
-    text: 'Access to production systems requires multi-factor authentication. Production database credentials are rotated regularly and stored exclusively in secret management systems — never in source code.',
+    text: 'Access to production systems requires multi-factor authentication. Production credentials are stored in secret management systems — never in source control — and rotated on a defined schedule and immediately on any suspicion of exposure.',
   },
   {
     Icon: Users,
     title: 'Personnel',
-    text: "RegEngine personnel with access to customer data are subject to confidentiality obligations. Access is granted on a least-privilege basis and reviewed periodically.",
+    text: "Access to customer data is restricted to the founder-operator under confidentiality obligations; access expands only with contractual controls as the team grows.",
   },
   {
     Icon: RefreshCw,
     title: 'Incident Response',
-    text: 'RegEngine maintains a documented incident response procedure. Security incidents are triaged promptly, with affected customers notified without undue delay and according to the executed agreement and applicable law.',
+    text: 'RegEngine maintains a documented incident response procedure; security incidents are triaged promptly and affected customers notified without undue delay.',
   },
 ];
 
@@ -493,8 +493,7 @@ export default function DpaPage() {
                   approved transfer mechanism where required.
                 </p>
                 <p>
-                  Customers who require completed SCC modules, a UK Addendum, or transfer annexes
-                  should request the current execution package during procurement.
+                  SCCs or a UK Addendum can be executed as part of contracting where required.
                 </p>
                 <p>
                   Where required for a customer deployment, RegEngine relies on the transfer mechanism

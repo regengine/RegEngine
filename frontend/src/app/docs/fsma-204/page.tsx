@@ -189,6 +189,7 @@ export default function FSMA204GuidePage() {
                             <code>{`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",
@@ -279,6 +280,7 @@ export default function FSMA204GuidePage() {
                                     { cte: 'Harvesting', event: 'harvesting', kdes: 'Location, Harvest Date, Lot Code, Product' },
                                     { cte: 'Cooling', event: 'cooling', kdes: 'Location, Cooling Date, Lot Code, Product' },
                                     { cte: 'Initial Packing', event: 'initial_packing', kdes: 'Location, Pack Date, TLC, Quantity' },
+                                    { cte: 'First Land-Based Receiving', event: 'first_land_based_receiving', kdes: 'Location, Landing Date, TLC, Quantity, Vessel Source' },
                                     { cte: 'Shipping', event: 'shipping', kdes: 'Ship From/To, TLC, Carrier, Date' },
                                     { cte: 'Receiving', event: 'receiving', kdes: 'Location, TLC, Source, Quantity, Date' },
                                     { cte: 'Transformation', event: 'transformation', kdes: 'Input TLCs, Output TLC, Date, Location' },
@@ -368,7 +370,7 @@ export default function FSMA204GuidePage() {
                         Supply Chain Tracing
                     </h2>
                     <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
-                        RegEngine uses a graph database to trace products forward and backward through your supply chain:
+                        RegEngine performs graph-based tracing over your event data to trace products forward and backward through your supply chain:
                     </p>
 
                     {/* Forward Trace */}
@@ -420,7 +422,6 @@ export default function FSMA204GuidePage() {
                         Ingested events are SHA-256 hashed and chain-linked, and export bundles ship with a
                         timestamped manifest. You can verify a downloaded bundle out-of-band via{' '}
                         <Link href="/verify" className="text-[var(--re-brand)] hover:underline">/verify</Link>.
-                        Strict downstream signature verification across the message bus is rolling out.
                     </p>
                 </section>
 

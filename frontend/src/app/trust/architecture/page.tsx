@@ -48,7 +48,7 @@ const STACK_LAYERS = [
     {
         Icon: Database,
         layer: 'Database',
-        technology: 'PostgreSQL on Supabase',
+        technology: 'PostgreSQL on Railway',
         detail:
             'Current database posture uses PostgreSQL tenant-scoping controls, append-oriented audit protections, and managed connection pooling.',
     },

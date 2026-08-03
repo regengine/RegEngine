@@ -18,7 +18,6 @@ import {
     Users,
     FileText,
     AlertCircle,
-    CheckCircle,
     Copy,
     Play,
     Code,
@@ -176,12 +175,6 @@ export default function AdminAPIConsolePage() {
                             <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
                                 <div className="text-3xl font-bold text-white">{categories.length}</div>
                                 <div className="text-sm text-re-text-tertiary">Categories</div>
-                            </div>
-                            <div className="px-6 py-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10">
-                                <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-5 h-5 text-re-success" />
-                                    <span className="text-sm text-re-text-tertiary">Live</span>
-                                </div>
                             </div>
                         </div>
                     </motion.div>
@@ -406,7 +399,7 @@ export default function AdminAPIConsolePage() {
                                             <CardContent className="py-12 text-center">
                                                 <Code className="w-12 h-12 text-re-text-muted mx-auto mb-4" />
                                                 <h3 className="text-lg font-semibold text-white mb-2">Select an endpoint</h3>
-                                                <p className="text-re-text-tertiary">Click on any endpoint to view details and test it</p>
+                                                <p className="text-re-text-tertiary">Click on any endpoint to view details</p>
                                             </CardContent>
                                         </Card>
                                     </motion.div>

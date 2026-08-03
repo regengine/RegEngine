@@ -110,26 +110,22 @@ export const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 export const COMPETITORS = [
-    { feature: 'Starting price', regengine: '$425/mo (published)', foodlogiq: 'Contact sales', tracelink: 'Enterprise only' },
-    { feature: 'Onboarding model', regengine: 'Self-serve', foodlogiq: 'Sales-led implementation', tracelink: 'Sales-led implementation' },
-    { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Verify with vendor', tracelink: 'Verify with vendor' },
-    { feature: 'FDA-oriented export', regengine: '✓ Built-in', foodlogiq: 'Verify with vendor', tracelink: 'Verify with vendor' },
-    { feature: 'Trace lookup', regengine: 'Indexed lookup', foodlogiq: 'Verify with vendor', tracelink: 'Verify with vendor' },
-    { feature: 'Contract length', regengine: 'Month-to-month', foodlogiq: 'Verify with vendor', tracelink: 'Verify with vendor' },
+    { feature: 'Starting price', regengine: 'List price from $849/mo (partner from $425/mo)', foodlogiq: 'Contact sales', repositrak: 'Custom retailer quotes' },
+    { feature: 'Onboarding model', regengine: 'Self-serve', foodlogiq: 'Sales-led implementation', repositrak: 'Retailer-coordinated' },
+    { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'FDA-oriented export', regengine: '✓ Built-in', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'Trace lookup', regengine: 'Indexed lookup', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
+    { feature: 'Contract length', regengine: 'No multi-year lock-in', foodlogiq: 'Verify with vendor', repositrak: 'Verify with vendor' },
 ];
 
 /* ─────────────────────────────────────────────────────────────
    INTEGRATION LOGOS
    ───────────────────────────────────────────────────────────── */
 export const INTEGRATIONS = [
-    { name: 'SAP', icon: '🔷' },
-    { name: 'Oracle NetSuite', icon: '🔶' },
-    { name: 'QuickBooks', icon: '📗' },
-    { name: 'Shopify', icon: '🛒' },
-    { name: 'WMS Systems', icon: '📦' },
     { name: 'REST API', icon: '⚡' },
-    { name: 'CSV Import', icon: '📄' },
+    { name: 'CSV / XLSX Import', icon: '📄' },
     { name: 'Webhook', icon: '🔔' },
+    { name: 'SFTP Import', icon: '📦' },
 ];
 
 /* ─────────────────────────────────────────────────────────────

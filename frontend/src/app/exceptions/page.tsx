@@ -49,8 +49,9 @@ const STATUS_BADGE: Record<string, { className: string; label: string }> = {
 };
 
 export default function ExceptionQueuePage() {
-  const { tenantId } = useAuth();
+  const { tenantId, user } = useAuth();
   const tid = tenantId || '';
+  const actor = user?.email || user?.id || 'unknown';
 
   const [severityFilter, setSeverityFilter] = useState<string | undefined>();
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -256,7 +257,7 @@ export default function ExceptionQueuePage() {
                               onClick={() => resolveException.mutate({
                                 caseId: exc.case_id,
                                 resolutionSummary: 'Resolved from queue',
-                                resolvedBy: 'dashboard_user',
+                                resolvedBy: actor,
                               })}
                             >
                               Resolve
@@ -268,7 +269,7 @@ export default function ExceptionQueuePage() {
                               onClick={() => waiveException.mutate({
                                 caseId: exc.case_id,
                                 waiverReason: 'Waived from queue',
-                                waiverApprovedBy: 'dashboard_user',
+                                waiverApprovedBy: actor,
                               })}
                             >
                               Waive

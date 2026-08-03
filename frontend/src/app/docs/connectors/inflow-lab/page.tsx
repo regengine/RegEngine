@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  Activity,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
@@ -12,6 +11,7 @@ import {
   Terminal,
   Webhook,
 } from "lucide-react";
+import { API_BASE } from "@/lib/api-base";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     "Use Inflow Lab to distinguish sandbox diagnosis, mock feed validation, authenticated ingest, and production evidence boundaries.",
 };
 
-const ingestExample = `curl -X POST https://your-preview-host/api/v1/webhooks/ingest \\
+const ingestExample = `curl -X POST ${API_BASE}/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: rge_live_..." \\
   -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \\
@@ -179,17 +179,6 @@ export default function InflowLabDocsPage() {
               <p>Inflow Lab is a simulator and developer tool, not a production vendor data source.</p>
               <p>Sandbox and mock records are for diagnosis, mapping, and feed monitoring setup. They are not production evidence.</p>
               <p>Cross-repo contract CI should pin the simulator commit that RegEngine expects, then run an authenticated ingest assertion against the local service.</p>
-            </div>
-          </section>
-
-          <section className={styles.card}>
-            <h2>
-              <Activity aria-hidden="true" size={21} />
-              Decision posture
-            </h2>
-            <div className={styles.notes}>
-              <p>Keep Inflow Lab as a sandbox/mock simulator until a design partner asks for hosted access.</p>
-              <p>Promote the connector tile and docs as proof of operational boundaries, not as a customer production integration.</p>
             </div>
           </section>
 

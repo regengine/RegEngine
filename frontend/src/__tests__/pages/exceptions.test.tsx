@@ -28,6 +28,7 @@ function createWrapper() {
 vi.mock('@/lib/auth-context', () => ({
   useAuth: vi.fn().mockReturnValue({
     tenantId: 'tenant-123',
+    user: { id: 'user-1', email: 'qa@example.com' },
   }),
 }));
 
@@ -159,7 +160,7 @@ describe('ExceptionQueuePage', () => {
     expect(mockResolveMutate).toHaveBeenCalledWith({
       caseId: 'exc-1',
       resolutionSummary: 'Resolved from queue',
-      resolvedBy: 'dashboard_user',
+      resolvedBy: 'qa@example.com',
     });
   });
 
@@ -174,7 +175,7 @@ describe('ExceptionQueuePage', () => {
     expect(mockWaiveMutate).toHaveBeenCalledWith({
       caseId: 'exc-1',
       waiverReason: 'Waived from queue',
-      waiverApprovedBy: 'dashboard_user',
+      waiverApprovedBy: 'qa@example.com',
     });
   });
 

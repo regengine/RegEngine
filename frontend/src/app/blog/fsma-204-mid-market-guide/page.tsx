@@ -337,7 +337,7 @@ export default function FSMA204MidMarketGuide() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
-                <span>Plan for 18-24 months of implementation, starting now. Early assessment and pilot are critical.</span>
+                <span>Plan for 18-24 months of implementation, starting now. Early assessment and pilot are critical. That timeline covers the full organization-wide compliance program — supplier onboarding, process changes, and data cleanup — while getting a traceability tool like RegEngine running takes days.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="w-5 h-5 text-[var(--re-brand)] flex-shrink-0 mt-0.5" />
