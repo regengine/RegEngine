@@ -472,7 +472,7 @@ export default function APIPlayground() {
           <button
             onClick={() => handleDemoToggle(!demoMode)}
             disabled={isGuest}
-            title={isGuest ? 'Sign up for a real API key to disable demo mode' : (demoMode ? 'Switch to live API' : 'Switch to demo sandbox')}
+            title={isGuest ? 'Live mode requires an API key provisioned by the RegEngine team' : (demoMode ? 'Switch to live API' : 'Switch to demo sandbox')}
             style={{
               position: 'relative',
               width: '44px',
@@ -499,7 +499,7 @@ export default function APIPlayground() {
           </button>
           {isGuest && (
             <span style={{ fontSize: '12px', color: 'var(--re-text-muted)', fontStyle: 'italic' }}>
-              Sign up to use live API
+              Live mode requires a provisioned API key
             </span>
           )}
         </div>
@@ -522,9 +522,12 @@ export default function APIPlayground() {
             <span>
               <strong>Demo Mode</strong> — responses are simulated.{' '}
               {isGuest && (
-                <a href="/signup" style={{ color: '#93bbfc', textDecoration: 'underline' }}>
-                  Sign up for a real API key.
-                </a>
+                <>
+                  <a href="/signup" style={{ color: '#93bbfc', textDecoration: 'underline' }}>
+                    Create a developer account
+                  </a>
+                  {' '}— live API keys are provisioned during onboarding.
+                </>
               )}
               {!isGuest && 'Toggle off to send live requests.'}
             </span>

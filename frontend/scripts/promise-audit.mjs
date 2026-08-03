@@ -9,6 +9,15 @@ const APP_ROOT = path.join(ROOT, 'src', 'app');
 const SRC_ROOT = path.join(ROOT, 'src');
 
 const BANNED_SOURCE_PATTERNS = [
+  // `include` (optional) restricts a rule to files under that directory.
+  // The portal key generator and portal UI legitimately mint and label
+  // `rge_test_` sandbox keys; only docs pages must never present the sandbox
+  // prefix as a live API credential format.
+  {
+    label: 'Sandbox key prefix presented in docs',
+    pattern: /rge_test_/g,
+    include: path.join(APP_ROOT, 'docs'),
+  },
   { label: 'Dead status host', pattern: /status\.regengine\.co/g },
   { label: 'Dead Slack host', pattern: /slack\.regengine\.co/g },
   { label: 'Dead legacy API host', pattern: /api\.regengine\.co/g },
@@ -101,6 +110,9 @@ async function auditSourcePatterns() {
   for (const file of files) {
     const contents = readFileSync(file, 'utf8');
     for (const rule of BANNED_SOURCE_PATTERNS) {
+      if (rule.include && !file.startsWith(rule.include + path.sep)) {
+        continue;
+      }
       const matches = contents.match(rule.pattern);
       if (matches && matches.length > 0) {
         findings.push({
