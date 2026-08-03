@@ -8,8 +8,8 @@ history and is not versioned with the backend.
 Backend change history lives where it is authoritative, not here:
 
 - **Schema** — [alembic/versions/](alembic/versions/), one revision per
-  change, currently at v104. The revision DAG is the schema's real
-  history; `scripts/check_alembic_revisions.py` keeps it single-headed.
+  change. The revision DAG is the schema's real history;
+  `scripts/check_alembic_revisions.py` keeps it single-headed.
 - **Everything else** — git history and the pull requests it references.
   `git log --oneline` with conventional-commit prefixes (`fix:`, `feat:`,
   `ci:`, `docs:`) is the backend changelog.
@@ -110,7 +110,7 @@ All notable changes to the frontend product surface are documented below.
 - Tests
   - Added tests for domain routes, rate limiter behavior, Kafka correlation headers + provenance, and graph by-request API.
 
- 
+
 ### Setup notes
 
 - Optional: `pip install -e .[rate_limit]` to enable Redis-backed limiter.
