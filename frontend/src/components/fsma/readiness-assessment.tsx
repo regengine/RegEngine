@@ -21,32 +21,34 @@ import {
     Building2,
     Leaf,
 } from 'lucide-react';
+import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
 
-// Food Traceability List categories (Verified against FDA official sources)
+// Food Traceability List categories — synced with the final FDA FTL as implemented
+// in src/app/tools/ftl-checker/components/FTLCheckerClient.tsx (source of truth)
 const FTL_CATEGORIES = [
-    { id: 'leafy-greens', name: 'Leafy Greens (including fresh-cut)', examples: 'Lettuce, spinach, kale, arugula, spring mix', icon: Leaf },
-    { id: 'tomatoes', name: 'Fresh Tomatoes', examples: 'Vine-ripe, Roma, cherry, grape tomatoes', icon: Package },
-    { id: 'peppers', name: 'Fresh Peppers', examples: 'Bell peppers, jalapeños, hot peppers', icon: Package },
-    { id: 'cucumbers', name: 'Fresh Cucumbers', examples: 'Slicing, pickling, English cucumbers', icon: Package },
+    { id: 'leafy-greens-fresh', name: 'Leafy Greens (fresh, intact)', examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens', icon: Leaf },
+    { id: 'leafy-greens-fresh-cut', name: 'Leafy Greens (fresh-cut)', examples: 'Bagged salad mix, spring mix, pre-washed spinach, chopped romaine', icon: Leaf },
+    { id: 'tomatoes', name: 'Tomatoes', examples: 'Fresh tomatoes (not canned or dried)', icon: Package },
+    { id: 'peppers', name: 'Peppers', examples: 'Bell peppers, jalapeños, chili peppers (fresh)', icon: Package },
+    { id: 'cucumbers', name: 'Cucumbers', examples: 'Fresh cucumbers', icon: Package },
     { id: 'herbs', name: 'Fresh Herbs', examples: 'Cilantro, basil, parsley (dill exempt per § 1.1305(e))', icon: Leaf },
     { id: 'melons', name: 'Melons', examples: 'Cantaloupe, honeydew, watermelon', icon: Package },
-    { id: 'tropical', name: 'Tropical Tree Fruits', examples: 'Mango, papaya, mamey (not banana, avocado, citrus)', icon: Package },
+    { id: 'tropical-fruits', name: 'Tropical Tree Fruits', examples: 'Mangoes, papayas, mamey, guava (not banana, avocado, citrus)', icon: Package },
     { id: 'sprouts', name: 'Sprouts', examples: 'Alfalfa, bean, broccoli sprouts', icon: Leaf },
     { id: 'fresh-cut-fruits', name: 'Fresh-Cut Fruits', examples: 'Pre-cut fruit mixes, fruit cups', icon: Package },
-    { id: 'fresh-cut-vegetables', name: 'Fresh-Cut Vegetables (non-leafy)', examples: 'Veggie trays, pre-cut carrots, celery', icon: Package },
-    { id: 'deli-salads', name: 'Ready-to-Eat Deli Salads', examples: 'Egg salad, seafood salad, pasta salad', icon: Package },
-    { id: 'finfish', name: 'Finfish (including smoked)', examples: 'Salmon, tuna, cod, smoked salmon, lox', icon: Package },
+    { id: 'fresh-cut-vegetables', name: 'Fresh-Cut Vegetables (non-leafy)', examples: 'Veggie trays, pre-cut carrots, celery sticks, broccoli florets', icon: Package },
+    { id: 'finfish-histamine', name: 'Finfish — Scombrotoxin/Histamine-Forming', examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack', icon: Package },
+    { id: 'finfish-ciguatoxin', name: 'Finfish — Ciguatoxin-Associated', examples: 'Barracuda, grouper, snapper, moray eel', icon: Package },
+    { id: 'finfish-other', name: 'Finfish — Other (fresh/frozen)', examples: 'Salmon, cod, halibut, tilapia, trout', icon: Package },
+    { id: 'finfish-smoked', name: 'Smoked Finfish', examples: 'Smoked salmon, lox, kippered herring, smoked trout', icon: Package },
     { id: 'crustaceans', name: 'Crustaceans', examples: 'Shrimp, crab, lobster, crawfish', icon: Package },
     { id: 'molluscan-shellfish', name: 'Molluscan Shellfish (bivalves)', examples: 'Oysters, clams, mussels, scallops', icon: Package },
+    { id: 'deli-salads', name: 'Ready-to-Eat Deli Salads', examples: 'Egg salad, seafood salad, pasta salad, potato salad', icon: Package },
+    { id: 'eggs', name: 'Shell Eggs', examples: 'Shell eggs of domesticated chickens (farms with fewer than 3,000 laying hens exempt)', icon: Package },
     { id: 'nut-butters', name: 'Nut Butters', examples: 'Peanut butter, almond butter', icon: Package },
-    { id: 'eggs', name: 'Shell Eggs', examples: 'Chicken eggs, duck eggs', icon: Package },
-    { id: 'cheese', name: 'Soft and Semi-Soft Cheeses', examples: 'Brie, Camembert, queso fresco, cottage, ricotta', icon: Package },
-    { id: 'specific-vegetables', name: 'Specific Fresh Vegetables', examples: 'Celery, green onions, fresh beans, fresh peas', icon: Package },
-    { id: 'nuts-seeds', name: 'Peanuts, Tree Nuts, and Seeds', examples: 'Raw peanuts, almonds, walnuts, sesame seeds (for further processing)', icon: Package },
-    { id: 'spices', name: 'Spices (dried/dehydrated)', examples: 'Black pepper, cumin, paprika, cinnamon', icon: Package },
-    { id: 'aquatic-farmed', name: 'Fresh Aquatic Farmed Food', examples: 'Farm-raised fish, shrimp, aquaculture products', icon: Package },
-    { id: 'rte-bakery', name: 'Ready-to-Eat Bakery Products', examples: 'Bakery items containing cheese, cut fruit, or cut vegetables', icon: Package },
-    { id: 'concentrated-fruit-veg', name: 'Concentrated Fruit/Vegetable Products', examples: 'Juice not for further processing, fruit/vegetable concentrates', icon: Package },
+    { id: 'cheese-fresh-soft', name: 'Fresh Soft Cheese', examples: 'Queso fresco, ricotta, cottage cheese, cream cheese', icon: Package },
+    { id: 'cheese-soft-ripened', name: 'Soft Ripened & Semi-Soft Cheese', examples: 'Brie, camembert, monterey jack, muenster, feta', icon: Package },
+    { id: 'cheese-unpasteurized', name: 'Cheese Made from Unpasteurized Milk (non-hard)', examples: 'Raw-milk brie, raw-milk feta, artisanal raw-milk soft cheeses', icon: Package },
 ];
 
 // Critical Tracking Events (CTEs)
@@ -434,15 +436,15 @@ export function FSMA204Assessment() {
                             </CardContent>
                         </Card>
 
-                        {/* Deadline Reminder */}
+                        {/* Enforcement Reminder */}
                         <Card className="border-primary/50 bg-primary/5">
                             <CardContent className="pt-4">
                                 <div className="flex items-center gap-3">
                                     <Clock className="h-8 w-8 text-primary" />
                                     <div>
-                                        <p className="font-semibold">Compliance Deadline: July 2028</p>
+                                        <p className="font-semibold">FDA enforcement begins {FSMA_ENFORCEMENT_DATE}</p>
                                         <p className="text-sm text-muted-foreground">
-                                            Approximately 30 months to achieve full compliance
+                                            {FSMA_ENFORCEMENT_FRAMING}
                                         </p>
                                     </div>
                                 </div>
