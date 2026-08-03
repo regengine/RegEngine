@@ -87,8 +87,8 @@ function statusLevel(score: number): 'compliant' | 'at-risk' | 'critical' {
 const STATUS_CONFIG = {
     'compliant': {
         icon: Shield,
-        label: 'FSMA 204 Compliant',
-        desc: 'Your traceability program meets current FDA requirements.',
+        label: 'FSMA 204 Ready',
+        desc: "Your traceability data meets RegEngine's readiness checks — an advisory indicator, not a legal determination.",
         bg: 'bg-re-brand-muted border-re-brand/30',
         text: 'text-re-brand',
     },
