@@ -87,8 +87,8 @@ function statusLevel(score: number): 'compliant' | 'at-risk' | 'critical' {
 const STATUS_CONFIG = {
     'compliant': {
         icon: Shield,
-        label: 'FSMA 204 Compliant',
-        desc: 'Your traceability program meets current FDA requirements.',
+        label: 'FSMA 204 Ready',
+        desc: "Your traceability data meets RegEngine's readiness checks — an advisory indicator, not a legal determination.",
         bg: 'bg-re-brand-muted border-re-brand/30',
         text: 'text-re-brand',
     },
@@ -601,16 +601,20 @@ export default function ComplianceDashboardPage() {
                                             <span className="text-[9px] text-muted-foreground">CSV / spreadsheet</span>
                                         </Button>
                                     </Link>
-                                    <Button variant="outline" className="h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl opacity-60 cursor-not-allowed" disabled title="Coming in v1.1">
-                                        <Download className="h-5 w-5 text-[var(--re-brand)]" />
-                                        <span className="text-xs font-medium">FDA Report</span>
-                                        <span className="text-[9px] text-muted-foreground">24-hr response</span>
-                                    </Button>
-                                    <Button variant="outline" className="h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl opacity-60 cursor-not-allowed" disabled title="Coming in v1.1">
-                                        <FileText className="h-5 w-5 text-[var(--re-brand)]" />
-                                        <span className="text-xs font-medium">EPCIS Export</span>
-                                        <span className="text-[9px] text-muted-foreground">GS1 2.0 format</span>
-                                    </Button>
+                                    <Link href="/dashboard/export-jobs">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                            <Download className="h-5 w-5 text-[var(--re-brand)]" />
+                                            <span className="text-xs font-medium">FDA Report</span>
+                                            <span className="text-[9px] text-muted-foreground">24-hr response</span>
+                                        </Button>
+                                    </Link>
+                                    <Link href="/dashboard/export-jobs">
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                            <FileText className="h-5 w-5 text-[var(--re-brand)]" />
+                                            <span className="text-xs font-medium">EPCIS Export</span>
+                                            <span className="text-[9px] text-muted-foreground">GS1 2.0 format</span>
+                                        </Button>
+                                    </Link>
                                 </CardContent>
                             </Card>
 
@@ -749,7 +753,7 @@ export default function ComplianceDashboardPage() {
                                     <p className="text-sm font-medium">Your biggest gap is <span className="text-re-warning">{lowestDim.label}</span>.</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">Scan labels or import data to improve this dimension.</p>
                                 </div>
-                                <Link href="/dashboard/scan">
+                                <Link href="/ingest">
                                     <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white text-xs whitespace-nowrap">
                                         Import Data <ArrowRight className="ml-1 h-3 w-3" />
                                     </Button>

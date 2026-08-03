@@ -240,7 +240,7 @@ export default function HomePage() {
               Verify a sample export
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ActionLink>
-            <ActionLink href="/contact">Book a 15-min call</ActionLink>
+            <ActionLink href="/contact">Book a 30-min call</ActionLink>
           </div>
           <MetricRail />
         </div>

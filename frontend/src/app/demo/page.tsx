@@ -230,14 +230,14 @@ export default function DemoPage() {
       <div className="bg-gradient-to-r from-[var(--re-brand)]/10 to-purple-500/10 border border-[var(--re-brand)]/20 rounded-xl p-8 text-center">
         <h2 className="text-xl font-bold mb-2">This could be your data</h2>
         <p className="text-[var(--re-text-muted)] text-sm mb-6 max-w-lg mx-auto">
-          RegEngine ingests events from your ERP, validates them against 25+ FSMA 204 rules, and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal — not an FDA-issued rating.
+          RegEngine ingests events from your ERP, validates them against 36 FSMA 204 validation rules (33 stateless + 3 cross-event), and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal — not an FDA-issued rating.
         </p>
         <div className="flex items-center justify-center gap-4">
           <Link
-            href="/#sandbox"
+            href="/walkthrough"
             className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors"
           >
-            Try the Sandbox
+            See the full walkthrough
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link

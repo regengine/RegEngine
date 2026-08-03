@@ -187,7 +187,8 @@ export default function PrivacyPage() {
               <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
                 Here&apos;s what we collect, why, and what we do with it. Your compliance data belongs
                 to you. RegEngine is designed to restrict tenant access at the database layer,
-                provide verifiable evidence exports where configured, and never sell your data.
+                provide verifiable evidence exports where configured, and don&apos;t sell your data
+                (as defined by the CCPA/CPRA).
               </p>
             </div>
           </div>
@@ -434,8 +435,8 @@ export default function PrivacyPage() {
                     Changes to This Policy
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
-                    We&apos;ll notify you of material changes via email at least 30 days before they
-                    take effect. Non-material changes (clarifications, formatting) may be made without
+                    We&apos;ll provide reasonable advance notice of material changes by email.
+                    Non-material changes (clarifications, formatting) may be made without
                     notice.
                   </p>
                 </div>

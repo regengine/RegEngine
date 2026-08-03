@@ -1,6 +1,6 @@
 import React from 'react';
 import { PageContainer } from '@/components/layout/page-container';
-import { Code, FileSpreadsheet, Keyboard, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Code, FileSpreadsheet, ScanLine, ArrowRight, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 
@@ -102,29 +102,29 @@ export default function IntegrationHubPage() {
                                     <div className="text-xs text-muted-foreground">Supported: .csv, .xlsx</div>
                                 </div>
 
-                                <button className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-brand)] hover:underline">
+                                <Link href="/tools/data-import" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-brand)] hover:underline">
                                     Map Your Columns <ArrowRight className="w-4 h-4" />
-                                </button>
+                                </Link>
                             </div>
 
                             {/* Manual Entry */}
                             <div className="group relative rounded-2xl border bg-background p-6 transition-all hover:border-[var(--re-accent-purple)]/50 hover:shadow-lg hover:shadow-[var(--re-accent-purple)]/5">
                                 <div className="w-12 h-12 rounded-xl bg-[var(--re-accent-purple)]/10 flex items-center justify-center text-[var(--re-accent-purple)] mb-6">
-                                    <Keyboard className="w-6 h-6" />
+                                    <ScanLine className="w-6 h-6" />
                                 </div>
-                                <h4 className="text-lg font-bold text-foreground mb-2">Manual Entry Portal</h4>
+                                <h4 className="text-lg font-bold text-foreground mb-2">Label &amp; Barcode Capture</h4>
                                 <p className="text-sm text-muted-foreground mb-6 line-clamp-3">
-                                    Essential for small growers, vessels, or one-off corrections. Use our mobile-friendly web forms to manually log Harvest, Cooling, or Shipping events on the floor.
+                                    Essential for small growers, vessels, or one-off corrections. Scan a GS1 barcode or upload a label photo and RegEngine extracts the lot code, GTIN, and KDEs for your records.
                                 </p>
 
                                 <div className="rounded-lg border bg-surface p-4 space-y-3 mb-6 relative overflow-hidden h-[140px]">
-                                    <div className="h-8 rounded bg-muted/50 border flex items-center px-3 text-xs text-muted-foreground">Select CTE Type...</div>
-                                    <div className="h-8 rounded bg-muted/50 border flex items-center px-3 text-xs text-muted-foreground">Traceability Lot Code</div>
-                                    <div className="h-8 rounded bg-[var(--re-accent-purple)]/20 border border-[var(--re-accent-purple)]/30 flex items-center justify-center text-xs font-medium text-[var(--re-accent-purple)]">Log Event</div>
+                                    <div className="h-8 rounded bg-muted/50 border flex items-center px-3 text-xs text-muted-foreground">Scan GS1 barcode...</div>
+                                    <div className="h-8 rounded bg-muted/50 border flex items-center px-3 text-xs text-muted-foreground">Upload label photo</div>
+                                    <div className="h-8 rounded bg-[var(--re-accent-purple)]/20 border border-[var(--re-accent-purple)]/30 flex items-center justify-center text-xs font-medium text-[var(--re-accent-purple)]">Extract KDEs</div>
                                 </div>
 
-                                <Link href="/tools/ftl-checker" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-accent-purple)] hover:underline">
-                                    Try Web Entry <ArrowRight className="w-4 h-4" />
+                                <Link href="/tools/label-scanner" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-accent-purple)] hover:underline">
+                                    Try Label Capture <ArrowRight className="w-4 h-4" />
                                 </Link>
                             </div>
 

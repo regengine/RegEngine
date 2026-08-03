@@ -51,7 +51,7 @@ export default function DeveloperPortalDashboard() {
         { label: 'Generate an API key', done: stats.activeKeys > 0, href: '/developer/portal/keys' },
         { label: 'Send your first event', done: stats.totalRequests > 0, href: '/docs' },
         { label: 'Try the API Playground', done: false, href: '/developer/portal/playground' },
-        { label: 'Set up webhooks', done: false, href: '/docs/webhooks' },
+        { label: 'Set up webhook ingestion', done: false, href: '/docs/webhooks' },
     ];
     const completedSteps = onboardingSteps.filter(s => s.done).length;
     const progress = Math.round((completedSteps / onboardingSteps.length) * 100);
@@ -146,10 +146,10 @@ export default function DeveloperPortalDashboard() {
                     {[
                         { label: 'API Keys', desc: 'Generate, revoke, and rotate', href: '/developer/portal/keys', icon: Key },
                         { label: 'Usage & Logs', desc: 'Requests, latency, errors', href: '/developer/portal/usage', icon: BarChart3 },
-                        { label: 'Quickstart', desc: '60-second integration guide', href: '/docs', icon: Zap },
+                        { label: 'Quickstart', desc: '5-minute integration guide', href: '/docs', icon: Zap },
                         { label: 'API Reference', desc: 'All endpoints documented', href: '/docs/api', icon: BookOpen },
                         { label: 'Playground', desc: 'Test endpoints live', href: '/developer/portal/playground', icon: Terminal },
-                        { label: 'Webhooks', desc: 'Real-time event delivery', href: '/docs/webhooks', icon: Webhook },
+                        { label: 'Webhook Ingestion', desc: 'Send events into RegEngine', href: '/docs/webhooks', icon: Webhook },
                     ].map((item) => (
                         <Link key={item.href} href={item.href} className="group flex items-center gap-3 rounded-lg p-4 no-underline transition-all" style={{
                             background: 'rgba(255,255,255,0.02)',

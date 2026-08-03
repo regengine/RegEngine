@@ -66,11 +66,13 @@ brew install bfg
 git clone --mirror https://github.com/regengine/RegEngine.git regengine-mirror
 cd regengine-mirror
 
-# Create a file with the secrets to remove (one per line)
+# Create a file with the secrets to remove (one per line).
+# NEVER list the actual values in this runbook or any tracked file —
+# pull them from the leaked commit (a130816) locally when building the list.
 cat > secrets.txt << 'EOF'
-327972511adf1e4c80e9bcc4470999b3d355dfcd429f296860a6bd8ac94f64a0
-uRqNfvHa7bgIcFkyxpOWZWFWzn5WMz6E8J4PqQBggrI=
-oWetq/v3HGtSUNsc7rlhNYNFttL9+YCf
+<OLD_SECRET_VALUE_1>
+<OLD_SECRET_VALUE_2>
+<OLD_SECRET_VALUE_3>
 EOF
 
 # Run BFG to replace secrets with ***REMOVED***

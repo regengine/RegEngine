@@ -284,7 +284,7 @@ export default function PortalSubmissionPage() {
                             Shipment Data Received
                         </h1>
                         <p className="text-[var(--re-text-muted)] mb-6">
-                            Your traceability data has been verified and recorded.
+                            Your traceability data has been validated and recorded.
                         </p>
 
                         <div className="bg-[var(--re-surface-elevated)] rounded-xl p-4 text-left space-y-2 mb-6">

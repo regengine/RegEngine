@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
+import { FSMA_ENFORCEMENT_DATE } from "@/lib/fsma-enforcement";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -501,7 +502,7 @@ export default function DashboardPage() {
                       FSMA 204 Compliance
                     </h3>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                      FDA deadline: July 2028 • Start tracking your readiness
+                      FDA enforcement begins {FSMA_ENFORCEMENT_DATE} • Start tracking your readiness
                     </p>
                   </div>
                 </div>

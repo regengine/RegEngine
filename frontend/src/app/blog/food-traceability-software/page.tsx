@@ -53,7 +53,7 @@ export default function FoodTraceabilitySoftwarePage() {
               Food traceability software ranges from basic Excel-based tracking to enterprise-grade platforms with automated supply chain visibility. Some vendors pitch themselves as FSMA 204 specialists. Others are generic supply chain tools retrofitted with compliance features. Many promise integration with your ERP—until you learn the integration costs $50K+ and takes six months.
             </p>
             <p className="text-[var(--re-text-secondary)] leading-relaxed mb-6">
-              The problem: most vendor comparison tools are written by vendors. They highlight features that make their product look best, not features that matter most for your compliance deadline or your budget.
+              The problem: most vendor comparison tools are written by vendors. They highlight features that make their product look best, not features that matter most for FDA's July 2028 enforcement date or your budget.
             </p>
             <p className="text-[var(--re-text-secondary)] leading-relaxed">
               This guide breaks down the four core evaluation criteria that food businesses should use to select a platform: capability alignment with FSMA 204, integration with existing systems, compliance feature depth, and total cost of ownership.

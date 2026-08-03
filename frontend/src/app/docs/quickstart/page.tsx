@@ -141,7 +141,8 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                                 />
                                 <p className="text-[var(--re-text-secondary)] leading-[1.7] mt-3 text-sm">
                                     <strong>Heads up:</strong> the <code className="bg-black/30 px-1.5 py-0.5 rounded">Idempotency-Key</code> header
-                                    is required — safe retries replay the cached response for 24 hours per tenant. Generate a
+                                    is required on webhook ingest — successful (2xx) responses are cached for 24 hours per tenant
+                                    and replayed on retry. On other POST endpoints it is optional (max length 255). Generate a
                                     fresh UUID per logical request. RECEIVING events require <code className="bg-black/30 px-1.5 py-0.5 rounded">immediate_previous_source</code>,{' '}
                                     <code className="bg-black/30 px-1.5 py-0.5 rounded">reference_document</code>, and{' '}
                                     <code className="bg-black/30 px-1.5 py-0.5 rounded">tlc_source_reference</code> per 21 CFR §1.1345(c).

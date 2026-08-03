@@ -454,7 +454,7 @@ export default function RecallReportPage() {
                                 <ShieldCheck className="h-12 w-12 text-re-brand/40 mb-4" />
                                 <h2 className="text-lg font-semibold">No Active Recall Report</h2>
                                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                                    Your system is ready to respond to a 24-hour FDA records request. Run a recall drill to validate your team&apos;s response speed.
+This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team&apos;s response speed.
                                 </p>
                                 <Link href="/dashboard/recall-drills">
                                     <Button size="sm" className="mt-4 rounded-xl min-h-[44px]">

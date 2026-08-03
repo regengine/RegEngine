@@ -296,8 +296,14 @@ export function RecallReadinessClient() {
                                 <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
                                     RegEngine helps teams organize KDEs and prepare sortable spreadsheet exports to support FSMA 204 records requests.
                                 </p>
-                                <Button className="w-full bg-[var(--re-brand)] text-xs h-8">
-                                    Book a Compliance Audit
+                                <Button asChild className="w-full bg-[var(--re-brand)] text-xs h-8">
+                                    <a
+                                        href="https://calendly.com/regengine/fsma-strategy-session"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        Book a strategy call
+                                    </a>
                                 </Button>
                             </div>
                         </div>

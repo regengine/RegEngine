@@ -10,22 +10,22 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs enterprise implementation" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "x", note: "Public account creation vs enterprise sales cycle" },
+  { feature: "Self-serve signup", regengine: "partial", competitor: "x", note: "Staged rollout vs enterprise sales cycle" },
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API with interactive docs; verify FoodLogiQ's current API surface" },
-  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "31 stateless + 3 cross-event rules; rule enforcement is configurable per workflow" },
+  { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "36 FSMA 204 validation rules (33 stateless + 3 cross-event); rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs batch reporting" },
   { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom enterprise quotes" },
-  { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom enterprise quotes" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
   { title: "Self-serve onboarding", desc: "RegEngine's sandbox returns FSMA 204 results in seconds and the full platform is live in one CSV upload. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
-  { title: "Published pricing", desc: "Facility-based pricing starting at $425/mo, no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
+  { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
 ];
 
 export default function FoodLogiQCompare() {
@@ -75,7 +75,7 @@ export default function FoodLogiQCompare() {
         </div>
 
         {/* Why teams switch */}
-        <h2 className="text-xl font-bold mb-6">Why teams switch from FoodLogiQ to RegEngine</h2>
+        <h2 className="text-xl font-bold mb-6">Why you might choose RegEngine over FoodLogiQ</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
             <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
@@ -95,8 +95,8 @@ export default function FoodLogiQCompare() {
             Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds. No signup required.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/#sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              Try the Sandbox <ArrowRight className="w-4 h-4" />
+            <Link href="/demo" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+              Explore the interactive demo <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">
               See Pricing

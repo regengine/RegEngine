@@ -10,19 +10,19 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs retailer-coordinated setup" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "partial", note: "Public account creation; ReposiTrak access is typically retailer-mediated" },
+  { feature: "Self-serve signup", regengine: "partial", competitor: "partial", note: "Staged rollout; ReposiTrak access is typically retailer-mediated" },
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify ReposiTrak's current API surface for your stack" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs status tracking" },
   { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify ReposiTrak's current ingestion options" },
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom retailer quotes" },
-  { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom retailer quotes" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
-  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine validates whether the underlying data is FSMA 204 compliant \u2014 checking KDEs, cross-event integrity, and mass balance. Many teams use both." },
+  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine validates whether the underlying data is FSMA 204 compliant \u2014 checking KDEs, cross-event integrity, and mass balance. You can use both." },
   { title: "Works beyond one retailer", icon: Shield, desc: "ReposiTrak is optimized for retailer-supplier compliance mandates. RegEngine works across your supply chain regardless of which retailers you serve." },
   { title: "Public API and open egress", icon: Code, desc: "RegEngine ships a public REST API, OpenAPI spec, webhook integrations, and CSV export at any time. Confirm ReposiTrak's current integration options for your stack." },
   { title: "Complement your retailer tools", icon: ShoppingCart, desc: "Use ReposiTrak for retailer compliance tracking AND RegEngine for FSMA 204 validation. They solve adjacent problems." },
@@ -66,7 +66,7 @@ export default function ReposiTrakCompare() {
           ))}
         </div>
 
-        <h2 className="text-xl font-bold mb-6">Why teams add RegEngine alongside ReposiTrak</h2>
+        <h2 className="text-xl font-bold mb-6">Why you might run RegEngine alongside ReposiTrak</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
             <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
@@ -83,15 +83,15 @@ export default function ReposiTrakCompare() {
           <h2 className="text-xl font-bold mb-2">See the difference yourself</h2>
           <p className="text-[var(--re-text-muted)] text-sm mb-6">Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds.</p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/#sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              Try the Sandbox <ArrowRight className="w-4 h-4" />
+            <Link href="/demo" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+              Explore the interactive demo <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">See Pricing</Link>
           </div>
         </div>
 
         <p className="mt-10 text-[0.65rem] text-[var(--re-text-disabled)] leading-relaxed">
-          ReposiTrak, Walmart, and Kroger are trademarks of their respective owners. Comparison reflects
+          ReposiTrak is a trademark of its respective owner. Comparison reflects
           publicly available information and RegEngine&apos;s interpretation; verify current capabilities
           and pricing directly with the vendor.
         </p>

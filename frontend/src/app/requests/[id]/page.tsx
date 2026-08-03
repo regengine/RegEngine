@@ -66,8 +66,9 @@ const STAGE_LABELS: Record<string, string> = {
 export default function RequestCaseDetailPage() {
   const params = useParams();
   const requestCaseId = params.id as string;
-  const { tenantId } = useAuth();
+  const { tenantId, user } = useAuth();
   const tid = tenantId || '';
+  const actor = user?.email || user?.id || 'unknown';
 
   const requests = useRequestCases(tid);
   const packages = usePackageHistory(tid, requestCaseId);
@@ -318,7 +319,7 @@ export default function RequestCaseDetailPage() {
                   variant="outline"
                   onClick={() => assemblePackage.mutate({
                     requestCaseId,
-                    generatedBy: 'dashboard_user',
+                    generatedBy: actor,
                   })}
                   disabled={assemblePackage.isPending}
                 >
@@ -331,7 +332,7 @@ export default function RequestCaseDetailPage() {
                   className="w-full"
                   onClick={() => submitPackage.mutate({
                     requestCaseId,
-                    submitted_by: 'dashboard_user',
+                    submitted_by: actor,
                     submitted_to: requestCase.requesting_party,
                   })}
                   disabled={submitPackage.isPending}

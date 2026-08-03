@@ -25,9 +25,9 @@ const TLC_VALIDATOR_CONFIG: ToolConfig = {
             }
         ],
         leadGate: {
-            title: 'Download the Lot Coding Standard',
-            description: 'Get our guide on "Defensible Lot Coding" to help your TLCs support FDA record review and maintain GS1 compatibility.',
-            cta: 'Download Standard'
+            title: 'Unlock Your Validation Results',
+            description: 'See the full in-browser analysis of your TLC structure — GS1 compatibility, entropy, and parseability checks — with guidance on making your lot codes defensible.',
+            cta: 'Show Results'
         }
     }
 };
@@ -118,8 +118,14 @@ export function TLCValidatorClient() {
                     <p className="text-xs text-[var(--re-text-secondary)] mb-4">
                         RegEngine enforces TLC stability across your entire supply chain, preventing re-labeling errors that lead to audit failure.
                     </p>
-                    <Button className="bg-[var(--re-brand)] w-full gap-2">
-                        Schedule a Demo <ArrowRight className="h-4 w-4" />
+                    <Button asChild className="bg-[var(--re-brand)] w-full gap-2">
+                        <a
+                            href="https://calendly.com/regengine/fsma-strategy-session"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            Schedule a Demo <ArrowRight className="h-4 w-4" />
+                        </a>
                     </Button>
                 </div>
             </div>

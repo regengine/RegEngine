@@ -21,6 +21,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
+import { API_BASE } from '@/lib/api-base';
 
 // Wrap design tokens to use theme-aware CSS variables for text/heading colors,
 // while keeping accent/border tokens that work across themes.
@@ -49,8 +50,6 @@ export const metadata: Metadata = {
 };
 
 /* ─── Data ─────────────────────────────────────────────────── */
-
-const API_BASE = 'https://your-preview-host/api/v1';
 
 const endpoints = [
   {
@@ -96,10 +95,10 @@ const METHOD_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const subPages = [
-  { title: 'Quickstart', href: '/docs/quickstart', icon: Zap, description: 'Your first API call in under 60 seconds' },
+  { title: 'Quickstart', href: '/docs/quickstart', icon: Zap, description: 'Your first API call in about 5 minutes' },
   { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'API keys, tenant headers, and security' },
   { title: 'API Reference', href: '/docs/api', icon: Code2, description: 'Full endpoint reference with schemas' },
-  { title: 'Webhooks', href: '/docs/webhooks', icon: Webhook, description: 'Real-time event notifications' },
+  { title: 'Webhook ingestion', href: '/docs/webhooks', icon: Webhook, description: 'Send events into RegEngine' },
   { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Preflight, readiness scoring, fix queue, and commit gates' },
   { title: 'Error Codes', href: '/docs/errors', icon: AlertTriangle, description: 'Error responses and troubleshooting' },
   { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'Request limits and throttling policies' },
@@ -125,6 +124,7 @@ function MethodBadge({ method }: { method: string }) {
 
 const curlSample = `curl -X POST ${API_BASE}/webhooks/ingest \\
   -H "X-RegEngine-API-Key: rge_live_abc123..." \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",
@@ -143,12 +143,15 @@ const curlSample = `curl -X POST ${API_BASE}/webhooks/ingest \\
     }]
   }'`;
 
-const pythonSample = `import requests
+const pythonSample = `import uuid
+
+import requests
 
 resp = requests.post(
     "${API_BASE}/webhooks/ingest",
     headers={
         "X-RegEngine-API-Key": "rge_live_abc123...",
+        "Idempotency-Key": str(uuid.uuid4()),
         "Content-Type": "application/json",
     },
     json={
@@ -176,6 +179,7 @@ const jsSample = `const resp = await fetch(
     method: "POST",
     headers: {
       "X-RegEngine-API-Key": "rge_live_abc123...",
+      "Idempotency-Key": crypto.randomUUID(),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -261,7 +265,7 @@ export default function DocsHomePage() {
           <div className="flex flex-wrap gap-4 mb-8">
             {[
               { step: '1', label: 'Read the docs', href: '/docs/quickstart', icon: BookOpen },
-              { step: '2', label: 'Get an API key', href: '/signup', icon: Key },
+              { step: '2', label: 'Request developer access', href: '/developers', icon: Key },
               { step: '3', label: 'Make your first call', href: '/docs/quickstart', icon: Terminal },
             ].map((item) => (
               <Link
@@ -482,17 +486,17 @@ export default function DocsHomePage() {
               Ready to get started?
             </h3>
             <p className="text-sm m-0" style={{ color: T.textMuted }}>
-              Create a free developer account and get your API key in minutes.
+              Developer access is request-gated — tell us about your integration and we&apos;ll provision your API key.
             </p>
           </div>
           <div className="flex gap-3 shrink-0">
             <Link
-              href="/signup"
+              href="/developers"
               className="inline-flex items-center gap-2 text-white px-6 py-3 rounded-md font-semibold text-sm no-underline"
               style={{ background: T.accent }}
             >
               <Key className="w-4 h-4" />
-              Get API Key
+              Request developer access
             </Link>
             <Link
               href="/docs/quickstart"

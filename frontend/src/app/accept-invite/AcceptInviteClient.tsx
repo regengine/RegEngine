@@ -42,7 +42,6 @@ function scrubSensitiveInviteUrl(): void {
 }
 
 export default function AcceptInvitePage() {
-  const MIN_PASSWORD_LENGTH = 12;
   const router = useRouter();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -50,8 +49,6 @@ export default function AcceptInvitePage() {
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null | undefined>(undefined);
 
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
 
   useEffect(() => {
@@ -67,16 +64,6 @@ export default function AcceptInvitePage() {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-      return;
-    }
-
     setIsLoading(true);
     try {
       if (!token) {
@@ -86,7 +73,6 @@ export default function AcceptInvitePage() {
 
       await apiClient.acceptInvite({
         token,
-        password,
         name,
       });
 
@@ -112,11 +98,14 @@ export default function AcceptInvitePage() {
     return (
       <AuthShell
         title="Welcome aboard"
-        description="Your account has been created successfully."
+        description="Your account is ready. We'll email you a sign-in code when you log in — no password needed."
         icon={CheckCircle}
       >
         <div role="status" className="space-y-4 text-center">
-          <p className="sr-only">Your account has been created successfully.</p>
+          <p className="sr-only">
+            Your account is ready. We&apos;ll email you a sign-in code when you
+            log in — no password needed.
+          </p>
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--re-success-bg)]">
             <CheckCircle
               className="h-7 w-7 text-re-success"
@@ -178,39 +167,6 @@ export default function AcceptInvitePage() {
               placeholder="John Doe"
               required
               autoComplete="name"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="invite-password">
-              Create Password
-            </label>
-            <Input
-              id="invite-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={MIN_PASSWORD_LENGTH}
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium"
-              htmlFor="invite-confirm-password"
-            >
-              Confirm Password
-            </label>
-            <Input
-              id="invite-confirm-password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={MIN_PASSWORD_LENGTH}
-              autoComplete="new-password"
             />
           </div>
 

@@ -51,7 +51,7 @@ export default function StatusPage() {
             >
               support@regengine.co
             </a>
-            . First response within 24 hours during pilot programs. For urgent
+. We aim to respond within one business day during pilot programs. For urgent
             ingestion or auth issues, include your workspace slug and the timestamp
             of the request so we can correlate with logs.
           </p>
