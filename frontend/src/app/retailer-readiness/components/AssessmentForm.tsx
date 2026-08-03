@@ -100,7 +100,7 @@ export default function AssessmentForm({
                             </p>
                         )}
                         <p style={{ fontSize: 12, color: T.textDim }}>
-                            No commitment required. Assessment delivered within 24 hours.
+                            No commitment required. Assessment typically delivered within one business day.
                         </p>
                     </form>
                 ) : (
@@ -113,7 +113,7 @@ export default function AssessmentForm({
                             Assessment Requested!
                         </h3>
                         <p style={{ color: T.textMuted, fontSize: 14, marginBottom: 20 }}>
-                            I&apos;ll send your retailer-readiness assessment to {email} within 24 hours.
+                            I&apos;ll send your retailer-readiness assessment to {email} — typically within one business day.
                         </p>
                         <Link href="/tools/ftl-checker">
                             <button style={{

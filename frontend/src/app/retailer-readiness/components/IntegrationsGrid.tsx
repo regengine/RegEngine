@@ -21,8 +21,11 @@ export default function IntegrationsGrid({ revealRef, visible }: IntegrationsGri
                     Works With Your Stack
                 </p>
                 <h2 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 700, color: T.heading }}>
-                    Plug Into Your Existing Systems
+                    Data In, Your Way
                 </h2>
+                <p style={{ fontSize: 14, color: T.textMuted, marginTop: 8 }}>
+                    Data in via API, CSV, and webhook — ERP integrations scoped per engagement.
+                </p>
             </div>
             <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',

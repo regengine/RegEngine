@@ -279,6 +279,7 @@ export default function FSMA204GuidePage() {
                                     { cte: 'Harvesting', event: 'harvesting', kdes: 'Location, Harvest Date, Lot Code, Product' },
                                     { cte: 'Cooling', event: 'cooling', kdes: 'Location, Cooling Date, Lot Code, Product' },
                                     { cte: 'Initial Packing', event: 'initial_packing', kdes: 'Location, Pack Date, TLC, Quantity' },
+                                    { cte: 'First Land-Based Receiving', event: 'first_land_based_receiving', kdes: 'Location, Landing Date, TLC, Quantity, Vessel Source' },
                                     { cte: 'Shipping', event: 'shipping', kdes: 'Ship From/To, TLC, Carrier, Date' },
                                     { cte: 'Receiving', event: 'receiving', kdes: 'Location, TLC, Source, Quantity, Date' },
                                     { cte: 'Transformation', event: 'transformation', kdes: 'Input TLCs, Output TLC, Date, Location' },

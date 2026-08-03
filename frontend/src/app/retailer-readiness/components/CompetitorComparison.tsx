@@ -38,7 +38,7 @@ export default function CompetitorComparison({ revealRef, visible }: CompetitorC
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.heading, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feature</span>
                     <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
                     <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>Trustwell</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>TraceLink</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>ReposiTrak</span>
                 </div>
                 {COMPETITORS.map((row, i) => (
                     <div key={i} className="competitor-row" style={{
@@ -50,7 +50,7 @@ export default function CompetitorComparison({ revealRef, visible }: CompetitorC
                         <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{row.feature}</span>
                         <span style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>{row.regengine}</span>
                         <span style={{ fontSize: 13, color: T.textDim }}>{row.foodlogiq}</span>
-                        <span style={{ fontSize: 13, color: T.textDim }}>{row.tracelink}</span>
+                        <span style={{ fontSize: 13, color: T.textDim }}>{row.repositrak}</span>
                     </div>
                 ))}
               </div>

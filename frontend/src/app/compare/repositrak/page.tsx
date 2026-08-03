@@ -10,15 +10,15 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { feature: "Time to first compliance export", regengine: "check", competitor: "partial", note: "Self-serve onboarding vs retailer-coordinated setup" },
-  { feature: "Self-serve signup", regengine: "check", competitor: "partial", note: "Public account creation; ReposiTrak access is typically retailer-mediated" },
+  { feature: "Self-serve signup", regengine: "partial", competitor: "partial", note: "Staged rollout; ReposiTrak access is typically retailer-mediated" },
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify ReposiTrak's current API surface for your stack" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs status tracking" },
   { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify ReposiTrak's current ingestion options" },
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "$425-$749/mo vs custom retailer quotes" },
-  { feature: "Free sandbox / developer tools", regengine: "check", competitor: "x", note: "Try before you buy" },
+  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "GA from $849/mo (Founding Design Partner rates from $425/mo, billed annually) vs custom retailer quotes" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
@@ -91,7 +91,7 @@ export default function ReposiTrakCompare() {
         </div>
 
         <p className="mt-10 text-[0.65rem] text-[var(--re-text-disabled)] leading-relaxed">
-          ReposiTrak, Walmart, and Kroger are trademarks of their respective owners. Comparison reflects
+          ReposiTrak is a trademark of its respective owner. Comparison reflects
           publicly available information and RegEngine&apos;s interpretation; verify current capabilities
           and pricing directly with the vendor.
         </p>
