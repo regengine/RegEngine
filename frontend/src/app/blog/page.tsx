@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3 } from 'lucide-react';
+import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3, Clock, Tag } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
@@ -68,6 +68,22 @@ const BLOG_POSTS = [
     icon: Leaf,
     date: 'April 2026',
     readTime: '12 min read',
+  },
+  {
+    slug: 'fsma-204-traceability-lot-codes',
+    title: 'FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide',
+    excerpt: 'Learn how to assign, track, and maintain Traceability Lot Codes under FSMA 204. Covers TLC requirements, best practices, and common mistakes for food businesses.',
+    icon: Tag,
+    date: 'March 2026',
+    readTime: '7 min read',
+  },
+  {
+    slug: '24-hour-rule',
+    title: 'The FSMA 204 24-Hour Rule Explained',
+    excerpt: 'The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.',
+    icon: Clock,
+    date: 'March 2026',
+    readTime: '6 min read',
   },
 ];
 

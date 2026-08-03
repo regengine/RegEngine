@@ -83,7 +83,7 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
             },
             {
                 id: 'partner_exchange',
-                text: 'Do you systematicallly receive KDEs from suppliers and provide them to customers?',
+                text: 'Do you systematically receive KDEs from suppliers and provide them to customers?',
                 type: 'select',
                 options: [
                     { label: 'Yes, digital exchange', value: 'yes', weight: 6 },

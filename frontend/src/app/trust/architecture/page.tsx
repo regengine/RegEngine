@@ -66,7 +66,7 @@ const DATA_FLOW_STEPS = [
         step: '1',
         title: 'Ingest',
         description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before scoring.',
-        color: 'bg-re-info-muted0/15 text-re-info',
+        color: 'bg-re-info/15 text-re-info',
     },
     {
         step: '2',
@@ -84,13 +84,13 @@ const DATA_FLOW_STEPS = [
         step: '4',
         title: 'Score',
         description: 'The compliance engine produces an advisory readiness signal across six weighted dimensions: export readiness, KDE completeness, CTE coverage, chain integrity, obligation coverage, and FTL product coverage. Per-dimension maturity varies; rule enforcement is opt-in per workflow and is advisory in production today.',
-        color: 'bg-re-warning-muted0/15 text-re-warning',
+        color: 'bg-re-warning/15 text-re-warning',
     },
     {
         step: '5',
         title: 'Export',
         description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0, FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
-        color: 'bg-re-danger-muted0/15 text-re-danger',
+        color: 'bg-re-danger/15 text-re-danger',
     },
 ];
 

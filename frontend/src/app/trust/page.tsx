@@ -116,7 +116,7 @@ export default function TrustCenterPage() {
                     commitments — SLAs, retention, security obligations — live in your contract; this page
                     is a starting point for diligence, not a substitute for it.
                 </p>
-                <div className={`${card} mt-6 border-re-warning/30 bg-re-warning-muted0/10 p-5`}>
+                <div className={`${card} mt-6 border-re-warning/30 bg-re-warning/10 p-5`}>
                     <div className="text-sm font-semibold text-re-text-primary">Pre-production trust posture</div>
                     <p className="mt-2 text-sm leading-relaxed text-re-text-muted">
                         RegEngine is a design-partner oriented FSMA 204 evidence layer. Public pages describe

@@ -118,9 +118,9 @@ export function MarketingFooter() {
                     >
                         Cookie Preferences
                     </button>
-                    <code className="font-mono text-[0.68rem] text-[var(--re-text-muted)]">
-                        verify_chain.py — don&apos;t trust, verify
-                    </code>
+                    <span className="text-[0.68rem] text-[var(--re-text-muted)]">
+                        Verify our exports yourself: <code className="font-mono">verify_chain.py</code>
+                    </span>
                 </div>
             </div>
         </footer>

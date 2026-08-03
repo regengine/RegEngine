@@ -140,7 +140,7 @@ export default function FTLCheckPage() {
       <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
         <CardHeader className="space-y-2 pb-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-warning-muted0/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-re-warning/10">
               <ShieldCheck className="h-5 w-5 text-re-warning" />
             </div>
             <div>
@@ -206,7 +206,7 @@ export default function FTLCheckPage() {
 
                 {/* Risk callout */}
                 {results.highRisk.length > 0 && (
-                  <div className="flex items-start gap-2 rounded-lg border border-re-warning/30 bg-re-warning-muted0/5 p-3">
+                  <div className="flex items-start gap-2 rounded-lg border border-re-warning/30 bg-re-warning/5 p-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-re-warning" />
                     <div className="text-sm">
                       <span className="font-medium text-re-warning">
@@ -252,7 +252,7 @@ export default function FTLCheckPage() {
                 {saveError && (
                   <div
                     role="alert"
-                    className="rounded-md border border-re-danger/40 bg-re-danger-muted0/10 px-3 py-2 text-sm text-re-danger"
+                    className="rounded-md border border-re-danger/40 bg-re-danger/10 px-3 py-2 text-sm text-re-danger"
                   >
                     {saveError}
                   </div>

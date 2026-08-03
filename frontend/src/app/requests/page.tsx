@@ -38,12 +38,12 @@ import {
 const STATUS_CONFIG: Record<string, { label: string; color: string; progress: number }> = {
   intake: { label: 'Intake', color: 'bg-re-surface-card0', progress: 5 },
   scoping: { label: 'Scoping', color: 'bg-blue-400', progress: 15 },
-  collecting: { label: 'Collecting', color: 'bg-re-info-muted0', progress: 30 },
-  gap_analysis: { label: 'Gap Analysis', color: 'bg-re-warning-muted0', progress: 45 },
+  collecting: { label: 'Collecting', color: 'bg-re-info', progress: 30 },
+  gap_analysis: { label: 'Gap Analysis', color: 'bg-re-warning', progress: 45 },
   exception_triage: { label: 'Exception Triage', color: 'bg-orange-500', progress: 55 },
   assembling: { label: 'Assembling', color: 'bg-purple-500', progress: 70 },
   internal_review: { label: 'Internal Review', color: 'bg-indigo-500', progress: 80 },
-  ready: { label: 'Ready', color: 'bg-re-success-muted0', progress: 90 },
+  ready: { label: 'Ready', color: 'bg-re-success', progress: 90 },
   submitted: { label: 'Submitted', color: 'bg-re-success', progress: 100 },
   amended: { label: 'Amended', color: 'bg-teal-500', progress: 100 },
 };

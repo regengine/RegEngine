@@ -8,13 +8,21 @@ import Link from 'next/link';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { HelpTooltip } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
 import { useAPIKeys, useCreateAPIKey, useGenerateAPIKey, useRevokeAPIKey } from '@/hooks/use-api';
-import { Key, Plus, Trash2, CheckCircle, Copy, Shield, Terminal, AlertCircle, ArrowRight } from 'lucide-react';
+import { Key, Plus, Trash2, CheckCircle, Copy, Shield, AlertCircle, ArrowRight } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 export default function AdminPage() {
@@ -25,6 +33,7 @@ export default function AdminPage() {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
+  const [pendingRevokeKeyId, setPendingRevokeKeyId] = useState<string | null>(null);
 
   const { data: apiKeys, isLoading, refetch, error } = useAPIKeys(adminKey, !!adminKey);
   const createKeyMutation = useCreateAPIKey();
@@ -86,13 +95,15 @@ export default function AdminPage() {
   };
 
   const handleRevokeKey = async (keyId: string) => {
-    if (!adminKey || !confirm('Are you sure you want to revoke this API key?')) return;
+    if (!adminKey) return;
 
     try {
       await revokeKeyMutation.mutateAsync({ adminKey, keyId });
       refetch();
     } catch (error) {
       console.error('Failed to revoke API key:', error);
+    } finally {
+      setPendingRevokeKeyId(null);
     }
   };
 
@@ -191,21 +202,12 @@ export default function AdminPage() {
                 {/* Help Section */}
                 <div className="p-4 rounded-lg bg-muted/50 border">
                   <h4 className="font-medium mb-2 flex items-center gap-2">
-                    <Terminal className="h-4 w-4" />
+                    <Key className="h-4 w-4" />
                     Where to find your Admin Master Key
                   </h4>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    The Admin Master Key is set in your environment configuration. You can find it in your <code className="bg-muted px-1 rounded">.env</code> file:
+                  <p className="text-sm text-muted-foreground">
+                    Ask your workspace administrator for the master key.
                   </p>
-                  <pre className="bg-re-surface-base text-re-text-primary p-3 rounded text-sm overflow-x-auto">
-                    <code>ADMIN_MASTER_KEY=your_key_here</code>
-                  </pre>
-                  <p className="text-sm text-muted-foreground mt-3">
-                    If you haven&apos;t set one up yet, generate a secure key:
-                  </p>
-                  <pre className="bg-re-surface-base text-re-text-primary p-3 rounded text-sm overflow-x-auto mt-2">
-                    <code>openssl rand -hex 32</code>
-                  </pre>
                 </div>
 
                 {/* Alternative: Onboarding Wizard */}
@@ -443,7 +445,7 @@ export default function AdminPage() {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => key.key_id && handleRevokeKey(key.key_id)}
+                            onClick={() => key.key_id && setPendingRevokeKeyId(key.key_id)}
                             disabled={revokeKeyMutation.isPending}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -461,6 +463,29 @@ export default function AdminPage() {
               </Card>
             </>
           )}
+
+          <Dialog open={pendingRevokeKeyId !== null} onOpenChange={(open) => { if (!open) setPendingRevokeKeyId(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Revoke this API key?</DialogTitle>
+                <DialogDescription>
+                  Anything using this key will immediately lose access. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPendingRevokeKeyId(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => pendingRevokeKeyId && handleRevokeKey(pendingRevokeKeyId)}
+                  disabled={revokeKeyMutation.isPending}
+                >
+                  Revoke Key
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </motion.div>
       </PageContainer>
     </div>

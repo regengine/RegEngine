@@ -454,9 +454,9 @@ export default function SnapshotsPage() {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'COMPLIANT': return 'bg-re-success-muted0/10 text-re-success border-green-500/30';
+            case 'COMPLIANT': return 'bg-re-success/10 text-re-success border-green-500/30';
             case 'AT_RISK': return 'bg-re-warning/10 text-re-warning border-yellow-500/30';
-            case 'NON_COMPLIANT': return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30';
+            case 'NON_COMPLIANT': return 'bg-re-danger/10 text-re-danger border-re-danger/30';
             default: return 'bg-re-surface-card0/10 text-re-text-tertiary border-re-border/30';
         }
     };
@@ -488,7 +488,7 @@ export default function SnapshotsPage() {
                         {selectedForDiff.length === 2 && (
                             <button
                                 onClick={compareSnapshots}
-                                className="flex items-center gap-2 px-6 py-3 bg-re-info hover:bg-re-info-muted0 rounded-xl font-medium transition-all"
+                                className="flex items-center gap-2 px-6 py-3 bg-re-info hover:bg-re-info rounded-xl font-medium transition-all"
                             >
                                 Compare Selected
                             </button>
@@ -522,7 +522,7 @@ export default function SnapshotsPage() {
 
                 {/* Error State */}
                 {fetchError && (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-sm mb-4">
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-re-danger text-sm mb-4">
                         <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                         <span>{fetchError}</span>
                     </div>
@@ -564,10 +564,10 @@ export default function SnapshotsPage() {
                                             {/* Degradation State Badge */}
                                             <span
                                                 className={`px-2 py-1 rounded-full text-sm border cursor-help ${snapshot.snapshot_state === 'VALID'
-                                                    ? 'bg-re-success-muted0/10 text-re-success border-green-500/30'
+                                                    ? 'bg-re-success/10 text-re-success border-green-500/30'
                                                     : snapshot.snapshot_state === 'STALE'
                                                         ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
-                                                        : 'bg-re-danger-muted0/10 text-re-danger border-re-danger/30'
+                                                        : 'bg-re-danger/10 text-re-danger border-re-danger/30'
                                                     }`}
                                                 title={snapshot.degradation_reason || `${snapshot.age_hours}h old`}
                                             >
@@ -582,7 +582,7 @@ export default function SnapshotsPage() {
                                                 </span>
                                             )}
                                             {snapshot.integrity_verified && (
-                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-re-success-muted0/10 text-re-success text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
+                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-re-success/10 text-re-success text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
                                                     <ShieldCheck className="h-3.5 w-3.5" />
                                                     INTEGRITY VERIFIED
                                                 </span>
@@ -1000,9 +1000,9 @@ export default function SnapshotsPage() {
                                     {diffResult.changes?.map((change: DiffChange, index: number) => (
                                         <div
                                             key={index}
-                                            className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-re-danger/50 bg-re-danger-muted0/10' :
+                                            className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-re-danger/50 bg-re-danger/10' :
                                                 change.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
-                                                    change.severity === 'positive' ? 'border-re-success/50 bg-re-success-muted0/10' :
+                                                    change.severity === 'positive' ? 'border-re-success/50 bg-re-success/10' :
                                                         'border-white/10 bg-white/5'
                                                 }`}
                                         >

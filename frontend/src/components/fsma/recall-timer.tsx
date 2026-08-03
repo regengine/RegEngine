@@ -121,7 +121,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
       {/* Urgency overlay animation */}
       {timeData?.urgency === 'critical' && drill.status === 'IN_PROGRESS' && (
         <motion.div
-          className="absolute inset-0 bg-re-danger-muted0/10 pointer-events-none"
+          className="absolute inset-0 bg-re-danger/10 pointer-events-none"
           animate={{ opacity: [0.1, 0.3, 0.1] }}
           transition={{ duration: 2, repeat: Infinity }}
         />
@@ -166,10 +166,10 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             <motion.div
               className={cn(
                 'h-full rounded-full',
-                timeData?.urgency === 'breached' && 'bg-re-danger-muted0',
-                timeData?.urgency === 'critical' && 'bg-re-danger-muted0',
-                timeData?.urgency === 'warning' && 'bg-re-warning-muted0',
-                timeData?.urgency === 'normal' && 'bg-re-success-muted0'
+                timeData?.urgency === 'breached' && 'bg-re-danger',
+                timeData?.urgency === 'critical' && 'bg-re-danger',
+                timeData?.urgency === 'warning' && 'bg-re-warning',
+                timeData?.urgency === 'normal' && 'bg-re-success'
               )}
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(100, timeData?.progress || 0)}%` }}

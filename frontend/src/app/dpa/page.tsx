@@ -410,7 +410,7 @@ export default function DpaPage() {
               <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-4">
                 7. Personal Data Breach Notification
               </h2>
-              <div className="rounded-xl border border-re-warning/30 bg-re-warning-muted0/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+              <div className="rounded-xl border border-re-warning/30 bg-re-warning/5 p-5 space-y-3 text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                 <div className="flex items-center gap-2 mb-1">
                   <Bell className="h-4 w-4 text-re-warning shrink-0" />
                   <h3 className="text-[14px] font-semibold text-[var(--re-text-primary)]">Incident Notification Process</h3>

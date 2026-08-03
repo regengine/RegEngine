@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { User, Mail, Building2, Phone, MapPin, Calendar, ArrowLeft, Info } from 'lucide-react';
+import { User, Mail, Building2, Phone, MapPin, ArrowLeft, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -174,13 +174,13 @@ export default function ProfileSettingsPage() {
                                         <Label>Role</Label>
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <User className="h-4 w-4" />
-                                            Account Member
+                                            Member
                                         </div>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Account Email</Label>
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Calendar className="h-4 w-4" />
+                                            <Mail className="h-4 w-4" />
                                             {email || 'Not signed in'}
                                         </div>
                                     </div>

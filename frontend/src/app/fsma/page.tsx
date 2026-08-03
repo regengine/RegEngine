@@ -405,8 +405,8 @@ function FSMADashboardContent() {
                               <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${
-                                    (supplier.completeness_rate || 0) >= 90 ? 'bg-re-success-muted0' :
-                                    (supplier.completeness_rate || 0) >= 70 ? 'bg-re-warning-muted0' : 'bg-re-danger-muted0'
+                                    (supplier.completeness_rate || 0) >= 90 ? 'bg-re-success' :
+                                    (supplier.completeness_rate || 0) >= 70 ? 'bg-re-warning' : 'bg-re-danger'
                                   } ${
                                     (supplier.completeness_rate || 0) >= 95 ? 'w-[95%]' :
                                     (supplier.completeness_rate || 0) >= 90 ? 'w-[90%]' :

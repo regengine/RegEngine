@@ -315,10 +315,10 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     const [expanded, setExpanded] = useState(false);
 
     const methodColors: Record<string, string> = {
-        GET: 'bg-re-info-muted0',
-        POST: 'bg-re-success-muted0',
+        GET: 'bg-re-info',
+        POST: 'bg-re-success',
         PUT: 'bg-re-warning',
-        DELETE: 'bg-re-danger-muted0',
+        DELETE: 'bg-re-danger',
     };
 
     return (
