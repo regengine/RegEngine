@@ -36,7 +36,7 @@ const CTES_PLAIN = [
     what: "Record when the product was cooled after harvest, where, and under what lot code.",
   },
   {
-    name: "Packing",
+    name: "Initial Packing",
     icon: FileSpreadsheet,
     who: "Packhouses",
     what: "Record what was packed, when, the lot code, and the quantity.",

@@ -212,7 +212,7 @@ export default function DashboardIntegrationsPage() {
                 if (!cancelled) {
                     setProfiles([]);
                     setProfilesStatus('error');
-                    setProfileError('Unable to load saved integration profiles for this tenant.');
+                    setProfileError('Unable to load saved integration profiles for this workspace.');
                 }
             }
         }
@@ -257,7 +257,7 @@ export default function DashboardIntegrationsPage() {
             setSupplierName('');
             setProfileNotes('');
         } catch {
-            setProfileError('Unable to save the integration profile. Check tenant access and try again.');
+            setProfileError('Unable to save the integration profile. Check workspace access and try again.');
         } finally {
             setSavingProfile(false);
         }
@@ -376,7 +376,7 @@ export default function DashboardIntegrationsPage() {
 
                         {!isAuthenticated && (
                             <div className={styles.warningBox}>
-                                Sign in to create tenant-scoped supplier profiles and attach them to portal invites.
+                                Sign in to create workspace-scoped supplier profiles and attach them to portal invites.
                             </div>
                         )}
                         {profileError && <div className={styles.errorBox}>{profileError}</div>}
@@ -482,12 +482,12 @@ export default function DashboardIntegrationsPage() {
                             <div className={styles.profileListPanel}>
                                 <div className={styles.pathHeader}>
                                     <div>
-                                        <h3 className={styles.pathTitle}>Tenant profiles</h3>
+                                        <h3 className={styles.pathTitle}>Workspace profiles</h3>
                                         <p className={styles.muted}>Attach one when you invite a supplier from Supplier Management.</p>
                                     </div>
                                     <span className={styles.verifiedBadge}>
                                         <ShieldCheck className={styles.badgeIcon} />
-                                        Tenant-scoped
+                                        Workspace-scoped
                                     </span>
                                 </div>
 

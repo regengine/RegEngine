@@ -476,7 +476,7 @@ export default function BulkUploadPage() {
             </span>
             <h1 className="text-xl sm:text-2xl font-bold text-[var(--re-text-primary)]">Supplier Bulk Upload</h1>
             <p className="mt-1 text-xs sm:text-sm text-[var(--re-text-muted)] max-w-xl">
-              Upload facilities, FTL scope, TLCs, and CTE events in one pass. Bulk writes use the same tenant-wide hash/Merkle path as manual entries.
+              Upload facilities, FTL scope, TLCs, and CTE events in one pass. Bulk writes use the same workspace-wide hash/Merkle path as manual entries.
             </p>
           </div>
           <Link href="/onboarding" className="text-sm font-medium text-[var(--re-brand)] hover:opacity-80 flex items-center gap-1 min-h-[44px]">
@@ -547,7 +547,7 @@ export default function BulkUploadPage() {
           <div>
             <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">Cryptographic integrity built in</h3>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Every bulk-uploaded record is SHA-256 hashed and inserted into the same tenant-wide Merkle tree as manual entries. Audit trails are tamper-evident from the moment data lands.
+              Every bulk-uploaded record is SHA-256 hashed and inserted into the same workspace-wide Merkle tree as manual entries. Audit trails are tamper-evident from the moment data lands.
             </p>
           </div>
         </div>

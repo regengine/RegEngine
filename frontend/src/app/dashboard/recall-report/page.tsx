@@ -160,7 +160,7 @@ export default function RecallReportPage() {
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
                             <AlertTriangle className="h-6 w-6 sm:h-7 sm:w-7 text-re-danger" />
-                            Recall Investigation
+                            Recall Report
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             FSMA 204 Traceability Response &amp; Readiness Assessment
@@ -179,7 +179,7 @@ export default function RecallReportPage() {
                         </Button>
                         <Link href="/dashboard/recall-drills">
                             <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
-                                <Play className="h-3.5 w-3.5 mr-1.5" /> Run Mock Drill
+                                <Play className="h-3.5 w-3.5 mr-1.5" /> Run Recall Drill
                             </Button>
                         </Link>
                         <Button
@@ -263,7 +263,7 @@ export default function RecallReportPage() {
                         <Info className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>
                             {report?.demo_disclaimer ??
-                                'Sample scenario only. Live recall evidence appears after tenant data and export workflows are connected for this workspace.'}
+                                'Sample scenario only. Live recall evidence appears after data and export workflows are connected for this workspace.'}
                         </span>
                     </div>
                 )}
@@ -452,13 +452,13 @@ export default function RecallReportPage() {
                                 animate={{ opacity: 1 }}
                             >
                                 <ShieldCheck className="h-12 w-12 text-re-brand/40 mb-4" />
-                                <h2 className="text-lg font-semibold">No Active Recall Investigation</h2>
+                                <h2 className="text-lg font-semibold">No Active Recall Report</h2>
                                 <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                                    This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a mock drill to validate your team&apos;s response speed.
+This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team&apos;s response speed.
                                 </p>
                                 <Link href="/dashboard/recall-drills">
                                     <Button size="sm" className="mt-4 rounded-xl min-h-[44px]">
-                                        <Play className="mr-1.5 h-3.5 w-3.5" /> Simulate Recall Drill
+                                        <Play className="mr-1.5 h-3.5 w-3.5" /> Run Recall Drill
                                     </Button>
                                 </Link>
                             </motion.div>

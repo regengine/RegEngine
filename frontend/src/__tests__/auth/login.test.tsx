@@ -126,7 +126,8 @@ describe('passwordless login', () => {
 
     await user.click(screen.getByRole('button', { name: /sign in with passkey/i }));
     await user.type(screen.getByLabelText(/passkey email/i), 'passkey@example.com');
-    await user.click(screen.getByRole('button', { name: /use passkey/i }));
+    const passkeyButtons = screen.getAllByRole('button', { name: /sign in with passkey/i });
+    await user.click(passkeyButtons[passkeyButtons.length - 1]);
 
     await waitFor(() => {
       expect(mocks.performPasskeyLogin).toHaveBeenCalledWith('passkey@example.com');

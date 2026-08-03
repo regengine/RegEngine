@@ -121,7 +121,7 @@ export default function AboutPage() {
                 Christopher Sellers
               </h2>
               <p className="text-sm font-mono text-[var(--re-brand)] mt-1">
-                Founder &amp; Builder
+                Founder
               </p>
               <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mt-4">
                 I built RegEngine because I kept seeing the same pattern: FSMA

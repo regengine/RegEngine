@@ -42,8 +42,8 @@ export default function SupportSettingsPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
-                        <p className="inline-flex items-start gap-2"><ShieldAlert className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Run a live drill or export from the Recall Drill Workspace before reaching out for support.</p>
-                        <p className="inline-flex items-start gap-2"><FileText className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Confirm your recurring archive jobs completed successfully so you have off-platform evidence available.</p>
+                        <p className="inline-flex items-start gap-2"><ShieldAlert className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Run a live drill or export from Recall Drills before reaching out for support.</p>
+                        <p className="inline-flex items-start gap-2"><FileText className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Confirm your recurring export jobs completed successfully so you have off-platform evidence available.</p>
                         <p className="inline-flex items-start gap-2"><Mail className="h-4 w-4 mt-0.5 text-[var(--re-brand)]" /> Contact support@regengine.co for operational issues. Custom SLA and named contacts apply only where contractually negotiated.</p>
                     </CardContent>
                 </Card>
@@ -52,9 +52,9 @@ export default function SupportSettingsPage() {
                     Related pages:{' '}
                     <Link href="/trust" className="text-[var(--re-brand)] underline">Trust Center</Link>
                     {' '}·{' '}
-                    <Link href="/dashboard/export-jobs" className="text-[var(--re-brand)] underline">Archive Jobs</Link>
+                    <Link href="/dashboard/export-jobs" className="text-[var(--re-brand)] underline">FDA Export</Link>
                     {' '}·{' '}
-                    <Link href="/dashboard/recall-drills" className="text-[var(--re-brand)] underline">Recall Drill Workspace</Link>
+                    <Link href="/dashboard/recall-drills" className="text-[var(--re-brand)] underline">Recall Drills</Link>
                 </div>
             </div>
         </div>

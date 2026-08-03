@@ -100,7 +100,7 @@ export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, classNa
             <p className="text-muted-foreground">No active recall drill</p>
             <Button className="mt-4" variant="outline" onClick={onStartDrill} disabled={!onStartDrill}>
               <PlayCircle className="w-4 h-4 mr-2" />
-              Start Mock Drill
+              Run Recall Drill
             </Button>
           </div>
         </CardContent>

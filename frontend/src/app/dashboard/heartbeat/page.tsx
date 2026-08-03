@@ -519,7 +519,7 @@ export default function HeartbeatPage() {
                                             <p className="text-base font-medium mb-1">No heartbeat data available</p>
                                             <p className="text-sm text-muted-foreground/60 max-w-md">
                                                 This workspace does not yet have enough connected evidence to render the heartbeat view.
-                                                Import traceability events or contact support if you expected tenant data to appear here.
+                                                Import traceability events or contact support if you expected workspace data to appear here.
                                             </p>
                                             <div className="flex gap-3 mt-5">
                                                 <Link href="/ingest">
@@ -828,9 +828,9 @@ export default function HeartbeatPage() {
                             >
                                 {[
                                     { label: 'Full Dashboard', href: '/dashboard', icon: BarChart3 },
-                                    { label: 'Import Data', href: '/tools/data-import', icon: Upload },
+                                    { label: 'Import Data', href: '/ingest', icon: Upload },
                                     { label: 'Audit Log', href: '/dashboard/audit-log', icon: FileText },
-                                    { label: 'Mock Drill', href: '/dashboard/recall-drills', icon: ShieldCheck },
+                                    { label: 'Recall Drill', href: '/dashboard/recall-drills', icon: ShieldCheck },
                                 ].map(link => {
                                     const LinkIcon = link.icon;
                                     return (

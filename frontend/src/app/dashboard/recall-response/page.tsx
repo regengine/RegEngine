@@ -227,7 +227,7 @@ export default function RecallResponsePage() {
                 <Button variant="outline" asChild>
                   <Link href="/dashboard/recall-drills">
                     <Clock className="w-4 h-4 mr-2" />
-                    Run Mock Drill
+                    Run Recall Drill
                   </Link>
                 </Button>
               </CardContent>
