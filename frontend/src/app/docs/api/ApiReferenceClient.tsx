@@ -172,10 +172,18 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/trace/{tlc}',
-                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope.',
+                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s tenant).',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "tlc": "00012345678901-LOT-2026-001", "nodes": [...], "edges": [...] }',
+                params: ['tenant_id={your-tenant-uuid}'],
+                response: JSON.stringify({
+                    seed_tlc: "00012345678901-LOT-2026-001",
+                    tenant_id: "38e99859-7364-4932-99fa-b1f114bf0202",
+                    traversal_depth: 5,
+                    node_count: 1,
+                    edge_count: 0,
+                    nodes: [{ tlc: "00012345678901-LOT-2026-001", is_seed: true, role: "seed", event_count: 0 }]
+                }, null, 2),
             },
             {
                 method: 'GET',
@@ -183,7 +191,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 description: 'Generate an FDA export for a traceability lot code (the 24-hour traceability request format). Requires the fda.export scope and an active subscription.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tlc=00012345678901-LOT-2026-001', 'format=csv'],
+                params: ['tenant_id={your-tenant-uuid}', 'tlc=00012345678901-LOT-2026-001', 'format=csv'],
                 response: 'CSV / JSON export with FSMA 204-required KDE columns',
             },
             {
@@ -192,7 +200,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 description: 'Generate an FDA export from the canonical record model (v2) — includes provenance and rule-evaluation status per row',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['start_date=2026-01-01', 'end_date=2026-01-31'],
+                params: ['tenant_id={your-tenant-uuid}', 'start_date=2026-01-01', 'end_date=2026-01-31'],
                 response: 'CSV / JSON export derived from canonical records',
             },
             {
@@ -201,7 +209,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 description: 'Recall-filtered FDA export — only events linked to the recalled lot and its trace graph',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tlc=00012345678901-LOT-2026-001'],
+                params: ['tenant_id={your-tenant-uuid}', 'tlc=00012345678901-LOT-2026-001'],
                 response: 'CSV / JSON export scoped to the recall trace',
             },
             {
@@ -219,7 +227,8 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 description: 'List previously generated exports with their verification status',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }] }',
+                params: ['tenant_id={your-tenant-uuid}'],
+                response: '{ "tenant_id": "38e99859-...", "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }], "total": 0 }',
             },
         ],
     },
