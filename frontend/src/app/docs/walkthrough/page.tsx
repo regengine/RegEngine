@@ -71,6 +71,7 @@ export default function WalkthroughPage() {
             code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "manual-walkthrough",
@@ -128,6 +129,7 @@ export default function WalkthroughPage() {
             code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "manual-walkthrough",
@@ -167,6 +169,7 @@ export default function WalkthroughPage() {
             code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "manual-walkthrough",
@@ -245,7 +248,6 @@ head -20 lot-export.csv`}
                 <li>Three CTE events with chained SHA-256 hashes are now in your tenant scope.</li>
                 <li>The compliance dashboard reflects them within seconds.</li>
                 <li>An FDA-oriented export can be produced for any subset by lot code.</li>
-                <li>Your tenant is now in the OKR count of pilots ingesting weekly.</li>
               </ul>
             </div>
           </div>

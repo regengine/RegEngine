@@ -290,7 +290,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
     },
     {
         id: 'webhooks',
-        name: 'Webhooks',
+        name: 'Webhook ingestion (inbound)',
         category: 'developer_api',
         status: 'implemented',
         delivery_mode: 'webhook',

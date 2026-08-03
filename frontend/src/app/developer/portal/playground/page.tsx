@@ -79,7 +79,7 @@ const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body:
     body: {
       tenant_id: 'demo-tenant',
       compliance_score: 87.5,
-      grade: 'B+',
+      gaps: ['traceability_coverage', 'data_quality'],
       breakdown: {
         data_completeness: 92,
         traceability_coverage: 85,
@@ -87,7 +87,7 @@ const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body:
         data_quality: 84,
       },
       last_evaluated: new Date().toISOString(),
-      recommendation: 'Improve traceability coverage for shipping CTEs to reach A grade.',
+      recommendation: 'Improve traceability coverage for shipping CTEs — 2 readiness gaps remaining.',
     },
   },
   'chain-verify': {
@@ -99,18 +99,6 @@ const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body:
       merkle_root: 'sha256:3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b',
       last_block_hash: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
       verified_at: new Date().toISOString(),
-    },
-  },
-  'sla-dashboard': {
-    status: 200,
-    statusText: 'OK',
-    body: {
-      tenant_id: 'demo-tenant',
-      uptime_percent: 99.95,
-      avg_response_ms: 142,
-      p99_response_ms: 480,
-      events_ingested_24h: 1247,
-      active_alerts: 0,
     },
   },
   'health': {
@@ -132,7 +120,7 @@ const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body:
     statusText: 'OK',
     body: {
       link_id: 'lnk_demo_x1y2z3',
-      url: 'https://app.regengine.com/portal/lnk_demo_x1y2z3',
+      url: 'https://regengine.co/portal/lnk_demo_x1y2z3',
       supplier_name: 'Example Farms',
       cte_types: ['receiving', 'shipping'],
       expires_at: '2026-04-27T00:00:00Z',
@@ -216,14 +204,6 @@ const ENDPOINTS: Endpoint[] = [
     sampleBody: {},
   },
   {
-    id: 'sla-dashboard',
-    path: '/api/v1/sla/dashboard/{tenant_id}',
-    method: 'GET',
-    description: 'SLA dashboard metrics',
-    proxyPath: '/api/ingestion/api/v1/sla/dashboard',
-    pathParams: ['tenant_id'],
-  },
-  {
     id: 'health',
     path: '/api/v1/monitoring/health/{tenant_id}',
     method: 'GET',
@@ -275,7 +255,7 @@ export default function APIPlayground() {
 
   const [demoMode, setDemoMode] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] = useState(ENDPOINTS[0]);
-  const [apiKey, setApiKey] = useState('rge_test_');
+  const [apiKey, setApiKey] = useState('rge_live_');
   const [tenantId, setTenantId] = useState('');
   const [pathParamValues, setPathParamValues] = useState<Record<string, string>>({});
   const [queryParamValues, setQueryParamValues] = useState<Record<string, string>>({});
@@ -303,7 +283,7 @@ export default function APIPlayground() {
       setApiKey('demo-key-sandbox');
       setTenantId('demo-tenant');
     } else {
-      setApiKey('rge_test_');
+      setApiKey('rge_live_');
       setTenantId('');
     }
     setResponse(null);

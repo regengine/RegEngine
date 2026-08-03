@@ -42,8 +42,6 @@ const apiErrors = [
     { code: 'record_immutable', message: 'Cannot modify immutable compliance record', fix: 'Create a new record version instead of updating' },
     { code: 'hash_mismatch', message: 'Content hash does not match expected value', fix: 'Data integrity issue - check for transmission errors' },
     { code: 'chain_position_conflict', message: 'Chain position already occupied', fix: 'Retry request - server will assign next position' },
-    { code: 'invalid_framework', message: 'Specified compliance framework not recognized', fix: 'Check /industries endpoint for supported frameworks' },
-    { code: 'document_too_large', message: 'Document exceeds maximum size limit', fix: 'Split document or compress before upload (max 50MB)' },
     { code: 'rate_limit_exceeded', message: 'Too many requests in time window', fix: 'Implement exponential backoff, see Rate Limits docs' },
 ];
 

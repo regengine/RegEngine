@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { API_BASE } from '@/lib/api-base';
 
 export const metadata: Metadata = {
     title: 'Developers | RegEngine — FSMA 204 Compliance API',
@@ -57,9 +58,10 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-const curlSnippet = `curl -X POST https://your-preview-host/api/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: rge_preview_YOUR_KEY" \\
+const curlSnippet = `curl -X POST ${API_BASE}/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: rge_live_YOUR_KEY" \\
   -H "X-Tenant-ID: your-tenant-id" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "source": "erp",

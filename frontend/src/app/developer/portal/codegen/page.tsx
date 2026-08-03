@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CodeBlock } from '@/components/developer/CodeBlock';
+import { API_BASE } from '@/lib/api-base';
 
 const OPERATIONS = [
   { id: 'ingest', label: 'Ingest Webhook Events', method: 'POST', path: '/api/v1/webhooks/ingest' },
@@ -9,7 +10,6 @@ const OPERATIONS = [
   { id: 'fda-export-all', label: 'FDA Export (full tenant)', method: 'GET', path: '/api/v1/fda/export/all' },
   { id: 'compliance', label: 'Get FSMA Readiness Score (advisory)', method: 'GET', path: '/api/v1/compliance/score/{tenant_id}' },
   { id: 'chain-verify', label: 'Verify Chain Integrity', method: 'POST', path: '/api/v1/chain/verify-all' },
-  { id: 'sla-dashboard', label: 'SLA Dashboard', method: 'GET', path: '/api/v1/sla/dashboard/{tenant_id}' },
   { id: 'health', label: 'Health Check', method: 'GET', path: '/api/v1/monitoring/health/{tenant_id}' },
   { id: 'csv-template', label: 'CSV Template Download', method: 'GET', path: '/api/v1/templates/{cte_type}' },
   { id: 'portal-link', label: 'Create Supplier Portal Link', method: 'POST', path: '/api/v1/portal/links' },
@@ -19,12 +19,13 @@ const OPERATIONS = [
 function generateSnippets(op: typeof OPERATIONS[0], apiKey: string, tenantId: string) {
   const key = apiKey || 'YOUR_API_KEY';
   const tid = tenantId || 'YOUR_TENANT_ID';
-  const base = 'https://your-preview-host';
+  const base = API_BASE.replace(/\/api\/v1$/, '');
 
   const snippets: Record<string, Record<string, string>> = {
     ingest: {
       curl: `curl -X POST ${base}/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: ${key}" \\
+  -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{
     "events": [{
@@ -35,12 +36,15 @@ function generateSnippets(op: typeof OPERATIONS[0], apiKey: string, tenantId: st
       "unit_of_measure": "cases"
     }]
   }'`,
-      python: `import requests
+      python: `import uuid
+
+import requests
 
 response = requests.post(
     "${base}/api/v1/webhooks/ingest",
     headers={
         "X-RegEngine-API-Key": "${key}",
+        "Idempotency-Key": str(uuid.uuid4()),
         "Content-Type": "application/json",
     },
     json={
@@ -58,6 +62,7 @@ print(response.json())`,
   method: 'POST',
   headers: {
     'X-RegEngine-API-Key': '${key}',
+    'Idempotency-Key': crypto.randomUUID(),
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -149,23 +154,6 @@ print(f"Chain valid: {result.get('valid')}")`,
 });
 const result = await response.json();
 console.log(\`Chain valid: \${result.valid}\`);`,
-    },
-    'sla-dashboard': {
-      curl: `curl -X GET "${base}/api/v1/sla/dashboard/${tid}" \\
-  -H "X-RegEngine-API-Key: ${key}"`,
-      python: `import requests
-
-response = requests.get(
-    f"${base}/api/v1/sla/dashboard/${tid}",
-    headers={"X-RegEngine-API-Key": "${key}"},
-)
-dashboard = response.json()
-print(dashboard)`,
-      node: `const response = await fetch('${base}/api/v1/sla/dashboard/${tid}', {
-  headers: { 'X-RegEngine-API-Key': '${key}' },
-});
-const dashboard = await response.json();
-console.log(dashboard);`,
     },
     health: {
       curl: `curl -X GET "${base}/api/v1/monitoring/health/${tid}" \\
