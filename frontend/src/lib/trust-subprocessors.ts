@@ -13,7 +13,7 @@ export interface TrustSubprocessor {
 export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   {
     name: 'Supabase',
-    purpose: 'PostgreSQL database, authentication, and row-level policy enforcement for core workspace data.',
+    purpose: 'PostgreSQL database, authentication, and row-level policy enforcement for core workspace data. Authentication email (password reset, magic-link, and one-time code) is delivered via Resend SMTP where custom SMTP is configured.',
     dataProcessed: 'Workspace records, user accounts, authentication metadata, and evidence ledger rows.',
     location: 'United States; project region per executed agreement/current DPA',
     link: 'https://supabase.com/privacy',
@@ -67,7 +67,7 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   },
   {
     name: 'Resend',
-    purpose: 'Transactional email, including invitations, alerts, and passwordless sign-in messages.',
+    purpose: 'Transactional email, including invitations, alerts, passwordless sign-in messages, and Supabase Auth delivery (password reset, magic-link, and one-time-code emails) via SMTP where configured.',
     dataProcessed: 'Recipient email addresses, message metadata, and delivery events.',
     location: 'United States',
     link: 'https://resend.com/legal/privacy-policy',
