@@ -83,7 +83,7 @@ export default function TraceGainsCompare() {
           <h2 className="text-xl font-bold mb-2">See the difference yourself</h2>
           <p className="text-[var(--re-text-muted)] text-sm mb-6">Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds.</p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/#sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+            <Link href="/sandbox" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
               Try the Sandbox <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">See Pricing</Link>

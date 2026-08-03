@@ -83,10 +83,10 @@ export function ScanHistoryWidget() {
             Recent Scans
           </CardTitle>
           <Link
-            href="/dashboard/scan"
+            href="/ingest"
             className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
           >
-            View all <ArrowRight className="h-3 w-3" />
+            Import data <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </CardHeader>
@@ -100,10 +100,10 @@ export function ScanHistoryWidget() {
             <ScanLine className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">No scans yet</p>
             <Link
-              href="/dashboard/scan"
+              href="/ingest"
               className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              Start scanning
+              Import data
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>

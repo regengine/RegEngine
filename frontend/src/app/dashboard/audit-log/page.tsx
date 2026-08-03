@@ -29,6 +29,7 @@ import {
     Shield,
 } from 'lucide-react';
 
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useTenant } from '@/lib/tenant-context';
@@ -226,9 +227,11 @@ export default function AuditLogPage() {
                         <Button variant="ghost" size="sm" onClick={() => loadLog()} disabled={loading} className="h-8 w-8 p-0">
                             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
-                        <Button variant="outline" size="sm" className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]" disabled title="Coming in v1.1">
-                            <Download className="h-3 w-3 mr-1" /> Export
-                        </Button>
+                        <Link href="/dashboard/export-jobs">
+                            <Button variant="outline" size="sm" className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]">
+                                <Download className="h-3 w-3 mr-1" /> Export
+                            </Button>
+                        </Link>
                         <Badge variant="outline" className="text-[10px] py-1 hidden sm:inline-flex">
                             <Shield className="h-3 w-3 mr-1 text-[var(--re-brand)]" /> Tamper-proof
                         </Badge>

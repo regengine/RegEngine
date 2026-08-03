@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
 import { usePostHog } from '@/lib/posthog-provider';
@@ -34,7 +35,7 @@ const KDE_CHECKER_CONFIG: ToolConfig = {
         ],
         leadGate: {
             title: 'Download Your Draft Checklist',
-            description: 'We will generate a PDF and an importable CSV template for your team. This is a draft starting checklist — review against the rule and your operation\'s actual obligations before adoption.',
+            description: 'You can print or save your checklist as a PDF and download an importable CSV template for your team. This is a draft starting checklist — review against the rule and your operation\'s actual obligations before adoption.',
             cta: 'Download Draft Checklist'
         }
     }
@@ -48,6 +49,23 @@ export function KDECheckerClient() {
         const categoryName = FSMA_FTL_CATEGORIES.find(c => c.id === category)?.name || 'Selected Category';
         const selectedCtes = ctes || [];
 
+        const downloadCsvTemplate = () => {
+            const rows: string[][] = [['CTE', 'KDE', 'Value', 'Notes']];
+            selectedCtes.forEach((cteId: string) => {
+                const cte = FSMA_CTES[cteId as keyof typeof FSMA_CTES];
+                if (!cte) return;
+                cte.kdes.forEach((kde) => rows.push([cte.name, kde.name, '', '']));
+            });
+            const csv = rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'kde-checklist-template.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
         return (
             <div className="space-y-8">
                 <div className="flex items-center justify-between gap-4">
@@ -59,10 +77,10 @@ export function KDECheckerClient() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="h-8 gap-2 text-xs">
+                        <Button variant="outline" size="sm" className="h-8 gap-2 text-xs" onClick={() => window.print()}>
                             <Printer className="h-3 w-3" /> Print
                         </Button>
-                        <Button variant="outline" size="sm" className="h-8 gap-2 text-xs">
+                        <Button variant="outline" size="sm" className="h-8 gap-2 text-xs" onClick={downloadCsvTemplate}>
                             <Download className="h-3 w-3" /> CSV Template
                         </Button>
                     </div>
@@ -99,8 +117,10 @@ export function KDECheckerClient() {
                     <p className="text-xs text-[var(--re-text-secondary)] mb-4 max-w-md">
                         RegEngine helps teams ingest, validate, and structure KDEs by CTE so a §1.1455(c) sortable spreadsheet can be assembled when FDA asks. Compliance remains your operation&apos;s responsibility.
                     </p>
-                    <Button className="bg-[var(--re-brand)] gap-2">
-                        Explore RegEngine <ArrowRight className="h-4 w-4" />
+                    <Button asChild className="bg-[var(--re-brand)] gap-2">
+                        <Link href="/walkthrough">
+                            Explore RegEngine <ArrowRight className="h-4 w-4" />
+                        </Link>
                     </Button>
                 </div>
             </div>

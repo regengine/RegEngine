@@ -104,7 +104,15 @@ export function ROICalculatorClient() {
                             We don&apos;t publish a promised ROI or payback period
                         </h4>
                         <p className="text-sm text-[var(--re-text-secondary)]">
-                            Book a 20-minute call and we&apos;ll model it against your actual record volume and current
+                            <a
+                                href="https://calendly.com/regengine/fsma-strategy-session"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-semibold text-[var(--re-brand)] hover:underline"
+                            >
+                                Book a call
+                            </a>{' '}
+                            and we&apos;ll model it against your actual record volume and current
                             spend. The figures above are an illustrative starting point, not a commitment.
                         </p>
                     </div>
