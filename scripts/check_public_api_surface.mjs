@@ -38,7 +38,8 @@ const EXPECTATIONS = [
     url: 'https://regengine.co/api/v1/records',
     expect: [401],
     mustBeJson: true,
-    note: 'Public read API (records rewrite): backend API-key auth must answer (401 JSON), never an edge 404. Bare path (no trailing segment) must match the :path* rewrite.',
+    mustStayOnHost: true,
+    note: 'Public read API (records rewrite): backend API-key auth must answer (401 JSON), never an edge 404. Bare path must proxy via the exact rewrite — a redirect here leaks the backend host (FastAPI redirect_slashes on the trailing-slash :path* render).',
   },
   {
     method: 'GET',
@@ -57,8 +58,8 @@ const EXPECTATIONS = [
 ];
 
 let failures = 0;
-for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
-  let status, contentType;
+for (const { method, url, expect, mustBeJson, mustStayOnHost, note } of EXPECTATIONS) {
+  let status, contentType, finalUrl;
   try {
     const res = await fetch(url, {
       method,
@@ -68,6 +69,7 @@ for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
     });
     status = res.status;
     contentType = res.headers.get('content-type') || '';
+    finalUrl = res.url;
   } catch (err) {
     console.error(`FAIL ${method} ${url} — request error: ${err.message}`);
     failures += 1;
@@ -75,11 +77,14 @@ for (const { method, url, expect, mustBeJson, note } of EXPECTATIONS) {
   }
   const statusOk = expect.includes(status);
   const jsonOk = !mustBeJson || contentType.includes('application/json');
-  if (statusOk && jsonOk) {
+  // Rewrites must proxy transparently; a followed redirect that lands off
+  // regengine.co leaks the backend host to callers.
+  const hostOk = !mustStayOnHost || new URL(finalUrl).hostname.endsWith('regengine.co');
+  if (statusOk && jsonOk && hostOk) {
     console.log(`ok   ${method} ${url} -> ${status}`);
   } else {
-    console.error(`FAIL ${method} ${url} -> ${status} (${contentType})`);
-    console.error(`     expected ${expect.join('/')}${mustBeJson ? ' with application/json' : ''} — ${note}`);
+    console.error(`FAIL ${method} ${url} -> ${status} (${contentType}) final=${finalUrl}`);
+    console.error(`     expected ${expect.join('/')}${mustBeJson ? ' with application/json' : ''}${mustStayOnHost ? ' staying on regengine.co' : ''} — ${note}`);
     failures += 1;
   }
 }

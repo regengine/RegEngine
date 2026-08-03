@@ -192,6 +192,15 @@ const nextConfig = {
             // services/ingestion/app/canonical_router.py enforces
             // require_permission("records.read") (API key + scopes + tenant
             // cross-check + rate limits) on every endpoint.
+            // Bare path FIRST: with zero segments, the :path* template below
+            // renders a trailing slash (`.../records/`), and FastAPI's
+            // redirect_slashes answers 307 with the BACKEND host in Location —
+            // leaking the Railway URL to callers (observed on preview
+            // regengine-szw0q78hr). An exact bare rewrite proxies cleanly.
+            ingestionUrl && {
+                source: '/api/v1/records',
+                destination: `${ingestionUrl}/api/v1/records`,
+            },
             ingestionUrl && {
                 source: '/api/v1/records/:path*',
                 destination: `${ingestionUrl}/api/v1/records/:path*`,
