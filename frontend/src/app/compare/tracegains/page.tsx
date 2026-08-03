@@ -25,7 +25,7 @@ const WHY_SWITCH = [
   { title: "CTE-level traceability", icon: Zap, desc: "TraceGains is strong at COA and supplier-spec collection. FSMA 204 also requires CTE-level KDE traceability \u2014 confirm coverage with each vendor for your commodities." },
   { title: "Per-event rule evaluation", icon: Shield, desc: "RegEngine evaluates events against 31+ FSMA 204 rules as part of ingestion. Verify TraceGains' current validation features directly with their team." },
   { title: "Built for FTL commodities", icon: FileText, desc: "TraceGains is positioned for CPG supplier quality management. RegEngine is built for produce, seafood, and other FTL-covered commodities." },
-  { title: "Complement, don't replace", icon: Users, desc: "Many teams use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
+  { title: "Complement, don't replace", icon: Users, desc: "You can use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
 ];
 
 export default function TraceGainsCompare() {
@@ -66,7 +66,7 @@ export default function TraceGainsCompare() {
           ))}
         </div>
 
-        <h2 className="text-xl font-bold mb-6">Why teams add RegEngine alongside TraceGains</h2>
+        <h2 className="text-xl font-bold mb-6">Why you might run RegEngine alongside TraceGains</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
           {WHY_SWITCH.map((item, i) => (
             <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">

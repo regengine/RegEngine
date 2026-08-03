@@ -207,7 +207,7 @@ export default function AboutPage() {
                 Lower overhead
               </p>
               <p className="text-xs text-[var(--re-text-muted)] mt-1 leading-relaxed">
-                No bloated org chart means savings passed directly to customers.
+                No bloated org chart means savings passed directly to you.
                 Enterprise features at mid-market pricing.
               </p>
             </div>
@@ -216,9 +216,9 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="text-xs text-[var(--re-text-muted)] mt-1 leading-relaxed">
-                No committee approvals. Customer feedback typically ships within
-                the same week. Regulatory updates deploy without waiting for
-                quarterly release trains.
+                No committee approvals. Design-partner feedback is scoped to
+                ship within days, not quarters. Regulatory updates deploy
+                without waiting for quarterly release trains.
               </p>
             </div>
             <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-4">

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     description: 'API-first architecture, published pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
     openGraph: {
         title: 'Why RegEngine | FSMA 204 Compliance Built Different',
-        description: 'API-first, transparent pricing, 48-hour speed to compliance. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
+        description: 'API-first, transparent pricing, and a self-serve path to a first FSMA 204 export in days. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
         url: 'https://regengine.co/why-regengine',
         type: 'website',
     },
@@ -349,7 +349,7 @@ export default function WhyRegEnginePage() {
                     <div className="mt-8 p-4 rounded-lg border border-re-info/20 bg-[var(--re-info-bg)] flex gap-3">
                         <AlertCircle className="h-5 w-5 text-re-info flex-shrink-0 mt-0.5" />
                         <p className="text-sm text-[var(--re-text-secondary)]">
-                            <strong>Note:</strong> Comparison data is current as of April 2026 and based on public pricing, documentation, and customer interviews. Competitor features change; if you spot an error, email{' '}
+                            <strong>Note:</strong> Comparison data is based on public pricing and vendor documentation as of April 2026. Competitor features change; if you spot an error, email{' '}
                             <a
                                 href="mailto:support@regengine.co"
                                 className="underline hover:text-re-info"

@@ -118,7 +118,7 @@ export default function WalkthroughPage() {
           <span className="text-re-brand">Here&apos;s how you respond in&nbsp;2.</span>
         </h1>
         <p className="text-lg text-re-text-muted max-w-xl leading-relaxed mb-8">
-          A step-by-step walkthrough of a real FDA records request — from messy supplier data to a cryptographically verified response package.
+          A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a cryptographically verified response package.
         </p>
         <div className="flex items-center gap-4 text-sm text-re-text-disabled">
           <span className="flex items-center gap-1.5">
