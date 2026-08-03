@@ -153,7 +153,7 @@ const getQuickActions = (tenantType: "retailer" | "supplier" | "system") => {
       title: "Team",
       description: "Manage team members & roles",
       icon: Building2,
-      href: "/dashboard/team",
+      href: "/settings/users",
       color: "text-re-brand",
       bg: "bg-re-brand-muted dark:bg-re-brand/30",
     },

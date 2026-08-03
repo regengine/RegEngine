@@ -103,8 +103,8 @@ test.describe('RBAC Gates', () => {
         test.skip(!hasAdminAuthenticatedE2E, adminAuthenticatedE2ESkipReason);
         test.setTimeout(60000);
 
-        // Login as admin — ?next=/dashboard/team to navigate directly to team page
-        await page.goto('/login?next=/dashboard/team');
+        // Login as admin — ?next=/settings/users to navigate directly to the team page
+        await page.goto('/login?next=/settings/users');
         await fillPasswordLogin(page, ADMIN_EMAIL, ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
@@ -113,7 +113,7 @@ test.describe('RBAC Gates', () => {
         // Should not be on login page (auth works)
         await expect(page).not.toHaveURL(/\/login/);
 
-        // May land on /dashboard/team, /dashboard, or /onboarding depending
+        // May land on /settings/users, /dashboard, or /onboarding depending
         // on the test user's onboarding state and role. All are valid.
         // Verify some authenticated content rendered.
         await expect(page.locator('nav, main, [role="navigation"]').first()).toBeVisible({ timeout: 15000 });
