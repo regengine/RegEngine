@@ -46,8 +46,10 @@ export default function DeveloperPortalDashboard() {
     const greeting = profile?.display_name || profile?.email?.split('@')[0] || 'Developer';
 
     // Onboarding checklist
-    const onboardingSteps = [
-        { label: 'Create your account', done: true, href: '#' },
+    // `href: null` means the step has nowhere to go — it renders as static text rather
+    // than a link, so clicking it can't push a `#` entry and jump the page to the top.
+    const onboardingSteps: { label: string; done: boolean; href: string | null }[] = [
+        { label: 'Create your account', done: true, href: null },
         { label: 'Generate an API key', done: stats.activeKeys > 0, href: '/developer/portal/keys' },
         { label: 'Send your first event', done: stats.totalRequests > 0, href: '/docs' },
         { label: 'Try the API Playground', done: false, href: '/developer/portal/playground' },
@@ -100,21 +102,33 @@ export default function DeveloperPortalDashboard() {
                         </div>
                     </div>
                     <div className="space-y-2">
-                        {onboardingSteps.map((step) => (
-                            <Link key={step.label} href={step.href} className="flex items-center gap-3 py-1.5 no-underline group">
-                                {step.done
-                                    ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-brand)' }} />
-                                    : <Circle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-text-disabled)' }} />
-                                }
-                                <span className="text-sm" style={{
-                                    color: step.done ? 'var(--re-text-disabled)' : 'var(--re-text-primary)',
-                                    textDecoration: step.done ? 'line-through' : 'none',
-                                }}>
-                                    {step.label}
-                                </span>
-                                {!step.done && <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--re-text-muted)' }} />}
-                            </Link>
-                        ))}
+                        {onboardingSteps.map((step) => {
+                            const content = (
+                                <>
+                                    {step.done
+                                        ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-brand)' }} />
+                                        : <Circle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--re-text-disabled)' }} />
+                                    }
+                                    <span className="text-sm" style={{
+                                        color: step.done ? 'var(--re-text-disabled)' : 'var(--re-text-primary)',
+                                        textDecoration: step.done ? 'line-through' : 'none',
+                                    }}>
+                                        {step.label}
+                                    </span>
+                                    {!step.done && <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--re-text-muted)' }} />}
+                                </>
+                            );
+
+                            return step.href ? (
+                                <Link key={step.label} href={step.href} className="flex items-center gap-3 py-1.5 no-underline group">
+                                    {content}
+                                </Link>
+                            ) : (
+                                <div key={step.label} className="flex items-center gap-3 py-1.5 group">
+                                    {content}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}

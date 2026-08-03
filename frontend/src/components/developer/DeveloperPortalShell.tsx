@@ -46,11 +46,18 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
     const router = useRouter();
     const { logout } = useAuth();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
 
     async function handleLogout() {
-        await logout();
-        router.replace('/login');
-        router.refresh();
+        if (isLoggingOut) return;
+        setIsLoggingOut(true);
+        try {
+            await logout();
+            router.replace('/login');
+            router.refresh();
+        } finally {
+            setIsLoggingOut(false);
+        }
     }
 
     function toggleSection(label: string) {
@@ -81,7 +88,9 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                         return (
                             <div key={section.label} className="mb-1">
                                 <button
+                                    type="button"
                                     onClick={() => toggleSection(section.label)}
+                                    aria-expanded={!isCollapsed}
                                     className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-md"
                                     style={{ color: 'var(--re-text-disabled)' }}
                                 >
@@ -130,12 +139,14 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                         Service updates available through support
                     </div>
                     <button
+                        type="button"
                         onClick={handleLogout}
-                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger/10 no-underline"
+                        disabled={isLoggingOut}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-re-danger/10 disabled:opacity-60 no-underline"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
                         <LogOut className="w-3.5 h-3.5" />
-                        Sign Out
+                        {isLoggingOut ? 'Signing out…' : 'Sign Out'}
                     </button>
                 </div>
             </aside>
