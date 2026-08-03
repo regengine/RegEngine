@@ -6,6 +6,7 @@ const fetchWithCsrfMock = vi.hoisted(() => vi.fn());
 const mockUseAuth = vi.hoisted(() => vi.fn());
 const mockUseTenant = vi.hoisted(() => vi.fn());
 const mockUseCurrentSubscription = vi.hoisted(() => vi.fn());
+const mockRedirect = vi.hoisted(() => vi.fn());
 
 function createWrapper() {
     const queryClient = new QueryClient({
@@ -21,6 +22,13 @@ function createWrapper() {
 
 vi.mock('@/lib/fetch-with-csrf', () => ({
     fetchWithCsrf: (...args: any[]) => fetchWithCsrfMock(...args),
+}));
+
+vi.mock('next/navigation', () => ({
+    redirect: (...args: any[]) => {
+        mockRedirect(...args);
+        throw new Error('NEXT_REDIRECT');
+    },
 }));
 
 vi.mock('@/lib/auth-context', () => ({
@@ -120,6 +128,8 @@ vi.mock('lucide-react', () => {
         Tag: Stub,
         Barcode: Stub,
         Users: Stub,
+        User: Stub,
+        LifeBuoy: Stub,
         Activity: Stub,
         Leaf: Stub,
         UserCog: Stub,
@@ -250,59 +260,14 @@ describe('dashboard auth gating cleanup', () => {
         expectNoApiKeyHeader();
     });
 
-    it('team page fetches members without requiring apiKey truthiness', async () => {
+    it('team route redirects to the canonical people-management page without fetching', async () => {
+        // /dashboard/team was consolidated into /settings/users (copy PR-11).
+        // The route must hand off to the canonical page and make no API calls
+        // of its own — authenticated or not.
         const { default: TeamPage } = await import('@/app/dashboard/team/page');
-        fetchWithCsrfMock.mockResolvedValue({
-            ok: true,
-            json: async () => ({
-                tenant_id: 'tenant-123',
-                total_members: 1,
-                active_members: 1,
-                pending_invites: 0,
-                roles_breakdown: { admin: 1 },
-                members: [
-                    {
-                        id: 'member-1',
-                        name: 'Casey Chen',
-                        email: 'casey@example.com',
-                        role: 'admin',
-                        status: 'active',
-                        last_active: '5m ago',
-                        invited_at: null,
-                        avatar_initials: 'CC',
-                    },
-                ],
-            }),
-        });
 
-        render(<TeamPage />, { wrapper: createWrapper() });
-
-        await waitFor(() => {
-            expect(fetchWithCsrfMock).toHaveBeenCalledWith(
-                '/api/ingestion/api/v1/team/tenant-123',
-                expect.objectContaining({
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                }),
-            );
-        });
-        expectNoApiKeyHeader();
-    });
-
-    it('still blocks these pages when the user is not authenticated', async () => {
-        const { default: TeamPage } = await import('@/app/dashboard/team/page');
-        mockUseAuth.mockReturnValue({
-            user: null,
-            isAuthenticated: false,
-            apiKey: null,
-        });
-        fetchWithCsrfMock.mockResolvedValue({
-            ok: true,
-            json: async () => ({}),
-        });
-
-        render(<TeamPage />, { wrapper: createWrapper() });
-
+        expect(() => TeamPage()).toThrowError('NEXT_REDIRECT');
+        expect(mockRedirect).toHaveBeenCalledWith('/settings/users');
         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
     });
 });

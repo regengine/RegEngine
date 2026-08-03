@@ -205,7 +205,7 @@ export default function DpaPage() {
                 </p>
                 <p>
                   <strong className="text-[var(--re-text-secondary)]">&ldquo;Processor&rdquo;</strong>{' '}
-                  means RegEngine, Inc., which processes personal data on behalf of the Controller.
+                  means RegEngine LLC, which processes personal data on behalf of the Controller.
                 </p>
                 <p>
                   <strong className="text-[var(--re-text-secondary)]">&ldquo;Personal Data&rdquo;</strong>{' '}
@@ -607,8 +607,8 @@ export default function DpaPage() {
                       business, security, and legal contacts before execution.
                     </p>
                     <p className="font-medium text-[var(--re-text-secondary)]">
-                      RegEngine, Inc.<br />
-                      Wilmington, Delaware, United States
+                      RegEngine LLC<br />
+                      Los Angeles, California, United States
                     </p>
                   </div>
                 </div>

@@ -151,7 +151,7 @@
 
 ## 8. IP & Licensing
 
-- [License](../LICENSE) -- Proprietary, RegEngine Inc.
+- [License](../LICENSE) -- Proprietary, RegEngine LLC
 - [Contributing](../CONTRIBUTING.md) -- Contribution guidelines
 - [Changelog](../CHANGELOG.md) -- Version history and release notes
 
