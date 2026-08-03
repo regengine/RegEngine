@@ -62,7 +62,7 @@ const CHECKLIST: ChecklistItem[] = [
   {
     id: 'team',
     label: 'Invite a team member',
-    href: '/dashboard/team',
+    href: '/settings/users',
     icon: Users,
     settingsKey: 'team_member_invited',
   },
