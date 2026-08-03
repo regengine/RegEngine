@@ -116,8 +116,8 @@ function gradeColor(grade: string) {
 }
 
 function riskBadge(risk: string) {
-    if (risk === 'high') return 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20';
-    if (risk === 'medium') return 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20';
+    if (risk === 'high') return 'bg-re-danger/10 text-re-danger border-re-danger/20';
+    if (risk === 'medium') return 'bg-re-warning/10 text-re-warning border-re-warning/20';
     return 'bg-re-brand-muted text-re-brand border-re-brand/20';
 }
 
@@ -243,7 +243,7 @@ export default function RecallReportPage() {
 
                 {/* Export error */}
                 {exportError && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-re-danger text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-re-danger text-xs">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>{exportError}</span>
                     </div>
@@ -259,7 +259,7 @@ export default function RecallReportPage() {
 
                 {/* Demo notice */}
                 {isDemo && !isLoading && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-blue-300 text-xs">
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-blue-300 text-xs">
                         <Info className="h-3.5 w-3.5 flex-shrink-0" />
                         <span>
                             {report?.demo_disclaimer ??
@@ -284,15 +284,15 @@ export default function RecallReportPage() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger-muted0/[0.06] border border-re-danger/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-danger/[0.06] border border-re-danger/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-danger tabular-nums">{DEMO_INVESTIGATION.lots_at_risk}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Lots at Risk</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning-muted0/[0.06] border border-re-warning/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-warning/[0.06] border border-re-warning/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-warning tabular-nums">{DEMO_INVESTIGATION.suppliers_impacted}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Suppliers Impacted</div>
                                 </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-re-info-muted0/[0.06] border border-re-info/20 text-center">
+                                <div className="p-3 sm:p-4 rounded-xl bg-re-info/[0.06] border border-re-info/20 text-center">
                                     <div className="text-2xl sm:text-3xl font-bold text-re-info tabular-nums">{DEMO_INVESTIGATION.facilities_in_chain}</div>
                                     <div className="text-[11px] text-muted-foreground mt-0.5">Facilities in Chain</div>
                                 </div>
@@ -595,9 +595,9 @@ export default function RecallReportPage() {
                                                 transition={{ delay: 0.05 * i }}
                                             >
                                                 <Badge variant="secondary" className={`text-[9px] px-2 flex-shrink-0 uppercase tracking-widest ${
-                                                    item.priority === 'HIGH' ? 'bg-re-danger-muted0/10 text-re-danger border-re-danger/20' :
-                                                    item.priority === 'MEDIUM' ? 'bg-re-warning-muted0/10 text-re-warning border-re-warning/20' :
-                                                    'bg-re-info-muted0/10 text-re-info border-re-info/20'
+                                                    item.priority === 'HIGH' ? 'bg-re-danger/10 text-re-danger border-re-danger/20' :
+                                                    item.priority === 'MEDIUM' ? 'bg-re-warning/10 text-re-warning border-re-warning/20' :
+                                                    'bg-re-info/10 text-re-info border-re-info/20'
                                                 }`}>
                                                     {item.priority}
                                                 </Badge>

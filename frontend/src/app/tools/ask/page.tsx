@@ -665,7 +665,7 @@ function AskPageContent() {
 
               {/* API Evidence */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">API Endpoints Called</h3>
+                <h3 className="text-lg font-semibold text-slate-900">Endpoints this query would call</h3>
                 <div className="space-y-3">
                   {result.apiEndpoints.map((endpoint, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-300 rounded-lg p-4 font-mono text-sm">

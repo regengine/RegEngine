@@ -144,9 +144,9 @@ export default function IntegrationHubPage() {
                             {/* Fake Browser header */}
                             <div className="flex items-center gap-2 px-4 py-3 border-b bg-background">
                                 <div className="flex gap-1.5">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-re-danger-muted0/80"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-re-warning-muted0/80"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-re-success-muted0/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-danger/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-warning/80"></div>
+                                    <div className="w-2.5 h-2.5 rounded-full bg-re-success/80"></div>
                                 </div>
                                 <div className="ml-4 text-xs font-mono text-muted-foreground">RegEngine Mapping Tool</div>
                             </div>

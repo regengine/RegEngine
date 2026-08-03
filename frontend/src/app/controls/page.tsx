@@ -4,6 +4,15 @@ import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Control {
   id: string;
@@ -25,6 +34,7 @@ export default function MyControlsPage() {
     description: '',
     framework: 'FSMA 204'
   });
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const router = useRouter();
 
   const fetchControls = useCallback(async () => {
@@ -80,8 +90,6 @@ export default function MyControlsPage() {
   };
 
   const handleDelete = async (controlId: string) => {
-    if (!confirm('Are you sure you want to delete this control?')) return;
-
     try {
       await fetchWithCsrf(`/api/controls/controls/${controlId}`, {
         method: 'DELETE',
@@ -93,6 +101,8 @@ export default function MyControlsPage() {
       fetchControls();
     } catch (error) {
       console.error('Failed to delete control:', error);
+    } finally {
+      setPendingDeleteId(null);
     }
   };
 
@@ -161,7 +171,7 @@ export default function MyControlsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">Framework</label>
+              <label className="block text-sm font-medium mb-2">Standards</label>
               <select
                 value={formData.framework}
                 onChange={(e) => setFormData({ ...formData, framework: e.target.value })}
@@ -244,7 +254,7 @@ export default function MyControlsPage() {
                       View
                     </button>
                     <button
-                      onClick={() => handleDelete(control.id)}
+                      onClick={() => setPendingDeleteId(control.id)}
                       className="text-re-danger hover:text-re-danger"
                     >
                       Delete
@@ -257,6 +267,25 @@ export default function MyControlsPage() {
         </table>
         </div>
       </div>
+
+      <Dialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this control?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the control and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => pendingDeleteId && handleDelete(pendingDeleteId)}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

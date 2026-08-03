@@ -355,8 +355,8 @@ export function AnomalyDetectionSimulator() {
                                 <div className="grid gap-3 md:grid-cols-2">
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="rounded-2xl bg-re-brand-muted border border-re-brand/20 p-3"><div className="text-xs text-muted-foreground">True positives</div><div className="text-2xl font-semibold text-re-brand-dark">{conf.tp}</div></div>
-                                        <div className="rounded-2xl bg-re-warning-muted0/10 border border-re-warning/20 p-3"><div className="text-xs text-muted-foreground">False positives</div><div className="text-2xl font-semibold text-re-warning">{conf.fp}</div></div>
-                                        <div className="rounded-2xl bg-re-danger-muted0/10 border border-re-danger/20 p-3"><div className="text-xs text-muted-foreground">False negatives</div><div className="text-2xl font-semibold text-re-danger">{conf.fn}</div></div>
+                                        <div className="rounded-2xl bg-re-warning/10 border border-re-warning/20 p-3"><div className="text-xs text-muted-foreground">False positives</div><div className="text-2xl font-semibold text-re-warning">{conf.fp}</div></div>
+                                        <div className="rounded-2xl bg-re-danger/10 border border-re-danger/20 p-3"><div className="text-xs text-muted-foreground">False negatives</div><div className="text-2xl font-semibold text-re-danger">{conf.fn}</div></div>
                                         <div className="rounded-2xl bg-muted/40 p-3"><div className="text-xs text-muted-foreground">True negatives</div><div className="text-2xl font-semibold">{conf.tn}</div></div>
                                     </div>
                                 </div>

@@ -334,7 +334,7 @@ function LabelScannerContent() {
                             </div>
                         )}
                         {error && (
-                            <div className="mt-4 p-3 rounded-lg bg-re-danger-muted0/10 border border-re-danger/20 text-sm text-re-danger">
+                            <div className="mt-4 p-3 rounded-lg bg-re-danger/10 border border-re-danger/20 text-sm text-re-danger">
                                 {error}
                             </div>
                         )}
@@ -381,7 +381,7 @@ function LabelScannerContent() {
                                 toolContext={{ toolInputs: { product_name: result.product_name, fsma_compatible: result.fsma_compatible, kdes_found: result.fsma_kdes.length } }}
                                 teaser={
                                     <div className="space-y-3 pb-6">
-                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning-muted0/10 border border-re-warning/20'}`}>
+                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning/10 border border-re-warning/20'}`}>
                                             {result.fsma_compatible ? <Check className="h-4 w-4 text-re-brand" /> : <Zap className="h-4 w-4 text-re-warning" />}
                                             <span className={`text-sm font-medium ${result.fsma_compatible ? 'text-re-brand' : 'text-re-warning'}`}>
                                                 {result.fsma_compatible ? 'Label contains likely-KDE fields' : 'Label is missing common KDE fields'}
@@ -400,7 +400,7 @@ function LabelScannerContent() {
                             >
                                 <div className="space-y-4">
                                     {/* FSMA badge */}
-                                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning-muted0/10 border border-re-warning/20'}`}>
+                                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${result.fsma_compatible ? 'bg-re-brand-muted border border-re-brand/20' : 'bg-re-warning/10 border border-re-warning/20'}`}>
                                         {result.fsma_compatible ? (
                                             <Check className="h-4 w-4 text-re-brand" />
                                         ) : (
@@ -466,7 +466,7 @@ function LabelScannerContent() {
                                             <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Allergens</h3>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {result.allergens.map((a) => (
-                                                    <span key={a} className="px-2 py-0.5 rounded-md bg-re-danger-muted0/10 border border-re-danger/20 text-xs text-re-danger font-medium">
+                                                    <span key={a} className="px-2 py-0.5 rounded-md bg-re-danger/10 border border-re-danger/20 text-xs text-re-danger font-medium">
                                                         {a}
                                                     </span>
                                                 ))}
@@ -504,7 +504,7 @@ function LabelScannerContent() {
                                                     <div key={i} className="flex items-center gap-2 text-xs">
                                                         <span className="text-[var(--re-text-muted)] min-w-[120px]">{kde.field}</span>
                                                         <span className="text-[var(--re-text-primary)] font-mono flex-1 truncate">{kde.value || '—'}</span>
-                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kde.confidence >= 0.8 ? 'bg-re-brand-muted text-re-brand' : kde.confidence >= 0.5 ? 'bg-re-warning-muted0/10 text-re-warning' : 'bg-re-danger-muted0/10 text-re-danger'}`}>
+                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${kde.confidence >= 0.8 ? 'bg-re-brand-muted text-re-brand' : kde.confidence >= 0.5 ? 'bg-re-warning/10 text-re-warning' : 'bg-re-danger/10 text-re-danger'}`}>
                                                             {Math.round(kde.confidence * 100)}%
                                                         </span>
                                                     </div>

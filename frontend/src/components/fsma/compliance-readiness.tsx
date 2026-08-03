@@ -181,7 +181,7 @@ export function ComplianceReadiness({ readiness, isLoading, onStartDrill, onExpo
                   <motion.div
                     className={cn(
                       'h-full rounded-full',
-                      score >= 80 ? 'bg-re-success-muted0' : score >= 60 ? 'bg-re-warning-muted0' : 'bg-re-danger-muted0'
+                      score >= 80 ? 'bg-re-success' : score >= 60 ? 'bg-re-warning' : 'bg-re-danger'
                     )}
                     initial={{ width: 0 }}
                     animate={{ width: `${score}%` }}

@@ -1063,7 +1063,7 @@ export function FTLCheckerClient() {
                                         <>
                                             <AlertTriangle size={28} className="mb-3" />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Action Required</h3>
-                                            <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>Based on your selections, <strong>{results.coveredCount} category{results.coveredCount === 1 ? '' : 'ies'}</strong> may fall under FSMA 204 by <strong>July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
+                                            <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>Based on your selections, <strong>{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong>July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
                                             <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>Some major retailers have announced their own traceability programs — check your buyers&apos; requirements.</p>
                                             {!emailSubmitted ? (
                                                 <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">

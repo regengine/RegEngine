@@ -72,7 +72,10 @@ async function apiFetchProducts(tenantId: string): Promise<ProductCatalogRespons
         signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Products fetch failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't load your product catalog. Check your connection and retry.");
+    }
     return res.json();
 }
 
@@ -86,7 +89,10 @@ async function apiAddProduct(tenantId: string, name: string, category: string, s
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, category, sku: sku || undefined }),
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Product add failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't add the product — retry.");
+    }
 }
 
 async function apiUpdateProduct(tenantId: string, product: Product, updates: { name: string; category: string; sku: string }): Promise<void> {
@@ -107,7 +113,10 @@ async function apiUpdateProduct(tenantId: string, product: Product, updates: { n
             facilities: product.facilities || [],
         }),
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Product update failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't save your changes — retry.");
+    }
 }
 
 async function apiDeleteProduct(tenantId: string, productId: string): Promise<void> {
@@ -118,7 +127,10 @@ async function apiDeleteProduct(tenantId: string, productId: string): Promise<vo
         credentials: 'include',
         signal: AbortSignal.timeout(12000),
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Product delete failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't delete the product — retry.");
+    }
 }
 
 export default function ProductCatalogPage() {
@@ -266,9 +278,14 @@ export default function ProductCatalogPage() {
                 {error && (
                     <Card className="border-orange-300 dark:border-orange-700">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">{error}</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
+                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                    <p className="text-sm">{error}</p>
+                                </div>
+                                <Button variant="outline" size="sm" className="rounded-xl text-xs flex-shrink-0 min-h-[44px]" onClick={() => loadProducts()} disabled={loading}>
+                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -311,6 +328,12 @@ export default function ProductCatalogPage() {
                                                 {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Add</>}
                                             </Button>
                                         </div>
+                                        {addProductMutation.isError && (
+                                            <p className="mt-2 text-xs text-re-danger flex items-center gap-1.5">
+                                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                {addProductMutation.error?.message || "Couldn't add the product — retry."}
+                                            </p>
+                                        )}
                                     </CardContent>
                                 </Card>
                             </motion.div>
@@ -401,6 +424,12 @@ export default function ProductCatalogPage() {
                                                     <X className="h-4 w-4" />
                                                 </Button>
                                             </div>
+                                            {updateProductMutation.isError && (
+                                                <p className="sm:col-span-2 md:col-span-4 text-xs text-re-danger flex items-center gap-1.5">
+                                                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                    {updateProductMutation.error?.message || "Couldn't save your changes — retry."}
+                                                </p>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -424,6 +453,13 @@ export default function ProductCatalogPage() {
                                     )}
                                 </CardContent>
                             </Card>
+                        )}
+
+                        {deleteProductMutation.isError && (
+                            <p className="text-xs text-re-danger flex items-center gap-1.5">
+                                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                {deleteProductMutation.error?.message || "Couldn't delete the product — retry."}
+                            </p>
                         )}
 
                         {/* Product List */}

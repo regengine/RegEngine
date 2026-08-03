@@ -52,9 +52,6 @@ const INFLOW_CONNECTOR = CAPABILITY_REGISTRY.find((item) => item.id === 'inflow-
 
 const INFLOW_FACTS = [
     ['Public slug', 'inflow-lab'],
-    ['Backend id', 'inflow_lab'],
-    ['Repository', 'regengine/inflow-lab'],
-    ['Contract CI', 'Live ingest replay'],
 ];
 
 const INFLOW_PATH = [
@@ -743,7 +740,7 @@ export default function DashboardIntegrationsPage() {
                         )}
                         {status === 'error' && (
                             <div className={styles.errorBox}>
-                                The mapping review contract route did not respond. Public status copy still renders from the shared registry above.
+                                Mapping review is temporarily unavailable. Connector statuses above are still current.
                             </div>
                         )}
                         <div className={styles.infoBox}>

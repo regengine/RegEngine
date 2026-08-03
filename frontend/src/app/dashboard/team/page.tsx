@@ -62,7 +62,10 @@ async function apiFetchTeam(tenantId: string): Promise<TeamResponse> {
         signal: AbortSignal.timeout(8000),
         headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Team fetch failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't load your team. Check your connection and retry.");
+    }
     return res.json();
 }
 
@@ -76,7 +79,10 @@ async function apiInviteMember(tenantId: string, name: string, email: string, ro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, role }),
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+        console.error(`Team invite failed: ${res.status} ${res.statusText}`);
+        throw new Error("Couldn't send the invite. Check your connection and retry.");
+    }
 }
 
 export default function TeamPage() {
@@ -158,9 +164,14 @@ export default function TeamPage() {
                 {error && (
                     <Card className="border-orange-300 dark:border-orange-700">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
-                                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">{error}</p>
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
+                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                    <p className="text-sm">{error}</p>
+                                </div>
+                                <Button variant="outline" size="sm" className="rounded-xl text-xs flex-shrink-0 min-h-[44px]" onClick={() => loadTeam()} disabled={loading}>
+                                    <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Retry
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
