@@ -602,7 +602,7 @@ export default function ExportPage() {
             </div>
             <h3 className="font-semibold">Form Chain Links</h3>
             <p className="text-sm text-re-text-disabled">
-              Each new event includes the previous hash. This creates an unbreakable chain where every event is cryptographically bound to its history.
+              Each new event includes the previous hash. This links every event to its history, so any alteration of an earlier record is detectable.
             </p>
             <div className="bg-re-surface-card p-3 rounded text-xs font-mono text-re-text-disabled">
               prev_hash + event → SHA-256 → chain_hash
