@@ -10,6 +10,8 @@ import {
     Copy,
     Check,
     Leaf,
+    Database,
+    FileDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,6 +99,127 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 auth: true,
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
                 response: '{ "service": "webhook-ingestion", "status": "healthy" }',
+            },
+        ],
+    },
+    {
+        name: 'Records API',
+        baseUrl: '/api/v1/records',
+        icon: Database,
+        description: 'Read canonical traceability events with full provenance — what it is, where it came from, what rules were applied, what failed, what must happen next',
+        endpoints: [
+            {
+                method: 'GET',
+                path: '',
+                description: 'List and search canonical traceability events. Requires an API key with the records.read scope. Keys are tenant-bound — results are always scoped to your workspace.',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                params_table: [
+                    { name: 'tlc', type: 'string', required: false, desc: 'Filter by traceability lot code' },
+                    { name: 'event_type', type: 'string', required: false, desc: 'Filter by CTE type (e.g. "receiving", "shipping")' },
+                    { name: 'status', type: 'string', required: false, desc: 'Record status (default: "active")' },
+                    { name: 'source_system', type: 'string', required: false, desc: 'Filter by ingestion source' },
+                    { name: 'start_date', type: 'ISO 8601', required: false, desc: 'Events at or after this timestamp' },
+                    { name: 'end_date', type: 'ISO 8601', required: false, desc: 'Events at or before this timestamp' },
+                    { name: 'limit', type: 'number', required: false, desc: 'Page size (default: 50, max: 500)' },
+                    { name: 'offset', type: 'number', required: false, desc: 'Pagination offset' },
+                ],
+                response: JSON.stringify({
+                    tenant_id: "38e99859-7364-4932-99fa-b1f114bf0202",
+                    events: [{
+                        event_id: "evt_9f8e7d6c5b4a",
+                        cte_type: "receiving",
+                        traceability_lot_code: "00012345678901-LOT-2026-001",
+                        status: "active",
+                        source_system: "erp",
+                        event_timestamp: "2026-02-05T14:23:00Z"
+                    }],
+                    total: 1
+                }, null, 2),
+            },
+            {
+                method: 'GET',
+                path: '/{event_id}',
+                description: 'Full record detail with provenance: source document, applied rules, evaluation results, and amendment chain.',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...} }',
+            },
+            {
+                method: 'GET',
+                path: '/{event_id}/evaluations',
+                description: 'Rule evaluations for a record — which FSMA 204 rules were applied and their outcomes',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
+            },
+            {
+                method: 'GET',
+                path: '/{event_id}/history',
+                description: 'Amendment chain for a record — every correction with who, when, and why',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "history": [{ "amended_at": "...", "reason": "..." }] }',
+            },
+        ],
+    },
+    {
+        name: 'FDA Trace & Export API',
+        baseUrl: '/api/v1/fda',
+        icon: FileDown,
+        description: 'Lot tracing and FDA-formatted exports from stored tenant evidence, with cryptographic verification',
+        endpoints: [
+            {
+                method: 'GET',
+                path: '/trace/{tlc}',
+                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope.',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "tlc": "00012345678901-LOT-2026-001", "nodes": [...], "edges": [...] }',
+            },
+            {
+                method: 'GET',
+                path: '/export',
+                description: 'Generate an FDA export for a traceability lot code (the 24-hour traceability request format). Requires the fda.export scope and an active subscription.',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                params: ['tlc=00012345678901-LOT-2026-001', 'format=csv'],
+                response: 'CSV / JSON export with FSMA 204-required KDE columns',
+            },
+            {
+                method: 'GET',
+                path: '/export/v2',
+                description: 'Generate an FDA export from the canonical record model (v2) — includes provenance and rule-evaluation status per row',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                params: ['start_date=2026-01-01', 'end_date=2026-01-31'],
+                response: 'CSV / JSON export derived from canonical records',
+            },
+            {
+                method: 'GET',
+                path: '/export/recall',
+                description: 'Recall-filtered FDA export — only events linked to the recalled lot and its trace graph',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                params: ['tlc=00012345678901-LOT-2026-001'],
+                response: 'CSV / JSON export scoped to the recall trace',
+            },
+            {
+                method: 'POST',
+                path: '/export/verify',
+                description: 'Verify the hash chain of a previously generated export. Requires the fda.verify scope. Pair with the public verify_chain.py script for independent verification.',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                body: JSON.stringify({ export_id: "exp_1a2b3c4d" }, null, 2),
+                response: '{ "export_id": "exp_1a2b3c4d", "chain_valid": true, "events_verified": 1204 }',
+            },
+            {
+                method: 'GET',
+                path: '/export/history',
+                description: 'List previously generated exports with their verification status',
+                auth: true,
+                headers: ['X-RegEngine-API-Key'],
+                response: '{ "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }] }',
             },
         ],
     },
@@ -416,8 +539,8 @@ export function ApiReferenceClient() {
                                     <p className="text-xs text-muted-foreground mt-2">
                                         Available on contracted workspaces. These endpoints are served from your
                                         workspace&apos;s provisioned endpoint URL (supplied during onboarding), not the
-                                        public regengine.co base URL. Webhook ingestion above is the publicly
-                                        reachable surface.
+                                        public regengine.co base URL. Webhook Ingestion, Records, and FDA
+                                        Trace &amp; Export above are the publicly reachable surface.
                                     </p>
                                 )}
                             </CardHeader>
@@ -468,11 +591,11 @@ export function ApiReferenceClient() {
                                 </div>
                                 <div className="bg-white dark:bg-re-surface-base rounded p-3">
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Records</h4>
-                                    <CodeBlock code={`# First page (any paginated endpoint)
-GET <endpoint>?limit=20
+                                    <CodeBlock code={`# First page
+GET /api/v1/records?limit=20
 
-# Next page
-GET <endpoint>?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
+# Next page (Records uses limit/offset)
+GET /api/v1/records?limit=20&offset=20`} language="http" />
                                 </div>
                             </div>
                         </CardContent>

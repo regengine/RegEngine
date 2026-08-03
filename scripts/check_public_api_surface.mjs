@@ -36,8 +36,23 @@ const EXPECTATIONS = [
   {
     method: 'GET',
     url: 'https://regengine.co/api/v1/records',
-    expect: [404],
-    note: 'NOT publicly wired yet — docs mark the read API "provisioned endpoint" (#2743). When the public rewrite ships (option B), flip this to expect 401 JSON.',
+    expect: [401],
+    mustBeJson: true,
+    note: 'Public read API (records rewrite): backend API-key auth must answer (401 JSON), never an edge 404. Bare path (no trailing segment) must match the :path* rewrite.',
+  },
+  {
+    method: 'GET',
+    url: 'https://regengine.co/api/v1/fda/export',
+    expect: [401],
+    mustBeJson: true,
+    note: 'Public FDA trace/export API rewrite: backend API-key auth must answer (401 JSON).',
+  },
+  {
+    method: 'POST',
+    url: 'https://regengine.co/api/v1/fda/export/verify',
+    expect: [401],
+    mustBeJson: true,
+    note: 'Mutating FDA endpoint must reach the backend (401 JSON), not the CSRF 403 — guards the /api/v1/fda/ entry in CSRF_EXEMPT_PREFIXES.',
   },
 ];
 

@@ -133,6 +133,14 @@ export const CSRF_EXEMPT_PREFIXES = [
     // the Bearer bypass in src/proxy.ts.
     '/api/webhooks/',
     '/api/v1/webhooks/',
+    // Public read API rewrites (next.config.js) — API-key callers send
+    // X-RegEngine-API-Key, not session cookies, so the double-submit check
+    // can never pass for them; the backend routers are the auth layer.
+    // Trailing-slash prefixes are safe here: the only bare paths are
+    // GET /api/v1/records (list) and the /api/v1/fda prefix root (no route),
+    // and GETs are never CSRF-checked (CSRF_PROTECTED_METHODS).
+    '/api/v1/records/',
+    '/api/v1/fda/',
     // Public ingestion endpoints that are unauthenticated, tenantless, and
     // operate only on caller-supplied or frozen synthetic data.
     '/api/ingestion/api/v1/sandbox/',

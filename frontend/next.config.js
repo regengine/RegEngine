@@ -175,17 +175,36 @@ const nextConfig = {
         //
         // Removed 2026-04-17 (#1221):
         //   - /api/compliance/:path*    (shadowed by the compliance route handler)
+        // Removed 2026-08-03:
+        //   - /api/v1/ingestion/:path*  (dead: destination `/v1/ingestion/*` no
+        //     longer exists on the backend — every request 404'd; the dashboard
+        //     uses the auth-gated /api/ingestion/[...path] handler instead)
         //
         // Filter out rewrites with undefined destinations — Vercel build may not
         // have INGESTION_SERVICE_URL env var set, and Next.js 16 treats
         // "undefined/:path*" as a fatal error.
         return [
-            // External API surface (documented in docs/API_VERSIONING.md).
-            // Keep as a rewrite — external callers use API-key auth, the frontend
-            // auth-gate layers would reject them as missing cookies/session.
+            // Public read API for API-key callers (canonical records).
+            // Deliberately a rewrite, not a route handler: external callers
+            // authenticate with X-RegEngine-API-Key, so the frontend auth-gate
+            // layers (requireProxyAuth/validateProxySession/sanitizePath) would
+            // reject them. The backend is the ONLY auth layer on this path —
+            // services/ingestion/app/canonical_router.py enforces
+            // require_permission("records.read") (API key + scopes + tenant
+            // cross-check + rate limits) on every endpoint.
             ingestionUrl && {
-                source: '/api/v1/ingestion/:path*',
-                destination: `${ingestionUrl}/v1/ingestion/:path*`,
+                source: '/api/v1/records/:path*',
+                destination: `${ingestionUrl}/api/v1/records/:path*`,
+            },
+            // Public FDA trace/export API for API-key callers. Same rationale
+            // as /api/v1/records — backend-only auth via
+            // services/ingestion/app/fda_export/router.py, which enforces
+            // require_permission("fda.read"|"fda.export"|"fda.verify") plus
+            // require_active_subscription. The CSRF exempt list
+            // (src/lib/csrf.ts) covers /api/v1/fda/ for POST /export/verify.
+            ingestionUrl && {
+                source: '/api/v1/fda/:path*',
+                destination: `${ingestionUrl}/api/v1/fda/:path*`,
             },
             // Internal alias: /api/auth/* → /api/admin/auth/* so client code can
             // use the shorter path. Destination is a same-origin route handler,
