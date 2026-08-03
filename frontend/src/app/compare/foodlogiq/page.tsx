@@ -25,7 +25,7 @@ const WHY_SWITCH = [
   { title: "Self-serve onboarding", desc: "RegEngine's sandbox returns FSMA 204 results in seconds and the full platform is live in one CSV upload. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
-  { title: "Published pricing", desc: "Facility-based GA pricing from $849/mo, with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
+  { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
 ];
 
 export default function FoodLogiQCompare() {
