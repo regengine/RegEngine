@@ -240,6 +240,16 @@ BANNED_PATTERNS = (
         re.compile(r"(^|[\s`'\"])(app/(?:epcis_ingestion|fda_export_router|sandbox_router)\.py)\b"),
         "Active docs/code should not point to deleted ingestion shim files.",
     ),
+    LegacyPattern(
+        "legacy-per-service-railway-host",
+        re.compile(
+            r"\b(?:admin-api-production|believable-respect[a-z0-9-]*|intelligent-essence[a-z0-9-]*)"
+            r"\.up\.railway\.app"
+        ),
+        "Pre-consolidation Railway hosts are deleted apps — Railway's edge answers "
+        "them, not RegEngine. Use https://regengine-production.up.railway.app "
+        "(the one consolidated service) or an explicit *_SERVICE_URL env var.",
+    ),
 )
 
 

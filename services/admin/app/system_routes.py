@@ -106,10 +106,19 @@ class JWTRevokeAllResponse(BaseModel):
     keys_revoked: int
 
 
-def _detect_default(docker_name: str, railway_url: str) -> str:
-    """Use Railway URL when running on Railway, Docker hostname otherwise."""
+def _detect_default(docker_name: str) -> str:
+    """Resolve a default base URL for a former standalone service.
+
+    The six services were consolidated into this one FastAPI app, so on
+    Railway the ingestion and compliance routers are mounted in this very
+    process and loopback is the only correct target. The per-service
+    Railway URLs that used to live here (believable-respect-production-2fb3,
+    intelligent-essence-production) belong to the pre-consolidation
+    topology; those apps no longer exist, so every call against them was
+    answered by Railway's edge rather than by RegEngine.
+    """
     if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_PROJECT_ID"):
-        return railway_url
+        return f"http://127.0.0.1:{os.getenv('PORT', '8000')}"
     return docker_name
 
 
@@ -117,11 +126,11 @@ def _get_service_urls() -> Dict[str, str]:
     """Build service health-check URLs from env vars or fallback to Docker/Railway defaults."""
     ingestion = os.getenv(
         "INGESTION_SERVICE_URL",
-        _detect_default("http://ingestion-api:8002", "https://believable-respect-production-2fb3.up.railway.app"),
+        _detect_default("http://ingestion-api:8002"),
     )
     compliance = os.getenv(
         "COMPLIANCE_SERVICE_URL",
-        _detect_default("http://compliance-api:8500", "https://intelligent-essence-production.up.railway.app"),
+        _detect_default("http://compliance-api:8500"),
     )
     urls = {
         "ingestion": f"{ingestion.rstrip('/')}/health",
@@ -137,7 +146,7 @@ def _get_service_urls() -> Dict[str, str]:
 def _get_ingestion_base() -> str:
     return os.getenv(
         "INGESTION_SERVICE_URL",
-        _detect_default("http://ingestion-api:8002", "https://believable-respect-production-2fb3.up.railway.app"),
+        _detect_default("http://ingestion-api:8002"),
     ).rstrip("/")
 
 
