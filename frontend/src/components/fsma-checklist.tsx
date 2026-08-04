@@ -120,7 +120,11 @@ export default function FSMAChecklist() {
     const [submissionError, setSubmissionError] = useState<string | null>(null);
     const [animateIn, setAnimateIn] = useState(false);
 
+    // Enter animation: the class must change *after* the first paint or the
+    // transition has no from-state to animate out of, so this flip is
+    // deliberately post-mount rather than an initial state value.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAnimateIn(true);
     }, []);
 

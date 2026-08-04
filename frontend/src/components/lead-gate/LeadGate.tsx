@@ -62,9 +62,12 @@ export function LeadGate({
     const [gateData, setGateData] = useState<Partial<AssessmentFormData>>({});
     // Capture UTM params on mount
     const [utmParams, setUtmParams] = useState<Record<string, string>>({});
+    // window.location is browser-only, so UTM capture cannot happen during
+    // render without breaking SSR.
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const params = new URLSearchParams(window.location.search);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setUtmParams({
             utmSource: params.get('utm_source') || '',
             utmMedium: params.get('utm_medium') || '',
@@ -74,6 +77,8 @@ export function LeadGate({
     }, []);
 
     // Check localStorage for returning leads (non-PII flag only — no email stored)
+    // localStorage is browser-only; this also performs a one-time migration of
+    // the legacy plain-text key, which must not run during render.
     useEffect(() => {
         if (typeof window === 'undefined') return;
         // Migrate: clear legacy plain-text email if present
@@ -83,6 +88,7 @@ export function LeadGate({
         }
         const captured = localStorage.getItem('re_lead_captured');
         if (captured) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setStep('done');
             onUnlock?.();
         }

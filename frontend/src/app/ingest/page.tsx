@@ -84,9 +84,11 @@ export default function IngestPage() {
     }
   };
 
-  // Initialize API key from stored value
+  // One-way prefill: the stored key resolves after mount, and the field stays
+  // user-editable afterwards, so this cannot be a lazy initial value.
   useEffect(() => {
     if (storedApiKey && !apiKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setApiKey(storedApiKey);
     }
   }, [storedApiKey, apiKey]);

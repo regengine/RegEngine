@@ -18,12 +18,14 @@ export default function ProfileSettingsPage() {
     const [location, setLocation] = useState('');
     const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-    // Pre-fill what we can from the authenticated user
+    // Prefill from the auth session, which resolves after mount. The fields
+    // remain editable, so this is a one-way seed rather than derived state.
     useEffect(() => {
         if (user) {
             const meta = (user as { user_metadata?: { full_name?: string; name?: string } }).user_metadata;
             if (meta?.full_name || meta?.name) {
                 const parts = (meta.full_name ?? meta.name ?? '').split(' ');
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setFirstName(parts[0] ?? '');
                 setLastName(parts.slice(1).join(' '));
             }
