@@ -1201,6 +1201,7 @@ jobs:
     if: always()
     needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check results
         run: |

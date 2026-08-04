@@ -42,6 +42,7 @@ jobs:
   workflow-tool-pinning:
     name: Privileged Workflow Tool Pinning
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -93,6 +94,7 @@ jobs:
   secrets:
     name: Secrets Scan (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -128,6 +130,7 @@ jobs:
   detect-secrets:
     name: Secrets Audit (detect-secrets)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -170,6 +173,7 @@ jobs:
   browser-storage-pii:
     name: Browser Storage PII Guard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -187,6 +191,7 @@ jobs:
   sast:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -269,6 +274,7 @@ jobs:
   deps:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -391,6 +397,7 @@ jobs:
   tenant-isolation:
     name: Tenant Isolation & Auth Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     services:
       postgres:
@@ -503,6 +510,7 @@ jobs:
   dast:
     name: DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: always()
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -531,6 +539,7 @@ jobs:
   security-txt-expiry:
     name: security.txt Expiry Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - name: Check security.txt expiration
@@ -557,6 +566,7 @@ jobs:
   sbom:
     name: Generate SBOM (SPDX)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [secrets, sast, deps]
     if: github.event_name != 'pull_request'
     permissions:
@@ -603,6 +613,7 @@ jobs:
   container-scan:
     name: Container Scan (Trivy)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # PR trigger removed (#2032): building the monolith image on every PR is
     # the largest single Actions minute consumer in this workflow. Keep on
     # push-to-main, scheduled weekly, and on-demand via workflow_dispatch.
@@ -642,6 +653,7 @@ jobs:
   audit-integrity:
     name: Audit Chain Integrity
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6

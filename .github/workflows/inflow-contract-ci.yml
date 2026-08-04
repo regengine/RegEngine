@@ -35,6 +35,7 @@ jobs:
   changes:
     name: Contract Change Detection
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       inflow_lab_ref: ${{ steps.refs.outputs.inflow_lab_ref }}
@@ -325,6 +326,7 @@ jobs:
   contract-status-gate:
     name: Contract Status Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs:
       - changes
       - contract
