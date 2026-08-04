@@ -65,54 +65,109 @@ DIRECTIONALITY (this is the whole ballgame)
     ``webhook_compat``, ``epcis``, ``canonical_router``, ``auditor_router``
     and ``webhook_router_v2`` deliberately run ``dual_write=False``.
 
-SAME-TRANSACTION vs CROSS-TRANSACTION PAIRS
--------------------------------------------
-Not every legacy row was written by ``dual_write_legacy``. The live
-``webhook_compat.ingest_events`` route writes the legacy row through the
-old ``CTEPersistence.store_event`` and the canonical row through a separate
-canonical-only store — two different transactions, two independently
-generated primary keys. Such a pair still joins on ``sha256_hash`` but was
-never produced by the dual-write mapping, so ``cte_events.id`` legitimately
-differs from ``traceability_events.event_id``.
+TWO LEGACY WRITERS, TWO INCOMPATIBLE HASH FORMULAS  (corrected 2026-08-04)
+-------------------------------------------------------------------------
+An earlier version of this docstring claimed that a ``webhook_compat`` pair
+"still joins on ``sha256_hash``" and merely differs in ``ingested_at``. THAT
+WAS FALSE, and the whole ``same-transaction``/``cross-transaction`` taxonomy
+built on it was unreachable code. The two writers hash DIFFERENT FIELD SETS:
 
-Because the dual write commits both rows in ONE transaction, and
-``ingested_at`` defaults to ``now()`` (= ``transaction_timestamp()``), a
-true dual-written pair has byte-identical ``ingested_at`` on both sides.
-This tool uses that to classify every matched pair:
+  legacy-native  ``shared/cte_persistence/hashing.py::compute_event_hash``
+      event_id | event_type | tlc | quantity | uom | location_gln |
+      timestamp | json(kdes minus description keys)              -- 8 fields
+      (``product_description`` deliberately excluded, #1323; no to_facility)
 
-    same-transaction  -> produced by dual_write_legacy. ANY field divergence
-                         here means the dual write itself is broken. HARD.
-    cross-transaction -> produced by two different writers. An ``id``
-                         divergence here is structural, not corruption — but
-                         it still means the v1 export's ``id`` column WOULD
-                         CHANGE at read cutover, so it is reported, not hidden.
+  canonical      ``shared/canonical_event.py::compute_sha256_hash``
+      event_id | event_type | tlc | product_reference | quantity | uom |
+      from_facility_reference | to_facility_reference | timestamp |
+      json(kdes)                                                 -- 10 fields
 
-Use ``--ignore-field id`` to get a verdict on the remaining fields once that
-class has been consciously accepted; the choice is echoed in the verdict
-block so it cannot be smuggled past a reviewer.
+Different arity, different fields, and the two writers mint independent
+``event_id`` values. A legacy row written by ``CTEPersistence.store_event``
+(still live via ``webhook_compat.ingest_events`` and its callers:
+``csv_templates``, ``sensitech_parser``, ``supplier_portal``) can therefore
+NEVER join a canonical row on ``sha256_hash`` — even though the same request
+DID write a canonical row through a sibling ``CanonicalEventStore(
+dual_write=False)`` call.
+
+So this tool does NOT conclude "a canonical write was lost" from a hash miss.
+Every orphan is classified first, in Python, by recomputing the legacy
+formula over the legacy row's own columns — the same probe
+``scripts/backfill_canonical_from_legacy.py::_matches_legacy_formula`` uses
+to decide what it must REFUSE to backfill. Both tools therefore produce the
+same partition of the same rows, by construction:
+
+    legacy-native orphan   the stored hash IS ``compute_event_hash(...)`` of
+                           this row. Structural non-join, NOT a #1277
+                           violation. Backfilling it would duplicate an FDA
+                           event, so the backfill refuses it too
+                           (``legacy_native_hash_formula``).
+    unexplained orphan     neither joins by hash nor reproduces the legacy
+                           formula. This is the real thing — a lost
+                           canonical write (#1277). HARD FAILURE.
+
+Because "legacy-native" only proves *which writer* wrote the row, not that
+its canonical sibling survived, each legacy-native orphan is additionally
+probed for a canonical row carrying the same content tuple
+(tenant_id, event_type, tlc, event_timestamp, quantity, unit_of_measure) —
+the columns ``normalize_webhook_event`` passes through verbatim. That probe
+is CORROBORATION, never proof, and is reported as its own number.
+
+There is NO phantom-orphan race. ``dual_write_legacy`` runs inside
+``persist_event`` in ONE transaction, and ``webhook_compat`` commits its
+legacy and canonical rows in one session transaction via nested savepoints.
+No writer commits a legacy row before its canonical sibling in a separate
+transaction, so ``--settle-seconds`` defaults to 0. The scan additionally
+runs at REPEATABLE READ so every count in the report comes from ONE snapshot.
+
+COVERAGE IS PART OF THE VERDICT
+-------------------------------
+``--since`` / ``--until`` / ``--limit`` all shrink what was actually proven.
+A clean scan of a one-month window on a multi-year compliance table is NOT
+a cutover decision — that is the exact false green this tool exists to
+prevent. Every run therefore issues an UNWINDOWED probe (tenant predicate
+only) and reports how many legacy rows fell OUTSIDE the scanned window. If
+that number is non-zero, the verdict is downgraded to PARTIAL COVERAGE with
+its own exit code (4). ``SAFE-TO-PROCEED`` + exit 0 is reserved for a scan
+that provably covered every legacy row in scope.
+
+WHAT IS AND IS NOT COMPARED
+---------------------------
+The v1 export emits 14 columns (``fetch_recall_events``). This tool compares
+every column that ``dual_write_legacy`` maps, including the three that are
+also the recall filter's WHERE predicates (``event_type``,
+``traceability_lot_code``, ``event_timestamp``) — a divergence there changes
+WHICH ROWS a recall search returns, not just cell values. Columns that are
+NOT compared are enumerated by name in the verdict block of every run
+(``UNCOMPARED_EXPORT_COLUMNS``), so the report discloses its own blind spots.
 
 EXIT CODES
 ----------
-    0  SAFE-TO-PROCEED   — rows were compared, zero legacy orphans, zero
-                           field divergence. (With ``--limit``, a clean
-                           SMOKE result: no violations in the sample, which
-                           is NOT by itself a cutover decision.)
-    1  DO-NOT-PROCEED    — parity violations found (legacy orphans and/or
-                           field divergence).
+    0  SAFE-TO-PROCEED   — full coverage, rows compared, zero unexplained
+                           orphans, zero field divergence.
+    1  DO-NOT-PROCEED    — parity violations found (unexplained legacy
+                           orphans and/or field divergence).
     2  DO-NOT-PROCEED    — could not complete: bad arguments, unreachable
                            database, missing tables, RLS hiding every row,
                            or a query error. No verdict was reached.
     3  DO-NOT-PROCEED    — ZERO COVERAGE. The scan compared zero rows. This
                            is the classic false-green and is never reported
                            as success.
+    4  NOT-A-DECISION    — the scan was clean but PARTIAL: ``--limit``
+                           truncated it, ``--since``/``--until`` excluded
+                           legacy rows, or ``--ignore-field`` suppressed a
+                           column. Deliberately NOT 0 so that
+                           ``if verify; then proceed`` cannot read it green.
 
 USAGE
 -----
     export DATABASE_URL='postgresql://...'      # read-only role preferred
-    python3 scripts/verify_canonical_parity_live.py --since 2026-07-01
+    # the gate: no window, no limit, no ignores
+    python3 scripts/verify_canonical_parity_live.py --json
 
-See ``--help`` for the full flag list and
-``docs/persistence/dual-write-cutover.md`` for where this fits in WS-1.
+See ``--help`` for the full flag list, ``docs/persistence/dual-write-cutover.md``
+for where this fits in WS-1, and ``docs/persistence/ws1-cutover-runbook.md``
+Step 4 for the pass/fail criteria this tool's exit codes feed.
 """
 
 from __future__ import annotations
@@ -136,15 +191,47 @@ EXIT_SAFE = 0
 EXIT_VIOLATIONS = 1
 EXIT_INCOMPLETE = 2
 EXIT_ZERO_COVERAGE = 3
+EXIT_PARTIAL = 4
 
 APPLICATION_NAME = "regengine_parity_verifier"
 
-# Default settling lag. The cross-transaction writers (webhook_compat) commit
-# the legacy row and the canonical row in SEPARATE transactions, so a scan
-# that runs right up to now() can observe a legacy row microseconds before
-# its canonical twin commits and report a phantom orphan. Excluding the most
-# recent few minutes removes that race without weakening the check.
-DEFAULT_SETTLE_SECONDS = 300
+# Default settling lag: NONE.
+#
+# The previous default of 300s was justified by a claim that "cross-transaction
+# writers commit the legacy row and the canonical row in SEPARATE transactions",
+# so a scan running up to now() could see a phantom orphan. That claim is false.
+# ``dual_write_legacy`` runs inside ``persist_event`` in ONE transaction, and
+# ``webhook_compat.ingest_events`` writes its legacy row and its canonical row
+# in ONE session transaction (nested savepoints, committed together). No writer
+# commits a legacy row before its canonical sibling in a separate transaction.
+#
+# A non-zero settle window is therefore pure coverage loss, and coverage loss
+# now downgrades the verdict (EXIT_PARTIAL). The flag remains for operators
+# scanning a read REPLICA, where replication lag is a real effect — but they
+# will see the resulting rows counted as outside-window and the verdict
+# downgraded accordingly, which is the honest outcome.
+DEFAULT_SETTLE_SECONDS = 0
+
+# Export columns (``fetch_recall_events``, services/ingestion/app/fda_export/
+# queries.py) that this tool does NOT compare. Printed in every verdict block
+# so the report discloses its own blind spots instead of leaving that
+# disclosure in a chat message.
+UNCOMPARED_EXPORT_COLUMNS: Tuple[Tuple[str, str], ...] = (
+    (
+        "sha256_hash",
+        "it is the join key itself — equal by construction for any matched pair",
+    ),
+    (
+        "chain_hash",
+        "the export reads it from the fsma.hash_chain JOIN, not from either event "
+        "table; hash_chain is shared by both writers so it is single-sourced",
+    ),
+    (
+        "ingested_at",
+        "used as the scan's window column; it is compared implicitly because a "
+        "dual-written pair shares one transaction_timestamp()",
+    ),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +285,89 @@ def read_only_execute(conn: Any, sql: str, params: Optional[Dict[str, Any]] = No
 
 
 # ---------------------------------------------------------------------------
+# The legacy-native hash probe
+# ---------------------------------------------------------------------------
+#
+# This is the ONE thing that lets an orphan be classified instead of merely
+# counted. It deliberately imports the SAME function the production legacy
+# writer uses and the SAME function scripts/backfill_canonical_from_legacy.py
+# uses to decide what it must refuse — so the two tools cannot drift into
+# disagreeing about which rows are structurally unjoinable.
+#
+# The import is guarded because this script is also run from ops boxes that
+# have sqlalchemy but not the repo on sys.path. If it fails, orphans are NOT
+# silently downgraded: they stay in the unexplained (hard-failure) bucket and
+# a loud note explains that classification was unavailable.
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _p in (os.path.join(_ROOT, "services"), _ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+try:  # pragma: no cover — import shape depends on the deploy environment
+    from shared.cte_persistence.hashing import compute_event_hash as _compute_legacy_hash
+
+    LEGACY_HASH_PROBE_AVAILABLE = True
+    LEGACY_HASH_PROBE_ERROR = ""
+except Exception as _exc:  # noqa: BLE001 — ops environments vary
+    _compute_legacy_hash = None  # type: ignore[assignment]
+    LEGACY_HASH_PROBE_AVAILABLE = False
+    LEGACY_HASH_PROBE_ERROR = f"{type(_exc).__name__}: {_exc}"
+
+
+def matches_legacy_formula(
+    legacy_id: str,
+    event_type: str,
+    tlc: str,
+    product_description: str,
+    quantity: Any,
+    unit_of_measure: str,
+    location_gln: Optional[str],
+    location_name: Optional[str],
+    event_timestamp: Any,
+    kdes: Optional[Dict[str, Any]],
+    stored_hash: str,
+) -> bool:
+    """True when ``stored_hash`` is the LEGACY formula over this row's columns.
+
+    A True result proves the row was written by
+    ``CTEPersistence.store_event`` (the legacy-native path, live via
+    ``webhook_compat.ingest_events``) and NOT by ``dual_write_legacy``. Its
+    absence from the canonical store by hash is then structural, not a lost
+    write.
+
+    A False result is NOT proof of the opposite. The probe can produce a
+    false negative — the KDE dict is read back out of JSONB and a value that
+    was hashed as a Python ``float``/``Decimal``/``datetime`` may render
+    differently after the round trip (the same caveat
+    ``backfill_canonical_from_legacy.py`` documents under
+    ``hash_unreconstructible``). False is therefore the CONSERVATIVE answer:
+    the row stays in the hard-failure bucket and gets a human.
+    """
+    if not LEGACY_HASH_PROBE_AVAILABLE or _compute_legacy_hash is None:
+        return False
+    try:
+        timestamp = event_timestamp.isoformat() if hasattr(event_timestamp, "isoformat") else str(event_timestamp)
+        return (
+            _compute_legacy_hash(
+                str(legacy_id),
+                event_type,
+                tlc,
+                product_description,
+                quantity,
+                unit_of_measure,
+                location_gln,
+                location_name,
+                timestamp,
+                dict(kdes or {}),
+            )
+            == stored_hash
+        )
+    except Exception:  # noqa: BLE001 — classification only, never fatal
+        return False
+
+
+# ---------------------------------------------------------------------------
 # The mapping under test
 # ---------------------------------------------------------------------------
 #
@@ -230,6 +400,28 @@ MAPPED_FIELDS: Tuple[FieldSpec, ...] = (
     ),
     # source = source_system
     ("source", "p.source", "t.source_system", False),
+    # ---- the recall-filter predicate columns -------------------------------
+    # build_recall_where_clause / build_recall_where_clause_canonical filter on
+    # event_type, traceability_lot_code and event_timestamp. A divergence in
+    # any of these changes WHICH ROWS a regulator's recall search returns, not
+    # merely what a cell says, so they are the highest-value columns in the
+    # whole comparison. All three are verbatim column-to-column copies under
+    # dual_write_legacy (legacy_dual_write.py: :event_type, :tlc,
+    # :event_timestamp).
+    ("event_type", "p.event_type", "t.event_type", False),
+    ("traceability_lot_code", "p.traceability_lot_code", "t.traceability_lot_code", False),
+    # Both sides are TIMESTAMPTZ (verified against the live schema at alembic
+    # head), so IS DISTINCT FROM is an exact instant comparison — no textual
+    # or timezone coercion is involved.
+    ("event_timestamp", "p.event_timestamp", "t.event_timestamp", False),
+    # ---- the remaining regulator-visible payload columns -------------------
+    # Both quantity columns are DOUBLE PRECISION on both tables and
+    # dual_write_legacy binds the identical Python float to each, so a direct
+    # IS DISTINCT FROM is exact. (No ::numeric cast: casting would introduce a
+    # rounding step that is not in the write path and could MASK a real
+    # divergence rather than reveal one.)
+    ("quantity", "p.quantity", "t.quantity", False),
+    ("unit_of_measure", "p.unit_of_measure", "t.unit_of_measure", False),
     # cte_kdes aggregate == kdes JSONB minus None-valued keys.
     # ``lk.v`` / ``ck.v`` are the LATERAL aggregates built in the page query;
     # both are NULL when the event has no (non-null) KDEs, so a missing-vs-
@@ -321,7 +513,9 @@ def build_page_query(opts: "Options", cursor: Optional[Tuple[datetime, str]], ba
     sql = f"""
         WITH page AS (
             SELECT c.id, c.tenant_id, c.sha256_hash, c.ingested_at,
-                   c.product_description, c.location_gln, c.location_name, c.source
+                   c.product_description, c.location_gln, c.location_name, c.source,
+                   c.event_type, c.traceability_lot_code, c.event_timestamp,
+                   c.quantity, c.unit_of_measure
             FROM fsma.cte_events c
             WHERE {where}
             ORDER BY c.ingested_at ASC, c.id ASC
@@ -334,6 +528,18 @@ def build_page_query(opts: "Options", cursor: Optional[Tuple[datetime, str]], ba
             p.ingested_at                               AS legacy_ingested_at,
             (t.event_id IS NULL)                        AS no_twin,
             (t.ingested_at IS NOT DISTINCT FROM p.ingested_at) AS same_transaction,
+            -- Carried so an ORPHAN can be CLASSIFIED (legacy-native writer vs
+            -- genuinely lost canonical write) without a second query. These
+            -- are exactly the inputs to compute_event_hash.
+            p.event_type                                AS legacy_event_type,
+            p.traceability_lot_code                     AS legacy_tlc,
+            p.product_description                       AS legacy_product_description,
+            p.quantity                                  AS legacy_quantity,
+            p.unit_of_measure                           AS legacy_uom,
+            p.location_gln                              AS legacy_location_gln,
+            p.location_name                             AS legacy_location_name,
+            p.event_timestamp                           AS legacy_event_timestamp,
+            lk.v                                        AS legacy_kdes,
             CASE WHEN t.event_id IS NULL THEN '{{}}'::jsonb ELSE (
                  {diff_expr}
             ) END                                       AS diffs
@@ -364,6 +570,79 @@ def build_legacy_total_query(opts: "Options") -> Tuple[str, Dict[str, Any]]:
     conds = build_window_conditions("c", params, opts)
     where = " AND ".join(conds) if conds else "TRUE"
     return f"SELECT COUNT(*) FROM fsma.cte_events c WHERE {where}", params
+
+
+def build_out_of_window_query(opts: "Options") -> Tuple[str, Dict[str, Any]]:
+    """Legacy rows in scope that the scan's WINDOW EXCLUDED.
+
+    This is the fix for the false green that ``--since`` used to produce: the
+    old COVERAGE block printed ``legacy rows in window`` (which applies the
+    same window as the scan), so a one-month scan of a multi-year compliance
+    table read as complete table coverage and still exited 0.
+
+    Only the TENANT predicate is applied here — never ``--since``/``--until``
+    — so the result is "how much of this tenant scope did the window hide".
+    ``MIN``/``MAX(ingested_at)`` of the hidden set is returned with it so the
+    operator can widen the window without guessing.
+    """
+    params: Dict[str, Any] = {}
+    conds: List[str] = []
+    if opts.tenants:
+        conds.append("c.tenant_id = ANY(CAST(:tenants AS uuid[]))")
+        params["tenants"] = [str(t) for t in opts.tenants]
+    # The complement of the scanned window.
+    window_misses: List[str] = []
+    if opts.since is not None:
+        window_misses.append("c.ingested_at < :since")
+        params["since"] = opts.since
+    if opts.until is not None:
+        window_misses.append("c.ingested_at >= :until")
+        params["until"] = opts.until
+    if not window_misses:
+        # No window at all — nothing can be outside it. Still issue a real
+        # query (rather than fabricating zeros) so the totals come from the
+        # same snapshot as everything else.
+        window_misses.append("FALSE")
+    conds.append("(" + " OR ".join(window_misses) + ")")
+    where = " AND ".join(conds)
+    return (
+        f"""
+        SELECT COUNT(*),
+               MIN(c.ingested_at),
+               MAX(c.ingested_at)
+        FROM fsma.cte_events c
+        WHERE {where}
+        """,
+        params,
+    )
+
+
+def build_orphan_content_probe_query() -> str:
+    """Does a canonical row exist carrying this legacy row's CONTENT?
+
+    Used ONLY on orphans already classified ``legacy-native`` by the hash
+    probe, to corroborate that ``webhook_compat``'s sibling
+    ``CanonicalEventStore(dual_write=False)`` call actually landed.
+
+    The tuple is exactly the set of columns ``normalize_webhook_event`` passes
+    through verbatim from the webhook event to the canonical model. It is NOT
+    a unique key and it is NOT proof of identity — two genuinely distinct
+    events can share it. It is reported as corroboration and never feeds the
+    pass/fail verdict; what it usefully detects is the alarming case, a
+    legacy-native orphan with NO canonical row that even resembles it.
+    """
+    return """
+        SELECT EXISTS (
+            SELECT 1
+            FROM fsma.traceability_events t
+            WHERE t.tenant_id = CAST(:tenant_id AS uuid)
+              AND t.event_type = :event_type
+              AND t.traceability_lot_code = :tlc
+              AND t.event_timestamp = :event_timestamp
+              AND t.quantity = :quantity
+              AND t.unit_of_measure = :uom
+        )
+    """
 
 
 def build_canonical_only_query(opts: "Options") -> Tuple[str, Dict[str, Any]]:
@@ -426,6 +705,8 @@ class Options:
     output_json: bool = False
     settle_seconds: int = DEFAULT_SETTLE_SECONDS
     until_was_explicit: bool = False
+    skip_content_probe: bool = False
+    max_content_probe: int = 5000
 
 
 @dataclass
@@ -435,6 +716,8 @@ class Sample:
     legacy_id: str
     same_transaction: bool
     diffs: Dict[str, Any]
+    # Orphan classification. None for divergence samples.
+    orphan_class: Optional[str] = None
 
 
 @dataclass
@@ -445,6 +728,19 @@ class Report:
     rows_matched_cross_txn: int = 0
     ambiguous_matches: int = 0
     legacy_orphans: int = 0
+    # --- orphan classification (see matches_legacy_formula) ---
+    # legacy-native: stored hash reproduces compute_event_hash over this row.
+    # Structural non-join, NOT a #1277 violation, and exactly the class
+    # backfill_canonical_from_legacy.py refuses under
+    # ``legacy_native_hash_formula``.
+    orphans_legacy_native: int = 0
+    # unexplained: neither joins by hash nor reproduces the legacy formula.
+    # This IS the lost-canonical-write case. Drives the DO-NOT-PROCEED verdict.
+    orphans_unexplained: int = 0
+    # Corroboration for legacy-native orphans only (see the content probe).
+    content_probe_attempted: int = 0
+    content_probe_corroborated: int = 0
+    content_probe_uncorroborated: int = 0
     diverged_rows: int = 0
     diverged_same_txn: int = 0
     diverged_cross_txn: int = 0
@@ -452,6 +748,11 @@ class Report:
     orphan_samples: List[Sample] = field(default_factory=list)
     divergence_samples: List[Sample] = field(default_factory=list)
     legacy_total_in_window: Optional[int] = None
+    # Legacy rows in tenant scope that the --since/--until window EXCLUDED.
+    # Non-zero means the scan is PARTIAL, whatever else it found.
+    legacy_out_of_window: Optional[int] = None
+    out_of_window_oldest: Optional[datetime] = None
+    out_of_window_newest: Optional[datetime] = None
     canonical_only: Optional[int] = None
     canonical_unjoinable: Optional[int] = None
     truncated_by_limit: bool = False
@@ -478,6 +779,69 @@ def _group_by_legacy_id(rows: Iterable[Any]) -> "Dict[str, List[Any]]":
     for row in rows:
         grouped.setdefault(row.legacy_id, []).append(row)
     return grouped
+
+
+def classify_orphan(conn: Any, row: Any, opts: Options, report: Report) -> str:
+    """Decide what an unjoined legacy row actually means.
+
+    Returns ``"legacy-native"`` (structural, expected while
+    ``webhook_compat.ingest_events`` is a live ingest route) or
+    ``"unexplained"`` (a lost canonical write, #1277 — a hard failure).
+
+    The hash probe is authoritative for the class. The content probe that
+    follows it only annotates a legacy-native orphan with whether a canonical
+    row carrying the same content exists; it never changes the class, because
+    a content match is corroboration and not identity.
+    """
+    is_legacy_native = matches_legacy_formula(
+        legacy_id=row.legacy_id,
+        event_type=row.legacy_event_type,
+        tlc=row.legacy_tlc,
+        product_description=row.legacy_product_description,
+        quantity=row.legacy_quantity,
+        unit_of_measure=row.legacy_uom,
+        location_gln=row.legacy_location_gln,
+        location_name=row.legacy_location_name,
+        event_timestamp=row.legacy_event_timestamp,
+        kdes=row.legacy_kdes,
+        stored_hash=row.sha256_hash,
+    )
+    if not is_legacy_native:
+        report.orphans_unexplained += 1
+        return "unexplained"
+
+    report.orphans_legacy_native += 1
+
+    if opts.skip_content_probe or report.content_probe_attempted >= opts.max_content_probe:
+        return "legacy-native"
+
+    try:
+        corroborated = read_only_execute(
+            conn,
+            build_orphan_content_probe_query(),
+            {
+                "tenant_id": row.tenant_id,
+                "event_type": row.legacy_event_type,
+                "tlc": row.legacy_tlc,
+                "event_timestamp": row.legacy_event_timestamp,
+                "quantity": row.legacy_quantity,
+                "uom": row.legacy_uom,
+            },
+        ).scalar()
+    except Exception as exc:  # noqa: BLE001 — corroboration only, never fatal
+        if "content probe" not in " ".join(report.notes):
+            report.notes.append(
+                f"content probe unavailable ({type(exc).__name__}: {str(exc)[:120]}); "
+                "legacy-native orphans are reported without corroboration."
+            )
+        return "legacy-native"
+
+    report.content_probe_attempted += 1
+    if corroborated:
+        report.content_probe_corroborated += 1
+    else:
+        report.content_probe_uncorroborated += 1
+    return "legacy-native"
 
 
 def scan(conn: Any, opts: Options, report: Report) -> None:
@@ -513,16 +877,26 @@ def scan(conn: Any, opts: Options, report: Report) -> None:
             first = candidates[0]
             if len(candidates) == 1 and first.no_twin:
                 report.legacy_orphans += 1
+                orphan_class = classify_orphan(conn, first, opts, report)
+                sample = Sample(
+                    sha256_hash=first.sha256_hash,
+                    tenant_id=first.tenant_id,
+                    legacy_id=legacy_id,
+                    same_transaction=False,
+                    diffs={},
+                    orphan_class=orphan_class,
+                )
+                # Sample UNEXPLAINED orphans preferentially. The legacy-native
+                # class is expected and bulk-countable; every unexplained
+                # orphan is a potential lost FDA record and needs a human, so
+                # it evicts a legacy-native sample rather than being dropped.
                 if len(report.orphan_samples) < opts.max_samples:
-                    report.orphan_samples.append(
-                        Sample(
-                            sha256_hash=first.sha256_hash,
-                            tenant_id=first.tenant_id,
-                            legacy_id=legacy_id,
-                            same_transaction=False,
-                            diffs={},
-                        )
-                    )
+                    report.orphan_samples.append(sample)
+                elif orphan_class == "unexplained":
+                    for i, existing in enumerate(report.orphan_samples):
+                        if existing.orphan_class != "unexplained":
+                            report.orphan_samples[i] = sample
+                            break
                 continue
 
             if len(candidates) > 1:
@@ -651,24 +1025,66 @@ def preflight(conn: Any, opts: Options) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def coverage_gaps(report: Report, opts: Options) -> List[str]:
+    """Every reason this scan proved LESS than the whole legacy store.
+
+    Each entry is a human-readable phrase. A non-empty list means the run is
+    not a cutover decision no matter how clean it was — that is the whole
+    point of separating this from the violation check.
+    """
+    gaps: List[str] = []
+    if report.truncated_by_limit:
+        gaps.append(f"--limit truncated the scan after {report.rows_compared:,} row(s)")
+    if report.legacy_out_of_window:
+        window = []
+        if opts.since is not None:
+            window.append(f"--since {opts.since.isoformat()}")
+        if opts.until is not None:
+            window.append(f"--until {opts.until.isoformat()}")
+        oldest = report.out_of_window_oldest.isoformat() if report.out_of_window_oldest else "?"
+        gaps.append(
+            f"{report.legacy_out_of_window:,} legacy row(s) fall OUTSIDE the scanned window "
+            f"({', '.join(window) or 'settle window'}; oldest excluded ingested_at {oldest}) "
+            "and were never compared"
+        )
+    if opts.ignore_fields:
+        gaps.append(
+            f"--ignore-field suppressed {', '.join(opts.ignore_fields)} from every comparison"
+        )
+    if not LEGACY_HASH_PROBE_AVAILABLE and report.legacy_orphans:
+        gaps.append(
+            "the legacy-native hash probe could not be imported, so orphans could not be "
+            "classified"
+        )
+    return gaps
+
+
 def decide(report: Report, opts: Options) -> Tuple[int, str, str]:
-    """Return ``(exit_code, headline, reason)``. Pure function — easy to test."""
-    if report.legacy_orphans > 0 or report.diverged_rows > 0:
-        reasons = []
-        if report.legacy_orphans:
-            reasons.append(
-                f"{report.legacy_orphans:,} legacy row(s) have no canonical twin by "
-                "(tenant_id, sha256_hash) — a canonical write was lost (#1277)"
-            )
-        if report.diverged_rows:
-            detail = (
-                f"{report.diverged_same_txn:,} in dual-written (same-transaction) pairs, "
-                f"{report.diverged_cross_txn:,} in cross-transaction pairs"
-            )
-            reasons.append(
-                f"{report.diverged_rows:,} matched pair(s) do not satisfy the "
-                f"dual_write_legacy mapping ({detail})"
-            )
+    """Return ``(exit_code, headline, reason)``. Pure function — easy to test.
+
+    Order matters and is deliberate:
+
+      1. Real violations lose to nothing. An unexplained orphan or a field
+         divergence is DO-NOT-PROCEED even if coverage was also partial.
+      2. Zero coverage is never success.
+      3. PARTIAL coverage gets its OWN exit code (4), not 0. A clean scan of
+         a window is not a clean scan of the table, and ``if verify; then
+         proceed`` must not read it as green.
+      4. Only a full-coverage, violation-free scan is SAFE-TO-PROCEED.
+    """
+    reasons: List[str] = []
+    if report.orphans_unexplained:
+        reasons.append(
+            f"{report.orphans_unexplained:,} legacy row(s) have no canonical twin AND do not "
+            "reproduce the legacy compute_event_hash formula — these were written by "
+            "dual_write_legacy and their canonical write was LOST (#1277)"
+        )
+    if report.diverged_rows:
+        reasons.append(
+            f"{report.diverged_rows:,} matched pair(s) do not satisfy the dual_write_legacy "
+            f"mapping (fields: {', '.join(sorted(report.field_divergence)) or 'n/a'})"
+        )
+    if reasons:
         return EXIT_VIOLATIONS, "DO-NOT-PROCEED", "; ".join(reasons)
 
     if report.rows_compared == 0:
@@ -680,21 +1096,45 @@ def decide(report: Report, opts: Options) -> Tuple[int, str, str]:
             "whether row-level security is hiding the rows from this role",
         )
 
-    if report.truncated_by_limit:
-        return (
-            EXIT_SAFE,
-            "SMOKE PASS CLEAN — NOT A CUTOVER DECISION",
-            f"no violations in the first {report.rows_compared:,} row(s), but --limit "
-            "truncated the scan; re-run without --limit before making a release decision",
+    # Legacy-native orphans are NOT a violation, but they are also NOT nothing:
+    # they are rows the canonical store cannot be shown to cover by hash. Say
+    # so in the reason text of every verdict that carries them.
+    native_note = ""
+    if report.orphans_legacy_native:
+        uncorroborated = ""
+        if report.content_probe_uncorroborated:
+            uncorroborated = (
+                f", and {report.content_probe_uncorroborated:,} of the "
+                f"{report.content_probe_attempted:,} probed had NO canonical row matching even "
+                "on content — investigate those before any retirement decision"
+            )
+        native_note = (
+            f"; {report.orphans_legacy_native:,} legacy row(s) were written by the "
+            "legacy-native store_event path (their stored hash reproduces "
+            "compute_event_hash), so they can never join canonical by sha256_hash — "
+            "structural, NOT a lost write, and the same class "
+            "backfill_canonical_from_legacy.py refuses under legacy_native_hash_formula"
+            f"{uncorroborated}"
         )
 
-    ignored = f" (ignoring field(s): {', '.join(opts.ignore_fields)})" if opts.ignore_fields else ""
+    gaps = coverage_gaps(report, opts)
+    if gaps:
+        return (
+            EXIT_PARTIAL,
+            "PARTIAL COVERAGE — NOT A CUTOVER DECISION",
+            f"no violations in the {report.rows_compared:,} row(s) actually compared, but this "
+            f"scan did not cover the whole legacy store: {'; '.join(gaps)}. Re-run with no "
+            f"--since/--until, no --limit and no --ignore-field before making a release "
+            f"decision{native_note}",
+        )
+
     return (
         EXIT_SAFE,
         "SAFE-TO-PROCEED",
-        f"{report.rows_compared:,} legacy row(s) in the window each have a canonical twin "
-        f"that reproduces the dual_write_legacy mapping exactly{ignored}; 0 legacy orphans, "
-        "0 field divergences",
+        f"{report.rows_compared:,} legacy row(s) — every row in scope, none excluded by a "
+        "window or a limit — have a canonical twin that reproduces the dual_write_legacy "
+        f"mapping on all {len(FIELD_NAMES)} mapped columns; 0 unexplained orphans, "
+        f"0 field divergences{native_note}",
     )
 
 
@@ -735,19 +1175,44 @@ def render_text(report: Report, opts: Options, info: Dict[str, Any], exit_code: 
 
     add("COVERAGE")
     add(f"  legacy rows in window (fsma.cte_events)     : {_fmt(report.legacy_total_in_window)}")
+    add(f"  legacy rows OUTSIDE the scanned window      : {_fmt(report.legacy_out_of_window)}")
+    if report.legacy_out_of_window:
+        oldest = report.out_of_window_oldest.isoformat() if report.out_of_window_oldest else "?"
+        newest = report.out_of_window_newest.isoformat() if report.out_of_window_newest else "?"
+        add(f"    ** NEVER COMPARED. ingested_at {oldest} .. {newest} **")
+        add("    ** this scan is PARTIAL — widen/remove --since/--until to cover them **")
     add(f"  legacy rows examined by this scan           : {report.rows_examined:,}")
     add(f"  rows COMPARED against a canonical twin      : {report.rows_compared:,}")
-    add(f"    of which same-transaction (dual-written)  : {report.rows_matched_same_txn:,}")
-    add(f"    of which cross-transaction (other writer) : {report.rows_matched_cross_txn:,}")
     add(f"  ambiguous (>1 canonical twin for one hash)  : {report.ambiguous_matches:,}")
     if report.truncated_by_limit:
         add("  ** scan TRUNCATED by --limit — partial coverage **")
     add("")
 
-    add("(a) LEGACY ORPHANS   [HARD FAILURE — a canonical write was lost, #1277]")
-    add(f"  legacy rows with no canonical twin          : {report.legacy_orphans:,}")
+    add("(a) LEGACY ORPHANS — legacy rows with no canonical row sharing their sha256_hash")
+    add(f"  total                                       : {report.legacy_orphans:,}")
+    add(
+        "  a1. legacy-native hash formula              : "
+        f"{report.orphans_legacy_native:,}   [STRUCTURAL — not a lost write]"
+    )
+    add("      Written by CTEPersistence.store_event (live via webhook_compat.ingest_events).")
+    add("      Its stored hash reproduces compute_event_hash, which hashes a DIFFERENT field")
+    add("      set than the canonical formula, so it can never join by sha256_hash. This is")
+    add("      the class backfill_canonical_from_legacy.py refuses as legacy_native_hash_formula")
+    add("      — do NOT feed these to the backfill; doing so would duplicate FDA events.")
+    if report.content_probe_attempted or report.orphans_legacy_native:
+        add(f"      content-probed                          : {report.content_probe_attempted:,}")
+        add(f"        canonical row with matching content   : {report.content_probe_corroborated:,}  [corroborated, not proof]")
+        add(f"        NO canonical row even by content      : {report.content_probe_uncorroborated:,}  <-- investigate these")
+    add(
+        "  a2. unexplained                             : "
+        f"{report.orphans_unexplained:,}   [HARD FAILURE — canonical write lost, #1277]"
+    )
+    if not LEGACY_HASH_PROBE_AVAILABLE:
+        add(f"      ** classification UNAVAILABLE ({LEGACY_HASH_PROBE_ERROR}) — every orphan")
+        add("      ** was counted as unexplained. Run from the repo root to enable it.")
     for sample in report.orphan_samples:
-        add(f"    sha256={sample.sha256_hash}  tenant={sample.tenant_id}  cte_events.id={sample.legacy_id}")
+        label = (sample.orphan_class or "unclassified").upper()
+        add(f"    [{label}] sha256={sample.sha256_hash}  tenant={sample.tenant_id}  cte_events.id={sample.legacy_id}")
     add("")
 
     add("(b) CANONICAL-ONLY   [INFORMATIONAL — expected, dual_write=False paths]")
@@ -757,20 +1222,36 @@ def render_text(report: Report, opts: Options, info: Dict[str, Any], exit_code: 
         add("    (unjoinable by any tool — sha256_hash is the only cross-store key)")
     add("")
 
-    add("(c) FIELD DIVERGENCE on matched pairs")
+    add("(c) FIELD DIVERGENCE on matched pairs   [ANY non-zero here is a HARD FAILURE]")
     for name in FIELD_NAMES:
         if name in opts.ignore_fields:
-            add(f"  {name:<22}: (ignored)")
+            add(f"  {name:<22}: (ignored)  <-- NOT VERIFIED")
         else:
             add(f"  {name:<22}: {report.field_divergence.get(name, 0):,}")
-    add(
-        f"  rows with >=1 divergence : {report.diverged_rows:,} "
-        f"(same-txn {report.diverged_same_txn:,} / cross-txn {report.diverged_cross_txn:,})"
-    )
+    add(f"  rows with >=1 divergence : {report.diverged_rows:,}")
+    # A matched pair whose ingested_at differs did NOT come out of one
+    # dual_write_legacy transaction. Since the only other legacy writer emits
+    # a hash that cannot join at all, such a pair should not exist — it is an
+    # anomaly worth a human's eye, not a benign "other writer" class.
+    if report.rows_matched_cross_txn:
+        add(
+            f"  ANOMALY: {report.rows_matched_cross_txn:,} matched pair(s) have DIFFERENT "
+            "ingested_at."
+        )
+        add("    dual_write_legacy writes both rows in one transaction, so ingested_at is")
+        add("    identical by construction. A mismatch means something other than the known")
+        add("    write paths produced this pair. Investigate before proceeding.")
+    add("")
+    add("(d) EXPORT COLUMNS NOT COMPARED BY THIS TOOL")
+    for column, why in UNCOMPARED_EXPORT_COLUMNS:
+        add(f"  {column:<22}: {why}")
+    if opts.ignore_fields:
+        add(f"  {'(operator --ignore-field)':<22}: {', '.join(opts.ignore_fields)}")
+    add("")
     if report.divergence_samples:
         add(f"  first {len(report.divergence_samples)} mismatching sha256_hash value(s):")
         for sample in report.divergence_samples:
-            kind = "dual-written" if sample.same_transaction else "cross-transaction"
+            kind = "same-transaction" if sample.same_transaction else "DIFFERING ingested_at"
             add(f"    {sample.sha256_hash}  ({kind}, tenant={sample.tenant_id})")
             for name, pair in sample.diffs.items():
                 legacy_value, canonical_value = (pair + [None, None])[:2] if isinstance(pair, list) else (pair, None)
@@ -810,20 +1291,41 @@ def render_json(report: Report, opts: Options, info: Dict[str, Any], exit_code: 
         },
         "coverage": {
             "legacy_total_in_window": report.legacy_total_in_window,
+            "legacy_out_of_window": report.legacy_out_of_window,
+            "out_of_window_oldest": report.out_of_window_oldest,
+            "out_of_window_newest": report.out_of_window_newest,
             "rows_examined": report.rows_examined,
             "rows_compared": report.rows_compared,
             "same_transaction": report.rows_matched_same_txn,
             "cross_transaction": report.rows_matched_cross_txn,
             "ambiguous_matches": report.ambiguous_matches,
             "truncated_by_limit": report.truncated_by_limit,
+            "full_coverage": not coverage_gaps(report, opts),
+            "gaps": coverage_gaps(report, opts),
         },
         "legacy_orphans": {
             "count": report.legacy_orphans,
+            # The count that actually drives the verdict. `count` alone is NOT
+            # a failure signal — see the docstring on the two hash formulas.
+            "unexplained": report.orphans_unexplained,
+            "legacy_native_hash_formula": report.orphans_legacy_native,
+            "classification_available": LEGACY_HASH_PROBE_AVAILABLE,
+            "content_probe": {
+                "attempted": report.content_probe_attempted,
+                "corroborated": report.content_probe_corroborated,
+                "uncorroborated": report.content_probe_uncorroborated,
+            },
             "samples": [
-                {"sha256_hash": s.sha256_hash, "tenant_id": s.tenant_id, "legacy_id": s.legacy_id}
+                {
+                    "sha256_hash": s.sha256_hash,
+                    "tenant_id": s.tenant_id,
+                    "legacy_id": s.legacy_id,
+                    "orphan_class": s.orphan_class,
+                }
                 for s in report.orphan_samples
             ],
         },
+        "uncompared_export_columns": [c for c, _why in UNCOMPARED_EXPORT_COLUMNS] + list(opts.ignore_fields),
         "canonical_only": {
             "count": report.canonical_only,
             "null_sha256_hash": report.canonical_unjoinable,
@@ -893,9 +1395,11 @@ def build_parser() -> argparse.ArgumentParser:
             "so the legacy read path can be retired. Reads DATABASE_URL from the environment."
         ),
         epilog=(
-            "EXIT CODES: 0 safe-to-proceed | 1 parity violations | "
-            "2 could not complete | 3 zero coverage (false-green guard). "
-            "This program never writes to the database."
+            "EXIT CODES: 0 safe-to-proceed (FULL coverage, no violations) | "
+            "1 parity violations | 2 could not complete | "
+            "3 zero coverage (false-green guard) | "
+            "4 clean but PARTIAL coverage — not a cutover decision. "
+            "Only 0 means proceed. This program never writes to the database."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -919,7 +1423,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=list(FIELD_NAMES),
         default=None,
         dest="ignore_fields",
-        help="exclude a mapped field from the comparison (repeatable). Echoed in the verdict block.",
+        help="exclude a mapped field from the comparison (repeatable). Echoed in the verdict "
+        "block AND downgrades the run to exit 4 (PARTIAL COVERAGE), because a verdict that "
+        "skipped a column is not a verdict on that column.",
     )
     parser.add_argument("--skip-canonical-only", action="store_true", help="skip the informational canonical-only anti-join count")
     parser.add_argument(
@@ -928,10 +1434,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SETTLE_SECONDS,
         metavar="S",
         help=(
-            f"exclude the most recent S seconds when --until is omitted (default {DEFAULT_SETTLE_SECONDS}). "
-            "Cross-transaction writers commit the legacy and canonical rows separately, so scanning "
-            "right up to now() can report a phantom orphan."
+            f"exclude the most recent S seconds when --until is omitted (default {DEFAULT_SETTLE_SECONDS} "
+            "= disabled). There is NO phantom-orphan race against a primary: every writer commits "
+            "its legacy and canonical rows in ONE transaction. Useful only against a read replica, "
+            "and any rows it excludes are reported as out-of-window and downgrade the verdict."
         ),
+    )
+    parser.add_argument(
+        "--skip-content-probe",
+        action="store_true",
+        help="skip the per-orphan canonical content lookup used to corroborate legacy-native "
+        "orphans. Faster on a database with very many orphans; costs you the "
+        "'no canonical row even by content' signal.",
+    )
+    parser.add_argument(
+        "--max-content-probe",
+        type=int,
+        default=5000,
+        metavar="N",
+        help="cap the orphan content probe at N lookups (default 5000). The probe has no "
+        "supporting index, so it is bounded by default.",
     )
     parser.add_argument("--statement-timeout-ms", type=int, default=60_000, metavar="MS", help="per-statement timeout (default 60000)")
     parser.add_argument("--json", action="store_true", dest="output_json", help="emit machine-readable JSON instead of the text report")
@@ -956,6 +1478,8 @@ def options_from_args(args: argparse.Namespace) -> Options:
         output_json=args.output_json,
         settle_seconds=args.settle_seconds,
         until_was_explicit=until_explicit,
+        skip_content_probe=args.skip_content_probe,
+        max_content_probe=max(0, args.max_content_probe),
     )
 
 
@@ -1007,7 +1531,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     started = time.monotonic()
 
     try:
-        with engine.connect() as conn:
+        # REPEATABLE READ so every number in the report — the in-window total,
+        # the out-of-window total, every scan page, the canonical-only
+        # anti-join — is read from ONE snapshot. Without it a concurrent
+        # ingest between two statements can make the counts disagree and
+        # manufacture a phantom orphan or a phantom coverage gap. This is a
+        # SQLAlchemy-level option, so it does not go through (or need to be
+        # excepted from) the read-only statement allowlist.
+        with engine.connect().execution_options(isolation_level="REPEATABLE READ") as conn:
             info = preflight(conn, opts)
 
             if info.get("canonical_sha_index") is None:
@@ -1018,10 +1549,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "idx_trace_events_tenant_sha256 ON fsma.traceability_events "
                     "(tenant_id, sha256_hash);  (this tool will NOT create it — it is read-only)"
                 )
+            if not LEGACY_HASH_PROBE_AVAILABLE:
+                report.notes.append(
+                    "the legacy-native hash probe could not be imported "
+                    f"({LEGACY_HASH_PROBE_ERROR}). Orphans CANNOT be classified, so every "
+                    "orphan is reported as unexplained (the conservative direction). Run "
+                    "this script from a checkout of the repo to enable classification."
+                )
             if not opts.until_was_explicit and opts.settle_seconds > 0:
                 report.notes.append(
-                    f"--until defaulted to now() - {opts.settle_seconds}s to avoid phantom "
-                    "orphans from in-flight cross-transaction writes."
+                    f"--until was set to now() - {opts.settle_seconds}s by --settle-seconds. "
+                    "Rows in that tail are NOT verified and are counted as out-of-window; "
+                    "there is no phantom-orphan race against a primary, so 0 is the right "
+                    "value unless you are scanning a lagging replica."
                 )
             if not opts.tenants:
                 report.notes.append(
@@ -1037,6 +1577,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             sql, params = build_legacy_total_query(opts)
             report.legacy_total_in_window = read_only_execute(conn, sql, params).scalar()
+
+            # The coverage-honesty probe. This is what stops a --since-narrowed
+            # scan of a multi-year table from exiting 0 SAFE-TO-PROCEED: it
+            # counts, with the tenant predicate ONLY, the legacy rows the
+            # window excluded. Non-zero => EXIT_PARTIAL, never EXIT_SAFE.
+            sql, params = build_out_of_window_query(opts)
+            out_row = read_only_execute(conn, sql, params).fetchone()
+            if out_row is not None:
+                report.legacy_out_of_window = out_row[0]
+                report.out_of_window_oldest = out_row[1]
+                report.out_of_window_newest = out_row[2]
 
             scan(conn, opts, report)
 
