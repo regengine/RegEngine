@@ -142,8 +142,12 @@ export function AccessibilityWidget() {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Reads persisted a11y preferences from localStorage and applies them to the
+  // document. Both are browser-only, so they cannot run during render or SSR —
+  // and `mounted` gates the hydration-sensitive markup below.
   useEffect(() => {
     const loaded = loadSettings();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSettings(loaded);
     applySettings(loaded);
     setMounted(true);
