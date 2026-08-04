@@ -14,7 +14,7 @@ import ssl
 import sys
 import urllib.request
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "https://believable-respect-production-2fb3.up.railway.app"
+BASE = sys.argv[1] if len(sys.argv) > 1 else "https://regengine-production.up.railway.app"
 API_KEY = sys.argv[2] if len(sys.argv) > 2 else os.getenv("REGENGINE_API_KEY", "")
 if not API_KEY:
     print("Error: No API key. Pass as 2nd arg or set REGENGINE_API_KEY env var.")

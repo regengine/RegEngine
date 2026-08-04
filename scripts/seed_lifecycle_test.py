@@ -28,7 +28,7 @@ import urllib.request
 from datetime import datetime, timedelta
 
 # ── Configuration ──────────────────────────────────────────────────────
-BASE = "https://believable-respect-production-2fb3.up.railway.app"
+BASE = "https://regengine-production.up.railway.app"
 API_KEY = "rge_lifecycle_test_0e0f4722fa2e6fc98399f73911819a8aff75a2944d0a2cf61b2e84edebcca219"
 TENANT_ID = "5946c58f-ddf9-4db0-9baa-acb11c6fce91"
 INGEST_URL = f"{BASE}/api/v1/webhooks/ingest"
