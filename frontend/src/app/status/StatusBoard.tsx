@@ -41,7 +41,11 @@ export function StatusBoard() {
     }
   }
 
+  // Mount-time fetch plus a refresh interval. Writing the response into state
+  // is the whole purpose of the effect; there is no render-time equivalent for
+  // a network result.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     const id = setInterval(load, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);

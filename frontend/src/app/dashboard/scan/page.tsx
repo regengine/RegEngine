@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useTenant } from '@/lib/tenant-context';
 import { FeatureNotEnabled } from '@/components/experimental/FeatureNotEnabled';
@@ -57,15 +57,23 @@ function useQRCodeSvgDataUrl(text: string) {
 /* ------------------------------------------------------------------ */
 /*  Detect viewport — show scanner on mobile, QR share on desktop     */
 /* ------------------------------------------------------------------ */
+const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
+
+function subscribeToMobileQuery(onStoreChange: () => void) {
+    const mq = window.matchMedia(MOBILE_MEDIA_QUERY);
+    mq.addEventListener('change', onStoreChange);
+    return () => mq.removeEventListener('change', onStoreChange);
+}
+
 function useIsMobile() {
-    const [mobile, setMobile] = useState(false);
-    useEffect(() => {
-        const mq = window.matchMedia('(max-width: 768px)');
-        setMobile(mq.matches);
-        const handler = (e: MediaQueryListEvent) => setMobile(e.matches);        mq.addEventListener('change', handler);
-        return () => mq.removeEventListener('change', handler);
-    }, []);
-    return mobile;
+    // useSyncExternalStore is the SSR-safe way to read a browser-only value:
+    // the server snapshot is `false`, the client reads matchMedia directly, and
+    // there is no setState-in-effect (so no extra render after hydration).
+    return useSyncExternalStore(
+        subscribeToMobileQuery,
+        () => window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+        () => false,
+    );
 }
 
 /* ------------------------------------------------------------------ */

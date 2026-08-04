@@ -49,6 +49,10 @@ export default function UserSettingsPage() {
 
     useEffect(() => {
         loadData();
+        // Mount-once load. loadData closes over inviteRoleId and then sets it,
+        // so adding it to the dependency array (directly or via useCallback)
+        // would re-fire this effect on its own result — an endless fetch loop.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadData = async () => {

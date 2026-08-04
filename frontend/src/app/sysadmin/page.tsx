@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity, LayoutDashboard, LogOut } from "lucide-react"
 
@@ -40,7 +40,7 @@ export default function SysAdminDashboard() {
         }
     }, [user, router])
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         if (!accessToken) return
 
         setLoading(true)
@@ -69,13 +69,13 @@ export default function SysAdminDashboard() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [accessToken])
 
     useEffect(() => {
         if (user && user.is_sysadmin && accessToken) {
             fetchData()
         }
-    }, [user, accessToken])
+    }, [user, accessToken, fetchData])
 
     if (!user || !user.is_sysadmin) {
         return null // Redirecting
