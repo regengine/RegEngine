@@ -37,6 +37,7 @@ jobs:
   full-suite-collection:
     name: Full suite collects without errors
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
     steps:
@@ -93,6 +94,7 @@ jobs:
   repo-root-fast-shard:
     name: Repo-root fast shard executes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
       PYTHONDONTWRITEBYTECODE: 1
@@ -123,6 +125,7 @@ jobs:
   # ── Per-service collection checks ───────────────────────
   test-environment-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         service: [admin, compliance, graph, ingestion, nlp, scheduler]

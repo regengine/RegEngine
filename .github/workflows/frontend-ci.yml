@@ -287,6 +287,7 @@ jobs:
     if: always()
     needs: [promise-audit, build, lint, test, smoke, security, production-readiness, e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check results
         run: |

@@ -47,6 +47,7 @@ jobs:
   wait-for-ci:
     name: Wait for CI
     runs-on: ubuntu-latest
+    timeout-minutes: 50
     steps:
       - name: Require backend CI green
         uses: lewagon/wait-on-check-action@2271c86c146b96545b4e871b855e10ffa6f50773  # v1.9.0
@@ -82,6 +83,7 @@ jobs:
     name: Deploy RegEngine Service
     needs: [wait-for-ci]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
