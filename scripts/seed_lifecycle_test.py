@@ -21,6 +21,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -28,9 +29,19 @@ import urllib.request
 from datetime import datetime, timedelta
 
 # ── Configuration ──────────────────────────────────────────────────────
-BASE = "https://believable-respect-production-2fb3.up.railway.app"
-API_KEY = "rge_lifecycle_test_0e0f4722fa2e6fc98399f73911819a8aff75a2944d0a2cf61b2e84edebcca219"
-TENANT_ID = "5946c58f-ddf9-4db0-9baa-acb11c6fce91"
+# This script seeds a live environment, so the API key is read from the
+# environment rather than committed. Export REGENGINE_API_KEY (and
+# optionally REGENGINE_BASE_URL / REGENGINE_TENANT_ID) before running.
+BASE = os.getenv("REGENGINE_BASE_URL", "https://regengine-production.up.railway.app")
+API_KEY = os.getenv("REGENGINE_API_KEY", "")
+TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "5946c58f-ddf9-4db0-9baa-acb11c6fce91")
+if not API_KEY:
+    print(
+        "Error: REGENGINE_API_KEY is not set. Export a key with ingest permissions "
+        "for the target tenant before running this seeder.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 INGEST_URL = f"{BASE}/api/v1/webhooks/ingest"
 PRODUCTS_URL = f"{BASE}/api/v1/products/{TENANT_ID}"
 SUPPLIERS_URL = f"{BASE}/api/v1/suppliers/{TENANT_ID}"
