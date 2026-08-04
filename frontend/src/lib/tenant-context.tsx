@@ -54,17 +54,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const [tenantId, setTenantId] = useState<string>(() => readStoredTenantId() || DEFAULT_TENANT_ID);
     const [hadStoredTenant] = useState<boolean>(() => Boolean(readStoredTenantId()));
 
-    // Load from local storage on mount
+    // Sync the API client with the tenant this provider already resolved.
+    // `tenantId` is lazily initialised from the same readStoredTenantId()
+    // call above, so re-setting it here only re-assigned the value state
+    // already held; the API-client hand-off is the effect's real work.
     useEffect(() => {
-        const stored = readStoredTenantId();
-        if (stored) {
-            setTenantId(stored);
-            // Sync with API client
-            apiClient.setCurrentTenant(stored);
-        } else {
-            // Set default tenant in API client
-            apiClient.setCurrentTenant(DEFAULT_TENANT_ID);
-        }
+        apiClient.setCurrentTenant(readStoredTenantId() || DEFAULT_TENANT_ID);
     }, []);
 
     useEffect(() => {
