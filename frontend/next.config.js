@@ -4,6 +4,13 @@ const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
 const isDocker = process.env.REGENGINE_DEPLOY_MODE === 'docker';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ingestionUrl = process.env.INGESTION_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8002`);
+// API-03's /api/v1/health rewrite used to be gated on apiGatewayUrl alone. That
+// var is not set in the Vercel production project, so the rewrite was silently
+// filtered out by the .filter(Boolean) below and the documented external
+// monitoring endpoint answered with the Next.js 404 page. Every service now
+// lives in one backend, so ingestionUrl reaches the same app that serves
+// /health — fall back to it rather than losing the endpoint entirely.
+const healthProbeUrl = apiGatewayUrl || ingestionUrl;
 // Note: COMPLIANCE_SERVICE_URL is read directly by the compliance route handler
 // (src/app/api/compliance/[...path]/route.ts) — no longer referenced here since
 // the /api/compliance rewrite was removed in #1221.
@@ -235,9 +242,9 @@ const nextConfig = {
             },
             // API-03: proxy admin health endpoint for external monitoring.
             // Public, unauthenticated — no handler needed.
-            apiGatewayUrl && {
+            healthProbeUrl && {
                 source: '/api/v1/health',
-                destination: `${apiGatewayUrl}/health`,
+                destination: `${healthProbeUrl}/health`,
             },
         ].filter(Boolean);
     },
