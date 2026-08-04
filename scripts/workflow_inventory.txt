@@ -42,6 +42,7 @@ openapi-public-spec.yml
 pr-gate.yml
 pr-quality.yml
 proxy-smoke.yml
+public-api-surface.yml
 qa-health.yml
 qa-pipeline.yml
 review-gates.yml
