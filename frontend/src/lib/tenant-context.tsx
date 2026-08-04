@@ -62,6 +62,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         apiClient.setCurrentTenant(readStoredTenantId() || DEFAULT_TENANT_ID);
     }, []);
 
+    // Reconciles the tenant with the auth session once it hydrates — an
+    // external-system sync, not state derivable during render.
     useEffect(() => {
         if (!isHydrated) {
             return;
@@ -72,6 +74,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             return;
         }
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTenantId(resolvedTenantId);
         apiClient.setCurrentTenant(resolvedTenantId);
     }, [authTenantId, isHydrated, tenantId]);

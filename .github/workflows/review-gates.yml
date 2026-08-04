@@ -18,6 +18,7 @@ jobs:
   supabase-patterns:
     name: Supabase Query Patterns
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -64,6 +65,7 @@ jobs:
   source-hygiene:
     name: Source Hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -115,6 +117,7 @@ jobs:
   audit-trail:
     name: Audit Trail Protection
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -173,6 +176,7 @@ jobs:
   sql-safety:
     name: SQL Injection Defense
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -195,6 +199,7 @@ jobs:
   tenant-isolation:
     name: Tenant Isolation Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -234,6 +239,7 @@ jobs:
   react-patterns:
     name: React Patterns
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 

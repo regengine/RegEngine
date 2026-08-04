@@ -30,13 +30,15 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
 
   const step = steps[currentStep];
 
-  // Find and highlight target element
+  // Measures the highlighted element with getBoundingClientRect, which is only
+  // meaningful once the DOM has been laid out — post-render by definition.
   useEffect(() => {
     if (!isOpen || !step) return;
 
     const target = document.querySelector(step.target);
     if (target) {
       const rect = target.getBoundingClientRect();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetRect(rect);
 
       // Scroll target into view if needed
@@ -249,8 +251,11 @@ export function useTutorial(storageKey: string) {
   const [shouldShow, setShouldShow] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
+  // localStorage is browser-only, so the dismissed flag cannot be read during
+  // render or SSR — the default is "hidden" until we know otherwise.
   useEffect(() => {
     const dismissed = localStorage.getItem(storageKey);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShouldShow(dismissed !== 'true');
   }, [storageKey]);
 

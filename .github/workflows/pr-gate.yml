@@ -223,6 +223,7 @@ jobs:
   ci-status-gate:
     name: "CI Status Gate"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [backend, frontend, workflow-contract]
     if: always()
     steps:
