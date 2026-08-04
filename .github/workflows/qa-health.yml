@@ -14,12 +14,17 @@
 # separate real gates rather than making this one blocking (#2502).
 name: QA Health Summary
 
+# Deliberately NOT run on pull_request. This job is a dashboard artifact
+# builder, not a gate (see the header above), so a per-PR run bought no
+# signal that the real "PR Gate: *" checks do not already provide — while
+# being one of the most expensive jobs in the repo. Its full-suite cost on
+# every PR push was a material contributor to exhausting the org's Actions
+# budget on 2026-08-03. The artifact tracks default-branch health, which is
+# what the sysadmin dashboard actually reports.
 on:
   workflow_dispatch:
   push:
     branches: [main, develop]
-  pull_request:
-    branches: [main]
 
 concurrency:
   group: qa-health-${{ github.ref }}
@@ -32,7 +37,11 @@ jobs:
   summarize:
     name: Build QA health artifact
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Was 60. Every step below now carries its own bound, so the job ceiling
+    # is a backstop rather than the thing that actually stops a runaway run —
+    # two observed runs burned 57 and 72 minutes and produced no artifact at
+    # all because the job timeout was the only limit in play.
+    timeout-minutes: 35
     env:
       NODE_VERSION: "24"
       PYTHON_VERSION: "3.11"
@@ -56,6 +65,7 @@ jobs:
         run: python3 -m pip install --require-hashes -r requirements.lock
 
       - name: Run backend pytest
+        timeout-minutes: 15
         continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
@@ -104,24 +114,34 @@ jobs:
           cd frontend
           npx playwright install --with-deps chromium
 
+      # Runs against the local stack, NOT production. playwright.config.ts
+      # takes its self-hosted branch whenever PLAYWRIGHT_BASE_URL is unset:
+      # it starts the backend (scripts/start-e2e-backend.sh on :8000) and a
+      # Next server on :3001, and deliberately overrides any inherited
+      # service URLs "so CI cannot accidentally mutate production".
+      #
+      # This previously pointed at regengine-production.up.railway.app, which
+      # made production latency into billable CI minutes — a slow or
+      # unreachable backend meant this step burned its entire timeout every
+      # run. The real gate (frontend-ci.yml) has always used local mode with
+      # these same fixed test keys; this only brings qa-health in line.
       - name: Run Playwright E2E
         if: always()
         continue-on-error: true
+        timeout-minutes: 22
         env:
-          INGESTION_SERVICE_URL: https://regengine-production.up.railway.app
-          COMPLIANCE_SERVICE_URL: https://regengine-production.up.railway.app
-          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
-          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-          JWT_PREVIOUS_KEY: ${{ secrets.JWT_PREVIOUS_KEY }}
-          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
-          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+          AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
+          JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
+          AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes # pragma: allowlist secret
+          CSRF_SECRET: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
+          ADMIN_MASTER_KEY: playwright-local-admin-master-key-2026
+          API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
+          REGENGINE_API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
+          REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
         run: |
           cd frontend
           set +e
-          playwright_timeout="30m"
+          playwright_timeout="20m"
           timeout "$playwright_timeout" npm run test:e2e -- --reporter=json > ../.qa-health/playwright.json &
           playwright_pid=$!
           while kill -0 "$playwright_pid" 2>/dev/null; do
@@ -145,8 +165,15 @@ jobs:
           set -e
           exit "$playwright_status"
 
+      # This is the step that actually stalled: in run 30802416703 it sat
+      # in_progress for 21 minutes until the job timeout killed it, so the
+      # artifact was never uploaded. The script itself does no I/O that can
+      # block, so the stall came from the environment around it (orphaned
+      # Playwright/webServer processes still holding the step's output
+      # pipe). A bound turns that into a fast, legible failure.
       - name: Build normalized QA health summary
         if: always()
+        timeout-minutes: 5
         run: |
           python3 scripts/qa_health_summary.py \
             --out .qa-health/qa-health-summary.json \
