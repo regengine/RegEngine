@@ -120,8 +120,38 @@ class TestMappingFidelity:
             "location_gln",
             "location_name",
             "source",
+            "event_type",
+            "traceability_lot_code",
+            "event_timestamp",
+            "quantity",
+            "unit_of_measure",
             "kdes",
         )
+
+    def test_recall_filter_predicate_columns_are_compared(self):
+        """The columns build_recall_where_clause filters on MUST be compared.
+
+        ``event_type``, ``traceability_lot_code`` and ``event_timestamp`` are
+        the WHERE predicates of both the legacy and canonical recall queries
+        (fda_export/queries.py). A divergence in any of them changes WHICH
+        ROWS a regulator's recall search returns, not merely a cell value, so
+        leaving them uncompared forfeits the verifier's entire purpose.
+        """
+        for predicate_column in ("event_type", "traceability_lot_code", "event_timestamp"):
+            assert predicate_column in vcpl.FIELD_NAMES
+
+    def test_uncompared_export_columns_are_disclosed_by_name(self):
+        """The tool must publish its own blind spots, not leave them in chat."""
+        disclosed = {name for name, _why in vcpl.UNCOMPARED_EXPORT_COLUMNS}
+        assert disclosed == {"sha256_hash", "chain_hash", "ingested_at"}
+        # Everything the v1 export emits is either compared or disclosed.
+        export_columns = {
+            "id", "event_type", "traceability_lot_code", "product_description",
+            "quantity", "unit_of_measure", "event_timestamp", "location_gln",
+            "location_name", "source", "sha256_hash", "chain_hash", "kdes",
+            "ingested_at",
+        }
+        assert export_columns <= set(vcpl.FIELD_NAMES) | disclosed
 
     def test_page_sql_encodes_the_documented_mapping(self):
         sql, _ = vcpl.build_page_query(vcpl.Options(), None, 10)
@@ -176,12 +206,113 @@ class TestVerdict:
         assert headline == "DO-NOT-PROCEED"
         assert "ZERO COVERAGE" in reason
 
-    def test_legacy_orphan_is_a_hard_failure(self):
-        report = vcpl.Report(rows_examined=10, rows_matched=9, legacy_orphans=1)
+    def test_unexplained_orphan_is_a_hard_failure(self):
+        report = vcpl.Report(
+            rows_examined=10, rows_matched=9, legacy_orphans=1, orphans_unexplained=1
+        )
         code, headline, reason = vcpl.decide(report, vcpl.Options())
         assert code == vcpl.EXIT_VIOLATIONS
         assert headline == "DO-NOT-PROCEED"
         assert "#1277" in reason
+
+    def test_legacy_native_orphan_is_not_a_lost_write(self):
+        """The correction that this whole tool turned on.
+
+        A legacy row written by ``CTEPersistence.store_event`` (live via
+        ``webhook_compat.ingest_events``) carries the LEGACY hash formula,
+        which hashes a different field set than the canonical formula. It can
+        never join canonical on ``sha256_hash`` even though its canonical
+        sibling exists. Reporting that as "a canonical write was lost" is
+        both wrong and dangerous: the documented remediation is the backfill,
+        which would then duplicate FDA traceability records.
+        """
+        report = vcpl.Report(
+            rows_examined=10,
+            rows_matched=5,
+            legacy_orphans=5,
+            orphans_legacy_native=5,
+            orphans_unexplained=0,
+        )
+        code, headline, reason = vcpl.decide(report, vcpl.Options())
+        assert code == vcpl.EXIT_SAFE
+        assert headline == "SAFE-TO-PROCEED"
+        assert "lost" not in reason.lower() or "NOT a lost write" in reason
+        # It must still be visible in the verdict — silence would be its own bug.
+        assert "legacy-native" in reason or "legacy_native_hash_formula" in reason
+
+    def test_mixed_orphans_fail_on_the_unexplained_ones_only(self):
+        report = vcpl.Report(
+            rows_examined=20,
+            rows_matched=14,
+            legacy_orphans=6,
+            orphans_legacy_native=5,
+            orphans_unexplained=1,
+        )
+        code, _headline, reason = vcpl.decide(report, vcpl.Options())
+        assert code == vcpl.EXIT_VIOLATIONS
+        assert "1 legacy row(s)" in reason
+
+    def test_uncorroborated_legacy_native_orphans_are_surfaced(self):
+        """Legacy-native only proves WHICH WRITER wrote the row.
+
+        It does not prove the canonical sibling survived — webhook_compat
+        writes canonical inside a savepoint whose exceptions it swallows. An
+        orphan with no canonical row matching even on content is the case an
+        operator must actually look at.
+        """
+        report = vcpl.Report(
+            rows_examined=10,
+            rows_matched=5,
+            legacy_orphans=5,
+            orphans_legacy_native=5,
+            content_probe_attempted=5,
+            content_probe_corroborated=3,
+            content_probe_uncorroborated=2,
+        )
+        _code, _headline, reason = vcpl.decide(report, vcpl.Options())
+        assert "NO canonical row matching even" in reason
+        assert "investigate" in reason
+
+    def test_out_of_window_rows_downgrade_a_clean_scan(self):
+        """The --since false green: the worst outcome this tool can produce.
+
+        A clean scan of a one-month window on a multi-year compliance table
+        used to exit 0 SAFE-TO-PROCEED, which would authorise retiring the
+        legacy FDA fallback while unverified legacy-only rows remained.
+        """
+        report = vcpl.Report(
+            rows_examined=5,
+            rows_matched=5,
+            legacy_total_in_window=5,
+            legacy_out_of_window=1_000_000,
+            out_of_window_oldest=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        )
+        opts = vcpl.Options(since=datetime(2026, 7, 1, tzinfo=timezone.utc))
+        code, headline, reason = vcpl.decide(report, opts)
+        assert code == vcpl.EXIT_PARTIAL
+        assert code != vcpl.EXIT_SAFE, "partial coverage must never exit 0"
+        assert "NOT A CUTOVER DECISION" in headline
+        assert "1,000,000" in reason and "OUTSIDE" in reason
+
+    def test_violations_outrank_partial_coverage(self):
+        """A real violation must not be masked by the partial-coverage path."""
+        report = vcpl.Report(
+            rows_examined=5,
+            rows_matched=4,
+            legacy_orphans=1,
+            orphans_unexplained=1,
+            legacy_out_of_window=99,
+        )
+        code, headline, _ = vcpl.decide(report, vcpl.Options(since=datetime(2026, 7, 1, tzinfo=timezone.utc)))
+        assert code == vcpl.EXIT_VIOLATIONS
+        assert headline == "DO-NOT-PROCEED"
+
+    def test_unclassifiable_orphans_are_a_coverage_gap(self):
+        """If the hash probe cannot be imported, nothing may be called green."""
+        report = vcpl.Report(rows_examined=5, rows_matched=4, legacy_orphans=1)
+        if not vcpl.LEGACY_HASH_PROBE_AVAILABLE:
+            gaps = vcpl.coverage_gaps(report, vcpl.Options())
+            assert any("classified" in g for g in gaps)
 
     def test_canonical_only_rows_are_never_a_failure(self):
         """dual_write=False paths make canonical-only rows expected (#1335)."""
@@ -205,14 +336,19 @@ class TestVerdict:
     def test_limit_truncated_clean_run_is_not_a_cutover_decision(self):
         report = vcpl.Report(rows_examined=5, rows_matched=5, truncated_by_limit=True)
         code, headline, reason = vcpl.decide(report, vcpl.Options(limit=5))
-        assert code == vcpl.EXIT_SAFE
+        # Previously this returned 0, so `if verify; then proceed` read a
+        # truncated smoke pass as green. It now has its own exit code.
+        assert code == vcpl.EXIT_PARTIAL
+        assert code != vcpl.EXIT_SAFE
         assert "NOT A CUTOVER DECISION" in headline
         assert "--limit" in reason
 
     def test_ignored_fields_are_disclosed_in_the_verdict(self):
         report = vcpl.Report(rows_examined=3, rows_matched=3)
-        _code, _headline, reason = vcpl.decide(report, vcpl.Options(ignore_fields=("id",)))
-        assert "ignoring field(s): id" in reason
+        code, _headline, reason = vcpl.decide(report, vcpl.Options(ignore_fields=("id",)))
+        assert "--ignore-field" in reason and "id" in reason
+        # A verdict that skipped a column is not a verdict on that column.
+        assert code == vcpl.EXIT_PARTIAL
 
 
 class TestCli:
@@ -228,13 +364,31 @@ class TestCli:
         assert vcpl.parse_timestamp("2026-07-01").tzinfo is timezone.utc
         assert vcpl.parse_timestamp("2026-07-01T00:00:00Z").tzinfo is timezone.utc
 
-    def test_until_defaults_to_a_settled_bound(self):
-        """Cross-transaction writers would otherwise produce phantom orphans."""
+    def test_settle_window_defaults_to_disabled(self):
+        """There is no phantom-orphan race, so the default must not lose rows.
+
+        The old 300s default was justified by a claim that webhook_compat
+        commits the legacy and canonical rows in SEPARATE transactions. It
+        does not — both go into one session transaction via nested
+        savepoints, and dual_write_legacy is a single transaction by
+        construction. A non-zero settle window is therefore pure, silent
+        coverage loss on the most recent (most interesting) rows.
+        """
+        assert vcpl.DEFAULT_SETTLE_SECONDS == 0
         args = vcpl.build_parser().parse_args([])
         opts = vcpl.options_from_args(args)
-        assert opts.until is not None
+        assert opts.until is None
         assert not opts.until_was_explicit
-        assert (datetime.now(timezone.utc) - opts.until).total_seconds() >= vcpl.DEFAULT_SETTLE_SECONDS - 5
+
+    def test_explicit_settle_window_still_downgrades_the_verdict(self):
+        args = vcpl.build_parser().parse_args(["--settle-seconds", "300"])
+        opts = vcpl.options_from_args(args)
+        assert opts.until is not None
+        report = vcpl.Report(
+            rows_examined=5, rows_matched=5, legacy_out_of_window=2
+        )
+        code, _headline, _reason = vcpl.decide(report, opts)
+        assert code == vcpl.EXIT_PARTIAL
 
     def test_missing_database_url_exits_incomplete(self, monkeypatch):
         monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -353,7 +507,234 @@ def _run_verifier(database_url: str, tenant: str, *extra: str):
     )
 
 
+def _seed_webhook_compat_pair(engine, tenant: str):
+    """Seed ONE event exactly the way ``webhook_compat.ingest_events`` does.
+
+    This is the corpus every earlier live test was missing: they all built
+    their rows with ``CanonicalEventStore(dual_write=True/False)`` only, so
+    they exercised the one writer whose rows join by hash and never the
+    writer that produces most of production's legacy rows.
+
+    The real route (``webhook_compat.py:172`` then ``:201``) does two
+    independent writes in ONE session transaction:
+      1. ``CTEPersistence.store_event`` -> a legacy row whose ``sha256_hash``
+         is ``cte_persistence.hashing.compute_event_hash`` over a fresh
+         ``uuid4()``;
+      2. ``CanonicalEventStore(dual_write=False).persist_event`` -> a
+         canonical row whose ``sha256_hash`` is the canonical 10-field
+         formula over a DIFFERENT ``uuid4()``.
+
+    The two hashes cannot be equal, so the pair never joins — while both
+    rows are present and correct. Returns the legacy row's hash.
+    """
+    import json as _json
+
+    from shared.cte_persistence.hashing import compute_event_hash
+
+    legacy_id = str(uuid4())
+    canonical = _make_event(UUID(tenant) if isinstance(tenant, str) else tenant)
+    kdes = {"gtin": "09506000134352", "ingest_source": "webhook_api"}
+    timestamp = canonical.event_timestamp
+    location = canonical.from_facility_reference
+
+    legacy_hash = compute_event_hash(
+        legacy_id,
+        canonical.event_type.value,
+        canonical.traceability_lot_code,
+        "webhook product",
+        canonical.quantity,
+        canonical.unit_of_measure,
+        location,
+        location,
+        timestamp.isoformat(),
+        kdes,
+    )
+    with engine.begin() as conn:
+        conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+        conn.execute(
+            text("""
+                INSERT INTO fsma.cte_events (
+                    id, tenant_id, event_type, traceability_lot_code,
+                    product_description, quantity, unit_of_measure,
+                    location_gln, location_name, event_timestamp,
+                    source, idempotency_key, sha256_hash, chain_hash
+                ) VALUES (
+                    CAST(:id AS uuid), CAST(:tid AS uuid), :et, :tlc,
+                    'webhook product', :q, :uom,
+                    :loc, :loc, :ts,
+                    'webhook_api', :idem, :sha, 'chain-wc'
+                )
+            """),
+            {
+                "id": legacy_id,
+                "tid": tenant,
+                "et": canonical.event_type.value,
+                "tlc": canonical.traceability_lot_code,
+                "q": canonical.quantity,
+                "uom": canonical.unit_of_measure,
+                "loc": location,
+                "ts": timestamp,
+                "idem": f"idem-wc-{uuid4().hex}",
+                "sha": legacy_hash,
+            },
+        )
+        for key, value in kdes.items():
+            conn.execute(
+                text(
+                    "INSERT INTO fsma.cte_kdes (cte_event_id, tenant_id, kde_key, kde_value) "
+                    "VALUES (CAST(:e AS uuid), CAST(:tid AS uuid), :k, CAST(:v AS jsonb))"
+                ),
+                {"e": legacy_id, "tid": tenant, "k": key, "v": _json.dumps(value)},
+            )
+
+    # The sibling canonical-only write, same content tuple, different event_id.
+    session = sessionmaker(bind=engine, future=True)()
+    try:
+        from shared.canonical_persistence.writer import CanonicalEventStore
+
+        session.execute(text("SET app.tenant_id = :tid"), {"tid": tenant})
+        canonical.kdes = kdes
+        CanonicalEventStore(session, dual_write=False).persist_event(canonical)
+        session.commit()
+    finally:
+        session.close()
+    return legacy_hash
+
+
 class TestAgainstLiveDatabase:
+    def test_webhook_compat_pair_is_not_reported_as_a_lost_write(self, seeded_tenant):
+        """The regression that made this tool unusable against production.
+
+        Before the fix the verifier reported every webhook_compat legacy row
+        as "a canonical write was lost (#1277)" and exited 1, on a database
+        where the canonical row was present the whole time. Worse, the
+        documented remediation for that message is the backfill — which, fed
+        these rows, would duplicate FDA traceability records.
+        """
+        import json
+
+        database_url, engine, tenant = seeded_tenant
+        legacy_hash = _seed_webhook_compat_pair(engine, tenant)
+
+        result = _run_verifier(database_url, tenant)
+        payload = json.loads(result.stdout)
+        orphans = payload["legacy_orphans"]
+
+        # It IS an orphan by hash — that part was never in dispute.
+        assert orphans["count"] == 1
+        # But it must be classified, not blamed on a lost write.
+        assert orphans["legacy_native_hash_formula"] == 1
+        assert orphans["unexplained"] == 0
+        assert orphans["samples"][0]["orphan_class"] == "legacy-native"
+        assert orphans["samples"][0]["sha256_hash"] == legacy_hash
+        # And the content probe should find the canonical sibling that is
+        # sitting right there in the same database.
+        assert orphans["content_probe"]["corroborated"] == 1
+        assert orphans["content_probe"]["uncorroborated"] == 0
+        # Verdict is not a data-loss page.
+        assert result.returncode == vcpl.EXIT_SAFE, result.stdout + result.stderr
+        assert payload["verdict"] == "SAFE-TO-PROCEED"
+
+    def test_a_real_lost_write_still_fails_alongside_webhook_compat_rows(self, seeded_tenant):
+        """Classification must not become a blanket amnesty for orphans.
+
+        A legacy row carrying the CANONICAL hash formula with no canonical
+        twin is a genuine #1277 violation, and must still fail even when
+        legacy-native orphans are present in the same corpus.
+        """
+        import json
+
+        database_url, engine, tenant = seeded_tenant
+        _seed_webhook_compat_pair(engine, tenant)
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(
+                text("""
+                    INSERT INTO fsma.cte_events (
+                        id, tenant_id, event_type, traceability_lot_code,
+                        product_description, quantity, unit_of_measure,
+                        location_gln, location_name, event_timestamp,
+                        source, idempotency_key, sha256_hash, chain_hash
+                    ) VALUES (
+                        gen_random_uuid(), CAST(:tid AS uuid), 'shipping', 'TLC-REALLY-LOST',
+                        'lost', 1.0, 'kg', 'GLN-X', 'GLN-X', NOW(),
+                        'webhook_api', :idem, :sha, 'chain-lost'
+                    )
+                """),
+                {"tid": tenant, "idem": f"idem-lost-{uuid4().hex}", "sha": "de" + "0" * 62},
+            )
+
+        result = _run_verifier(database_url, tenant)
+        payload = json.loads(result.stdout)
+        assert result.returncode == vcpl.EXIT_VIOLATIONS, result.stdout + result.stderr
+        assert payload["legacy_orphans"]["count"] == 2
+        assert payload["legacy_orphans"]["legacy_native_hash_formula"] == 1
+        assert payload["legacy_orphans"]["unexplained"] == 1
+        assert "#1277" in payload["reason"]
+
+    def test_a_narrow_since_window_cannot_return_safe_to_proceed(self, seeded_tenant):
+        """The --since false green, end to end on a real database.
+
+        A window that hides legacy rows must never exit 0. This is the exact
+        shape that would otherwise authorise retiring the legacy FDA fallback
+        while unverified legacy-only rows remained.
+        """
+        import json
+
+        database_url, engine, tenant = seeded_tenant
+        # Backdate one legacy row out of the window (pre-dual-write history).
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(
+                text(
+                    "UPDATE fsma.cte_events SET ingested_at = now() - interval '400 days' "
+                    "WHERE tenant_id = CAST(:tid AS uuid) "
+                    "AND id = (SELECT id FROM fsma.cte_events "
+                    "          WHERE tenant_id = CAST(:tid AS uuid) LIMIT 1)"
+                ),
+                {"tid": tenant},
+            )
+
+        since = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+        result = _run_verifier(database_url, tenant, "--since", since)
+        payload = json.loads(result.stdout)
+        assert result.returncode == vcpl.EXIT_PARTIAL, result.stdout + result.stderr
+        assert payload["verdict"] != "SAFE-TO-PROCEED"
+        assert payload["coverage"]["legacy_out_of_window"] == 1
+        assert payload["coverage"]["full_coverage"] is False
+        assert any("OUTSIDE" in gap for gap in payload["coverage"]["gaps"])
+
+    def test_canonical_drift_on_recall_predicate_columns_is_detected(self, seeded_tenant):
+        """Post-hoc canonical UPDATEs are real (rules/engine.py:802, writer.py:322).
+
+        ``event_type``/``traceability_lot_code``/``event_timestamp`` are the
+        recall filter's WHERE predicates, so drift there changes WHICH ROWS a
+        regulator's search returns. The verifier used to compare 6 columns and
+        report SAFE-TO-PROCEED through exactly this mutation.
+        """
+        import json
+
+        database_url, engine, tenant = seeded_tenant
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(
+                text(
+                    "UPDATE fsma.traceability_events SET quantity = 999.0, "
+                    "event_timestamp = event_timestamp - interval '90 days', "
+                    "traceability_lot_code = 'TLC-MUTATED' "
+                    "WHERE tenant_id = CAST(:tid AS uuid)"
+                ),
+                {"tid": tenant},
+            )
+
+        result = _run_verifier(database_url, tenant)
+        payload = json.loads(result.stdout)
+        assert result.returncode == vcpl.EXIT_VIOLATIONS, result.stdout + result.stderr
+        by_field = payload["field_divergence"]["by_field"]
+        assert by_field["quantity"] > 0
+        assert by_field["event_timestamp"] > 0
+        assert by_field["traceability_lot_code"] > 0
+
     def test_clean_dual_write_corpus_is_safe_to_proceed(self, seeded_tenant):
         import json
 
