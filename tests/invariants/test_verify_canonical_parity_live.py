@@ -24,9 +24,9 @@ import importlib.util
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -683,8 +683,14 @@ class TestAgainstLiveDatabase:
 
         database_url, engine, tenant = seeded_tenant
         # Backdate one legacy row out of the window (pre-dual-write history).
+        # fsma.cte_events is append-only (fsma.prevent_cte_mutation, FDA
+        # 21 CFR 1.1455); the trigger's own documented escape hatch is the
+        # only way to stage this fixture, and it is scoped to this
+        # transaction. Production data is never mutated by the verifier —
+        # this is test setup, and the verifier itself is read-only.
         with engine.begin() as conn:
             conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
             conn.execute(
                 text(
                     "UPDATE fsma.cte_events SET ingested_at = now() - interval '400 days' "
