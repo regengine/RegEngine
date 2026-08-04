@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { sandboxCta } from "@/lib/sandbox-cta";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -22,7 +23,10 @@ const FEATURES = [
 ];
 
 const WHY_SWITCH = [
-  { title: "Self-serve onboarding", desc: "RegEngine's sandbox returns FSMA 204 results in seconds and the full platform is live in one CSV upload. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
+  // #2757 — this used to assert the sandbox returns results "in seconds" regardless of
+  // whether the sandbox surface is enabled on the deployment. Reworded to the claim the
+  // product makes unconditionally: rule evaluation runs on the first CSV you upload.
+  { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload — no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
   { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both to compare for your facility count." },
@@ -91,12 +95,14 @@ export default function FoodLogiQCompare() {
         {/* CTA */}
         <div className="bg-gradient-to-r from-[var(--re-brand)]/10 to-purple-500/10 border border-[var(--re-brand)]/20 rounded-xl p-8 text-center">
           <h2 className="text-xl font-bold mb-2">See the difference yourself</h2>
+          {/* #2757 — copy and destination resolve together so the blurb can never
+              promise a CSV sandbox that this deployment does not serve. */}
           <p className="text-[var(--re-text-muted)] text-sm mb-6">
-            Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds. No signup required.
+            {sandboxCta().blurb}
           </p>
           <div className="flex items-center justify-center gap-4">
-            <Link href="/demo" className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
-              Explore the interactive demo <ArrowRight className="w-4 h-4" />
+            <Link href={sandboxCta().href} className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--re-brand-dark)] transition-colors">
+              {sandboxCta().label} <ArrowRight className="w-4 h-4" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center gap-2 bg-white/10 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors">
               See Pricing

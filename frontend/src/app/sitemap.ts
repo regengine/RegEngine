@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experimental-features';
+import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
 /**
  * XML sitemap.
@@ -23,6 +24,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/integrations`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/trust`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
+        // #2757 — only advertise the sandbox when its (experimental) router is
+        // mounted; listing a page that answers "not enabled here" is worse for
+        // search than not listing it.
+        ...(isSandboxEnabled()
+            ? [{ url: `${baseUrl}/sandbox`, changeFrequency: 'monthly' as const, priority: 0.9 }]
+            : []),
         { url: `${baseUrl}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },
     ];
