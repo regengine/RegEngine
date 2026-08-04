@@ -24,6 +24,7 @@ import {
   ReadinessScore,
   RegulatoryCitationBlock,
 } from "@/components/compliance";
+import { sandboxCta } from "@/lib/sandbox-cta";
 
 export const metadata: Metadata = {
   title: "RegEngine — Compliance OS for Food Traceability",
@@ -322,6 +323,26 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* #2757 — the anchor the compare-page CTAs pointed at for months before
+          #2730 repointed them. Copy and destination come from sandboxCta() so
+          this section cannot promise a sandbox the deployment does not serve. */}
+      <section id="sandbox" className="re-section border-y border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+        <div className="re-container">
+          <h2 className="text-2xl font-semibold text-[var(--re-text-primary)]">
+            See it against your own data
+          </h2>
+          <p className="mt-3 max-w-[620px] text-sm leading-7 text-[var(--re-text-muted)]">
+            {sandboxCta().blurb}
+          </p>
+          <div className="mt-6">
+            <ActionLink href={sandboxCta().href} primary>
+              {sandboxCta().label}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </ActionLink>
           </div>
         </div>
       </section>
