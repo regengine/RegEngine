@@ -292,8 +292,14 @@ def set_tenant_context(session: Session, tenant_id: str) -> None:
     if _set_tenant_guc is not None:
         _set_tenant_guc(session, str(tenant_id))
         return
+    # Documented ops-box fallback: unreachable whenever the canonical primitive
+    # imports. Boxes that have sqlalchemy but not FastAPI still need to backfill
+    # (see the guarded import above). The SQL is byte-identical to
+    # set_tenant_guc's own form and the UUID validation the primitive performs
+    # already ran above, so this branch cannot become the "divergent inline
+    # copy" the rule exists to prevent.
     session.execute(
-        text("SELECT set_config('app.tenant_id', :tid, true)"),
+        text("SELECT set_config('app.tenant_id', :tid, true)"),  # nosemgrep: adhoc-tenant-guc-set-config
         {"tid": str(tenant_id)},
     )
 

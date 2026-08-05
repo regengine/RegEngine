@@ -985,9 +985,20 @@ def preflight(conn: Any, opts: Options) -> Dict[str, Any]:
     # tenant at a time; an all-tenant scan needs a role that bypasses RLS
     # (the migration/owner role). Setting the GUC when exactly one tenant was
     # requested makes the common case work under either role.
+    #
+    # This deliberately does NOT call services.shared.tenant_context.
+    # set_tenant_guc, even though that is the canonical primitive. This module's
+    # read-only guarantee rests on read_only_execute being "the ONLY way this
+    # module touches the database" — every statement passes assert_read_only
+    # first. set_tenant_guc calls session.execute() itself, so routing through
+    # it would put un-asserted SQL on a connection pointed at the production
+    # database, trading this tool's core safety property for rule conformance.
+    # The bound parameter is preserved, so the injection surface the rule cares
+    # about is unchanged.
     if len(opts.tenants) == 1:
         read_only_execute(
             conn,
+            # nosemgrep: adhoc-tenant-guc-set-config - rationale above
             "SELECT set_config('app.tenant_id', :tid, false)",
             {"tid": opts.tenants[0]},
         )
