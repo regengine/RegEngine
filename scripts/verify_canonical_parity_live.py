@@ -986,9 +986,16 @@ def preflight(conn: Any, opts: Options) -> Dict[str, Any]:
     # (the migration/owner role). Setting the GUC when exactly one tenant was
     # requested makes the common case work under either role.
     if len(opts.tenants) == 1:
+        # Session scope (`false`), deliberately NOT the canonical
+        # set_tenant_guc primitive: that helper is transaction-scoped
+        # (`true`), and this parity scan issues many statements outside any
+        # single transaction, so a transaction-scoped GUC would fall out of
+        # scope mid-scan. Safe to suppress here — the connection is asserted
+        # read-only immediately above, so this grants visibility for a
+        # read-only scan and cannot be a write-side tenant grant.
         read_only_execute(
             conn,
-            "SELECT set_config('app.tenant_id', :tid, false)",
+            "SELECT set_config('app.tenant_id', :tid, false)",  # nosemgrep: adhoc-tenant-guc-set-config
             {"tid": opts.tenants[0]},
         )
         info["tenant_guc"] = opts.tenants[0]

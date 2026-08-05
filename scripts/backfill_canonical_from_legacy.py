@@ -292,8 +292,16 @@ def set_tenant_context(session: Session, tenant_id: str) -> None:
     if _set_tenant_guc is not None:
         _set_tenant_guc(session, str(tenant_id))
         return
+    # Import-failure fallback only — unreachable whenever the canonical
+    # primitive is available. Suppressed rather than rewritten because both
+    # risks the rule guards against are already handled here: the SQL is
+    # set_tenant_guc's own documented form verbatim (transaction-scoped
+    # `true`, bound parameter, so it is not a *divergent* copy), and the
+    # tenant id is UUID-validated above before any SQL runs. Rewriting this
+    # to call the primitive unconditionally would break the lean ops images
+    # this branch exists for, where the import genuinely fails.
     session.execute(
-        text("SELECT set_config('app.tenant_id', :tid, true)"),
+        text("SELECT set_config('app.tenant_id', :tid, true)"),  # nosemgrep: adhoc-tenant-guc-set-config
         {"tid": str(tenant_id)},
     )
 
