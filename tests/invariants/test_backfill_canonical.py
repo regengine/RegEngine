@@ -396,6 +396,84 @@ class TestBackfillSafety:
         assert row[1] == "urn:gs1:414:0614141000012"
         assert row[2] == event.sha256_hash
 
+    def test_outer_commit_failure_is_not_recorded_as_backfill(self, tenant_session, tmp_path):
+        """A mid-batch outer commit failure must leave the audit trail and the
+        summary honest: the batch's rows are rolled back, so none may be counted
+        as ``backfilled`` nor emitted to the JSONL trail as a durable ``backfill``.
+
+        This is the #1335 data-integrity contract: a row insert is savepoint-
+        committed inside the batch transaction, but ``sp.commit()`` only RELEASES
+        the savepoint — durability depends on the OUTER ``session.commit()``. We
+        simulate that outer commit raising and assert nothing claims a write the
+        database rolled back.
+        """
+        session, tenant_id, database_url = tenant_session
+        # A plain from-facility orphan reconstructs cleanly (see
+        # test_execute_backfills_orphan), so absent the commit failure this row
+        # WOULD be backfilled — that is what makes the deferral observable.
+        event = _make_event(tenant_id, from_facility="urn:gs1:414:0614141000005")
+        _persist_dual(session, event)
+        _orphan_the_canonical_row(session, tenant_id, event.event_id)
+
+        # A session_factory whose produced sessions raise on the OUTER commit,
+        # exactly as a mid-batch commit failure would, while every read query and
+        # the savepoint INSERT still succeed.
+        engine = create_engine(database_url, future=True)
+        real_factory = sessionmaker(
+            bind=engine, future=True, autoflush=False, expire_on_commit=False
+        )
+
+        def failing_factory():
+            s = real_factory()
+
+            def boom():
+                raise RuntimeError("simulated outer commit failure")
+
+            s.commit = boom  # shadow the bound method for this session
+            return s
+
+        summary = backfill.Summary(tenants=1)
+        args = backfill.build_parser().parse_args(
+            ["--database-url", database_url, "--tenant-id", str(tenant_id), "--execute"]
+        )
+        report_path = tmp_path / "decisions.jsonl"
+
+        try:
+            with open(report_path, "a", encoding="utf-8") as report:
+                # process_tenant re-raises after rolling the batch back.
+                with pytest.raises(RuntimeError, match="simulated outer commit failure"):
+                    backfill.process_tenant(
+                        failing_factory, str(tenant_id), args, summary, report, {}, None
+                    )
+        finally:
+            engine.dispose()
+
+        # The row was examined, but NOT counted as backfilled — the commit that
+        # would have made it durable never landed.
+        assert summary.orphans_examined == 1
+        assert summary.backfilled == 0
+        assert not summary.by_hypothesis, "facility-hypothesis counters were bumped for a rolled-back batch"
+        assert summary.chain_entry_missing == 0
+        assert summary.status_assumed_active == 0
+
+        # The audit trail must not claim a durable backfill for this row. A
+        # batch-level 'rolled_back' record is emitted instead.
+        decisions = [
+            json.loads(line)
+            for line in report_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        backfills = [d for d in decisions if d.get("decision") == "backfill"]
+        assert backfills == [], "a rolled-back row was emitted to the audit trail as a durable backfill"
+        rolled_back = [d for d in decisions if d.get("decision") == "rolled_back"]
+        assert len(rolled_back) == 1
+        assert str(event.event_id) in rolled_back[0]["rolled_back_legacy_ids"]
+
+        # And the database itself has no canonical twin — the rollback undid the
+        # savepoint insert, so the audit trail and the DB agree.
+        session.rollback()
+        assert _canonical_count(session, tenant_id) == 0
+
     def test_legacy_native_row_is_refused(self, tenant_session, tmp_path):
         """A ``store_event``-shaped row uses a different hash formula — refuse it."""
         from shared.cte_persistence.hashing import compute_event_hash

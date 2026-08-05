@@ -339,11 +339,17 @@ export function SupplyChainKnowledgeGraphBuilder() {
     // `draw` is a plain render-scope function that reads the canvas and every
     // piece of view state. The dependency list below is the state it actually
     // paints from; adding `draw` itself would change identity on every render
-    // and repaint in a loop. Same for the resize listener, which is bound once.
+    // and repaint in a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { draw(); }, [nodes, edges, vp, selNode, selEdge, trace, visNodes, visEdges]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { const h = () => draw(); if (typeof window !== 'undefined') window.addEventListener("resize", h); return () => { if (typeof window !== 'undefined') window.removeEventListener("resize", h); }; }, []);
+    // Keep a ref pointing at the latest `draw` so the once-bound resize listener
+    // below always repaints from current state instead of the first render's
+    // stale closure.
+    const drawRef = useRef(draw);
+    drawRef.current = draw;
+    // The resize listener is bound once (empty deps) — the `drawRef` indirection
+    // lets it read fresh state without re-registering on every render.
+    useEffect(() => { const h = () => drawRef.current(); if (typeof window !== 'undefined') window.addEventListener("resize", h); return () => { if (typeof window !== 'undefined') window.removeEventListener("resize", h); }; }, []);
 
     const fitView = () => {
         if (!containerRef.current || !visNodes.length) return;
