@@ -1228,6 +1228,7 @@ def export_fda_spreadsheet_v2(
 async def get_merkle_root(
     tenant_id: str = Query(..., description="Tenant identifier"),
     principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Return the current Merkle root for a tenant's hash chain."""
     # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
@@ -1248,6 +1249,7 @@ async def get_merkle_proof(
     tenant_id: str = Query(..., description="Tenant identifier"),
     event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
     principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Return a Merkle inclusion proof for a specific event."""
     # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.

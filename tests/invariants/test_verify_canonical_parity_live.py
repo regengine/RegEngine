@@ -225,6 +225,11 @@ class TestVerdict:
         sibling exists. Reporting that as "a canonical write was lost" is
         both wrong and dangerous: the documented remediation is the backfill,
         which would then duplicate FDA traceability records.
+
+        NOT a violation is not the same as SAFE: with zero of the five
+        orphans content-probed, this scan cannot show canonical holds them,
+        so the verdict is PARTIAL — the exit code ``if verify; then proceed``
+        must not read as authorization to retire the legacy store.
         """
         report = vcpl.Report(
             rows_examined=10,
@@ -234,11 +239,28 @@ class TestVerdict:
             orphans_unexplained=0,
         )
         code, headline, reason = vcpl.decide(report, vcpl.Options())
-        assert code == vcpl.EXIT_SAFE
-        assert headline == "SAFE-TO-PROCEED"
+        assert code != vcpl.EXIT_VIOLATIONS, "legacy-native orphans are not violations"
+        assert code == vcpl.EXIT_PARTIAL, "unprobed native orphans are unproven coverage"
+        assert "never content-probed" in reason
         assert "lost" not in reason.lower() or "NOT a lost write" in reason
         # It must still be visible in the verdict — silence would be its own bug.
         assert "legacy-native" in reason or "legacy_native_hash_formula" in reason
+
+    def test_fully_corroborated_legacy_native_orphans_are_safe(self):
+        """When every native orphan is probed AND corroborated, canonical
+        demonstrably holds the data, and SAFE-TO-PROCEED is earned."""
+        report = vcpl.Report(
+            rows_examined=10,
+            rows_matched=5,
+            legacy_orphans=5,
+            orphans_legacy_native=5,
+            content_probe_attempted=5,
+            content_probe_corroborated=5,
+            content_probe_uncorroborated=0,
+        )
+        code, headline, _reason = vcpl.decide(report, vcpl.Options())
+        assert code == vcpl.EXIT_SAFE
+        assert headline == "SAFE-TO-PROCEED"
 
     def test_mixed_orphans_fail_on_the_unexplained_ones_only(self):
         report = vcpl.Report(
@@ -269,9 +291,14 @@ class TestVerdict:
             content_probe_corroborated=3,
             content_probe_uncorroborated=2,
         )
-        _code, _headline, reason = vcpl.decide(report, vcpl.Options())
+        code, _headline, reason = vcpl.decide(report, vcpl.Options())
         assert "NO canonical row matching even" in reason
         assert "investigate" in reason
+        # An uncorroborated orphan is a row this scan cannot show canonical
+        # holds. Exit 0 here once authorized retiring the sole copy of an FDA
+        # traceability record; it must be PARTIAL, never SAFE.
+        assert code == vcpl.EXIT_PARTIAL
+        assert code != vcpl.EXIT_SAFE, "uncorroborated orphans must never exit 0"
 
     def test_out_of_window_rows_downgrade_a_clean_scan(self):
         """The --since false green: the worst outcome this tool can produce.

@@ -1063,6 +1063,27 @@ def coverage_gaps(report: Report, opts: Options) -> List[str]:
             "the legacy-native hash probe could not be imported, so orphans could not be "
             "classified"
         )
+    # Legacy-native orphans can never join canonical by hash, so the content
+    # probe is the ONLY evidence canonical covers them. An orphan the probe
+    # could not corroborate — or never examined at all — is a row this scan
+    # cannot show the canonical store holds. Retiring the legacy store on
+    # exit 0 while such rows exist would discard the sole copy of an FDA
+    # traceability record, so both cases must deny SAFE-TO-PROCEED the same
+    # way every other unproven-coverage condition above does.
+    if report.content_probe_uncorroborated:
+        gaps.append(
+            f"{report.content_probe_uncorroborated:,} legacy-native orphan(s) have NO "
+            "canonical row matching even on content — canonical coverage of these rows "
+            "is unproven; investigate each one before any retirement decision"
+        )
+    unprobed_native = report.orphans_legacy_native - report.content_probe_attempted
+    if unprobed_native > 0:
+        gaps.append(
+            f"{unprobed_native:,} legacy-native orphan(s) were never content-probed "
+            "(--skip-content-probe, or the --max-content-probe cap) — their canonical "
+            "coverage is unknown; re-run with probing enabled and a cap of at least "
+            f"{report.orphans_legacy_native:,}"
+        )
     return gaps
 
 
