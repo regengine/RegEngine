@@ -167,7 +167,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'FDA Trace & Export API',
         baseUrl: '/api/v1/fda',
         icon: FileDown,
-        description: 'Lot tracing and FDA-formatted exports from stored tenant evidence, with cryptographic verification',
+        description: 'Lot tracing and traceability record exports from stored tenant evidence, with cryptographic verification',
         endpoints: [
             {
                 method: 'GET',
