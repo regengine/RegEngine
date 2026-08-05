@@ -987,6 +987,12 @@ def process_tenant(
     examined = 0
     for chunk in _chunks(orphan_ids, args.batch_size):
         session = session_factory()
+        # Buffer of durably-pending backfill successes for THIS batch. In
+        # --execute mode nothing in it is counted or emitted until the outer
+        # session.commit() below returns; the row inserts live in the open
+        # transaction and are not durable until then.
+        pending: List[_PendingSuccess] = []
+        committed = False
         try:
             # SQLAlchemy autobegins on first execute; set_tenant_context's
             # set_config(..., true) is transaction-scoped, so the GUC covers
@@ -995,18 +1001,29 @@ def process_tenant(
             rows = fetch_rows(session, tenant_id, chunk)
             for row in rows:
                 examined += 1
-                _process_row(session, row, args, summary, report)
+                _process_row(session, row, args, summary, report, pending)
             if args.execute:
                 session.commit()
+                committed = True
             else:
                 # Belt and braces: the row path never issues an INSERT in
                 # dry-run, and the transaction is rolled back regardless.
                 session.rollback()
         except Exception:
             session.rollback()
+            # The outer commit (or the batch) failed: every savepoint-committed
+            # insert was just rolled back. Discard the buffered successes — they
+            # must NOT be counted or emitted as backfills — and record the
+            # rollback in the audit trail instead.
+            _emit_batch_rolled_back(report, tenant_id, pending)
             raise
         finally:
             session.close()
+        if args.execute and committed:
+            # Durable now: apply the buffered successes (counters + audit records)
+            # only after the outer commit landed, then advance the resume cursor.
+            for item in pending:
+                item.apply(summary, report)
         if args.execute:
             cursors[tenant_id] = chunk[-1]
             save_state(args.state_file, cursors)
@@ -1034,12 +1051,76 @@ def _emit(report: Optional[Any], record: Dict[str, Any]) -> None:
     report.flush()
 
 
+@dataclass
+class _PendingSuccess:
+    """A durably-pending backfill success, held until the outer commit lands.
+
+    In ``--execute`` mode a row's INSERT runs inside a nested SAVEPOINT; the
+    ``sp.commit()`` only RELEASES the savepoint, so the row's durability still
+    depends on the batch's OUTER ``session.commit()``. Counting the row as
+    backfilled and emitting its "backfill" audit record BEFORE that outer commit
+    would make the summary and the JSONL trail lie if the commit then fails and
+    the whole batch is rolled back. So the success side effects are buffered
+    here and applied by ``apply()`` only after the outer commit returns.
+    """
+
+    record: Dict[str, Any]
+    hypothesis: str
+    product_reference_nulled: bool
+    status_superseded: bool
+    assumed_status: bool
+    has_chain: bool
+
+    def apply(self, summary: Summary, report: Optional[Any]) -> None:
+        """Record the durable success: bump counters and emit the audit record."""
+        summary.backfilled += 1
+        summary.by_hypothesis[self.hypothesis] = summary.by_hypothesis.get(self.hypothesis, 0) + 1
+        if self.product_reference_nulled:
+            summary.product_reference_nulled += 1
+        if self.status_superseded:
+            summary.status_recovered_superseded += 1
+        elif self.assumed_status:
+            summary.status_assumed_active += 1
+        if not self.has_chain:
+            summary.chain_entry_missing += 1
+        _emit(report, self.record)
+
+
+def _emit_batch_rolled_back(
+    report: Optional[Any], tenant_id: str, pending: Sequence[_PendingSuccess]
+) -> None:
+    """Emit a single batch-level record when an outer commit failed.
+
+    The buffered successes are discarded (never counted, never emitted as
+    "backfill") because the rollback undid every savepoint-committed insert.
+    This record makes that outcome visible in the audit trail instead of the
+    rows silently vanishing.
+    """
+    if report is None or not pending:
+        return
+    _emit(
+        report,
+        {
+            "tenant_id": tenant_id,
+            "decision": "rolled_back",
+            "reason": "batch_commit_failed",
+            "explanation": (
+                "The outer session.commit() for this batch raised; every "
+                "savepoint-committed insert in the batch was rolled back, so "
+                "these rows were NOT backfilled and are not counted as such."
+            ),
+            "rolled_back_legacy_ids": [p.record.get("legacy_id") for p in pending],
+        },
+    )
+
+
 def _process_row(
     session: Session,
     row: LegacyRow,
     args: argparse.Namespace,
     summary: Summary,
     report: Optional[Any],
+    pending: List[_PendingSuccess],
 ) -> None:
     summary.orphans_examined += 1
 
@@ -1100,36 +1181,49 @@ def _process_row(
         "hash_chain_entry_present": has_chain,
     }
 
-    if args.execute:
-        sp = session.begin_nested()
-        try:
-            inserted = session.execute(INSERT_SQL, params).fetchone()
-            sp.commit()
-        except Exception as exc:
-            sp.rollback()
-            summary.skip(R_INSERT_FAILED)
-            summary.errors += 1
-            record.update({"decision": "skip", "reason": R_INSERT_FAILED, "error": str(exc)})
-            _emit(report, record)
-            logger.error("backfill_insert_failed", extra={"legacy_id": row.id, "error": str(exc)})
-            return
-        if inserted is None:  # pragma: no cover - pre-checks make this unreachable
-            summary.skip(R_INSERT_FAILED)
-            record.update({"decision": "skip", "reason": R_INSERT_FAILED})
-            _emit(report, record)
-            return
+    pending_success = _PendingSuccess(
+        record=record,
+        hypothesis=rec.hypothesis,
+        product_reference_nulled=rec.product_reference_nulled,
+        status_superseded=status is EventStatus.SUPERSEDED,
+        assumed_status=assumed_status,
+        has_chain=has_chain,
+    )
 
-    summary.backfilled += 1
-    summary.by_hypothesis[rec.hypothesis] = summary.by_hypothesis.get(rec.hypothesis, 0) + 1
-    if rec.product_reference_nulled:
-        summary.product_reference_nulled += 1
-    if status is EventStatus.SUPERSEDED:
-        summary.status_recovered_superseded += 1
-    elif assumed_status:
-        summary.status_assumed_active += 1
-    if not has_chain:
-        summary.chain_entry_missing += 1
-    _emit(report, record)
+    if not args.execute:
+        # Dry run: the batch is rolled back by design, so "would_backfill" never
+        # claims a durable write. Recording the decision immediately is honest
+        # and preserves the existing dry-run audit stream / counters.
+        pending_success.apply(summary, report)
+        return
+
+    sp = session.begin_nested()
+    try:
+        inserted = session.execute(INSERT_SQL, params).fetchone()
+        sp.commit()
+    except Exception as exc:
+        sp.rollback()
+        summary.skip(R_INSERT_FAILED)
+        summary.errors += 1
+        record.update({"decision": "skip", "reason": R_INSERT_FAILED, "error": str(exc)})
+        _emit(report, record)
+        logger.error("backfill_insert_failed", extra={"legacy_id": row.id, "error": str(exc)})
+        return
+    if inserted is None:  # pragma: no cover - pre-checks make this unreachable
+        summary.skip(R_INSERT_FAILED)
+        record.update({"decision": "skip", "reason": R_INSERT_FAILED})
+        _emit(report, record)
+        return
+
+    # The INSERT is in the OPEN transaction; the nested sp.commit() above only
+    # RELEASED the savepoint, so this row is not durable until the batch's outer
+    # session.commit() succeeds. Buffer the success — do NOT count it as
+    # backfilled and do NOT emit its "backfill" audit record yet. The batch loop
+    # flushes the buffer only after the outer commit returns; on commit failure
+    # the whole batch (including this insert) is rolled back and the buffer is
+    # discarded, so the counters and audit trail never claim a write that the
+    # database rolled back.
+    pending.append(pending_success)
 
 
 # ---------------------------------------------------------------------------
