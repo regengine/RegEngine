@@ -8,7 +8,8 @@
 // promising "results in under 60 seconds" would be a claim the deployment
 // cannot honor.
 //
-// PR #2730 hit exactly this: it repointed the dead /#sandbox anchors at /demo
+// PR #2730 hit exactly this: it repointed the dead homepage sandbox hash
+// anchors at /demo
 // but left the sandbox prose above the buttons, so the copy promised a CSV
 // sandbox while the button opened a dashboard. Resolving copy and destination
 // together — from one flag — is what stops those two drifting apart again.
