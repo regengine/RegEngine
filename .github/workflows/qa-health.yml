@@ -41,7 +41,11 @@ jobs:
     # is a backstop rather than the thing that actually stops a runaway run —
     # two observed runs burned 57 and 72 minutes and produced no artifact at
     # all because the job timeout was the only limit in play.
-    timeout-minutes: 35
+    # 45, not 35: healthy runs take 34m37s-35m30s (runs 30973063688 and
+    # 30979898499 — the latter passed every step and was still cancelled by
+    # the 35m ceiling), and the step bounds below already cap a runaway at
+    # ~42m+overhead, so the job ceiling must sit above their sum.
+    timeout-minutes: 45
     env:
       NODE_VERSION: "24"
       PYTHON_VERSION: "3.11"
