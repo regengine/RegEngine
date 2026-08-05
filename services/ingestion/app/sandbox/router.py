@@ -42,6 +42,7 @@ from .models import (
     SandboxTraceRequest,
     TraceGraphResponse,
 )
+from .client_ip import resolve_client_ip
 from .rate_limiting import _check_sandbox_rate_limit
 from .tracer import _trace_in_memory, sandbox_trace as _sandbox_trace_impl
 from .validation import (
@@ -72,8 +73,12 @@ router = APIRouter(prefix="/api/v1/sandbox", tags=["Sandbox"])
 )
 async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> SandboxResponse:
     """Stateless evaluation of traceability events against FSMA 204 rules."""
-    # Rate limit by IP
-    client_ip = request.client.host if request.client else "unknown"
+    # Rate limit by IP. resolve_client_ip honors X-Forwarded-For only when the
+    # peer is a configured trusted proxy (SANDBOX_TRUSTED_PROXY_CIDRS /
+    # TRUSTED_PROXY_CIDRS); otherwise it falls back to the socket peer so every
+    # public caller isn't lumped into one bucket behind the Vercel BFF, and a
+    # spoofed header can't mint fresh buckets.
+    client_ip = resolve_client_ip(request)
     _check_sandbox_rate_limit(client_ip)
 
     # Parse events from JSON or CSV
@@ -297,7 +302,9 @@ def _evict_stale_share_buckets(now: float) -> None:
 )
 async def sandbox_share(payload: SandboxShareRequest, request: Request) -> SandboxShareResponse:
     """Store evaluation results and return a shareable URL."""
-    client_ip = request.client.host if request.client else "unknown"
+    # Trusted-proxy-aware client IP (see resolve_client_ip); falls back to the
+    # socket peer when no trusted proxy is configured.
+    client_ip = resolve_client_ip(request)
 
     # Rate limit shares (10/hour per IP)
     now = datetime.now(timezone.utc).timestamp()
