@@ -43,8 +43,11 @@ Read from ``services/shared/canonical_persistence/legacy_dual_write.py``
 
     cte_events.id                  = traceability_events.event_id (verbatim)
     cte_events.product_description = COALESCE(product_reference, '')
-    cte_events.location_gln        = COALESCE(from_facility_reference,
-                                              to_facility_reference)   (#2535)
+    cte_events.location_gln        = from_facility_reference
+                                     OR-ELSE to_facility_reference   (#2535)
+                                     (Python ``or`` in the writer: falls back on
+                                     '' as well as NULL, mirrored in SQL as
+                                     COALESCE(NULLIF(from, ''), to))
     cte_events.location_name       = same expression as location_gln   (#2535)
     cte_events.source              = source_system
     cte_kdes (aggregated)          = traceability_events.kdes with
@@ -384,18 +387,29 @@ MAPPED_FIELDS: Tuple[FieldSpec, ...] = (
     ("id", "p.id::text", "t.event_id::text", False),
     # product_description = COALESCE(product_reference, '')
     ("product_description", "p.product_description", "COALESCE(t.product_reference, '')", False),
-    # location_gln = COALESCE(from_facility_reference, to_facility_reference)  (#2535)
+    # location_gln = from_facility_reference OR-else to_facility_reference  (#2535)
+    #
+    # dual_write_legacy writes ``from_facility_reference or to_facility_reference``
+    # (legacy_dual_write.py) — Python ``or``, which falls back on ANY falsy left
+    # operand, i.e. BOTH None AND the empty string ''. A bare
+    # ``COALESCE(from, to)`` only substitutes on SQL NULL, so an empty-string
+    # from_facility with a populated to_facility diverges: the legacy row
+    # faithfully stored ``to`` (the fallback the writer chose for ''), while the
+    # canonical side evaluated to '' and IS DISTINCT FROM reported a spurious
+    # location divergence (and, symmetrically, a legacy row corrupted to '' would
+    # be MASKED). ``NULLIF(from, '')`` collapses '' to NULL first so COALESCE
+    # reproduces the writer's ``or`` exactly for every operand combination.
     (
         "location_gln",
         "p.location_gln",
-        "COALESCE(t.from_facility_reference, t.to_facility_reference)",
+        "COALESCE(NULLIF(t.from_facility_reference, ''), t.to_facility_reference)",
         False,
     ),
     # location_name carries the SAME expression as location_gln (#2535).
     (
         "location_name",
         "p.location_name",
-        "COALESCE(t.from_facility_reference, t.to_facility_reference)",
+        "COALESCE(NULLIF(t.from_facility_reference, ''), t.to_facility_reference)",
         False,
     ),
     # source = source_system
