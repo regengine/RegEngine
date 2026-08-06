@@ -159,10 +159,16 @@ class TestMappingFidelity:
         assert "p.id::text IS DISTINCT FROM t.event_id::text" in sql
         # product_description == COALESCE(product_reference, '')
         assert "p.product_description IS DISTINCT FROM COALESCE(t.product_reference, '')" in sql
-        # location_gln == location_name == COALESCE(from_facility, to_facility) (#2535)
+        # location_gln == location_name == the writer's ``from_facility_reference
+        # or to_facility_reference``. That Python ``or`` falls back on ANY falsy
+        # left operand (None AND ''), so the canonical-side expression must
+        # NULLIF the empty string to NULL before COALESCE — a bare
+        # COALESCE(from, to) would only substitute on NULL and diverge on '' .
         assert (
-            sql.count("COALESCE(t.from_facility_reference, t.to_facility_reference)") >= 2
-        ), "location_gln and location_name must share one expression (#2535)"
+            sql.count("COALESCE(NULLIF(t.from_facility_reference, ''), t.to_facility_reference)") >= 2
+        ), "location_gln and location_name must share the NULLIF-collapsing expression (#2535)"
+        # The bare (empty-string-mishandling) form must be gone.
+        assert "COALESCE(t.from_facility_reference, t.to_facility_reference)" not in sql
         # source == source_system
         assert "p.source IS DISTINCT FROM t.source_system" in sql
         # None-valued KDEs are dropped on the canonical side, mirroring
@@ -225,6 +231,11 @@ class TestVerdict:
         sibling exists. Reporting that as "a canonical write was lost" is
         both wrong and dangerous: the documented remediation is the backfill,
         which would then duplicate FDA traceability records.
+
+        NOT a violation is not the same as SAFE: with zero of the five
+        orphans content-probed, this scan cannot show canonical holds them,
+        so the verdict is PARTIAL — the exit code ``if verify; then proceed``
+        must not read as authorization to retire the legacy store.
         """
         report = vcpl.Report(
             rows_examined=10,
@@ -234,11 +245,28 @@ class TestVerdict:
             orphans_unexplained=0,
         )
         code, headline, reason = vcpl.decide(report, vcpl.Options())
-        assert code == vcpl.EXIT_SAFE
-        assert headline == "SAFE-TO-PROCEED"
+        assert code != vcpl.EXIT_VIOLATIONS, "legacy-native orphans are not violations"
+        assert code == vcpl.EXIT_PARTIAL, "unprobed native orphans are unproven coverage"
+        assert "never content-probed" in reason
         assert "lost" not in reason.lower() or "NOT a lost write" in reason
         # It must still be visible in the verdict — silence would be its own bug.
         assert "legacy-native" in reason or "legacy_native_hash_formula" in reason
+
+    def test_fully_corroborated_legacy_native_orphans_are_safe(self):
+        """When every native orphan is probed AND corroborated, canonical
+        demonstrably holds the data, and SAFE-TO-PROCEED is earned."""
+        report = vcpl.Report(
+            rows_examined=10,
+            rows_matched=5,
+            legacy_orphans=5,
+            orphans_legacy_native=5,
+            content_probe_attempted=5,
+            content_probe_corroborated=5,
+            content_probe_uncorroborated=0,
+        )
+        code, headline, _reason = vcpl.decide(report, vcpl.Options())
+        assert code == vcpl.EXIT_SAFE
+        assert headline == "SAFE-TO-PROCEED"
 
     def test_mixed_orphans_fail_on_the_unexplained_ones_only(self):
         report = vcpl.Report(
@@ -269,9 +297,14 @@ class TestVerdict:
             content_probe_corroborated=3,
             content_probe_uncorroborated=2,
         )
-        _code, _headline, reason = vcpl.decide(report, vcpl.Options())
+        code, _headline, reason = vcpl.decide(report, vcpl.Options())
         assert "NO canonical row matching even" in reason
         assert "investigate" in reason
+        # An uncorroborated orphan is a row this scan cannot show canonical
+        # holds. Exit 0 here once authorized retiring the sole copy of an FDA
+        # traceability record; it must be PARTIAL, never SAFE.
+        assert code == vcpl.EXIT_PARTIAL
+        assert code != vcpl.EXIT_SAFE, "uncorroborated orphans must never exit 0"
 
     def test_out_of_window_rows_downgrade_a_clean_scan(self):
         """The --since false green: the worst outcome this tool can produce.
@@ -740,6 +773,74 @@ class TestAgainstLiveDatabase:
         assert by_field["quantity"] > 0
         assert by_field["event_timestamp"] > 0
         assert by_field["traceability_lot_code"] > 0
+
+    def test_empty_from_facility_reference_falls_back_like_the_writer(self, seeded_tenant):
+        """#2535 empty-string vs NULL — the exact operand asymmetry this fix closes.
+
+        ``dual_write_legacy`` writes ``from_facility_reference or
+        to_facility_reference`` (legacy_dual_write.py). Python ``or`` falls back
+        on ANY falsy left operand — the empty string '' as well as None — so an
+        event whose from_facility is '' but whose to_facility is populated has
+        its legacy location_gln/location_name set to the ``to`` value.
+
+        The verifier's canonical-side expression used a bare
+        ``COALESCE(from, to)``, which only substitutes on SQL NULL, so it
+        evaluated '' -> '' and reported a SPURIOUS location divergence against a
+        legacy row that was written correctly. After the fix
+        (``COALESCE(NULLIF(from, ''), to)``) both sides agree with the writer.
+
+        Both directions are pinned here: the clean empty-from pair must NOT
+        diverge, and a genuinely wrong location on that same pair must STILL be
+        caught — the fix collapses '' to the fallback, it does not blanket-mute
+        the column.
+        """
+        import json
+
+        from shared.canonical_persistence.writer import CanonicalEventStore
+
+        database_url, engine, tenant = seeded_tenant
+        event = _make_event(UUID(tenant))
+        # from_facility '' is falsy -> the writer falls back to to_facility.
+        event.from_facility_reference = ""
+        event.to_facility_reference = "urn:gs1:414:9999999999999"
+        tlc = event.traceability_lot_code
+
+        session = sessionmaker(bind=engine, future=True)()
+        try:
+            session.execute(text("SET app.tenant_id = :tid"), {"tid": tenant})
+            CanonicalEventStore(session, dual_write=True).persist_event(event)
+            session.commit()
+        finally:
+            session.close()
+
+        # 1) No SPURIOUS divergence: '' collapses to the to_facility fallback on
+        #    BOTH sides, exactly as the writer intended.
+        result = _run_verifier(database_url, tenant)
+        assert result.returncode == vcpl.EXIT_SAFE, result.stdout + result.stderr
+        by_field = json.loads(result.stdout)["field_divergence"]["by_field"]
+        assert by_field["location_gln"] == 0, by_field
+        assert by_field["location_name"] == 0, by_field
+
+        # 2) A GENUINELY wrong location on the same pair is still detected. The
+        #    append-only trigger's documented escape hatch stages the fixture and
+        #    is scoped to this transaction; the verifier itself never mutates.
+        with engine.begin() as conn:
+            conn.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tenant})
+            conn.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
+            conn.execute(
+                text(
+                    "UPDATE fsma.cte_events SET location_gln = 'WRONG-GLN', "
+                    "location_name = 'WRONG-NAME' "
+                    "WHERE tenant_id = CAST(:tid AS uuid) AND traceability_lot_code = :tlc"
+                ),
+                {"tid": tenant, "tlc": tlc},
+            )
+
+        result = _run_verifier(database_url, tenant)
+        assert result.returncode == vcpl.EXIT_VIOLATIONS, result.stdout + result.stderr
+        by_field = json.loads(result.stdout)["field_divergence"]["by_field"]
+        assert by_field["location_gln"] == 1, by_field
+        assert by_field["location_name"] == 1, by_field
 
     def test_clean_dual_write_corpus_is_safe_to_proceed(self, seeded_tenant):
         import json

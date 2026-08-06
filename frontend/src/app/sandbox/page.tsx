@@ -5,7 +5,8 @@ import { SandboxClient } from './SandboxClient';
 import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
 // #2757 — restores the front door the compare-page CTAs have promised since
-// #2730 removed the dead /#sandbox anchors. The evaluation itself is served by
+// #2730 removed the dead homepage sandbox hash anchors. The evaluation
+// itself is served by
 // POST /api/v1/sandbox/evaluate through the existing unauthenticated BFF proxy
 // allowlist in app/api/ingestion/[...path]/route.ts.
 

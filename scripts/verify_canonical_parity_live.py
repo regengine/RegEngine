@@ -43,8 +43,11 @@ Read from ``services/shared/canonical_persistence/legacy_dual_write.py``
 
     cte_events.id                  = traceability_events.event_id (verbatim)
     cte_events.product_description = COALESCE(product_reference, '')
-    cte_events.location_gln        = COALESCE(from_facility_reference,
-                                              to_facility_reference)   (#2535)
+    cte_events.location_gln        = from_facility_reference
+                                     OR-ELSE to_facility_reference   (#2535)
+                                     (Python ``or`` in the writer: falls back on
+                                     '' as well as NULL, mirrored in SQL as
+                                     COALESCE(NULLIF(from, ''), to))
     cte_events.location_name       = same expression as location_gln   (#2535)
     cte_events.source              = source_system
     cte_kdes (aggregated)          = traceability_events.kdes with
@@ -384,18 +387,29 @@ MAPPED_FIELDS: Tuple[FieldSpec, ...] = (
     ("id", "p.id::text", "t.event_id::text", False),
     # product_description = COALESCE(product_reference, '')
     ("product_description", "p.product_description", "COALESCE(t.product_reference, '')", False),
-    # location_gln = COALESCE(from_facility_reference, to_facility_reference)  (#2535)
+    # location_gln = from_facility_reference OR-else to_facility_reference  (#2535)
+    #
+    # dual_write_legacy writes ``from_facility_reference or to_facility_reference``
+    # (legacy_dual_write.py) — Python ``or``, which falls back on ANY falsy left
+    # operand, i.e. BOTH None AND the empty string ''. A bare
+    # ``COALESCE(from, to)`` only substitutes on SQL NULL, so an empty-string
+    # from_facility with a populated to_facility diverges: the legacy row
+    # faithfully stored ``to`` (the fallback the writer chose for ''), while the
+    # canonical side evaluated to '' and IS DISTINCT FROM reported a spurious
+    # location divergence (and, symmetrically, a legacy row corrupted to '' would
+    # be MASKED). ``NULLIF(from, '')`` collapses '' to NULL first so COALESCE
+    # reproduces the writer's ``or`` exactly for every operand combination.
     (
         "location_gln",
         "p.location_gln",
-        "COALESCE(t.from_facility_reference, t.to_facility_reference)",
+        "COALESCE(NULLIF(t.from_facility_reference, ''), t.to_facility_reference)",
         False,
     ),
     # location_name carries the SAME expression as location_gln (#2535).
     (
         "location_name",
         "p.location_name",
-        "COALESCE(t.from_facility_reference, t.to_facility_reference)",
+        "COALESCE(NULLIF(t.from_facility_reference, ''), t.to_facility_reference)",
         False,
     ),
     # source = source_system
@@ -996,10 +1010,16 @@ def preflight(conn: Any, opts: Options) -> Dict[str, Any]:
     # The bound parameter is preserved, so the injection surface the rule cares
     # about is unchanged.
     if len(opts.tenants) == 1:
+        # Session scope (`false`), deliberately NOT the canonical
+        # set_tenant_guc primitive: that helper is transaction-scoped
+        # (`true`), and this parity scan issues many statements outside any
+        # single transaction, so a transaction-scoped GUC would fall out of
+        # scope mid-scan. Safe to suppress here — the connection is asserted
+        # read-only immediately above, so this grants visibility for a
+        # read-only scan and cannot be a write-side tenant grant.
         read_only_execute(
             conn,
-            # nosemgrep: adhoc-tenant-guc-set-config - rationale above
-            "SELECT set_config('app.tenant_id', :tid, false)",
+            "SELECT set_config('app.tenant_id', :tid, false)",  # nosemgrep: adhoc-tenant-guc-set-config
             {"tid": opts.tenants[0]},
         )
         info["tenant_guc"] = opts.tenants[0]
@@ -1066,6 +1086,27 @@ def coverage_gaps(report: Report, opts: Options) -> List[str]:
         gaps.append(
             "the legacy-native hash probe could not be imported, so orphans could not be "
             "classified"
+        )
+    # Legacy-native orphans can never join canonical by hash, so the content
+    # probe is the ONLY evidence canonical covers them. An orphan the probe
+    # could not corroborate — or never examined at all — is a row this scan
+    # cannot show the canonical store holds. Retiring the legacy store on
+    # exit 0 while such rows exist would discard the sole copy of an FDA
+    # traceability record, so both cases must deny SAFE-TO-PROCEED the same
+    # way every other unproven-coverage condition above does.
+    if report.content_probe_uncorroborated:
+        gaps.append(
+            f"{report.content_probe_uncorroborated:,} legacy-native orphan(s) have NO "
+            "canonical row matching even on content — canonical coverage of these rows "
+            "is unproven; investigate each one before any retirement decision"
+        )
+    unprobed_native = report.orphans_legacy_native - report.content_probe_attempted
+    if unprobed_native > 0:
+        gaps.append(
+            f"{unprobed_native:,} legacy-native orphan(s) were never content-probed "
+            "(--skip-content-probe, or the --max-content-probe cap) — their canonical "
+            "coverage is unknown; re-run with probing enabled and a cap of at least "
+            f"{report.orphans_legacy_native:,}"
         )
     return gaps
 

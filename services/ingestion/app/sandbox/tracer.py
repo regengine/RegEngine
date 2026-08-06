@@ -18,6 +18,7 @@ from .models import (
     TraceGraphResponse,
     TraceNode,
 )
+from .client_ip import resolve_client_ip
 from .rate_limiting import _check_sandbox_rate_limit
 
 
@@ -219,7 +220,7 @@ def _trace_in_memory(
 
 async def sandbox_trace(payload: SandboxTraceRequest, request: Request) -> TraceGraphResponse:
     """Stateless in-memory lot tracing for the sandbox."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = resolve_client_ip(request)
     _check_sandbox_rate_limit(client_ip)
 
     if not payload.csv.strip():

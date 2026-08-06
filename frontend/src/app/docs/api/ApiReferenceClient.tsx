@@ -140,18 +140,10 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/{event_id}',
-                description: 'Full record detail with provenance: source document, applied rules, evaluation results, and amendment chain.',
+                description: 'Full record detail with provenance and inline rule evaluations: source document, applied FSMA 204 rules and their outcomes, and amendment chain. Rule evaluations are returned inline as rule_evaluations — there is no separate evaluations endpoint.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...} }',
-            },
-            {
-                method: 'GET',
-                path: '/{event_id}/evaluations',
-                description: 'Rule evaluations for a record — which FSMA 204 rules were applied and their outcomes',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
+                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...}, "rule_evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
             },
             {
                 method: 'GET',
@@ -167,7 +159,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'FDA Trace & Export API',
         baseUrl: '/api/v1/fda',
         icon: FileDown,
-        description: 'Lot tracing and FDA-formatted exports from stored tenant evidence, with cryptographic verification',
+        description: 'Lot tracing and traceability record exports from stored tenant evidence, with cryptographic verification',
         endpoints: [
             {
                 method: 'GET',
@@ -215,11 +207,20 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'POST',
                 path: '/export/verify',
-                description: 'Verify the hash chain of a previously generated export. Requires the fda.verify scope. Pair with the public verify_chain.py script for independent verification.',
+                description: 'Verify that a previously generated export reproduces the same hash. Requires the fda.verify scope and an active subscription. Both parameters are query parameters (not a request body). Pair with the public verify_chain.py script for independent verification.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                body: JSON.stringify({ export_id: "exp_1a2b3c4d" }, null, 2),
-                response: '{ "export_id": "exp_1a2b3c4d", "chain_valid": true, "events_verified": 1204 }',
+                params: ['export_id=exp_1a2b3c4d', 'tenant_id={your-tenant-uuid}'],
+                response: JSON.stringify({
+                    export_id: "exp_1a2b3c4d",
+                    original_hash: "9f8e7d6c…",
+                    regenerated_hash: "9f8e7d6c…",
+                    hashes_match: true,
+                    original_record_count: 1204,
+                    current_record_count: 1204,
+                    data_integrity: "VERIFIED",
+                    verified_at: "2026-02-05T14:23:00Z"
+                }, null, 2),
             },
             {
                 method: 'GET',
@@ -228,7 +229,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params: ['tenant_id={your-tenant-uuid}'],
-                response: '{ "tenant_id": "38e99859-...", "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }], "total": 0 }',
+                response: '{ "tenant_id": "38e99859-...", "exports": [{ "id": "exp_1a2b3c4d", "export_type": "trace", "record_count": 1204, "export_hash": "9f8e7d6c…", "generated_at": "..." }], "total": 1 }',
             },
         ],
     },
