@@ -14,57 +14,69 @@ export const INFLOW_LAB_TUTORIAL_BANNER_KEY = "inflow-lab-dashboard-tutorial-ban
 // Step-by-step operating guide for the dashboard Inflow Lab tab. Targets are
 // stable anchors on the page: data-tutorial markers, the funnel test id, and
 // the selected-lot panel marker the tests already rely on.
-export const INFLOW_LAB_TUTORIAL_STEPS: TutorialStep[] = [
-    {
-        target: '[data-tutorial="inflow-load-data"]',
-        title: "Bring supplier data in",
-        content:
-            "Everything starts with data. Upload CSV takes your own supplier rows; Load realistic sample fills the workspace with a believable farm-to-DC trace so you can explore safely.",
-        position: "bottom",
-    },
-    {
-        target: 'section[aria-label="How Inflow Lab works"]',
-        title: "Know what the lab does",
-        content:
-            "Inflow Lab is a sandbox. It replays lot activity, rebuilds each lot's evidence trail, and shows exactly which FSMA 204 records are missing. Nothing you do here writes to production exports.",
-        position: "bottom",
-    },
-    {
-        target: '[data-tutorial="inflow-guided-proof"]',
-        title: "Run your first test",
-        content:
-            "Click Run guided proof to evaluate the sample end to end: it loads the sample rows, runs the sandbox evaluation, and lights up the panels below with real results.",
-        position: "bottom",
-    },
-    {
-        target: '[data-testid="inflow-funnel"]',
-        title: "Read the pipeline funnel",
-        content:
-            "Lots flow Loaded → Validated → Passing → Preview-ready → Production import. Wherever the numbers drop is where your data is losing evidence.",
-        position: "top",
-    },
-    {
-        target: '[data-tutorial="inflow-readiness"]',
-        title: "Check the Data Preflight Score",
-        content:
-            "Five factors roll up into one readiness score. The “biggest gap” badge marks the factor holding you back — that is always the next thing to fix.",
-        position: "right",
-    },
-    {
-        target: '[data-tutorial="inflow-exceptions"]',
-        title: "Clear exceptions by pattern",
-        content:
-            "Blocked lots are grouped by shared root cause — handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks.",
-        position: "top",
-    },
-    {
-        target: "[data-selected-lot-panel]",
-        title: "Trace one lot, then save your run",
-        content:
-            "Click any lot code to see its five-step lifecycle and exactly which CTE evidence is missing. When an evaluation looks right, Save test run persists it to the Inflow Workbench (write access required). Reopen this guide any time from “How to use” in the header.",
-        position: "left",
-    },
-];
+//
+// A builder rather than a constant: the "run your first test" step carries a
+// real action button wired to the page's guided proof, so the walkthrough can
+// produce the data its later steps describe instead of narrating empty panels.
+export function buildInflowLabTutorialSteps({
+    runGuidedProof,
+}: {
+    runGuidedProof: () => void;
+}): TutorialStep[] {
+    return [
+        {
+            target: 'section[aria-label="How Inflow Lab works"]',
+            title: "What Inflow Lab is",
+            content:
+                "A sandbox for supplier traceability data. It replays lot activity, rebuilds each lot's evidence trail, and shows exactly which FSMA 204 records are missing. Nothing here writes to production exports.",
+            position: "bottom",
+        },
+        {
+            target: '[data-tutorial="inflow-load-data"]',
+            title: "Bring supplier data in",
+            content:
+                "Upload CSV takes your own supplier rows; Load realistic sample fills the editor with a believable farm-to-DC trace so you can explore safely. Both open the data editor below.",
+            position: "bottom",
+        },
+        {
+            target: '[data-tutorial="inflow-guided-proof"]',
+            title: "Run your first test",
+            content:
+                "This evaluates the built-in sample end to end — the highlighted button is live, or use the one right here. The pipeline, score, and lot panels below fill with the results.",
+            position: "bottom",
+            action: "Run guided proof",
+            onAction: runGuidedProof,
+        },
+        {
+            target: '[data-testid="inflow-funnel"]',
+            title: "Read the pipeline funnel",
+            content:
+                "Lots flow Loaded → Validated → Passing → Preview-ready → Production import. Wherever the numbers drop is where your data is losing evidence.",
+            position: "top",
+        },
+        {
+            target: '[data-tutorial="inflow-readiness"]',
+            title: "Check the Data Preflight Score",
+            content:
+                "Five factors roll up into one readiness score. The “biggest gap” badge marks the factor holding you back — that is always the next thing to fix.",
+            position: "right",
+        },
+        {
+            target: '[data-tutorial="inflow-exceptions"]',
+            title: "Clear exceptions by pattern",
+            content:
+                "Blocked lots are grouped by shared root cause — handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The sample data passes cleanly, so this list is empty until your own data brings real exceptions.",
+            position: "top",
+        },
+        {
+            target: "[data-selected-lot-panel]",
+            title: "Trace one lot",
+            content:
+                "Click any lot code to see its five-step lifecycle and which CTE evidence is missing. When an evaluation looks right, Save test run in the data editor persists it to the Inflow Workbench (write access required). Reopen this guide any time from “How to use” in the header.",
+            position: "left",
+        },
+    ];
+}
 
 // The dismissed flag lives in localStorage, which React must treat as an
 // external store: reading it during render would break SSR, and reading it in
@@ -92,6 +104,17 @@ function bannerDismissedOnServer() {
     return true;
 }
 
+// Completing (or explicitly skipping) the walkthrough is the banner's job
+// done — calling this retires it without requiring a separate dismissal.
+export function dismissInflowLabTutorialBanner() {
+    try {
+        window.localStorage.setItem(INFLOW_LAB_TUTORIAL_BANNER_KEY, "true");
+    } catch {
+        /* private mode — banner simply reappears next visit */
+    }
+    bannerListeners.forEach((listener) => listener());
+}
+
 export function InflowLabTutorialBanner({ onStart }: { onStart: () => void }) {
     const dismissed = useSyncExternalStore(
         subscribeToBanner,
@@ -100,12 +123,7 @@ export function InflowLabTutorialBanner({ onStart }: { onStart: () => void }) {
     );
 
     const dismiss = useCallback(() => {
-        try {
-            window.localStorage.setItem(INFLOW_LAB_TUTORIAL_BANNER_KEY, "true");
-        } catch {
-            /* private mode — banner simply reappears next visit */
-        }
-        bannerListeners.forEach((listener) => listener());
+        dismissInflowLabTutorialBanner();
     }, []);
 
     if (dismissed) return null;
