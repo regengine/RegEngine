@@ -384,7 +384,10 @@ describe('Dashboard Inflow Lab', () => {
             if (!node) throw new Error('handoff group not rendered');
             return node as HTMLElement;
         });
-        expect(within(handoff).getByRole('button', { name: /^Fix all /i })).toBeInTheDocument();
+        // "Fix all" is a navigation into the fix queue, so it renders as a
+        // link (role=link) rather than an inert button.
+        const fixAll = within(handoff).getByRole('link', { name: /^Fix all /i });
+        expect(fixAll).toHaveAttribute('href', '/exceptions');
 
         // The mixed group, even when populated, must never carry a Fix all
         // bulk CTA per the audit (per-lot triage only). Filter to mixed and
