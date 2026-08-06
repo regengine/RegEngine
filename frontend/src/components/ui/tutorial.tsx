@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
 import { Button } from './button';
@@ -165,7 +166,7 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleNext, handlePrev, handleSkip]);
 
-  if (!isOpen || !step) return null;
+  if (!isOpen || !step || typeof document === 'undefined') return null;
 
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
@@ -254,7 +255,10 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
       ]
     : [{ key: 'full', style: { top: 0, left: 0, right: 0, bottom: 0 } }];
 
-  return (
+  // Portaled to <body>: the tour mounts inside arbitrary page containers, and
+  // page-scoped CSS (e.g. the inflow-lab shim styling every direct-child div)
+  // or transformed ancestors would otherwise re-style the fixed overlay.
+  return createPortal(
     <>
       {backdropPanels.map((panel) => (
         <div
@@ -346,7 +350,8 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
           </div>
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body,
   );
 }
 
