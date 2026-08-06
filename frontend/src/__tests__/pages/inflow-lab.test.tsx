@@ -689,7 +689,7 @@ describe('Dashboard Inflow Lab', () => {
         );
 
         expect(await screen.findByText('Step 1 of 7')).toBeInTheDocument();
-        expect(screen.getByText('Bring supplier data in')).toBeInTheDocument();
+        expect(screen.getByText('What Inflow Lab is')).toBeInTheDocument();
     });
 
     it('walks forward through the tutorial steps', async () => {
@@ -704,7 +704,7 @@ describe('Dashboard Inflow Lab', () => {
 
         await user.click(screen.getByRole('button', { name: /Next/i }));
         expect(await screen.findByText('Step 2 of 7')).toBeInTheDocument();
-        expect(screen.getByText('Know what the lab does')).toBeInTheDocument();
+        expect(screen.getByText('Bring supplier data in')).toBeInTheDocument();
     });
 
     it('dismisses the tutorial banner without disabling the How to use entry point', async () => {

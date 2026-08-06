@@ -36,9 +36,10 @@ import {
     type ExceptionPatternId,
 } from "../lib/exception-grouping";
 import {
-    INFLOW_LAB_TUTORIAL_STEPS,
     INFLOW_LAB_TUTORIAL_STORAGE_KEY,
     InflowLabTutorialBanner,
+    buildInflowLabTutorialSteps,
+    dismissInflowLabTutorialBanner,
 } from "./InflowLabTutorial";
 
 type CteState = "complete" | "missing";
@@ -422,6 +423,63 @@ function toTraceEvent(record: InflowRecord): TraceEvent {
     };
 }
 
+// The sandbox response carries no location/timestamp, so recover them from the
+// submitted CSV when it is simple enough to split safely. Quoted fields mean a
+// naive split would mangle rows — in that case fall back to row labels.
+function csvRowMetaByIndex(csv: string): { location?: string; timestamp?: string }[] {
+    if (csv.includes('"')) return [];
+    const lines = csv
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.length < 2) return [];
+    const header = lines[0].split(",").map((column) => column.trim().toLowerCase());
+    const locationIdx = header.indexOf("location_name");
+    const timestampIdx = header.indexOf("timestamp");
+    return lines.slice(1).map((line) => {
+        const cells = line.split(",");
+        return {
+            location: locationIdx >= 0 ? cells[locationIdx]?.trim() || undefined : undefined,
+            timestamp: timestampIdx >= 0 ? cells[timestampIdx]?.trim() || undefined : undefined,
+        };
+    });
+}
+
+// Turn a sandbox evaluation into the same TraceEvent shape the simulator feed
+// uses, so one evaluation lights up the funnel, exceptions, and lot-trace
+// panels instead of leaving them at zero.
+function sandboxResultToTraceEvents(result: SandboxEvaluationResult, csv: string): TraceEvent[] {
+    const rowMeta = csvRowMetaByIndex(csv);
+    return result.events.map((event) => {
+        const meta = rowMeta[event.event_index] ?? {};
+        const parsedTimestamp = meta.timestamp ? Date.parse(meta.timestamp) : Number.NaN;
+        return {
+            id: event.event_index + 1,
+            cte: event.cte_type,
+            lotCode: event.traceability_lot_code || `row-${event.event_index + 1}`,
+            product: event.product_description || "Uploaded traceability record",
+            location: meta.location || `Uploaded row ${event.event_index + 1}`,
+            timestamp: Number.isNaN(parsedTimestamp)
+                ? formatServiceTime(new Date().toISOString())
+                : formatServiceTime(new Date(parsedTimestamp).toISOString()),
+            mode: "uploaded",
+            attempts: 1,
+            deliveryStatus: event.compliant ? "posted" : "generated",
+        };
+    });
+}
+
+function lineageByLotFromEvents(traceEvents: TraceEvent[]): Record<string, LineageNode[]> {
+    return traceEvents.reduce<Record<string, LineageNode[]>>((current, event) => {
+        if (!current[event.lotCode]) {
+            current[event.lotCode] = toLineage(
+                traceEvents.filter((candidate) => candidate.lotCode === event.lotCode),
+            );
+        }
+        return current;
+    }, {});
+}
+
 function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
     const byCte = new Map(eventsForLot.map((event) => [event.cte, event]));
     return REQUIRED_CTES.map((cte) => {
@@ -566,6 +624,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         mixed: false,
     });
     const [selectedLotIds, setSelectedLotIds] = useState<Record<string, boolean>>({});
+    const [expandedLotGroups, setExpandedLotGroups] = useState<Partial<Record<ExceptionPatternId, boolean>>>({});
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -735,6 +794,23 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     const exportReadyCount = exportReadyLots.length;
 
     const exceptionGroups = useMemo(() => groupExceptionsByPattern(exceptionLots), [exceptionLots]);
+
+    // Groups default to only "handoff" open; if the data's exceptions live in
+    // another pattern the panel would render nothing but a collapsed heading.
+    // Open every group that actually has lots when the grouping changes.
+    useEffect(() => {
+        setOpenGroups((current) => {
+            let changed = false;
+            const next = { ...current };
+            for (const group of exceptionGroups) {
+                if (group.lots.length > 0 && !next[group.id]) {
+                    next[group.id] = true;
+                    changed = true;
+                }
+            }
+            return changed ? next : current;
+        });
+    }, [exceptionGroups]);
     const sourceSupplierBreakdown = useMemo(() => {
         const sourceGroup = exceptionGroups.find((group) => group.id === "source");
         return sourceGroup ? summarizeSourceSuppliers(sourceGroup.lots) : null;
@@ -789,9 +865,11 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             ? Math.round((feederResult.compliant_events / feederResult.total_events) * 100)
             : 0
         : null;
-    const connectionHealth = engineConnected ? 100 : 0;
+    // The simulator sidecar is an optional service: absent is "not measured",
+    // not a red 0% that silently drags the composite score down.
+    const connectionHealth = engineConnected ? 100 : null;
 
-    const readinessFactors: { id: string; label: string; value: number | null; tone: "ok" | "warn" | "bad" | "locked" }[] = [
+    const readinessFactors: { id: string; label: string; value: number | null; tone: "ok" | "warn" | "bad" | "locked"; lockedLabel?: string }[] = [
         {
             id: "kde",
             label: "KDE completeness",
@@ -815,12 +893,14 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             label: "Sandbox pass rate",
             value: sandboxPassRate,
             tone: sandboxPassRate === null ? "locked" : sandboxPassRate >= 75 ? "ok" : sandboxPassRate >= 50 ? "warn" : "bad",
+            lockedLabel: "not run",
         },
         {
             id: "connection",
             label: "Connection health",
             value: connectionHealth,
-            tone: connectionHealth >= 75 ? "ok" : connectionHealth >= 50 ? "warn" : "bad",
+            tone: connectionHealth === null ? "locked" : "ok",
+            lockedLabel: "offline",
         },
     ];
 
@@ -837,12 +917,25 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         : measuredFactors.length
         ? Math.round(measuredFactors.reduce((acc, f) => acc + f.value, 0) / measuredFactors.length)
         : 0;
-    const biggestGap = measuredFactors.length
+    // Before any data exists every measured factor ties at zero and "biggest
+    // gap" would land arbitrarily on the first one — suppress it until there
+    // is something real to rank.
+    const hasAnyRunData = totalLotCount > 0 || feederResult !== null;
+    const biggestGap = hasAnyRunData && measuredFactors.length
         ? measuredFactors.reduce((min, f) => (f.value < min.value ? f : min), measuredFactors[0])
         : null;
+    const scoreBadge = !hasAnyRunData
+        ? { label: "no data yet", className: "border-slate-200 bg-slate-50 text-slate-500" }
+        : compositeScore >= 80
+        ? { label: "export-ready", className: "border-emerald-200 bg-emerald-50 text-emerald-800" }
+        : compositeScore >= 50
+        ? { label: "needs work", className: "border-amber-200 bg-amber-50 text-amber-800" }
+        : { label: "at risk", className: "border-rose-200 bg-rose-50 text-rose-800" };
 
     const passingCount = exportReadyCount;
-    const previewReadyCount = feederResult ? feederResult.compliant_events : 0;
+    // Lots, not events — the funnel's earlier stages count lots, and mixing
+    // units let "Preview-ready 5" materialize out of a 1-lot pipeline.
+    const previewReadyCount = feederResult ? exportReadyCount : 0;
 
     const openFixCount = savedRun
         ? savedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
@@ -851,21 +944,35 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         ? latestSavedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
         : 0;
 
+    // Clears the pending evaluation, but deliberately NOT ``loadedRun`` — the
+    // "Latest saved workbench run" banner reflects server state and must not
+    // vanish just because the user typed in the CSV editor.
     const resetFeederPreview = () => {
         setFeederResult(null);
         setBackendReadiness(null);
         setFeederError(null);
         setIsSavingRun(false);
         setSavedRun(null);
-        setLoadedRun(null);
         setWorkbenchSaveNote(null);
         setWorkbenchSaveError(null);
+    };
+
+    // Opens the CSV editor and brings it into view — the header buttons that
+    // trigger it sit a full viewport above where the drawer mounts, and an
+    // off-screen state change reads as "the button did nothing".
+    const openCsvDrawer = () => {
+        setShowCsvDrawer(true);
+        requestAnimationFrame(() => {
+            document
+                .querySelector("[data-csv-drawer]")
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
     };
 
     const loadRealisticSample = () => {
         setFeederCsv(REALISTIC_SAMPLE_CSV);
         resetFeederPreview();
-        setShowCsvDrawer(true);
+        openCsvDrawer();
     };
 
     const handleFeederFile = (file: File | null) => {
@@ -874,7 +981,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         reader.onload = () => {
             setFeederCsv(String(reader.result || ""));
             resetFeederPreview();
-            setShowCsvDrawer(true);
+            openCsvDrawer();
         };
         reader.onerror = () => setFeederError("Could not read the selected CSV file.");
         reader.readAsText(file);
@@ -884,7 +991,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         const csvToEvaluate = csvOverride ?? feederCsv;
         if (!csvToEvaluate.trim()) {
             setFeederError("Paste CSV text or upload a CSV file before evaluating.");
-            setShowCsvDrawer(true);
+            openCsvDrawer();
             return;
         }
         if (csvOverride !== undefined) {
@@ -913,6 +1020,17 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             }
             const result = (await response.json()) as SandboxEvaluationResult;
             setFeederResult(result);
+            // Feed the evaluation into the same stores the simulator uses, so
+            // the funnel, exceptions, score, and lot-trace panels show the run
+            // the user just made instead of staying at zero.
+            const evaluatedEvents = sandboxResultToTraceEvents(result, csvToEvaluate);
+            if (evaluatedEvents.length) {
+                setServiceEvents(evaluatedEvents);
+                setServiceLineage(lineageByLotFromEvents(evaluatedEvents));
+                const evaluatedLots = Array.from(new Set(evaluatedEvents.map((event) => event.lotCode)));
+                const firstBlocked = evaluatedEvents.find((event) => event.deliveryStatus !== "posted")?.lotCode;
+                setSelectedLot(firstBlocked ?? evaluatedLots[0] ?? null);
+            }
             if (isAuthenticated && activeTenantId) {
                 try {
                     const readiness = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/readiness/preview", {
@@ -936,11 +1054,29 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         }
     };
 
-    const runGuidedProof = () => {
+    const runGuidedProof = async () => {
         resetFeederPreview();
         setShowCsvDrawer(true);
-        void evaluateFeederData(REALISTIC_SAMPLE_CSV);
+        await evaluateFeederData(REALISTIC_SAMPLE_CSV);
+        // Outside the walkthrough (which handles its own scrolling per step),
+        // bring the newly lit pipeline into view so the click has a visible
+        // consequence.
+        if (!isTutorialOpen) {
+            document
+                .querySelector('[data-testid="inflow-funnel"]')
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
     };
+
+    // The tutorial's "Run guided proof" action reads through a ref so the step
+    // array can stay referentially stable while the action always sees fresh
+    // component state.
+    const runGuidedProofRef = useRef(runGuidedProof);
+    runGuidedProofRef.current = runGuidedProof;
+    const tutorialSteps = useMemo(
+        () => buildInflowLabTutorialSteps({ runGuidedProof: () => void runGuidedProofRef.current() }),
+        [],
+    );
 
     const saveWorkbenchRun = async () => {
         if (!feederResult || !feederCsv.trim()) {
@@ -1031,6 +1167,11 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         ? `Proof lead lot ${leadLotLabel} is dragging down ${biggestGap?.label?.toLowerCase() ?? "readiness"} because ${leadMissingEvidence} is still missing.`
         : "The current proof lead is the blocked lot holding readiness below export confidence.";
     const selectedLotIsProofLead = selectedLotData?.lotCode === leadProofLot?.lotCode;
+    // The walkthrough panel must never invent a defect: with no data it shows
+    // a get-started state, with clean data it reports the pass, and only a
+    // genuinely blocked lot produces the red defect breakdown.
+    const hasLotData = totalLotCount > 0;
+    const hasBlockedLead = Boolean(leadProofLot && !leadProofLot.readiness.exportReady);
 
     return (
         <main
@@ -1259,16 +1400,32 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                 <div className="mt-2 grid gap-2 sm:grid-cols-3">
                                     <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                                         <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
+                                        <div className="mt-1 text-sm font-semibold text-slate-950">
+                                            {hasLotData ? leadLotLabel : "—"}
+                                        </div>
                                     </div>
                                     <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                                         <div className="text-[11px] uppercase tracking-wider text-slate-500">Product</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadProductLabel}</div>
+                                        <div className="mt-1 text-sm font-semibold text-slate-950">
+                                            {hasLotData ? leadProductLabel : "—"}
+                                        </div>
                                     </div>
-                                    <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-rose-700">Status</div>
-                                        <div className="mt-1 text-sm font-semibold text-rose-900">Readiness blocked</div>
-                                    </div>
+                                    {hasBlockedLead ? (
+                                        <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2">
+                                            <div className="text-[11px] uppercase tracking-wider text-rose-700">Status</div>
+                                            <div className="mt-1 text-sm font-semibold text-rose-900">Readiness blocked</div>
+                                        </div>
+                                    ) : hasLotData ? (
+                                        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2">
+                                            <div className="text-[11px] uppercase tracking-wider text-emerald-700">Status</div>
+                                            <div className="mt-1 text-sm font-semibold text-emerald-900">Preview-ready</div>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                            <div className="text-[11px] uppercase tracking-wider text-slate-500">Status</div>
+                                            <div className="mt-1 text-sm font-semibold text-slate-600">No data yet</div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -1292,11 +1449,19 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                     <Lightbulb className="h-4 w-4 text-emerald-700" />
                                     3. Recommended fix path
                                 </div>
-                                <p className="mt-2 text-xs leading-5 text-slate-700">{leadFixPath}</p>
-                                <div className="mt-2 rounded-md border border-emerald-200 bg-white px-2.5 py-2 text-xs text-slate-700">
-                                    {proofAfterState}
-                                </div>
-                                {leadProofGroup && (
+                                <p className="mt-2 text-xs leading-5 text-slate-700">
+                                    {hasBlockedLead
+                                        ? leadFixPath
+                                        : hasLotData
+                                        ? "Nothing to fix — every loaded lot closes its lifecycle. Bring in your own supplier rows to preflight real data."
+                                        : "Once data is loaded, the fastest fix for the blocking pattern appears here."}
+                                </p>
+                                {hasBlockedLead && (
+                                    <div className="mt-2 rounded-md border border-emerald-200 bg-white px-2.5 py-2 text-xs text-slate-700">
+                                        {proofAfterState}
+                                    </div>
+                                )}
+                                {hasBlockedLead && leadProofGroup && (
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
                                         <Button
                                             type="button"
@@ -1314,47 +1479,104 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             </div>
                         </div>
 
-                        <div className="block rounded-md border border-rose-200 bg-rose-50 p-4 shadow-sm shadow-rose-100/70">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                        <AlertTriangle className="h-4 w-4 text-rose-600" />
-                                        2. Caught defect
+                        {hasBlockedLead ? (
+                            <div className="block rounded-md border border-rose-200 bg-rose-50 p-4 shadow-sm shadow-rose-100/70">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                                            2. Caught defect
+                                        </div>
+                                        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                                            Missing evidence stops this lot before export.
+                                        </h3>
                                     </div>
-                                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                                        Missing evidence stops this lot before export.
-                                    </h3>
+                                    <Badge className="border-0 bg-rose-600 text-[10px] text-white hover:bg-rose-600">
+                                        Blocked now
+                                    </Badge>
                                 </div>
-                                <Badge className="border-0 bg-rose-600 text-[10px] text-white hover:bg-rose-600">
-                                    Blocked now
-                                </Badge>
-                            </div>
 
-                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
+                                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
+                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
+                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
+                                    </div>
+                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
+                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Pattern</div>
+                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadPatternLabel}</div>
+                                    </div>
+                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
+                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Missing</div>
+                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadMissingEvidence}</div>
+                                    </div>
                                 </div>
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Pattern</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadPatternLabel}</div>
-                                </div>
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Missing</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadMissingEvidence}</div>
-                                </div>
-                            </div>
 
-                            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
-                                {leadProofLot
-                                    ? `${leadProductLabel} lot ${leadLotLabel} is blocked because ${leadMissingEvidence} is missing from the handoff chain.`
-                                    : `The current test set is blocked because ${leadMissingEvidence} is missing from the handoff chain.`}
-                            </p>
-                            <div className="mt-3 rounded-md border border-rose-200 bg-white px-3 py-3 text-sm text-slate-700">
-                                RegEngine reconstructs the lifecycle, isolates the exact break, and points the operator to
-                                the missing evidence instead of returning a generic failure.
+                                <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
+                                    {`${leadProductLabel} lot ${leadLotLabel} is blocked because ${leadMissingEvidence} is missing from the handoff chain.`}
+                                </p>
+                                <div className="mt-3 rounded-md border border-rose-200 bg-white px-3 py-3 text-sm text-slate-700">
+                                    RegEngine reconstructs the lifecycle, isolates the exact break, and points the operator to
+                                    the missing evidence instead of returning a generic failure.
+                                </div>
                             </div>
-                        </div>
+                        ) : hasLotData ? (
+                            <div className="block rounded-md border border-emerald-200 bg-emerald-50 p-4 shadow-sm shadow-emerald-100/70">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                            2. Evidence complete
+                                        </div>
+                                        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                                            Every loaded lot closes its lifecycle end to end.
+                                        </h3>
+                                    </div>
+                                    <Badge className="border-0 bg-emerald-600 text-[10px] text-white hover:bg-emerald-600">
+                                        All passing
+                                    </Badge>
+                                </div>
+                                <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
+                                    {`${leadProductLabel} lot ${leadLotLabel} has all five CTEs with complete KDE evidence — it would enter the preview-ready path without touching production exports.`}
+                                </p>
+                                <div className="mt-3 rounded-md border border-emerald-200 bg-white px-3 py-3 text-sm text-slate-700">
+                                    To see how a defect is caught and grouped, upload supplier rows with a gap — for
+                                    example, delete the receiving row from the sample CSV and re-run the test.
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="block rounded-md border border-slate-200 bg-white p-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                                    <Play className="h-4 w-4 text-emerald-700" />
+                                    2. No test data yet
+                                </div>
+                                <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                                    Run the guided proof to see a real evaluation here.
+                                </h3>
+                                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                                    This panel reports on your actual test data — which lot leads the proof, whether its
+                                    evidence chain closes, and what to fix if it does not. Load the realistic sample or
+                                    upload your own supplier CSV to light it up.
+                                </p>
+                                <div className="mt-4 flex flex-wrap items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        onClick={() => void runGuidedProof()}
+                                        disabled={isFeederEvaluating || isRunning}
+                                        className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
+                                    >
+                                        Try it with the sample
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={loadRealisticSample}
+                                        className="h-8 border-slate-300 bg-white px-3 text-xs"
+                                    >
+                                        Open sample in editor
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </section>
 
@@ -1377,8 +1599,8 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                         <FunnelStep
                             id="validated"
                             label="Validated"
-                            value={String(totalLotCount)}
-                            sub="parse-clean"
+                            value={String(activeEvents.length)}
+                            sub="rows parse-clean"
                             tone="ok"
                             tag="schema"
                         />
@@ -1444,21 +1666,27 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         <span className="text-sm text-slate-500">/ 100</span>
                                         <Badge
                                             variant="outline"
-                                            className="ml-1 border-amber-200 bg-amber-50 text-[10px] text-amber-800"
+                                            className={`ml-1 text-[10px] ${scoreBadge.className}`}
                                         >
-                                            needs work
+                                            {scoreBadge.label}
                                         </Badge>
                                     </div>
-                                    <p className="mt-1 text-xs text-slate-500">Lowest factor sets the next fix.</p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        {hasAnyRunData
+                                            ? "Lowest factor sets the next fix."
+                                            : "Load data or run the guided proof to measure readiness."}
+                                    </p>
                                 </div>
                                 <div className="text-right text-xs text-slate-500">
-                                    <div>Δ since last run</div>
-                                    <div className="text-sm text-emerald-600">
-                                        {feederResult ? `${feederResult.compliant_events} passing` : "+0 (first run pending)"}
+                                    <div>Latest sandbox run</div>
+                                    <div className={feederResult ? "text-sm text-slate-700" : "text-sm text-slate-400"}>
+                                        {feederResult
+                                            ? `${feederResult.compliant_events} of ${feederResult.total_events} events passing`
+                                            : "not run yet"}
                                     </div>
                                     </div>
                                 </div>
-                            {leadProofLot && (
+                            {hasBlockedLead && (
                                 <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
                                     <span className="font-medium">Proof lead:</span> {readinessLeadNote}
                                     <div className="mt-2">
@@ -1488,7 +1716,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             variant="outline"
                                                             className="border-slate-200 bg-slate-50 text-[10px] text-slate-500"
                                                         >
-                                                            not run
+                                                            {factor.lockedLabel ?? "not run"}
                                                         </Badge>
                                                     )}
                                                     {isBiggestGap && (
@@ -1653,7 +1881,9 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                         lotCount={group.lots.length}
                                                     />
                                                     <div className="overflow-hidden rounded-md border border-slate-200">
-                                                        {group.lots.slice(0, 6).map((lot) => (
+                                                        {group.lots
+                                                            .slice(0, expandedLotGroups[group.id] ? group.lots.length : 6)
+                                                            .map((lot) => (
                                                             <LotRow
                                                                 key={lot.lotCode}
                                                                 lot={lot}
@@ -1666,13 +1896,18 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                                 onSelect={() => setSelectedLot(lot.lotCode)}
                                                             />
                                                         ))}
-                                                        {group.lots.length > 6 && (
+                                                        {group.lots.length > 6 && !expandedLotGroups[group.id] && (
                                                             <div className="bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
                                                                 + {group.lots.length - 6} more lots in this pattern ·{" "}
                                                                 <button
                                                                     type="button"
                                                                     className="font-medium text-emerald-700 hover:underline"
-                                                                    onClick={() => undefined}
+                                                                    onClick={() =>
+                                                                        setExpandedLotGroups((current) => ({
+                                                                            ...current,
+                                                                            [group.id]: true,
+                                                                        }))
+                                                                    }
                                                                 >
                                                                     show all
                                                                 </button>
@@ -1726,7 +1961,16 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         Selected lot
                                     </div>
                                     {selectedLotData && (
-                                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900">
+                                        <Button
+                                            variant="ghost"
+                                            className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900"
+                                            onClick={() =>
+                                                exceptionsSectionRef.current?.scrollIntoView({
+                                                    behavior: "smooth",
+                                                    block: "start",
+                                                })
+                                            }
+                                        >
                                             Change
                                         </Button>
                                     )}
@@ -1832,7 +2076,24 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         </div>
 
                                         <div className="mt-4 flex gap-2">
-                                            <Button className="h-9 flex-1 bg-emerald-700 text-xs text-white hover:bg-emerald-800">
+                                            <Button
+                                                className="h-9 flex-1 bg-emerald-700 text-xs text-white hover:bg-emerald-800"
+                                                onClick={() => {
+                                                    const group = exceptionGroups.find((candidate) =>
+                                                        candidate.lots.some(
+                                                            (lot) => lot.lotCode === selectedLotData?.lotCode,
+                                                        ),
+                                                    );
+                                                    if (group) {
+                                                        setActiveFilter(group.id);
+                                                        setOpenGroups((current) => ({ ...current, [group.id]: true }));
+                                                    }
+                                                    exceptionsSectionRef.current?.scrollIntoView({
+                                                        behavior: "smooth",
+                                                        block: "start",
+                                                    });
+                                                }}
+                                            >
                                                 Fix this lot
                                             </Button>
                                             <Button asChild variant="outline" className="h-9 border-slate-300 bg-white text-xs">
@@ -1858,6 +2119,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                 {showCsvDrawer && (
                     <section
                         aria-label="CSV input"
+                        data-csv-drawer
                         className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                     >
                         <div className="flex items-center justify-between">
@@ -1950,9 +2212,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             </div>
 
             <Tutorial
-                steps={INFLOW_LAB_TUTORIAL_STEPS}
+                steps={tutorialSteps}
                 isOpen={isTutorialOpen}
                 onClose={() => setIsTutorialOpen(false)}
+                onComplete={dismissInflowLabTutorialBanner}
                 storageKey={INFLOW_LAB_TUTORIAL_STORAGE_KEY}
             />
         </main>
