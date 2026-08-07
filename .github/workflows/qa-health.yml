@@ -41,11 +41,11 @@ jobs:
     # is a backstop rather than the thing that actually stops a runaway run —
     # two observed runs burned 57 and 72 minutes and produced no artifact at
     # all because the job timeout was the only limit in play.
-    # 45, not 35: healthy runs take 34m37s-35m30s (runs 30973063688 and
-    # 30979898499 — the latter passed every step and was still cancelled by
-    # the 35m ceiling), and the step bounds below already cap a runaway at
-    # ~42m+overhead, so the job ceiling must sit above their sum.
-    timeout-minutes: 45
+    # The job ceiling is a pure backstop and must sit above the sum of the
+    # step bounds (15 + 28 + 5 = 48, plus setup overhead) — a ceiling below
+    # that sum can only ever cancel healthy runs, never catch a runaway
+    # before a step bound does (runs 30973063688/30979898499 proved it).
+    timeout-minutes: 55
     env:
       NODE_VERSION: "24"
       PYTHON_VERSION: "3.11"
@@ -132,7 +132,10 @@ jobs:
       - name: Run Playwright E2E
         if: always()
         continue-on-error: true
-        timeout-minutes: 22
+        # 28, not 22: the suite ran ~20m before the inflow-lab tour spec added
+        # six geometry tests (~2m of real coverage). 22m left no headroom and
+        # would cancel healthy runs — the same trap the job ceiling fell into.
+        timeout-minutes: 28
         env:
           AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
           JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
