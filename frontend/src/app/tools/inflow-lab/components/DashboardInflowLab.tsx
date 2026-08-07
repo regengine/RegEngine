@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
-    CheckCircle2,
     ChevronRight,
     ClipboardList,
     GraduationCap,
@@ -34,6 +33,7 @@ import {
     summarizeSourceSuppliers,
     type ExceptionPatternId,
 } from "../lib/exception-grouping";
+import { EvidenceChain } from "./EvidenceChain";
 import {
     INFLOW_LAB_TUTORIAL_STORAGE_KEY,
     InflowLabTutorialBanner,
@@ -181,26 +181,6 @@ cooling,TLC-SBX-20260506-021,Spring Mix,184,cases,Salinas Cooling Hub,2026-05-06
 initial_packing,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Packing House,2026-05-06T14:31:00Z,,,PACK-021
 shipping,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Shipping Dock,2026-05-06T18:06:00Z,GreenLeaf Packing House,North Bay DC,BOL-021
 receiving,TLC-SBX-20260506-021,Spring Mix,182,cases,North Bay DC,2026-05-07T01:14:00Z,GreenLeaf Shipping Dock,North Bay DC,REC-021`;
-const EXPLAINER_STEPS = [
-    {
-        title: "What goes in",
-        detail: "Supplier CSV rows with lot codes, CTE timestamps, facilities, and shipping references.",
-    },
-    {
-        title: "What the machine does",
-        detail: "Normalizes row formats, reconstructs each lot lifecycle, and groups the missing KDE or handoff defects.",
-    },
-    {
-        title: "What comes out",
-        detail: "A readiness score, a fix queue by pattern, and a lot-by-lot trace that shows where evidence dropped.",
-    },
-] as const;
-const DEFAULT_PROOF_INPUTS = [
-    "Harvest timestamp from supplier field team",
-    "Cooling confirmation from pre-cool facility",
-    "Packing and shipping handoff from pack house",
-    "DC receiving confirmation before export staging",
-] as const;
 const FILTER_CHIPS: { id: "all" | ExceptionPatternId; label: string }[] = [
     { id: "all", label: "all" },
     { id: "handoff", label: "handoff" },
@@ -632,6 +612,14 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     const [isTutorialOpen, setIsTutorialOpen] = useState(false);
     const [proofLeadPulse, setProofLeadPulse] = useState(0);
     const [isProofLeadHighlighted, setIsProofLeadHighlighted] = useState(false);
+    // Remount key for the evidence chain. `animate-in` only fires on mount, so
+    // the staggered reveal needs a fresh key each time an evaluation lands —
+    // otherwise re-running just swaps classes and nothing moves.
+    const [chainRunKey, setChainRunKey] = useState(0);
+    useEffect(() => {
+        setChainRunKey((key) => key + 1);
+    }, [serviceEvents]);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const exceptionsSectionRef = useRef<HTMLDivElement>(null);
     const selectedLotPanelRef = useRef<HTMLDivElement>(null);
@@ -1178,9 +1166,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             : leadProofGroup?.id === "source"
             ? "Push the missing harvest or cooling KDEs back to the supplier feed, then re-test before promotion."
             : "Triage the lot individually, patch the missing KDEs, and confirm the lifecycle closes end to end.";
-    const proofAfterState = leadProofLot
-        ? `Once corrected, ${leadProofLot.product} moves from blocked evidence to preview-ready traceability.`
-        : "Once corrected, the blocked lot moves into the preview-ready path without touching production exports.";
     const leadLotLabel = leadProofLot ? leadProofLot.lotCode.slice(-6) : "active";
     const leadProductLabel = leadProofLot?.product ?? "Supplier lot";
     const leadPatternLabel = leadProofGroup?.label ?? "Missing handoff evidence";
@@ -1193,6 +1178,14 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     // genuinely blocked lot produces the red defect breakdown.
     const hasLotData = totalLotCount > 0;
     const hasBlockedLead = Boolean(leadProofLot && !leadProofLot.readiness.exportReady);
+    // The five-CTE chain for whichever lot is leading the proof. Falls back to
+    // an all-missing skeleton so the chain still renders its five slots before
+    // any data arrives — EvidenceChain greys those out rather than reading them
+    // as defects.
+    const leadLineage = leadProofLot
+        ? serviceLineage[leadProofLot.lotCode] ??
+          toLineage(activeEvents.filter((event) => event.lotCode === leadProofLot.lotCode))
+        : toLineage([]);
 
     return (
         <main
@@ -1293,313 +1286,34 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     </div>
                 )}
 
-                <section
-                    aria-label="How Inflow Lab works"
-                    className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.9fr)]"
-                >
-                    <div
-                        className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                        style={{ display: "block" }}
-                    >
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                                    How it works
-                                </div>
-                                <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                                    Real supplier activity in. Clear failure evidence out.
-                                </h2>
-                                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Inflow Lab replays believable farm-to-DC lot activity, reconstructs the evidence
-                                    trail, and flags the exact missing KDEs blocking readiness. We show the evidence and
-                                    the fix recommendation, not the internal scoring recipe.
-                                </p>
-                            </div>
-                            <Badge
-                                variant="outline"
-                                className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700"
-                            >
-                                Trade-secret safe
-                            </Badge>
-                        </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
-                            {EXPLAINER_STEPS.map((step) => (
-                                <div key={step.title} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                                    <div className="text-sm font-semibold text-slate-900">{step.title}</div>
-                                    <p className="mt-1 text-xs leading-5 text-slate-600">{step.detail}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div
-                        className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                        style={{ display: "block" }}
-                    >
-                        <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                            Example business activity
-                        </div>
-                        <h2 className="mt-1 text-base font-semibold text-slate-950">
-                            A produce handoff a buyer can recognize in seconds
-                        </h2>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-                            <KdeTile label="Product" value="Spring Mix" />
-                            <KdeTile label="Quantity" value="184 cases" />
-                            <KdeTile label="Supplier" value="Riverbend Organics" />
-                            <KdeTile label="Destination" value="North Bay DC" />
-                        </div>
-                        <p className="mt-3 text-xs leading-5 text-slate-600">
-                            Load a fabricated sample based on a common farm-to-DC trace so buyers can see the input
-                            shape, the caught break, and the fix path before any production feed is connected.
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2" data-tutorial="inflow-guided-proof">
-                            <Button
-                                type="button"
-                                className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
-                                onClick={runGuidedProof}
-                                disabled={isFeederEvaluating || isRunning}
-                            >
-                                {isFeederEvaluating ? (
-                                    <>
-                                        <RefreshCcw className="mr-2 h-3.5 w-3.5 animate-spin" />
-                                        Running
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="mr-2 h-3.5 w-3.5" />
-                                        Run guided proof
-                                    </>
-                                )}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="h-8 border-slate-300 bg-white px-3 text-xs"
-                                onClick={loadRealisticSample}
-                            >
-                                Load sample flow
-                            </Button>
-                            <span className="text-xs text-slate-500">
-                                Harvest → cool → pack → ship → receive
-                            </span>
-                        </div>
-                    </div>
-                </section>
-
-                <section
-                    aria-label="Proof walkthrough"
-                    className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                    style={{ display: "block" }}
-                >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                            <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                                Proof walkthrough
-                            </div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                                See the lot, the break, and the fastest path to clear it
-                            </h2>
-                            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                This should read like product proof: normal supplier activity comes in, the broken
-                                handoff is isolated, and the operator gets the next fix to unblock readiness.
-                            </p>
-                        </div>
-                        <Badge
-                            variant="outline"
-                            className="border-slate-200 bg-slate-50 text-[10px] text-slate-700"
-                        >
-                            Buyer-readable
-                        </Badge>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.35fr)]">
-                        <div className="space-y-3">
-                            <div className="rounded-md border border-slate-200 bg-white p-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                    Current proof point
-                                </div>
-                                <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">
-                                            {hasLotData ? leadLotLabel : "—"}
-                                        </div>
-                                    </div>
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Product</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">
-                                            {hasLotData ? leadProductLabel : "—"}
-                                        </div>
-                                    </div>
-                                    {hasBlockedLead ? (
-                                        <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2">
-                                            <div className="text-[11px] uppercase tracking-wider text-rose-700">Status</div>
-                                            <div className="mt-1 text-sm font-semibold text-rose-900">Readiness blocked</div>
-                                        </div>
-                                    ) : hasLotData ? (
-                                        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2">
-                                            <div className="text-[11px] uppercase tracking-wider text-emerald-700">Status</div>
-                                            <div className="mt-1 text-sm font-semibold text-emerald-900">Preview-ready</div>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                            <div className="text-[11px] uppercase tracking-wider text-slate-500">Status</div>
-                                            <div className="mt-1 text-sm font-semibold text-slate-600">No data yet</div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="block rounded-md border border-slate-200 bg-white p-3">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                    1. Incoming business activity
-                                </div>
-                                <p className="mt-2 text-xs leading-5 text-slate-600">
-                                    A normal leafy-greens handoff arrives as supplier rows, not perfect structured truth.
-                                </p>
-                                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
-                                    {DEFAULT_PROOF_INPUTS.map((item) => (
-                                        <li key={item}>{item}</li>
-                                    ))}
-                                </ul>
-                            </div>
-
-                            <div className="block rounded-md border border-emerald-200 bg-emerald-50 p-3">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    <Lightbulb className="h-4 w-4 text-emerald-700" />
-                                    3. Recommended fix path
-                                </div>
-                                <p className="mt-2 text-xs leading-5 text-slate-700">
-                                    {hasBlockedLead
-                                        ? leadFixPath
-                                        : hasLotData
-                                        ? "Nothing to fix — every loaded lot closes its lifecycle. Bring in your own supplier rows to preflight real data."
-                                        : "Once data is loaded, the fastest fix for the blocking pattern appears here."}
-                                </p>
-                                {hasBlockedLead && (
-                                    <div className="mt-2 rounded-md border border-emerald-200 bg-white px-2.5 py-2 text-xs text-slate-700">
-                                        {proofAfterState}
-                                    </div>
-                                )}
-                                {hasBlockedLead && leadProofGroup && (
-                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            className="h-7 border-slate-300 bg-white px-2 text-xs"
-                                            onClick={() => focusProofLead("exceptions")}
-                                        >
-                                            Focus this defect
-                                        </Button>
-                                        <span className="text-[11px] text-slate-500">
-                                            Jumps to the exact pattern group already visible below.
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {hasBlockedLead ? (
-                            <div className="block rounded-md border border-rose-200 bg-rose-50 p-4 shadow-sm shadow-rose-100/70">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                            <AlertTriangle className="h-4 w-4 text-rose-600" />
-                                            2. Caught defect
-                                        </div>
-                                        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                                            Missing evidence stops this lot before export.
-                                        </h3>
-                                    </div>
-                                    <Badge className="border-0 bg-rose-600 text-[10px] text-white hover:bg-rose-600">
-                                        Blocked now
-                                    </Badge>
-                                </div>
-
-                                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
-                                    </div>
-                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Pattern</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadPatternLabel}</div>
-                                    </div>
-                                    <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Missing</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadMissingEvidence}</div>
-                                    </div>
-                                </div>
-
-                                <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
-                                    {`${leadProductLabel} lot ${leadLotLabel} is blocked because ${leadMissingEvidence} is missing from the handoff chain.`}
-                                </p>
-                                <div className="mt-3 rounded-md border border-rose-200 bg-white px-3 py-3 text-sm text-slate-700">
-                                    RegEngine reconstructs the lifecycle, isolates the exact break, and points the operator to
-                                    the missing evidence instead of returning a generic failure.
-                                </div>
-                            </div>
-                        ) : hasLotData ? (
-                            <div className="block rounded-md border border-emerald-200 bg-emerald-50 p-4 shadow-sm shadow-emerald-100/70">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                            2. Evidence complete
-                                        </div>
-                                        <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                                            Every loaded lot closes its lifecycle end to end.
-                                        </h3>
-                                    </div>
-                                    <Badge className="border-0 bg-emerald-600 text-[10px] text-white hover:bg-emerald-600">
-                                        All passing
-                                    </Badge>
-                                </div>
-                                <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
-                                    {`${leadProductLabel} lot ${leadLotLabel} has all five CTEs with complete KDE evidence — it would enter the preview-ready path without touching production exports.`}
-                                </p>
-                                <div className="mt-3 rounded-md border border-emerald-200 bg-white px-3 py-3 text-sm text-slate-700">
-                                    To see how a defect is caught and grouped, upload supplier rows with a gap — for
-                                    example, delete the receiving row from the sample CSV and re-run the test.
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="block rounded-md border border-slate-200 bg-white p-4">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    <Play className="h-4 w-4 text-emerald-700" />
-                                    2. No test data yet
-                                </div>
-                                <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                                    Run the guided proof to see a real evaluation here.
-                                </h3>
-                                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                                    This panel reports on your actual test data — which lot leads the proof, whether its
-                                    evidence chain closes, and what to fix if it does not. Load the realistic sample or
-                                    upload your own supplier CSV to light it up.
-                                </p>
-                                <div className="mt-4 flex flex-wrap items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        onClick={() => void runGuidedProof()}
-                                        disabled={isFeederEvaluating || isRunning}
-                                        className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
-                                    >
-                                        Try it with the sample
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={loadRealisticSample}
-                                        className="h-8 border-slate-300 bg-white px-3 text-xs"
-                                    >
-                                        Open sample in editor
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </section>
+                <EvidenceChain
+                    nodes={leadLineage}
+                    hasData={hasLotData}
+                    isBlocked={hasBlockedLead}
+                    isBusy={isFeederEvaluating || isRunning}
+                    lot={
+                        leadProofLot
+                            ? {
+                                  code: leadProofLot.lotCode,
+                                  product: leadProofLot.product,
+                                  supplier: leadProofLot.supplier,
+                                  cases: leadProofLot.cases,
+                              }
+                            : null
+                    }
+                    missingEvidence={leadMissingEvidence}
+                    patternLabel={leadPatternLabel}
+                    fixPath={leadFixPath}
+                    lotsAffected={leadProofGroup?.lots.length ?? null}
+                    rowsRead={activeEvents.length}
+                    lotCount={totalLotCount}
+                    runKey={chainRunKey}
+                    onRun={() => void runGuidedProof()}
+                    onLoadSample={loadRealisticSample}
+                    onFocusDefect={
+                        hasBlockedLead && leadProofGroup ? () => focusProofLead("exceptions") : null
+                    }
+                />
 
                 <section aria-label="Pipeline funnel" data-testid="inflow-funnel">
                     <div className="flex items-center justify-between">

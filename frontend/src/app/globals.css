@@ -240,14 +240,25 @@ body[data-inflow-lab="true"] {
     border-bottom: 1px solid #e2e8f0;
     text-align: left;
 }
-[data-inflow-lab-app] section:first-of-type {
+/* These three rules are indexed by document POSITION, so they land on whatever
+   section happens to occupy the slot rather than on a section that asked for
+   the layout. That is only safe where the section order is fixed — the
+   standalone client. The dashboard composes its own sections and reorders them,
+   so there the rules force `display: grid` onto component internals that never
+   opted in (a card's own header row gets re-flowed into grid tracks, and the
+   heading, badge and body land in separate columns). The dashboard was already
+   fighting this with inline `style={{ display: "block" }}` escape hatches
+   rather than relying on it, so scope the rules to the standalone modes
+   ("simulation" | "preflight" | "staging" | "production_evidence") and let
+   dashboard sections lay themselves out. */
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:first-of-type {
     overflow: hidden;
 }
-[data-inflow-lab-app] section:first-of-type > div {
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:first-of-type > div {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
 }
-[data-inflow-lab-app] section:nth-of-type(2) {
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:nth-of-type(2) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
@@ -691,6 +702,13 @@ body.barcode-scanner-active .barcode-scanner-ui {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+        /* Zeroing only the duration leaves staggered reveals (an element per
+           step, each with a longer `animation-delay`) invisible for the whole
+           delay before popping in — `fill-mode: backwards` holds the hidden
+           first frame. The delay has to go too, or "reduced motion" reads as
+           "content missing". */
+        animation-delay: 0ms !important;
+        transition-delay: 0ms !important;
     }
 
 }

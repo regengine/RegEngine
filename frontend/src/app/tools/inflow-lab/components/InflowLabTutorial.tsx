@@ -29,10 +29,10 @@ export function buildInflowLabTutorialSteps({
 }): TutorialStep[] {
     return [
         {
-            target: 'section[aria-label="How Inflow Lab works"]',
+            target: '[data-testid="inflow-evidence-chain"]',
             title: "What Inflow Lab is",
             content:
-                "A sandbox for supplier traceability data. It replays lot activity, rebuilds each lot's evidence trail, and shows exactly which FSMA 204 records are missing. Nothing here writes to production exports.",
+                "A sandbox for supplier traceability data. This is one lot's chain of custody, harvest through receiving — a solid link is a record we have, a broken one is a record that never arrived. The gate at the end is what a missing link costs you. Nothing here writes to production exports.",
             position: "bottom",
         },
         {
@@ -46,9 +46,9 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-guided-proof"]',
             title: "Run your first test",
             content:
-                "This evaluates the built-in sample end to end — the highlighted button is live, or use the one right here. The pipeline, score, and lot panels below fill with the results.",
+                "This evaluates the built-in sample end to end — the highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
             position: "bottom",
-            action: "Run guided proof",
+            action: "Run trace",
             onAction: runGuidedProof,
         },
         {

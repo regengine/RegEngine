@@ -15,9 +15,9 @@ const DASHBOARD_TOUR = {
     stepCount: 7,
     // Step index (0-based) whose tooltip carries a live action button.
     actionStep: 2,
-    actionLabel: 'Run guided proof',
+    actionLabel: 'Run trace',
     targets: [
-        'section[aria-label="How Inflow Lab works"]',
+        '[data-testid="inflow-evidence-chain"]',
         '[data-tutorial="inflow-load-data"]',
         '[data-tutorial="inflow-guided-proof"]',
         '[data-testid="inflow-funnel"]',
@@ -150,7 +150,7 @@ for (const [label, viewport] of [
 
             await page
                 .locator('[data-tutorial="inflow-guided-proof"]')
-                .getByRole('button', { name: 'Run guided proof' })
+                .getByRole('button', { name: 'Run trace' })
                 .click();
 
             await expect(page.getByRole('dialog')).toBeVisible();
