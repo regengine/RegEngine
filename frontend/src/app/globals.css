@@ -205,6 +205,18 @@ body[data-inflow-lab="true"] {
     border-color: transparent;
     color: #fff;
 }
+/* The standalone hero's dark action buttons. Without this the generic
+   button rule above paints them white while .text-white keeps the label
+   white — white-on-white, i.e. invisible. */
+[data-inflow-lab-app] button.bg-slate-800 {
+    background: #1e293b;
+    border-color: #475569;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-slate-800:hover {
+    background: #334155;
+    border-color: #64748b;
+}
 [data-inflow-lab-app] button.bg-white\/10 {
     border-color: rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.1);
@@ -1529,7 +1541,11 @@ body,
 }
 
 .re-panel,
-.re-app-surface :is(.re-panel, .bg-card, [class*="bg-card"], [class*="bg-white"], [class*="bg-slate-50"], [class*="bg-gray-50"], [class*="bg-zinc-50"]) {
+/* Substring matches need guards: "bg-white" must not catch translucent
+   overlays like bg-white/10 (glass over dark heroes), and "bg-slate-50"
+   is a substring of bg-slate-500 — solidifying those to an elevated white
+   panel makes white-on-dark text unreadable. */
+.re-app-surface :is(.re-panel, .bg-card, [class*="bg-card"], [class*="bg-white"]:not([class*="bg-white/"]), [class*="bg-slate-50"]:not([class*="bg-slate-500"]), [class*="bg-gray-50"]:not([class*="bg-gray-500"]), [class*="bg-zinc-50"]:not([class*="bg-zinc-500"])) {
     border-color: var(--re-surface-border) !important;
     border-radius: var(--re-radius-lg) !important;
     background-color: var(--re-surface-elevated) !important;

@@ -10,6 +10,10 @@ import type { TutorialStep } from "@/components/ui/tutorial";
 // itself (it stays reachable from the header's "How to use" button).
 export const INFLOW_LAB_TUTORIAL_STORAGE_KEY = "inflow-lab-dashboard-tutorial";
 export const INFLOW_LAB_TUTORIAL_BANNER_KEY = "inflow-lab-dashboard-tutorial-banner-dismissed";
+// The standalone /tools/inflow-lab client carries its own tour with its own
+// dismissal state — finishing one surface's tour must not hide the other's.
+export const INFLOW_LAB_CLIENT_TUTORIAL_STORAGE_KEY = "inflow-lab-client-tutorial";
+export const INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY = "inflow-lab-client-tutorial-banner-dismissed";
 
 // Step-by-step operating guide for the dashboard Inflow Lab tab. Targets are
 // stable anchors on the page: data-tutorial markers, the funnel test id, and
@@ -78,6 +82,52 @@ export function buildInflowLabTutorialSteps({
     ];
 }
 
+// Operating guide for the standalone /tools/inflow-lab workbench (also used
+// by its embedded dashboard variant). Anchors are stable regardless of tab
+// state; the demo step carries a live action so the tour can produce the data
+// its later steps describe.
+export function buildInflowLabClientTutorialSteps({
+    runDemo,
+    isStandalone,
+}: {
+    runDemo: () => void;
+    isStandalone: boolean;
+}): TutorialStep[] {
+    return [
+        {
+            target: 'section[aria-label="Inflow Lab environment boundary"]',
+            title: "What Inflow Lab is",
+            content:
+                "A mock environment for supplier traceability data. Everything here uses test or uploaded records only — formal production records start after signed-in import, so you can experiment freely.",
+            position: "bottom",
+        },
+        {
+            target: '[data-tutorial="lab-primary-actions"]',
+            title: "Run your first demo",
+            content: isStandalone
+                ? "Load mock scenario fills the lab with a believable supplier feed; Run pipeline processes it end to end. The button here does both in one go and jumps to the event log when it finishes."
+                : "Start guided test run loads a mock supplier feed if the lab is empty, processes it end to end, and jumps to the record log when it finishes.",
+            position: "bottom",
+            action: "Run the demo",
+            onAction: runDemo,
+        },
+        {
+            target: '[data-tutorial="lab-tabs"]',
+            title: "Find your way around",
+            content:
+                "Each tab is a workspace: Data feeder tests your own CSV before import, Fix queue groups blocking defects, Lots and Lineage trace individual lot codes, and the log tab shows every record the pipeline produced.",
+            position: "bottom",
+        },
+        {
+            target: '[data-tutorial="lab-workspace"]',
+            title: "Read the results",
+            content:
+                "Pipeline results land here — connection status, lot counts, and delivery outcomes on the overview, with the full detail one tab away. Reopen this guide any time from “How to use” in the header.",
+            position: "top",
+        },
+    ];
+}
+
 // The dismissed flag lives in localStorage, which React must treat as an
 // external store: reading it during render would break SSR, and reading it in
 // an effect would cascade an extra render. useSyncExternalStore handles both —
@@ -92,9 +142,9 @@ function subscribeToBanner(onStoreChange: () => void) {
     };
 }
 
-function readBannerDismissed(): boolean {
+function readBannerDismissed(key: string): boolean {
     try {
-        return window.localStorage.getItem(INFLOW_LAB_TUTORIAL_BANNER_KEY) === "true";
+        return window.localStorage.getItem(key) === "true";
     } catch {
         return false;
     }
@@ -106,25 +156,34 @@ function bannerDismissedOnServer() {
 
 // Completing (or explicitly skipping) the walkthrough is the banner's job
 // done — calling this retires it without requiring a separate dismissal.
-export function dismissInflowLabTutorialBanner() {
+export function dismissInflowLabTutorialBanner(key: string = INFLOW_LAB_TUTORIAL_BANNER_KEY) {
     try {
-        window.localStorage.setItem(INFLOW_LAB_TUTORIAL_BANNER_KEY, "true");
+        window.localStorage.setItem(key, "true");
     } catch {
         /* private mode — banner simply reappears next visit */
     }
     bannerListeners.forEach((listener) => listener());
 }
 
-export function InflowLabTutorialBanner({ onStart }: { onStart: () => void }) {
+export function InflowLabTutorialBanner({
+    onStart,
+    dismissKey = INFLOW_LAB_TUTORIAL_BANNER_KEY,
+    description = "A guided walkthrough: load supplier data, run a sandbox test, read the readiness score, and clear blocked lots.",
+}: {
+    onStart: () => void;
+    dismissKey?: string;
+    description?: string;
+}) {
+    const readDismissed = useCallback(() => readBannerDismissed(dismissKey), [dismissKey]);
     const dismissed = useSyncExternalStore(
         subscribeToBanner,
-        readBannerDismissed,
+        readDismissed,
         bannerDismissedOnServer,
     );
 
     const dismiss = useCallback(() => {
-        dismissInflowLabTutorialBanner();
-    }, []);
+        dismissInflowLabTutorialBanner(dismissKey);
+    }, [dismissKey]);
 
     if (dismissed) return null;
 
@@ -145,10 +204,7 @@ export function InflowLabTutorialBanner({ onStart }: { onStart: () => void }) {
                     <span className="block text-sm font-semibold text-slate-950">
                         New to Inflow Lab? Learn to operate it step by step
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-600">
-                        A guided walkthrough: load supplier data, run a sandbox test, read the readiness
-                        score, and clear blocked lots.
-                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-600">{description}</span>
                 </span>
                 <span className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-700 group-hover:underline">
                     Start walkthrough

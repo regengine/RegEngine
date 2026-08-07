@@ -20,7 +20,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Tutorial } from "@/components/ui/tutorial";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
@@ -554,6 +553,9 @@ function buildLotSummary(lotCode: string, lotEvents: TraceEvent[], lineage: Line
         lastLocation: lotEvents[0]?.location ?? "No location",
         supplier: supplier ?? undefined,
         cases: cases ?? undefined,
+        // Highest ingest sequence for the lot — the recency proxy the mixed
+        // group's "Sort by recency" uses (timestamps are display strings).
+        latestEventId: lotEvents.reduce((max, event) => Math.max(max, event.id), 0),
     };
 }
 
@@ -623,8 +625,8 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         source: false,
         mixed: false,
     });
-    const [selectedLotIds, setSelectedLotIds] = useState<Record<string, boolean>>({});
     const [expandedLotGroups, setExpandedLotGroups] = useState<Partial<Record<ExceptionPatternId, boolean>>>({});
+    const [mixedLotSort, setMixedLotSort] = useState<"cases" | "recency" | null>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -1121,8 +1123,27 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         }
     };
 
-    const toggleLotSelection = (lotCode: string, checked: boolean) => {
-        setSelectedLotIds((current) => ({ ...current, [lotCode]: checked }));
+    // Serialize a group's blocked lots for the "Export to CSV" action —
+    // client-side download, no backend involved.
+    const exportGroupCsv = (groupId: ExceptionPatternId, lots: LotSummary[]) => {
+        const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+        const rows = [
+            ["lot_code", "product", "pattern", "missing_ctes", "delivery"],
+            ...lots.map((lot) => [
+                lot.lotCode,
+                lot.product,
+                groupId,
+                lot.missingCtes.join("; "),
+                lot.readiness.deliveryLabel,
+            ]),
+        ];
+        const csv = rows.map((row) => row.map(escape).join(",")).join("\n");
+        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `inflow-lab-${groupId}-exceptions.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
     };
 
     const focusProofLead = (target: "exceptions" | "selected" = "exceptions") => {
@@ -1839,8 +1860,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                             </div>
                                             {group.bulkActionable && group.lots.length > 0 ? (
                                                 <Button
-                                                    type="button"
-                                                    onClick={(event) => event.preventDefault()}
+                                                    asChild
                                                     className={cn(
                                                         "h-8 px-3 text-xs",
                                                         group.id === "handoff"
@@ -1848,15 +1868,23 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                                                     )}
                                                 >
-                                                    {group.id === "handoff"
-                                                        ? `Fix all ${group.lots.length}`
-                                                        : `Fix all ${group.lots.length}`}
+                                                    <Link href="/exceptions" onClick={(event) => event.stopPropagation()}>
+                                                        {`Fix all ${group.lots.length}`}
+                                                    </Link>
                                                 </Button>
                                             ) : (
                                                 group.lots.length > 0 && (
                                                     <Button
                                                         type="button"
-                                                        onClick={(event) => event.preventDefault()}
+                                                        onClick={(event) => {
+                                                            // Inside <summary>: keep the click from toggling
+                                                            // the group closed while we open and focus it.
+                                                            event.preventDefault();
+                                                            setOpenGroups((current) => ({ ...current, [group.id]: true }));
+                                                            setActiveFilter(group.id);
+                                                            const firstLot = group.lots[0];
+                                                            if (firstLot) setSelectedLot(firstLot.lotCode);
+                                                        }}
                                                         variant="outline"
                                                         className="h-8 border-slate-300 bg-white px-3 text-xs"
                                                     >
@@ -1879,9 +1907,21 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             group.id === "source" ? sourceSupplierBreakdown : null
                                                         }
                                                         lotCount={group.lots.length}
+                                                        onUploadCsv={() => fileInputRef.current?.click()}
+                                                        onViewExample={loadRealisticSample}
+                                                        activeSort={mixedLotSort}
+                                                        onSortChange={setMixedLotSort}
+                                                        onExportCsv={() => exportGroupCsv(group.id, group.lots)}
                                                     />
                                                     <div className="overflow-hidden rounded-md border border-slate-200">
-                                                        {group.lots
+                                                        {(group.id === "mixed" && mixedLotSort
+                                                            ? [...group.lots].sort((a, b) =>
+                                                                  mixedLotSort === "cases"
+                                                                      ? (b.cases ?? 0) - (a.cases ?? 0) || b.events - a.events
+                                                                      : b.latestEventId - a.latestEventId,
+                                                              )
+                                                            : group.lots
+                                                        )
                                                             .slice(0, expandedLotGroups[group.id] ? group.lots.length : 6)
                                                             .map((lot) => (
                                                             <LotRow
@@ -1889,10 +1929,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                                 lot={lot}
                                                                 groupId={group.id}
                                                                 isSelected={lot.lotCode === selectedLot}
-                                                                checked={Boolean(selectedLotIds[lot.lotCode])}
-                                                                onCheckedChange={(checked) =>
-                                                                    toggleLotSelection(lot.lotCode, checked)
-                                                                }
                                                                 onSelect={() => setSelectedLot(lot.lotCode)}
                                                             />
                                                         ))}
@@ -2281,16 +2317,31 @@ function FunnelStep({
     );
 }
 
+// The FDA's traceability-rule page listing the required KDEs per CTE — the
+// authoritative reference the "View FSMA 204 KDE list" action points at.
+const FSMA_204_KDE_REFERENCE_URL =
+    "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods";
+
 function GroupRootCausePanel({
     groupId,
     sourceSupplierBreakdown,
     lotCount,
+    onUploadCsv,
+    onViewExample,
+    activeSort,
+    onSortChange,
+    onExportCsv,
 }: {
     groupId: ExceptionPatternId;
     sourceSupplierBreakdown:
         | ReturnType<typeof summarizeSourceSuppliers>
         | null;
     lotCount: number;
+    onUploadCsv: () => void;
+    onViewExample: () => void;
+    activeSort: "cases" | "recency" | null;
+    onSortChange: (sort: "cases" | "recency") => void;
+    onExportCsv: () => void;
 }) {
     if (groupId === "handoff") {
         return (
@@ -2305,14 +2356,19 @@ function GroupRootCausePanel({
                             Map the <code className="font-mono text-xs text-slate-800">handoff_evidence</code> column from your shipping CSV, or upload a corrected file with packing/shipping/DC-receive timestamps.
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                Map handoff fields
-                            </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                            <Button
+                                variant="outline"
+                                className="h-7 border-slate-300 bg-white px-2 text-xs"
+                                onClick={onUploadCsv}
+                            >
                                 Upload corrected CSV
                             </Button>
-                            <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                View example
+                            <Button
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-slate-500"
+                                onClick={onViewExample}
+                            >
+                                View a complete example
                             </Button>
                         </div>
                     </div>
@@ -2371,18 +2427,38 @@ function GroupRootCausePanel({
                             </div>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                <Mail className="mr-1.5 h-3.5 w-3.5" />
-                                Email suppliers
+                            <Button asChild variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                                <a
+                                    href={`mailto:?subject=${encodeURIComponent(
+                                        "Missing traceability timestamps in your supplier feed",
+                                    )}&body=${encodeURIComponent(
+                                        "Our preflight check found lots from your feed missing required timestamps:\n\n" +
+                                            [
+                                                ...(sourceSupplierBreakdown?.harvestSuppliers.map(
+                                                    (s) => `- ${s.supplier}: harvest timestamp missing on ${s.lotCount} lot(s)`,
+                                                ) ?? []),
+                                                ...(sourceSupplierBreakdown?.coolingSuppliers.map(
+                                                    (s) => `- ${s.supplier}: cooling timestamp missing on ${s.lotCount} lot(s)`,
+                                                ) ?? []),
+                                            ].join("\n") +
+                                            "\n\nPlease include these fields in the next file so the lots can pass traceability preflight.",
+                                    )}`}
+                                >
+                                    <Mail className="mr-1.5 h-3.5 w-3.5" />
+                                    Email suppliers
+                                </a>
                             </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                Map source columns
-                            </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                            <Button
+                                variant="outline"
+                                className="h-7 border-slate-300 bg-white px-2 text-xs"
+                                onClick={onUploadCsv}
+                            >
                                 Upload supplier CSV
                             </Button>
-                            <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                View FSMA 204 KDE list
+                            <Button asChild variant="ghost" className="h-7 px-2 text-xs text-slate-500">
+                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noreferrer">
+                                    View FSMA 204 KDE list
+                                </a>
                             </Button>
                         </div>
                     </div>
@@ -2404,13 +2480,29 @@ function GroupRootCausePanel({
                         Each lot has a different combination of missing KDEs. A bulk fix would either over-match or under-match. Recommend triaging individually — start with the largest case counts.
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                        <Button
+                            variant="outline"
+                            aria-pressed={activeSort === "cases"}
+                            className={cn(
+                                "h-7 border-slate-300 bg-white px-2 text-xs",
+                                activeSort === "cases" && "border-emerald-300 bg-emerald-50 text-emerald-800",
+                            )}
+                            onClick={() => onSortChange("cases")}
+                        >
                             Sort by case count
                         </Button>
-                        <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                        <Button
+                            variant="outline"
+                            aria-pressed={activeSort === "recency"}
+                            className={cn(
+                                "h-7 border-slate-300 bg-white px-2 text-xs",
+                                activeSort === "recency" && "border-emerald-300 bg-emerald-50 text-emerald-800",
+                            )}
+                            onClick={() => onSortChange("recency")}
+                        >
                             Sort by recency
                         </Button>
-                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
+                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500" onClick={onExportCsv}>
                             <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
                             Export to CSV
                         </Button>
@@ -2425,15 +2517,11 @@ function LotRow({
     lot,
     groupId,
     isSelected,
-    checked,
-    onCheckedChange,
     onSelect,
 }: {
     lot: LotSummary;
     groupId: ExceptionPatternId;
     isSelected: boolean;
-    checked: boolean;
-    onCheckedChange: (checked: boolean) => void;
     onSelect: () => void;
 }) {
     const missingFieldsLabel = lot.missingCtes.length
@@ -2451,12 +2539,6 @@ function LotRow({
                 isSelected && "bg-emerald-50/40 outline outline-1 outline-emerald-200"
             )}
         >
-            <Checkbox
-                checked={checked}
-                onCheckedChange={(value) => onCheckedChange(value === true)}
-                aria-label={`Select ${lot.lotCode}`}
-                className="h-4 w-4 shrink-0"
-            />
             <button
                 type="button"
                 onClick={onSelect}
@@ -2491,7 +2573,11 @@ function LotRow({
             </button>
             <span className="ml-auto truncate text-xs text-slate-500">{missingFieldsLabel}</span>
             {groupId === "mixed" && (
-                <Button variant="ghost" className="h-6 px-2 text-[11px] text-slate-500 hover:text-slate-900">
+                <Button
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px] text-slate-500 hover:text-slate-900"
+                    onClick={onSelect}
+                >
                     Triage
                 </Button>
             )}
