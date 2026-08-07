@@ -273,6 +273,7 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
       {/* Spotlight ring around the hole */}
       {hole && (
         <div
+          data-testid="tutorial-spotlight"
           className="fixed z-[101] rounded-lg ring-4 ring-primary pointer-events-none"
           style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
         />
