@@ -96,6 +96,47 @@ test.describe('Dashboard Inflow Lab', () => {
         );
     });
 
+    test('leads with the evidence chain, not an explanation of it', async ({ page }) => {
+        await loginToDashboardInflowLab(page);
+
+        const chain = page.getByTestId('inflow-evidence-chain');
+        await expect(chain).toBeVisible();
+
+        // All five CTEs are on the page as one chain, harvest through receive.
+        for (const cte of ['Harvesting', 'Cooling', 'Initial packing', 'Shipping', 'DC receiving']) {
+            await expect(chain.getByText(cte, { exact: false }).first()).toBeVisible();
+        }
+        // The chain terminates in the consequence, which is the point of it.
+        await expect(chain.getByText('Export gate')).toBeVisible();
+        await expect(chain.getByRole('button', { name: /Run trace/i })).toBeVisible();
+
+        // The brochure the chain replaced must not creep back: these were
+        // section headings and internal design notes shipped as UI copy.
+        await expect(page.getByText('What goes in')).toHaveCount(0);
+        await expect(page.getByText('This should read like product proof')).toHaveCount(0);
+        await expect(page.getByText('Proof walkthrough')).toHaveCount(0);
+    });
+
+    test('states the export verdict before any scrolling', async ({ page }) => {
+        await loginToDashboardInflowLab(page);
+
+        const chain = page.getByTestId('inflow-evidence-chain');
+        await expect(chain).toBeVisible();
+
+        // Whatever the seeded data says, the gate has to commit to one of the
+        // three honest verdicts — never sit blank once a trace has run.
+        await expect(
+            chain.getByText(/^(Awaiting trace|Blocked|Preview-ready)$/),
+        ).toBeVisible();
+
+        // The chain is the first thing in the workspace, above the funnel.
+        const chainBox = await chain.boundingBox();
+        const funnelBox = await page.getByTestId('inflow-funnel').boundingBox();
+        expect(chainBox).not.toBeNull();
+        expect(funnelBox).not.toBeNull();
+        expect(chainBox!.y).toBeLessThan(funnelBox!.y);
+    });
+
     test('keeps sandbox evaluation gated behind local CSV input', async ({ page }) => {
         await loginToDashboardInflowLab(page);
 
