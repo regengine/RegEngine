@@ -20,4 +20,15 @@ describe('app route ownership', () => {
         expect(shouldHideMarketingChrome('/settings/security')).toBe(true);
         expect(shouldHideMarketingChrome('/mobile/capture')).toBe(true);
     });
+
+    it('hides marketing chrome inside the developer portal shell but not on /developers marketing pages', () => {
+        expect(shouldHideMarketingChrome('/developer/portal')).toBe(true);
+        expect(shouldHideMarketingChrome('/developer/portal/keys')).toBe(true);
+        expect(shouldHideMarketingChrome('/developer/login')).toBe(true);
+        // "/developer" must not prefix-match the public marketing page.
+        expect(shouldHideMarketingChrome('/developers')).toBe(false);
+        expect(shouldHideMarketingChrome('/developers/compliance-verticals')).toBe(false);
+        // Portal routes carry their own chrome but are NOT middleware-auth routes.
+        expect(isAuthenticatedAppRoute('/developer/portal')).toBe(false);
+    });
 });

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     authValue: {
         user: { id: 'dev-1', email: 'dev@example.com' },
         isAuthenticated: true,
+        isHydrated: true,
         logout: () => Promise.resolve(),
     },
 }));
@@ -96,6 +97,29 @@ describe('developer portal click behavior', () => {
         await user.click(revoke);
 
         expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(1);
+    });
+
+    it('settles into a sign-in prompt instead of hanging when no auth user hydrates', async () => {
+        // A stale re_access_token cookie passes the server layout's presence
+        // check while the client auth context hydrates no user. The pages must
+        // settle into an honest signed-out state — not spin forever, and not
+        // render a fabricated zero-state dashboard.
+        const savedUser = mocks.authValue.user;
+        mocks.authValue.user = null as unknown as typeof savedUser;
+        try {
+            const dashboard = render(<DeveloperPortalDashboard />);
+            expect(await screen.findByRole('heading', { name: /session has expired/i })).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login?next=/developer/portal');
+            expect(screen.queryByRole('heading', { name: /welcome back/i })).not.toBeInTheDocument();
+            expect(global.fetch).not.toHaveBeenCalled();
+            dashboard.unmount();
+
+            render(<ApiKeysPage />);
+            expect(await screen.findByRole('heading', { name: /session has expired/i })).toBeInTheDocument();
+            expect(global.fetch).not.toHaveBeenCalled();
+        } finally {
+            mocks.authValue.user = savedUser;
+        }
     });
 
     it('renders the already-completed onboarding step as text, not a "#" link', async () => {

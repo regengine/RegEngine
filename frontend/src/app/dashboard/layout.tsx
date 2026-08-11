@@ -36,6 +36,7 @@ import {
     FlaskConical,
     Bot,
     ShieldAlert,
+    Code2,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -126,6 +127,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
             { label: 'Team', href: '/settings/users', icon: UserCog },
             { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
+            { label: 'Developer Portal', href: '/developer/portal', icon: Code2 },
         ],
     },
 ];

@@ -21,7 +21,7 @@ interface ApiKey {
 }
 
 export default function ApiKeysPage() {
-    const { user: authUser } = useAuth();
+    const { user: authUser, isHydrated } = useAuth();
     const [keys, setKeys] = useState<ApiKey[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
@@ -34,7 +34,14 @@ export default function ApiKeysPage() {
     const [error, setError] = useState<string | null>(null);
 
     const loadKeys = useCallback(async () => {
-        if (!authUser) return;
+        // Wait for auth hydration before deciding anything — the server
+        // layout only checks cookie *presence*, so a stale cookie reaches
+        // this page and only the client knows whether a session exists.
+        if (!isHydrated) return;
+        if (!authUser) {
+            setIsLoading(false);
+            return;
+        }
 
         try {
             const response = await fetch('/api/developer/portal/keys', { credentials: 'include' });
@@ -50,7 +57,7 @@ export default function ApiKeysPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [authUser]);
+    }, [authUser, isHydrated]);
 
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
@@ -118,6 +125,26 @@ export default function ApiKeysPage() {
         return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} /></div>;
     }
 
+    // Hydrated with no session: prompt for sign-in instead of showing an
+    // empty key manager that can't actually do anything.
+    if (!authUser) {
+        return (
+            <div className="rounded-lg p-8 text-center" style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
+                <h1 className="text-lg font-semibold" style={{ color: 'var(--re-text-primary)' }}>Your session has expired</h1>
+                <p className="text-sm mt-2" style={{ color: 'var(--re-text-muted)' }}>
+                    Sign in again to manage your sandbox API keys.
+                </p>
+                <a
+                    href="/login?next=/developer/portal/keys"
+                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md text-sm font-semibold no-underline"
+                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
+                >
+                    Sign in
+                </a>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -129,16 +156,16 @@ export default function ApiKeysPage() {
                 </div>
                 <Button
                     onClick={() => setShowCreate(true)}
-                    style={{ background: 'var(--re-brand)', color: '#000', fontWeight: 600 }}
+                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)', fontWeight: 600 }}
                 >
                     <Plus className="w-4 h-4 mr-2" /> New Key
                 </Button>
             </div>
 
             {/* Sandbox-only notice */}
-            <Card style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+            <Card style={{ background: 'var(--re-info-bg)', border: '1px solid var(--re-info-border)' }}>
                 <CardContent className="py-3">
-                    <p className="text-sm m-0" style={{ color: '#60a5fa' }}>
+                    <p className="text-sm m-0" style={{ color: 'var(--re-signal-blue)' }}>
                         Keys created here are <code className="font-mono">rge_test_</code> sandbox credentials — they
                         cannot authenticate requests to the live RegEngine API. Live{' '}
                         <code className="font-mono">rge_live_</code> keys are provisioned by the RegEngine team during
@@ -148,7 +175,7 @@ export default function ApiKeysPage() {
             </Card>
 
             {error && (
-                <Card role="alert" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                <Card role="alert" style={{ background: 'var(--re-danger-bg)', border: '1px solid var(--re-danger-border)' }}>
                     <CardContent className="py-3">
                         <p className="text-sm m-0 text-re-danger">{error}</p>
                     </CardContent>
@@ -157,13 +184,13 @@ export default function ApiKeysPage() {
 
             {/* Revealed key banner */}
             {revealedKey && (
-                <Card style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                <Card style={{ background: 'var(--re-success-bg)', border: '1px solid var(--re-success-border)' }}>
                     <CardContent className="py-4">
                         <p className="text-sm font-medium mb-2" style={{ color: 'var(--re-brand)' }}>
                             Your new sandbox key (copy it now — it won't be shown again):
                         </p>
                         <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono px-3 py-2 rounded" style={{ background: 'rgba(0,0,0,0.3)', color: 'var(--re-text-primary)' }}>
+                            <code className="flex-1 text-xs font-mono px-3 py-2 rounded" style={{ background: 'var(--re-surface-inset)', color: 'var(--re-text-primary)' }}>
                                 {revealedKey}
                             </code>
                             <Button variant="outline" size="sm" onClick={copyKey}>
@@ -185,7 +212,7 @@ export default function ApiKeysPage() {
 
             {/* Create key form */}
             {showCreate && (
-                <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Card style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
                     <CardContent className="py-4">
                         <div className="flex items-end gap-3">
                             <div className="flex-1">
@@ -195,13 +222,13 @@ export default function ApiKeysPage() {
                                     value={newKeyName}
                                     onChange={(e) => setNewKeyName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && createKey()}
-                                    style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--re-text-primary)' }}
+                                    style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
                                 />
                             </div>
                             <Button
                                 onClick={createKey}
                                 disabled={!newKeyName.trim() || isCreating || !developerId}
-                                style={{ background: 'var(--re-brand)', color: '#000', fontWeight: 600 }}
+                                style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)', fontWeight: 600 }}
                             >
                                 {isCreating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                                 Generate
@@ -217,7 +244,7 @@ export default function ApiKeysPage() {
             {/* Keys list */}
             <div className="space-y-2">
                 {keys.length === 0 ? (
-                    <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <Card style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
                         <CardContent className="py-12 text-center">
                             <Key className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--re-text-disabled)' }} />
                             <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>No API keys yet. Create one to get started.</p>
@@ -225,7 +252,7 @@ export default function ApiKeysPage() {
                     </Card>
                 ) : (
                     keys.map((key) => (
-                        <Card key={key.id} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Card key={key.id} style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
                             <CardContent className="flex items-center gap-4 py-3">
                                 <Key className="w-4 h-4 flex-shrink-0" style={{ color: key.enabled ? 'var(--re-brand)' : 'var(--re-text-disabled)' }} />
                                 <div className="flex-1 min-w-0">
