@@ -14,6 +14,10 @@ interface CodeBlockProps {
     title?: string;
 }
 
+// Only rendered inside the developer portal (codegen page), so these tokens
+// resolve against the .re-devportal scope — which also means the block
+// automatically defers to forced high-contrast mode along with the rest of
+// the portal. The /docs pages use @/components/ui/code-block, not this.
 export function CodeBlock({ snippets, title }: CodeBlockProps) {
     const [activeIdx, setActiveIdx] = useState(0);
     const [copied, setCopied] = useState(false);
@@ -27,11 +31,11 @@ export function CodeBlock({ snippets, title }: CodeBlockProps) {
     }
 
     return (
-        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--re-surface-border)' }}>
             {/* Header: title + language tabs + copy */}
             <div className="flex items-center justify-between px-4 py-2" style={{
-                background: 'rgba(0,0,0,0.4)',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                background: 'var(--re-surface-elevated)',
+                borderBottom: '1px solid var(--re-border-subtle)',
             }}>
                 <div className="flex items-center gap-1">
                     {title && (
@@ -45,8 +49,8 @@ export function CodeBlock({ snippets, title }: CodeBlockProps) {
                             onClick={() => { setActiveIdx(i); setCopied(false); }}
                             className="px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
                             style={{
-                                background: i === activeIdx ? 'rgba(16,185,129,0.15)' : 'transparent',
-                                color: i === activeIdx ? 'var(--re-brand)' : 'var(--re-text-disabled)',
+                                background: i === activeIdx ? 'var(--re-brand-muted)' : 'transparent',
+                                color: i === activeIdx ? 'var(--re-brand-light)' : 'var(--re-text-disabled)',
                             }}
                         >
                             {s.label}
@@ -55,8 +59,8 @@ export function CodeBlock({ snippets, title }: CodeBlockProps) {
                 </div>
                 <button
                     onClick={handleCopy}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors hover:bg-white/5"
-                    style={{ color: copied ? 'var(--re-brand)' : 'var(--re-text-disabled)' }}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] transition-colors hover:bg-[var(--re-brand-muted)]"
+                    style={{ color: copied ? 'var(--re-brand-light)' : 'var(--re-text-disabled)' }}
                 >
                     {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     {copied ? 'Copied' : 'Copy'}
@@ -64,7 +68,7 @@ export function CodeBlock({ snippets, title }: CodeBlockProps) {
             </div>
             {/* Code body */}
             <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed" style={{
-                background: 'rgba(0,0,0,0.3)',
+                background: 'var(--re-surface-inset)',
                 margin: 0,
             }}>
                 <code style={{ color: 'var(--re-text-muted)', fontFamily: 'var(--re-font-mono, ui-monospace, monospace)' }}>

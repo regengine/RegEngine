@@ -433,9 +433,9 @@ export default function APIPlayground() {
   };
 
   const statusColor = (status: number) => {
-    if (status >= 200 && status < 300) return { bg: 'rgba(16,185,129,0.2)', text: '#10b981' };
-    if (status >= 400 && status < 500) return { bg: 'rgba(245,158,11,0.2)', text: '#f59e0b' };
-    return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
+    if (status >= 200 && status < 300) return { bg: 'var(--re-success-muted)', text: 'var(--re-success)' };
+    if (status >= 400 && status < 500) return { bg: 'var(--re-warning-muted)', text: 'var(--re-warning)' };
+    return { bg: 'var(--re-danger-muted)', text: 'var(--re-danger)' };
   };
 
   return (
@@ -461,11 +461,11 @@ export default function APIPlayground() {
           gap: '12px',
           marginBottom: '16px',
           padding: '10px 16px',
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'var(--re-surface-card)',
+          border: '1px solid var(--re-surface-border)',
           borderRadius: '8px',
         }}>
-          <FlaskConical size={16} style={{ color: demoMode ? '#3b82f6' : 'var(--re-text-muted)' }} />
+          <FlaskConical size={16} style={{ color: demoMode ? 'var(--re-signal-blue)' : 'var(--re-text-muted)' }} />
           <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--re-text-primary)' }}>
             Demo Mode
           </span>
@@ -483,7 +483,7 @@ export default function APIPlayground() {
               height: '24px',
               borderRadius: '12px',
               border: 'none',
-              background: demoMode ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+              background: demoMode ? 'var(--re-signal-blue)' : 'var(--re-border-default)',
               cursor: isGuest ? 'not-allowed' : 'pointer',
               transition: 'background 0.2s',
               opacity: isGuest ? 0.7 : 1,
@@ -513,10 +513,10 @@ export default function APIPlayground() {
           <div style={{
             padding: '10px 16px',
             marginBottom: '16px',
-            background: 'rgba(59,130,246,0.08)',
-            border: '1px solid rgba(59,130,246,0.25)',
+            background: 'var(--re-info-bg)',
+            border: '1px solid var(--re-info-border)',
             borderRadius: '8px',
-            color: '#60a5fa',
+            color: 'var(--re-signal-blue)',
             fontSize: '13px',
             display: 'flex',
             alignItems: 'center',
@@ -553,7 +553,7 @@ export default function APIPlayground() {
                   const ep = ENDPOINTS.find(x => x.id === e.target.value);
                   if (ep) handleEndpointChange(ep);
                 }}
-                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
+                className="w-full px-3 py-2.5 text-sm bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono"
               >
                 {ENDPOINTS.map(ep => (
                   <option key={ep.id} value={ep.id}>{ep.method} {ep.path}</option>
@@ -574,7 +574,7 @@ export default function APIPlayground() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="rge_live_..."
-                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
+                className="w-full px-3 py-2.5 text-sm bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono"
               />
             </div>
 
@@ -588,7 +588,7 @@ export default function APIPlayground() {
                 value={tenantId}
                 onChange={(e) => setTenantId(e.target.value)}
                 placeholder="your-tenant-uuid"
-                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
+                className="w-full px-3 py-2.5 text-sm bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono"
               />
             </div>
 
@@ -608,7 +608,7 @@ export default function APIPlayground() {
                       value={pathParamValues[param] || ''}
                       onChange={(e) => setPathParamValues(prev => ({ ...prev, [param]: e.target.value }))}
                       placeholder={param === 'cte_type' ? 'receiving' : param}
-                      className="w-full px-3 py-2 text-[13px] bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
+                      className="w-full px-3 py-2 text-[13px] bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono"
                     />
                   </div>
                 ))}
@@ -631,7 +631,7 @@ export default function APIPlayground() {
                       value={queryParamValues[param.key] || ''}
                       onChange={(e) => setQueryParamValues(prev => ({ ...prev, [param.key]: e.target.value }))}
                       placeholder={param.placeholder}
-                      className="w-full px-3 py-2 text-[13px] bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
+                      className="w-full px-3 py-2 text-[13px] bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono"
                     />
                   </div>
                 ))}
@@ -643,7 +643,7 @@ export default function APIPlayground() {
               <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Request Headers
               </label>
-              <div className="bg-black/30 border border-white/[0.06] rounded-md p-3 text-xs font-mono text-[var(--re-text-muted)]">
+              <div className="bg-[var(--re-surface-inset)] border border-[var(--re-surface-border)] rounded-md p-3 text-xs font-mono text-[var(--re-text-muted)]">
                 <div>X-RegEngine-API-Key: {apiKey}</div>
                 {tenantId && <div>X-Tenant-ID: {tenantId}</div>}
                 {selectedEndpoint.method === 'POST' && <div>Content-Type: application/json</div>}
@@ -659,7 +659,7 @@ export default function APIPlayground() {
                 value={requestBody}
                 onChange={(e) => setRequestBody(e.target.value)}
                 disabled={selectedEndpoint.method === 'GET'}
-                className="w-full min-h-[200px] p-3 text-xs bg-black/30 border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono resize-y"
+                className="w-full min-h-[200px] p-3 text-xs bg-[var(--re-surface-inset)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] rounded-md font-mono resize-y"
                 style={{ opacity: selectedEndpoint.method === 'GET' ? 0.5 : 1 }}
               />
             </div>
@@ -668,7 +668,7 @@ export default function APIPlayground() {
             <Button
               onClick={sendRequest}
               disabled={loading || !apiKey}
-              className="w-full p-3 bg-[var(--re-brand)] text-white flex items-center justify-center gap-2 text-sm font-semibold rounded-md border-none"
+              className="w-full p-3 bg-[var(--re-brand)] text-[var(--re-surface-base)] flex items-center justify-center gap-2 text-sm font-semibold rounded-md border-none"
               style={{
                 cursor: loading ? 'wait' : 'pointer',
                 opacity: loading || !apiKey ? 0.6 : 1,
@@ -694,13 +694,13 @@ export default function APIPlayground() {
               )}
 
               {!response && !loading && !error && (
-                <div className="bg-white/[0.02] border border-white/[0.06] rounded-md p-6 text-center text-[var(--re-text-disabled)]">
+                <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-md p-6 text-center text-[var(--re-text-disabled)]">
                   <p>Send a request to see the response</p>
                 </div>
               )}
 
               {loading && (
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '24px', textAlign: 'center', color: 'var(--re-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '300px' }}>
+                <div style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)', borderRadius: '6px', padding: '24px', textAlign: 'center', color: 'var(--re-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '300px' }}>
                   <Loader2 size={16} className="animate-spin" style={{ color: 'var(--re-brand)' }} />
                   <span>Processing request...</span>
                 </div>
@@ -725,7 +725,7 @@ export default function APIPlayground() {
 
               {response && !loading && (
                 <>
-                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-t-md p-3 flex items-center justify-between border-b border-b-white/[0.06]">
+                  <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-t-md p-3 flex items-center justify-between border-b border-b-[var(--re-surface-border)]">
                     <div className="flex items-center gap-2">
                       <Badge className="text-[11px] font-semibold px-2 py-1" style={{
                         background: statusColor(response.status).bg,
@@ -739,13 +739,13 @@ export default function APIPlayground() {
                     </div>
                     <Button
                       onClick={copyResponse}
-                      className="px-3 py-1.5 bg-white/[0.06] border border-white/[0.06] text-[var(--re-text-primary)] flex items-center gap-1.5 text-xs rounded cursor-pointer"
+                      className="px-3 py-1.5 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] flex items-center gap-1.5 text-xs rounded cursor-pointer"
                     >
                       {copiedResponse ? <Check size={14} /> : <Copy size={14} />}
                       {copiedResponse ? 'Copied' : 'Copy'}
                     </Button>
                   </div>
-                  <div className="bg-black/30 border border-white/[0.06] rounded-b-md p-4 min-h-[300px] max-h-[500px] overflow-y-auto font-mono text-xs text-[var(--re-text-muted)] whitespace-pre-wrap break-words">
+                  <div className="bg-[var(--re-surface-inset)] border border-[var(--re-surface-border)] rounded-b-md p-4 min-h-[300px] max-h-[500px] overflow-y-auto font-mono text-xs text-[var(--re-text-muted)] whitespace-pre-wrap break-words">
                     {JSON.stringify(response.body, null, 2)}
                   </div>
                 </>

@@ -286,7 +286,7 @@ export default function CodeGenPage() {
             value={selectedOp.id}
             onChange={(e) => setSelectedOp(OPERATIONS.find(o => o.id === e.target.value) || OPERATIONS[0])}
             className="w-full px-3 py-2 rounded-md text-sm"
-            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--re-text-primary)' }}
+            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
           >
             {OPERATIONS.map(op => (
               <option key={op.id} value={op.id}>{op.method} -- {op.label}</option>
@@ -301,7 +301,7 @@ export default function CodeGenPage() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             className="w-full px-3 py-2 rounded-md text-sm font-mono"
-            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--re-text-primary)' }}
+            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
           />
         </div>
         <div>
@@ -312,16 +312,16 @@ export default function CodeGenPage() {
             value={tenantId}
             onChange={(e) => setTenantId(e.target.value)}
             className="w-full px-3 py-2 rounded-md text-sm font-mono"
-            style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--re-text-primary)' }}
+            style={{ background: 'var(--re-surface-inset)', border: '1px solid var(--re-border-default)', color: 'var(--re-text-primary)' }}
           />
         </div>
       </div>
 
       {/* Endpoint badge */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md" style={{ background: 'var(--re-surface-elevated)', border: '1px solid var(--re-surface-border)' }}>
         <span className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded" style={{
-          color: selectedOp.method === 'POST' ? '#10b981' : '#60a5fa',
-          background: selectedOp.method === 'POST' ? 'rgba(16,185,129,0.1)' : 'rgba(96,165,250,0.1)',
+          color: selectedOp.method === 'POST' ? 'var(--re-brand-light)' : 'var(--re-signal-blue)',
+          background: selectedOp.method === 'POST' ? 'var(--re-success-bg)' : 'var(--re-info-bg)',
         }}>{selectedOp.method}</span>
         <code className="text-sm font-mono" style={{ color: 'var(--re-text-primary)' }}>{selectedOp.path}</code>
       </div>

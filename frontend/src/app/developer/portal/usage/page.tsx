@@ -106,7 +106,7 @@ export default function UsagePage() {
                     {isRefreshing && (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--re-text-muted)]" aria-label="Refreshing usage" />
                     )}
-                    <div className="flex gap-1 p-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
+                    <div className="flex gap-1 p-1 rounded-md bg-[var(--re-surface-card)] border border-[var(--re-surface-border)]">
                         {(['24h', '7d', '30d'] as const).map(range => (
                             <button
                                 key={range}
@@ -115,8 +115,8 @@ export default function UsagePage() {
                                 aria-pressed={timeRange === range}
                                 className="px-3 py-1 text-xs font-medium rounded transition-colors"
                                 style={{
-                                    background: timeRange === range ? 'rgba(16,185,129,0.15)' : 'transparent',
-                                    color: timeRange === range ? 'var(--re-brand)' : 'var(--re-text-muted)',
+                                    background: timeRange === range ? 'var(--re-brand-muted)' : 'transparent',
+                                    color: timeRange === range ? 'var(--re-brand-light)' : 'var(--re-text-muted)',
                                 }}
                             >
                                 {range}
@@ -125,6 +125,19 @@ export default function UsagePage() {
                     </div>
                 </div>
             </div>
+
+            {/* Telemetry honesty: sandbox keys don't record traffic, so this page
+                can only ever show live-integration data — which is provisioned
+                during onboarding. Zeros here are expected, not a failure. */}
+            <Card style={{ background: 'var(--re-info-bg)', border: '1px solid var(--re-info-border)' }}>
+                <CardContent className="py-3">
+                    <p className="text-sm m-0" style={{ color: 'var(--re-signal-blue)' }}>
+                        Sandbox keys don&apos;t record request telemetry yet. Usage data appears here once a
+                        live <code className="font-mono">rge_live_</code> integration is enabled for your
+                        workspace during onboarding.
+                    </p>
+                </CardContent>
+            </Card>
 
             {loadFailed && (
                 <p className="text-sm text-re-danger">
@@ -137,7 +150,7 @@ export default function UsagePage() {
                 className="grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity"
                 style={{ opacity: isRefreshing ? 0.5 : 1 }}
             >
-                <Card className="bg-white/[0.02] border-white/[0.06]">
+                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
                             <Activity className="w-4 h-4 text-[var(--re-brand)]" />
@@ -146,7 +159,7 @@ export default function UsagePage() {
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{totalRequests.toLocaleString()}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-white/[0.02] border-white/[0.06]">
+                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
                             <Clock className="w-4 h-4 text-re-info" />
@@ -155,7 +168,7 @@ export default function UsagePage() {
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{avgLatency}ms</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-white/[0.02] border-white/[0.06]">
+                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
                             <AlertCircle className="w-4 h-4 text-re-danger" />
@@ -164,7 +177,7 @@ export default function UsagePage() {
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{errorRate}%</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-white/[0.02] border-white/[0.06]">
+                <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
                             <TrendingUp className="w-4 h-4 text-[var(--re-linkage)]" />
@@ -177,7 +190,7 @@ export default function UsagePage() {
 
             {/* Endpoint breakdown */}
             <Card
-                className="bg-white/[0.02] border-white/[0.06] transition-opacity"
+                className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)] transition-opacity"
                 style={{ opacity: isRefreshing ? 0.5 : 1 }}
             >
                 <CardHeader>
@@ -186,18 +199,18 @@ export default function UsagePage() {
                 <CardContent>
                     {endpoints.length === 0 ? (
                         <p className="text-sm text-center py-8 text-[var(--re-text-muted)]">
-                            No API activity in this time period. Make your first request to see usage data.
+                            No recorded requests in this time period.
                         </p>
                     ) : (
                         <div className="space-y-2">
                             {endpoints.map((ep, i) => (
-                                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded bg-black/[0.15]">
+                                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded bg-[var(--re-surface-elevated)]">
                                     <Badge
                                         variant="outline"
                                         className="font-mono text-xs w-14 justify-center"
                                         style={{
-                                            color: ep.method === 'POST' ? 'var(--re-brand)' : '#60a5fa',
-                                            borderColor: ep.method === 'POST' ? 'rgba(16,185,129,0.3)' : 'rgba(96,165,250,0.3)',
+                                            color: ep.method === 'POST' ? 'var(--re-brand-light)' : 'var(--re-signal-blue)',
+                                            borderColor: ep.method === 'POST' ? 'var(--re-success-border)' : 'var(--re-info-border)',
                                         }}
                                     >
                                         {ep.method}
@@ -205,7 +218,7 @@ export default function UsagePage() {
                                     <code className="text-xs font-mono flex-1 truncate text-[var(--re-text-primary)]">{ep.endpoint}</code>
                                     <span className="text-xs tabular-nums text-[var(--re-text-muted)]">{ep.count.toLocaleString()} req</span>
                                     <span className="text-xs tabular-nums w-16 text-right text-[var(--re-text-disabled)]">{ep.avgLatency}ms</span>
-                                    <span className="text-xs tabular-nums w-12 text-right" style={{ color: ep.errorRate > 5 ? '#f87171' : 'var(--re-text-disabled)' }}>
+                                    <span className="text-xs tabular-nums w-12 text-right" style={{ color: ep.errorRate > 5 ? 'var(--re-signal-red)' : 'var(--re-text-disabled)' }}>
                                         {ep.errorRate.toFixed(1)}%
                                     </span>
                                 </div>
