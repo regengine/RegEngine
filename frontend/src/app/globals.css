@@ -193,16 +193,7 @@ body[data-inflow-lab="true"] {
     }
 }
 
-@media (min-width: 640px) {
-    [data-inflow-lab-app] .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (min-width: 768px) {
-    [data-inflow-lab-app] .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 @media (min-width: 1024px) {
-    [data-inflow-lab-app] .lg\:items-start { align-items: flex-start; }
     [data-inflow-lab-app] .lg\:grid-cols-\[minmax\(0\,1fr\)_420px\],
     [data-inflow-lab-app] section:first-of-type > div {
         grid-template-columns: minmax(0, 1fr) 420px;
