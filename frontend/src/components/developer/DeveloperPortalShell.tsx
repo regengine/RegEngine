@@ -8,10 +8,18 @@ import {
     LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
     ShieldCheck, Terminal, Code2, Webhook, Package,
     AlertCircle, ChevronDown, ChevronRight, Zap,
-    FileText,
+    FileText, ArrowLeft, ArrowUpRight,
 } from 'lucide-react';
 
-const NAV_SECTIONS = [
+interface PortalNavItem {
+    label: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    /** Leaves the portal shell for the shared public docs chrome. */
+    external?: boolean;
+}
+
+const NAV_SECTIONS: { label: string; items: PortalNavItem[] }[] = [
     {
         label: 'Overview',
         items: [
@@ -23,13 +31,13 @@ const NAV_SECTIONS = [
     {
         label: 'Documentation',
         items: [
-            { label: 'Quickstart', href: '/docs', icon: Zap },
-            { label: 'API Reference', href: '/docs/api', icon: BookOpen },
-            { label: 'Authentication', href: '/docs/authentication', icon: ShieldCheck },
-            { label: 'Error Codes', href: '/docs/errors', icon: AlertCircle },
-            { label: 'Webhooks', href: '/docs/webhooks', icon: Webhook },
-            { label: 'SDKs & Libraries', href: '/docs/sdks', icon: Package },
-            { label: 'Changelog', href: '/docs/changelog', icon: FileText },
+            { label: 'Quickstart', href: '/docs', icon: Zap, external: true },
+            { label: 'API Reference', href: '/docs/api', icon: BookOpen, external: true },
+            { label: 'Authentication', href: '/docs/authentication', icon: ShieldCheck, external: true },
+            { label: 'Error Codes', href: '/docs/errors', icon: AlertCircle, external: true },
+            { label: 'Webhooks', href: '/docs/webhooks', icon: Webhook, external: true },
+            { label: 'SDKs & Libraries', href: '/docs/sdks', icon: Package, external: true },
+            { label: 'Changelog', href: '/docs/changelog', icon: FileText, external: true },
         ],
     },
     {
@@ -70,17 +78,28 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
     }
 
     return (
-        <div className="min-h-screen flex re-app-shell">
-            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] shadow-sm">
-                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline border-b border-[var(--re-border-subtle)]">
-                    <div className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]">
-                        <ShieldCheck className="w-4 h-4 text-[var(--re-brand)]" />
-                    </div>
-                    <div>
-                        <span className="font-semibold text-sm block text-[var(--re-text-primary)]">RegEngine</span>
-                        <span className="text-[10px] font-medium text-[var(--re-text-disabled)]">Developer Portal</span>
-                    </div>
-                </Link>
+        <div className="re-devportal min-h-screen flex">
+            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
+                {/* Badge sits OUTSIDE the logo link so the link's accessible
+                    name stays "RegEngine developer portal" — the badge is a
+                    status indicator, not link text. */}
+                <div className="p-4 flex items-center gap-2.5 border-b border-[var(--re-border-subtle)]">
+                    <Link href="/developer/portal" className="flex-1 min-w-0 flex items-center gap-2.5 no-underline">
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center border border-[var(--re-surface-border)] bg-[var(--re-brand-muted)]">
+                            <Terminal className="w-4 h-4 text-[var(--re-brand-light)]" />
+                        </div>
+                        <div className="min-w-0">
+                            <span className="font-semibold text-sm block text-[var(--re-text-primary)]">RegEngine</span>
+                            <span className="font-mono text-[10px] tracking-wide text-[var(--re-brand-light)]">developer portal</span>
+                        </div>
+                    </Link>
+                    <span
+                        className="font-mono text-[10px] font-semibold tracking-widest px-1.5 py-0.5 rounded border"
+                        style={{ color: 'var(--re-warning)', borderColor: 'var(--re-warning-border)', background: 'var(--re-warning-bg)' }}
+                    >
+                        SANDBOX
+                    </span>
+                </div>
 
                 <nav className="flex-1 overflow-y-auto py-3 px-2">
                     {NAV_SECTIONS.map((section) => {
@@ -91,7 +110,7 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                                     type="button"
                                     onClick={() => toggleSection(section.label)}
                                     aria-expanded={!isCollapsed}
-                                    className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-md"
+                                    className="w-full flex items-center justify-between px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-widest rounded-md"
                                     style={{ color: 'var(--re-text-disabled)' }}
                                 >
                                     {section.label}
@@ -108,18 +127,26 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                                                 <Link
                                                     key={item.href}
                                                     href={item.href}
+                                                    aria-current={active ? 'page' : undefined}
                                                     className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-all no-underline"
                                                     style={{
-                                                        color: active ? '#fff' : 'var(--re-text-muted)',
-                                                        background: active ? 'var(--re-brand)' : 'transparent',
-                                                        fontWeight: active ? 500 : 400,
+                                                        color: active ? 'var(--re-brand-light)' : 'var(--re-text-muted)',
+                                                        background: active ? 'var(--re-brand-muted)' : 'transparent',
+                                                        boxShadow: active ? 'inset 2px 0 0 var(--re-brand)' : 'none',
+                                                        fontWeight: active ? 600 : 400,
                                                     }}
                                                 >
                                                     <item.icon className="w-3.5 h-3.5 flex-shrink-0" style={{
-                                                        color: active ? '#fff' : 'var(--re-text-disabled)',
+                                                        color: active ? 'var(--re-brand-light)' : 'var(--re-text-disabled)',
                                                     }} />
                                                     {item.label}
-                                                    {active && <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: '#fff' }} />}
+                                                    {item.external && (
+                                                        <>
+                                                            {/* Same-tab navigation out of the portal chrome — say so for AT users */}
+                                                            <span className="sr-only">(opens documentation)</span>
+                                                            <ArrowUpRight className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: 'var(--re-text-disabled)' }} />
+                                                        </>
+                                                    )}
                                                 </Link>
                                             );
                                         })}
@@ -138,6 +165,14 @@ export function DeveloperPortalShell({ children }: { children: React.ReactNode }
                         <div className="w-1.5 h-1.5 rounded-full bg-re-success" />
                         Service updates available through support
                     </div>
+                    <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-[var(--re-brand-muted)] no-underline"
+                        style={{ color: 'var(--re-text-muted)' }}
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        Back to console
+                    </Link>
                     <button
                         type="button"
                         onClick={handleLogout}

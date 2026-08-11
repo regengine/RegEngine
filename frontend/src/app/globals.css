@@ -1745,3 +1745,104 @@ body,
         transform: none !important;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Developer Portal — committed dark developer identity
+   ═══════════════════════════════════════════════════════════ */
+
+/* The portal keeps its own dark, terminal-adjacent chrome regardless of the
+   app's light/dark preference — the visual signal that you've left the
+   compliance console and entered the API surface. Every token the portal
+   pages consume is redefined here, on the shell wrapper, so the values win
+   over both `:root` and `.dark` by DOM proximity and nothing leaks out.
+
+   Forced high contrast is a user's accessibility choice and outranks the
+   committed look, so the whole block is gated on :not(.a11y-high-contrast):
+   in that mode none of these tokens apply and the portal inherits the
+   user's forced scheme wholesale. Gating beats a token-by-token `inherit`
+   escape hatch because it cannot drift when tokens are added here. */
+html:not(.a11y-high-contrast) .re-devportal {
+    color-scheme: dark;
+
+    /* shadcn primitives (Card, Button, Input, Badge inside the portal) */
+    --background: 214 40% 6%;
+    --foreground: 210 40% 96%;
+    --card: 218 41% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 218 41% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 166 91% 5%;
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 214 21% 68%;
+    --accent: 160 84% 39%;
+    --accent-foreground: 166 91% 5%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 34% 19%;
+    --input: 217 34% 23%;
+    --ring: 160 84% 39%;
+
+    /* Brand: the API accent. Bright enough to read as text on the dark base
+       (7.1:1) and dark text on a brand fill clears 8:1 — unlike the app's
+       ink-colored `--re-brand`, which vanishes on dark surfaces. */
+    --re-brand: #10b981;
+    --re-brand-dark: #059669;
+    --re-brand-light: #34d399;
+    --re-brand-muted: rgba(16, 185, 129, 0.12);
+
+    --re-signal-red: #f87171;
+    --re-signal-yellow: #fbbf24;
+    --re-signal-green: #34d399;
+    --re-signal-blue: #60a5fa;
+
+    --re-surface-base: #090e15;
+    --re-surface-card: #101826;
+    --re-surface-border: #1e2b40;
+    --re-surface-elevated: #0d1420;
+    --re-surface-overlay: #090e15f2;
+    --re-sticky-bg: #090e15f2;
+    /* Inset wells (inputs, revealed keys) — darker than the page base so form
+       fields read as fields rather than holes in the card they sit on. */
+    --re-surface-inset: #05080d;
+    /* Pillar token consumed by the usage page; :root's #475569 is invisible here. */
+    --re-linkage: #93a4b8;
+
+    --re-text-primary: #f1f5f9;
+    --re-text-secondary: #dbe4ee;
+    --re-text-tertiary: #b9c5d4;
+    --re-text-muted: #93a4b8;
+    /* #7d8fa6 clears WCAG AA (4.5:1) on all three portal surfaces — a darker
+       value fails on --re-surface-elevated/-card even though it passes on base. */
+    --re-text-disabled: #7d8fa6;
+
+    --re-border-default: #24344d;
+    --re-border-subtle: #16202f;
+    --re-border-strong: #35496a;
+
+    --re-success: #34d399;
+    --re-success-muted: rgba(52, 211, 153, 0.14);
+    --re-success-bg: rgba(52, 211, 153, 0.07);
+    --re-success-border: rgba(52, 211, 153, 0.25);
+    --re-warning: #fbbf24;
+    --re-warning-muted: rgba(251, 191, 36, 0.14);
+    --re-warning-bg: rgba(251, 191, 36, 0.07);
+    --re-warning-border: rgba(251, 191, 36, 0.3);
+    --re-danger: #f87171;
+    --re-danger-muted: rgba(248, 113, 113, 0.14);
+    --re-danger-bg: rgba(248, 113, 113, 0.08);
+    --re-danger-border: rgba(248, 113, 113, 0.3);
+    --re-info: #60a5fa;
+    --re-info-muted: rgba(96, 165, 250, 0.14);
+    --re-info-bg: rgba(96, 165, 250, 0.08);
+    --re-info-border: rgba(96, 165, 250, 0.3);
+
+    color: var(--re-text-primary);
+    /* Fine dot grid — deliberately different from the app shell's 48px line
+       grid so the two surfaces never read as the same place. */
+    background:
+        radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1.5px) 0 0 / 26px 26px,
+        var(--re-surface-base);
+}
