@@ -34,9 +34,7 @@ export default function ApiKeysPage() {
     const [error, setError] = useState<string | null>(null);
 
     const loadKeys = useCallback(async () => {
-        // Wait for auth hydration before deciding anything — the server
-        // layout only checks cookie *presence*, so a stale cookie reaches
-        // this page and only the client knows whether a session exists.
+        // The server verifies Supabase auth; hydration supplies the client profile.
         if (!isHydrated) return;
         if (!authUser) {
             setIsLoading(false);
