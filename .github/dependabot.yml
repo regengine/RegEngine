@@ -35,6 +35,18 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
+      # Majors that cannot go green on this toolchain yet. Remove an entry once
+      # its blocker below clears, then let CI judge the upgrade on its own.
+      #   eslint 10   — eslint-config-next 16.2.12 calls the pre-10 scope-manager
+      #                 API (scopeManager.addGlobals); `eslint .` crashes outright.
+      #   jsdom 30    — requires Node >=22.22.2; CI runs Node 20.
+      #   jest-dom 7  — requires Node >=22 and a new @testing-library/dom peer.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/jest-dom"
+        update-types: ["version-update:semver-major"]
 
   # Python services — security-critical packages get solo PRs (no group entry
   # means Dependabot opens one PR per package). Dev/test tooling is grouped to
