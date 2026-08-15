@@ -5,7 +5,7 @@
 # Core Framework
 fastapi>=0.127.0
 uvicorn[standard]>=0.27.0
-sqlalchemy>=2.0.25
+sqlalchemy>=2.0.51
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
 # Pin it explicitly so pip-compile always emits a hash — otherwise --require-hashes
 # rejects the build on Railway. See build failure on #1823 / #1842.
