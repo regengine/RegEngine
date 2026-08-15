@@ -379,11 +379,11 @@ export default function IngestPage() {
                         API Key Required
                       </p>
                       <p className="text-sm text-re-warning dark:text-re-warning mt-1">
-                        You need an API key to ingest documents. Complete the setup wizard to get started.
+                        You need an API key to ingest documents. Generate a sandbox key in the developer portal to continue with dev and test ingestion.
                       </p>
-                      <Link href="/onboarding">
+                      <Link href="/developer/portal/keys">
                         <Button size="sm" variant="outline" className="mt-3">
-                          Go to Setup
+                          Generate Sandbox Key
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </Link>
