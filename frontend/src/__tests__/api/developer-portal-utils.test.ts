@@ -113,7 +113,9 @@ describe('getDeveloperPortalContext', () => {
         const context = await getDeveloperPortalContext(makeRequest());
 
         expect('response' in context).toBe(true);
-        if (!('response' in context)) {
+        // `in` alone stopped proving the property is defined after the
+        // TypeScript bump in #2773; check the value, not just the key.
+        if (!('response' in context) || !context.response) {
             throw new Error('Expected authentication response, received developer context');
         }
         expect(context.response.status).toBe(401);
@@ -154,7 +156,9 @@ describe('getDeveloperPortalContext', () => {
         const context = await getDeveloperPortalContext(makeRequest());
 
         expect('response' in context).toBe(true);
-        if (!('response' in context)) {
+        // `in` alone stopped proving the property is defined after the
+        // TypeScript bump in #2773; check the value, not just the key.
+        if (!('response' in context) || !context.response) {
             throw new Error('Expected failure response, received developer context');
         }
         expect(context.response.status).toBe(502);
