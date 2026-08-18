@@ -41,6 +41,7 @@ legacy-code-scan.yml
 openapi-public-spec.yml
 pr-gate.yml
 pr-quality.yml
+production-uptime.yml
 proxy-smoke.yml
 public-api-surface.yml
 qa-health.yml
