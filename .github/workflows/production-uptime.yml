@@ -50,12 +50,22 @@ jobs:
         run: |
           set -uo pipefail
 
-          # Three attempts spaced 10s apart, and a path is only counted as down
-          # when EVERY attempt fails. Single-request blips are common enough
-          # against this host that alerting on one would train everyone to
-          # ignore the alert — which is the same outcome as having none.
+          # Each probe is "path|forbidden-regex". A 200 is necessary but NOT
+          # always sufficient: /api/inflow-lab/* is a Next.js proxy that
+          # deliberately DEGRADES to HTTP 200 with {"offline":true} when the
+          # Inflow Lab backend is unreachable — see optionalOfflineResponse in
+          # frontend/src/app/api/inflow-lab/[...path]/route.ts, which fires for
+          # GET on the health/status/records contracts. Probing status alone
+          # would report a healthy site while its backend was gone: exactly the
+          # silent failure this workflow exists to catch. Caught in review of
+          # this file by the Vercel review bot before it ever ran.
+          PROBES=(
+            "/|"
+            '/api/inflow-lab/api/healthz|"offline"[[:space:]]*:[[:space:]]*true'
+          )
+
           probe_path() {
-            local path="$1" code="" body="" bodyfile
+            local path="$1" forbidden="$2" code="" body="" bodyfile degraded=0
             bodyfile=$(mktemp)
             for attempt in 1 2 3; do
               # Truncate first: a connection-level failure never writes the file,
@@ -67,23 +77,34 @@ jobs:
               code=$(curl -sS --max-time 20 -o "$bodyfile" -w '%{http_code}' "${BASE_URL}${path}" || true)
               code="${code:-000}"
               if [ "$code" = "200" ]; then
-                rm -f "$bodyfile"
-                echo "OK ${path} (attempt ${attempt})"
-                return 0
+                if [ -z "$forbidden" ] || ! grep -Eq "$forbidden" "$bodyfile"; then
+                  rm -f "$bodyfile"
+                  echo "OK ${path} (attempt ${attempt})"
+                  return 0
+                fi
+                # 200 but self-reported degraded. Keep retrying: a brief upstream
+                # flap should not page anyone.
+                degraded=1
+              else
+                degraded=0
               fi
               sleep 10
             done
             body=$(head -c 200 "$bodyfile" 2>/dev/null | tr '\n' ' ' | tr -s ' ')
             rm -f "$bodyfile"
-            echo "DOWN ${path} last_status=${code} body=${body:-(empty)}"
+            if [ "$degraded" = "1" ]; then
+              echo "DEGRADED ${path} status=200 but the proxy reports its backend offline body=${body:-(empty)}"
+            else
+              echo "DOWN ${path} last_status=${code} body=${body:-(empty)}"
+            fi
             return 1
           }
 
           failures=""
-          # The marketing root and the dashboard's Inflow Lab backend proxy:
-          # the proxy can fail while the site serves, so both are probed.
-          for path in "/" "/api/inflow-lab/api/healthz"; do
-            if ! out=$(probe_path "$path"); then
+          for spec in "${PROBES[@]}"; do
+            probe_target="${spec%%|*}"
+            probe_forbidden="${spec#*|}"
+            if ! out=$(probe_path "$probe_target" "$probe_forbidden"); then
               failures="${failures}${out}"$'\n'
             fi
             echo "$out"
@@ -102,7 +123,7 @@ jobs:
           fi
 
           echo "failed=false" >> "$GITHUB_OUTPUT"
-          echo "All probes returned 200."
+          echo "All probes returned 200 and none reported a degraded backend."
 
       - name: Open or update the outage issue
         if: failure()
