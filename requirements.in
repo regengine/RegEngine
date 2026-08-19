@@ -3,7 +3,32 @@
 # Per-service requirements.txt files are DEPRECATED — this file covers all services.
 
 # Core Framework
-fastapi>=0.141.1
+# Capped below 0.137 deliberately. 0.137 changed how `include_router` records
+# sub-routers: they stay on `app.routes` as `_IncludedRouter` objects (defined
+# in fastapi/routing.py, nothing to do with the starlette version) instead of
+# being flattened into `APIRoute`s. Bisected: 0.136.0 has no occurrences of that
+# class, 0.137.0 has 14.
+#
+# Two consequences, and the second is the serious one.
+#
+# Anything that walks `app.routes` stops seeing endpoints. That silently blinds
+# `tests/security/test_auth_coverage.py::test_all_endpoints_require_auth`,
+# which proves every endpoint requires auth *by enumerating routes* — under
+# 0.141 it finds nothing to police and passes vacuously instead of failing
+# loudly.
+#
+# And `prometheus-fastapi-instrumentator` 7.1.0 — the version this repo
+# actually ships — reads `.path` off every entry in `app.routes`, so it raises
+# `AttributeError: '_IncludedRouter' object has no attribute 'path'` inside
+# middleware on real requests. That is a 500 on production traffic, not a test
+# artifact: 93 repo-root tests fail this way. Its 8.x line handles the new
+# shape but requires starlette>=1.0.0, pulling a second major upgrade along.
+#
+# So the bump is a three-package migration (fastapi, prometheus-fastapi-
+# instrumentator, starlette) plus repairing the route-introspection helpers and
+# re-proving the security guards still bite. That belongs in its own PR, not in
+# a lockfile resync. 0.136.0 is the version currently serving production.
+fastapi>=0.136.0,<0.137
 uvicorn[standard]>=0.52.1
 sqlalchemy>=2.0.25
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
@@ -21,7 +46,30 @@ PyYAML>=6.0.3
 gunicorn>=26.0.0
 
 # Database & Storage
-alembic>=1.13.0
+# Capped below 1.19 deliberately. 1.19 compares CHECK constraints during
+# autogenerate, which 1.18 did not, and `alembic check` in the repo-root
+# RLS/isolation gate then reports drift on constraints that are not drift.
+#
+# Most of this schema (fsma.*, canonical/CTE persistence, RLS infrastructure)
+# is raw-SQL-managed and has NO ORM model by design. alembic/env.py's
+# `include_object` already encodes that one-directional contract — objects that
+# exist in the database with no ORM counterpart are ignored rather than
+# proposed for DROP — but it only spells that out for `table` and `index`.
+# Under 1.19 every raw-SQL CHECK constraint falls outside the filter and comes
+# back as a remove_constraint proposal: ~30 of them, on auth_challenges,
+# organizations, webauthn_challenges, fsma.agent_artifacts,
+# fsma.ingestion_run_receipts and more.
+#
+# Verified rather than assumed: this gate passes on main at alembic 1.18.4 and
+# fails on 1.19.1 with the identical schema, so the schema did not move.
+#
+# Lifting the cap is a small, real change — extend `include_object` to cover
+# `check_constraint` under the same `reflected and compare_to is None` rule
+# already applied to tables and indexes, then confirm the gate still catches
+# genuine ORM-side constraint drift rather than going quiet. That deserves its
+# own PR; widening a drift detector's blind spot inside a lockfile resync is
+# exactly the kind of change that should not pass unnoticed.
+alembic>=1.13.0,<1.19
 psycopg[binary]>=3.3.4
 psycopg2-binary>=2.9.12
 asyncpg>=0.31.0
