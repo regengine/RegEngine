@@ -23,8 +23,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.build_info import current_build_info  # noqa: E402
 
-SHA = "1234567890abcdef1234567890abcdef12345678"
-OTHER_SHA = "fedcba0987654321fedcba0987654321fedcba09"
+# Full-length git object ids, not credentials. They are 40 hex characters
+# because that is what the code under test parses — `_looks_like_sha` accepts
+# 7 to 64, and a short fixture would not exercise the real shape. detect-secrets
+# scores any long hex run as high entropy, so the false positive is marked
+# rather than dodged by splicing the literals into pieces, which would only
+# hide them from the scanner and from the next reader too.
+SHA = "1234567890abcdef1234567890abcdef12345678"  # pragma: allowlist secret — fake commit id
+OTHER_SHA = "fedcba0987654321fedcba0987654321fedcba09"  # pragma: allowlist secret — fake commit id
 
 ALL_SOURCES = (
     "REGENGINE_BUILD_SHA",
