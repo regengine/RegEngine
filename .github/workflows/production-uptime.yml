@@ -1,11 +1,14 @@
 name: Production Uptime
 
 # regengine.co was down for 45+ minutes on 2026-08-18 (Vercel
-# DEPLOYMENT_PAUSED) and nothing reported it. Every scheduled workflow in this
-# repo checks *code*; the only production probe, Demo Smoke, is
-# workflow_dispatch-only. The mock demo in regengine/inflow-lab had nightly
-# smoke plus auto-filed issues, so the demo was better monitored than the
-# product.
+# DEPLOYMENT_PAUSED) and nothing reported it.
+#
+# An earlier revision of this comment claimed no scheduled workflow probed
+# production. That was wrong: public-api-surface.yml runs nightly at 06:30 UTC
+# against regengine.co. What it lacks is an alert — `permissions: contents:
+# read`, no issue on failure — and a nightly cadence means up to 24 hours of
+# silence. Detection at minutes-scale, and an alert someone actually receives,
+# are the two things that were genuinely missing.
 #
 # This is deliberately NOT Demo Smoke on a timer. Demo Smoke is a deep
 # Playwright run needing API-key secrets and ~15 minutes; a credential rotation
@@ -59,8 +62,27 @@ jobs:
           # would report a healthy site while its backend was gone: exactly the
           # silent failure this workflow exists to catch. Caught in review of
           # this file by the Vercel review bot before it ever ran.
+          #
+          # Probe selection matters more than probe count. `/` is a statically
+          # prerendered page served from the CDN — it returns 200 with every
+          # serverless function and every backend dead, so on its own it proves
+          # only that the deployment exists. `/api/inflow-lab/*` reaches the
+          # Inflow Lab demo's Railway service, not the product backend.
+          # `/api/health` is the one that covers the product: it is
+          # `force-dynamic`, so it fails outright if functions are not serving,
+          # and it returns 503 unless every configured backend answers
+          # (frontend/src/app/api/health/route.ts).
+          #
+          # Known limit, stated rather than papered over: a service whose URL is
+          # unset reports `not_configured` and is excluded from the tally, so a
+          # 200 here means "every backend that is configured answers", not
+          # "every backend exists". Alerting on `not_configured` would page on
+          # deployments that legitimately omit a service, and a probe that cries
+          # wolf gets muted — which is how monitoring dies. Configuration drift
+          # belongs to the deploy gate, not the uptime probe.
           PROBES=(
             "/|"
+            "/api/health|"
             '/api/inflow-lab/api/healthz|"offline"[[:space:]]*:[[:space:]]*true'
           )
 

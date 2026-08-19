@@ -30,6 +30,7 @@
 
 [workflows]
 agent-sweep.yml
+api-surface-issue.yml
 backend-ci.yml
 bundle-analysis.yml
 demo-smoke.yml

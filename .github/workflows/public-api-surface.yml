@@ -3,6 +3,18 @@ name: Public API Surface Probe
 # Outside-in check that the documented public API surface actually answers
 # from the internet the way the docs promise. Probes production; runs on a
 # schedule (not as a PR gate) because it tests the deployed site, not the PR.
+#
+# This is the only scheduled job in the repo that proves the Railway backend
+# answers through regengine.co — /api/v1/records, /api/v1/fda/* and
+# /api/v1/webhooks/* are all next.config.js rewrites to the ingestion service.
+# For a long time it had no way to say so: `permissions: contents: read`, no
+# failure handler, so a red run existed only on a tab nobody opens. That is
+# precisely how Remote Smoke in regengine/inflow-lab failed 100 consecutive
+# times unnoticed. It now files an issue on failure and closes it on recovery.
+#
+# Nightly cadence is deliberate and unchanged: this probe is comparatively
+# expensive and its job is surface *correctness*, not liveness. Minutes-scale
+# liveness belongs to production-uptime.yml.
 
 on:
   workflow_dispatch:
@@ -31,3 +43,26 @@ jobs:
 
       - name: Probe documented public endpoints from outside
         run: node scripts/check_public_api_surface.mjs
+
+  # Both edges, so the issue's open/closed state means something. See
+  # .github/workflows/api-surface-issue.yml.
+  report-failure:
+    needs: probe
+    if: failure()
+    uses: ./.github/workflows/api-surface-issue.yml
+    permissions:
+      contents: read
+      issues: write
+    with:
+      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  report-recovery:
+    needs: probe
+    if: success()
+    uses: ./.github/workflows/api-surface-issue.yml
+    permissions:
+      contents: read
+      issues: write
+    with:
+      run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      resolved: true
