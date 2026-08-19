@@ -1,0 +1,141 @@
+name: API Surface Issue
+
+# Alert plumbing for public-api-surface.yml, with both edges: file on failure,
+# close on recovery.
+#
+# Both edges, not just the first, because an alert that only ever fires stops
+# carrying information. Once a tracker is open, the lookup below — scoped to
+# `state: 'open'` — routes every later failure into that same thread, so a
+# stale tracker from a resolved incident absorbs the next genuine outage as one
+# more comment nobody is notified about. regengine/inflow-lab learned this the
+# expensive way: Remote Smoke failed 100 consecutive times against one aged
+# thread and nothing happened.
+
+on:
+  workflow_call:
+    inputs:
+      run_url:
+        description: URL of the workflow run
+        required: true
+        type: string
+      resolved:
+        description: >-
+          Set true from a passing run to close the tracker instead of opening
+          one. Callers wire this as a second job with `if: success()`.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Close the tracker on recovery
+        if: inputs.resolved
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          RUN_URL: ${{ inputs.run_url }}
+        with:
+          script: |
+            // Match on an invisible marker, not the title, so retitling by hand
+            // does not orphan the thread and spawn a duplicate.
+            const MARKER = '<!-- public-api-surface-tracker -->';
+            const runUrl = process.env.RUN_URL;
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            // Close every match, not just the first: duplicates predating this
+            // edge would otherwise keep the stale-tracker problem alive.
+            const trackers = existing.filter(
+              (issue) => !issue.pull_request && (issue.body || '').includes(MARKER),
+            );
+
+            if (trackers.length === 0) {
+              core.info('No open public API surface tracker to close.');
+              return;
+            }
+
+            for (const tracker of trackers) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: tracker.number,
+                body: `**The public API surface is answering again.** Verified by ${runUrl}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: tracker.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              core.notice(`Closed recovered API surface tracker #${tracker.number}`);
+            }
+
+      - name: Open or update the failure issue
+        if: ${{ !inputs.resolved }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          RUN_URL: ${{ inputs.run_url }}
+        with:
+          script: |
+            const MARKER = '<!-- public-api-surface-tracker -->';
+            const runUrl = process.env.RUN_URL;
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const tracker = existing.find(
+              (issue) => !issue.pull_request && (issue.body || '').includes(MARKER),
+            );
+
+            const detail = [
+              '**The documented public API surface is not answering as promised.**',
+              '',
+              `- Failing run: ${runUrl}`,
+              `- Commit under test: \`${context.sha}\``,
+              '',
+              'This probe is the only scheduled check that proves the Railway backend',
+              'answers through `regengine.co`. `/api/v1/records`, `/api/v1/fda/*` and',
+              '`/api/v1/webhooks/*` are `next.config.js` rewrites to the ingestion',
+              'service, so a failure here is one of:',
+              '',
+              '- the backend is down or not reachable from the edge;',
+              '- a rewrite was dropped or repointed, and the edge is now answering 404;',
+              '- auth changed shape, so a documented endpoint no longer returns the',
+              '  401 JSON the probe expects.',
+              '',
+              'The run log names the failing endpoint and what it returned.',
+            ].join('\n');
+
+            if (tracker) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: tracker.number,
+                body: detail,
+              });
+              core.notice(`Commented on existing API surface issue #${tracker.number}`);
+              return;
+            }
+
+            const created = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Public API surface is not answering as documented',
+              body: `${MARKER}\n\n${detail}\n\nThis issue is reused for subsequent failures and closes itself once the probe passes again.`,
+            });
+            core.notice(`Opened API surface issue #${created.data.number}`);

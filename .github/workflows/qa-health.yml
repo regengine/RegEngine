@@ -19,8 +19,22 @@ name: QA Health Summary
 # signal that the real "PR Gate: *" checks do not already provide — while
 # being one of the most expensive jobs in the repo. Its full-suite cost on
 # every PR push was a material contributor to exhausting the org's Actions
-# budget on 2026-08-03. The artifact tracks default-branch health, which is
-# what the sysadmin dashboard actually reports.
+# budget on 2026-08-03. The artifact tracks default-branch health.
+#
+# It does NOT reach the dashboard. This job uploads a GitHub Actions artifact;
+# nothing downloads it at runtime. `services/admin/app/qa_health.py` reads
+# `qa/qa-health/latest.json`, a file checked into the repo and baked into the
+# image by `Dockerfile`, which no workflow writes — and `qa/**` is not in
+# `deploy.yml`'s path filter, so even committing a refresh by hand ships no
+# redeploy. An earlier version of this comment claimed the artifact was "what
+# the sysadmin dashboard actually reports"; it never was.
+#
+# Production consequently served a snapshot frozen at 2026-07-23 labelled
+# "Latest CI artifact". The loader now refuses to present an artifact older
+# than QA_HEALTH_MAX_AGE_DAYS as current, so the stale file reads as
+# `unavailable` rather than as month-old results stated with confidence.
+# Closing the loop properly means publishing this artifact somewhere the
+# service can read at runtime.
 on:
   workflow_dispatch:
   push:

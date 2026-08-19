@@ -67,12 +67,20 @@ def health() -> dict[str, object]:
     # cross-deploy contract skew instead of failing silently on live posts.
     from .webhook_models import INFLOW_CONTRACT_VERSION
 
+    # Which commit is answering. Without this, a rollout that fails its
+    # healthcheck and reverts under railway.toml's ON_FAILURE restart policy
+    # is invisible: the deploy workflow has already gone green and every probe
+    # afterwards asserts behaviour an old image satisfies perfectly. This is
+    # the field deploy.yml's post-deploy check compares against github.sha.
+    from shared.build_info import current_build_info
+
     return {
         "status": overall_status,
         "service": "regengine",
         "kafka": kafka_status,
         "webhook_hmac_configured": hmac_configured,
         "inflow_contract_version": INFLOW_CONTRACT_VERSION,
+        "build": current_build_info().public_dict(),
     }
 
 

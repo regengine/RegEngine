@@ -454,6 +454,38 @@ class TestEvents:
         assert params["lim"] == 25
         assert params["off"] == 50
 
+    def test_order_by_carries_a_unique_tiebreaker(self):
+        """OFFSET pagination over a non-unique sort key silently loses rows.
+
+        ``event_timestamp`` is indexed but not unique, and ties are routine:
+        ``csv_templates._parse_date_flexible`` stamps unparseable dates with
+        the epoch sentinel, and both the supplier portal and the Sensitech
+        parser normalise date-only values to midnight. Each page of a
+        LIMIT/OFFSET scan is planned independently, so tied rows can be
+        returned twice or never at all — an evidence set that reports itself
+        complete while being short. ``event_id`` is the primary key, so its
+        presence in the ORDER BY is what makes the total order deterministic.
+
+        Proven against a live cluster in
+        ``test_auditor_pagination_ties_pg.py``; this asserts the SQL shape so
+        a regression fails in CI, which has no Postgres.
+        """
+        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
+        client = _build_client(_make_principal(), session)
+        resp = client.get("/api/v1/audit/events?limit=25&offset=50")
+        assert resp.status_code == 200
+
+        sql = session.calls[-1][0]
+        order_by = re.search(
+            r"ORDER BY (.+?) LIMIT", sql, re.IGNORECASE
+        )
+        assert order_by, f"audit_events emitted no ORDER BY before LIMIT: {sql}"
+        keys = [key.strip() for key in order_by.group(1).split(",")]
+        assert keys[0].lower().startswith("e.event_timestamp"), keys
+        assert any(
+            key.lower().startswith("e.event_id") for key in keys[1:]
+        ), f"ORDER BY has no unique tiebreaker after event_timestamp: {keys}"
+
     def test_null_timestamp_and_quantity_handled(self):
         """Defensive: missing timestamps and quantities don't crash
         the response assembly."""
