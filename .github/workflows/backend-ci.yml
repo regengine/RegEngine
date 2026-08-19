@@ -585,7 +585,7 @@ jobs:
             -q --no-cov \
             ${{ steps.ignores.outputs.flags }}
 
-      - name: Run remediation integration suite (RLS enforced end-to-end)
+      - name: Run migrated-Postgres integration suites (RLS + pagination)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379/0
@@ -607,7 +607,17 @@ jobs:
           # Single-process on purpose: the session-scoped engines in
           # tests/remediation/conftest.py do role creation + grants that
           # would race under xdist workers.
-          pytest services/ingestion/tests/remediation -v --no-cov
+          #
+          # ``test_auditor_pagination_ties_pg.py`` rides along because this
+          # is the only step with an alembic-head database: it walks every
+          # page of a wholly tied event block through the real auditor
+          # router and asserts each row comes back exactly once. It skips
+          # in the unmigrated main suite step above, and REGENGINE_REQUIRE_DB
+          # keeps that skip from happening here.
+          pytest \
+            services/ingestion/tests/remediation \
+            services/ingestion/tests/test_auditor_pagination_ties_pg.py \
+            -v --no-cov
 
   # ── Docker Build (consolidated monolith) ─────────────────
   # Production deploys a single consolidated monolith built from the
