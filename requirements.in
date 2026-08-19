@@ -3,7 +3,7 @@
 # Per-service requirements.txt files are DEPRECATED — this file covers all services.
 
 # Core Framework
-fastapi>=0.127.0
+fastapi>=0.141.1
 uvicorn[standard]>=0.52.1
 sqlalchemy>=2.0.25
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
