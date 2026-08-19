@@ -70,6 +70,14 @@ COPY qa/qa-health /app/qa/qa-health
 # Copy monolith entry point
 COPY server /app/server
 
+# Build identity. The deploy pipeline overwrites this with the commit it is
+# shipping immediately before `railway up`; the committed placeholder is the
+# literal string "unknown", which build_info rejects as a non-SHA and reports
+# as absent. A committed real SHA would be worse than nothing — it would go
+# stale and lie. .dockerignore excludes .git, so this file is the only way
+# identity reaches the image.
+COPY build-sha.txt /app/build-sha.txt
+
 # Set PYTHONPATH so all service imports resolve
 ENV PYTHONPATH=/app:/app/services:/app/services/ingestion:/app/services/admin:/app/services/graph:/app/services/nlp:/app/services/compliance
 

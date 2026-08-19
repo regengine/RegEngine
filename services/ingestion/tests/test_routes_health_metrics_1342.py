@@ -155,7 +155,13 @@ class TestHealthKafkaUnconfigured:
     def test_empty_env_returns_healthy_and_not_configured(self, monkeypatch):
         monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "")
         result = health()
-        assert result == {
+        # ``build`` is compared separately: its contents depend on the
+        # environment, but its *presence* is a contract — deploy.yml's
+        # post-deploy check reads build.commit_sha off this payload to prove
+        # the rollout it just shipped is the one actually serving.
+        assert "build" in result
+        assert "commit_sha" in result["build"]
+        assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "healthy",
             "service": "regengine",
             "kafka": "not_configured",
@@ -200,7 +206,13 @@ class TestHealthKafkaAvailable:
         _kafka_health_result.update({"status": "available", "error": None})
 
         result = health()
-        assert result == {
+        # ``build`` is compared separately: its contents depend on the
+        # environment, but its *presence* is a contract — deploy.yml's
+        # post-deploy check reads build.commit_sha off this payload to prove
+        # the rollout it just shipped is the one actually serving.
+        assert "build" in result
+        assert "commit_sha" in result["build"]
+        assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "healthy",
             "service": "regengine",
             "kafka": "available",
@@ -236,7 +248,13 @@ class TestHealthKafkaUnavailable:
         _kafka_health_result.update({"status": "unavailable", "error": "timeout"})
 
         result = health()
-        assert result == {
+        # ``build`` is compared separately: its contents depend on the
+        # environment, but its *presence* is a contract — deploy.yml's
+        # post-deploy check reads build.commit_sha off this payload to prove
+        # the rollout it just shipped is the one actually serving.
+        assert "build" in result
+        assert "commit_sha" in result["build"]
+        assert {key: value for key, value in result.items() if key != "build"} == {
             "status": "degraded",
             "service": "regengine",
             "kafka": "unavailable",

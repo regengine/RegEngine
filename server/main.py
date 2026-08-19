@@ -892,10 +892,13 @@ if _router_enabled("fsma_compliance"):
 # ── Root endpoint ────────────────────────────────────────────────
 @app.get("/")
 async def root():
+    from shared.build_info import current_build_info
+
     return {
         "service": "RegEngine API",
         "version": app.version,
         "mode": "consolidated",
+        "build": current_build_info().public_dict(),
     }
 
 
@@ -914,11 +917,13 @@ app.include_router(scheduler_status_router)
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
     from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION
+    from shared.build_info import current_build_info
 
     return {
         "status": "healthy",
         "service": "regengine",
         "inflow_contract_version": INFLOW_CONTRACT_VERSION,
+        "build": current_build_info().public_dict(),
     }
 
 

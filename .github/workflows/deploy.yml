@@ -119,6 +119,14 @@ jobs:
             exit 1
           fi
 
+      # Stamp the commit into the build context. .dockerignore excludes .git,
+      # so without this the image has no way to say which commit it is —
+      # which is what made the class of failure below undetectable.
+      - name: Stamp build identity
+        run: |
+          printf '%s\n' "${{ github.sha }}" > build-sha.txt
+          echo "Stamped build-sha.txt with ${{ github.sha }}"
+
       - name: Deploy to Railway
         env:
           # Use the account/workspace token path. The previous project token
@@ -133,3 +141,62 @@ jobs:
             --project "$RAILWAY_PROJECT_ID" \
             --environment "$RAILWAY_ENVIRONMENT_ID" \
             --service "$RAILWAY_SERVICE_ID"
+
+      # `railway up --ci` returns once the upload is accepted, not once the new
+      # image is serving. railway.toml sets restartPolicyType = "ON_FAILURE"
+      # with a /readiness healthcheck, so a rollout that fails its healthcheck
+      # reverts to the previous image *after* this workflow has already gone
+      # green. Nothing downstream could notice: every probe asserts behaviour
+      # an older image satisfies perfectly.
+      #
+      # This closes that hole by asserting identity rather than behaviour —
+      # the deployed /health must report the commit we just shipped.
+      - name: Verify the deployed commit is the one we shipped
+        env:
+          BACKEND_URL: https://regengine-production.up.railway.app
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+
+          # Rollout budget. railway.toml allows healthcheckTimeout=300 plus up
+          # to 3 ON_FAILURE restarts, so a slow-but-succeeding rollout must not
+          # be called a failure here.
+          deadline=$(( SECONDS + 900 ))
+          attempt=0
+          last_sha=""
+          last_code=""
+
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            body=$(mktemp)
+            last_code=$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' "${BACKEND_URL}/health" || true)
+            last_code="${last_code:-000}"
+
+            if [ "$last_code" = "200" ]; then
+              # `// empty` also covers a payload with no build key at all,
+              # which is what an image predating build stamping returns.
+              last_sha=$(jq -r '.build.commit_sha // empty' "$body" 2>/dev/null || true)
+              if [ "$last_sha" = "$EXPECTED_SHA" ]; then
+                rm -f "$body"
+                echo "Deployed commit matches: ${EXPECTED_SHA}"
+                exit 0
+              fi
+            fi
+            rm -f "$body"
+
+            echo "attempt ${attempt}: status=${last_code} deployed_sha=${last_sha:-(none)} expected=${EXPECTED_SHA}"
+            sleep 15
+          done
+
+          echo "::error::Deploy did not converge. /health last reported status=${last_code} commit_sha=${last_sha:-(none)}, expected ${EXPECTED_SHA}."
+          # Three distinct causes, three distinct messages. A single generic
+          # failure string would send whoever reads this at 3am down the wrong
+          # path, which is most of what makes an alert useless.
+          if [ "$last_code" != "200" ]; then
+            echo "::error::/health never returned 200 (last status ${last_code}). The service is not serving — check the Railway deploy logs for a crashed or unhealthy rollout."
+          elif [ -z "$last_sha" ]; then
+            echo "::error::/health answered but carried no commit_sha. Either the rollout reverted to an image predating build stamping, or build-sha.txt did not reach the image."
+          else
+            echo "::error::A different commit is serving — the rollout reverted (railway.toml restartPolicyType=ON_FAILURE) or another deploy raced this one."
+          fi
+          exit 1
