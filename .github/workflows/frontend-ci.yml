@@ -365,10 +365,60 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Install Playwright browsers
+      # Split from a single `npx playwright install --with-deps chromium`.
+      # On 2026-08-19 that one step stalled twice in a row for 28+ minutes
+      # (runs 32231852566 attempts 1 and 2) until the job's 30m bound killed
+      # it — with no way to tell whether the apt half (--with-deps) or the
+      # browser-download half was hanging, because both live in one opaque
+      # step. Healthy runtime for the whole thing is ~25s. The split makes
+      # the next stall name its culprit, the cache removes the download for
+      # every run after one green pass at a given Playwright version, and
+      # the bounded retry converts a stalled download from a 30m job loss
+      # into a killed-and-reattempted connection.
+      - name: Resolve Playwright version for cache key
+        id: pw-version
         run: |
           cd frontend
-          npx playwright install --with-deps chromium
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
+      - name: Install Playwright system deps (apt, best-effort)
+        timeout-minutes: 6
+        run: |
+          cd frontend
+          # Run 32235477691 proved the apt half is what stalls (6m12s to the
+          # bound; the CDN download never ran) — mirror flakiness, not code.
+          # ubuntu-latest images ship browsers and their shared libraries, so
+          # a stalled install-deps degrades to a LOUD warning instead of a
+          # job loss: if a library truly is missing, the browser launch in
+          # "Run E2E tests" fails with an explicit error naming the .so.
+          for attempt in 1 2; do
+            if timeout 150 npx playwright install-deps chromium; then
+              exit 0
+            fi
+            echo "::warning::install-deps attempt ${attempt} failed or stalled past 150s"
+          done
+          echo "::warning::proceeding without install-deps; relying on the runner image's preinstalled browser libraries"
+
+      - name: Install Playwright Chromium (bounded, retried)
+        timeout-minutes: 14
+        run: |
+          cd frontend
+          # `npx playwright install` no-ops in seconds on a cache hit. On a
+          # miss, a stalled CDN connection gets killed at 6m and retried
+          # once on a fresh connection rather than eating the job bound.
+          for attempt in 1 2; do
+            if timeout 6m npx playwright install chromium; then
+              exit 0
+            fi
+            echo "::warning::playwright install chromium attempt ${attempt} failed or stalled past 6m"
+          done
+          exit 1
 
       - name: Run E2E tests
         id: run_e2e

@@ -149,6 +149,11 @@ jobs:
         # 28, not 22: the suite ran ~20m before the inflow-lab tour spec added
         # six geometry tests (~2m of real coverage). 22m left no headroom and
         # would cancel healthy runs — the same trap the job ceiling fell into.
+        # (Correction: that "~20m" was not the suite finishing — it was the
+        # inner `timeout "$playwright_timeout"` below firing at its 20m cap;
+        # see the comment on playwright_timeout. 28 remains correct as the
+        # OUTER bound: it must exceed the inner cap by enough for the
+        # exit-124 fallback to write the timeout marker into the report.)
         timeout-minutes: 28
         env:
           AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
@@ -162,7 +167,22 @@ jobs:
         run: |
           cd frontend
           set +e
-          playwright_timeout="20m"
+          # 24m, up from 20m — and 20m was never the suite's honest runtime.
+          # Three consecutive main runs (08-06, 08-11, 08-15) ended this step
+          # at exactly 20m00–20m01s: the signature of `timeout` firing, not a
+          # suite landing on a round number, and job cleanup logged orphaned
+          # next-server/npm-dev/backend processes each time. Since #2748 cut
+          # this cap from 30m to 20m the suite has NOT ONCE been observed to
+          # complete; every run took the exit-124 path below, which replaces
+          # the report with "suites": [] — so the dashboard has been reading
+          # zero E2E coverage while continue-on-error kept the step green.
+          # #2766 then raised the step bound 22m->28m to chase that "~20m
+          # runtime", which changed nothing because THIS value is the actual
+          # limiter. The two must move together: keep this a few minutes
+          # under timeout-minutes above so the fallback write still runs.
+          # If the suite hits 24m too, treat it as a hang to profile — do
+          # not raise this again on the assumption the suite is just slow.
+          playwright_timeout="24m"
           timeout "$playwright_timeout" npm run test:e2e -- --reporter=json > ../.qa-health/playwright.json &
           playwright_pid=$!
           while kill -0 "$playwright_pid" 2>/dev/null; do
