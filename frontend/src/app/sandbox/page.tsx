@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: 'FSMA 204 Sandbox — Check your CSV | RegEngine',
   description:
     'Upload a CSV of traceability events and see which FSMA 204 key data elements are missing. No signup, no data stored.',
+  openGraph: {
+    title: 'FSMA 204 Sandbox — Check your CSV',
+    description: 'Upload a CSV of traceability events and see which FSMA 204 key data elements are missing. No signup, no data stored.',
+    url: 'https://regengine.co/sandbox',
+    type: 'website',
+  },
 };
 
 export default function SandboxPage() {
