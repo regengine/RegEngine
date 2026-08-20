@@ -78,6 +78,18 @@ describe('sitemap', () => {
         expect(cardless).toEqual([]);
     });
 
+    it('restates url in every openGraph block a listed page declares', () => {
+        // A segment's openGraph REPLACES the inherited root block wholesale,
+        // so declaring one without `url` silently drops og:url (root's
+        // relative './' is lost). All 10 blog pages shipped that way.
+        const dropped = paths.filter((p) => {
+            const src = segmentSource(p);
+            const og = src.match(/openGraph:\s*\{[\s\S]*?\n\s*\},/);
+            return og !== null && !/\burl:/.test(og[0]);
+        });
+        expect(dropped).toEqual([]);
+    });
+
     it('gives every listed page its own openGraph block', () => {
         // Without one, a page inherits the root layout's card and advertises
         // the homepage's title and description as its own.

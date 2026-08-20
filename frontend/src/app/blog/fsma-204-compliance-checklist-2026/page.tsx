@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
   description: 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.',
   openGraph: {
+    url: 'https://regengine.co/blog/fsma-204-compliance-checklist-2026',
+    siteName: 'RegEngine',
     title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
     description: 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.',
     type: 'article',

@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description:
     "The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.",
   openGraph: {
+    url: "https://regengine.co/blog/24-hour-rule",
+    siteName: "RegEngine",
     title: "The FSMA 204 24-Hour Rule Explained",
     description: "What the FDA's 24-hour records request means for your food business.",
     type: "article",

@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
   description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
   openGraph: {
+    url: 'https://regengine.co/blog',
+    siteName: 'RegEngine',
     title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
     description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
     type: 'website',

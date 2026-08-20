@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
   description: 'Mid-market food companies (10-500 employees) face unique FSMA 204 challenges. Learn how to implement traceability without overwhelming your operations.',
   openGraph: {
+    url: 'https://regengine.co/blog/fsma-204-mid-market-guide',
+    siteName: 'RegEngine',
     title: 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
     description: 'Mid-market food companies (10-500 employees) face unique FSMA 204 challenges. Learn how to implement traceability without overwhelming your operations.',
     type: 'article',
