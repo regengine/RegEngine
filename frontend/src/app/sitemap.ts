@@ -21,9 +21,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/`, changeFrequency: 'weekly' as const, priority: 1.0 },
         { url: `${baseUrl}/pricing`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/developer/register`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        // /alpha and /verticals/food-safety are redirect()-only stubs, so they
-        // are deliberately absent: a sitemap entry must resolve to a 200.
+        // /alpha, /verticals/food-safety and /developer/register are redirect
+        // stubs (the last one client-side, into robots-disallowed /signup), so
+        // they are deliberately absent: a sitemap entry must resolve to a 200.
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },

@@ -34,7 +34,10 @@ export const metadata: Metadata = {
     title: 'RegEngine — Food Traceability That Protects Your Brand',
     description: 'FSMA 204 Food Traceability Compliance',
     siteName: 'RegEngine',
-    url: 'https://regengine.co',
+    // Relative, like alternates.canonical above: pages that do not declare
+    // their own openGraph inherit this block, and an absolute root URL made
+    // every one of them claim og:url = the homepage.
+    url: './',
     type: 'website',
     images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'RegEngine FSMA 204 traceability compliance' }],
   },

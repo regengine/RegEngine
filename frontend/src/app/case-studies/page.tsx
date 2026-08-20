@@ -11,6 +11,12 @@ export const metadata: Metadata = {
         'Product validation: RegEngine processes 1,200 leafy greens CTE events with 94.2% auto-normalization, 0.8 manual touches per 1,000 rows, and sub-second trace latency.',
     keywords:
         'FSMA 204, leafy greens traceability, fresh-cut produce, food safety, CTE validation, FDA compliance, RegEngine',
+  openGraph: {
+    title: 'Leafy Greens Traceability Validation | RegEngine',
+    description: 'Product validation: 1,200 leafy greens CTE events, 94.2% auto-normalization, sub-second trace latency.',
+    url: 'https://regengine.co/case-studies',
+    type: 'article',
+  },
 };
 
 const HERO_METRICS = [
