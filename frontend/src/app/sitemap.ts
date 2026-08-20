@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { BLOG_POST_SLUGS } from '@/lib/blog-posts';
 import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experimental-features';
 import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
@@ -6,6 +7,10 @@ import { isSandboxEnabled } from '@/lib/sandbox-cta';
  * XML sitemap.
  *
  * Includes all public-facing pages: marketing, tools, content, docs, and resources.
+ *
+ * Only canonical URLs that answer 200 belong here — never a route that
+ * redirects, and never the same URL twice. Both cost crawl budget and teach
+ * Search Console that the sitemap is unreliable.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
     const baseUrl = 'https://regengine.co';
@@ -17,7 +22,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/pricing`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/developer/register`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/alpha`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        // /alpha and /verticals/food-safety are redirect()-only stubs, so they
+        // are deliberately absent: a sitemap entry must resolve to a 200.
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
@@ -60,15 +66,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const contentPages = [
         { url: `${baseUrl}/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
-        { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/case-studies`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
-        { url: `${baseUrl}/blog/24-hour-rule`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/blog/fsma-204-traceability-lot-codes`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/blog/fsma-204-compliance-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/blog/food-traceability-software`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/blog/fsma-204-cte-kde-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        // Every published post, from the same list the blog index renders —
+        // four posts were live but uncrawled while these were hand-maintained.
+        ...BLOG_POST_SLUGS.map((slug) => ({
+            url: `${baseUrl}/blog/${slug}`,
+            changeFrequency: 'monthly' as const,
+            priority: 0.8,
+        })),
     ];
 
     // Resource pages
@@ -77,7 +84,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/retailer-readiness`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.6 },
-        { url: `${baseUrl}/verticals/food-safety`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];
 
     return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({
