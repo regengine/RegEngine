@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
   description: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.',
   openGraph: {
+    url: 'https://regengine.co/blog/food-traceability-software',
+    siteName: 'RegEngine',
     title: 'Food Traceability Software: How to Choose the Right Platform | RegEngine',
     description: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership. A practical guide to selecting FSMA 204 software.',
     type: 'website',
