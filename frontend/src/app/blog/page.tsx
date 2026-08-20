@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3, Clock, Tag } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { BlogPostSlug } from '@/lib/blog-posts';
 
 export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
@@ -12,7 +14,18 @@ export const metadata: Metadata = {
   },
 };
 
-const BLOG_POSTS = [
+type BlogPost = {
+  slug: BlogPostSlug;
+  title: string;
+  excerpt: string;
+  icon: LucideIcon;
+  date: string;
+  readTime: string;
+};
+
+// Slugs are typed against BLOG_POST_SLUGS so a post added here without being
+// added to the shared list (and therefore the sitemap) fails typecheck.
+const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'fsma-204-compliance-guide',
     title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
