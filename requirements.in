@@ -46,30 +46,16 @@ PyYAML>=6.0.3
 gunicorn>=26.0.0
 
 # Database & Storage
-# Capped below 1.19 deliberately. 1.19 compares CHECK constraints during
-# autogenerate, which 1.18 did not, and `alembic check` in the repo-root
-# RLS/isolation gate then reports drift on constraints that are not drift.
-#
-# Most of this schema (fsma.*, canonical/CTE persistence, RLS infrastructure)
-# is raw-SQL-managed and has NO ORM model by design. alembic/env.py's
-# `include_object` already encodes that one-directional contract — objects that
-# exist in the database with no ORM counterpart are ignored rather than
-# proposed for DROP — but it only spells that out for `table` and `index`.
-# Under 1.19 every raw-SQL CHECK constraint falls outside the filter and comes
-# back as a remove_constraint proposal: ~30 of them, on auth_challenges,
-# organizations, webauthn_challenges, fsma.agent_artifacts,
-# fsma.ingestion_run_receipts and more.
-#
-# Verified rather than assumed: this gate passes on main at alembic 1.18.4 and
-# fails on 1.19.1 with the identical schema, so the schema did not move.
-#
-# Lifting the cap is a small, real change — extend `include_object` to cover
-# `check_constraint` under the same `reflected and compare_to is None` rule
-# already applied to tables and indexes, then confirm the gate still catches
-# genuine ORM-side constraint drift rather than going quiet. That deserves its
-# own PR; widening a drift detector's blind spot inside a lockfile resync is
-# exactly the kind of change that should not pass unnoticed.
-alembic>=1.13.0,<1.19
+# Floor is 1.19.1, where autogenerate began comparing CHECK constraints. The
+# cap that used to sit here is gone: alembic/env.py's `include_object` now
+# extends the one-directional drift contract to `check_constraint`, so the
+# raw-SQL CHECKs with no ORM counterpart are exempt the same way raw-SQL
+# tables and indexes already were. Three ORM constraints that the DDL had
+# created under different names were renamed to match rather than exempted.
+# Proven against a live migrated schema, not assumed: the gate fails at 1.19.1
+# without the fix (29 operations), passes with it, and still fails when an
+# ORM-only CHECK is introduced — so the blind spot did not widen.
+alembic>=1.19.1
 psycopg[binary]>=3.3.4
 psycopg2-binary>=2.9.12
 asyncpg>=0.31.0
