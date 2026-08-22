@@ -3,32 +3,16 @@
 # Per-service requirements.txt files are DEPRECATED — this file covers all services.
 
 # Core Framework
-# Capped below 0.137 deliberately. 0.137 changed how `include_router` records
-# sub-routers: they stay on `app.routes` as `_IncludedRouter` objects (defined
-# in fastapi/routing.py, nothing to do with the starlette version) instead of
-# being flattened into `APIRoute`s. Bisected: 0.136.0 has no occurrences of that
-# class, 0.137.0 has 14.
-#
-# Two consequences, and the second is the serious one.
-#
-# Anything that walks `app.routes` stops seeing endpoints. That silently blinds
-# `tests/security/test_auth_coverage.py::test_all_endpoints_require_auth`,
-# which proves every endpoint requires auth *by enumerating routes* — under
-# 0.141 it finds nothing to police and passes vacuously instead of failing
-# loudly.
-#
-# And `prometheus-fastapi-instrumentator` 7.1.0 — the version this repo
-# actually ships — reads `.path` off every entry in `app.routes`, so it raises
-# `AttributeError: '_IncludedRouter' object has no attribute 'path'` inside
-# middleware on real requests. That is a 500 on production traffic, not a test
-# artifact: 93 repo-root tests fail this way. Its 8.x line handles the new
-# shape but requires starlette>=1.0.0, pulling a second major upgrade along.
-#
-# So the bump is a three-package migration (fastapi, prometheus-fastapi-
-# instrumentator, starlette) plus repairing the route-introspection helpers and
-# re-proving the security guards still bite. That belongs in its own PR, not in
-# a lockfile resync. 0.136.0 is the version currently serving production.
-fastapi>=0.136.0,<0.137
+# 0.137 changed how `include_router` records sub-routers: they stay on
+# `app.routes` as `_IncludedRouter` objects instead of being flattened into
+# `APIRoute`s, so anything walking `app.routes` stops seeing endpoints. The
+# repo's route-enumerating guards now go through
+# services/shared/route_introspection.py, which handles both shapes and
+# raises on any it does not recognise rather than quietly reporting fewer
+# routes. The cap this replaces also claimed a three-package migration; the
+# lock already resolved prometheus-fastapi-instrumentator 8.1.0 and starlette
+# 1.6.0, so only fastapi actually moved.
+fastapi>=0.141.1
 uvicorn[standard]>=0.52.1
 sqlalchemy>=2.0.25
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
