@@ -6,10 +6,7 @@ export async function DELETE(
     { params }: { params: Promise<{ keyId: string }> },
 ) {
     const context = await getDeveloperPortalContext(request);
-    if ('response' in context) return context.response;
-    if (!context.profile) {
-        return NextResponse.json({ error: 'Developer profile not found' }, { status: 404 });
-    }
+    if (!context.ok) return context.response;
 
     const { keyId } = await params;
     const { error } = await context.client.supabase
