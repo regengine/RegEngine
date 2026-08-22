@@ -75,8 +75,8 @@ describe('getDeveloperPortalContext', () => {
 
         const context = await getDeveloperPortalContext(makeRequest());
 
-        expect('response' in context).toBe(false);
-        if ('response' in context) {
+        expect(context.ok).toBe(true);
+        if (!context.ok) {
             throw new Error('Expected developer context, received response');
         }
 
@@ -112,10 +112,11 @@ describe('getDeveloperPortalContext', () => {
 
         const context = await getDeveloperPortalContext(makeRequest());
 
-        expect('response' in context).toBe(true);
-        // `in` alone stopped proving the property is defined after the
-        // TypeScript bump in #2773; check the value, not just the key.
-        if (!('response' in context) || !context.response) {
+        expect(context.ok).toBe(false);
+        // The `ok` discriminant replaces the old `in` test, which stopped
+        // proving the property was *defined* after the TypeScript bump in
+        // #2773 and needed a second `!context.response` check to stay honest.
+        if (context.ok) {
             throw new Error('Expected authentication response, received developer context');
         }
         expect(context.response.status).toBe(401);
@@ -155,10 +156,8 @@ describe('getDeveloperPortalContext', () => {
 
         const context = await getDeveloperPortalContext(makeRequest());
 
-        expect('response' in context).toBe(true);
-        // `in` alone stopped proving the property is defined after the
-        // TypeScript bump in #2773; check the value, not just the key.
-        if (!('response' in context) || !context.response) {
+        expect(context.ok).toBe(false);
+        if (context.ok) {
             throw new Error('Expected failure response, received developer context');
         }
         expect(context.response.status).toBe(502);

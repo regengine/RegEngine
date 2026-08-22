@@ -87,13 +87,33 @@ def _build_test_app():
 
 
 def _extract_endpoints(app) -> list[tuple[str, str]]:
-    """Extract all (METHOD, path) pairs from the FastAPI app's routes."""
-    endpoints = []
-    for route in app.routes:
-        if hasattr(route, "methods") and hasattr(route, "path"):
-            for method in route.methods:
-                if method in ("GET", "POST", "PUT", "PATCH", "DELETE"):
-                    endpoints.append((method, route.path))
+    """Extract all (METHOD, path) pairs from the FastAPI app's routes.
+
+    Enumeration goes through ``shared.route_introspection`` rather than
+    ``app.routes`` directly. Since fastapi 0.137 an included router stays on
+    ``app.routes`` as one wrapper object, so the direct walk returned the few
+    routes registered on the app itself — this gate would have policed a
+    handful of endpoints and reported success. The helper flattens both
+    shapes and raises on any it does not recognise.
+    """
+    from shared.paths import ensure_shared_importable
+
+    ensure_shared_importable()
+    from shared.route_introspection import iter_effective_routes
+
+    endpoints = [
+        (method, path)
+        for path, route in iter_effective_routes(app)
+        for method in (route.methods or ())
+        if method in ("GET", "POST", "PUT", "PATCH", "DELETE")
+    ]
+    # A gate that proves "every endpoint requires auth" is worthless if it
+    # found no endpoints. This app mounts hundreds; the floor only has to be
+    # high enough that a collapsed route table cannot slip through as a pass.
+    assert len(endpoints) > 50, (
+        f"route enumeration returned only {len(endpoints)} endpoints — the app's "
+        "route table did not flatten, so this gate is not actually inspecting it"
+    )
     return sorted(endpoints)
 
 
@@ -170,32 +190,53 @@ def test_all_endpoints_require_auth(app_and_client):
     app, client = app_and_client
     endpoints = _extract_endpoints(app)
 
-    # Reset the per-IP auth failure counter between requests. Otherwise, after
-    # 15 unauthenticated probes the rate limiter blocks "testclient" and every
+    # Keep the per-IP auth failure counter from tripping. Otherwise, after 15
+    # unauthenticated probes the rate limiter blocks "testclient" and every
     # subsequent endpoint returns 429 — which would mask a genuinely
     # unprotected endpoint behind the block and make this assertion
     # order-dependent.
+    #
+    # This used to clear a module-level dict, authz._auth_failures. #2711
+    # replaced that with a BruteForceLimiter and deleted the dict (there is a
+    # test asserting it stays deleted), which left this line raising
+    # AttributeError at the first non-allowlisted endpoint — so the gate has
+    # been erroring rather than proving anything since. Swap in a fresh
+    # per-process limiter whose budget is far above the endpoint count, which
+    # is what clearing between requests was for.
     from app import authz
+    from shared.rate_limit import BruteForceLimiter
+
+    unlimited = BruteForceLimiter(
+        namespace="test-auth-coverage",
+        max_failures=10 * len(endpoints) + 1000,
+        window_seconds=authz._AUTH_FAIL_WINDOW,
+        redis_client=None,
+    )
+    unlimited._redis = None  # ignore any env-provided Redis
+    previous_limiter = authz._auth_limiter
+    authz._auth_limiter = unlimited
 
     unprotected = []
-    for method, path in endpoints:
-        key = f"{method} {path}"
-        if key in UNAUTHENTICATED_ALLOWLIST:
-            continue
+    try:
+        for method, path in endpoints:
+            key = f"{method} {path}"
+            if key in UNAUTHENTICATED_ALLOWLIST:
+                continue
 
-        # Skip HEAD (mirrors GET auth) and OPTIONS (CORS preflight)
-        if method in ("HEAD", "OPTIONS"):
-            continue
+            # Skip HEAD (mirrors GET auth) and OPTIONS (CORS preflight)
+            if method in ("HEAD", "OPTIONS"):
+                continue
 
-        authz._auth_failures.clear()
-        test_path = _make_dummy_path(path)
-        response = client.request(method, test_path)
+            test_path = _make_dummy_path(path)
+            response = client.request(method, test_path)
 
-        # 401/403 = auth enforced. 404/405/422 = route resolved but rejected
-        # on other grounds (still means auth middleware ran or route doesn't match).
-        # Only 200/201/204 without auth is a problem.
-        if response.status_code in (200, 201, 204):
-            unprotected.append(f"{method} {path} -> {response.status_code}")
+            # 401/403 = auth enforced. 404/405/422 = route resolved but rejected
+            # on other grounds (still means auth middleware ran or route doesn't match).
+            # Only 200/201/204 without auth is a problem.
+            if response.status_code in (200, 201, 204):
+                unprotected.append(f"{method} {path} -> {response.status_code}")
+    finally:
+        authz._auth_limiter = previous_limiter
 
     assert not unprotected, f"Endpoints accessible without authentication:\n" + "\n".join(f"  {e}" for e in unprotected)
 

@@ -78,13 +78,25 @@ DESC_INDEX_QUARANTINE = {
 def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
     """One-directional drift contract (WS-2b).
 
-    ``reflected and compare_to is None`` == a table/index that exists in
-    the database but has no ORM counterpart. That is the normal state for
-    the raw-SQL-managed majority of the schema, so it is excluded from
-    autogenerate/check instead of being flagged as a drop candidate.
-    Everything defined on an ORM Base is compared for real.
+    ``reflected and compare_to is None`` == a table/index/CHECK constraint
+    that exists in the database but has no ORM counterpart. That is the
+    normal state for the raw-SQL-managed majority of the schema, so it is
+    excluded from autogenerate/check instead of being flagged as a drop
+    candidate. Everything defined on an ORM Base is compared for real.
+
+    ``check_constraint`` joined this set when alembic 1.19 began comparing
+    CHECK constraints during autogenerate. The rule is unchanged, only its
+    reach: 26 raw-SQL CHECKs on auth_challenges, organizations,
+    webauthn_challenges, fsma.agent_artifacts, fsma.agent_artifact_reviews,
+    fsma.ingestion_runs and fsma.ingestion_run_receipts started arriving as
+    remove_constraint proposals purely because no ORM model claims them.
+
+    Note this stays one-directional. A CHECK constraint declared on an ORM
+    model but absent from the database is ``reflected is False``, so it is
+    still compared and still fails the gate — which is what caught the three
+    name mismatches fixed alongside this change.
     """
-    if type_ in {"table", "index"} and reflected and compare_to is None:
+    if type_ in {"table", "index", "check_constraint"} and reflected and compare_to is None:
         return False
     # Known-equivalent representations that autogenerate cannot compare
     # faithfully (verified manually against the migrated schema):

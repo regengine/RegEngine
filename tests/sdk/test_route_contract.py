@@ -45,11 +45,12 @@ def registered_routes() -> set[tuple[str, str]]:
     app.include_router(graph_router, prefix="/api/v1")
     app.include_router(canonical_router)
 
+    from shared.route_introspection import iter_effective_routes
+
     pairs: set[tuple[str, str]] = set()
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            for method in route.methods:
-                pairs.add((method.upper(), route.path))
+    for path, route in iter_effective_routes(app):
+        for method in route.methods or ():
+            pairs.add((method.upper(), path))
     return pairs
 
 

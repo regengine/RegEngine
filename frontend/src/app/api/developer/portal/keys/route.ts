@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDeveloperPortalContext, withDeveloperCookies } from '../_utils';
+import {
+    getDeveloperPortalContext,
+    withDeveloperCookies,
+    type AuthenticatedDeveloperContext,
+} from '../_utils';
 
 type ApiKeyRow = {
     id: string;
@@ -40,8 +44,7 @@ async function hashKey(key: string): Promise<string> {
     return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function loadKeys(context: Awaited<ReturnType<typeof getDeveloperPortalContext>>): Promise<ApiKeyRow[]> {
-    if (!('client' in context) || !context.profile) return [];
+async function loadKeys(context: AuthenticatedDeveloperContext): Promise<ApiKeyRow[]> {
     const { data, error } = await context.client.supabase
         .from('developer_api_keys')
         .select('*')
@@ -56,11 +59,11 @@ async function loadKeys(context: Awaited<ReturnType<typeof getDeveloperPortalCon
 
 export async function GET(request: NextRequest) {
     const context = await getDeveloperPortalContext(request);
-    if ('response' in context) return context.response;
+    if (!context.ok) return context.response;
 
     try {
         const keys = await loadKeys(context);
-        return withDeveloperCookies(context, NextResponse.json({ developerId: context.profile?.id || null, keys }));
+        return withDeveloperCookies(context, NextResponse.json({ developerId: context.profile.id, keys }));
     } catch {
         return NextResponse.json({ error: 'Failed to load API keys' }, { status: 502 });
     }
@@ -68,10 +71,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     const context = await getDeveloperPortalContext(request);
-    if ('response' in context) return context.response;
-    if (!context.profile) {
-        return NextResponse.json({ error: 'Developer profile not found' }, { status: 404 });
-    }
+    if (!context.ok) return context.response;
 
     const body = await request.json().catch(() => null);
     const name = typeof body?.name === 'string' ? body.name.trim() : '';

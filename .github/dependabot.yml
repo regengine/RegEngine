@@ -56,6 +56,20 @@ updates:
   # Security-critical (solo PRs): cryptography, pyjwt, python-jose, sqlalchemy,
   # alembic, fastapi, starlette, stripe, httpx, opentelemetry-*
 
+  # KNOWN LIMITATION — a root-pip PR from Dependabot is never mergeable as
+  # opened. It edits requirements.in and leaves requirements.lock untouched,
+  # so the "Verify requirements.lock freshness" gate in backend-ci.yml fails
+  # until someone recompiles the lock into the PR branch by hand.
+  #
+  # This is a filename problem, not a Dependabot bug. The compiled output is
+  # named requirements.lock; Dependabot's pip-compile support looks for the
+  # conventional requirements.txt. #2780 shows both behaviours in one PR: it
+  # updated cli/requirements.txt and did not update requirements.lock.
+  # #2780-#2784 all landed this way, and #2787 had to resync afterwards.
+  #
+  # Durable fix is to rename requirements.lock -> requirements.txt, which
+  # touches the Dockerfile and ten workflows and so wants its own PR. Until
+  # then: expect the red gate, run the pip-compile command it prints, push.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

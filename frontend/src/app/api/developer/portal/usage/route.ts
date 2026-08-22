@@ -5,10 +5,7 @@ const VALID_RANGES = new Set(['24h', '7d', '30d']);
 
 export async function GET(request: NextRequest) {
     const context = await getDeveloperPortalContext(request);
-    if ('response' in context) return context.response;
-    if (!context.profile) {
-        return withDeveloperCookies(context, NextResponse.json({ usage: [] }));
-    }
+    if (!context.ok) return context.response;
 
     const rangeParam = request.nextUrl.searchParams.get('range') || '7d';
     const range = VALID_RANGES.has(rangeParam) ? rangeParam : '7d';
