@@ -91,7 +91,18 @@ jobs:
         run: |
           python -m pip install "pip==24.3.1" pip-tools==7.5.2
           pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in
-          git diff --exit-code -- requirements.lock
+          if ! git diff --quiet -- requirements.lock; then
+            echo "::error::requirements.lock is stale — requirements.in was edited without recompiling."
+            echo "Regenerate it in this PR, on Python 3.11, with the same toolchain this gate uses:"
+            echo "  python -m pip install 'pip==24.3.1' pip-tools==7.5.2"
+            echo "  pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in"
+            echo ""
+            echo "Dependabot PRs against the root pip manifest always land here: it edits"
+            echo "requirements.in and cannot refresh requirements.lock. See the note in"
+            echo ".github/dependabot.yml. The diff this gate computed:"
+            git --no-pager diff -- requirements.lock
+            exit 1
+          fi
 
   # ── Test Matrix ──────────────────────────────────────────
   test:
