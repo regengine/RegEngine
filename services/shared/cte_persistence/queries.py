@@ -94,22 +94,28 @@ class QueryPathMixin:
             # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
             # text() parameter parser misidentifies :param::cast as a single token,
             # silently dropping the :tlc binding and producing a SyntaxError.
+            #
+            # The recursive term MUST be a single branch. Postgres splits a
+            # recursive CTE at the LAST top-level UNION, so writing the walk as
+            # seed UNION forward UNION backward puts the forward branch inside
+            # the non-recursive term and every execution fails with
+            # InvalidRecursion ("recursive reference ... must not appear within
+            # its non-recursive term"). Both directions are therefore walked in
+            # one branch: join a link whichever side matches, emit the other.
             rows = self.session.execute(
                 text("""
                     WITH RECURSIVE tlc_graph(tlc, depth) AS (
                         -- Seed
                         SELECT CAST(:tlc AS text), 0
                         UNION
-                        -- Forward: seed was an input → walk to outputs
-                        SELECT tl.output_tlc, tg.depth + 1
+                        -- Walk both directions: input → output and output → input
+                        SELECT CASE WHEN tg.tlc = tl.input_tlc
+                                    THEN tl.output_tlc
+                                    ELSE tl.input_tlc
+                               END,
+                               tg.depth + 1
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
-                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
-                        UNION
-                        -- Backward: seed is an output → walk to inputs
-                        SELECT tl.input_tlc, tg.depth + 1
-                        FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
                     SELECT DISTINCT tlc FROM tlc_graph
@@ -349,6 +355,10 @@ class QueryPathMixin:
             params[f"seed_{i}"] = s
 
         try:
+            # Single recursive branch for the same reason as the single-seed
+            # twin above: Postgres splits a recursive CTE at the LAST top-level
+            # UNION, so a seed/forward/backward three-branch UNION fails with
+            # InvalidRecursion on every execution.
             rows = self.session.execute(
                 text(f"""
                     WITH RECURSIVE seeds(tlc) AS (
@@ -358,16 +368,14 @@ class QueryPathMixin:
                         -- Seed set
                         SELECT CAST(tlc AS text), 0 FROM seeds
                         UNION
-                        -- Forward: input → outputs
-                        SELECT tl.output_tlc, tg.depth + 1
+                        -- Walk both directions: input → output and output → input
+                        SELECT CASE WHEN tg.tlc = tl.input_tlc
+                                    THEN tl.output_tlc
+                                    ELSE tl.input_tlc
+                               END,
+                               tg.depth + 1
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
-                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
-                        UNION
-                        -- Backward: output → inputs
-                        SELECT tl.input_tlc, tg.depth + 1
-                        FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
                     SELECT DISTINCT tlc FROM tlc_graph
