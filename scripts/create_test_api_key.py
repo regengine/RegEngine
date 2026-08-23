@@ -44,7 +44,7 @@ for _p in (str(REPO_ROOT), str(REPO_ROOT / "services")):
 
 # Matches the AUTH_TEST_BYPASS default tenant and the legacy phase-2b seed
 # tenant, so a key minted here composes with existing local fixtures.
-DEFAULT_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -52,8 +52,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--name", default="Local Test Key")
     parser.add_argument(
         "--tenant-id",
-        default=DEFAULT_TENANT_ID,
-        help=f"Tenant UUID the key is scoped to (default {DEFAULT_TENANT_ID})",
+        default=TEST_TENANT_ID,
+        help=f"Tenant UUID the key is scoped to (default {TEST_TENANT_ID})",
     )
     parser.add_argument(
         "--tenant-name",
@@ -137,6 +137,7 @@ def _async_url(database_url: str) -> str:
 
 async def _seed_tenant(database_url: str, tenant_id: str, tenant_name: str) -> bool:
     """Ensure the tenants row exists. Returns True if a row was inserted."""
+    from shared.tenant_context import set_tenant_guc
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -148,10 +149,7 @@ async def _seed_tenant(database_url: str, tenant_id: str, tenant_name: str) -> b
         async with engine.begin() as conn:
             # tenants has forced RLS; set the tenant GUC so the write passes
             # the policy for non-superuser roles too.
-            await conn.execute(
-                text("SELECT set_config('app.tenant_id', :tid, true)"),
-                {"tid": tenant_id},
-            )
+            await set_tenant_guc(conn, tenant_id)
             result = await conn.execute(
                 text(
                     """
