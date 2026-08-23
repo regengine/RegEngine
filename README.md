@@ -181,6 +181,17 @@ export REDIS_URL="redis://localhost:6379/0"
 alembic upgrade head
 ```
 
+Mint a local test API key against this stack (seeds the test tenant and its
+`trialing` billing status too, so subscription-gated routes work):
+
+```bash
+./venv/bin/python scripts/create_test_api_key.py
+```
+
+The raw key is printed once — pass it in the `X-RegEngine-API-Key` header.
+In development the backend validates DB-backed keys only when the server
+process runs with `ENABLE_DB_API_KEYS=true`.
+
 To exercise the full customer experience against this stack — provisioning a
 tenant and API key, activating billing, ingesting from a simulated customer
 system, and verifying evidence — run the customer-journey harness in the
