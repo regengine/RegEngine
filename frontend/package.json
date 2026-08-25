@@ -50,7 +50,7 @@
     "dexie": "^4.4.5",
     "framer-motion": "~13.1.0",
     "html5-qrcode": "^2.3.8",
-    "jose": "^6.2.8",
+    "jose": "^6.2.9",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.31.0",
