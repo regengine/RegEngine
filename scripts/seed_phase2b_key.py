@@ -1,3 +1,13 @@
+"""DEPRECATED — do not use for new keys; use scripts/create_test_api_key.py.
+
+This seeder writes a legacy unpeppered SHA-256 key hash into the per-service
+admin database (regengine_admin on port 5433), which the consolidated monolith
+no longer reads — keys seeded here do not authenticate against the running
+app. The replacement mints keys through the production DatabaseAPIKeyStore
+path against DATABASE_URL. Kept only as a historical reference for the
+phase-2b audit fixture.
+"""
+
 import hashlib
 import os
 from datetime import datetime, timezone

@@ -1,3 +1,12 @@
+"""DEPRECATED — prefer scripts/create_test_api_key.py for test keys.
+
+This script assumes the legacy container layout (hardcoded /app on sys.path)
+and a pre-existing tenant row. The replacement works from any checkout, seeds
+the tenant and its Redis billing status, defaults keys to a 30-day expiry, and
+refuses to run against production. Kept only for the remediation bootstrap
+flow it was written for.
+"""
+
 import asyncio
 import os
 import sys

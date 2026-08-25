@@ -42,8 +42,10 @@
 *   **Frequency**: Daily full dump at 03:00 UTC.
 *   **Procedure**:
     ```bash
-    # Non-blocking backup
-    docker exec regengine-postgres-1 pg_dump -U regengine regengine_admin | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
+    # Non-blocking backup. The consolidated monolith keeps ALL tables —
+    # including the admin subsystem's — in the 'regengine' database; the
+    # legacy 'regengine_admin' database is empty and not worth dumping.
+    docker exec regengine-postgres-1 pg_dump -U regengine regengine | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
     
     # Upload
     aws s3 cp backups/postgres/*.gz s3://regengine-backups/postgres/
@@ -85,14 +87,14 @@
 6.  **Verify**: Run `MATCH (n) RETURN count(n)` and compare with metrics.
 
 #### PostgreSQL Recovery
-1.  **Stop**: `docker compose stop admin-api` (Prevent new writes)
+1.  **Stop**: stop the backend monolith (the local `uvicorn`/`gunicorn server.main:app` process, or the app container if one is running) to prevent new writes.
 2.  **Restore**:
     ```bash
     # Drop/Create DB
-    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine_admin; CREATE DATABASE regengine_admin;"
+    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine; CREATE DATABASE regengine;"
     
     # Import Dump
-    gunzip -c backups/postgres/latest.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine_admin
+    gunzip -c backups/postgres/latest.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine
     ```
 3.  **Restart Services**: `docker compose restart`
 
