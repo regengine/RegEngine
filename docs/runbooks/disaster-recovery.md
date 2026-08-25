@@ -42,8 +42,13 @@
 *   **Frequency**: Daily full dump at 03:00 UTC.
 *   **Procedure**:
     ```bash
-    # Non-blocking backup
-    docker exec regengine-postgres-1 pg_dump -U regengine regengine_admin | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
+    # Non-blocking backup. The consolidated monolith keeps ALL tables —
+    # including the admin subsystem's — in the 'regengine' database; no
+    # migration chain populates the legacy 'regengine_admin' database.
+    # If your stack predates the consolidation and legacy tooling wrote
+    # real rows into regengine_admin, take ONE final dump of it before
+    # adopting this procedure — after that, only 'regengine' is covered.
+    docker exec regengine-postgres-1 pg_dump -U regengine regengine | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
     
     # Upload
     aws s3 cp backups/postgres/*.gz s3://regengine-backups/postgres/
@@ -85,16 +90,17 @@
 6.  **Verify**: Run `MATCH (n) RETURN count(n)` and compare with metrics.
 
 #### PostgreSQL Recovery
-1.  **Stop**: `docker compose stop admin-api` (Prevent new writes)
+1.  **Stop**: stop the backend monolith (the local `uvicorn`/`gunicorn server.main:app` process, or the app container if one is running) to prevent new writes.
 2.  **Restore**:
     ```bash
     # Drop/Create DB
-    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine_admin; CREATE DATABASE regengine_admin;"
+    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine; CREATE DATABASE regengine;"
     
-    # Import Dump
-    gunzip -c backups/postgres/latest.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine_admin
+    # Import Dump (substitute the date of the dump you are restoring —
+    # the backup procedure above writes regengine_YYYY-MM-DD.sql.gz)
+    gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine
     ```
-3.  **Restart Services**: `docker compose restart`
+3.  **Restart**: bring dependencies back if stopped (`docker compose -f docker-compose.dev.yml up -d`), then start the backend monolith again (`uvicorn server.main:app --port 8000`, or your process manager's equivalent).
 
 ### 4.2 Scenario: Region/Data Center Failure
 1.  **Switch Context**: Update `AWS_DEFAULT_REGION` in `.env`.
