@@ -6,7 +6,9 @@
 set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    -- Admin API database
+    -- Admin API database (LEGACY: the consolidated monolith keeps its admin
+    -- tables in the main 'regengine' database — point ADMIN_DATABASE_URL
+    -- there, not here. Kept for old per-service tooling that expects it.)
     SELECT 'CREATE DATABASE regengine_admin'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'regengine_admin')\gexec
 

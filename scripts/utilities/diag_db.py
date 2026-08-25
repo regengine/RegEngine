@@ -4,7 +4,9 @@ import uuid
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-ADMIN_DATABASE_URL = "postgresql://regengine:regengine@localhost:5433/regengine_admin"
+# The consolidated monolith keeps admin tables in the main 'regengine' DB
+# (the legacy regengine_admin DB on 5433 is dead — see .env.example).
+ADMIN_DATABASE_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 engine = create_engine(ADMIN_DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 

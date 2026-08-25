@@ -17,7 +17,7 @@ Environment variables:
     NEO4J_URI          (default: bolt://localhost:7687)
     NEO4J_USER         (default: neo4j)
     NEO4J_PASSWORD     (default: neo4j)
-    POSTGRES_URL       (default: postgresql://regengine:regengine@localhost:5433/regengine_admin)
+    POSTGRES_URL       (default: postgresql://regengine:regengine@localhost:5432/regengine)
 """
 
 import argparse
@@ -41,7 +41,9 @@ logger = logging.getLogger("chaos-seeder")
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j")
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
+# Default matches the current dev stack — the legacy regengine_admin DB on
+# 5433 no longer holds any tables (see .env.example).
+POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
 
 # Seed tag so we can identify and clean up test data
