@@ -154,7 +154,7 @@ There are 144+ env vars in `.env.example`. Here is what actually matters:
 |----------|-----|
 | `AUTH_SECRET_KEY` | JWT signing. Must match between admin (Railway) and frontend (Vercel). |
 | `DATABASE_URL` | Primary PostgreSQL connection. |
-| `ADMIN_DATABASE_URL` | Admin service PostgreSQL. Different from DATABASE_URL in production. |
+| `ADMIN_DATABASE_URL` | Admin subsystem PostgreSQL — same database as DATABASE_URL (`postgresql+psycopg://` driver). Pointing it at the legacy `regengine_admin` DB fails boot with `CriticalSchemaDriftError`. |
 | `REGENGINE_INTERNAL_SECRET` | Service-to-service tenant header trust. |
 | `ADMIN_MASTER_KEY` | Admin API master key for bootstrapping. |
 
