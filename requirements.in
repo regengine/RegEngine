@@ -13,7 +13,7 @@
 # lock already resolved prometheus-fastapi-instrumentator 8.1.0 and starlette
 # 1.6.0, so only fastapi actually moved.
 fastapi>=0.141.1
-uvicorn[standard]>=0.52.1
+uvicorn[standard]>=0.52.3
 sqlalchemy>=2.0.52
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
 # Pin it explicitly so pip-compile always emits a hash — otherwise --require-hashes
