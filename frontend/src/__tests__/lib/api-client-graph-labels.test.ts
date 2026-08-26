@@ -8,7 +8,7 @@
  * The labels router is mounted at:
  *   services/graph/app/routes.py:55
  *     v1_router.include_router(labels.router, prefix="/labels", tags=["labels"])
- *   server/main.py:869
+ *   server/main.py:910
  *     app.include_router(graph_router, prefix="/api/v1", tags=["Graph Operations"])
  * giving /api/v1/labels/* — with services/graph/app/routers/labels.py:171
  * `@router.get("/health")` and :177 `@router.post("/batch/init")`.

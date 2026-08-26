@@ -341,20 +341,48 @@ from shared.auth import validate_auth_config
 
 validate_auth_config()
 
-# #2808: insecure-default secret checks had ZERO call sites repo-wide, so the
-# INSECURE_DEFAULTS table (ADMIN_MASTER_KEY=dev-admin-key, NEO4J_PASSWORD=neo4j,
-# object-storage test creds, …) was never consulted and a deployment could boot
-# on shipped placeholder credentials. Wired here next to validate_auth_config()
-# because this module is the single production entrypoint.
+# #2808: the insecure-default secret checks had ZERO call sites repo-wide, so
+# the INSECURE_DEFAULTS table (ADMIN_MASTER_KEY=dev-admin-key,
+# NEO4J_PASSWORD=neo4j, object-storage test creds, …) was never consulted and a
+# deployment could boot on shipped placeholder credentials. Wired here next to
+# validate_auth_config() because this module is the single production
+# entrypoint. Both functions no-op unless REGENGINE_ENV is explicitly
+# "production", so local and test boots are untouched.
 #
-# Safe to call unconditionally: both functions no-op unless REGENGINE_ENV is
-# explicitly "production" — the same fail-fast-only-in-prod convention
-# validate_auth_config() uses — so local/test boot and the import smoke test
-# are unaffected.
+# Enforcement follows the #2461 RLS-posture pattern above: run the check on
+# every boot so a violation is impossible to miss, but do not abort by default.
+# validate_production_secrets() fails on any of its four variables being
+# *unset* — OBJECT_STORAGE_ACCESS_KEY_ID / OBJECT_STORAGE_SECRET_ACCESS_KEY
+# included — and this module is the only deployed container, so raising here on
+# an unverified env-var gap is a fleet-wide crash-loop, not a safety net.
+# tests/test_server_import_smoke.py's simulated Railway boot
+# (RAILWAY_ENVIRONMENT_NAME=production, no object-storage creds) demonstrates
+# exactly that: it fails to import when this raises.
+#
+# So: log loudly (Sentry-captured) by default, and set
+# REGENGINE_REQUIRE_SECURE_SECRETS=1 on Railway once the four variables are
+# confirmed present — from that point the fleet can never silently regress to
+# placeholder credentials.
 from shared.secrets_manager import require_secure_secrets_in_production, validate_production_secrets
 
-require_secure_secrets_in_production()
-validate_production_secrets()
+_REQUIRE_SECURE_SECRETS = os.getenv("REGENGINE_REQUIRE_SECURE_SECRETS", "").strip().lower() in {"1", "true", "yes"}
+
+try:
+    require_secure_secrets_in_production()
+    validate_production_secrets()
+except RuntimeError as _secrets_exc:
+    if _REQUIRE_SECURE_SECRETS:
+        raise
+    # The message names the offending variables only — never their values.
+    logger.error(
+        "insecure_production_secrets_detected",
+        msg=(
+            "Production secret validation FAILED but boot is continuing. Set "
+            "REGENGINE_REQUIRE_SECURE_SECRETS=1 to make this fatal once the "
+            "variables are confirmed on the deploy target (#2808)."
+        ),
+        error=str(_secrets_exc),
+    )
 
 # #1325: mount Prometheus RED metrics on /metrics for the monolith. add_security/
 # add_observability above wire CORS + OTel tracing but NOT the Prometheus

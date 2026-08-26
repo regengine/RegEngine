@@ -362,8 +362,10 @@ def _build_dependency_checker():
 # code — three handlers claimed that path and Starlette's first-match won,
 # which was the Kafka-only ingestion handler. This is the only handler in the
 # process that actually verifies Postgres/Neo4j/Redis, so it is remounted on a
-# distinct path instead of being deleted. Root ``/health`` is now owned solely
-# by the liveness probe in server/main.py.
+# distinct path instead of being deleted. ``/health`` is now owned solely by
+# services/ingestion/app/routes_health_metrics.py (the one path
+# .github/workflows/inflow-contract-ci.yml gates the standalone ingestion
+# entrypoint on); the root liveness probe moved to ``/health/live``.
 @router.get("/health/deep", operation_id="admin_deep_health")
 async def health():
     """Deep health check — verifies Postgres, Neo4j and Redis connectivity.

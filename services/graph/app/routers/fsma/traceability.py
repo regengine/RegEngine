@@ -617,15 +617,21 @@ async def log_traceability_event(
 
     # 2. Persistence to Neo4j
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    client = Neo4jClient(database=db_name)
     event_id = str(uuid.uuid4())
 
     try:
-        # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The explicit close that used to
-        # sit inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver (and pool)
-        # per failed request behind the generic 500 handler.
-        async with Neo4jClient(database=db_name) as client, client.session() as session:
+        # #2833: entering the client as a context manager closes the
+        # driver — and its connection pool — on every exit path. The
+        # explicit close that used to sit inside the try was skipped
+        # whenever the session work or the canonical bridge below it
+        # raised, leaking a driver (and pool) per failed request behind
+        # the generic 500 handler.
+        # `async with client` rather than `async with Neo4jClient(...) as
+        # client`: __aenter__ returns self, so the two are equivalent for
+        # the real client, and this form keeps working for callers that
+        # hold the constructed instance (test doubles included).
+        async with client, client.session() as session:
             # Create TraceEvent
             trace_event = TraceEvent(
                 event_id=event_id,

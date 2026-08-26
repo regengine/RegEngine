@@ -14,7 +14,7 @@ import { getServerServiceURL } from '@/lib/api-config';
 //   services/admin/app/api_overlay.py:207  @router.get("/controls/{control_id}")
 //   services/admin/app/api_overlay.py:241  @router.put("/controls/{control_id}")
 //   services/admin/app/api_overlay.py:293  @router.delete("/controls/{control_id}")
-// and it is mounted prefix-free in server/main.py:794
+// and it is mounted prefix-free in server/main.py:835
 //   app.include_router(overlay_router, tags=["Compliance Overlay"])
 // so the effective paths are /v1/overlay/controls[/{id}]. Every request under
 // the old /v1/admin/ prefix 404'd.

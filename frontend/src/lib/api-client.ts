@@ -525,7 +525,7 @@ class APIClient {
   // forwards verbatim: `${GRAPH_URL}/${path}`. The labels router is mounted at
   //   services/graph/app/routes.py:55
   //     v1_router.include_router(labels.router, prefix="/labels", ...)
-  // and v1_router reaches the app via server/main.py:869
+  // and v1_router reaches the app via server/main.py:910
   //     app.include_router(graph_router, prefix="/api/v1", ...)
   // giving /api/v1/labels/* (services/graph/app/routers/labels.py:171
   // `@router.get("/health")`, :177 `@router.post("/batch/init")`). The old

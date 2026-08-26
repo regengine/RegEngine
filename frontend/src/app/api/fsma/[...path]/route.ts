@@ -5,7 +5,7 @@ import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } fr
 //
 // #2836 Every mapping below is pinned to a real backend mount point:
 //
-//   Graph service, mounted at /api/v1 (server/main.py:869
+//   Graph service, mounted at /api/v1 (server/main.py:910
 //   `app.include_router(graph_router, prefix="/api/v1", ...)`), sub-routers from
 //   services/graph/app/routes.py:
 //     :59  trace_router      prefix="/fsma/traceability"  -> /api/v1/fsma/traceability/*
@@ -16,13 +16,13 @@ import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } fr
 //
 //   `gaps` and `export/` are NOT top-level FSMA routes — they are endpoints on
 //   the compliance sub-router (services/graph/app/routers/fsma/compliance.py):
-//     :624 @router.get("/gaps")                    -> /api/v1/fsma/compliance/gaps
-//     :661 @router.get("/gaps/orphans")            -> /api/v1/fsma/compliance/gaps/orphans
-//     :717 @router.get("/export/gaps")             -> /api/v1/fsma/compliance/export/gaps
-//     :411 @router.get("/export/trace/{tlc}")      -> /api/v1/fsma/compliance/export/trace/*
-//     :538 @router.get("/export/recall-contacts/{tlc}")
+//     :640 @router.get("/gaps")                    -> /api/v1/fsma/compliance/gaps
+//     :681 @router.get("/gaps/orphans")            -> /api/v1/fsma/compliance/gaps/orphans
+//     :741 @router.get("/export/gaps")             -> /api/v1/fsma/compliance/export/gaps
+//     :419 @router.get("/export/trace/{tlc}")      -> /api/v1/fsma/compliance/export/trace/*
+//     :550 @router.get("/export/recall-contacts/{tlc}")
 //     :84  @router.get("/export/fda-request")
-//     :181 @router.get("/export/epcis")
+//     :185 @router.get("/export/epcis")
 //   so they need the `compliance/` segment spliced in, which is what
 //   GRAPH_COMPLIANCE_PATH_PREFIXES below does.
 //
@@ -33,7 +33,7 @@ import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } fr
 //   it back without a real backend router to point it at.
 //
 //   Compliance service — services/compliance/app/routes.py:64 declares
-//   `APIRouter(tags=["fsma-compliance"])` with NO prefix, and server/main.py:887
+//   `APIRouter(tags=["fsma-compliance"])` with NO prefix, and server/main.py:929
 //   mounts it with no prefix either (`app.include_router(fsma_router, ...)`), so
 //   its routes are /industries, /checklists, /checklists/{id} and
 //   /v1/fsma/audit/spreadsheet. The previous `/fsma-204/` fallback segment is

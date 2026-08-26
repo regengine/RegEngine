@@ -11,15 +11,15 @@
  *   #2835 controls — services/admin/app/api_overlay.py:55
  *                      router = APIRouter(prefix="/v1/overlay", tags=["overlay"])
  *                    :123 @router.post("/controls")   :168 @router.get("/controls")
- *                    mounted prefix-free at server/main.py:794.
+ *                    mounted prefix-free at server/main.py:835.
  *                    Was built as /v1/admin/... — 404 on every call.
  *
  *   #2836 fsma     — services/graph/app/routes.py:59-63 mounts the FSMA
- *                    sub-routers, and server/main.py:869 mounts graph at
+ *                    sub-routers, and server/main.py:910 mounts graph at
  *                    prefix="/api/v1". `gaps` and `export/` are endpoints on
  *                    the compliance sub-router
- *                    (services/graph/app/routers/fsma/compliance.py:624, :661,
- *                    :717), NOT top-level FSMA routes, so they need the
+ *                    (services/graph/app/routers/fsma/compliance.py:640, :681,
+ *                    :741), NOT top-level FSMA routes, so they need the
  *                    compliance/ segment. There is NO drift router anywhere in
  *                    the backend, and no /fsma-204 prefix is registered by
  *                    anything.
@@ -133,7 +133,7 @@ describe('#2836 fsma proxy routes each path to its real backend mount', () => {
         const target = await targetUrlFor(GET!, '/api/fsma/checklists');
         expect(target).not.toContain('/fsma-204/');
         // services/compliance/app/routes.py:64 declares APIRouter with no
-        // prefix and server/main.py:887 mounts it with none either.
+        // prefix and server/main.py:929 mounts it with none either.
         expect(target).toBe(`${COMPLIANCE}/checklists`);
     });
 
