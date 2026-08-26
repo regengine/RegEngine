@@ -7,8 +7,8 @@ existing tables), and asserts:
   1. The upgrade succeeds.
   2. The core schemas and tables declared by the consolidated
      baseline + v043-v058 chain exist after the upgrade.
-  3. The v061 task_queue policy is in place (no OR-empty-string
-     bypass).
+  3. The v114 task-queue policies use command-appropriate, fail-closed
+     ``USING`` and ``WITH CHECK`` predicates.
   4. ``fsma.fsma_audit_trail.tenant_id`` and ``fsma.task_queue.tenant_id``
      are NOT NULL (#1287).
   5. ``fsma.task_queue`` has FORCE ROW LEVEL SECURITY enabled (#1281).
@@ -256,24 +256,70 @@ def test_core_tables_exist(pg_engine: Engine) -> None:
 
 
 def test_task_queue_policy_fail_closed(pg_engine: Engine) -> None:
-    """v061 replaced the v050 fail-open policy. Assert the replacement
-    policy uses ``get_tenant_context()`` and does NOT contain the
-    original OR-empty-string bypass."""
+    """v114 keeps every task-queue command on its fail-closed predicate.
+
+    PostgreSQL stores INSERT predicates in ``with_check`` rather than
+    ``qual``.  Checking only ``qual`` therefore reports a secure INSERT
+    policy as empty and, more importantly, would never validate its actual
+    write constraint.
+    """
     with pg_engine.connect() as conn:
         rows = conn.execute(
-            text("SELECT policyname, qual FROM pg_policies WHERE schemaname = 'fsma' AND tablename = 'task_queue'")
+            text(
+                "SELECT policyname, cmd, roles, qual, with_check "
+                "FROM pg_policies "
+                "WHERE schemaname = 'fsma' AND tablename = 'task_queue'"
+            )
         ).fetchall()
-    assert rows, "task_queue has no RLS policies after v061"
-    for row in rows:
-        qual = row.qual or ""
-        assert "current_setting('app.tenant_id', true) = ''" not in qual, (
-            f"v050 fail-open bypass still present in policy {row.policyname}: {qual}"
-        )
-        # Either get_tenant_context() (preferred) or a direct GUC
-        # comparison without the empty-string escape hatch.
-        assert "get_tenant_context" in qual or "nullif" in qual.lower(), (
-            f"Policy {row.policyname} doesn't use a fail-hard resolver: {qual}"
-        )
+
+    expected = {
+        "task_queue_runtime_select": ("SELECT", ["regengine"], "tenant", None),
+        "task_queue_runtime_insert": ("INSERT", ["regengine"], None, "tenant"),
+        "task_queue_sysadmin_select": ("SELECT", ["regengine_sysadmin"], "sysadmin", None),
+        "task_queue_sysadmin_update": ("UPDATE", ["regengine_sysadmin"], "sysadmin", "sysadmin"),
+        "task_queue_sysadmin_delete": ("DELETE", ["regengine_sysadmin"], "sysadmin", None),
+    }
+    actual = {row.policyname: row for row in rows}
+    assert set(actual) == set(expected), (
+        "Unexpected v114 task_queue policy inventory: "
+        f"missing={sorted(set(expected) - set(actual))}, "
+        f"extra={sorted(set(actual) - set(expected))}"
+    )
+
+    for policy_name, (command, roles, qual_kind, check_kind) in expected.items():
+        row = actual[policy_name]
+        assert row.cmd == command, f"{policy_name} has command {row.cmd}, expected {command}"
+        assert row.roles == roles, f"{policy_name} has roles {row.roles}, expected {roles}"
+
+        for field_name, predicate, predicate_kind in (
+            ("qual", row.qual, qual_kind),
+            ("with_check", row.with_check, check_kind),
+        ):
+            if predicate_kind is None:
+                assert predicate is None, f"{policy_name}.{field_name} should be empty: {predicate}"
+                continue
+
+            # ``pg_get_expr`` adds explicit ``::text`` casts on some
+            # PostgreSQL versions; remove only those display casts before
+            # comparing the policy contract.
+            normalized = str(predicate).lower().replace("::text", "")
+            assert "current_setting('app.tenant_id', true) = ''" not in normalized, (
+                f"v050 fail-open bypass still present in {policy_name}.{field_name}: {predicate}"
+            )
+            assert normalized.strip(" ()") != "true", (
+                f"Permissive predicate present in {policy_name}.{field_name}: {predicate}"
+            )
+            if predicate_kind == "tenant":
+                assert "nullif(current_setting('app.tenant_id', true), '')" in normalized, (
+                    f"{policy_name}.{field_name} does not fail closed on tenant context: {predicate}"
+                )
+            else:
+                assert "current_user" in normalized and "regengine_sysadmin" in normalized, (
+                    f"{policy_name}.{field_name} does not pin the sysadmin role: {predicate}"
+                )
+                assert "regengine.is_sysadmin" in normalized, (
+                    f"{policy_name}.{field_name} does not require the sysadmin transaction arm: {predicate}"
+                )
 
 
 def test_task_queue_has_force_rls(pg_engine: Engine) -> None:
