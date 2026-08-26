@@ -415,6 +415,25 @@ def _parse_csv_to_events(
             col_map.setdefault(alias.lower(), canonical)
 
     reader = csv.DictReader(io.StringIO(csv_text))
+
+    # #2819: distinguish the two failure shapes that used to look identical.
+    #
+    #   * The cte_type COLUMN is absent from the header entirely (or is an
+    #     alias we don't recognise). The file is structurally unusable —
+    #     there is no per-row information to preserve, every row is equally
+    #     unevaluable, and the caller needs to be told to add the column.
+    #     ``sandbox/router.py`` turns the empty result into a 400 naming the
+    #     missing column, which is the right answer; we keep that contract.
+    #
+    #   * The column EXISTS but individual cells are blank. This is the
+    #     #2819 data-integrity bug: those rows used to vanish silently, so a
+    #     10-row upload was scored as 7 rows and readiness came back
+    #     "100% compliant" over a reduced record set. Those rows are now
+    #     counted and flagged.
+    _header_maps_cte_type = any(
+        col_map.get((col or "").strip().lower().replace(" ", "_")) == "cte_type" for col in (reader.fieldnames or [])
+    )
+
     events = []
     normalizations: List[Dict[str, Any]] = []
     row_errors: List[Dict[str, Any]] = []
@@ -538,6 +557,14 @@ def _parse_csv_to_events(
 
         events.append(event)
         row_index += 1
+
+    # #2819: no CTE-type column at all → structurally unusable file. Return
+    # empty so the caller surfaces a single actionable "add a cte_type
+    # column" error instead of N identical per-row errors. Rows are only
+    # dropped here when EVERY row is equally unevaluable, so a readiness
+    # score can never be computed over a partially-reduced record set.
+    if not _header_maps_cte_type:
+        return []
 
     # Attach normalizations to be retrieved by caller
     if track_normalizations and events:

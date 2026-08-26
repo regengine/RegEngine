@@ -13,10 +13,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import PlainTextResponse
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
-from shared.metrics_auth import require_metrics_key
 from shared.pagination import PaginatedResponse, PaginationParams
 
 # Centralised path resolution
@@ -266,13 +263,17 @@ def require_funnel_read(
     return None
 
 
-@router.get("/health", operation_id="admin_deep_health")
-async def health():
-    """Health check endpoint with dependency verification."""
+def _build_dependency_checker():
+    """Build the dependency-verifying ``HealthCheck`` used by the deep probes.
+
+    Shared by ``GET /health/deep`` and ``GET /ready`` so both report on the
+    *same* live Postgres / Neo4j / Redis probes. Only dependencies that are
+    actually configured are registered — an unset ``REDIS_URL`` means "not part
+    of this deployment", not "down".
+    """
     import asyncio
     import os
 
-    from fastapi.responses import JSONResponse
     from shared.observability.health import HealthCheck
 
     checker = HealthCheck(service_name="admin-api")
@@ -354,14 +355,50 @@ async def health():
 
         checker.add_dependency("redis", check_redis)
 
-    result = await checker.check()
-    return JSONResponse(content=result, status_code=200)
+    return checker
 
 
+# #2856: this probe used to be registered at ``/health``, where it was dead
+# code — three handlers claimed that path and Starlette's first-match won,
+# which was the Kafka-only ingestion handler. This is the only handler in the
+# process that actually verifies Postgres/Neo4j/Redis, so it is remounted on a
+# distinct path instead of being deleted. Root ``/health`` is now owned solely
+# by the liveness probe in server/main.py.
+@router.get("/health/deep", operation_id="admin_deep_health")
+async def health():
+    """Deep health check — verifies Postgres, Neo4j and Redis connectivity.
+
+    Returns 503 when any configured dependency is unreachable. Previously this
+    hardcoded ``status_code=200`` even for ``status == "unhealthy"``, so an
+    unreachable database still read as a green probe to anything that alerted
+    on the HTTP status rather than parsing the body (#2856).
+    """
+    from fastapi.responses import JSONResponse
+
+    result = await _build_dependency_checker().check()
+    status_code = 200 if result.get("status") == "healthy" else 503
+    return JSONResponse(content=result, status_code=status_code)
+
+
+# #2856: previously a static ``{"status": "ready"}`` that probed nothing and
+# could never report an instance that was up but unable to serve. It now runs
+# the same dependency verification as ``/health/deep`` and 503s when a
+# configured dependency is down — the semantics
+# ``shared.observability.health.install_health_router`` already defines for
+# ``/ready`` across the other services. The monolith's Railway-polled probe
+# remains ``/readiness`` (server/main.py); this is the per-service equivalent.
 @router.get("/ready", response_model=ReadinessResponse)
 async def readiness():
-    """Readiness probe for k8s orchestration."""
-    return {"status": "ready", "service": "admin-api"}
+    """Readiness probe for k8s orchestration — 503 when a dependency is down."""
+    from fastapi.responses import JSONResponse
+
+    result = await _build_dependency_checker().check()
+    if result.get("status") == "healthy":
+        return {"status": "ready", "service": "admin-api"}
+    return JSONResponse(
+        status_code=503,
+        content={"status": "not_ready", "service": "admin-api", "dependencies": result.get("dependencies", {})},
+    )
 
 
 @router.get("/health/consumer", dependencies=[Depends(verify_admin_key)])
@@ -374,10 +411,14 @@ def consumer_health():
     return JSONResponse(content=health_info, status_code=status_code)
 
 
-@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
-def metrics():
-    """Prometheus metrics endpoint."""
-    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# #2856: the hand-rolled ``GET /metrics`` that used to live here was a second
+# registration of a path already owned by
+# ``shared.observability.fastapi_metrics.install_metrics`` — called by both
+# server/main.py and services/admin/main.py. Starlette served whichever
+# registered first while OpenAPI documented the other. install_metrics is the
+# single source of truth (prometheus-fastapi-instrumentator RED metrics plus
+# the X-Metrics-Key guard), so the duplicate is gone; ``generate_latest()``
+# exposition is still served at ``/metrics`` by that installer.
 
 
 @v1_router.post("/admin/keys", response_model=CreateKeyResponse)

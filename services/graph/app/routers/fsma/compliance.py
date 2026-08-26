@@ -107,13 +107,16 @@ async def export_fda_request_sheet(
     # (409 E_TENANT_MISMATCH) on divergence before any read.
     scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
-    client = Neo4jClient(database=db_name)
 
     try:
         from ...fsma_utils import query_events_by_range
 
-        events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
@@ -208,13 +211,16 @@ async def export_epcis(
     logger.info("epcis_export_initiated", start=start_date, end=end_date, format=format)
 
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
         from ...fsma_utils import query_events_by_range
 
-        events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
 
         # Map CTE types to EPCIS bizStep
         BIZ_STEP_MAP = {
@@ -438,14 +444,17 @@ async def export_trace_csv(
     - Facility Address
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        if direction == "forward":
-            result = await trace_forward(client, tlc, max_depth, str(tenant_id))
-        else:
-            result = await trace_backward(client, tlc, max_depth, str(tenant_id))
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            if direction == "forward":
+                result = await trace_forward(client, tlc, max_depth, str(tenant_id))
+            else:
+                result = await trace_backward(client, tlc, max_depth, str(tenant_id))
 
         # Generate CSV content
         csv_buffer = io.StringIO()
@@ -559,11 +568,14 @@ async def export_recall_contacts(
     - Quantity Received
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        result = await trace_forward(client, tlc, 10, str(tenant_id))
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            result = await trace_forward(client, tlc, 10, str(tenant_id))
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
@@ -638,11 +650,14 @@ async def get_compliance_gaps(
     # on any divergence from the middleware-resolved tenant.
     scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
-    client = Neo4jClient(database=db_name)
 
     try:
-        gaps = await find_gaps(client, scoped_tenant_id)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            gaps = await find_gaps(client, scoped_tenant_id)
 
         return {
             "total_gaps": len(gaps),
@@ -681,11 +696,14 @@ async def get_orphaned_lots(
     # on any divergence from the middleware-resolved tenant.
     scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
-    client = Neo4jClient(database=db_name)
 
     try:
-        orphans = await find_orphaned_lots(client, scoped_tenant_id, days_stagnant)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            orphans = await find_orphaned_lots(client, scoped_tenant_id, days_stagnant)
 
         return {
             "total_orphans": len(orphans),
@@ -728,11 +746,14 @@ async def export_gaps_csv(
     # on any divergence from the middleware-resolved tenant.
     scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
-    client = Neo4jClient(database=db_name)
 
     try:
-        gaps = await find_gaps(client, scoped_tenant_id)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The old `await client.close()`
+        # inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver per failure.
+        async with Neo4jClient(database=db_name) as client:
+            gaps = await find_gaps(client, scoped_tenant_id)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)

@@ -339,11 +339,76 @@ class TestParseCsvCteTypeNormalization:
         events = _parse_csv_to_events(csv)
         assert events[0]["cte_type"] == "customcte"
 
-    def test_row_without_cte_type_skipped_entirely(self):
-        """Rows lacking a cte_type must be dropped — they can't be evaluated."""
+    def test_csv_with_no_cte_type_column_at_all_is_still_empty(self):
+        """A header with NO cte_type column is a STRUCTURAL error, not a
+        per-row one.
+
+        This is the one case where returning no events is right: every row
+        is equally unevaluable, so there is no partial record set to score.
+        ``sandbox/router.py`` turns the empty result into a 400 that names
+        the missing column, which is a better answer than N identical
+        per-row errors. Contrast with the blank-cell tests below (#2819),
+        where the column exists and individual rows must be counted.
+        """
         csv = "tlc,product\nLOT-1,Apples\n"
+        assert _parse_csv_to_events(csv) == []
+
+    def test_blank_cte_type_cell_is_counted_and_flagged(self):
+        """#2819: an EMPTY cell is the real-world shape of this bug.
+
+        Blank cells are stripped by the ``not value.strip()`` guard earlier
+        in the parser, so a blank cte_type arrives at the CTE-normalization
+        block as a MISSING key, not an empty string.
+        """
+        csv = "cte_type,tlc\n,LOT-1\n"
         events = _parse_csv_to_events(csv)
-        assert events == []
+
+        assert len(events) == 1
+        assert "cte_type" not in events[0]
+        assert len(events[0]["__row_errors__"]) == 1
+
+    def test_ten_rows_with_three_blank_cte_types(self):
+        """#2819 headline case: 10 CSV rows in, 10 rows counted out, with
+        3 explicit validation errors — not 7 rows and silence."""
+        lines = ["cte_type,tlc,product"]
+        blank_rows = {2, 5, 8}
+        for i in range(10):
+            cte = "" if i in blank_rows else "harvesting"
+            lines.append(f"{cte},LOT-{i},Romaine")
+        csv = "\n".join(lines) + "\n"
+
+        events = _parse_csv_to_events(csv)
+
+        assert len(events) == 10, "every CSV data row must be counted"
+        errors = events[0]["__row_errors__"]
+        assert len(errors) == 3
+        assert sorted(e["event_index"] for e in errors) == sorted(blank_rows)
+        assert all(e["field"] == "cte_type" for e in errors)
+        assert all(e["action_type"] == "missing_required_field" for e in errors)
+
+        # Row ordering is preserved: index N in the output is row N of the CSV.
+        for i, event in enumerate(events):
+            assert event["traceability_lot_code"] == f"LOT-{i}"
+            assert ("cte_type" in event) is (i not in blank_rows)
+
+    def test_row_errors_absent_when_every_row_has_a_cte_type(self):
+        csv = "cte_type,tlc\nharvesting,LOT-1\nshipping,LOT-2\n"
+        events = _parse_csv_to_events(csv)
+        assert len(events) == 2
+        assert "__row_errors__" not in events[0]
+
+    def test_missing_cte_type_surfaces_as_a_kde_validation_error(self):
+        """#2819 end-to-end intent: because the row is now emitted, the
+        downstream sandbox validator produces a real, blocking error for it
+        instead of the row being invisible."""
+        from app.sandbox.validation import _validate_kdes
+
+        csv = "cte_type,tlc\nharvesting,LOT-1\n,LOT-2\n"
+        events = _parse_csv_to_events(csv)
+        assert len(events) == 2
+
+        assert _validate_kdes(events[1]), "row with no CTE type must produce a validation error"
+        assert "Invalid CTE type" in _validate_kdes(events[1])[0]
 
 
 # ===========================================================================

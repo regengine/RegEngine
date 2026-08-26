@@ -343,9 +343,27 @@ async def get_current_user(
                 error_type=type(exc).__name__,
             )
 
-    # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
+    # Set user_id context for RLS so the user can see themselves (PostgreSQL only).
+    #
+    # SECURITY (#2853): the third set_config argument is ``is_local``. This
+    # used to pass ``false`` — a SESSION-scoped write that outlives the
+    # request and rides the pooled connection back into the pool. public.users
+    # and public.sessions are ENABLE+FORCE RLS with policies keyed on this
+    # exact GUC (``user_self_isolation`` / ``sessions_user_isolation``, v078),
+    # so the next caller to check out that connection inherited the previous
+    # caller's identity scope until its own get_current_user overwrote it —
+    # and pre-auth or non-authenticating routes never overwrite it at all.
+    #
+    # ``true`` makes it transaction-scoped, matching the shared engine's
+    # canonical primitive (``shared.tenant_context.set_tenant_guc``) and
+    # clearing automatically on COMMIT/ROLLBACK. Safe here because
+    # ``SessionLocal`` is built with ``expire_on_commit=False`` (see
+    # services/admin/app/database.py), so a mid-request commit cannot trigger
+    # an implicit re-SELECT of the user row after the GUC has cleared.
+    # database.py's checkout listener resets this GUC as well, as defence in
+    # depth for connections that were orphaned mid-request.
     if db.bind and db.bind.dialect.name != "sqlite":
-        db.execute(text("SELECT set_config('regengine.user_id', :uid, false)"), {"uid": str(user_id)})
+        db.execute(text("SELECT set_config('regengine.user_id', :uid, true)"), {"uid": str(user_id)})
 
     user = db.get(UserModel, UUID(user_id))
     if user is None:

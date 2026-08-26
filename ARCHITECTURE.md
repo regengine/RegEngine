@@ -46,9 +46,11 @@ useful decomposition seams in the codebase:
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
 - **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
-  Alembic (`alembic/versions/`, head is **v110** —
-  `6f8c2d1a4b90_v110_developer_profile_insert_policy`, verified 2026-08-26);
-  the app performs no runtime DDL as of v098/v099. The newest tables are
+  Alembic (`alembic/versions/`, head is **v111** —
+  `df664d92adba_v111_public_controls_regulations_force_rls`, which FORCEs RLS
+  on `public.controls` and `public.regulations`; verified 2026-08-26);
+  the app performs no runtime DDL as of v098/v099. v111 creates no tables, so
+  the newest tables are
   `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
   rule-evaluation persistence, replayed by the
   `rule_evaluation_deadletter_replay` scheduler job) and
@@ -59,8 +61,9 @@ useful decomposition seams in the codebase:
   value plus the v105 marker columns that never shipped, v109 adds a
   tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
   RLS INSERT policy letting authenticated users create their own developer
-  profile. `fsma.compliance_evidence_snapshots` (v103) and the v102
-  mock-audit drill records are no longer the newest tables.
+  profile. v111 then FORCEs RLS on the two regulatory control-plane tables.
+  `fsma.compliance_evidence_snapshots` (v103) and the v102 mock-audit drill
+  records are no longer the newest tables.
 - **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
   subscription/entitlement checks, idempotency caching, and task-processing
   helpers when configured. The local dev stack

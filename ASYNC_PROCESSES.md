@@ -103,8 +103,10 @@ Redis-backed.
 
 - **Neo4j supplier sync** — `services/admin/app/supplier_graph_sync.py` mirrors supplier
   onboarding into Neo4j at runtime behind a circuit breaker; webhook ingest can enqueue
-  CTE events to a Redis `neo4j-sync` list when enabled (the draining worker,
-  `services/graph/scripts/fsma_sync_worker.py`, is not deployed).
+  CTE events to a Redis `neo4j-sync` list when enabled. **Nothing drains that
+  list.** The draining worker this doc previously named
+  (`services/graph/scripts/fsma_sync_worker.py`) no longer exists in the tree,
+  so enqueued entries accumulate unread rather than merely going undeployed.
 - **Hidden dependency:** the monolith `/readiness` probe pings Neo4j when `NEO4J_URI` is
   set — a down Neo4j can fail the Railway healthcheck.
 
@@ -126,5 +128,5 @@ These look async but are synchronous request-response:
 - **Identity resolution** — triggered synchronously during ingestion, not scheduled.
 - **FDA export generation** — on-demand via API request, not pre-generated.
 - **CTE lot tracing** — recursive SQL in `services/shared/cte_persistence/queries.py`,
-  executed per request. (`server/workers/lot_tracing.py` looks like a worker module but
-  is dead code with zero importers.)
+  executed per request. (The `server/workers/lot_tracing.py` module this doc used to
+  flag as dead code has since been deleted; there is no lot-tracing worker.)

@@ -1046,7 +1046,8 @@ def normalize_epcis_event(
     # authoritative map, raising on anything unmapped (#2815). The old
     # 6-entry fuzzy substring loop silently defaulted to CTEType.RECEIVING
     # and disagreed with epcis/normalization.py on five real bizSteps.
-    cte_type = _resolve_bizstep_to_cte_type(epcis_data.get("bizStep"))
+    biz_step = epcis_data.get("bizStep", "")
+    cte_type = _resolve_bizstep_to_cte_type(biz_step)
 
     # Extract identifiers
     epc_list = epcis_data.get("epcList", [])

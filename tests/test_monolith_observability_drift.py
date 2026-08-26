@@ -49,7 +49,14 @@ def test_metrics_requires_auth(server_main):
 
 def test_metrics_returns_exposition_with_valid_key(server_main, monkeypatch):
     """With the configured key the endpoint returns Prometheus exposition
-    including the seeded ``regengine_*`` business counters."""
+    including RED series populated by real traffic.
+
+    #2866: this previously asserted on ``regengine_events_ingested_total``,
+    one of four business counters that were seeded at install time but never
+    incremented anywhere in the codebase. Asserting a seeded-but-dead counter
+    proved only that the seeding ran. Asserting a RED series populated by the
+    request fired below proves instrumentation actually works.
+    """
     import shared.observability.metrics_auth as metrics_auth
 
     monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "test-metrics-key")
@@ -61,8 +68,10 @@ def test_metrics_returns_exposition_with_valid_key(server_main, monkeypatch):
     resp = client.get("/metrics", headers={"X-Metrics-Key": "test-metrics-key"})
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
-    # Seeded at install time, so deterministically present on first scrape.
-    assert "regengine_events_ingested_total" in resp.text
+    # Populated by the /health request fired above, so deterministically
+    # present — and, unlike a seeded counter, only present if the middleware
+    # genuinely observed the request.
+    assert "http_requests_total" in resp.text
 
 
 # ---------------------------------------------------------------------------
