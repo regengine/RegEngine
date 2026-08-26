@@ -49,7 +49,6 @@ from __future__ import annotations
 # model classes, hashing functions, ``logger``) is still defined or
 # imported below, and the sibling modules resolve them late through
 # this module so monkeypatching ``core.X`` keeps working.
-
 import hashlib  # noqa: F401  — kept for backward compat (was a module global)
 import json
 import logging
@@ -65,8 +64,8 @@ from sqlalchemy.exc import (  # noqa: F401  — kept for backward compat
 )
 from sqlalchemy.orm import Session
 
-from .models import StoreResult, ChainVerification, MerkleVerification, DuplicateEventError
-from .hashing import compute_event_hash, compute_chain_hash, compute_idempotency_key
+from .hashing import compute_chain_hash, compute_event_hash, compute_idempotency_key
+from .models import ChainVerification, DuplicateEventError, MerkleVerification, StoreResult
 
 # ---------------------------------------------------------------------------
 # Validation Status Constants (fix #1324)
@@ -323,11 +322,11 @@ def _assert_not_exists(sha256_hash: str, tenant_id: str, session: Any) -> None:
 # Imported AFTER the helpers above so the sibling modules can resolve
 # ``core`` attributes during their (lazy, call-time) lookups. These
 # mixins contain code moved verbatim out of this file.
-from .writes import WritePathMixin  # noqa: E402
 from .batch import BatchWritePathMixin  # noqa: E402
+from .exports import ExportLogMixin  # noqa: E402
 from .queries import QueryPathMixin  # noqa: E402
 from .verification import ChainVerificationMixin  # noqa: E402
-from .exports import ExportLogMixin  # noqa: E402
+from .writes import WritePathMixin  # noqa: E402
 
 
 class CTEPersistence(

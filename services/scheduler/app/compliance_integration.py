@@ -12,10 +12,10 @@ from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 import structlog
+from shared.maintenance_tenants import list_maintenance_tenant_ids
 
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
-from shared.maintenance_tenants import list_maintenance_tenant_ids
 from shared.tenant_context import set_tenant_guc
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import SQLAlchemyError

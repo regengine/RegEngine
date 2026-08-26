@@ -13,7 +13,6 @@ import sys
 from typing import Optional
 
 from fastapi import HTTPException
-
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..authz import IngestionPrincipal
@@ -24,11 +23,9 @@ _pkg = sys.modules[__package__]
 def _lookup_tenant_id_for_api_key(raw_api_key: str) -> Optional[str]:
     """Best-effort legacy tenant lookup for callers without principal tenant context."""
     try:
-        from shared.database import SessionLocal
-        from sqlalchemy import bindparam as _bindparam
-        from sqlalchemy import text as _text
-
         from shared.api_key_store import set_api_key_lookup_context
+        from shared.database import SessionLocal
+        from sqlalchemy import bindparam as _bindparam, text as _text
 
         _db = SessionLocal()
         try:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 # Previously imported services.admin.main, which eagerly initialized the
 # Postgres pool at module load and broke any test host without a running
 # local Postgres. Build a minimal FastAPI app around just the v1_router
@@ -9,8 +11,6 @@ from __future__ import annotations
 from app import routes as routes_mod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from uuid import UUID
-
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
