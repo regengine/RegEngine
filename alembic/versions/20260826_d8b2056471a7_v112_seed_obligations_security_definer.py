@@ -19,8 +19,8 @@ The caller is ``services/ingestion/app/onboarding.py`` line 38, on a
 (NOBYPASSRLS after the #2461 cutover). Every template read in the body asks
 for ``tenant_id = demo_tenant`` while the ``tenant_isolation_*`` policies
 conjoin ``tenant_id = <new tenant>`` onto it — an unsatisfiable predicate.
-RLS filters rather than raising, so the
-result is zero rows and no error: onboarding reports success, seeds nothing,
+RLS filters rather than raising, so the result is zero rows and no error:
+onboarding reports success, seeds nothing,
 and v106 then writes ``fsma.tenant_seed_state`` with ``obligation_count = 0``
 — which is exactly the value that disables the #2708 fail-closed cross-check
 in ``services/ingestion/app/compliance_score.py`` line 260
@@ -216,10 +216,7 @@ def upgrade() -> None:
         """
     )
     op.execute("REVOKE ALL ON FUNCTION seed_obligations_for_tenant(uuid) FROM PUBLIC")
-    op.execute(
-        "GRANT EXECUTE ON FUNCTION seed_obligations_for_tenant(uuid) "
-        "TO regengine, regengine_sysadmin"
-    )
+    op.execute("GRANT EXECUTE ON FUNCTION seed_obligations_for_tenant(uuid) TO regengine, regengine_sysadmin")
 
 
 def downgrade() -> None:
