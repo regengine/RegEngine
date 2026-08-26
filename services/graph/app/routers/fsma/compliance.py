@@ -112,9 +112,10 @@ async def export_fda_request_sheet(
         from ...fsma_utils import query_events_by_range
 
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
 
@@ -216,9 +217,10 @@ async def export_epcis(
         from ...fsma_utils import query_events_by_range
 
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
 
@@ -447,9 +449,10 @@ async def export_trace_csv(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             if direction == "forward":
                 result = await trace_forward(client, tlc, max_depth, str(tenant_id))
@@ -571,9 +574,10 @@ async def export_recall_contacts(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             result = await trace_forward(client, tlc, 10, str(tenant_id))
 
@@ -653,9 +657,10 @@ async def get_compliance_gaps(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             gaps = await find_gaps(client, scoped_tenant_id)
 
@@ -699,9 +704,10 @@ async def get_orphaned_lots(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             orphans = await find_orphaned_lots(client, scoped_tenant_id, days_stagnant)
 
@@ -749,9 +755,10 @@ async def export_gaps_csv(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             gaps = await find_gaps(client, scoped_tenant_id)
 

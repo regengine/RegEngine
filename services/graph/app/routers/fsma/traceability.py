@@ -115,9 +115,10 @@ async def trace_forward_endpoint(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             result = await trace_forward(
                 client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow
@@ -242,9 +243,10 @@ async def trace_backward_endpoint(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             result = await trace_backward(client, tlc, max_depth, str(tenant_id))
 
@@ -320,9 +322,10 @@ async def lot_timeline_endpoint(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             timeline = await get_lot_timeline(client, tlc, str(tenant_id))
 
@@ -464,9 +467,10 @@ async def search_traceability_events(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             events = await query_events_by_range(
                 client,
@@ -617,9 +621,10 @@ async def log_traceability_event(
 
     try:
         # #2833: `async with` closes the driver — and its connection
-        # pool — on every exit path. The old `await client.close()`
-        # inside the try was skipped whenever the query or the
-        # serialization below it raised, leaking a driver per failure.
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client, client.session() as session:
             # Create TraceEvent
             trace_event = TraceEvent(

@@ -954,7 +954,25 @@ app.include_router(scheduler_status_router)
 
 
 # ── Health check ─────────────────────────────────────────────────
-@app.get("/health", tags=["system"], operation_id="root_liveness_health")
+# #2856: this handler used to be registered at ``/health``, where it was the
+# third claimant of that path and never ran. Starlette resolves first-match, so
+# ``services/ingestion/app/routes_health_metrics.py`` (included at line ~512,
+# long before this module-level route) answered every request — while FastAPI's
+# OpenAPI ``paths`` dict, being last-write-wins, documented *this* handler. The
+# published schema described a probe that could not be reached.
+#
+# ``/health`` stays with the ingestion handler because
+# ``services/ingestion/main.py`` exposes no other liveness path and
+# .github/workflows/inflow-contract-ci.yml gates on it. This one keeps its
+# distinct value — it is the only probe that touches nothing at all (no Kafka
+# call, no webhook_router_v2 import) — so it is remounted rather than deleted.
+#
+# The probe map after #2856:
+#   /health        liveness (ingestion handler; also the deploy.yml commit gate)
+#   /health/live   this — minimal liveness, imports nothing optional
+#   /health/deep   Postgres + Neo4j + Redis verification, 503 when unhealthy
+#   /readiness     Railway's healthcheckPath (railway.toml), 503 when Postgres is down
+@app.get("/health/live", tags=["system"], operation_id="root_liveness_health")
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
     from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION

@@ -25,26 +25,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health-metrics"])
 
 
-# #2856: this used to be registered at ``/health``. Three handlers claimed that
-# path (this one, ``admin_deep_health`` in services/admin/app/routes.py, and the
-# root liveness probe in server/main.py). Starlette resolves first-match, so in
-# the monolith THIS handler won every request while FastAPI's OpenAPI ``paths``
-# dict (last-write-wins) documented a handler that never ran. Root ``/health`` is
-# now owned solely by the liveness probe in server/main.py; this Kafka/webhook
-# view moved to ``/health/ingestion``. The ``/healthz`` and ``/api/health``
-# compatibility aliases below still return this exact payload, so no field
-# published by this handler became unreachable.
-@router.get("/health/ingestion")
+# #2856: this is now the SOLE owner of ``GET /health``. Three handlers used to
+# claim that path — this one, ``admin_deep_health`` in
+# services/admin/app/routes.py, and a root liveness probe in server/main.py.
+# Starlette resolves first-match while FastAPI's OpenAPI ``paths`` dict is
+# last-write-wins, so the monolith served this handler and documented another.
+#
+# This handler kept the path (rather than the root one) because
+# ``services/ingestion/main.py`` has no ``/health`` of its own: the Inflow Lab
+# contract workflow boots that entrypoint and gates on ``GET /health`` both as
+# its readiness wait and as the source of ``inflow_contract_version``
+# (.github/workflows/inflow-contract-ci.yml). The other two moved instead —
+# root liveness to ``/health/live``, the admin dependency probe to
+# ``/health/deep``.
+@router.get("/health")
 def health() -> dict[str, object]:
-    """Ingestion-subsystem health view (Kafka + webhook HMAC posture).
+    """Liveness / ingestion-posture endpoint.
 
     Returns ``"healthy"`` when all dependencies are reachable, or
     ``"degraded"`` when optional dependencies (e.g. Kafka) are
     unavailable.  Monitoring tools can alert on *degraded* without
     treating the service as fully down.
 
-    NOT the liveness probe: root ``/health`` (server/main.py) is liveness and
-    ``/readiness`` is the dependency-gated readiness probe Railway polls.
+    This is deliberately shallow: ``/readiness`` (server/main.py) is the
+    dependency-gated probe Railway polls, and ``/health/deep`` verifies
+    Postgres/Neo4j/Redis connectivity.
     """
     # Kafka is optional — only check if explicitly configured
     kafka_servers = _os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
