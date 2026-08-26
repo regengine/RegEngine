@@ -120,9 +120,7 @@ async def trace_forward_endpoint(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            result = await trace_forward(
-                client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow
-            )
+            result = await trace_forward(client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow)
 
         # Record metrics
         duration = time.time() - start_time

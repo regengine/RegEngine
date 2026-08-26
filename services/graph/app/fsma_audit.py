@@ -120,8 +120,7 @@ def _persist_audit_entry(entry) -> bool:
         if not _unconfigured_engine_warned:
             _unconfigured_engine_warned = True
             logging.getLogger("fsma_audit").warning(
-                "Audit DB engine unconfigured (DATABASE_URL unset): audit entries "
-                "are NOT being persisted. event_id=%s",
+                "Audit DB engine unconfigured (DATABASE_URL unset): audit entries are NOT being persisted. event_id=%s",
                 getattr(entry, "event_id", "?"),
             )
         else:
