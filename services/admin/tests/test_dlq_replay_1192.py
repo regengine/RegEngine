@@ -37,15 +37,31 @@ def _make_db_session():
     return MagicMock()
 
 
+def _configure_admin_execute(db: MagicMock, *route_results: MagicMock) -> None:
+    """Account for the route's transaction-local global-admin GUC arm."""
+    db.execute.side_effect = [MagicMock(), *route_results]
+
+
+def _assert_admin_context_armed(db: MagicMock) -> None:
+    first_sql = str(db.execute.call_args_list[0].args[0])
+    assert "set_config('regengine.is_sysadmin', 'true', true)" in first_sql
+
+
 def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
     """Mount system_routes on a minimal FastAPI app with stubbed dependencies."""
-    from services.admin.app.dependencies import get_current_user, get_session
+    from services.admin.app.dependencies import get_session
+    from services.admin.app.privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
     from services.admin.app.system_routes import router
 
     app = FastAPI()
     app.include_router(router, prefix="/v1")
 
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_sysadmin_high_assurance] = lambda: PrivilegedActor(
+        actor_type="staff_user",
+        actor_id=str(user.id),
+        auth_method="webauthn",
+        user=user,
+    )
     app.dependency_overrides[get_session] = lambda: db
     return app
 
@@ -64,6 +80,7 @@ class TestDLQReplayAuth:
         client = TestClient(_build_app(user, db), raise_server_exceptions=False)
         resp = client.post("/v1/system/dlq/replay", json={"ids": [], "limit": 5})
         assert resp.status_code == 403
+        db.execute.assert_not_called()
 
     def test_sysadmin_passes_auth_gate(self):
         user = _make_user(is_sysadmin=True)
@@ -72,11 +89,12 @@ class TestDLQReplayAuth:
         # Stub DB: no rows found for auto-limit query
         mock_result = MagicMock()
         mock_result.fetchall.return_value = []
-        db.execute.return_value = mock_result
+        _configure_admin_execute(db, mock_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": [], "limit": 5})
         assert resp.status_code == 200
+        _assert_admin_context_armed(db)
 
 
 class TestDLQReplayWithIds:
@@ -98,8 +116,8 @@ class TestDLQReplayWithIds:
         update_result = MagicMock()
         update_result.rowcount = 1
 
-        # execute() is called 4 times: 1 fetch + 3 updates
-        db.execute.side_effect = [fetch_result, update_result, update_result, update_result]
+        # execute() is called 5 times: admin arm + fetch + 3 updates.
+        _configure_admin_execute(db, fetch_result, update_result, update_result, update_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": dead_ids})
@@ -112,6 +130,8 @@ class TestDLQReplayWithIds:
         for r in data["results"]:
             assert r["success"] is True
             assert r["id"] in dead_ids
+        _assert_admin_context_armed(db)
+        assert db.commit.call_count == 3
 
     def test_replayed_at_update_issued(self):
         """The UPDATE statement must reference replayed_at and replay_attempts."""
@@ -124,14 +144,15 @@ class TestDLQReplayWithIds:
 
         update_result = MagicMock()
         update_result.rowcount = 1
-        db.execute.side_effect = [fetch_result, update_result]
+        _configure_admin_execute(db, fetch_result, update_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": dead_ids})
         assert resp.status_code == 200
 
         # Verify the UPDATE SQL contained replay tracking columns
-        update_call_args = db.execute.call_args_list[1]
+        _assert_admin_context_armed(db)
+        update_call_args = db.execute.call_args_list[2]
         sql_text = str(update_call_args[0][0])
         assert "replayed_at" in sql_text
         assert "replay_attempts" in sql_text
@@ -143,7 +164,7 @@ class TestDLQReplayWithIds:
 
         fetch_result = MagicMock()
         fetch_result.fetchall.return_value = []  # no rows returned
-        db.execute.return_value = fetch_result
+        _configure_admin_execute(db, fetch_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": [missing_id]})
@@ -153,6 +174,7 @@ class TestDLQReplayWithIds:
         assert data["replayed"] == 0
         assert data["failed"] == 1
         assert data["results"][0]["error"] == "not_found"
+        _assert_admin_context_armed(db)
 
     def test_non_dead_status_rejected(self):
         user = _make_user(is_sysadmin=True)
@@ -161,7 +183,7 @@ class TestDLQReplayWithIds:
 
         fetch_result = MagicMock()
         fetch_result.fetchall.return_value = [(pending_id, "pending")]
-        db.execute.return_value = fetch_result
+        _configure_admin_execute(db, fetch_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": [pending_id]})
@@ -171,6 +193,7 @@ class TestDLQReplayWithIds:
         assert data["replayed"] == 0
         assert data["failed"] == 1
         assert "status_is_pending_not_dead" in data["results"][0]["error"]
+        _assert_admin_context_armed(db)
 
 
 class TestDLQReplayBulkLimit:
@@ -188,7 +211,7 @@ class TestDLQReplayBulkLimit:
         update_result = MagicMock()
         update_result.rowcount = 1
 
-        db.execute.side_effect = [fetch_result, update_result, update_result, update_result]
+        _configure_admin_execute(db, fetch_result, update_result, update_result, update_result)
 
         client = TestClient(_build_app(user, db))
         resp = client.post("/v1/system/dlq/replay", json={"ids": [], "limit": 10})
@@ -197,6 +220,8 @@ class TestDLQReplayBulkLimit:
         data = resp.json()
         assert data["replayed"] == 3
         assert data["failed"] == 0
+        _assert_admin_context_armed(db)
+        assert db.commit.call_count == 3
 
     def test_limit_max_1000(self):
         """limit > 1000 should fail validation."""
@@ -205,3 +230,4 @@ class TestDLQReplayBulkLimit:
         client = TestClient(_build_app(user, db), raise_server_exceptions=False)
         resp = client.post("/v1/system/dlq/replay", json={"ids": [], "limit": 1001})
         assert resp.status_code == 422
+        db.execute.assert_not_called()

@@ -335,34 +335,13 @@ class TestSmallHelpers:
         monkeypatch.delenv("DATABASE_URL", raising=False)
         assert wr._is_production() is False
 
-    def test_verify_api_key_accepts_matching_key(self, monkeypatch):
-        class _S:
-            api_key = "correct-key"
-
-        monkeypatch.setattr(wr, "get_settings", lambda: _S())
+    def test_verify_api_key_accepts_present_header(self):
         wr._verify_api_key("correct-key")  # must not raise
 
-    def test_verify_api_key_defers_key_validation_to_principal(self, monkeypatch):
-        class _S:
-            api_key = "correct-key"
-
-        monkeypatch.setattr(wr, "get_settings", lambda: _S())
+    def test_verify_api_key_defers_key_validation_to_principal(self):
         wr._verify_api_key("wrong-key")  # principal validation happens later
 
-    def test_verify_api_key_no_configured_key_non_prod_ok(self, monkeypatch):
-        class _S:
-            api_key = None
-
-        monkeypatch.setattr(wr, "get_settings", lambda: _S())
-        monkeypatch.setattr(wr, "_is_production", lambda: False)
-        wr._verify_api_key("any-key")  # no raise
-
-    def test_verify_api_key_production_without_configured_key_rejects(self, monkeypatch):
-        class _S:
-            api_key = None
-
-        monkeypatch.setattr(wr, "get_settings", lambda: _S())
-        monkeypatch.setattr(wr, "_is_production", lambda: True)
+    def test_verify_api_key_missing_header_rejects(self):
         with pytest.raises(Exception) as exc:
             wr._verify_api_key(None)
         assert exc.value.status_code == 401

@@ -25,7 +25,7 @@ def _app() -> FastAPI:
 def _wire(app, *, db):
     user = SimpleNamespace(id=USER_ID, email="owner@example.com")
     session = SimpleNamespace(id=SESSION_ID, auth_method="webauthn")
-    app.dependency_overrides[session_auth.get_current_active_session_context] = lambda: (
+    app.dependency_overrides[session_auth.get_scoped_active_session_context] = lambda: (
         session_auth.ActiveSessionContext(user=user, session=session)
     )
     app.dependency_overrides[auth_routes.get_session] = lambda: db
@@ -77,3 +77,6 @@ def test_session_logout_rejects_unauthenticated_requests():
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required."}
     db.commit.assert_not_called()
+    guc_sql = [str(execute_call.args[0]) for execute_call in db.execute.call_args_list]
+    assert "set_config('regengine.is_sysadmin', 'true', true)" in guc_sql[0]
+    assert "set_config('regengine.is_sysadmin', 'false', true)" in guc_sql[1]

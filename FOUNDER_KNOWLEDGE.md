@@ -156,7 +156,7 @@ There are 144+ env vars in `.env.example`. Here is what actually matters:
 | `DATABASE_URL` | Primary PostgreSQL connection. |
 | `ADMIN_DATABASE_URL` | Admin service PostgreSQL. Different from DATABASE_URL in production. |
 | `REGENGINE_INTERNAL_SECRET` | Service-to-service tenant header trust. |
-| `ADMIN_MASTER_KEY` | Admin API master key for bootstrapping. |
+| `REGENGINE_TENANT_PROVISIONER_KEY` | Tenantless Stripe workload key with only `internal.tenants.create`; rotate within 90 days. |
 
 ### Should Be Set (has defaults but defaults are wrong for production)
 

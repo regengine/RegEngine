@@ -248,32 +248,60 @@ aws route53 change-resource-record-sets \
 
 ## Step 6: Initialize API Keys
 
-### 6.1 Get Admin Master Key
+Provision two WebAuthn/SSO staff sysadmins before enabling the production
+fail-closed gates. A staff user with `is_sysadmin=true` creates tenant API keys
+through the browser admin console. Save each raw key once in the caller's
+secret manager; record only its key ID and actor-attributed audit event.
 
-```bash
-ADMIN_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id regengine/prod/admin-master-key \
-  --query SecretString \
-  --output text)
-```
+Keep database credentials and migration authority out of the Vercel frontend
+project. `DATABASE_URL`, `ADMIN_DATABASE_URL`, and `MIGRATIONS_DATABASE_URL`
+belong only to the Railway application/migration boundary; the schema-owner
+credential must not be present in a frontend build or function environment.
+The Vercel project must also omit generic `API_KEY`, `REGENGINE_API_KEY`, and
+their tenant-binding aliases. Audit names with `vercel env ls` before deploying
+the candidate, remove obsolete entries, then create a new deployment because
+environment changes do not alter an already-built deployment.
 
-### 6.2 Create API Keys
+For Stripe onboarding, mint a tenantless workload credential with exactly
+`internal.tenants.create`, an expiry of at most 90 days, and a rate limit of at
+most 10 requests per minute. Store it only as
+`REGENGINE_TENANT_PROVISIONER_KEY` in the ingestion runtime.
 
-```bash
-ALB_URL=$(terraform -chdir=infra output -raw alb_url)
+Set `REGENGINE_AUTH_STRICT=1` and `REDIS_URL` in staging and production. The
+backend also treats any recognized cloud staging/preview environment as strict
+when the flag is omitted: access-token lifetime is limited to 1–15 minutes,
+legacy JTI-free tokens and process-local sessions/API-key stores are rejected,
+and Redis/key-registry uncertainty aborts startup or returns 503. The flag is
+explicit evidence of operator intent; it cannot weaken a strict runtime.
 
-# Create demo key
-curl -X POST https://api.regengine.yourdomain.com/admin/keys \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Key: $ADMIN_KEY" \
-  -d '{
-    "name": "Production Demo Key",
-    "rate_limit_per_minute": 100,
-    "scopes": ["read", "ingest"]
-  }'
-```
+If the system-metrics page calls the score and chain endpoints, provision a
+separate tenant key limited to those reads and configure the pair
+`REGENGINE_SYSTEM_METRICS_API_KEY` / `REGENGINE_SYSTEM_METRICS_TENANT_ID` on
+Railway. The tenant ID is a matching assertion; this credential is never a
+generic service or administrative key.
 
-Save the returned API key securely.
+### Privileged proxy source attribution
+
+Generate a dedicated client-IP attestation key with `openssl rand -hex 32` and
+store the same `REGENGINE_PROXY_IP_HMAC_KEY` value in the Vercel frontend and
+Railway backend for one environment. Use separate values for preview, staging,
+and production; never expose the key through a `NEXT_PUBLIC_` variable, log it,
+or reuse the CSRF/auth signing material.
+
+Privileged admin and review BFF routes accept the singular platform-provided
+Vercel client IP, remove raw forwarding and caller-supplied attestation
+headers, and sign the canonical IP, timestamp, HTTP method, and request ID.
+The backend accepts that IP only when the HMAC is valid and no more than 60
+seconds old. It ignores `Forwarded`, `X-Forwarded-For`, and `X-Real-IP` and
+falls back to the socket peer for absent, malformed, stale, or tampered
+attestations. On Vercel, missing key or platform IP fails the privileged BFF
+request with 503; local non-Vercel development remains available without the
+attestation key.
+
+Before promotion, verify a valid request records the external test client's IP,
+then repeat with spoofed raw forwarding headers, a modified signed IP, and an
+attestation older than 60 seconds. None may influence audit or privileged
+throttle attribution. Record only the deployment IDs and result, never the key.
 
 ## Step 7: Monitoring Setup
 

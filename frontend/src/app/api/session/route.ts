@@ -2,11 +2,11 @@
  * Server-side session endpoint — HTTP-only cookie auth (CRITICAL #2 fix).
  *
  * This API route is the ONLY place where sensitive credentials (access token,
- * API key, admin key) are stored. They live in HTTP-only cookies that
+ * tenant API key) are stored. They live in HTTP-only cookies that
  * JavaScript cannot read, so XSS attacks cannot exfiltrate them.
  *
  * Usage:
- *   POST   /api/session — set credentials (access_token, api_key, admin_key, tenant_id, user)
+ *   POST   /api/session — set credentials (access_token, api_key, tenant_id, user)
  *   GET    /api/session — return session info (user, tenant) WITHOUT exposing raw tokens
  *   DELETE /api/session — clear all session cookies (logout)
  *
@@ -42,6 +42,8 @@ type AuthMeResponse = {
     tenant_id: string | null;
     role: string | null;
     auth_method: AuthMethod;
+    is_sysadmin: boolean;
+    permissions: string[];
 };
 
 function cookieOptionsFor(rememberSession: boolean) {
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { access_token, api_key, admin_key, tenant_id, user, remember_me } = body;
+        const { access_token, api_key, tenant_id, user, remember_me } = body;
         const cookieOptions = cookieOptionsFor(remember_me !== false);
 
         // Decode-only — the admin backend owns JWTKeyRegistry and remains
@@ -127,9 +129,6 @@ export async function POST(request: NextRequest) {
             if (!isUsableCredential(api_key)) {
                 response.cookies.delete('re_api_key');
             }
-            if (!isUsableCredential(admin_key)) {
-                response.cookies.delete('re_admin_key');
-            }
         }
 
         if (isUsableCredential(access_token)) {
@@ -137,9 +136,6 @@ export async function POST(request: NextRequest) {
         }
         if (isUsableCredential(api_key)) {
             response.cookies.set('re_api_key', api_key, cookieOptions);
-        }
-        if (isUsableCredential(admin_key)) {
-            response.cookies.set('re_admin_key', admin_key, cookieOptions);
         }
         if (resolvedTenantId) {
             response.cookies.set('re_tenant_id', resolvedTenantId, {
@@ -247,6 +243,9 @@ function parseAuthMeResponse(payload: unknown): AuthMeResponse | null {
     if (typeof body.user_id !== 'string') return null;
     if (typeof body.email !== 'string') return null;
     if (!isAuthMethod(body.auth_method)) return null;
+    const permissions = Array.isArray(body.permissions)
+        ? body.permissions.filter((permission): permission is string => typeof permission === 'string')
+        : [];
 
     return {
         user_id: body.user_id,
@@ -255,6 +254,8 @@ function parseAuthMeResponse(payload: unknown): AuthMeResponse | null {
         tenant_id: typeof body.tenant_id === 'string' ? body.tenant_id : null,
         role: typeof body.role === 'string' ? body.role : null,
         auth_method: body.auth_method,
+        is_sysadmin: body.is_sysadmin === true,
+        permissions,
     };
 }
 
@@ -278,8 +279,12 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
                     cookie: cookieHeader,
                 },
                 cache: 'no-store',
+                redirect: 'manual',
             });
 
+            if (response.status >= 300 && response.status < 400) {
+                continue;
+            }
             if (shouldRetryAdminProxyResponse(response, 'auth/me')) {
                 continue;
             }
@@ -304,15 +309,12 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
                 user: {
                     id: profile.user_id,
                     email: profile.email,
-                    is_sysadmin: false,
+                    is_sysadmin: profile.is_sysadmin,
                     status: 'active',
                     role_name: profile.role || undefined,
                     organization_id: profile.organization_id,
                     auth_method: profile.auth_method,
-                    // permissions intentionally omitted: /auth/me does not
-                    // expose the tenant permission list, and an empty array
-                    // reads as "no permissions" to capability checks
-                    // (hasPermission), not "unknown".
+                    permissions: profile.permissions,
                 },
             };
         } catch {
@@ -326,7 +328,6 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
 export async function GET(request: NextRequest) {
     const access_token = request.cookies.get('re_access_token')?.value || null;
     const api_key = request.cookies.get('re_api_key')?.value || null;
-    const admin_key = request.cookies.get('re_admin_key')?.value || null;
     const tenant_id = request.cookies.get('re_tenant_id')?.value || null;
     const userCookie = request.cookies.get('re_user')?.value || null;
 
@@ -350,8 +351,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json({
         authenticated: isAuthenticated,
         has_api_key: !!api_key,
-        has_admin_key: !!admin_key,
-        has_credentials: !!(access_token || opaqueSession || api_key || admin_key || supabaseSession),
+        has_credentials: !!(access_token || opaqueSession || api_key || supabaseSession),
         tenant_id: resolvedTenantId,
         auth_method: resolvedAuthMethod,
         user: resolvedUser,
@@ -416,7 +416,6 @@ export async function DELETE(request: NextRequest) {
     const response = NextResponse.json({ ok: true });
     response.cookies.delete('re_access_token');
     response.cookies.delete('re_api_key');
-    response.cookies.delete('re_admin_key');
     response.cookies.delete('re_tenant_id');
     response.cookies.delete('re_user');
     // __Host- prefixed cookies can only be overwritten by a Set-Cookie that
@@ -442,8 +441,12 @@ async function revokeBackendSession(accessToken: string): Promise<void> {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                 },
+                redirect: 'manual',
             });
 
+            if (response.status >= 300 && response.status < 400) {
+                continue;
+            }
             if (!shouldRetryAdminProxyResponse(response, 'auth/logout')) {
                 return;
             }
@@ -467,8 +470,12 @@ async function revokeOpaqueSession(sessionToken: string): Promise<void> {
                 headers: {
                     cookie: cookieHeader,
                 },
+                redirect: 'manual',
             });
 
+            if (response.status >= 300 && response.status < 400) {
+                continue;
+            }
             if (!shouldRetryAdminProxyResponse(response, 'auth/session/logout')) {
                 return;
             }

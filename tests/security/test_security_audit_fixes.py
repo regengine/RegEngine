@@ -33,6 +33,7 @@ full disposition table is in the PR that introduced this rewrite (#2503).
 
 from __future__ import annotations
 
+import ast
 import os
 import sys
 import time
@@ -46,6 +47,72 @@ from fastapi.testclient import TestClient
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _qualified_name(node: ast.AST) -> str:
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _literal_ints(node: ast.AST) -> set[int]:
+    if not isinstance(node, (ast.List, ast.Set, ast.Tuple)):
+        return set()
+    return {
+        item.value
+        for item in node.elts
+        if isinstance(item, ast.Constant) and isinstance(item.value, int) and not isinstance(item.value, bool)
+    }
+
+
+def test_security_release_gate_contains_no_skip_or_vacuous_assertion_patterns():
+    """Keep checked-in security tests from regressing into coverage theater."""
+    violations: set[str] = set()
+    for path in sorted((_REPO_ROOT / "tests" / "security").glob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        relative = path.relative_to(_REPO_ROOT)
+        for node in ast.walk(tree):
+            location = f"{relative}:{getattr(node, 'lineno', 1)}"
+            if isinstance(node, ast.Assert) and isinstance(node.test, ast.Constant) and node.test.value is True:
+                violations.add(f"{location}: unconditional assert True")
+
+            if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+                if any(isinstance(value, ast.Constant) and value.value is True for value in node.values):
+                    violations.add(f"{location}: expression contains 'or True'")
+
+            if isinstance(node, (ast.Call, ast.Attribute)):
+                callable_node = node.func if isinstance(node, ast.Call) else node
+                qualified = _qualified_name(callable_node)
+                if qualified in {"pytest.skip", "pytest.importorskip", "pytest.xfail"} or qualified.startswith(
+                    ("pytest.mark.skip", "pytest.mark.xfail")
+                ):
+                    violations.add(f"{location}: security release gate contains {qualified}")
+
+            if not isinstance(node, ast.Assert) or not isinstance(node.test, ast.Compare):
+                continue
+            comparison = node.test
+            if not isinstance(comparison.left, ast.Attribute) or comparison.left.attr != "status_code":
+                continue
+            for operator, comparator in zip(comparison.ops, comparison.comparators):
+                if isinstance(operator, ast.In) and _literal_ints(comparator) & {404, 405, 422}:
+                    violations.add(
+                        f"{location}: broad status acceptance includes a routing/validation result (404/405/422)"
+                    )
+
+    assert not violations, "Security release-gate quality violations:\n" + "\n".join(sorted(violations))
+
+
+def test_required_integration_database_cannot_degrade_to_skip(monkeypatch):
+    """REGENGINE_REQUIRE_DB turns a missing CI database into a hard failure."""
+    from tests.integration_requirements import sqlalchemy_session_or_skip
+
+    monkeypatch.setenv("REGENGINE_REQUIRE_DB", "1")
+    with pytest.raises(pytest.fail.Exception, match="integration gate must execute"):
+        sqlalchemy_session_or_skip(None, reason="mandatory security database unavailable")
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -56,8 +123,8 @@ def monolith():
     """Import the consolidated monolith app with test env applied.
 
     ``tests/conftest.py`` applies ``tests/env_defaults.py`` before any test
-    module imports, so REGENGINE_ENV=test, AUTH_TEST_BYPASS_TOKEN,
-    AUTH_SECRET_KEY and ADMIN_MASTER_KEY are already set. The app is
+    module imports, so REGENGINE_ENV=test, AUTH_TEST_BYPASS_TOKEN and
+    AUTH_SECRET_KEY are already set. The app is
     imported (not run through its lifespan), so no DB init, task workers or
     schedulers start.
     """
@@ -103,18 +170,27 @@ def bypass_headers(bypass_token, bypass_tenant):
 
 @pytest.fixture(autouse=True)
 def _reset_admin_bruteforce(monolith):
-    """Clear the admin-key brute-force counter for the TestClient IP.
+    """Clear the shared privileged-auth failure budget between tests."""
+    import redis
 
-    ``verify_admin_key`` locks an IP out (429) after 5 failed X-Admin-Key
-    attempts in 60s, and the counter is Redis-backed when Redis is
-    available — so stale counters from a previous run (or earlier tests in
-    this module) would turn expected 401s into flaky 429s.
-    """
-    from services.admin.app import routes as admin_routes
+    from services.admin.app import privileged_auth
 
-    admin_routes._reset_admin_failures("testclient")
+    client = redis.Redis.from_url(
+        "redis://localhost:6379/0",
+        socket_connect_timeout=0.5,
+        socket_timeout=0.5,
+    )
+    try:
+        keys = list(client.scan_iter("privileged_auth:*"))
+        if keys:
+            client.delete(*keys)
+    except Exception:
+        pass
+    with privileged_auth._privileged_auth_throttle._memory_lock:
+        privileged_auth._privileged_auth_throttle._memory.clear()
     yield
-    admin_routes._reset_admin_failures("testclient")
+    with privileged_auth._privileged_auth_throttle._memory_lock:
+        privileged_auth._privileged_auth_throttle._memory.clear()
 
 
 @pytest.fixture()
@@ -242,8 +318,8 @@ class TestAuthGuardEnforcement:
     """Endpoints requiring authentication must 401 without credentials.
 
     The ``/v1/evidence/*`` and ``/v1/obligation/*`` targets of the previous
-    version do not exist on any entrypoint; the admin session and
-    master-key surfaces below are their real counterparts.
+    version do not exist on any entrypoint; the tenant API-key and opaque
+    admin-session surfaces below are their real counterparts.
     """
 
     @pytest.mark.parametrize(
@@ -290,7 +366,7 @@ class TestAuthGuardEnforcement:
             ("DELETE", f"/v1/admin/keys/{uuid4()}"),
         ],
     )
-    def test_admin_master_key_endpoints_require_auth(self, client, method, endpoint):
+    def test_human_admin_endpoints_require_session_auth(self, client, method, endpoint):
         response = client.request(method, endpoint, json={} if method == "POST" else None)
 
         assert response.status_code in (401, 403), (
@@ -363,8 +439,8 @@ class TestRLSSysadminDefense:
 
     ``/v1/admin/user/promote`` never existed; the real role-mutation
     surface is ``PATCH /v1/admin/users/{id}/role`` (session-authenticated,
-    ``PermissionChecker("users.manage_roles")``) and tenant provisioning is
-    gated by the X-Admin-Key master key.
+    ``PermissionChecker("users.manage_roles")``) and human tenant
+    provisioning requires an opaque high-assurance sysadmin session.
     """
 
     def test_role_change_rejects_api_key_credentials(self, client, bypass_headers):
@@ -387,19 +463,19 @@ class TestRLSSysadminDefense:
 
         assert response.status_code in (401, 403), f"Forged sysadmin token accepted with {response.status_code}"
 
-    def test_tenant_provisioning_requires_admin_master_key(self, client, bypass_headers):
+    def test_tenant_provisioning_rejects_tenant_api_key(self, client, bypass_headers):
         response = client.post(
             "/v1/admin/tenants",
-            headers=bypass_headers,  # API key + tenant header, but no X-Admin-Key
+            headers=bypass_headers,
             json={"name": f"tenant-{uuid4()}"},
         )
 
         assert response.status_code in (401, 403), (
-            f"Expected 401/403 for tenant provisioning without X-Admin-Key, got {response.status_code}"
+            f"Expected 401/403 for tenant provisioning without a browser session, got {response.status_code}"
         )
 
-    def test_wrong_admin_master_key_rejected(self, client):
-        response = client.get("/v1/admin/keys", headers={"X-Admin-Key": "not-the-master-key"})
+    def test_retired_admin_header_rejected(self, client):
+        response = client.get("/v1/admin/keys", headers={"X-Admin-Key": "retired-shared-credential"})
 
         assert response.status_code in (401, 403)
 
@@ -455,14 +531,12 @@ class TestJWTKeyRotation:
 
 
 class TestCSRFDefenses:
-    """RegEngine's CSRF posture: header-token auth + strict CORS.
+    """Cookie mutations require a valid session/CSRF proof and strict origin.
 
-    There is no cookie-session double-submit implementation in the backend
-    (the previous tests skipped themselves whenever a 403 did not appear —
-    always). The actual defenses are (a) state-changing endpoints only
-    accept custom-header credentials a cross-site browser request cannot
-    attach, and (b) credentialed CORS never allows wildcard/unknown
-    origins.
+    Tenant API routes use explicit header credentials. Browser administration
+    uses opaque session cookies, and mutation routes additionally pass through
+    the shared origin/CSRF gate. Credentialed CORS must never allow wildcard or
+    unknown origins.
     """
 
     def test_cookie_only_request_cannot_mutate_state(self, client):
@@ -582,7 +656,7 @@ class TestErrorHandlingAndInfoLeakage:
     def test_404_does_not_leak_paths(self, client):
         response = client.get("/v1/admin/secret-internal-path-xyz")
 
-        assert response.status_code in (401, 404)
+        assert response.status_code == 404
         body = response.text.lower()
         assert "/users/" not in body
         assert "traceback" not in body

@@ -222,10 +222,9 @@ def _resolve_workbench_tenant(
     ``?tenant_id=other`` — that was the bypass closed by the 2026-05
     wildcard-scope audit (services/ingestion/app/inflow_workbench.py:215).
 
-    Internal/master callers (legacy_master, dev_open) carry
-    ``tenant_id=None`` and so flow through ``resolve_principal_tenant_id``
-    with ``principal_tenant=None``; they retain their existing ability to
-    pass an explicit tenant context.
+    The local ``dev_open`` caller carries ``tenant_id=None`` and can pass an
+    explicit tenant context. Database-backed credentials are always bound to
+    one tenant before they reach this resolver.
     """
     return resolve_principal_tenant_id(explicit_tenant_id, x_tenant_id, principal.tenant_id)
 

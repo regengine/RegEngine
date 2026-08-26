@@ -9,7 +9,6 @@ import requests
 # Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8400")
 INGEST_SERVICE_URL = os.getenv("INGEST_SERVICE_URL", "http://localhost:8002")
-ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "admin-master-key-dev")
 
 # Test Data
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
@@ -17,7 +16,6 @@ API_KEY = os.getenv("REGENGINE_TEST_API_KEY", "rge_phase2b.testsecret123")
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": ADMIN_MASTER_KEY,
     "X-Tenant-ID": TENANT_ID,
     "Content-Type": "application/json",
 }

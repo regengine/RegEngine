@@ -134,9 +134,6 @@ jobs:
           JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
           AUTH_OTP_HMAC_SECRET: playwright-local-otp-hmac-secret-2026-minimum-32-bytes # pragma: allowlist secret
           CSRF_SECRET: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
-          ADMIN_MASTER_KEY: playwright-local-admin-master-key-2026
-          API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
-          REGENGINE_API_KEY: playwright-local-regengine-api-key-2026 # pragma: allowlist secret
           REGENGINE_E2E_EMAIL_OUTBOX: /tmp/regengine-playwright-email-outbox.jsonl
         run: |
           cd frontend

@@ -754,7 +754,7 @@ class TestIngestCsv:
         assert resp.status_code == 200
         assert captured["tenant_id"] == "t1"
 
-    def test_legacy_master_tenant_id_passthrough(self, monkeypatch):
+    def test_dev_open_tenant_id_passthrough(self, monkeypatch):
         captured: dict = {}
 
         async def _fake(payload, **kwargs):

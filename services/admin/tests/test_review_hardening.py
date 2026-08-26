@@ -71,6 +71,11 @@ class CapturingFakeSession:
         )
 
         if isinstance(item, AuditLogModel):
+            # A real database assigns the autoincrementing audit ID during
+            # flush. Simulate that successful-persistence signal so the
+            # fail-closed caller can distinguish it from AuditLogger's None
+            # error return.
+            item.id = len(self.audit_sink) + 1
             self.audit_sink.append(item)
             return
         if isinstance(item, ReviewItemModel):
@@ -380,6 +385,49 @@ def test_resolve_hallucination_writes_to_audit_chain(tracker_with_audit):
     assert meta["prior_status"] == "PENDING"
 
 
+def test_resolve_hallucination_rolls_back_when_audit_persistence_fails(monkeypatch):
+    """A review decision must never commit without its audit-chain row."""
+    from sqlalchemy import create_engine, func, select
+    from sqlalchemy.orm import sessionmaker
+
+    from services.admin.app.audit import AuditLogger
+    from services.admin.app.metrics import HallucinationTracker
+    from services.admin.app.sqlalchemy_models import AuditLogModel, ReviewItemModel
+
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    ReviewItemModel.__table__.create(engine)
+    AuditLogModel.__table__.create(engine)
+    session_factory = sessionmaker(bind=engine)
+    tracker = HallucinationTracker(session_factory, FakeRedis())
+    tenant = "11111111-1111-1111-1111-111111111111"
+
+    record = tracker.record_hallucination(
+        tenant_id=tenant,
+        document_id="doc-a",
+        doc_hash="hash-audit-failure",
+        extractor="GENERIC",
+        confidence_score=0.3,
+        extraction=_example_extraction(),
+    )
+
+    monkeypatch.setattr(AuditLogger, "log_event", staticmethod(lambda *args, **kwargs: None))
+
+    with pytest.raises(RuntimeError, match="audit persistence failed"):
+        tracker.resolve_hallucination(
+            record["review_id"],
+            new_status="APPROVED",
+            reviewer_id="reviewer-1",
+            tenant_id=tenant,
+            actor_user_id="99999999-9999-9999-9999-999999999999",
+        )
+
+    with session_factory() as session:
+        item = session.get(ReviewItemModel, UUID(record["review_id"]))
+        assert item is not None
+        assert item.status == "PENDING"
+        assert session.scalar(select(func.count()).select_from(AuditLogModel)) == 0
+
+
 # =========================================================================
 # #1388 / #2139: Kafka consumer canonical signed-event verification
 # =========================================================================
@@ -508,41 +556,37 @@ def test_extract_and_record_uses_verified_signed_payload(monkeypatch):
 
 
 # =========================================================================
-# #1389: tenant-scoped API key required for review queue
+# #1389: tenant-scoped browser session required for review queue
 # =========================================================================
 
 
-def test_require_tenant_scoped_key_rejects_null_tenant():
-    from fastapi import HTTPException
-    from shared.auth import APIKey
+def test_review_routes_do_not_accept_api_key_authentication():
+    import inspect
 
-    from services.admin.app.review_routes import _require_tenant_scoped_key
+    from services.admin.app import review_routes
 
-    key_no_tenant = APIKey(
-        key_id="rge_legacy",
-        key_hash="x",
-        name="legacy",
-        tenant_id=None,
-        created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
-    )
-    with pytest.raises(HTTPException) as excinfo:
-        _require_tenant_scoped_key(key_no_tenant)
-    assert excinfo.value.status_code == 403
+    source = inspect.getsource(review_routes)
+    assert "require_api_key" not in source
+    assert "X-RegEngine-API-Key" not in source
 
 
-def test_require_tenant_scoped_key_accepts_tenant_bound():
-    from shared.auth import APIKey
+def test_review_routes_use_distinct_read_and_decide_dependencies():
+    from services.admin.app import review_routes
 
-    from services.admin.app.review_routes import _require_tenant_scoped_key
-
-    key = APIKey(
-        key_id="rge_ok",
-        key_hash="x",
-        name="ok",
-        tenant_id="11111111-1111-1111-1111-111111111111",
-        created_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
-    )
-    assert _require_tenant_scoped_key(key) == "11111111-1111-1111-1111-111111111111"
+    route_dependencies = {
+        (route.path, method): {dependency.call for dependency in route.dependant.dependencies}
+        for route in review_routes.router.routes
+        for method in route.methods
+    }
+    assert review_routes.require_review_read in route_dependencies[
+        ("/v1/admin/review/hallucinations", "GET")
+    ]
+    assert review_routes.require_review_decide in route_dependencies[
+        ("/v1/admin/review/{review_id}/approve", "POST")
+    ]
+    assert review_routes.require_review_decide in route_dependencies[
+        ("/v1/admin/review/{review_id}/reject", "POST")
+    ]
 
 
 # =========================================================================

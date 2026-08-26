@@ -12,7 +12,6 @@ DEFAULT_ALLOWED_HEADERS = [
     "Authorization",
     "Content-Type",
     "Idempotency-Key",
-    "X-Admin-Key",
     "X-API-Version",
     "X-Correlation-ID",
     "X-Metrics-Key",

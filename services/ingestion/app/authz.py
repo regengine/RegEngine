@@ -2,23 +2,18 @@
 
 from __future__ import annotations
 
-import hmac
-import importlib
 import logging
 import os
 import threading
-import uuid
-from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from shared.api_key_store import APIKeyResponse, api_key_hash_candidates
-from shared.auth import APIKey, require_api_key
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, optional_api_key, require_api_key
 from shared.permissions import has_permission
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
-from sqlalchemy import bindparam, text
 
 logger = logging.getLogger("authz")
 
@@ -27,7 +22,7 @@ logger = logging.getLogger("authz")
 # Auth failure rate limiting — blocks IPs after repeated failed auth attempts
 #
 # #2711: backed by shared.rate_limit.BruteForceLimiter (the #1392 admin
-# master-key pattern) instead of a bare module-level dict, so the failure
+# privileged-auth pattern) instead of a bare module-level dict, so the failure
 # budget is shared across workers/replicas when Redis is available and
 # honors RATE_LIMIT_FAIL_MODE on Redis uncertainty. Falls back to a
 # per-process counter (with a loud per-activation warning) when it isn't.
@@ -196,8 +191,8 @@ def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> s
     # input must not determine the rate-limit bucket. A request that lands
     # here with no authenticated principal AND no X-Tenant-ID header gets
     # the shared "global" bucket, preventing tenant-bucket isolation
-    # attacks. Header fallback retained for master-key callers; long-term,
-    # all paths should resolve via services/shared/tenant_context.py.
+    # attacks. The header fallback is used only by the explicit local
+    # dev-open principal; production keys are credential-bound.
     return "global"
 
 
@@ -245,81 +240,6 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
     )
 
 
-def _tenant_id_from_master_header(request: Request) -> str:
-    """Return a validated X-Tenant-ID for legacy master-key callers.
-
-    Fail closed (mirrors ``shared/auth.py`` #1068): the legacy master key may
-    authenticate ANY tenant, so it MUST supply a non-empty, valid-UUID
-    ``X-Tenant-ID``. Without it we would mint a ``*``-scoped, ``tenant_id=None``
-    principal that silently disables RLS — so absence raises 401, not None.
-    """
-    tenant_id = (request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id") or "").strip()
-    if not tenant_id:
-        raise HTTPException(
-            status_code=401,
-            detail="E_TENANT_HEADER_REQUIRED: preshared master-key auth requires X-Tenant-ID",
-        )
-    try:
-        uuid.UUID(tenant_id)
-    except (ValueError, AttributeError, TypeError) as exc:
-        raise HTTPException(
-            status_code=401,
-            detail="E_TENANT_HEADER_INVALID: X-Tenant-ID must be a valid UUID",
-        ) from exc
-    return tenant_id
-
-
-def _current_settings():
-    """Resolve settings from the live ``app.config`` module.
-
-    Some ingestion tests temporarily replace ``app.config`` in ``sys.modules``.
-    Looking it up lazily keeps authz aligned with the current module instance
-    instead of holding a stale function reference across test-module swaps.
-    """
-    config_module = importlib.import_module("app.config")
-    return config_module.get_settings()
-
-
-def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]:
-    """Fallback direct lookup when DatabaseAPIKeyStore is not enabled."""
-    db_session = None
-    try:
-        from shared.database import SessionLocal
-
-        key_hashes = api_key_hash_candidates(raw_api_key)
-        db_session = SessionLocal()
-        stmt = text(
-            """
-            SELECT key_id, tenant_id, scopes, enabled, expires_at
-            FROM api_keys
-            WHERE key_hash IN :key_hashes
-            LIMIT 1
-            """
-        ).bindparams(bindparam("key_hashes", expanding=True))
-        row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
-        if not row:
-            return None
-
-        key_id, tenant_id, scopes, enabled, expires_at = row
-        if enabled is False:
-            return None
-        if expires_at and expires_at < datetime.now(timezone.utc):
-            return None
-
-        return IngestionPrincipal(
-            key_id=str(key_id),
-            scopes=list(scopes or []),
-            tenant_id=str(tenant_id) if tenant_id else None,
-            auth_mode="scoped_key_db_fallback",
-        )
-    except Exception:
-        logger.warning("DB API key lookup failed", exc_info=True)
-        return None
-    finally:
-        if db_session is not None:
-            db_session.close()
-
-
 async def get_ingestion_principal(
     request: Request,
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
@@ -327,51 +247,18 @@ async def get_ingestion_principal(
     """
     Authenticate caller and return principal context.
 
-    Behavior:
-    - If ``API_KEY`` is configured: require either that legacy master key or a
-      valid scoped key from the API key store.
-    - If ``API_KEY`` is not configured: keep local-dev behavior open.
+    Production accepts only database-backed, credential-bound API keys.
+    Explicit development/test mode retains the historical open fallback.
     """
-    settings = _current_settings()
-    configured_api_key = getattr(settings, "api_key", None)
     client_ip = request.client.host if request.client else "unknown"
 
     # Check if this IP is temporarily blocked due to repeated auth failures
     _check_auth_rate_limit(client_ip)
 
-    if configured_api_key:
-        if x_regengine_api_key and hmac.compare_digest(
-            x_regengine_api_key.encode("utf-8"),
-            configured_api_key.encode("utf-8"),
-        ):
-            return IngestionPrincipal(
-                key_id="legacy-master",
-                scopes=["*"],
-                tenant_id=_tenant_id_from_master_header(request),
-                auth_mode="legacy_master",
-            )
-
-        if not x_regengine_api_key:
-            _record_auth_failure(client_ip)
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
-
-        try:
-            api_key = await require_api_key(
-                request=request,
-                x_regengine_api_key=x_regengine_api_key,
-            )
-            return _principal_from_api_key(api_key)
-        except HTTPException as exc:
-            principal = _lookup_scoped_key_from_db(x_regengine_api_key)
-            if principal:
-                return principal
-            _record_auth_failure(client_ip)
-            raise exc
-
-    # Local-dev/test default when API_KEY is not configured.
     _dev = _is_dev_env()
     if not x_regengine_api_key:
         if not _dev:
+            _record_auth_failure(client_ip)
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
         logger.warning(
             "dev_open_auth_activated: path=%s client_ip=%s - "
@@ -387,33 +274,58 @@ async def get_ingestion_principal(
             auth_mode="dev_open",
         )
 
-    # In dev mode, prefer scoped-key auth when available, but preserve historical
-    # open behavior if key store is not configured.
+    # Once a credential is presented, never downgrade a rejected credential to
+    # dev-open access.  This preserves workload/tenant key separation in every
+    # environment and prevents rate-limit/backend failures being bypassed by a
+    # second, weaker lookup path.
     try:
         api_key = await require_api_key(
             request=request,
             x_regengine_api_key=x_regengine_api_key,
         )
         return _principal_from_api_key(api_key)
-    except HTTPException:
-        principal = _lookup_scoped_key_from_db(x_regengine_api_key)
-        if principal:
-            return principal
-        if not _dev:
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
-        logger.warning(
-            "dev_open_auth_activated: path=%s client_ip=%s - "
-            "Request authenticated with dev-open fallback; "
-            "this MUST NOT appear outside local development",
-            request.url.path,
-            client_ip,
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            _record_auth_failure(client_ip)
+        raise
+
+
+async def get_optional_ingestion_principal(
+    request: Request,
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+) -> Optional[IngestionPrincipal]:
+    """Authenticate a presented tenant key without requiring one.
+
+    Only absence is anonymous. A present invalid, expired, revoked,
+    rate-limited, tenantless, or backend-unverifiable credential preserves the
+    canonical error from :func:`shared.auth.require_api_key` and can never be
+    downgraded to the anonymous path.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    _check_auth_rate_limit(client_ip)
+
+    # The retired shared administrative credential must not acquire meaning
+    # merely because this route also permits a truly anonymous caller. Read it
+    # directly from the request so X-Admin-Key stays absent from OpenAPI.
+    if "x-admin-key" in request.headers:
+        _record_auth_failure(client_ip)
+        raise HTTPException(status_code=401, detail="X-Admin-Key is not an accepted authentication method")
+
+    try:
+        api_key = await optional_api_key(
+            request=request,
+            x_regengine_api_key=x_regengine_api_key,
         )
-        return IngestionPrincipal(
-            key_id="dev-open",
-            scopes=["*"],
-            tenant_id=None,
-            auth_mode="dev_open",
-        )
+        if api_key is None:
+            return None
+        return _principal_from_api_key(api_key)
+    except HTTPException as exc:
+        # 401 is an invalid/expired/revoked key. The canonical tenant-key
+        # dependency uses 403 when a workload credential is presented on a
+        # tenant surface; that is also a rejected credential for this realm.
+        if exc.status_code in {401, 403}:
+            _record_auth_failure(client_ip)
+        raise
 
 
 def require_permission(required_permission: str):
@@ -436,10 +348,10 @@ def require_permission(required_permission: str):
             # (which tenants) — a tenant-scoped key with ``*`` MUST NOT be
             # able to pivot to another tenant by passing ``?tenant_id=other``.
             #
-            # Internal/master callers (legacy_master, dev_open) carry
-            # ``tenant_id=None`` and so already bypass this check via the
-            # ``principal.tenant_id`` guard below; they do not need (and
-            # never needed) the wildcard short-circuit.
+            # The explicit local-development fallback carries
+            # ``tenant_id=None`` and therefore bypasses this check through
+            # the ``principal.tenant_id`` guard below. Production callers
+            # are always bound to a tenant by their database-backed key.
             #
             # Fixes the wildcard-bypass finding in the 2026-05 audit
             # (services/ingestion/app/authz.py:385).

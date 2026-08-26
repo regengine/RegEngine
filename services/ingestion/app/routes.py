@@ -9,15 +9,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import structlog
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter
 
 # Add shared module to path
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access  # noqa: F401  (re-exported for back-compat)
 
-from .config import get_settings
 from .pipeline import ScraperPipeline
 
 # NOTE: /v1/ingest/* (regulation, direct, file, url) and their helpers
@@ -92,11 +89,3 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
     "google_discovery": GoogleDiscoveryScraper(),
     "fda_warnings": FDAEnforcementScraper(),
 }
-
-
-def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
-    """Verify API key if configured."""
-    settings = get_settings()
-    if settings.api_key is not None:
-        if not x_api_key or x_api_key != settings.api_key:
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")

@@ -48,7 +48,7 @@ describe('apiClient review queue contract', () => {
         }));
 
         const { apiClient } = await importFreshClient();
-        const items = await apiClient.getReviewItems('cookie-managed');
+        const items = await apiClient.getReviewItems();
 
         expect(fetchMock).toHaveBeenCalledWith(
             '/api/admin/v1/admin/review/flagged-extractions?status_filter=PENDING&limit=50',
@@ -72,14 +72,14 @@ describe('apiClient review queue contract', () => {
         ]);
     });
 
-    it('sends reviewer metadata with approve and reject decisions', async () => {
+    it('derives reviewer identity server-side and sends no privileged key header', async () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({}))
             .mockResolvedValueOnce(jsonResponse({}));
 
         const { apiClient } = await importFreshClient();
-        await apiClient.approveReviewItem('admin-key', 'rev-1');
-        await apiClient.rejectReviewItem('admin-key', 'rev-1');
+        await apiClient.approveReviewItem('rev-1');
+        await apiClient.rejectReviewItem('rev-1');
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
@@ -87,11 +87,11 @@ describe('apiClient review queue contract', () => {
             expect.objectContaining({
                 method: 'POST',
                 headers: {
-                    'X-Admin-Key': 'admin-key',
                     'X-CSRF-Token': 'csrf-token',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Approved via web interface' }),
+                body: JSON.stringify({}),
+                credentials: 'include',
             }),
         );
         expect(fetchMock).toHaveBeenNthCalledWith(
@@ -100,13 +100,61 @@ describe('apiClient review queue contract', () => {
             expect.objectContaining({
                 method: 'POST',
                 headers: {
-                    'X-Admin-Key': 'admin-key',
                     'X-CSRF-Token': 'csrf-token',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ reviewer_id: 'web-frontend', notes: 'Rejected via web interface' }),
+                body: JSON.stringify({}),
+                credentials: 'include',
             }),
         );
+
+        for (const [, init] of fetchMock.mock.calls) {
+            const headers = new Headers(init.headers);
+            expect(headers.has('x-admin-key')).toBe(false);
+        }
+    });
+
+    it('manages tenants and live keys through the opaque browser session contract', async () => {
+        fetchMock
+            .mockResolvedValueOnce(jsonResponse({ key_id: 'key-1', api_key: 'raw-once' }))
+            .mockResolvedValueOnce(jsonResponse({
+                items: [{
+                    id: 'key-1',
+                    key_id: 'key-1',
+                    name: 'Deploy key',
+                    created_at: '2026-08-03T12:00:00Z',
+                }],
+                total: 1,
+                skip: 0,
+                limit: 100,
+            }))
+            .mockResolvedValueOnce(new Response(null, { status: 204 }))
+            .mockResolvedValueOnce(jsonResponse({ id: 'tenant-1', name: 'Acme' }));
+
+        const { apiClient } = await importFreshClient();
+        await apiClient.createAPIKey({ name: 'Deploy key', tenantId: 'tenant-1' });
+        const keys = await apiClient.listAPIKeys();
+        await apiClient.revokeAPIKey('key-1');
+        await apiClient.createTenant('Acme');
+
+        expect(keys).toEqual([{
+            id: 'key-1',
+            key_id: 'key-1',
+            name: 'Deploy key',
+            created_at: '2026-08-03T12:00:00Z',
+        }]);
+
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+            '/api/admin/v1/admin/keys',
+            '/api/admin/v1/admin/keys',
+            '/api/admin/v1/admin/keys/key-1',
+            '/api/admin/v1/admin/tenants',
+        ]);
+        for (const [, init] of fetchMock.mock.calls) {
+            const headers = new Headers(init.headers);
+            expect(init.credentials).toBe('include');
+            expect(headers.has('x-admin-key')).toBe(false);
+        }
     });
 
     it('omits X-RegEngine-API-Key for cookie-backed file ingest calls when no apiKey is provided', async () => {

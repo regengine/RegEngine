@@ -3,24 +3,23 @@ Audit Log Router.
 
 Returns real audit data from Postgres instead of static sample rows.
 
-NOTE: The audit_logs table lives in the *admin* database while CTE/export/alert
-tables live in the *ingestion* database.  We maintain two session factories so
-queries hit the correct database.
+All sources live in the same migrated PostgreSQL database.  The endpoint uses
+the ordinary ``DATABASE_URL`` role for every query and binds the authenticated
+tenant to the transaction before reading.  It must never open the administrative
+credential from a tenant-facing route.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
-from shared.tenant_context import TenantContext
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from shared.tenant_context import TenantContext, set_tenant_guc_if_uuid
+from sqlalchemy import text
 
 from .tenant_validation import validate_tenant_id
 from .webhook_compat import require_tenant_context
@@ -49,44 +48,6 @@ class AuditLogResponse(BaseModel):
     page: int
     page_size: int
     entries: list[AuditEntry]
-
-
-# Lazy-init admin DB session factory — only created when first needed.
-_admin_session_factory = None
-
-
-_admin_url_warned = False
-
-
-def _get_admin_db_session():
-    """Return a session connected to the admin database (audit_logs table).
-
-    Uses ADMIN_DATABASE_URL env var.  Returns None if not configured,
-    allowing the caller to skip the admin audit query gracefully.
-    """
-    global _admin_session_factory, _admin_url_warned
-    admin_url = os.getenv("ADMIN_DATABASE_URL")
-    if not admin_url:
-        if not _admin_url_warned:
-            logger.warning(
-                "ADMIN_DATABASE_URL is not set — admin audit logs will be incomplete. "
-                "Set this env var to enable full audit trail."
-            )
-            _admin_url_warned = True
-        return None
-    if _admin_session_factory is None:
-        # Convert psycopg driver URL to standard psycopg2 if needed
-        conn_url = admin_url.replace("postgresql+psycopg://", "postgresql://")
-        _admin_session_factory = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=create_engine(conn_url, pool_size=3, max_overflow=5, pool_pre_ping=True),
-        )
-    try:
-        return _admin_session_factory()
-    except Exception as exc:
-        logger.error("audit_log_admin_db_session_failed error=%s", str(exc))
-        return None
 
 
 def _to_iso(value: Any) -> str:
@@ -148,15 +109,40 @@ def _query_admin_audit_logs(db_session, tenant_id: str, limit: int) -> list[Audi
                 timestamp,
                 event_type,
                 event_category,
-                COALESCE(actor_email, 'system') AS actor,
+                CASE
+                    WHEN audit.actor_id IS NOT NULL AND EXISTS (
+                        SELECT 1
+                        FROM audit_logs AS marker
+                        WHERE marker.tenant_id = audit.tenant_id
+                          AND marker.action = 'gdpr_anonymize_user'
+                          AND COALESCE(
+                              marker.metadata ->> 'redacted_user_id',
+                              marker.metadata -> 'details' ->> 'redacted_user_id',
+                              marker.resource_id
+                          ) = audit.actor_id::text
+                    ) THEN '[REDACTED]'
+                    ELSE COALESCE(audit.actor_email, 'system')
+                END AS actor,
+                audit.actor_id::text AS actor_id,
+                EXISTS (
+                    SELECT 1
+                    FROM audit_logs AS marker
+                    WHERE marker.tenant_id = audit.tenant_id
+                      AND marker.action = 'gdpr_anonymize_user'
+                      AND COALESCE(
+                          marker.metadata ->> 'redacted_user_id',
+                          marker.metadata -> 'details' ->> 'redacted_user_id',
+                          marker.resource_id
+                      ) = audit.actor_id::text
+                ) AS actor_erased,
                 action,
                 COALESCE(resource_type || ':' || resource_id, resource_type, action) AS resource,
                 COALESCE(metadata, '{}'::jsonb) AS details,
                 COALESCE(actor_ip, '') AS ip_address,
                 COALESCE(integrity_hash, '') AS integrity_hash
-            FROM audit_logs
-            WHERE tenant_id = :tenant_id
-            ORDER BY timestamp DESC
+            FROM audit_logs AS audit
+            WHERE audit.tenant_id = :tenant_id
+            ORDER BY audit.timestamp DESC
             LIMIT :limit
             """
         ),
@@ -166,17 +152,18 @@ def _query_admin_audit_logs(db_session, tenant_id: str, limit: int) -> list[Audi
     entries: list[AuditEntry] = []
     for row in rows:
         normalized_type = _normalize_audit_event_type(row.event_type, row.event_category, row.action)
+        actor_erased = bool(getattr(row, "actor_erased", False))
         entries.append(
             AuditEntry(
                 id=row.id,
                 timestamp=_to_iso(row.timestamp),
                 event_type=normalized_type,
                 category=_normalize_category(row.event_type, row.event_category),
-                actor=row.actor,
+                actor="[REDACTED]" if actor_erased else row.actor,
                 action=row.action,
-                resource=row.resource or "audit",
-                details=row.details if isinstance(row.details, dict) else {},
-                ip_address=row.ip_address or "",
+                resource="[REDACTED]" if actor_erased else (row.resource or "audit"),
+                details={"redacted": True} if actor_erased else (row.details if isinstance(row.details, dict) else {}),
+                ip_address="" if actor_erased else (row.ip_address or ""),
                 hash=row.integrity_hash or "",
             )
         )
@@ -346,28 +333,25 @@ async def get_audit_log(
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
 
-    # Query admin audit_logs from the admin database
-    try:
-        admin_session = _get_admin_db_session()
-        if admin_session is not None:
-            try:
-                entries.extend(_query_admin_audit_logs(admin_session, tenant_id, limit=200))
-            finally:
-                admin_session.close()
-    except Exception as exc:
-        logger.warning("audit_log_admin_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
+    db_session = get_db_safe()
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Audit data is temporarily unavailable")
 
-    # Query CTE events, exports, and alerts from the ingestion database
     try:
-        db_session = get_db_safe()
-        try:
-            entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
-            entries.extend(_query_exports(db_session, tenant_id, limit=100))
-            entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
-        finally:
-            db_session.close()
+        # Production tenant identifiers are UUIDs.  The tolerant helper keeps
+        # local slug-based fixtures working; UUID tenants always receive the
+        # transaction-scoped RLS context before the first application read.
+        set_tenant_guc_if_uuid(db_session, tenant_id)
+        entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
+        entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
+        entries.extend(_query_exports(db_session, tenant_id, limit=100))
+        entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
     except Exception as exc:
-        logger.warning("audit_log_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
+        db_session.rollback()
+        logger.error("audit_log_query_failed error=%s tenant_id=%s", str(exc), tenant_id)
+        raise HTTPException(status_code=503, detail="Audit data is temporarily unavailable") from exc
+    finally:
+        db_session.close()
 
     dedup: dict[str, AuditEntry] = {}
     for entry in entries:

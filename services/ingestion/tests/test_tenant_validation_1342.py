@@ -190,10 +190,9 @@ class TestResolveTenant:
         result = resolve_tenant(None, principal)
         assert result == "valid"
 
-    def test_unscoped_principal_can_target_explicit_tenant(self):
-        # legacy_master / dev_open carry tenant_id=None and may still target an
-        # explicit tenant — explicit-tenant targeting is gated on the ABSENCE of
-        # a bound principal tenant, not on the `*` scope (#2504).
+    def test_dev_open_principal_can_target_explicit_tenant(self):
+        # The local dev-open fallback carries tenant_id=None and may target an
+        # explicit tenant; database-backed keys never reach this shape.
         principal = SimpleNamespace(tenant_id=None, scopes=["*"])
         assert resolve_tenant("explicit-valid", principal) == "explicit-valid"
 
@@ -221,11 +220,8 @@ class TestValidTenantIdDependency:
 
     def test_pattern_matches_module_constant(self):
         dep = ValidTenantId()
-        # The Path dependency carries the regex pattern for FastAPI validation
-        # Pydantic v2 stores pattern in metadata
-        assert dep.metadata or hasattr(dep, "regex") or True  # structural check
-        # Direct attribute varies across FastAPI versions — locking the call
-        # succeeds and returns a Path dependency is the key contract.
+        patterns = [getattr(item, "pattern", None) for item in dep.metadata]
+        assert r"^[a-zA-Z0-9_-]{1,64}$" in patterns
 
     def test_description_present(self):
         dep = ValidTenantId()

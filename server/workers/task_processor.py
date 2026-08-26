@@ -33,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
-from shared.tenant_context import system_scope, tenant_scope
+from shared.tenant_context import tenant_scope
 
 logger = structlog.get_logger("task-processor")
 
@@ -461,11 +461,10 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
     # by the recall engine, not the worker).
     handler_types = list(TASK_HANDLERS.keys())
 
-    # #2461: the claim scan is cross-tenant by design — system_scope +
-    # the Engine begin-hook set regengine.system_context so the v095
-    # task_queue policy arm admits it under the least-privilege role.
-    with system_scope():
-        row = _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds)
+    # Cross-tenant queue mechanics run on the canonical admin session.  RLS
+    # requires the exact regengine_sysadmin role; no caller-controlled GUC is
+    # an authorization input.
+    row = _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds)
 
     if row:
         task_type = row[1]
@@ -488,8 +487,10 @@ def _claim_task(db) -> Optional[Dict[str, Any]]:
 
 def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
     """Run the claim UPDATE...SKIP LOCKED and commit when a row was won."""
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
+    arm_global_admin_context(db)
     row = db.execute(
         text("""
             UPDATE fsma.task_queue
@@ -528,19 +529,23 @@ def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
 
 
 def _complete_task(db, task_id: int) -> None:
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
-    # #2461: queue-state transition — system_scope (see _claim_task).
-    with system_scope():
-        db.execute(
-            text("""
-                UPDATE fsma.task_queue
-                SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
-                WHERE id = :id
-            """),
-            {"id": task_id},
-        )
-        db.commit()
+    arm_global_admin_context(db)
+    result = db.execute(
+        text("""
+            UPDATE fsma.task_queue
+            SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
+            WHERE id = :id
+              AND locked_by = :worker
+              AND status = 'processing'
+        """),
+        {"id": task_id, "worker": WORKER_ID},
+    )
+    if not result.rowcount:
+        logger.warning("task_complete_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
+    db.commit()
 
 
 def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
@@ -553,24 +558,22 @@ def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
     The ``locked_by = :worker`` predicate is the safety: if we no longer
     own the task we must NOT extend the lock.
     """
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
-    # #2461: runs in the heartbeat THREAD — contextvars do not inherit
-    # into threading.Thread bodies, so the system scope is entered here,
-    # inside the function that actually executes the SQL.
-    with system_scope():
-        result = db.execute(
-            text(
-                """
-                UPDATE fsma.task_queue
-                SET locked_until = NOW() + (:seconds || ' seconds')::interval
-                WHERE id = :id
-                  AND locked_by = :worker
-                """
-            ),
-            {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
-        )
-        db.commit()
+    arm_global_admin_context(db)
+    result = db.execute(
+        text(
+            """
+            UPDATE fsma.task_queue
+            SET locked_until = NOW() + (:seconds || ' seconds')::interval
+            WHERE id = :id
+              AND locked_by = :worker
+            """
+        ),
+        {"id": task_id, "worker": WORKER_ID, "seconds": int(timeout_seconds)},
+    )
+    db.commit()
     return bool(result.rowcount)
 
 
@@ -677,16 +680,16 @@ def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -
         - status  → 'dead'
         - locks cleared; scheduled_at left alone (dead never runs again).
     """
-    # #2461: queue-state transition — system_scope (see _claim_task).
-    with system_scope():
-        _fail_task_inner(db, task_id, error, attempts, max_attempts)
+    _fail_task_inner(db, task_id, error, attempts, max_attempts)
 
 
 def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
+    from services.admin.app.database import arm_global_admin_context
     from sqlalchemy import text
 
+    arm_global_admin_context(db)
     if attempts >= max_attempts:
-        db.execute(
+        result = db.execute(
             text(
                 """
                 UPDATE fsma.task_queue
@@ -695,9 +698,11 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     locked_by = NULL,
                     locked_until = NULL
                 WHERE id = :id
+                  AND locked_by = :worker
+                  AND status = 'processing'
                 """
             ),
-            {"id": task_id, "error": error[:2000]},
+            {"id": task_id, "error": error[:2000], "worker": WORKER_ID},
         )
     else:
         # Retry path — defer via scheduled_at so the next claim does NOT
@@ -706,7 +711,7 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
         # and the 2s poller grabbed it within 2s, causing a tight retry
         # loop on persistent errors.
         delay = _retry_delay_seconds(attempts)
-        db.execute(
+        result = db.execute(
             text(
                 """
                 UPDATE fsma.task_queue
@@ -716,10 +721,19 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     locked_until = NULL,
                     scheduled_at = NOW() + (:delay_seconds || ' seconds')::interval
                 WHERE id = :id
+                  AND locked_by = :worker
+                  AND status = 'processing'
                 """
             ),
-            {"id": task_id, "error": error[:2000], "delay_seconds": int(delay)},
+            {
+                "id": task_id,
+                "error": error[:2000],
+                "delay_seconds": int(delay),
+                "worker": WORKER_ID,
+            },
         )
+    if not result.rowcount:
+        logger.warning("task_fail_skipped_lost_lock", task_id=task_id, worker_id=WORKER_ID)
     db.commit()
 
 
@@ -729,7 +743,10 @@ def _worker_loop() -> None:
 
     # Try to get a database session
     try:
-        from shared.database import SessionLocal
+        from services.admin.app.database import (
+            SessionLocal,
+            arm_global_admin_context,
+        )
     except ImportError:
         logger.warning("task_worker_no_database_session_factory")
         return
@@ -767,7 +784,7 @@ def _worker_loop() -> None:
                 # every transaction the handler opens carries the tenant
                 # GUC via the Engine begin-hook. The heartbeat thread does
                 # NOT inherit this contextvar — _heartbeat_extend enters
-                # its own system_scope.
+                # its own admin control-plane session.
                 if task.get("tenant_id"):
                     with tenant_scope(task["tenant_id"]):
                         _run_handler_with_heartbeat(
@@ -966,7 +983,7 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     not block process exit.
     """
     try:
-        from shared.database import SessionLocal
+        from services.admin.app.database import SessionLocal, arm_global_admin_context
         from sqlalchemy import text
     except ImportError:
         logger.warning("abandoned_task_release_no_db_module", task_id=task_id)
@@ -975,26 +992,23 @@ def _release_abandoned_task_lock(task_id: int, attempts: int) -> None:
     db = None
     try:
         db = SessionLocal()
-        # #2461: shutdown-path queue mechanics — system_scope. Runs in
-        # the stop_task_worker caller's thread, so the scope is entered
-        # here, around the statement that needs it.
-        with system_scope():
-            result = db.execute(
-                text(
-                    """
-                    UPDATE fsma.task_queue
-                    SET status = 'pending',
-                        locked_by = NULL,
-                        locked_until = NULL,
-                        attempts = GREATEST(attempts - 1, 0)
-                    WHERE id = :id
-                      AND locked_by = :worker
-                      AND status = 'processing'
-                    """
-                ),
-                {"id": task_id, "worker": WORKER_ID},
-            )
-            db.commit()
+        arm_global_admin_context(db)
+        result = db.execute(
+            text(
+                """
+                UPDATE fsma.task_queue
+                SET status = 'pending',
+                    locked_by = NULL,
+                    locked_until = NULL,
+                    attempts = GREATEST(attempts - 1, 0)
+                WHERE id = :id
+                  AND locked_by = :worker
+                  AND status = 'processing'
+                """
+            ),
+            {"id": task_id, "worker": WORKER_ID},
+        )
+        db.commit()
         released = bool(result.rowcount)
         logger.warning(
             "task_abandoned_on_shutdown",

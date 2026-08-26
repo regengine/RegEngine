@@ -11,11 +11,11 @@ import os
 import uuid
 
 import structlog
+from shared.proxy_ip_attestation import verified_proxy_client_ip as _verified_proxy_client_ip
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 logger = structlog.get_logger("audit_middleware")
-
 
 # #1414: paths that MUST NOT run through the audit context middleware.
 # These are unauthenticated / metadata endpoints — running them through
@@ -72,12 +72,12 @@ def _should_skip_request(method: str, path: str) -> bool:
 
 
 def _trusted_proxy_cidrs() -> list[ipaddress._BaseNetwork]:
-    """Parse trusted-proxy CIDRs from env into a list of IP networks.
+    """Parse legacy trusted-proxy CIDRs for configuration compatibility.
 
-    #1414: ``X-Forwarded-For`` is trusted ONLY when the immediate
-    connection originates from a trusted proxy. In production this is
-    typically the Railway edge CIDR range; in dev it can include
-    127.0.0.0/8. Unset = no proxies trusted; XFF is ignored.
+    AuditContextMiddleware no longer uses peer CIDRs to authorize forwarding
+    headers: a public backend cannot tell a legitimate BFF call from a direct
+    caller that happens to traverse the same edge. Raw forwarding headers are
+    always ignored; only the signed proxy-IP attestation is authoritative.
 
     Two env vars are accepted, checked in order:
 
@@ -112,6 +112,7 @@ def _trusted_proxy_cidrs() -> list[ipaddress._BaseNetwork]:
 
 
 def _is_trusted_proxy(client_host: str | None) -> bool:
+    """Legacy helper retained for compatibility tests; not an audit trust gate."""
     if not client_host:
         return False
     try:
@@ -148,7 +149,11 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
         if _should_skip_request(request.method, request.url.path):
             return await call_next(request)
 
-        request_id = str(uuid.uuid4())
+        # RequestIDMiddleware owns the canonical per-hop request ID in the
+        # consolidated app and runs before this middleware. The standalone
+        # admin service has no request-ID middleware, so retain a local UUID
+        # fallback there.
+        request_id = str(getattr(request.state, "request_id", "") or uuid.uuid4())
         request.state.audit_context = {
             "request_id": request_id,
             "actor_ip": self._get_client_ip(request),
@@ -161,32 +166,17 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_client_ip(request: Request) -> str:
-        """Extract real IP. #1414: ``X-Forwarded-For`` and
-        ``X-Real-IP`` are honored ONLY when the immediate peer is a
-        trusted proxy (AUDIT_TRUSTED_PROXY_CIDRS / TRUSTED_PROXY_CIDRS).
-        Otherwise we use the raw socket address so attackers can't spoof
-        ``actor_ip`` on unauthenticated routes to evade per-IP rate
-        limits or blame another IP in audit.
+        """Resolve an authenticated BFF client IP or use the socket peer.
 
-        Malformed XFF (first hop not a valid IP) falls back to the socket
-        address rather than returning garbage. IPv6 hops are accepted
-        natively by ``ipaddress.ip_address``.
+        Raw ``Forwarded``, ``X-Forwarded-For``, and ``X-Real-IP`` values are
+        never authority, including when Railway is the immediate peer. The
+        public backend can also be called directly, so peer-CIDR trust alone
+        cannot distinguish a Vercel BFF request from attacker-supplied headers.
         """
         client_host = request.client.host if request.client else None
-
-        if _is_trusted_proxy(client_host):
-            forwarded = request.headers.get("x-forwarded-for")
-            if forwarded:
-                # Left-most hop is the originator when the chain is trusted.
-                first_hop = forwarded.split(",")[0].strip()
-                if first_hop and _looks_like_ip(first_hop):
-                    return first_hop
-            real_ip = request.headers.get("x-real-ip")
-            if real_ip:
-                candidate = real_ip.strip()
-                if candidate and _looks_like_ip(candidate):
-                    return candidate
-
+        verified_client_ip = _verified_proxy_client_ip(request)
+        if verified_client_ip:
+            return verified_client_ip
         return client_host or "unknown"
 
 

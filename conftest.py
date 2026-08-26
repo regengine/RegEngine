@@ -108,8 +108,13 @@ def _remember_real_module(
     mod_spec = getattr(module, "__spec__", None)
     if module is None or mod_spec is None:
         return False
-    if expected_root and expected_root not in mod_file:
-        return False
+    if expected_root:
+        try:
+            module_path = Path(mod_file).resolve()
+            expected_path = Path(expected_root).resolve()
+            module_path.relative_to(expected_path)
+        except (OSError, ValueError):
+            return False
     cache[name] = module
     return True
 

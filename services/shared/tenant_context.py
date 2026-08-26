@@ -14,7 +14,7 @@ body, and Supabase `user_metadata` are **not** accepted.
 Consolidated the following bugs (all variants of the same pattern):
 
 - #1065  PermissionChecker grants sysadmin without tenant context
-- #1068  preshared master-key path accepts empty X-Tenant-ID
+- #1068  retired shared-key path accepted an empty X-Tenant-ID
 - #1106  FDA spreadsheet route trusts client X-Tenant-ID
 - #1122  NLP extraction pipelines missing tenant_id thread-through
 - #1405  ComplianceServiceSync.get_alert does not filter by tenant_id
@@ -29,7 +29,7 @@ re-introduces the forbidden patterns.
 
 ## Usage
 
-    from services.shared.tenant_context import resolve_tenant_context
+    from shared.tenant_context import resolve_tenant_context
 
     @router.get("/items")
     async def list_items(ctx: TenantContext = Depends(resolve_tenant_context)):
@@ -69,7 +69,7 @@ class TenantContext:
 
     Attributes:
         tenant_id: UUID string. Never None, never empty, never a demo fallback.
-        principal_kind: "api_key" | "jwt" | "preshared" | "test_bypass".
+        principal_kind: "api_key" | "jwt" | "test_bypass".
         principal_id:   Stable identifier for the principal (api_key.key_id,
                         user_id, etc.). Used as ``actor_id`` in audit logs.
         actor_email:    Optional email for audit-log readability. May be None
@@ -102,10 +102,7 @@ async def resolve_tenant_context(request: Request) -> TenantContext:
          takes tenant_id from the server-side ``api_keys.tenant_id`` row.
       2. JWT principal set by ``services.shared.auth.get_current_user`` —
          takes tenant_id from the signed ``tenant_id`` claim.
-      3. Preshared master key — takes tenant_id from ``X-Tenant-ID``
-         header **only if** verify_api_key accepted the master key
-         (so request.state.api_key is already populated).
-      4. Test-bypass path — only when ``REGENGINE_ENV`` is ``development``
+      3. Test-bypass path — only when ``REGENGINE_ENV`` is ``development``
          or ``test`` AND ``AUTH_TEST_BYPASS_TOKEN`` matches.
 
     Tenant_id from URL path, query string, request body, or Supabase
@@ -199,9 +196,8 @@ def _extract_principal(request: Request) -> Optional[TenantContext]:
     api_key = getattr(request.state, "api_key", None)
     if api_key is not None:
         key_id = getattr(api_key, "key_id", "unknown")
-        is_master = key_id == "preshared-master"
         is_bypass = key_id == "test"
-        kind = "preshared" if is_master else ("test_bypass" if is_bypass else "api_key")
+        kind = "test_bypass" if is_bypass else "api_key"
         return TenantContext(
             tenant_id=getattr(api_key, "tenant_id", "") or "",
             principal_kind=kind,
@@ -506,17 +502,17 @@ def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
 # and ingestion audit_log build lazy private engines, server/main builds
 # a readiness throwaway), so instance registration cannot guarantee
 # coverage. The handler no-ops on non-postgresql dialects (sqlite unit
-# tests) and when no context is seeded — untenanted access then fails
-# CLOSED at the RLS layer via get_tenant_context()'s RAISE.
+# tests). Every PostgreSQL transaction first receives an explicit local
+# fail-closed baseline, even when no context is seeded. This is required for
+# transaction-mode poolers: checkout and the subsequent transaction may land
+# on different server backends, so session-level state can never be trusted.
 #
-# A second contextvar drives the ``regengine.system_context`` GUC for
-# cross-tenant queue/maintenance mechanics; only the two system-metadata
-# tables given the v095 policy arm (fsma.task_queue,
-# fsma.fsma_audit_trail) honor it. It is an unprivileged GUC — the
-# blast radius is deliberately limited to queue metadata and the audit
-# chain; RLS here defends against application bugs, not SQL injection
-# (an attacker who can run arbitrary SQL could equally set
-# app.tenant_id).
+# The retired ``regengine.system_context`` GUC is still reset to ``false`` in
+# the per-transaction baseline so stale state cannot survive a rolling
+# deployment.  No current policy reads it and application code has no API for
+# setting it true.  Cross-tenant maintenance uses the separately credentialed
+# ``regengine_sysadmin`` role plus the exact-role ``regengine.is_sysadmin``
+# policy arm.
 #
 # Out of hook coverage by construction: the raw-psycopg
 # ``regengine_ingestion.storage.database.DatabaseManager`` (keeps its
@@ -524,7 +520,6 @@ def apply_tenant_context(session: Any, ctx: TenantContext) -> None:
 # psycopg.connect() usage.
 
 _rls_tenant_id: ContextVar[Optional[str]] = ContextVar("rls_tenant_id", default=None)
-_rls_system_context: ContextVar[bool] = ContextVar("rls_system_context", default=False)
 
 _HOOK_INSTALLED = False
 
@@ -612,34 +607,6 @@ def tenant_scope(tenant_id: Union[str, _uuid.UUID]) -> Iterator[None]:
         _rls_tenant_id.reset(token)
 
 
-@contextmanager
-def system_scope() -> Iterator[None]:
-    """Mark this context as cross-tenant queue/maintenance mechanics.
-
-    Sets ``regengine.system_context = 'true'`` (transaction-scoped) on
-    every transaction started while active. Only affects tables given
-    the v095 system arm (fsma.task_queue, fsma.fsma_audit_trail). Does
-    NOT set a tenant — tenant-DATA tables stay fail-closed.
-    """
-    token = _rls_system_context.set(True)
-    try:
-        yield
-    finally:
-        _rls_system_context.reset(token)
-
-
-def apply_system_guc(session: Any) -> Any:
-    """Explicitly set ``regengine.system_context`` on an ALREADY-OPEN transaction.
-
-    The begin-hook only fires when a transaction starts; sessions whose
-    transaction is already open when :func:`system_scope` is entered
-    (e.g. an admin request session that ran auth queries first) need
-    this explicit, idempotent application. Transaction-scoped — clears
-    at COMMIT/ROLLBACK like set_tenant_guc.
-    """
-    return session.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
-
-
 def _apply_rls_gucs_on_begin(conn: Any) -> None:
     """SQLAlchemy Connection ``begin`` handler — first statements of every txn."""
     try:
@@ -647,6 +614,32 @@ def _apply_rls_gucs_on_begin(conn: Any) -> None:
             return  # sqlite fallback engines / unit tests
     except AttributeError:  # pragma: no cover — defensive
         return
+
+    # Establish the complete security-GUC baseline on the same backend and in
+    # the same transaction that will execute the application query.  SET LOCAL
+    # semantics (set_config(..., true)) make a later COMMIT/ROLLBACK clear the
+    # values automatically.  One SELECT keeps the hook to a single round trip;
+    # Connection.execute inside SQLAlchemy's ``begin`` event does not recurse.
+    conn.execute(
+        text(
+            """
+            SELECT
+                set_config('app.tenant_id', '', true),
+                set_config('app.portal_link_token', '', true),
+                set_config('app.remediation_token_hash', '', true),
+                set_config('regengine.tenant_id', '', true),
+                set_config('regengine.user_id', '', true),
+                set_config('regengine.is_sysadmin', 'false', true),
+                set_config('regengine.system_context', 'false', true),
+                set_config('regengine.api_key_lookup_id', '', true),
+                set_config('regengine.api_key_lookup_hash_current', '', true),
+                set_config('regengine.api_key_lookup_hash_legacy', '', true),
+                set_config('audit.allow_break_glass', 'false', true),
+                set_config('fsma.allow_mutation', 'false', true)
+            """
+        )
+    )
+    _inc_rls_guc_metric("baseline")
 
     tid = _rls_tenant_id.get()
     if tid is not None:
@@ -662,11 +655,6 @@ def _apply_rls_gucs_on_begin(conn: Any) -> None:
             {"tid": str(tid)},
         )
         _inc_rls_guc_metric("tenant")
-    if _rls_system_context.get():
-        conn.execute(text("SELECT set_config('regengine.system_context', 'true', true)"))
-        _inc_rls_guc_metric("system")
-
-
 def install_rls_guc_hook() -> None:
     """Register :func:`_apply_rls_gucs_on_begin` on the Engine CLASS.
 

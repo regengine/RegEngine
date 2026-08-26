@@ -101,12 +101,13 @@ def _provision_app_roles(database_url: str) -> None:
 
 
 def _run_alembic(cmd: list[str], database_url: str, extra_env: dict | None = None) -> subprocess.CompletedProcess:
-    """Invoke alembic as a subprocess with DATABASE_URL set.
+    """Invoke Alembic with the explicit schema-owner migration URL.
 
     A subprocess keeps the test isolated from any alembic state the
     parent pytest process might hold (env.py caching, etc.).
     """
     env = os.environ.copy()
+    env["MIGRATIONS_DATABASE_URL"] = database_url
     env["DATABASE_URL"] = database_url
     if extra_env:
         env.update(extra_env)

@@ -5,19 +5,34 @@ import psycopg
 import pytest
 from psycopg.rows import dict_row
 
-from tests.integration_requirements import psycopg_connect_or_skip
 
-# Get DB URL from env or use default (matching conftest.py)
-DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
+def _role_admin_database_url() -> str:
+    """Return the explicit provider credential used to create probe roles."""
+    url = os.environ.get("ROLE_ADMIN_DATABASE_URL", "").strip()
+    if url:
+        return url
+
+    # The older security workflow names its explicit PostgreSQL provider URL
+    # TEST_DB_URL. Keep that test-only compatibility without ever falling back
+    # to ADMIN_DATABASE_URL, whose production role is deliberately
+    # NOSUPERUSER/NOCREATEROLE.
+    url = os.environ.get("TEST_DB_URL", "").strip()
+    if url:
+        return url
+
+    pytest.fail(
+        "ROLE_ADMIN_DATABASE_URL (or the legacy explicit provider TEST_DB_URL) "
+        "is required for the RLS release gate"
+    )
 
 
 @pytest.fixture(scope="module")
 def db_connection():
-    """Create a raw DB connection for RLS testing."""
-    conn = psycopg_connect_or_skip(
-        DB_URL,
-        reason="PostgreSQL database is unavailable for RLS verification",
-    )
+    """Connect with the explicit role-admin/provider test credential."""
+    try:
+        conn = psycopg.connect(_role_admin_database_url())
+    except (psycopg.OperationalError, psycopg.ProgrammingError) as exc:
+        pytest.fail(f"PostgreSQL is required for the RLS release gate: {exc}")
     conn.autocommit = False  # Use transactions
     try:
         yield conn
@@ -42,10 +57,14 @@ def _make_probe_role(cur):
     with cur.connection.cursor() as check_cur:
         check_cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
         if not check_cur.fetchone()[0]:
-            pytest.skip("RLS probe requires a superuser connection to create the probe role")
+            pytest.fail("RLS release gate requires a privileged fixture connection to create the restricted probe role")
     role = f"rls_probe_{uuid.uuid4().hex[:8]}"
     cur.execute(f'CREATE ROLE "{role}" NOLOGIN')
-    cur.execute(f'GRANT SELECT ON audit_logs TO "{role}"')
+    # v111 revokes implicit PUBLIC schema access. Grant only the two
+    # capabilities this probe needs so SET ROLE exercises the table's RLS
+    # policy instead of failing earlier during relation lookup.
+    cur.execute(f'GRANT USAGE ON SCHEMA public TO "{role}"')
+    cur.execute(f'GRANT SELECT ON public.audit_logs TO "{role}"')
     return role
 
 

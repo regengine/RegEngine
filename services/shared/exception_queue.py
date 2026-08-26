@@ -150,7 +150,7 @@ class ExceptionQueueService:
     def set_tenant_context(self, tenant_id: str) -> None:
         """Set the RLS tenant context for this session.
 
-        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        Delegates to ``shared.tenant_context.set_tenant_guc`` —
         the canonical Phase B primitive (#1934). Behavior-preserving for
         valid UUIDs (same ``SET LOCAL app.tenant_id = :tid`` SQL with
         the same parameterized binding); the helper additionally
@@ -159,7 +159,7 @@ class ExceptionQueueService:
         non-UUID GUC that would break every
         ``get_tenant_context()::UUID`` comparison in RLS.
         """
-        from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
 
         set_tenant_guc(self.session, tenant_id)
 
@@ -674,7 +674,7 @@ class ExceptionQueueService:
         Returns:
             List of created ExceptionCase objects.
         """
-        from services.shared.rules_engine import RuleEvaluationResult
+        from shared.rules_engine import RuleEvaluationResult
 
         failures = [r for r in summary.results if r.result == "fail"]
         if not failures:

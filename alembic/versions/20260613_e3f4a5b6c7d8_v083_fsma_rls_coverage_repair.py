@@ -45,6 +45,10 @@ def upgrade() -> None:
                 END IF;
 
                 EXECUTE format(
+                    'ALTER TABLE fsma.%I NO FORCE ROW LEVEL SECURITY',
+                    table_name
+                );
+                EXECUTE format(
                     'UPDATE fsma.%I SET tenant_id = org_id WHERE tenant_id IS NULL',
                     table_name
                 );
@@ -80,6 +84,8 @@ def upgrade() -> None:
 
             ALTER TABLE fsma.key_data_elements
                 ADD COLUMN IF NOT EXISTS tenant_id UUID;
+            ALTER TABLE fsma.key_data_elements NO FORCE ROW LEVEL SECURITY;
+            ALTER TABLE fsma.critical_tracking_events NO FORCE ROW LEVEL SECURITY;
 
             UPDATE fsma.key_data_elements kde
             SET tenant_id = cte.tenant_id
@@ -104,6 +110,7 @@ def upgrade() -> None:
                 ON fsma.key_data_elements(tenant_id);
             ALTER TABLE fsma.key_data_elements ENABLE ROW LEVEL SECURITY;
             ALTER TABLE fsma.key_data_elements FORCE ROW LEVEL SECURITY;
+            ALTER TABLE fsma.critical_tracking_events FORCE ROW LEVEL SECURITY;
             DROP POLICY IF EXISTS fsma_org_isolation_kdes ON fsma.key_data_elements;
             DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.key_data_elements;
             CREATE POLICY tenant_isolation_kdes
@@ -128,6 +135,8 @@ def upgrade() -> None:
 
             ALTER TABLE fsma.cte_kdes_backfill_log_v059
                 ADD COLUMN IF NOT EXISTS tenant_id UUID;
+            ALTER TABLE fsma.cte_kdes_backfill_log_v059 NO FORCE ROW LEVEL SECURITY;
+            ALTER TABLE fsma.cte_events NO FORCE ROW LEVEL SECURITY;
 
             UPDATE fsma.cte_kdes_backfill_log_v059 log
             SET tenant_id = cte.tenant_id
@@ -152,6 +161,7 @@ def upgrade() -> None:
                 ON fsma.cte_kdes_backfill_log_v059(tenant_id);
             ALTER TABLE fsma.cte_kdes_backfill_log_v059 ENABLE ROW LEVEL SECURITY;
             ALTER TABLE fsma.cte_kdes_backfill_log_v059 FORCE ROW LEVEL SECURITY;
+            ALTER TABLE fsma.cte_events FORCE ROW LEVEL SECURITY;
             DROP POLICY IF EXISTS tenant_isolation_cte_kdes_backfill_log_v059
                 ON fsma.cte_kdes_backfill_log_v059;
             CREATE POLICY tenant_isolation_cte_kdes_backfill_log_v059

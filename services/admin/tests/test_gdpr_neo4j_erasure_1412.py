@@ -192,26 +192,29 @@ def test_erasure_enqueues_graph_outbox_row_before_commit():
 
     from services.admin.app import erasure_routes
 
-    source = inspect.getsource(erasure_routes.request_erasure)
+    helper_source = inspect.getsource(erasure_routes._apply_account_erasure)
+    handler_source = inspect.getsource(erasure_routes.request_erasure)
 
-    enqueue_match = re.search(r"\benqueue_graph_write\s*\(", source)
-    commit_match = re.search(r"\bdb\.commit\s*\(", source)
+    enqueue_match = re.search(r"\benqueue_graph_write\s*\(", helper_source)
+    helper_call_match = re.search(r"\b_apply_account_erasure\s*\(", handler_source)
+    commit_match = re.search(r"\bdb\.commit\s*\(", handler_source)
 
     assert enqueue_match is not None, (
-        "request_erasure must call enqueue_graph_write() so the Neo4j deletion is durable via the graph_outbox drainer."
+        "_apply_account_erasure must call enqueue_graph_write() so the Neo4j deletion is durable via the graph_outbox drainer."
     )
+    assert helper_call_match is not None, "request_erasure must apply the durable erasure transaction"
     assert commit_match is not None, "request_erasure handler shape changed — db.commit() not found"
-    assert enqueue_match.start() < commit_match.start(), (
-        "enqueue_graph_write() must run BEFORE db.commit() so the outbox "
+    assert helper_call_match.start() < commit_match.start(), (
+        "_apply_account_erasure() must run BEFORE db.commit() so its outbox "
         "row lands in the same Postgres transaction as the soft-delete. "
         "If commit happens first, an outbox-write failure leaves the "
         "Postgres erasure committed without a durable graph cleanup row."
     )
 
     # Operation tag must be stable for outbox dedupe + metric labels.
-    assert 'operation="user_erasure"' in source or "operation='user_erasure'" in source, (
+    assert 'operation="user_erasure"' in helper_source or "operation='user_erasure'" in helper_source, (
         "operation tag must be 'user_erasure'"
     )
 
     # dedupe_key required so a retried request doesn't write a second row.
-    assert "dedupe_key=" in source, "enqueue_graph_write call must pass a dedupe_key to make retries idempotent"
+    assert "dedupe_key=" in helper_source, "enqueue_graph_write call must pass a dedupe_key to make retries idempotent"

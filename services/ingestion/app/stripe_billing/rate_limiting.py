@@ -1,21 +1,25 @@
 """
-Stripe webhook rate limiting — Redis-backed with in-memory fallback.
+Stripe endpoint rate limiting.
 
-Reuses the same sliding-window pattern as app.sandbox.rate_limiting.
-Limits: 100 requests/minute per source IP.
+Webhook delivery retains its Redis-backed sliding window with local fallback.
+Public checkout uses the shared brute-force primitive and requires Redis in
+production/cloud modes so replicas cannot multiply the checkout abuse budget.
 """
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 import os
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Dict
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from shared.env import CLOUD_ENV_VARS, get_environment
+from shared.proxy_ip_attestation import verified_proxy_client_ip
+from shared.rate_limit import BruteForceLimiter
 
 logger = logging.getLogger("stripe_billing.rate_limit")
 
@@ -25,6 +29,11 @@ logger = logging.getLogger("stripe_billing.rate_limit")
 
 _WEBHOOK_RATE_LIMIT = 100  # requests per window
 _WEBHOOK_WINDOW = 60  # seconds
+_CHECKOUT_RATE_LIMIT = 10  # requests per source IP per window
+_CHECKOUT_WINDOW = 60  # seconds
+
+_checkout_limiter: BruteForceLimiter | None = None
+_checkout_limiter_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # In-memory fallback
@@ -147,72 +156,54 @@ def _check_redis(client_ip: str, now: float) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _trusted_proxy_cidrs() -> list:
-    """Parse trusted-proxy CIDRs from env.
-
-    Mirrors ``services/admin/app/audit_middleware.py``: ``X-Forwarded-For``
-    is honored ONLY when the immediate connection peer falls inside one
-    of these CIDRs. Without that gate, an attacker can mint a fresh
-    per-IP rate-limit bucket on every request by rotating the header,
-    fully bypassing the limiter.
-
-    Two env vars accepted (in order): ``STRIPE_TRUSTED_PROXY_CIDRS``
-    (specific) wins over ``TRUSTED_PROXY_CIDRS`` (shared). Unset = XFF
-    ignored; the raw socket address is used.
-    """
-    raw = os.getenv("STRIPE_TRUSTED_PROXY_CIDRS", "").strip() or os.getenv("TRUSTED_PROXY_CIDRS", "").strip()
-    if not raw:
-        return []
-    cidrs = []
-    for item in raw.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        try:
-            cidrs.append(ipaddress.ip_network(item, strict=False))
-        except ValueError:
-            logger.warning("stripe_trusted_proxy_cidr_invalid value=%s", item)
-    return cidrs
-
-
-def _is_trusted_proxy(client_host: str | None) -> bool:
-    if not client_host:
-        return False
-    try:
-        client_ip = ipaddress.ip_address(client_host)
-    except ValueError:
-        return False
-    for cidr in _trusted_proxy_cidrs():
-        if client_ip in cidr:
-            return True
-    return False
-
-
-def _looks_like_ip(value: str) -> bool:
-    try:
-        ipaddress.ip_address(value)
-    except ValueError:
-        return False
-    return True
-
-
 def _client_ip(request) -> str:
-    """Resolve the real client IP.
-
-    Honors ``X-Forwarded-For`` only when the peer is a trusted proxy
-    (#XFF-bypass-2026-05-12). Otherwise falls back to
-    ``request.client.host``.
-    """
+    """Resolve an authenticated BFF IP, otherwise use the socket peer."""
     client_host = request.client.host if request.client else None
-
-    if _is_trusted_proxy(client_host):
-        forwarded = request.headers.get("X-Forwarded-For") or request.headers.get("x-forwarded-for")
-        if forwarded:
-            first_hop = forwarded.split(",")[0].strip()
-            if first_hop and _looks_like_ip(first_hop):
-                return first_hop
-
+    authenticated_client_ip = verified_proxy_client_ip(request)
+    if authenticated_client_ip:
+        return authenticated_client_ip
     return client_host or "unknown"
+
+
+def _checkout_requires_shared_backend() -> bool:
+    """Require Redis anywhere except an explicit, non-cloud local/test run."""
+    cloud_deployment = any(os.getenv(name) for name in CLOUD_ENV_VARS)
+    environment = get_environment()
+    return cloud_deployment or environment not in {"development", "local", "test"}
+
+
+def _get_checkout_limiter() -> BruteForceLimiter:
+    global _checkout_limiter
+    if _checkout_limiter is None:
+        with _checkout_limiter_lock:
+            if _checkout_limiter is None:
+                _checkout_limiter = BruteForceLimiter(
+                    namespace="stripe_checkout_requests",
+                    max_failures=_CHECKOUT_RATE_LIMIT,
+                    window_seconds=_CHECKOUT_WINDOW,
+                    require_shared_backend=_checkout_requires_shared_backend(),
+                )
+    return _checkout_limiter
+
+
+def _check_stripe_checkout_rate_limit(request: Request) -> None:
+    """Consume the per-IP public checkout budget before Stripe is called."""
+    client_ip = _client_ip(request)
+    limiter = _get_checkout_limiter()
+    # The Redis INCR inside record_failure is atomic across replicas. Checking
+    # first and incrementing second would permit concurrent overshoot.
+    current_count = limiter.record_failure(client_ip)
+    if current_count > limiter.max_failures:
+        logger.warning("stripe_checkout_rate_limit_exceeded client_ip=%s", client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Try again shortly.",
+            headers={"Retry-After": str(_CHECKOUT_WINDOW)},
+        )
+
+    # BruteForceLimiter is a generic fixed-window shared counter. Checkout
+    # consumes one unit for every request, not only failures, because Stripe
+    # session creation itself is the resource being protected.
 
 
 def _check_stripe_webhook_rate_limit(request) -> None:

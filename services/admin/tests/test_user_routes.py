@@ -219,6 +219,38 @@ class TestUpdateUserRole_Issue1341:
         assert exc.value.status_code == 400
         assert "Role not found" in exc.value.detail
 
+    def test_rejects_custom_role_owned_by_another_tenant(self, monkeypatch) -> None:
+        """A role UUID is not authority to cross the tenant boundary."""
+        user_routes_mod, audit_calls = _load_routes(monkeypatch)
+        db = MagicMock()
+        membership = _fake_membership(role_id=MEMBER_ROLE_ID)
+        membership_result = MagicMock()
+        membership_result.scalar_one_or_none.return_value = membership
+        db.execute.return_value = membership_result
+
+        other_tenant_role = _fake_role(
+            OWNER_ROLE_ID,
+            "Owner",
+            tenant_id=uuid.UUID("99999999-9999-9999-9999-999999999999"),
+        )
+        db.get.return_value = other_tenant_role
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                user_routes_mod.update_user_role(
+                    user_id=TARGET_USER_ID,
+                    update=user_routes_mod.RoleUpdate(role_id=OWNER_ROLE_ID),
+                    current_user=_fake_user(ACTOR_ID, is_sysadmin=False),
+                    db=db,
+                )
+            )
+
+        assert exc.value.status_code == 400
+        assert exc.value.detail == "Role not found"
+        assert membership.role_id == MEMBER_ROLE_ID
+        assert audit_calls == []
+        db.commit.assert_not_called()
+
     def test_blocks_demotion_of_last_owner(self, monkeypatch) -> None:
         """#1083: the only remaining Owner must not be demotable. A
         regression here would let a tenant be left with zero Owners

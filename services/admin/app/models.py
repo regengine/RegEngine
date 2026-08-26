@@ -334,7 +334,7 @@ class RevokeAllSessionsResponse(BaseModel):
 class TenantContext:
     """Helper class for managing tenant context in database sessions.
 
-    NOTE on the Phase B canonical helper (``services.shared.tenant_context.set_tenant_guc``):
+    NOTE on the Phase B canonical helper (``shared.tenant_context.set_tenant_guc``):
     these methods deliberately do NOT delegate to it. They use the
     SECURITY DEFINER SQL functions (``set_tenant_context(uuid)``,
     ``set_admin_context(bool)``, ``set_config(..., FALSE)``) which are

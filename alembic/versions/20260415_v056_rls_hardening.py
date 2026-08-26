@@ -43,25 +43,19 @@ def upgrade() -> None:
     # Part 1: SQL_V048 — Sysadmin defense-in-depth
     # ================================================================
 
-    # 1a. Create regengine_sysadmin role
+    # 1a. Validate the provider-admin-provisioned sysadmin role. Alembic may
+    # run as a schema owner without CREATEROLE or role ADMIN OPTION.
     op.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                CREATE ROLE regengine_sysadmin LOGIN INHERIT;
+                RAISE EXCEPTION
+                    'regengine_sysadmin must be provisioned before Alembic runs';
             END IF;
         END $$;
     """)
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT pg_has_role('regengine_sysadmin', 'regengine', 'MEMBER') THEN
-                EXECUTE 'GRANT regengine TO regengine_sysadmin';
-            END IF;
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Could not grant regengine to regengine_sysadmin: %', SQLERRM;
-        END $$;
-    """)
+    # Never make the sysadmin role inherit the ordinary runtime role. v111
+    # validates that neither runtime credential has any role memberships.
 
     # 1b. Audit schema and sysadmin access log
     op.execute("CREATE SCHEMA IF NOT EXISTS audit")

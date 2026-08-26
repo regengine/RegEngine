@@ -1,9 +1,10 @@
 """
 GDPR Right-to-Erasure API.
 
-Provides a user-facing endpoint for data deletion requests per
-GDPR Article 17. Soft-deletes user account data immediately and
-schedules hard-delete after the configured retention period.
+Provides a user-facing endpoint for data deletion requests per GDPR Article
+17. The endpoint atomically disables the global identity, replaces stored
+email identifiers, deactivates memberships, revokes database sessions, writes
+an append-only audit redaction order, and queues graph cleanup.
 
 FSMA 204 compliance note: Audit logs that contain actor_email are
 anonymized (email masked) rather than deleted, because 21 CFR 1.1310
@@ -15,20 +16,56 @@ from __future__ import annotations
 
 import os
 import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from shared.database import get_db
+from shared.tenant_context import set_tenant_guc
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
-from .dependencies import get_current_user
+from .database import arm_global_admin_context, get_session
+from .dependencies import get_current_user, get_session_store
 from .graph_outbox import enqueue_graph_write
 from .models import TenantContext
-from .sqlalchemy_models import UserModel
+from .session_store import RedisSessionStore
+from .sqlalchemy_models import (
+    AuditLogModel,
+    AuthChallengeModel,
+    MembershipModel,
+    MFARecoveryCodeModel,
+    OrganizationMembershipModel,
+    SessionModel,
+    TenantModel,
+    UserEmailModel,
+    UserModel,
+    WebAuthnChallengeModel,
+    WebAuthnCredentialModel,
+)
 
 logger = structlog.get_logger("erasure")
+
+
+@contextmanager
+def get_db():
+    """Compatibility seam for older tests that patch this name.
+
+    Production erasure uses the request-scoped ``get_session`` dependency so
+    tenant GUC and admin arming stay on the same connection as
+    ``get_current_user``.
+    """
+    from .database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.rollback()
+        db.close()
 
 # Cypher to detach-delete only graph nodes that represent the erased user.
 # tenant_id and user_id are always passed as parameters, never interpolated.
@@ -134,19 +171,210 @@ class ErasureResponse(BaseModel):
     hard_delete_date: Optional[str] = None
 
 
+def _erased_email(user_id: uuid.UUID, row_id: uuid.UUID | None = None) -> str:
+    """Return a unique, non-routable replacement for an erased email."""
+
+    suffix = f"+{row_id.hex}" if row_id is not None else ""
+    return f"erased+{user_id.hex}{suffix}@invalid.regengine.local"
+
+
+def _apply_account_erasure(
+    db,
+    *,
+    user_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> int:
+    """Apply the durable account-erasure transaction without committing.
+
+    The global user row has no ``deleted_at`` column and there is no durable
+    hard-delete queue in the current schema.  Treating it as a generic
+    ``user_account`` retention table previously generated invalid SQL and the
+    retention helper swallowed the error.  This explicit operation matches the
+    actual schema and leaves a tamper-evident redaction order that audit exports
+    and tenant audit views honor.
+    """
+
+    user = db.get(UserModel, user_id)
+    if user is None:
+        raise LookupError("authenticated user no longer exists")
+
+    membership_tenants = set(
+        db.execute(select(MembershipModel.tenant_id).where(MembershipModel.user_id == user_id)).scalars().all()
+    )
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        # ``audit_logs`` intentionally has tenant-only SELECT/INSERT policies,
+        # even for the armed admin role. Enumerate tenant IDs under the reviewed
+        # global arm, then bind each tenant locally and look only for this
+        # authenticated identity's history. This finds audit-history-only
+        # tenants without adding a broader audit_logs policy.
+        audit_tenants = set()
+        tenant_ids = db.execute(select(TenantModel.id)).scalars().all()
+        for audit_tenant_id in tenant_ids:
+            set_tenant_guc(db, str(audit_tenant_id))
+            if db.execute(
+                select(AuditLogModel.tenant_id)
+                .where(
+                    AuditLogModel.tenant_id == audit_tenant_id,
+                    AuditLogModel.actor_id == user_id,
+                )
+                .limit(1)
+            ).scalar_one_or_none() is not None:
+                audit_tenants.add(audit_tenant_id)
+    else:
+        audit_tenants = set(
+            db.execute(
+                select(AuditLogModel.tenant_id)
+                .where(AuditLogModel.actor_id == user_id)
+                .distinct()
+            )
+            .scalars()
+            .all()
+        )
+    marker_tenants = membership_tenants | audit_tenants | {tenant_id}
+    if tenant_id not in membership_tenants:
+        raise PermissionError("authenticated user is not a member of the selected tenant")
+
+    now = datetime.now(timezone.utc)
+    db.execute(
+        update(SessionModel)
+        .where(SessionModel.user_id == user_id)
+        .values(
+            is_revoked=True,
+            revoked_at=func.coalesce(SessionModel.revoked_at, now),
+            user_agent=None,
+            ip_address=None,
+            token_hash=None,
+            active_membership_id=None,
+        )
+    )
+    db.execute(
+        update(MembershipModel)
+        .where(MembershipModel.user_id == user_id)
+        .values(is_active=False)
+    )
+
+    email_rows = db.execute(select(UserEmailModel).where(UserEmailModel.user_id == user_id)).scalars().all()
+    email_fingerprints = [row.email_fingerprint for row in email_rows if row.email_fingerprint]
+    for email_row in email_rows:
+        email_row.email = _erased_email(user_id, email_row.id)
+        email_row.email_fingerprint = None
+        email_row.is_verified = False
+
+    # Authentication factors/challenges are not compliance evidence. Remove
+    # them instead of retaining durable links to the erased identity.
+    db.execute(delete(OrganizationMembershipModel).where(OrganizationMembershipModel.user_id == user_id))
+    db.execute(delete(WebAuthnCredentialModel).where(WebAuthnCredentialModel.user_id == user_id))
+    db.execute(delete(WebAuthnChallengeModel).where(WebAuthnChallengeModel.user_id == user_id))
+    db.execute(delete(MFARecoveryCodeModel).where(MFARecoveryCodeModel.user_id == user_id))
+    if email_fingerprints:
+        db.execute(delete(AuthChallengeModel).where(AuthChallengeModel.email_fingerprint.in_(email_fingerprints)))
+
+    user.email = _erased_email(user_id)
+    user.global_status = "erased"
+    user.status = "erased"
+    user.is_sysadmin = False
+    user.mfa_secret = None
+    user.mfa_secret_ciphertext = None
+    user.token_version = int(user.token_version or 0) + 1
+    user.last_login_at = None
+
+    from .audit import AuditLogger
+
+    historical_audit_rows = 0
+    for marker_tenant_id in sorted(marker_tenants, key=str):
+        # ``audit_logs`` deliberately has no global-sysadmin INSERT policy.
+        # Bind each marker write to the tenant derived from this authenticated
+        # user's membership/audit history. The setting is transaction-local
+        # and cannot be selected by request data.
+        if db.bind is not None and db.bind.dialect.name != "sqlite":
+            set_tenant_guc(db, str(marker_tenant_id))
+        tenant_audit_rows = int(
+            db.execute(
+                select(func.count(AuditLogModel.id)).where(
+                    AuditLogModel.tenant_id == marker_tenant_id,
+                    AuditLogModel.actor_id == user_id,
+                )
+            ).scalar_one()
+        )
+        historical_audit_rows += tenant_audit_rows
+        audit_entry_id = AuditLogger.log_event(
+            db,
+            tenant_id=marker_tenant_id,
+            event_type="data.delete",
+            event_category="data_modification",
+            severity="info",
+            actor_id=user_id,
+            actor_email=None,
+            action="gdpr_anonymize_user",
+            resource_type="user_account",
+            resource_id=str(user_id),
+            endpoint="/v1/account/erasure",
+            metadata={
+                "gdpr_article": 17,
+                "marker_kind": "per_user_anonymization_order",
+                "redacted_user_id": str(user_id),
+                "redacted_tenant_id": str(marker_tenant_id),
+                "redacted_fields": [
+                    "email",
+                    "mfa_secret",
+                    "session_ip",
+                    "session_user_agent",
+                    "webauthn_credentials",
+                ],
+                "records_affected": tenant_audit_rows,
+            },
+        )
+        if audit_entry_id is None:
+            raise SQLAlchemyError("account erasure audit marker could not be persisted")
+
+        enqueue_graph_write(
+            db,
+            tenant_id=str(marker_tenant_id),
+            operation="user_erasure",
+            cypher=_CYPHER_DELETE_USER_GRAPH_DATA,
+            params={"user_id": str(user_id)},
+            dedupe_key=f"user_erasure:{marker_tenant_id}:{user_id}",
+        )
+    return historical_audit_rows
+
+
+async def _revoke_erased_user_runtime_sessions(
+    session_store: RedisSessionStore,
+    user_id: uuid.UUID,
+) -> None:
+    """Revoke Redis sessions/elevation state; fail closed after two tries."""
+
+    from .auth.elevation_helpers import _revoke_all_elevation_tokens_for_user
+
+    async def _retry(operation):
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                return await operation()
+            except Exception as exc:  # noqa: BLE001 - backend failures all map to 503
+                last_error = exc
+        assert last_error is not None
+        raise last_error
+
+    await _retry(lambda: session_store.revoke_all_user_sessions(user_id))
+    await _retry(lambda: _revoke_all_elevation_tokens_for_user(session_store, user_id))
+
+
 @router.post(
     "/erasure",
     response_model=ErasureResponse,
     summary="Request account data erasure (GDPR Article 17)",
     description=(
-        "Soft-deletes your account data and schedules permanent deletion. "
-        "Audit logs are anonymized (email masked) to preserve FSMA 204 "
-        "traceability requirements while removing PII."
+        "Disables the account, replaces stored email identifiers, revokes all "
+        "sessions, and records a mandatory PII-masking order while preserving "
+        "the regulated audit trail."
     ),
 )
 async def request_erasure(
     body: ErasureRequest,
     current_user: UserModel = Depends(get_current_user),
+    session_store: RedisSessionStore = Depends(get_session_store),
+    db: Session = Depends(get_session),
 ):
     """Process a GDPR right-to-erasure request for the authenticated user."""
     if not body.confirm:
@@ -163,134 +391,52 @@ async def request_erasure(
     # Tenant comes from the RLS context bound by ``get_current_user`` --
     # ``UserModel`` does not carry a tenant_id column.
     user_id = current_user.id
-    email = current_user.email or "unknown"
     if not user_id:
         raise HTTPException(status_code=401, detail="Could not identify user")
 
     try:
-        from shared.audit_logging import AuditActor
-        from shared.data_retention import (
-            DataRetentionManager,
-            DeletionRequest,
-            RetentionPolicy,
+        # Same request-scoped admin session as ``get_current_user``. Tenant is
+        # the authenticated principal's bound context, not a new connection.
+        tenant_id = TenantContext.get_tenant_context(db)
+        if tenant_id is None:
+            raise HTTPException(status_code=403, detail="Tenant context required")
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+            tenant_uuid = uuid.UUID(str(tenant_id))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=403, detail="Valid tenant-bound identity required") from exc
+
+        logger.info(
+            "erasure_requested",
+            user_id=str(user_id),
+            tenant_id=str(tenant_id) if tenant_id else None,
+            reason_supplied=bool(body.reason),
         )
-        from shared.pii import mask_email
 
-        with get_db() as db:
-            # Tenant is read from the RLS context bound by ``get_current_user``
-            # on the same connection, not from the user object (UserModel has
-            # no tenant_id) and not from the request body (untrusted).
-            tenant_id = TenantContext.get_tenant_context(db)
-
-            logger.info(
-                "erasure_requested",
-                user_id=str(user_id),
-                tenant_id=str(tenant_id) if tenant_id else None,
-                reason=body.reason,
+        try:
+            arm_global_admin_context(db)
+            _historical_audit_rows = _apply_account_erasure(
+                db,
+                user_id=user_uuid,
+                tenant_id=tenant_uuid,
             )
-
-            manager = DataRetentionManager()
-
-            # ``AuditActor`` exposes ``email`` (not ``actor_email``).
-            # The previous attribute name raised TypeError on every
-            # erasure call and silently kept GDPR Article 17 broken
-            # even after #1441 realigned the downstream method
-            # signatures.  This is fix #1092.
-            actor = AuditActor(
-                actor_type="user",
-                actor_id=user_id,
-                email=mask_email(email),
-                tenant_id=str(tenant_id) if tenant_id else None,
-            )
-
-            # The DeletionRequest enum uses USER_INITIATED in this codebase
-            # (not USER_REQUEST, which was the wrong identifier previously).
-            deletion_request = DeletionRequest.USER_INITIATED
-
-            # Parse tenant/user as UUID when possible (both the shared
-            # retention layer and the audit-log INSERT require UUIDs).
-            # If parsing fails the erasure still proceeds for the
-            # soft-delete side; the per-user anonymization then
-            # degrades to a logged no-op.
-            try:
-                user_uuid = uuid.UUID(str(user_id))
-            except (TypeError, ValueError):
-                user_uuid = None
-            try:
-                tenant_uuid = uuid.UUID(str(tenant_id)) if tenant_id else None
-            except (TypeError, ValueError):
-                tenant_uuid = None
-
-            # 1. Soft-delete the user account record (global resource,
-            # no tenant_id required — see _GLOBAL_RESOURCES).
-            result = await manager.process_deletion_request(
-                db=db,
-                resource_type="user_account",
-                record_id=user_id,
-                policy=RetentionPolicy.USER_ACCOUNT,
-                deletion_request=deletion_request,
-                actor=actor,
-                reason=body.reason or "GDPR Article 17 right-to-erasure request",
-            )
-
-            # 2. Emit a per-user GDPR anonymization order for the
-            # tenant's audit trail.  Uses the new
-            # ``anonymize_audit_logs_for_user`` method introduced for
-            # #1092 — the previous batch ``anonymize_audit_logs``
-            # targeted the retention threshold (24-month-old rows) and
-            # had the wrong semantics for a right-to-erasure request.
-            anonymized_count = 0
-            if user_uuid is not None and tenant_uuid is not None:
-                try:
-                    anonymized_count, _anonymize_errors = await manager.anonymize_audit_logs_for_user(
-                        db=db,
-                        user_id=user_uuid,
-                        tenant_id=tenant_uuid,
-                        actor=actor,
-                    )
-                except Exception as anon_err:  # noqa: BLE001
-                    # Do not fail the whole erasure if anonymization
-                    # errors; the soft-delete is the primary action.
-                    logger.warning(
-                        "erasure_anonymize_audit_logs_failed",
-                        user_id=user_id,
-                        error=str(anon_err),
-                    )
-                    anonymized_count = 0
-            else:
-                logger.warning(
-                    "erasure_anonymize_audit_logs_skipped_non_uuid",
-                    user_id=user_id,
-                    tenant_id=tenant_id,
-                )
-
-            # 3. Durable Neo4j user-graph deletion via the graph outbox.
-            #    Pre-fix: a post-commit best-effort call to
-            #    _delete_neo4j_user_graph_data opened its own AsyncGraphDatabase
-            #    driver. If Neo4j was unreachable at request time, the deletion
-            #    silently no-op'd while the Postgres commit had already
-            #    persisted the soft-delete — a real GDPR liability.
-            #
-            #    Now: enqueue an outbox row inside the same Postgres
-            #    transaction as the soft-delete + audit anonymization. The
-            #    drainer (admin/app/graph_outbox.py:GraphOutboxDrainer)
-            #    replays the Cypher with retry + backoff. Both halves land
-            #    atomically (or neither does); Neo4j unavailability shifts
-            #    from "silent no-op" to "eventually consistent".
-            #
-            #    Parameters are passed as Cypher params, not interpolated.
-            #    User-scoped; tenant-graph offboarding is a different flow.
-            if tenant_id is not None:
-                enqueue_graph_write(
-                    db,
-                    tenant_id=str(tenant_id),
-                    operation="user_erasure",
-                    cypher=_CYPHER_DELETE_USER_GRAPH_DATA,
-                    params={"user_id": str(user_id)},
-                    dedupe_key=f"user_erasure:{user_id}",
-                )
-
             db.commit()
+        except Exception:
+            # The global flag is transaction-local. Rollback clears it on any
+            # pre-commit failure; a successful commit clears it without
+            # opening a second transaction. No database operation may occur
+            # between that durable commit and runtime credential cleanup.
+            db.rollback()
+            raise
+
+        try:
+            await _revoke_erased_user_runtime_sessions(session_store, user_uuid)
+        except Exception as exc:  # noqa: BLE001 - Redis errors must not produce a false 2xx
+            logger.error("erasure_session_revocation_failed", user_id=str(user_id), error_type=type(exc).__name__)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Account data was disabled, but authentication cleanup is still pending",
+            ) from exc
 
         # The post-commit Neo4j call below is retained as a low-latency
         # best-effort attempt — the outbox row above is the durability
@@ -299,27 +445,34 @@ async def request_erasure(
         # replay is harmless. If Neo4j is reachable: deletion is fast.
         # If unreachable: this no-ops (warning logged) and the drainer
         # eventually applies the same Cypher.
-        if tenant_id is not None:
-            await _delete_neo4j_user_graph_data(str(tenant_id), str(user_id))
+        await _delete_neo4j_user_graph_data(str(tenant_id), str(user_id))
 
         return ErasureResponse(
             status="accepted",
             message=(
-                "Your account data has been marked for deletion. "
-                "Audit logs have been anonymized to comply with both GDPR and FSMA 204. "
-                "Permanent deletion will occur after the retention period."
+                "Your identity has been disabled, stored email identifiers replaced, "
+                "and sessions revoked. Compliance audit history is retained under a "
+                "mandatory PII-masking order."
             ),
-            soft_deleted=result.get("soft_deleted", False),
-            audit_logs_anonymized=bool(anonymized_count),
-            hard_delete_scheduled=result.get("hard_delete_scheduled", False),
-            hard_delete_date=result.get("hard_delete_date"),
+            soft_deleted=True,
+            audit_logs_anonymized=True,
+            hard_delete_scheduled=False,
+            hard_delete_date=None,
         )
 
+    except HTTPException:
+        raise
+    except LookupError as e:
+        logger.warning("erasure_user_missing", user_id=str(user_id), error=str(e))
+        raise HTTPException(status_code=404, detail="Authenticated user no longer exists") from e
+    except PermissionError as e:
+        logger.warning("erasure_tenant_membership_missing", user_id=str(user_id), error=str(e))
+        raise HTTPException(status_code=403, detail="Authenticated user is not a member of the selected tenant") from e
     except ImportError as e:
         logger.error("erasure_import_error", error=str(e))
         raise HTTPException(
             status_code=503,
-            detail="Data retention module not available. Contact support.",
+            detail="Account erasure dependency unavailable. Contact support.",
         )
     except SQLAlchemyError as e:
         # RE-SEC-001: previously this branch was a broad ``except Exception``

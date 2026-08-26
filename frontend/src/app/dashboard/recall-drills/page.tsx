@@ -1,15 +1,13 @@
 'use client';
 
-import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
 import type { RecallDrillRun } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
-import { useTenant } from '@/lib/tenant-context';
 
 type RecallDrillsResponse = {
     items?: RecallDrillRun[];
@@ -19,23 +17,20 @@ type RecallDrillsResponse = {
 
 export default function RecallDrillsPage() {
     const { isAuthenticated } = useAuth();
-    const { tenantId } = useTenant();
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
     const [lots, setLots] = useState('');
     const [dateRange, setDateRange] = useState('');
-    const queryClient = useQueryClient();
-    const drillsQueryKey = ['recall-drills', tenantId] as const;
+    const drillsQueryKey = ['recall-drills'] as const;
 
     const { data: drillsResponse, isLoading: runsLoading } = useQuery<RecallDrillsResponse>({
         queryKey: drillsQueryKey,
-        queryFn: async () => {
-            const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
-                credentials: 'include',
-                signal: AbortSignal.timeout(8000),
-            });
-            if (!response.ok) return { items: [], meta: { status: 'error' } };
-            return response.json() as Promise<RecallDrillsResponse>;
-        },
+        queryFn: async () => ({
+            items: [],
+            meta: {
+                status: 'not_connected',
+                message: 'Automated recall drills are not available on this workspace.',
+            },
+        }),
         enabled: isAuthenticated,
         retry: false,
     });
@@ -45,35 +40,9 @@ export default function RecallDrillsPage() {
 
     const startDrillMutation = useMutation({
         mutationFn: async () => {
-            const response = await fetchWithCsrf('/api/fsma/customer-readiness/recall-drills', {
-                method: 'POST',
-                credentials: 'include',
-                signal: AbortSignal.timeout(12000),
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    scenario,
-                    lots: lots.split(',').map((lot) => lot.trim()).filter(Boolean),
-                    dateRange,
-                }),
-            });
-            if (response.status === 501) {
-                throw new Error('Recall drill automation is not yet available — it is still in development. Run a manual drill from the Requests workflow in the meantime.');
-            }
-            if (!response.ok) throw new Error('Failed to start drill');
-            return (await response.json()) as { drill: RecallDrillRun };
-        },
-        onSuccess: (data) => {
-            queryClient.setQueryData<RecallDrillsResponse>(drillsQueryKey, (old) => {
-                const existingRuns = old?.items ?? old?.drills ?? [];
-                const nextRuns = [data.drill, ...existingRuns];
-                return {
-                    ...old,
-                    items: nextRuns,
-                    drills: nextRuns,
-                };
-            });
+            throw new Error(
+                'Recall drill automation is not yet available — use the Requests workflow for a manual drill.',
+            );
         },
     });
 

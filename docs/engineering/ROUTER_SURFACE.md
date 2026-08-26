@@ -2,23 +2,27 @@
 
 Source of truth: `server/main.py`
 
-Date: 2026-05-03
+Date: 2026-08-03
 
 ## Current Mount Model
 
 RegEngine runs as a consolidated FastAPI app.
 
-Router exposure is controlled by:
+Production router exposure is controlled by:
 
 ```text
-DISABLED_ROUTERS
+ENABLED_ROUTERS
 ```
 
-The current behavior is:
+The current behavior is fail closed:
 
 - Always mount a small system/ingestion base.
-- Mount every feature router unless its name is listed in `DISABLED_ROUTERS`.
-- In production, auto-disable experimental routers unless `ENABLE_EXPERIMENTAL_ROUTERS=true`.
+- In production, require the exact release-approved allowlist below; a missing,
+  extra, or unknown router aborts startup.
+- Reject production `DISABLED_ROUTERS` and
+  `ENABLE_EXPERIMENTAL_ROUTERS=true` configuration.
+- Development/test retain broad mounting and the historical
+  `DISABLED_ROUTERS` behavior for focused local work.
 
 That means the production default is narrower for explicitly experimental routers, while product/ops-adjacent routers still require deployment review.
 
@@ -31,9 +35,17 @@ These are mounted unconditionally:
 - Readiness: `/readiness`
 - Feature listing: `/api/v1/features`
 - Ingestion core router from `services.ingestion.app.routes`
+- Core URL/file/direct/regulation ingest router from
+  `services.ingestion.app.routes_ingest`
 - Health/metrics router from `services.ingestion.app.routes_health_metrics`
 - Ingestion status router from `services.ingestion.app.routes_status`
 - Webhook ingest router from `services.ingestion.app.webhook_router_v2`
+- Metrics-protected scheduler status router from
+  `server.routes_scheduler_status`
+
+The FSMA readiness compatibility routes are owned by `readiness` and are
+mounted only when that approved router group is enabled. They are not part of
+the unconditional base.
 
 ## FSMA Production Spine
 
@@ -46,6 +58,11 @@ These routers belong closest to the FSMA production story:
 - `epcis_ingestion`
 - `score`
 - `portal`
+- `billing`
+- `onboarding`
+- `recall`
+- `proof_verify`
+- `proof_recall`
 - `canonical_records`
 - `rules`
 - `exceptions`
@@ -57,7 +74,6 @@ These routers belong closest to the FSMA production story:
 - `audit_export_log`
 - `sla_tracking`
 - `export_monitoring`
-- `supplier_validation`
 - `admin`
 - `fsma_compliance`
 
@@ -67,10 +83,7 @@ These are not automatically safe. They are production-relevant only when tests p
 
 These may be useful for onboarding, customer operations, or commercial workflow, but they are not the narrow ingest/validate/export spine:
 
-- `billing`
 - `alerts`
-- `onboarding`
-- `recall`
 - `supplier_mgmt`
 - `audit_log`
 - `product_catalog`
@@ -79,6 +92,9 @@ These may be useful for onboarding, customer operations, or commercial workflow,
 - `settings`
 - `integration`
 - `identity`
+- `supplier_validation` — release-disabled until supplier dashboard records
+  have a stable, tenant-scoped identity link to canonical portal/CTE events;
+  the historical query targeted a table that was never migrated
 - `incidents`
 - `disaster_recovery`
 
@@ -105,34 +121,39 @@ These should be disabled in production unless explicitly promoted:
 
 Rationale: these surfaces either expand the product beyond FSMA evidence flow, are demo/prototype oriented, or can create a confusing public API surface for an investor/CTO review.
 
-## Recommended Production Configuration
-
-Short-term production discipline can be achieved without deleting code by setting `DISABLED_ROUTERS` to disable non-core surfaces.
-
-Suggested starting point:
+## Required Production Configuration
 
 ```text
-DISABLED_ROUTERS=scraping,discovery,sources,sandbox,sensitech,audit,sop,export,qr_decoder,label_vision,exchange,recall_simulations,graph,nlp
+ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,billing,onboarding,recall,proof_verify,proof_recall,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,admin,fsma_compliance
 ```
 
-Then review the Product/Ops Adjacent group and disable anything not required for the current design-partner workflow.
+This value is intentionally exact, not a customizable production subset. A
+router change is a release-gate change: update `server/router_policy.py`, add
+the operation-level auth/tenant manifest and executable test adapters, and
+repeat staging isolation checks before changing the environment.
 
-## Stronger Follow-Up
+Graph, NLP, scraping, discovery, sandbox, recall simulations, legacy export,
+and every other omitted optional router are release-disabled and return 404.
+Graph promotion additionally requires the tenant matrix against Neo4j.
 
-The first production guard is implemented: experimental routers require `ENABLE_EXPERIMENTAL_ROUTERS=true` in production.
+## Route-Complete Security Manifest
 
-The stronger follow-up is to replace deny-by-configuration with allow-by-configuration for all optional production routers:
+`docs/security/route-security-manifest.json` is generated from the copied
+`APIRoute` objects in the consolidated app. `server/main.py` records ownership
+at router-inclusion time; ownership is not inferred from path prefixes.
 
-```text
-ENABLE_EXPERIMENTAL_ROUTERS=false
-ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance
+Run the blocking gate locally with:
+
+```bash
+python scripts/generate_route_security_manifest.py --check
 ```
 
-Recommended behavior for that follow-up:
-
-- Development/test may keep broad router mounting.
-- Production should mount only explicitly enabled routers.
-- Experimental routers should require both `ENABLE_EXPERIMENTAL_ROUTERS=true` and explicit listing.
+The gate executes a security adapter for every enabled operation, rejects
+unowned/unclassified/duplicate operations, compares the generated table with
+the checked-in manifest, imports the production allowlist in a clean process,
+and issues one safe exact-404 probe for every unique omitted route path. A
+route promotion requires an explicit operation policy and adapter before the
+manifest can be regenerated.
 
 ## Acceptance Rule
 

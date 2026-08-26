@@ -1,4 +1,10 @@
 # RegEngine Codebase Audit Report
+
+> **Archived historical snapshot (March 2026).** This document does not
+> describe the current authentication or deployment contract. Any shared
+> administrative-key references below are retired and must not be configured
+> or used.
+
 **Date**: March 9, 2026  
 **Scope**: Database schema, infrastructure, Neo4j integration, background jobs, and security configuration  
 **Status**: Comprehensive scan completed across all services

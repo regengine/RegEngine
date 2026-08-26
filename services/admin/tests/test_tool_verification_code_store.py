@@ -133,7 +133,7 @@ async def test_verify_email_fails_closed_when_redis_unavailable_in_production(tv
     def raise_redis_down(*args, **kwargs):
         raise RuntimeError("redis down")
 
-    monkeypatch.setattr(tvr, "is_production", lambda: True)
+    monkeypatch.setattr(tvr, "requires_strict_auth_runtime", lambda: True)
     monkeypatch.setattr(tvr.aioredis, "from_url", raise_redis_down)
     tvr._redis_available = None
     tvr._redis_client = None
@@ -198,7 +198,7 @@ async def test_confirm_code_fails_closed_when_redis_unavailable_in_production(tv
     def raise_redis_down(*args, **kwargs):
         raise RuntimeError("redis down")
 
-    monkeypatch.setattr(tvr, "is_production", lambda: True)
+    monkeypatch.setattr(tvr, "requires_strict_auth_runtime", lambda: True)
     monkeypatch.setattr(tvr.aioredis, "from_url", raise_redis_down)
     tvr._redis_available = None
     tvr._redis_client = None

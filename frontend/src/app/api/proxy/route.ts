@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
-import { applyCookieCredentials } from '@/lib/proxy-factory';
+import { applyCookieCredentials, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('admin');
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -79,7 +79,10 @@ export async function POST(request: NextRequest) {
             method: normalizedMethod,
             headers,
             body: normalizedMethod === 'GET' ? undefined : (body ? JSON.stringify(body) : undefined),
+            redirect: 'manual',
         });
+        const redirectError = rejectUpstreamRedirect(backendResponse, 'generic');
+        if (redirectError) return redirectError;
 
         const data = await backendResponse.json().catch(() => ({}));
         return NextResponse.json(data, { status: backendResponse.status });

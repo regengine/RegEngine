@@ -5,9 +5,7 @@
  * 
  * Seeds all demo data in one command:
  * 1. Creates demo tenant via Admin API
- * 2. Seeds review queue with DORA-based hallucinations
- * 3. Seeds Neo4j with cross-jurisdiction regulatory data
- * 4. Verifies compliance checklists are loaded
+ * 2. Verifies compliance checklists are loaded
  * 
  * Usage: node scripts/seed_demo.js
  */
@@ -15,26 +13,8 @@
 const ADMIN_URL = 'http://localhost:8400';
 const COMPLIANCE_URL = 'http://localhost:8500';
 
-// Load admin key from environment or .env file
-function getAdminKey() {
-    if (process.env.ADMIN_MASTER_KEY) {
-        return process.env.ADMIN_MASTER_KEY;
-    }
-
-    const fs = require('fs');
-    const path = require('path');
-
-    const envPath = path.join(__dirname, '..', '.env');
-    if (fs.existsSync(envPath)) {
-        const content = fs.readFileSync(envPath, 'utf8');
-        const match = content.match(/ADMIN_MASTER_KEY=(.*)$/m);
-        if (match) return match[1].trim();
-    }
-
-    return 'dev-master-key';
-}
-
-const ADMIN_KEY = getAdminKey();
+const TENANT_PROVISIONER_KEY = process.env.REGENGINE_TENANT_PROVISIONER_KEY || '';
+const EXISTING_DEMO_TENANT_ID = process.env.DEMO_TENANT_ID || '';
 
 // Demo data: DORA-based regulatory extractions
 const DEMO_HALLUCINATIONS = [
@@ -135,12 +115,21 @@ async function checkHealth(name, url) {
 }
 
 async function createTenant() {
+    if (!TENANT_PROVISIONER_KEY) {
+        if (EXISTING_DEMO_TENANT_ID) {
+            log('→', 'Using pre-provisioned demo tenant', EXISTING_DEMO_TENANT_ID);
+            return EXISTING_DEMO_TENANT_ID;
+        }
+        throw new Error(
+            'Set DEMO_TENANT_ID or a scoped REGENGINE_TENANT_PROVISIONER_KEY before running this script',
+        );
+    }
     try {
-        const res = await fetch(`${ADMIN_URL}/v1/admin/tenants`, {
+        const res = await fetch(`${ADMIN_URL}/v1/internal/tenants`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Admin-Key': ADMIN_KEY,
+                'X-RegEngine-API-Key': TENANT_PROVISIONER_KEY,
             },
             body: JSON.stringify({ name: 'Demo Tenant' }),
         });
@@ -150,17 +139,7 @@ async function createTenant() {
             log('✓', 'Created demo tenant', data.tenant_id);
             return data.tenant_id;
         } else if (res.status === 409) {
-            log('→', 'Demo tenant already exists');
-            // Get existing tenant
-            const listRes = await fetch(`${ADMIN_URL}/v1/admin/tenants`, {
-                headers: { 'X-Admin-Key': ADMIN_KEY },
-            });
-            if (listRes.ok) {
-                const tenants = await listRes.json();
-                const demo = tenants.find(t => t.name === 'Demo Tenant');
-                if (demo) return demo.id;
-            }
-            return null;
+            throw new Error('Demo tenant already exists; set DEMO_TENANT_ID to reuse it');
         }
     } catch (e) {
         log('✗', 'Failed to create tenant', e.message);
@@ -169,33 +148,9 @@ async function createTenant() {
 }
 
 async function seedReviewQueue(tenantId) {
-    log('📋', 'Seeding review queue with DORA extractions...');
-
-    let seeded = 0;
-    for (const item of DEMO_HALLUCINATIONS) {
-        try {
-            const res = await fetch(`${ADMIN_URL}/v1/admin/review/hallucinations`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Admin-Key': ADMIN_KEY,
-                },
-                body: JSON.stringify({
-                    ...item,
-                    tenant_id: tenantId,
-                }),
-            });
-
-            if (res.ok) {
-                seeded++;
-            }
-        } catch (e) {
-            // Continue on error
-        }
-    }
-
-    log('✓', `Seeded ${seeded}/${DEMO_HALLUCINATIONS.length} review items`);
-    return seeded;
+    log('→', 'Review fixtures are no longer inserted through a privileged HTTP bypass', tenantId);
+    log('→', 'Load review fixtures through the local database fixture runner when needed');
+    return 0;
 }
 
 async function verifyCompliance() {
@@ -247,7 +202,7 @@ async function main() {
     console.log('\n' + '='.repeat(50));
     console.log('\n✨ Demo setup complete!\n');
     console.log('Available features:');
-    console.log('  • Review Queue: 5 DORA extractions');
+    console.log('  • Review Queue: load through the local database fixture runner when needed');
     console.log('  • Compliance: 22 industry checklists');
     console.log('\nOpen http://localhost:3000 to start the demo.\n');
 }

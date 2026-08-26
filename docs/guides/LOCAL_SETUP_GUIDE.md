@@ -70,10 +70,6 @@ current local dev stack:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 # Copy the output and paste it as POSTGRES_PASSWORD in .env
 
-# Generate Admin Master Key
-openssl rand -hex 32
-# Copy the output and paste it as ADMIN_MASTER_KEY in .env
-
 # JWT/CSRF signing secret shared by backend and frontend
 python -c "import secrets; print(secrets.token_urlsafe(64))"
 # Copy the output and paste it as AUTH_SECRET_KEY in .env
@@ -88,7 +84,6 @@ Your `.env` file should look like this:
 ```bash
 # REQUIRED SECRETS
 POSTGRES_PASSWORD=your_generated_postgres_password_here
-ADMIN_MASTER_KEY=your_generated_master_key_here
 AUTH_SECRET_KEY=your_generated_auth_secret_here
 
 # Object storage credentials are required only when you run ingestion/object
@@ -408,7 +403,6 @@ docker compose -f docker-compose.dev.yml logs -f postgres
 
 # Check environment variables are set
 cat .env | grep POSTGRES_PASSWORD
-cat .env | grep ADMIN_MASTER_KEY
 cat .env | grep AUTH_SECRET_KEY
 
 # Restart services

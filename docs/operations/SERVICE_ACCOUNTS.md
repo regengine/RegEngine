@@ -1,90 +1,50 @@
 # Service Accounts Guide
 
-## Overview
+Service accounts provide attributable, least-privilege access for automated
+integrations. RegEngine does not use a shared administrative credential.
 
-Service accounts provide programmatic access to RegEngine APIs for automated integrations, CI/CD pipelines, and backend-to-backend communication.
+## Creating tenant API keys
 
-## Creating a Service Account
+A staff user creates, lists, and revokes live tenant keys through the browser
+admin console. The user must have an active opaque session, `is_sysadmin=true`,
+and a WebAuthn or SSO authentication method. Each action records the user,
+session, target tenant, request, and source address.
 
-### Via Admin API (Recommended)
+The raw key is returned once. Store it in the caller's secret manager and send
+it only in the `X-RegEngine-API-Key` header:
 
 ```bash
-# Create service account API key
-curl -X POST http://localhost:8400/admin/keys \
-  -H "X-Admin-Key: $ADMIN_MASTER_KEY" \
+curl https://api.regengine.co/v1/labels/search \
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
+  -H "X-Tenant-ID: $REGENGINE_TENANT_ID"
+```
+
+`X-Tenant-ID` is an optional assertion. It must match the tenant bound to the
+credential and is never an authentication mechanism.
+
+## Tenant-provisioning workload key
+
+Stripe onboarding is the only workload permitted to create a tenant without a
+human browser session. Provision a tenantless database-backed key with exactly
+the `internal.tenants.create` permission, an expiry of at most 90 days, and a
+rate limit of at most 10 requests per minute. Store it as
+`REGENGINE_TENANT_PROVISIONER_KEY` in the ingestion service.
+
+```bash
+curl -X POST https://admin.internal.regengine.co/v1/internal/tenants \
+  -H "X-RegEngine-API-Key: $REGENGINE_TENANT_PROVISIONER_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "CI/CD Pipeline",
-    "tenant_id": "YOUR_TENANT_UUID",
-    "scopes": ["read", "ingest"],
-    "rate_limit_per_minute": 120,
-    "expires_at": "2027-01-01T00:00:00Z"
-  }'
+  -d '{"name":"Provisioned customer"}'
 ```
 
-**Response:**
-```json
-{
-  "api_key": "rge_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "key_id": "key_abc123",
-  "name": "CI/CD Pipeline",
-  "warning": "Store this key securely. It will not be shown again."
-}
-```
+The internal route is excluded from public OpenAPI. Tenant-bound, expired,
+revoked, or wrong-scope keys are rejected.
 
-### Scopes
+## Operational requirements
 
-| Scope | Description |
-|-------|-------------|
-| `read` | Read regulations, analysis, graph data |
-| `ingest` | Upload documents for processing |
-| `write` | Modify tenant data |
-| `admin` | Tenant administration |
-
-## Using Service Account Keys
-
-### API Authentication
-
-```bash
-# Include in X-RegEngine-API-Key header
-curl -X GET http://localhost:8200/v1/labels/search \
-  -H "X-RegEngine-API-Key: rge_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
-  -H "X-Tenant-ID: YOUR_TENANT_UUID"
-```
-
-### Service-to-Service Communication
-
-Service accounts are automatically detected when `is_service_account: true` is set in the JWT payload or API key metadata. This enables:
-
-- Bypass of interactive auth flows
-- Rate limit escalation for bulk operations
-- Audit log attribution to the service identity
-
-## Managing Service Accounts
-
-### List Keys
-```bash
-curl -X GET http://localhost:8400/admin/keys \
-  -H "X-Admin-Key: $ADMIN_MASTER_KEY"
-```
-
-### Revoke Key
-```bash
-curl -X DELETE http://localhost:8400/admin/keys/{key_id} \
-  -H "X-Admin-Key: $ADMIN_MASTER_KEY"
-```
-
-## Best Practices
-
-1. **Least Privilege**: Request only required scopes
-2. **Rotation**: Set expiration and rotate keys quarterly
-3. **Secrets Management**: Store keys in vault/secrets manager
-4. **Audit**: Monitor API key usage in audit logs
-5. **Naming**: Use descriptive names (e.g., "GitHub Actions - FSMA Sync")
-
-## Security Considerations
-
-- API keys are hashed before storage (SHA-256)
-- Keys cannot be retrieved after creation
-- All access is logged in the audit trail
-- Revocation takes effect immediately
+- Grant only the permissions the workload executes.
+- Use a descriptive actor name tied to one workload and environment.
+- Set an expiry and rotate before it lapses.
+- Revoke the old credential after callers migrate.
+- Monitor attributable success and denial audit records.
+- Never place workload or tenant keys in browser-readable configuration.

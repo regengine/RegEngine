@@ -3,10 +3,10 @@ import { getServerServiceURL } from '@/lib/api-config';
 import {
     requireProxyAuth,
     validateProxySession,
-    getServerApiKey,
     validateUuid,
     enforceTenantMatch,
 } from '@/lib/api-proxy';
+import { prepareTenantScopedProxyHeaders, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 import {
     allowDevComplianceSnapshotFallback,
     refreezeDevComplianceSnapshot,
@@ -62,13 +62,11 @@ export async function POST(
         }
     }
     const COMPLIANCE_URL = getComplianceUrl();
-    const headers: Record<string, string> = {
+    const headers = new Headers({
         'Content-Type': request.headers.get('content-type') || 'application/json',
-    };
-    const apiKey = getServerApiKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
     const allowFallback = allowDevComplianceSnapshotFallback();
     if (!COMPLIANCE_URL) {
         if (allowFallback) {
@@ -95,8 +93,11 @@ export async function POST(
                 method: 'POST',
                 headers,
                 body: rawBody || undefined,
+                redirect: 'manual',
             },
         );
+        const redirectError = rejectUpstreamRedirect(response, 'compliance-snapshot-refreeze');
+        if (redirectError) return redirectError;
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {

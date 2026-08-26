@@ -25,6 +25,27 @@ import pytest
 # =========================================================================
 
 
+@pytest.mark.asyncio
+async def test_legacy_entrypoint_fails_closed_when_rls_gate_is_enabled(monkeypatch):
+    """The local/debug entrypoint may not swallow an enforced RLS failure."""
+
+    import importlib
+
+    import services.admin.main as admin_main
+
+    database_module = importlib.import_module("app.database")
+
+    def _inert_posture():
+        raise RuntimeError("RLS enforcement required: inert role")
+
+    monkeypatch.setenv("REGENGINE_REQUIRE_RLS_ENFORCEMENT", "1")
+    monkeypatch.setattr(database_module, "init_db", _inert_posture)
+
+    with pytest.raises(RuntimeError, match="RLS enforcement required"):
+        async with admin_main.lifespan(admin_main.app):
+            pytest.fail("lifespan must not yield after a failed RLS posture gate")
+
+
 def test_reset_tenant_guc_listener_is_attached_on_postgres_engine():
     """For a non-sqlite engine we must install the checkout listener."""
     import importlib
@@ -61,6 +82,7 @@ def test_reset_tenant_guc_issues_clearing_statements_on_postgres():
         pytest.skip("listener is a no-op on SQLite")
 
     conn = MagicMock()
+    conn.get_transaction_status.return_value = 0
     cursor = MagicMock()
     conn.cursor.return_value = cursor
 
@@ -356,11 +378,18 @@ async def test_system_metrics_forwards_service_credentials_with_tenant(monkeypat
     result.fetchone.return_value = (0,)
     db.execute.return_value = result
 
-    monkeypatch.setenv("REGENGINE_API_KEY", "server-side-service-key")
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_API_KEY", "server-side-service-key")
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_TENANT_ID", tenant_id)
     monkeypatch.delenv("API_KEY", raising=False)
     monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
     monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
-    monkeypatch.setattr(routes_mod, "resilient_client", lambda **_kwargs: FakeResilientClient())
+    captured_client_options = {}
+
+    def fake_resilient_client(**kwargs):
+        captured_client_options.update(kwargs)
+        return FakeResilientClient()
+
+    monkeypatch.setattr(routes_mod, "resilient_client", fake_resilient_client)
 
     response = await routes_mod.get_system_metrics(
         current_user=SimpleNamespace(id="user-1"),
@@ -376,6 +405,52 @@ async def test_system_metrics_forwards_service_credentials_with_tenant(monkeypat
             "X-RegEngine-API-Key": "server-side-service-key",
             "X-Tenant-ID": tenant_id,
         }
+    assert captured_client_options["follow_redirects"] is False
+
+
+@pytest.mark.asyncio
+async def test_system_metrics_rejects_redirect_without_following_scoped_key(monkeypatch):
+    from services.admin.app import system_routes as routes_mod
+
+    tenant_id = "11111111-1111-4111-8111-111111111111"
+    requests = []
+
+    class RedirectResponse:
+        status_code = 302
+
+        def json(self):
+            raise AssertionError("redirect bodies must not be parsed")
+
+    class FakeClient:
+        async def get(self, url, **kwargs):
+            requests.append((url, kwargs))
+            return RedirectResponse()
+
+    class FakeResilientClient:
+        async def __aenter__(self):
+            return FakeClient()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    db = MagicMock()
+    result = MagicMock()
+    result.scalar.return_value = 0
+    result.fetchone.return_value = (0,)
+    db.execute.return_value = result
+
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_API_KEY", "server-side-service-key")
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_TENANT_ID", tenant_id)
+    monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
+    monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
+    monkeypatch.setattr(routes_mod, "resilient_client", lambda **_kwargs: FakeResilientClient())
+
+    response = await routes_mod.get_system_metrics(current_user=SimpleNamespace(id="user-1"), db=db)
+
+    assert len(requests) == 2
+    assert response.compliance_score is None
+    assert response.events_ingested == 0
+    assert response.chain_length == 0
 
 
 @pytest.mark.asyncio
@@ -409,7 +484,8 @@ async def test_system_metrics_does_not_forward_empty_service_credentials(monkeyp
     result.fetchone.return_value = (0,)
     db.execute.return_value = result
 
-    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_SYSTEM_METRICS_API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_SYSTEM_METRICS_TENANT_ID", raising=False)
     monkeypatch.delenv("API_KEY", raising=False)
     monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
     monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
@@ -423,11 +499,8 @@ async def test_system_metrics_does_not_forward_empty_service_credentials(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_system_metrics_uses_legacy_api_key_fallback_with_tenant(monkeypatch):
-    """If REGENGINE_API_KEY is absent, the legacy API_KEY fallback is still
-    tenant-scoped. This keeps local/older deployments working without ever
-    sending an unscoped service credential to ingestion.
-    """
+async def test_system_metrics_ignores_retired_api_key_environment_alias(monkeypatch):
+    """The retired generic API_KEY alias is never a service credential."""
     from services.admin.app import system_routes as routes_mod
 
     tenant_id = "11111111-1111-4111-8111-111111111111"
@@ -457,7 +530,8 @@ async def test_system_metrics_uses_legacy_api_key_fallback_with_tenant(monkeypat
     result.fetchone.return_value = (0,)
     db.execute.return_value = result
 
-    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_SYSTEM_METRICS_API_KEY", raising=False)
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_TENANT_ID", tenant_id)
     monkeypatch.setenv("API_KEY", "legacy-service-key")
     monkeypatch.setattr(routes_mod, "_get_ingestion_base", lambda: "https://ingestion.test")
     monkeypatch.setattr(routes_mod, "_resolve_tenant", lambda _db: tenant_id)
@@ -467,10 +541,21 @@ async def test_system_metrics_uses_legacy_api_key_fallback_with_tenant(monkeypat
 
     assert len(client_calls) == 2
     for _, kwargs in client_calls:
-        assert kwargs["headers"] == {
-            "X-RegEngine-API-Key": "legacy-service-key",
-            "X-Tenant-ID": tenant_id,
-        }
+        assert kwargs["headers"] is None
+
+
+def test_tenant_bound_ingestion_headers_rejects_cross_tenant_reuse(monkeypatch):
+    from services.admin.app import system_routes as routes_mod
+
+    monkeypatch.setenv("REGENGINE_SYSTEM_METRICS_API_KEY", "tenant-bound-key")
+    monkeypatch.setenv(
+        "REGENGINE_SYSTEM_METRICS_TENANT_ID",
+        "11111111-1111-4111-8111-111111111111",
+    )
+
+    assert routes_mod._tenant_bound_ingestion_headers(
+        "22222222-2222-4222-8222-222222222222"
+    ) == {}
 
 
 # =========================================================================
@@ -551,20 +636,18 @@ def test_brute_force_limiter_uses_redis_when_provided():
     assert bfl.is_limited("ip-b") is False
 
 
-def test_admin_routes_module_uses_shared_bruteforce_limiter():
-    """Sanity check: routes.py must use BruteForceLimiter not a
-    per-process dict anymore."""
+def test_privileged_auth_uses_redis_fail_closed_outside_explicit_local_environments():
+    """Privileged auth permits process memory only in explicit non-cloud local/test."""
     import inspect
 
-    from services.admin.app import routes
+    from services.admin.app import privileged_auth
 
-    source = inspect.getsource(routes)
-    assert "BruteForceLimiter" in source
-    # The old per-process dict still has a legacy identifier path
-    # (to keep test_p0_security_hardening.py backward-compat). We
-    # verify the ACTIVE limiter is the shared one by checking its
-    # usage in verify_admin_key.
-    assert "_admin_brute_force" in source
+    source = inspect.getsource(privileged_auth.PrivilegedAuthThrottle)
+    assert "privileged_auth:failures:" in source
+    assert "_memory_fallback_allowed" in source
+    assert "CLOUD_ENV_VARS" in source
+    assert "get_environment" in source
+    assert "_authentication_service_unavailable" in source
 
 
 # =========================================================================

@@ -24,7 +24,8 @@ RegEngine uses the following sensitive credentials:
 
 | Secret | Purpose | Default (Dev) | Production Requirement |
 |--------|---------|---------------|------------------------|
-| `ADMIN_MASTER_KEY` | API key management admin | `dev-admin-key-change-in-production` | **CRITICAL - Must change** |
+| `REGENGINE_TENANT_PROVISIONER_KEY` | Stripe tenant-creation workload | None | Tenantless, exact scope, ≤90-day expiry |
+| `AUTH_SECRET_KEY` | Local JWT/session signing | None | Managed high-entropy secret |
 | `NEO4J_PASSWORD` | Graph database access | `change-me-in-production` | **CRITICAL - Must change** |
 | `AWS_ACCESS_KEY_ID` | S3 bucket access | `test` (LocalStack) | Use IAM roles instead |
 | `AWS_SECRET_ACCESS_KEY` | S3 bucket access | `test` (LocalStack) | Use IAM roles instead |
@@ -37,7 +38,7 @@ RegEngine uses the following sensitive credentials:
 **Store secrets:**
 ```bash
 aws secretsmanager create-secret \
-  --name regengine/admin-master-key \
+  --name regengine/tenant-provisioner-key \
   --secret-string "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 
 aws secretsmanager create-secret \
@@ -50,8 +51,8 @@ aws secretsmanager create-secret \
 {
   "secrets": [
     {
-      "name": "ADMIN_MASTER_KEY",
-      "valueFrom": "arn:aws:secretsmanager:region:account:secret:regengine/admin-master-key"
+      "name": "REGENGINE_TENANT_PROVISIONER_KEY",
+      "valueFrom": "arn:aws:secretsmanager:region:account:secret:regengine/tenant-provisioner-key"
     },
     {
       "name": "NEO4J_PASSWORD",
@@ -65,8 +66,8 @@ aws secretsmanager create-secret \
 
 **Store secrets:**
 ```bash
-vault kv put secret/regengine/admin \
-  master_key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+vault kv put secret/regengine/tenant-provisioner \
+  api_key="<value minted through the high-assurance staff flow>"
 
 vault kv put secret/regengine/neo4j \
   password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
@@ -79,18 +80,18 @@ vault kv put secret/regengine/neo4j \
 **Create secrets:**
 ```bash
 kubectl create secret generic regengine-secrets \
-  --from-literal=admin-master-key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" \
+  --from-literal=tenant-provisioner-key="<scoped workload key>" \
   --from-literal=neo4j-password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
 ```
 
 **Mount in deployment:**
 ```yaml
 env:
-  - name: ADMIN_MASTER_KEY
+  - name: REGENGINE_TENANT_PROVISIONER_KEY
     valueFrom:
       secretKeyRef:
         name: regengine-secrets
-        key: admin-master-key
+        key: tenant-provisioner-key
   - name: NEO4J_PASSWORD
     valueFrom:
       secretKeyRef:
@@ -161,19 +162,27 @@ Then remove `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from environment - b
 
 ### Manual Rotation
 
-**Admin Master Key:**
-```bash
-# 1. Generate new key
-NEW_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+**Privileged administration and workload keys:**
 
-# 2. Update secrets manager
-aws secretsmanager update-secret \
-  --secret-id regengine/admin-master-key \
-  --secret-string "$NEW_KEY"
+There is no shared human-administration secret. Staff administration uses an
+opaque browser session for an `is_sysadmin=true` user and requires WebAuthn or
+SSO step-up for privileged actions. Rotate a staff authenticator through the
+identity provider and revoke the affected session; do not create a replacement
+header key.
 
-# 3. Restart admin service
-kubectl rollout restart deployment/admin-api
-```
+Rotate `REGENGINE_TENANT_PROVISIONER_KEY` and other workload credentials by:
+
+1. Using a high-assurance staff session to mint a new database-backed key with
+   only its exact workload scope (the tenant provisioner uses
+   `internal.tenants.create`) and no more than 90 days of validity.
+2. Updating the caller's secret-manager entry without logging the raw value.
+3. Verifying an actor-attributed call using the new key ID/name.
+4. Revoking the old database key, then confirming it receives 401 and the
+   expected shared throttle applies.
+
+Store only workload raw values in the caller's secret manager. Audit records
+and release evidence contain key IDs/names, user/session IDs, deployment IDs,
+and results—never raw credentials.
 
 **Neo4j Password:**
 ```bash
@@ -220,7 +229,8 @@ Use this checklist when closing a suspected secret exposure incident.
   - `git ls-files .env`
 - [ ] Check whether `.env` ever appeared in commit history:
   - `git log -- .env`
-- [ ] Rotate `ADMIN_MASTER_KEY` in secrets manager and restart `admin-service`.
+- [ ] Confirm the retired shared administrative credential is absent from every runtime and caller.
+- [ ] Rotate `REGENGINE_TENANT_PROVISIONER_KEY`, restart ingestion, and revoke the old key.
 - [ ] Rotate `NEO4J_PASSWORD` in Neo4j + secrets manager and restart graph-dependent services.
 - [ ] Rotate MinIO/S3 access keys (if non-LocalStack credentials are used) and restart affected services.
 - [ ] Invalidate/revoke any stale API keys issued during the exposure window.
@@ -234,22 +244,10 @@ Use this checklist when closing a suspected secret exposure incident.
 3. Wait for client to migrate (grace period)
 4. Revoke old key
 
-**Automated:**
-```bash
-# Create new key
-NEW_KEY=$(curl -X POST http://admin-api:8400/admin/keys \
-  -H "X-Admin-Key: $ADMIN_MASTER_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Production Client", "rate_limit_per_minute": 500}' \
-  | jq -r '.api_key')
-
-# Notify client
-echo "New API key: $NEW_KEY"
-
-# After migration, revoke old key
-curl -X DELETE http://admin-api:8400/admin/keys/$OLD_KEY_ID \
-  -H "X-Admin-Key: $ADMIN_MASTER_KEY"
-```
+Creation and revocation are performed by a staff user in the browser admin
+console after WebAuthn/SSO authentication. Record key IDs and actor-attributed
+audit events, never the raw key value. Automated callers may not mint their own
+tenant credentials.
 
 ## Security Best Practices
 
@@ -295,7 +293,7 @@ If a secret is compromised:
 Monitor secrets access:
 ```bash
 aws cloudtrail lookup-events \
-  --lookup-attributes AttributeKey=ResourceName,AttributeValue=regengine/admin-master-key \
+  --lookup-attributes AttributeKey=ResourceName,AttributeValue=regengine/tenant-provisioner-key \
   --max-items 50
 ```
 
@@ -305,6 +303,7 @@ Check `services/*/app/routes.py` logs for:
 - `api_key_validated` - Successful authentication
 - `invalid_api_key` - Failed authentication attempts
 - `rate_limit_exceeded` - Potential abuse
+- privileged audit events attributed to staff user/session or workload key ID/name
 
 ### Alerts
 

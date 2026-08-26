@@ -21,6 +21,16 @@ type SessionResponse = {
 
 type SeedOptions = {
     isSysadmin?: boolean;
+    sessionAuthMethod?: 'email_otp' | 'webauthn' | 'sso';
+};
+
+export type SeededPasswordlessUser = {
+    email: string;
+    user_id: string;
+    organization_id: string;
+    membership_id: string;
+    tenant_id: string;
+    is_sysadmin: boolean;
 };
 
 type VirtualAuthenticatorHandle = {
@@ -47,8 +57,11 @@ export function resetOtpOutbox(): void {
     rmSync(outboxPath(), { force: true });
 }
 
-export function seedPasswordlessUser(email: string, options: SeedOptions = {}): void {
-    execFileSync(
+export function seedPasswordlessUser(
+    email: string,
+    options: SeedOptions = {},
+): SeededPasswordlessUser {
+    const output = execFileSync(
         pythonBin(),
         [path.join(repoRoot(), 'scripts/seed_passwordless_e2e_user.py')],
         {
@@ -57,10 +70,19 @@ export function seedPasswordlessUser(email: string, options: SeedOptions = {}): 
                 ...process.env,
                 REGENGINE_E2E_MODE: 'true',
                 REGENGINE_E2E_IS_SYSADMIN: options.isSysadmin ? 'true' : 'false',
+                REGENGINE_E2E_SESSION_AUTH_METHOD: options.sessionAuthMethod || '',
                 TEST_USER_EMAIL: email,
             },
+            encoding: 'utf8',
         },
     );
+    const record = output
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('{') && line.endsWith('}'))
+        .at(-1);
+    if (!record) throw new Error(`Passwordless seed produced no identity record for ${email}`);
+    return JSON.parse(record) as SeededPasswordlessUser;
 }
 
 function readOutboxRecords(): OutboxRecord[] {

@@ -48,9 +48,8 @@ def _get_tenant_id_from_request(request: Request) -> Optional[str]:
     Resolution order (PRINCIPAL FIRST per EPIC-A #1651):
       1. RBAC principal on ``request.state.principal`` (authoritative —
          set by an upstream auth dependency).
-      2. Accepted API-key principal on ``request.state.api_key`` (set by
-         ``shared.auth.require_api_key``; preshared master keys already carry
-         the validated ``X-Tenant-ID`` value here).
+      2. Accepted database-backed API-key principal on ``request.state.api_key``
+         (set by ``shared.auth.require_api_key`` with its bound tenant).
 
     Request path/query/header/body tenant claims are not trusted here. The
     subscription-status lookup is a trust decision, so it must use only

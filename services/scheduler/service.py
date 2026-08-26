@@ -80,6 +80,18 @@ logger = structlog.get_logger("scheduler")
 _STALE_COVERAGE_ZERO_RUNS = 7
 
 
+def _strict_database_role_cutover_enabled() -> bool:
+    """Return whether control-plane work must be absent from DATABASE_URL."""
+    environment = (
+        os.getenv("REGENGINE_ENV", "")
+        or os.getenv("ENVIRONMENT", "")
+        or os.getenv("ENV", "")
+    ).strip().lower()
+    return environment in {"staging", "production"} or os.getenv(
+        "REGENGINE_REQUIRE_RLS_ENFORCEMENT", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class SchedulerService:
     """Main scheduler service orchestrating all components."""
 
@@ -651,15 +663,24 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
-        # Inactive account disablement — NIST AC-2(3) (#974)
-        self._add_tracked_job(
-            self.disable_inactive_accounts,
-            job_id="inactive_account_sweep",
-            trigger=IntervalTrigger(hours=24),
-            next_run_time=self._near_boot_first_run(minutes=6),
-            name="Disable Inactive Accounts (90 days)",
-        )
-        logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
+        # Identity mutation belongs to the audited admin control plane.  Until
+        # that dedicated job exists, strict role-cutover deployments do not
+        # schedule the legacy DATABASE_URL sweep.
+        if _strict_database_role_cutover_enabled():
+            logger.warning(
+                "job_security_disabled",
+                job_id="inactive_account_sweep",
+                reason="requires audited ADMIN_DATABASE_URL control-plane worker",
+            )
+        else:
+            self._add_tracked_job(
+                self.disable_inactive_accounts,
+                job_id="inactive_account_sweep",
+                trigger=IntervalTrigger(hours=24),
+                next_run_time=self._near_boot_first_run(minutes=6),
+                name="Disable Inactive Accounts (90 days)",
+            )
+            logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
 
         # KDE retention enforcement — FSMA 204 24-month minimum (#973)
         self._add_tracked_job(
@@ -894,30 +915,31 @@ class SchedulerService:
         Postgres.
         """
         try:
-            from shared.database import SessionLocal
-            from shared.tenant_context import system_scope  # noqa: PLC0415
+            from services.admin.app.database import (
+                SessionLocal,
+                arm_global_admin_context,
+            )
             from sqlalchemy import text as _sqltext
 
             db = SessionLocal()
             try:
-                # #2461: cross-tenant queue maintenance — system_scope +
-                # begin-hook set regengine.system_context so the v095
-                # task_queue policy arm admits the DELETE under the
-                # least-privilege role.
-                with system_scope():
-                    result = db.execute(
-                        _sqltext(
-                            """
-                            DELETE FROM fsma.task_queue
-                            WHERE status IN ('completed', 'dead')
-                              AND COALESCE(completed_at, created_at)
-                                  < NOW() - INTERVAL '30 days'
-                            RETURNING id
-                            """
-                        )
+                # Cross-tenant retention is an audited control-plane action
+                # and runs through ADMIN_DATABASE_URL.  The database policy
+                # pins it to the exact sysadmin role.
+                arm_global_admin_context(db)
+                result = db.execute(
+                    _sqltext(
+                        """
+                        DELETE FROM fsma.task_queue
+                        WHERE status IN ('completed', 'dead')
+                          AND COALESCE(completed_at, created_at)
+                              < NOW() - INTERVAL '30 days'
+                        RETURNING id
+                        """
                     )
-                    rows = result.fetchall()
-                    db.commit()
+                )
+                rows = result.fetchall()
+                db.commit()
                 if rows:
                     logger.info("task_queue_purged", rows=len(rows))
                 else:
@@ -934,7 +956,7 @@ class SchedulerService:
         ``{INGESTION_SERVICE_URL}/v1/ingest/all-regulations`` with
         ``REGENGINE_INTERNAL_SECRET`` as ``X-RegEngine-API-Key`` — but
         ``shared.auth.require_api_key`` never accepted that secret (it
-        validates tenant keys and the preshared master key only), so the
+        validates database-backed tenant keys only), so the
         job could not authenticate against the consolidated monolith.
         Scheduler and ingestion now share a process, so call the ingestion
         sweep directly: no HTTP hop, no credentials, and no 120s
@@ -1004,8 +1026,9 @@ class SchedulerService:
                 # tick). Iterate public.tenants instead (infra table,
                 # permissive policy per v092) and let per-tenant
                 # check_deadline_status find the active cases.
-                result = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants"))
-                tenant_ids = [str(r[0]) for r in result.fetchall()]
+                from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
+
+                tenant_ids = list_maintenance_tenant_ids()
 
                 total_overdue = 0
                 total_critical = 0
@@ -1063,6 +1086,12 @@ class SchedulerService:
 
     def disable_inactive_accounts(self) -> None:
         """Disable accounts with no login for 90+ days — NIST AC-2(3) (#974)."""
+        if _strict_database_role_cutover_enabled():
+            logger.warning(
+                "inactive_account_sweep_security_disabled",
+                reason="identity mutation is not authorized through DATABASE_URL",
+            )
+            return
         try:
             from shared.database import SessionLocal
 
@@ -1101,24 +1130,23 @@ class SchedulerService:
         for recent months hasn't dropped (which would indicate premature deletion).
         """
         try:
-            from shared.database import SessionLocal
-            from shared.tenant_context import system_scope  # noqa: PLC0415
+            from services.admin.app.database import (
+                SessionLocal,
+                arm_global_admin_context,
+            )
 
             db = SessionLocal()
             try:
-                # Check that audit trail records within the 24-month window
-                # exist. #2461: deliberately cross-tenant (retention guard
-                # over the whole audit chain) — system_scope + the v095
-                # fsma_audit_trail policy arm admit the COUNT under the
-                # least-privilege role.
-                with system_scope():
-                    result = db.execute(
-                        __import__("sqlalchemy").text("""
-                            SELECT COUNT(*) as cnt
-                            FROM fsma.fsma_audit_trail
-                            WHERE created_at >= NOW() - INTERVAL '24 months'
-                        """)
-                    )
+                # Deliberately global retention guard through the canonical
+                # admin credential; the ordinary role remains tenant-bound.
+                arm_global_admin_context(db)
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT COUNT(*) as cnt
+                        FROM fsma.fsma_audit_trail
+                        WHERE created_at >= NOW() - INTERVAL '24 months'
+                    """)
+                )
                 row = result.fetchone()
                 count = row[0] if row else 0
                 if count == 0:
@@ -1159,21 +1187,14 @@ class SchedulerService:
 
             db = SessionLocal()
             try:
-                # Archive sysadmin access logs older than 7 years (NIST AU-4, #1009)
+                # Sysadmin audit evidence is intentionally not mutable through
+                # DATABASE_URL.  Retention requires a separately approved,
+                # audited admin maintenance path; until then retain it.
                 deleted_audit = 0
-                try:
-                    result = db.execute(
-                        __import__("sqlalchemy").text("""
-                            DELETE FROM audit.sysadmin_access_log
-                            WHERE accessed_at < NOW() - INTERVAL '2555 days'
-                            RETURNING id
-                        """)
-                    )
-                    deleted_audit = len(result.fetchall())
-                except Exception:
-                    pass  # Table may not exist on all databases
-
-                db.commit()
+                logger.debug(
+                    "sysadmin_audit_retention_deferred",
+                    reason="requires audited ADMIN_DATABASE_URL maintenance",
+                )
 
                 # Archive CTE events older than 3 years. #2461:
                 # fsma.cte_events is RLS-forced tenant DATA — it gets NO
@@ -1200,13 +1221,11 @@ class SchedulerService:
                 # and compliance_alerts (ON DELETE CASCADE, no append-only
                 # triggers there).
                 deleted_ctes = 0
-                tenant_rows = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants")).fetchall()
-                # End the discovery transaction so each tenant's DELETE
-                # starts a FRESH transaction inside tenant_scope (the
-                # begin-hook only fires at transaction start).
-                db.commit()
-                for tenant_row in tenant_rows:
-                    with tenant_scope(str(tenant_row[0])):
+                from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
+
+                tenant_ids = list_maintenance_tenant_ids()
+                for tenant_id in tenant_ids:
+                    with tenant_scope(tenant_id):
                         db.execute(
                             __import__("sqlalchemy").text("SELECT set_config('fsma.allow_mutation', 'true', true)")
                         )

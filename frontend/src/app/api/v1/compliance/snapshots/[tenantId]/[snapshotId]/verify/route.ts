@@ -3,10 +3,10 @@ import { getServerServiceURL } from '@/lib/api-config';
 import {
     requireProxyAuth,
     validateProxySession,
-    getServerApiKey,
     validateUuid,
     enforceTenantMatch,
 } from '@/lib/api-proxy';
+import { prepareTenantScopedProxyHeaders, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 import {
     allowDevComplianceSnapshotFallback,
     verifyDevComplianceSnapshot,
@@ -62,13 +62,11 @@ export async function GET(
 
     const COMPLIANCE_URL = getComplianceUrl();
 
-    const headers: Record<string, string> = {
+    const headers = new Headers({
         'Content-Type': 'application/json',
-    };
-    const apiKey = getServerApiKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
     const allowFallback = allowDevComplianceSnapshotFallback();
     const verifiedBy = url.searchParams.get('verified_by') || 'playwright@regengine.local';
     if (!COMPLIANCE_URL) {
@@ -91,8 +89,11 @@ export async function GET(
             {
                 method: 'GET',
                 headers,
+                redirect: 'manual',
             }
         );
+        const redirectError = rejectUpstreamRedirect(response, 'compliance-snapshot-verify');
+        if (redirectError) return redirectError;
 
         const data = await response.json().catch(() => ({}));
 

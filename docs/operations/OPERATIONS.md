@@ -94,7 +94,7 @@ docker-compose logs --tail 50 admin-api | grep -E "(error|ERROR|failed)"
    ```bash
    docker-compose exec admin-api alembic upgrade head
    ```
-3. **Missing secrets**: Verify `.env` has `ADMIN_MASTER_KEY` and `NEO4J_PASSWORD`
+3. **Missing secrets**: Verify `.env` has `AUTH_SECRET_KEY`, the database URLs, Redis, and any enabled-service credentials.
 
 ---
 
@@ -198,8 +198,8 @@ docker-compose up -d
 
 Required in `.env`:
 ```bash
-# Security (REQUIRED - generate with `openssl rand -hex 32`)
-ADMIN_MASTER_KEY=your-32-char-hex-key
+# Authentication/session signing (REQUIRED)
+AUTH_SECRET_KEY=your-high-entropy-signing-key
 
 # Database (REQUIRED - generate with `openssl rand -base64 32`)
 NEO4J_PASSWORD=your-strong-password

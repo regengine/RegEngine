@@ -9,6 +9,10 @@ from __future__ import annotations
 from app import routes as routes_mod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from uuid import UUID
+
+
+TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
 
 def _build_app() -> FastAPI:
@@ -19,25 +23,33 @@ def _build_app() -> FastAPI:
 
 def test_admin_funnel_endpoint_returns_stage_metrics(monkeypatch) -> None:
     app = _build_app()
+    db = object()
 
     def _override_session():
-        yield object()
+        yield db
 
     app.dependency_overrides[routes_mod.require_funnel_read] = lambda: None
     app.dependency_overrides[routes_mod.get_session] = _override_session
-
     monkeypatch.setattr(
-        routes_mod,
-        "get_funnel_stage_metrics",
-        lambda db_session=None: [
+        routes_mod.TenantContext,
+        "get_tenant_context",
+        staticmethod(lambda _db: TENANT_ID),
+    )
+
+    observed: dict[str, object] = {}
+
+    def _metrics(*, tenant_id, db_session=None):
+        observed.update(tenant_id=tenant_id, db_session=db_session)
+        return [
             {"name": "signup_completed", "count": 10, "conversion_from_previous_pct": 100.0},
             {"name": "first_ingest", "count": 6, "conversion_from_previous_pct": 60.0},
             {"name": "first_scan", "count": 4, "conversion_from_previous_pct": 66.67},
             {"name": "first_nlp_query", "count": 3, "conversion_from_previous_pct": 75.0},
             {"name": "checkout_started", "count": 2, "conversion_from_previous_pct": 66.67},
             {"name": "payment_completed", "count": 1, "conversion_from_previous_pct": 50.0},
-        ],
-    )
+        ]
+
+    monkeypatch.setattr(routes_mod, "get_funnel_stage_metrics", _metrics)
 
     with TestClient(app) as client:
         response = client.get("/v1/admin/funnel")
@@ -47,6 +59,7 @@ def test_admin_funnel_endpoint_returns_stage_metrics(monkeypatch) -> None:
     assert body["stages"][0]["name"] == "signup_completed"
     assert body["stages"][-1]["name"] == "payment_completed"
     assert body["stages"][-1]["count"] == 1
+    assert observed == {"tenant_id": str(TENANT_ID), "db_session": db}
 
 
 def test_admin_funnel_endpoint_requires_auth_by_default() -> None:

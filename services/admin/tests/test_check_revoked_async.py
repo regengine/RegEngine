@@ -104,6 +104,7 @@ async def test_check_revoked_async_hits_redis_and_caches(monkeypatch):
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
 
     redis_mock = MagicMock()
+    redis_mock.get = AsyncMock(return_value=None)
     redis_mock.sismember = AsyncMock(return_value=True)
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
 
@@ -124,6 +125,7 @@ async def test_check_revoked_async_returns_false_when_not_revoked(monkeypatch):
     jti = f"jti-{uuid.uuid4()}"
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
     redis_mock = MagicMock()
+    redis_mock.get = AsyncMock(return_value=None)
     redis_mock.sismember = AsyncMock(return_value=False)
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
 
@@ -137,6 +139,7 @@ async def test_check_revoked_async_no_redis_returns_false(monkeypatch):
     degrade to the in-memory set without raising."""
     from services.admin.app import auth_utils
 
+    monkeypatch.setenv("REGENGINE_ENV", "test")
     monkeypatch.setattr(auth_utils, "_revocation_redis", None)
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
 
@@ -166,9 +169,10 @@ async def test_check_revoked_async_redis_error_fails_permissive(monkeypatch):
     token, and logout is audited in the DB."""
     from services.admin.app import auth_utils
 
+    monkeypatch.setenv("REGENGINE_ENV", "test")
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
     redis_mock = MagicMock()
-    redis_mock.sismember = AsyncMock(side_effect=ConnectionError("redis down"))
+    redis_mock.get = AsyncMock(side_effect=ConnectionError("redis down"))
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
 
     # Must not raise.
@@ -218,6 +222,7 @@ async def test_get_current_user_rejects_redis_revoked_jti(monkeypatch):
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
     # Redis DOES contain it (it was written by worker A).
     redis_mock = MagicMock()
+    redis_mock.get = AsyncMock(return_value=None)
     redis_mock.sismember = AsyncMock(return_value=True)
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
 
@@ -254,6 +259,7 @@ async def test_get_current_user_accepts_non_revoked_jti(monkeypatch):
 
     monkeypatch.setattr(auth_utils, "_revoked_jtis", set())
     redis_mock = MagicMock()
+    redis_mock.get = AsyncMock(return_value=None)
     redis_mock.sismember = AsyncMock(return_value=False)
     monkeypatch.setattr(auth_utils, "_revocation_redis", redis_mock)
 

@@ -291,6 +291,9 @@ def test_tool_access_secret_fails_closed_in_production(monkeypatch):
     monkeypatch.delenv("JWT_SIGNING_KEY", raising=False)
     monkeypatch.setenv("AUTH_SECRET_KEY", "session-key-must-not-be-used")
     monkeypatch.setenv("REGENGINE_ENV", "production")
+    # Satisfy the independent strict-runtime Redis prerequisite so this test
+    # reaches the dedicated tool-secret validation it is intended to pin.
+    monkeypatch.setenv("REDIS_URL", "redis://strict-auth-test.invalid:6379/0")
 
     with pytest.raises(RuntimeError) as excinfo:
         _reload_tool_verification_routes()
@@ -310,8 +313,9 @@ def test_tool_access_secret_fails_closed_in_production(monkeypatch):
 def test_tool_access_secret_empty_string_fails_in_production(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "   ")  # whitespace only
     monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setenv("REDIS_URL", "redis://strict-auth-test.invalid:6379/0")
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="TOOL_ACCESS_SECRET"):
         _reload_tool_verification_routes()
 
 

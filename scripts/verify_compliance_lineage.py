@@ -11,7 +11,6 @@ ADMIN_API_URL = "http://localhost:8400"
 API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": os.environ.get("ADMIN_MASTER_KEY", ""),
     "X-Tenant-ID": os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000"),
 }
 LIVE_FDA_URL = "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods"

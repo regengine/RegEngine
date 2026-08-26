@@ -92,12 +92,19 @@ def validate_url(
     if not parsed.netloc:
         raise SSRFError("URL must include a host")
 
+    # User-info is never needed by RegEngine's outbound fetchers.  Reject it
+    # explicitly instead of relying on downstream clients' inconsistent
+    # handling of credential-bearing URLs (including misleading
+    # ``trusted.example@target`` forms).
+    if parsed.username is not None or parsed.password is not None:
+        raise SSRFError("URLs with embedded credentials are not allowed")
+
     # Extract hostname (handle IPv6 brackets)
     hostname = parsed.hostname
     if not hostname:
         raise SSRFError("Could not extract hostname from URL")
 
-    hostname_lower = hostname.lower()
+    hostname_lower = hostname.lower().rstrip(".")
 
     # Check blocked hostnames
     if hostname_lower in BLOCKED_HOSTS:
@@ -130,9 +137,7 @@ def _check_resolved_ip(hostname: str) -> None:
         ip = None
 
     if ip is not None:
-        for network in BLOCKED_NETWORKS:
-            if ip in network:
-                raise SSRFError(f"Resolved IP {ip} is in blocked network {network}")
+        _reject_non_global_address(ip)
         return
 
     # Not an IP literal - resolve via DNS, inspecting every returned address
@@ -155,12 +160,25 @@ def _check_resolved_ip(hostname: str) -> None:
             resolved_ip = ip_address(addr)
         except ValueError:
             continue
-        for network in BLOCKED_NETWORKS:
-            if resolved_ip in network:
-                raise SSRFError(f"Resolved IP {resolved_ip} is in blocked network {network}")
+        _reject_non_global_address(resolved_ip)
 
     if not seen:
         raise SSRFError(f"Could not resolve hostname: {hostname}")
+
+
+def _reject_non_global_address(address) -> None:
+    """Reject every non-public destination, including IPv4-mapped IPv6.
+
+    ``BLOCKED_NETWORKS`` remains the documented minimum denylist, while the
+    ``is_global`` test also covers unspecified, multicast, reserved,
+    benchmarking, carrier-grade NAT, and future special-use ranges.  The
+    mapped-address check prevents ``::ffff:127.0.0.1`` from bypassing the
+    IPv4 loopback rule through an IPv6 literal.
+    """
+    mapped = getattr(address, "ipv4_mapped", None)
+    effective = mapped or address
+    if not effective.is_global:
+        raise SSRFError(f"Resolved IP {address} is not a public global address")
 
 
 def validate_s3_key(key: str) -> str:

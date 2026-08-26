@@ -190,16 +190,17 @@ class TestIngestionPipelineContract:
 _LIVE_SMOKE = os.getenv("REGENGINE_LIVE_SMOKE", "").strip().lower() in {"1", "true", "yes"}
 
 
-@pytest.mark.skipif(
-    not _LIVE_SMOKE,
-    reason="live golden-corpus smoke is opt-in — set REGENGINE_LIVE_SMOKE=1 against a deployed stack",
-)
 class TestGoldenCorpusLiveSmoke:
     """End-to-end FDA FSMA-204 rule ingestion against a live stack.
 
     Once REGENGINE_LIVE_SMOKE=1 is set, an unreachable service is a hard
     failure: this class can never go green by skipping.
     """
+
+    # This is a separate opt-in deployment smoke, not part of the in-process
+    # security gate that imports this file.  Exclude it from collection when
+    # not requested instead of reporting a green skip in the release suite.
+    __test__ = _LIVE_SMOKE
 
     def test_fda_rule_ingestion_live(self):
         import requests

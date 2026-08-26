@@ -108,7 +108,7 @@ export function getCsrfTokenFromCookie(): string {
 /** HTTP methods that require CSRF validation. */
 export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Paths exempt from CSRF checks (auth callbacks, webhooks, public sandbox, public tools).
+/** Routes exempt from CSRF checks (pre-auth ceremonies, signed webhooks, and API-key routes).
  *
  *  Keep this list narrow. Broad prefixes like /api/tools/ silently exempt
  *  every future handler placed there — list the specific public endpoints
@@ -121,39 +121,67 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *  like every other mutating endpoint. The Origin allowlist on POST
  *  /api/session (RE-SEC-003) remains as defense-in-depth.
  */
-export const CSRF_EXEMPT_PREFIXES = [
-    '/api/auth/',
-    '/api/admin/auth/',
-    // Public invite acceptance arrives without an authenticated session and is
-    // authorized by the opaque invite token itself.
-    '/api/admin/v1/auth/accept-invite',
-    // Both webhook paths: /api/webhooks/* for local handlers, /api/v1/webhooks/*
-    // for the next.config.js rewrite to the ingestion service. External senders
-    // authenticate via HMAC signatures, not Bearer tokens, so they don't hit
-    // the Bearer bypass in src/proxy.ts.
-    '/api/webhooks/',
-    '/api/v1/webhooks/',
-    // Public read API rewrites (next.config.js) — API-key callers send
-    // X-RegEngine-API-Key, not session cookies, so the double-submit check
-    // can never pass for them; the backend routers are the auth layer.
-    // Trailing-slash prefixes are safe here: the only bare paths are
-    // GET /api/v1/records (list) and the /api/v1/fda prefix root (no route),
-    // and GETs are never CSRF-checked (CSRF_PROTECTED_METHODS).
-    '/api/v1/records/',
-    '/api/v1/fda/',
-    // Public ingestion endpoints that are unauthenticated, tenantless, and
-    // operate only on caller-supplied or frozen synthetic data.
-    '/api/ingestion/api/v1/sandbox/',
-    '/api/ingestion/api/v1/proof/',
-    // Public unauthenticated tool endpoints — add new entries explicitly.
-    '/api/inflow-lab/',
-    '/api/tools/check-access',
-    '/api/tools/verify',
+export type CsrfExemptionRule = Readonly<{
+    methods: readonly string[];
+    path: string;
+    match: 'exact' | 'segment-prefix' | 'regex';
+}>;
+
+/**
+ * Reviewed route-and-method exemptions. A mutation is exempt only when both
+ * its HTTP method and its full path match a rule. Segment prefixes enforce a
+ * path boundary, so `/api/tools/verify-extra` cannot inherit an exemption for
+ * `/api/tools/verify`.
+ */
+export const CSRF_EXEMPT_RULES: readonly CsrfExemptionRule[] = [
+    // Pre-auth passwordless and passkey ceremonies. Registration, logout,
+    // logout-all, and session revocation intentionally do not appear here.
+    { methods: ['POST'], path: '/api/admin/auth/challenges', match: 'exact' },
+    {
+        methods: ['POST'],
+        path: '^/api/admin/auth/challenges/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}/verify$',
+        match: 'regex',
+    },
+    { methods: ['POST'], path: '/api/admin/auth/webauthn/login/generate-options', match: 'exact' },
+    { methods: ['POST'], path: '/api/admin/auth/webauthn/login/verify', match: 'exact' },
+    // Invite acceptance is authorized by the single-use opaque invite token.
+    { methods: ['POST'], path: '/api/admin/auth/accept-invite', match: 'exact' },
+    { methods: ['POST'], path: '/api/admin/v1/auth/accept-invite', match: 'exact' },
+    // External senders authenticate webhooks with request signatures.
+    { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: '/api/webhooks', match: 'segment-prefix' },
+    { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: '/api/v1/webhooks', match: 'segment-prefix' },
+    // These public surfaces use API keys, signed proof material, or caller-
+    // supplied synthetic data rather than browser session cookies.
+    { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: '/api/v1/records', match: 'segment-prefix' },
+    { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: '/api/v1/fda', match: 'segment-prefix' },
+    {
+        methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
+        path: '/api/ingestion/api/v1/sandbox',
+        match: 'segment-prefix',
+    },
+    {
+        methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
+        path: '/api/ingestion/api/v1/proof',
+        match: 'segment-prefix',
+    },
+    { methods: ['POST'], path: '/api/tools/check-access', match: 'exact' },
+    { methods: ['POST'], path: '/api/tools/verify', match: 'exact' },
 ];
 
-/** Check whether a request path is exempt from CSRF verification. */
-export function isCsrfExempt(pathname: string): boolean {
-    return CSRF_EXEMPT_PREFIXES.some(prefix => pathname.startsWith(prefix));
+function pathMatchesRule(pathname: string, rule: CsrfExemptionRule): boolean {
+    if (rule.match === 'exact') return pathname === rule.path;
+    if (rule.match === 'segment-prefix') {
+        return pathname === rule.path || pathname.startsWith(`${rule.path}/`);
+    }
+    return new RegExp(rule.path).test(pathname);
+}
+
+/** Check whether a request route and method are exempt from CSRF verification. */
+export function isCsrfExempt(pathname: string, method: string): boolean {
+    const normalizedMethod = method.toUpperCase();
+    return CSRF_EXEMPT_RULES.some(
+        (rule) => rule.methods.includes(normalizedMethod) && pathMatchesRule(pathname, rule),
+    );
 }
 
 /**

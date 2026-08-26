@@ -27,7 +27,6 @@ _DEFAULTS = {
     "ADMIN_FALLBACK_SQLITE": "sqlite:///:memory:",
     # Auth
     "AUTH_SECRET_KEY": "dev_secret_key_change_me",
-    "ADMIN_MASTER_KEY": "admin-master-key-dev",
     "AUTH_TEST_BYPASS_TOKEN": "test-bypass-ci-only-not-for-production",
     "INTERNAL_SERVICE_SECRET": "trusted-internal-v1",
 }

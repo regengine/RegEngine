@@ -19,12 +19,17 @@ def _make_user(*, is_sysadmin: bool) -> MagicMock:
 
 
 def _build_app(user: MagicMock) -> FastAPI:
-    from services.admin.app.dependencies import get_current_user
+    from services.admin.app.privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
     from services.admin.app.system_routes import router
 
     app = FastAPI()
     app.include_router(router, prefix="/v1")
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_sysadmin_high_assurance] = lambda: PrivilegedActor(
+        actor_type="staff_user",
+        actor_id=str(user.id),
+        auth_method="webauthn",
+        user=user,
+    )
     return app
 
 

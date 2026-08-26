@@ -1,6 +1,11 @@
-import { NextRequest } from 'next/server';
-import { createJsonProxy } from '@/lib/proxy-factory';
-import { getServerApiKey } from '@/lib/api-proxy';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+    appendOpaqueSessionCookies,
+    applyCookieCredentials,
+    createJsonProxy,
+    passthroughRequestHeaders,
+    type ProxyHandler,
+} from '@/lib/proxy-factory';
 import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy graph API requests to the Graph backend service
@@ -21,17 +26,37 @@ const GRAPH_URL = getGraphUrl();
 
 export const dynamic = 'force-dynamic';
 
-const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
+const graphProxy = createJsonProxy({
     serviceName: 'graph',
     buildTargetUrl: (path, queryString) => `${GRAPH_URL}/${path}${queryString}`,
-    buildHeaders: (_request: NextRequest) => {
+    buildHeaders: (request: NextRequest) => {
         const headers = new Headers({ 'Content-Type': 'application/json' });
-        const apiKey = getServerApiKey();
-        if (apiKey) {
-            headers.set('X-RegEngine-API-Key', apiKey);
-        }
+        passthroughRequestHeaders(headers, request, [
+            'authorization',
+            'x-regengine-api-key',
+            'x-api-key',
+        ]);
+        applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
+        appendOpaqueSessionCookies(headers, request);
         return headers;
     },
 });
 
-export { GET, POST, PUT, PATCH, DELETE };
+function releaseDisabled(handler: ProxyHandler | undefined): ProxyHandler {
+    return async (request, context) => {
+        // Graph/Neo4j is deliberately outside the release router inventory.
+        // Production stays 404 until a tenant/auth matrix and manifest adapter
+        // are added in a future code change. Developers must opt in explicitly.
+        if (process.env.NODE_ENV === 'production' || process.env.REGENGINE_ENABLE_GRAPH_PROXY !== '1') {
+            return new NextResponse(null, { status: 404 });
+        }
+        if (!handler) return new NextResponse(null, { status: 404 });
+        return handler(request, context);
+    };
+}
+
+export const GET = releaseDisabled(graphProxy.GET);
+export const POST = releaseDisabled(graphProxy.POST);
+export const PUT = releaseDisabled(graphProxy.PUT);
+export const PATCH = releaseDisabled(graphProxy.PATCH);
+export const DELETE = releaseDisabled(graphProxy.DELETE);

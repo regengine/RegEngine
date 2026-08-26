@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,6 +13,7 @@ from services.admin.app.metrics import (
     hallucination_duplicates_total,
     hallucination_events_total,
 )
+from services.admin.app.sqlalchemy_models import AuditLogModel
 
 
 class FakeRedis:
@@ -43,13 +45,17 @@ class FakeSession:
     def __init__(self, storage: dict[UUID, object]):
         self.storage = storage
         self._pending = None
+        self.bind = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
 
     def add(self, item):
+        if isinstance(item, AuditLogModel):
+            item.id = 1
+            return
         self._pending = item
 
     def execute(self, stmt, params=None):
         """No-op: absorbs SET LOCAL tenant context in tests."""
-        return None
+        return SimpleNamespace(one_or_none=lambda: None)
 
     def flush(self):
         return None

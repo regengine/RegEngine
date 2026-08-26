@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -19,53 +19,36 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { HelpTooltip } from '@/components/ui/tooltip';
 import { useAuth } from '@/lib/auth-context';
 import { useAPIKeys, useCreateAPIKey, useGenerateAPIKey, useRevokeAPIKey } from '@/hooks/use-api';
 import { Key, Plus, Trash2, CheckCircle, Copy, Shield, AlertCircle, ArrowRight } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 export default function AdminPage() {
-  const { adminKey: storedAdminKey, setAdminKey: storeAdminKey, setApiKey: storeApiKey, tenantId } = useAuth();
-  const [adminKey, setAdminKey] = useState('');
+  const {
+    isAuthenticated,
+    isHighAssuranceSession,
+    user,
+    setApiKey: storeApiKey,
+    tenantId,
+  } = useAuth();
   const [newKeyDescription, setNewKeyDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [authError, setAuthError] = useState(false);
   const [pendingRevokeKeyId, setPendingRevokeKeyId] = useState<string | null>(null);
+  const canManageKeys = isAuthenticated && isHighAssuranceSession && user?.is_sysadmin === true;
 
-  const { data: apiKeys, isLoading, refetch, error } = useAPIKeys(adminKey, !!adminKey);
+  const { data: apiKeys, isLoading, refetch, error } = useAPIKeys(canManageKeys);
   const createKeyMutation = useCreateAPIKey();
   const generateKeyMutation = useGenerateAPIKey();
   const revokeKeyMutation = useRevokeAPIKey();
 
-  // Initialize from stored admin key
-  useEffect(() => {
-    if (storedAdminKey && !adminKey) {
-      setAdminKey(storedAdminKey);
-    }
-  }, [storedAdminKey, adminKey]);
-
-  // Handle auth errors
-  useEffect(() => {
-    if (error) {
-      setAuthError(true);
-    } else if (apiKeys) {
-      setAuthError(false);
-      // Store the admin key if authentication was successful
-      if (adminKey && adminKey !== storedAdminKey) {
-        storeAdminKey(adminKey);
-      }
-    }
-  }, [error, apiKeys, adminKey, storedAdminKey, storeAdminKey]);
-
   const handleCreateKey = async () => {
-    if (!adminKey) return;
+    if (!canManageKeys) return;
 
     try {
       const result = await createKeyMutation.mutateAsync({
-        adminKey,
         name: newKeyDescription || 'New API Key',
         description: newKeyDescription || undefined,
         tenantId: tenantId || undefined,
@@ -82,10 +65,10 @@ export default function AdminPage() {
   };
 
   const handleGenerateKey = async () => {
-    if (!adminKey) return;
+    if (!canManageKeys) return;
 
     try {
-      const result = await generateKeyMutation.mutateAsync({ adminKey, tenantId: tenantId || undefined });
+      const result = await generateKeyMutation.mutateAsync({ tenantId: tenantId || undefined });
       if (result.api_key) {
         setGeneratedKey(result.api_key);
       }
@@ -95,10 +78,10 @@ export default function AdminPage() {
   };
 
   const handleRevokeKey = async (keyId: string) => {
-    if (!adminKey) return;
+    if (!canManageKeys) return;
 
     try {
-      await revokeKeyMutation.mutateAsync({ adminKey, keyId });
+      await revokeKeyMutation.mutateAsync({ keyId });
       refetch();
     } catch (error) {
       console.error('Failed to revoke API key:', error);
@@ -156,74 +139,28 @@ export default function AdminPage() {
             </CardContent>
           </Card>
 
-          {/* Admin Key Input */}
-          {!adminKey && (
+          {!canManageKeys && (
             <Card className="mb-8">
               <CardHeader>
-                <CardTitle>Authentication Required</CardTitle>
+                <CardTitle>High-assurance sign-in required</CardTitle>
                 <CardDescription>
-                  Enter your admin master key to manage API keys
+                  Live credential management requires a WebAuthn or SSO sysadmin session.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    refetch();
-                  }}
-                  className="flex gap-4"
-                >
-                  <Input
-                    type="password"
-                    placeholder="Enter admin master key"
-                    value={adminKey}
-                    onChange={(e) => {
-                      setAdminKey(e.target.value);
-                      setAuthError(false);
-                    }}
-                  />
-                  <Button type="submit">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Authenticate
-                  </Button>
-                </form>
-
-                {authError && (
-                  <div className="p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger dark:border-re-danger">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-re-danger dark:text-re-danger mt-0.5" />
-                      <p className="text-sm text-re-danger dark:text-re-danger">
-                        Invalid admin key. Please check your key and try again.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Help Section */}
-                <div className="p-4 rounded-lg bg-muted/50 border">
-                  <h4 className="font-medium mb-2 flex items-center gap-2">
-                    <Key className="h-4 w-4" />
-                    Where to find your Admin Master Key
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    Ask your workspace administrator for the master key.
-                  </p>
-                </div>
-
-                {/* Alternative: Onboarding Wizard */}
                 <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
                   <div className="flex items-start gap-3">
                     <div className="p-2 rounded-full bg-primary/10">
-                      <Key className="h-4 w-4 text-primary" />
+                      <Shield className="h-4 w-4 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium">First time here?</h4>
+                      <h4 className="font-medium">Use your staff identity</h4>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Use our setup wizard for a guided experience to get your first API key.
+                        Email-code-only sessions cannot create or revoke live credentials. Sign in with an approved passkey or SSO account.
                       </p>
-                      <Link href="/onboarding">
+                      <Link href="/login?next=/admin">
                         <Button size="sm" variant="outline" className="mt-2">
-                          Go to Setup Wizard
+                          Sign in securely
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                       </Link>
@@ -234,9 +171,18 @@ export default function AdminPage() {
             </Card>
           )}
 
-          {/* Authenticated View */}
-          {adminKey && (
+          {canManageKeys && (
             <>
+              {error && (
+                <div className="mb-6 p-3 rounded-lg bg-re-danger-muted dark:bg-re-danger/20 border border-re-danger">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-re-danger mt-0.5" />
+                    <p className="text-sm text-re-danger">
+                      This session is not authorized to manage live credentials.
+                    </p>
+                  </div>
+                </div>
+              )}
               {/* Quick Generate API Key */}
               <Card className="mb-8">
                 <CardHeader className="flex flex-col gap-2">

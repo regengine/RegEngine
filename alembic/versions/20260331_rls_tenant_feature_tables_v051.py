@@ -113,37 +113,23 @@ def upgrade() -> None:
     # DBs that ran the pre-guard version of v056.
     # ----------------------------------------------------------------
 
-    # Create the dedicated sysadmin role (if not exists)
+    # Runtime roles are provider-admin prerequisites. Alembic may run as a
+    # schema/database owner with neither CREATEROLE nor role ADMIN OPTION.
     op.execute("""
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                CREATE ROLE regengine_sysadmin LOGIN INHERIT;
-                RAISE NOTICE 'Created role regengine_sysadmin';
+                RAISE EXCEPTION
+                    'regengine_sysadmin must be provisioned before Alembic runs';
             END IF;
         END
         $$;
     """)
 
-    op.execute("""
-        DO $$
-        BEGIN
-            IF NOT pg_has_role('regengine_sysadmin', 'regengine', 'MEMBER') THEN
-                EXECUTE 'GRANT regengine TO regengine_sysadmin';
-                RAISE NOTICE 'Granted regengine to regengine_sysadmin';
-            END IF;
-        EXCEPTION WHEN OTHERS THEN
-            RAISE NOTICE 'Could not grant regengine to regengine_sysadmin: %', SQLERRM;
-        END
-        $$;
-    """)
-
-    op.execute("""
-        COMMENT ON ROLE regengine_sysadmin IS
-            'Dedicated sysadmin role for RLS bypass. Both this role AND the '
-            'regengine.is_sysadmin session variable must be present to bypass '
-            'tenant isolation. Never use this role for normal application connections.';
-    """)
+    # Do not grant regengine membership to regengine_sysadmin. v111 requires
+    # both runtime roles to have independent, closed ACL inventories and no
+    # inherited authority. Role comments/provisioning also remain provider-
+    # admin work rather than silently increasing Alembic's authority.
 
     # Audit schema and sysadmin access log table
     op.execute("CREATE SCHEMA IF NOT EXISTS audit;")

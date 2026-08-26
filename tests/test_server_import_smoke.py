@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from server.router_policy import PRODUCTION_ENABLED_ROUTERS
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -35,6 +39,67 @@ def test_lifespan_verifies_admin_and_api_key_bases_at_startup():
     assert "verify_orm_db_type_alignment(_shared_engine, _api_key_base)" in src
 
 
+@pytest.mark.asyncio
+async def test_lifespan_runtime_rls_gate_is_unwrapped_and_precedes_workers(monkeypatch):
+    """An inert/unknown runtime role must abort before auth or workers start."""
+    main = importlib.import_module("server.main")
+    admin_database = importlib.import_module("services.admin.app.database")
+    auth_runtime = importlib.import_module("services.admin.app.auth_runtime")
+    db_type_assertions = importlib.import_module("shared.db_type_assertions")
+    external_connectors = importlib.import_module("shared.external_connectors.register_all")
+    s3_utils = importlib.import_module("services.ingestion.app.s3_utils")
+    shared_database = importlib.import_module("shared.database")
+    task_processor = importlib.import_module("server.workers.task_processor")
+
+    events: list[str] = []
+
+    class RuntimePostureRejected(RuntimeError):
+        pass
+
+    def reject_runtime_posture(runtime_engine, sysadmin_engine):
+        assert runtime_engine is shared_database.engine
+        assert sysadmin_engine is admin_database._engine
+        events.append("rls-posture")
+        raise RuntimePostureRejected("inert runtime RLS posture")
+
+    async def initialize_auth_runtime():
+        events.append("auth-runtime")
+        return object()
+
+    def start_task_worker():
+        events.append("task-worker")
+        raise AssertionError("task worker started before the RLS posture gate")
+
+    monkeypatch.setattr(s3_utils, "is_object_storage_configured", lambda: True)
+    monkeypatch.setattr(admin_database, "init_db", lambda: None)
+    monkeypatch.setattr(db_type_assertions, "verify_orm_db_type_alignment", lambda *_args: None)
+    monkeypatch.setattr(external_connectors, "register_all_connectors", lambda: None)
+    monkeypatch.setattr(shared_database, "validate_runtime_database_posture", reject_runtime_posture)
+    monkeypatch.setattr(auth_runtime, "initialize_auth_runtime", initialize_auth_runtime)
+    monkeypatch.setattr(task_processor, "start_task_worker", start_task_worker)
+
+    with pytest.raises(RuntimePostureRejected, match="inert runtime RLS posture"):
+        async with main.lifespan(main.app):
+            pass
+
+    assert events == ["rls-posture"]
+
+
+def test_lifespan_initializes_and_always_shuts_down_auth_runtime():
+    """The deployed monolith must not omit cluster-wide revocation wiring."""
+    main = importlib.import_module("server.main")
+    src = inspect.getsource(main.lifespan)
+
+    initialize = "auth_runtime = await initialize_auth_runtime()"
+    workers = "start_task_worker()"
+    shutdown = 'await _shutdown_step("shutdown_auth_runtime"'
+    assert initialize in src
+    assert shutdown in src
+    assert src.index(initialize) < src.index(workers) < src.index(shutdown)
+    assert "finally:" in src[src.index(initialize) : src.index(shutdown)]
+    assert "shutdown_auth_runtime(auth_runtime)" in src
+
+
 def test_railway_cloud_import_disables_public_docs():
     script = """
 import json
@@ -56,6 +121,19 @@ print("DOCS_RESULT_JSON=" + json.dumps({
         route for route in routes
         if route in {"GET /docs", "GET /redoc", "GET /openapi.json"}
     ),
+    "mounted_routers": sorted(main._MOUNTED_ROUTERS),
+    "excluded_routes_present": sorted(
+        route for route in routes
+        if route in {
+            "POST /v1/scrape/cppa",
+            "GET /v1/ingest/discovery/queue",
+            "POST /api/v1/sandbox/evaluate",
+            "POST /api/v1/query/traceability",
+            "GET /api/v1/provisions/by-request",
+            "GET /api/v1/simulations/scenarios",
+            "POST /api/v1/suppliers/validation/{tenant_id}/validate",
+        }
+    ),
 }))
 """
     for regengine_env in (None, "staging"):
@@ -70,6 +148,9 @@ print("DOCS_RESULT_JSON=" + json.dumps({
                 "ADMIN_FALLBACK_SQLITE",
                 "AUTH_TEST_BYPASS_TOKEN",
                 "DATABASE_URL",
+                "DISABLED_ROUTERS",
+                "ENABLED_ROUTERS",
+                "ENABLE_EXPERIMENTAL_ROUTERS",
                 "ENV",
                 "REGENGINE_ENV",
             }
@@ -82,8 +163,11 @@ print("DOCS_RESULT_JSON=" + json.dumps({
                 "ADMIN_DATABASE_URL": database_url,
                 "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
                 "DATABASE_URL": database_url,
-                "REGENGINE_API_KEY": "rge_test_cloud_docs_lockdown",  # pragma: allowlist secret
+                "ENABLED_ROUTERS": ",".join(sorted(PRODUCTION_ENABLED_ROUTERS)),
+                "REDIS_URL": "redis://localhost:6379/15",
+                "RATE_LIMIT_FAIL_MODE": "closed",
                 "RAILWAY_ENVIRONMENT_NAME": "production",
+                "SESSION_STORE_BACKEND": "database",
                 "TOOL_ACCESS_SECRET": "tool-access-secret-for-railway-docs-lockdown",  # pragma: allowlist secret
             }
         )
@@ -114,4 +198,6 @@ print("DOCS_RESULT_JSON=" + json.dumps({
             "redoc_url": None,
             "openapi_url": None,
             "docs_routes": [],
+            "mounted_routers": sorted(PRODUCTION_ENABLED_ROUTERS),
+            "excluded_routes_present": [],
         }

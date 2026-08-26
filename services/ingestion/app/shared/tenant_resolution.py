@@ -10,7 +10,7 @@ import logging
 from typing import Optional
 
 from fastapi import HTTPException
-from shared.api_key_store import api_key_hash_candidates
+from shared.api_key_store import set_api_key_lookup_context
 from shared.database import get_db_safe
 from shared.tenant_context import set_rls_tenant_id
 from sqlalchemy import bindparam, text
@@ -46,7 +46,10 @@ def _lookup_api_key_tenant_id(x_regengine_api_key: Optional[str]) -> Optional[st
 
     db = get_db_safe()
     try:
-        key_hashes = api_key_hash_candidates(raw_api_key)
+        lookup_proof = set_api_key_lookup_context(db, raw_api_key)
+        if lookup_proof is None:
+            return None
+        _key_id, key_hashes = lookup_proof
         row = db.execute(
             text(
                 """
@@ -76,7 +79,7 @@ def resolve_tenant_id(
     """Resolve tenant context from explicit ID, header, or API-key lookup.
 
     Scoped API keys are authoritative and cannot be overridden by a request
-    body/query/header tenant. Legacy master-key callers may still supply a
+    body/query/header tenant. The local development fallback may supply a
     tenant explicitly, but conflicting explicit/header values are rejected.
     """
     requested_tenant_id = _pick_requested_tenant_id(explicit_tenant_id, x_tenant_id)
@@ -106,7 +109,7 @@ def resolve_principal_tenant_id(
     """Resolve tenant context for an authenticated ingestion principal.
 
     Scoped principals cannot override their tenant through query/body/header.
-    Legacy master callers may still provide a tenant explicitly.
+    Only the local development fallback reaches this helper without a binding.
     """
     requested_tenant_id = _pick_requested_tenant_id(explicit_tenant_id, x_tenant_id)
     principal_tenant = _normalize_tenant_id(principal_tenant_id)

@@ -116,6 +116,7 @@ def _clean_auth_env(monkeypatch):
         "AUTH_TEST_BYPASS_TOKEN",
         "AUTH_TEST_BYPASS_TENANT_ID",
         "REGENGINE_ENV",
+        "REGENGINE_AUTH_STRICT",
         "ENABLE_DB_API_KEYS",
     ):
         monkeypatch.delenv(var, raising=False)
@@ -145,6 +146,15 @@ class TestGetKeyStore:
         monkeypatch.setattr(auth, "_db_store_instance", sentinel)
         assert get_key_store() is sentinel
         # Cached on second call.
+        assert get_key_store() is sentinel
+
+    def test_railway_staging_returns_db_store_even_when_legacy_flag_is_false(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_ENV", "staging")
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "staging")
+        monkeypatch.setenv("ENABLE_DB_API_KEYS", "false")
+        sentinel = _make_db_store_stub()
+        monkeypatch.setattr(auth, "_db_store_instance", sentinel)
+
         assert get_key_store() is sentinel
 
     def test_enable_db_api_keys_overrides_dev(self, monkeypatch):
@@ -217,43 +227,24 @@ class TestRequireApiKeyBypass:
 
 
 # ---------------------------------------------------------------------------
-# require_api_key — preshared master key happy path
+# require_api_key — retired environment master key
 # ---------------------------------------------------------------------------
 
 
-class TestRequireApiKeyPresharedHappyPath:
-    """The fail-closed master-key/tenant cases are pinned in #1068's suite —
-    here we just smoke-test the happy path so we don't drift on the env var
-    aliases (API_KEY vs REGENGINE_API_KEY)."""
-
-    def test_master_key_with_valid_tenant_returns_principal(self, monkeypatch):
-        master = "configured-master-key-with-enough-entropy"
-        monkeypatch.setenv("API_KEY", master)
+class TestRequireApiKeyRetiredEnvironmentMaster:
+    @pytest.mark.parametrize("environment_name", ["API_KEY", "REGENGINE_API_KEY"])
+    def test_environment_value_is_not_an_authentication_source(self, monkeypatch, environment_name):
+        retired = "configured-master-key-with-enough-entropy"
+        monkeypatch.setenv(environment_name, retired)
         monkeypatch.setenv("REGENGINE_ENV", "production")
-        request = _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID})
-        result = _run(
-            require_api_key(
-                request,
-                master,
-            )
-        )
-        assert isinstance(result, APIKey)
-        assert result.key_id == "preshared-master"
-        assert result.tenant_id == _VALID_TENANT_UUID
-        assert result.billing_tier == "ENTERPRISE"
-        assert request.state.api_key is result
+        instance = _make_db_store_stub(validate_return=None)
+        monkeypatch.setattr(auth, "_db_store_instance", instance)
 
-    def test_regengine_api_key_env_var_is_also_honored(self, monkeypatch):
-        master = "configured-via-regengine-api-key-env-var"
-        monkeypatch.setenv("REGENGINE_API_KEY", master)
-        monkeypatch.setenv("REGENGINE_ENV", "production")
-        result = _run(
-            require_api_key(
-                _make_request(headers={"x-tenant-id": _VALID_TENANT_UUID}),
-                master,
-            )
-        )
-        assert result.key_id == "preshared-master"
+        with pytest.raises(HTTPException) as exc:
+            _run(require_api_key(_make_request(headers={"x-tenant-id": _VALID_TENANT_UUID}), retired))
+
+        assert exc.value.status_code == 401
+        instance.validate_key.assert_awaited_once_with(retired)
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +258,11 @@ class TestRequireApiKeyInMemoryStoreBranch:
     def test_in_memory_validate_success(self, monkeypatch):
         monkeypatch.setenv("REGENGINE_ENV", "development")
         store = auth._key_store
-        raw, meta = store.create_key(name="dev-key", rate_limit_per_minute=10)
+        raw, meta = store.create_key(
+            name="dev-key",
+            tenant_id=_VALID_TENANT_UUID,
+            rate_limit_per_minute=10,
+        )
         try:
             result = _run(require_api_key(_make_request(), raw))
             assert isinstance(result, APIKey)
@@ -286,7 +281,11 @@ class TestRequireApiKeyInMemoryStoreBranch:
     def test_in_memory_rate_limit_exceeded(self, monkeypatch):
         monkeypatch.setenv("REGENGINE_ENV", "development")
         store = auth._key_store
-        raw, meta = store.create_key(name="rl-key", rate_limit_per_minute=1)
+        raw, meta = store.create_key(
+            name="rl-key",
+            tenant_id=_VALID_TENANT_UUID,
+            rate_limit_per_minute=1,
+        )
         try:
             # First request consumes the entire quota.
             _run(require_api_key(_make_request(), raw))
@@ -347,6 +346,29 @@ class TestRequireApiKeyDatabaseStoreBranch:
         assert result is principal
         assert request.state.api_key is principal
 
+    @pytest.mark.parametrize(
+        ("tenant_id", "scopes"),
+        [
+            (None, ["internal.tenants.create"]),
+            (_VALID_TENANT_UUID, ["internal.tenants.create"]),
+        ],
+    )
+    def test_workload_credential_rejected_by_generic_tenant_auth(self, monkeypatch, tenant_id, scopes):
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        principal = MagicMock()
+        principal.key_id = "rge_workload"
+        principal.rate_limit_per_minute = 10
+        principal.tenant_id = tenant_id
+        principal.scopes = scopes
+        instance = _make_db_store_stub(validate_return=principal)
+        monkeypatch.setattr(auth, "_db_store_instance", instance)
+
+        with pytest.raises(HTTPException) as exc:
+            _run(require_api_key(_make_request(path="/industries"), "rge_workload.secret"))
+
+        assert exc.value.status_code == 403
+        instance.check_rate_limit.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # optional_api_key
@@ -357,10 +379,16 @@ class TestOptionalApiKey:
     def test_no_key_returns_none(self):
         assert _run(optional_api_key(_make_request(), None)) is None
 
+    def test_empty_presented_header_is_rejected(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        with pytest.raises(HTTPException) as exc:
+            _run(optional_api_key(_make_request(), ""))
+        assert exc.value.status_code == 401
+
     def test_valid_key_returns_principal(self, monkeypatch):
         monkeypatch.setenv("REGENGINE_ENV", "development")
         store = auth._key_store
-        raw, meta = store.create_key(name="opt-key")
+        raw, meta = store.create_key(name="opt-key", tenant_id=_VALID_TENANT_UUID)
         try:
             result = _run(optional_api_key(_make_request(), raw))
             assert isinstance(result, APIKey)

@@ -9,9 +9,9 @@ import {
 } from './auth-helpers';
 
 test('email OTP login hydrates profile and requires passkey step-up for admin policy', async ({ context, page }) => {
-    const email = `playwright+${Date.now()}@example.com`;
+    const email = `playwright@${Date.now()}.example.com`;
     resetOtpOutbox();
-    seedPasswordlessUser(email);
+    seedPasswordlessUser(email, { isSysadmin: true });
 
     await loginWithEmailOtp(page, context, email);
     await expectHydratedSession(page, email, 'email_otp');
@@ -27,13 +27,19 @@ test('email OTP login hydrates profile and requires passkey step-up for admin po
     await expect(page.getByRole('button', { name: /authenticate with passkey/i })).toBeVisible();
 });
 
-test('WebAuthn step-up registers a passkey and completes the admin policy action', async ({ context, page }) => {
-    const email = `playwright-webauthn+${Date.now()}@example.com`;
+test('pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up', async ({ context, page }) => {
+    const email = `playwright-webauthn@${Date.now()}.example.com`;
     resetOtpOutbox();
     seedPasswordlessUser(email, { isSysadmin: true });
 
     await loginWithEmailOtp(page, context, email);
     await expectHydratedSession(page, email, 'email_otp');
+
+    // Production rollout pre-provisions high-assurance WebAuthn/SSO staff.
+    // The E2E-only seeder models that bootstrap without adding a production
+    // path that lets an email-code session enroll an attacker-controlled key.
+    seedPasswordlessUser(email, { isSysadmin: true, sessionAuthMethod: 'sso' });
+    await expectHydratedSession(page, email, 'sso');
 
     await page.goto('/settings/security');
     await expect(page.getByRole('heading', { name: /security settings/i })).toBeVisible();
@@ -44,6 +50,9 @@ test('WebAuthn step-up registers a passkey and completes the admin policy action
         await expect(
             page.getByRole('status').filter({ hasText: /passkey registered/i }),
         ).toBeVisible({ timeout: 15_000 });
+
+        seedPasswordlessUser(email, { isSysadmin: true, sessionAuthMethod: 'email_otp' });
+        await expectHydratedSession(page, email, 'email_otp');
 
         await page.getByRole('button', { name: /verify admin policy access/i }).click();
         const stepUpDialog = page.getByRole('dialog', { name: /authenticate with your passkey/i });

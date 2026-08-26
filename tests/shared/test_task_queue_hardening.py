@@ -121,6 +121,9 @@ class TestRetryBackoff:
             "#1181: _fail_task must bump scheduled_at to defer the retry — "
             "otherwise the next poll picks it up in ~2s and we burn CPU"
         )
+        assert any("locked_by" in s for s in sql), (
+            "_fail_task must keep the lock-owner predicate so a reclaimer cannot fail this worker's task"
+        )
 
     def test_fail_task_dead_does_not_defer(self):
         db = MagicMock()
@@ -155,14 +158,28 @@ class TestClaimTaskRespectsBackoff:
     the invariant is locked in against future refactors.
     """
 
-    def _capture_claim_sql(self) -> str:
+    @staticmethod
+    def _claim_db(row=None) -> MagicMock:
         db = MagicMock()
-        # fetchone=None means "queue empty" — we only care about the SQL shape.
-        db.execute.return_value.fetchone.return_value = None
-        task_processor._claim_task(db)
+        claim_result = MagicMock()
+        claim_result.fetchone.return_value = row
+        db.execute.side_effect = [MagicMock(), claim_result]
+        return db
+
+    @staticmethod
+    def _assert_admin_arm_then_claim(db: MagicMock) -> str:
+        assert db.execute.call_count == 2
         calls = [str(call.args[0]) for call in db.execute.call_args_list if call.args]
-        assert calls, "_claim_task must issue at least one SQL statement"
-        return calls[0]
+        assert len(calls) == 2
+        assert "set_config('regengine.is_sysadmin', 'true', true)" in calls[0]
+        assert "update fsma.task_queue" in calls[1].lower()
+        return calls[1]
+
+    def _capture_claim_sql(self) -> str:
+        # fetchone=None means "queue empty" — we only care about the SQL shape.
+        db = self._claim_db()
+        task_processor._claim_task(db)
+        return self._assert_admin_arm_then_claim(db)
 
     def test_claim_filters_pending_by_scheduled_at(self):
         sql = self._capture_claim_sql().lower()
@@ -204,13 +221,13 @@ class TestClaimTaskRespectsBackoff:
         zero tasks in production. This test ensures the function at
         least reaches the `db.execute` call cleanly.
         """
-        db = MagicMock()
-        db.execute.return_value.fetchone.return_value = None
+        db = self._claim_db()
 
         # Must not raise — specifically not NameError.
         result = task_processor._claim_task(db)
         assert result is None
-        db.execute.assert_called_once()
+        self._assert_admin_arm_then_claim(db)
+        db.commit.assert_not_called()
 
     def test_claim_returns_visibility_timeout_from_row(self):
         """`row[5]` is read — RETURNING must project a sixth column.
@@ -220,9 +237,9 @@ class TestClaimTaskRespectsBackoff:
         IndexError. We now COALESCE the column to the default so
         `row[5]` is always a usable int.
         """
-        db = MagicMock()
         # Simulate a real claim — 7 columns incl. timeout and tenant_id.
-        db.execute.return_value.fetchone.return_value = (
+        db = self._claim_db(
+            (
             42,  # id
             "nlp_extraction",  # task_type
             {"doc": "x"},  # payload (dict)
@@ -230,6 +247,7 @@ class TestClaimTaskRespectsBackoff:
             3,  # max_attempts
             180,  # visibility_timeout_seconds
             "11111111-2222-3333-4444-555555555555",  # tenant_id (row column)
+            )
         )
         claimed = task_processor._claim_task(db)
         assert claimed is not None
@@ -237,6 +255,8 @@ class TestClaimTaskRespectsBackoff:
         assert claimed["visibility_timeout_seconds"] == 180
         # EPIC-A #1651 — the row column is the tenant authority for handlers.
         assert claimed["tenant_id"] == "11111111-2222-3333-4444-555555555555"
+        self._assert_admin_arm_then_claim(db)
+        db.commit.assert_called_once()
 
     def test_claim_sql_returns_six_columns(self):
         """Guard the column count in RETURNING against silent regressions."""

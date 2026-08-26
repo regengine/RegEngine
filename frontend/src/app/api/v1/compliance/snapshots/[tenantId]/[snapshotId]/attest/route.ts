@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
     requireProxyAuth,
     validateProxySession,
-    getServerApiKey,
-    getAdminMasterKey,
     validateUuid,
     enforceTenantMatch,
 } from '@/lib/api-proxy';
+import { prepareTenantScopedProxyHeaders, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 import {
     allowDevComplianceSnapshotFallback,
     attestDevComplianceSnapshot,
@@ -74,16 +73,11 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
 
-    // Build auth headers. Prefer the server-side REGENGINE_API_KEY (see
-    // getServerApiKey). Fall back to ADMIN_MASTER_KEY when present. The
-    // previous `|| 'admin'` literal was a hardcoded credential that would
-    // leak in logs and could match a default backend config — never send
-    // a literal placeholder as an API key.
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const apiKey = getServerApiKey() ?? getAdminMasterKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    // Forward the caller's tenant credential/session. A first-party key is
+    // injected only when its configured tenant binding matches the path.
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
 
     // When the backend base is unresolved (empty sentinel from getComplianceUrl),
     // never construct a relative fetch URL. Use the dev fallback if available.
@@ -106,8 +100,11 @@ export async function POST(
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body),
+                redirect: 'manual',
             }
         );
+        const redirectError = rejectUpstreamRedirect(response, 'compliance-snapshot-attest');
+        if (redirectError) return redirectError;
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));

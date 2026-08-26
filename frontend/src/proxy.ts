@@ -470,6 +470,14 @@ function shouldUpgradeInsecureRequests(request: NextRequest): boolean {
     return process.env.NODE_ENV === 'production' && isHttps && !isLocalHost;
 }
 
+function isReleaseDisabledApiSurface(pathname: string): boolean {
+    const isGraphSurface = pathname === '/api/graph' || pathname.startsWith('/api/graph/');
+    return (
+        isGraphSurface &&
+        (process.env.NODE_ENV === 'production' || process.env.REGENGINE_ENABLE_GRAPH_PROXY !== '1')
+    );
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -499,13 +507,20 @@ export async function proxy(request: NextRequest) {
         return res;
     };
 
+    // Release-disabled surfaces must be indistinguishable from absent routes.
+    // Resolve this before CSRF so writes cannot reveal that a disabled handler
+    // exists by returning a middleware-generated 403 instead of exact 404.
+    if (isReleaseDisabledApiSurface(pathname)) {
+        return withCsp(new NextResponse(null, { status: 404 }));
+    }
+
     // -----------------------------------------------------------------------
     // CSRF protection for mutating API requests (double-submit cookie check)
     // -----------------------------------------------------------------------
-    if (
+    const csrfProtectedRequest =
         pathname.startsWith('/api/') &&
         CSRF_PROTECTED_METHODS.has(request.method) &&
-        !isCsrfExempt(pathname) &&
+        !isCsrfExempt(pathname, request.method) &&
         // #537 Bearer tokens only bypass CSRF for non-browser API clients (curl, SDKs, server-to-server).
         // Browser requests ALWAYS include an Origin or Referer header. If either is present alongside
         // a Bearer token, the request is from a browser — CSRF protection still applies.
@@ -514,8 +529,23 @@ export async function proxy(request: NextRequest) {
             request.headers.get('authorization')?.startsWith('Bearer ') &&
             !request.headers.get('origin') &&
             !request.headers.get('referer')
-        )
-    ) {
+        );
+
+    if (csrfProtectedRequest) {
+        const sourceUrl = request.headers.get('origin') || request.headers.get('referer');
+        let sourceOrigin: string | null = null;
+        try {
+            sourceOrigin = sourceUrl ? new URL(sourceUrl).origin : null;
+        } catch {
+            sourceOrigin = null;
+        }
+        if (sourceOrigin !== request.nextUrl.origin) {
+            return withCsp(NextResponse.json(
+                { error: 'Cross-origin mutation rejected' },
+                { status: 403 },
+            ));
+        }
+
         const headerToken = request.headers.get(CSRF_HEADER);
         const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
 
