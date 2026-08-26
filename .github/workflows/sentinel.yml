@@ -39,7 +39,7 @@ jobs:
       - name: Set up Node (for headless Claude Code CLI)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
 
       - name: Install Claude Code CLI
         # Issue #2812: this job holds issues:write + pull-requests:write and

@@ -5,6 +5,11 @@ dependency management, and the debt table were re-checked against code on
 this date. Sections carry their own dates where a claim was verified
 earlier and not re-checked.
 
+Partial re-verification 2026-08-26 (#2871): only the Alembic schema-head
+claim in **Infrastructure** below was re-checked against
+`alembic/versions/`. Every other section still carries its 2026-07-31
+date and was **not** re-verified on 2026-08-26.
+
 ## Deployment Model
 
 RegEngine is deployed as **one consolidated FastAPI app** behind a Next.js
@@ -41,10 +46,21 @@ useful decomposition seams in the codebase:
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
 - **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
-  Alembic (`alembic/versions/`, currently v104); the app performs no runtime
-  DDL as of v098/v099. The newest tables are
-  `fsma.compliance_evidence_snapshots` (v103, backs the Compliance Snapshots
-  surface) and the v102 mock-audit drill records.
+  Alembic (`alembic/versions/`, head is **v110** —
+  `6f8c2d1a4b90_v110_developer_profile_insert_policy`, verified 2026-08-26);
+  the app performs no runtime DDL as of v098/v099. The newest tables are
+  `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
+  rule-evaluation persistence, replayed by the
+  `rule_evaluation_deadletter_replay` scheduler job) and
+  `fsma.tenant_seed_state` (v106, per-tenant obligation seed marker so an
+  RLS deny-all empty read is no longer mistaken for an unseeded tenant).
+  The revisions after those add no tables: v107 fixes the CTE-correction
+  `BEFORE UPDATE` trigger to `RETURN NEW`, v108 adds the `result='error'`
+  value plus the v105 marker columns that never shipped, v109 adds a
+  tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
+  RLS INSERT policy letting authenticated users create their own developer
+  profile. `fsma.compliance_evidence_snapshots` (v103) and the v102
+  mock-audit drill records are no longer the newest tables.
 - **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
   subscription/entitlement checks, idempotency caching, and task-processing
   helpers when configured. The local dev stack

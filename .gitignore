@@ -41,6 +41,8 @@ node_modules/
 .env.production
 # .env.example is the safe template — keep tracked despite the .env.* pattern above
 !.env.example
+# Same for scoped example templates such as frontend/.env.test.example (#2873).
+!.env.*.example
 .DS_Store
 .idea/
 .vscode/
@@ -58,6 +60,10 @@ yarn-error.log*
 frontend/out/
 .pytest_cache/
 .audit/
+# Stamped at deploy time by .github/workflows/deploy.yml and COPYed into the
+# image by the Dockerfile. The tracked copy only ever held the literal
+# "unknown", which is worse than absent — it masks a missing stamp (#2894).
+build-sha.txt
 
 # RegEngine Specific
 *.db
@@ -67,6 +73,12 @@ secrets.md
 
 # Artifacts that should never be tracked
 *.zip
+# ...except the public proof/sample bundles the frontend serves. These are
+# intentionally tracked fixtures (the audit-bundle pair backs the public
+# /api/v1/proof/verify demo, including the deliberately tampered one), and
+# the bare *.zip rule above was silently covering them (#2873).
+!frontend/public/proof/*.zip
+!frontend/public/samples/*.zip
 login_resp.json
 frontend/build_log.txt
 frontend/build_output.txt
@@ -75,6 +87,11 @@ frontend/build_v2_log.txt
 # Stress test / bulk data files (move to external storage)
 fsma_stress_test_*
 test_data/
+# ...except services/test_data/, which holds 25 intentionally-tracked audit
+# job fixtures. The bare test_data/ rule above was covering them (#2873).
+# The negation names the directory itself — a negation for files inside an
+# excluded directory would not take effect.
+!services/test_data/
 
 # MCP / Gemini settings (contains tokens)
 .gemini/settings.json

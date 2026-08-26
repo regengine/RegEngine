@@ -570,7 +570,10 @@ export async function proxy(request: NextRequest) {
 
     // Developer portal: only gate key generation and playground behind auth.
     // All docs, codegen, and portal pages are public for developer evaluation.
-    if (isGatedRoute(pathname) || pathname === '/developer/portal/keys') {
+    // #2886 The former `|| pathname === '/developer/portal/keys'` special case
+    // is gone — GATED_DEV_ROUTES now carries the real page paths, so
+    // isGatedRoute() covers both keys and playground (including sub-paths).
+    if (isGatedRoute(pathname)) {
         return withCsp(await requireAppAuth(request, requestHeaders));
     }
 

@@ -64,13 +64,11 @@ concurrency:
   group: frontend-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'ci' }}
   cancel-in-progress: true
 
-env:
-  NODE_VERSION: '20'
-
+# Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
+# github-script, no check-run or PR-comment action — so checks:write and
+# pull-requests:write were unused write scope on every run.
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   promise-audit:
@@ -83,7 +81,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -111,7 +109,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -153,7 +151,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -186,7 +184,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -195,10 +193,14 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Run Vitest
+      - name: Run Vitest (with coverage thresholds enforced)
+        # Issue #2845: frontend/vitest.config.mts declares 20% coverage
+        # thresholds, but no workflow ever passed --coverage, so they were
+        # never enforced. test:coverage == `vitest run --coverage`, which
+        # fails the run when a threshold is not met.
         run: |
           cd frontend
-          npm run test:run
+          npm run test:coverage
 
   # ── Deterministic Smoke ───────────────────────────────────
   smoke:
@@ -211,7 +213,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -239,7 +241,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -263,7 +265,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -343,7 +345,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

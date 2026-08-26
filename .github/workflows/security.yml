@@ -242,11 +242,19 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Semgrep EPIC-A tenant-trust gate
+      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape)
         run: |
           # No grandfathered tenant-trust findings. Tenant authority must come
           # from authenticated principal state; see services/shared/tenant_context.py.
+          #
+          # Issue #2813: every semgrep call passes an explicit --config, which
+          # disables auto-discovery of the root .semgrep.yml. Its ERROR rule
+          # (fda-export-writer-requires-safe-cell, the FDA CSV-injection guard)
+          # and .semgrep/current-user-shape.yaml therefore never ran. Both are
+          # loaded explicitly here alongside tenant-trust.
           semgrep --config=.semgrep/tenant-trust.yaml \
+            --config=.semgrep.yml \
+            --config=.semgrep/current-user-shape.yaml \
             --error \
             --json --output semgrep-tenant-trust.json \
             .
@@ -285,7 +293,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
@@ -510,21 +518,41 @@ jobs:
   # ──────────────────────────────────────────────
   # 5. DAST (OWASP ZAP baseline)
   # ──────────────────────────────────────────────
+  # Issue #2814: the scan step used to `exit 0` when ZAP_TARGET was unset, which
+  # renders as a green check indistinguishable from a real passing scan. The
+  # `secrets` context is not available in a job-level `if:`, so this preflight
+  # job exposes "is it configured" as an output and the real job keys off that —
+  # GitHub then renders DAST as genuinely *skipped* when unconfigured.
+  dast-preflight:
+    name: DAST preflight (ZAP_TARGET configured?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: Check ZAP_TARGET
+        id: check
+        env:
+          ZAP_TARGET: ${{ secrets.ZAP_TARGET }}
+        run: |
+          if [ -n "${ZAP_TARGET:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ZAP_TARGET is not configured — the DAST job will be SKIPPED, not passed."
+          fi
+
   dast:
     name: DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: always()
+    needs: dast-preflight
+    if: needs.dast-preflight.outputs.configured == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
       - name: ZAP baseline scan
-        run: |
-          if [ -z "${ZAP_TARGET:-}" ]; then
-            echo "SKIP: ZAP_TARGET not configured. Set it in GitHub Secrets to enable DAST."
-            exit 0
-          fi
-          bash scripts/security/zap_baseline.sh
+        run: bash scripts/security/zap_baseline.sh
         env:
           ZAP_TARGET: ${{ secrets.ZAP_TARGET }}
 
@@ -653,37 +681,45 @@ jobs:
   # ──────────────────────────────────────────────
   # 8. Audit Chain Integrity (ISO 27001 12.7.1)
   # ──────────────────────────────────────────────
-  audit-integrity:
-    name: Audit Chain Integrity
+  # Issue #2814: the in-job "validate secrets" step reported success when the
+  # audit secrets were absent, so an unconfigured run was a green check rather
+  # than a skip. `secrets` cannot be read from a job-level `if:`, so the check
+  # is hoisted into a preflight job whose output gates the real one — the
+  # Audit Chain Integrity job now renders as SKIPPED when unconfigured.
+  audit-integrity-preflight:
+    name: Audit chain preflight (secrets configured?)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
-
-      - name: Validate audit chain secrets
-        id: validate_audit
+      - name: Check audit chain secrets
+        id: check
         env:
           AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
           AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
         run: |
-          if [ -z "$AUDIT_API_BASE" ] || [ -z "$AUDIT_TOKEN" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping audit chain check (missing AUDIT_API_BASE or AUDIT_VERIFY_TOKEN)."
+          if [ -n "${AUDIT_API_BASE:-}" ] && [ -n "${AUDIT_TOKEN:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN not configured — the Audit Chain Integrity job will be SKIPPED, not passed."
           fi
 
+  audit-integrity:
+    name: Audit Chain Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: audit-integrity-preflight
+    if: needs.audit-integrity-preflight.outputs.configured == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
       - name: Run audit chain check
-        if: steps.validate_audit.outputs.ready == 'true'
         env:
           AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
           AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
         run: |
           chmod +x scripts/security/verify_audit_chain.sh
           bash scripts/security/verify_audit_chain.sh
-
-      - name: Audit chain check skipped
-        if: steps.validate_audit.outputs.ready != 'true'
-        run: |
-          echo "Audit chain check skipped due to missing secrets"

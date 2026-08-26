@@ -57,8 +57,6 @@ guard). In the default Railway deployment **no Kafka consumers run**:
 - The NLP Kafka consumer pipeline (`services/nlp/app/consumer/`) is deprecated; its
   consumer thread starts only from the legacy standalone `services/nlp/main.py` with
   `EVENT_BACKBONE=kafka` — neither condition holds in production.
-- The graph `fsma_consumer` (`services/graph/app/consumers/fsma_consumer.py`) is a
-  manual `__main__` entrypoint, not in any deployment config.
 - `shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
   opt-in path. Opt-in-alive, not deleted — but vestigial for the default deployment.
 

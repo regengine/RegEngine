@@ -60,10 +60,11 @@ concurrency:
 env:
   PYTHON_VERSION: '3.11'
 
+# Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
+# github-script, no check-run or PR-comment action — so checks:write and
+# pull-requests:write were unused write scope on every run.
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   # ── Dependency Lock Freshness ────────────────────────────

@@ -2,7 +2,12 @@
 
 Source of truth: `server/main.py`
 
-Date: 2026-05-03
+Date: 2026-08-26 (previously 2026-05-03)
+
+Re-audited 2026-08-26 against `_VALID_ROUTER_NAMES` in `server/main.py`,
+which holds **52** names. The 2026-05-03 revision of this file enumerated
+only 49 and omitted `remediation`, `proof_verify`, and `proof_recall`
+(#2838). All three are now listed below and in the allowlist.
 
 ## Current Mount Model
 
@@ -49,6 +54,13 @@ These routers belong closest to the FSMA production story:
 - `canonical_records`
 - `rules`
 - `exceptions`
+- `remediation` — **boot-critical.** Listed in `_COMPLIANCE_ROUTERS`
+  (`server/main.py`). Putting it in `DISABLED_ROUTERS` makes the app raise
+  `RuntimeError` at import and **refuse to boot** unless
+  `ALLOW_DISABLE_COMPLIANCE_ROUTERS=true` is also set (which only downgrades
+  the hard failure to a `logger.critical` "degraded compliance mode"). Mounts
+  two routers — `/api/v1/remediation` (10 routes) and
+  `/api/v1/remediation/supplier` (5 routes, token-scoped supplier access).
 - `request_workflow`
 - `auditor`
 - `compliance_metrics`
@@ -62,6 +74,37 @@ These routers belong closest to the FSMA production story:
 - `fsma_compliance`
 
 These are not automatically safe. They are production-relevant only when tests prove tenant isolation, validation behavior, and failure handling.
+
+The other compliance-critical names in `_COMPLIANCE_ROUTERS` are
+`canonical_records`, `rules`, `exceptions`, `fda_export`, and
+`chain_verification`. Disabling any of them has the same boot-refusal
+effect described for `remediation`.
+
+## Public Proof Surface (tenantless, unauthenticated)
+
+These mount unconditionally in production — they are **not** in
+`_EXPERIMENTAL_ROUTERS`, so `ENABLE_EXPERIMENTAL_ROUTERS` does not gate
+them and nothing suppresses them unless they are named in
+`DISABLED_ROUTERS`:
+
+- `proof_verify` — `POST /api/v1/proof/verify` (`server/main.py:556`).
+  Public hash-chain/Merkle-root verifier for an exported FDA bundle. **No
+  auth, no tenant context.** Rate-limited to 10 req/min/IP via the shared
+  slowapi limiter. The router docstring asserts it touches no database and
+  no tenant-scoped store, and operates only on caller-supplied bytes.
+- `proof_recall` — `POST /api/v1/proof/recall-drill`
+  (`server/main.py:654`). Public deterministic recall drill against a
+  frozen synthetic dataset baked into the module. **No auth, no tenant
+  context.** Rate-limited to 5 req/min/IP.
+
+**Open promotion gap (#2838):** these are live public production surfaces
+that were never recorded against the Acceptance Rule at the bottom of this
+file, and `PRODUCTION_SURFACE.md`'s Promotion Rule was never applied to
+them in writing. Each router carries an in-module justification docstring,
+but that is the author's argument, not a completed review. Treat closing
+that review as outstanding work; the "no tenant data" claim in particular
+deserves an enforced test (static assertion of zero `shared.database` /
+`CTEPersistence` imports) rather than a docstring.
 
 ## Product/Ops Adjacent
 
@@ -125,8 +168,30 @@ The stronger follow-up is to replace deny-by-configuration with allow-by-configu
 
 ```text
 ENABLE_EXPERIMENTAL_ROUTERS=false
-ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,canonical_records,rules,exceptions,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance
+ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,canonical_records,rules,exceptions,remediation,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance,proof_verify,proof_recall
 ```
+
+> **Corrected 2026-08-26 (#2838).** The previous allowlist was **not**
+> safe to copy-paste:
+>
+> - It omitted `remediation`. `ENABLED_ROUTERS` is allow-by-configuration,
+>   so once it is implemented, omission means "disabled" — and
+>   `remediation` is compliance-critical, so a deploy using the old string
+>   would have **failed to boot**.
+> - It omitted `proof_verify` and `proof_recall`, silently removing two
+>   live public endpoints.
+> - It omitted `portal`, which the FSMA Production Spine list above does
+>   include.
+>
+> If you would rather not expose the public proof endpoints in a given
+> environment, drop `proof_verify,proof_recall` from the string
+> deliberately — but never drop `remediation`.
+
+**Implementation status:** `ENABLED_ROUTERS` is still a proposal. As of
+2026-08-26 `server/main.py` reads only `DISABLED_ROUTERS` and
+`ENABLE_EXPERIMENTAL_ROUTERS`; setting `ENABLED_ROUTERS` today has no
+effect. Keep this string correct anyway — it is the spec the follow-up
+will be built against.
 
 Recommended behavior for that follow-up:
 

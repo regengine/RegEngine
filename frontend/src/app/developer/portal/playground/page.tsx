@@ -5,6 +5,7 @@ import { Terminal, Play, Loader2, Copy, Check, AlertTriangle, FlaskConical } fro
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
+import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 // ---------------------------------------------------------------------------
 // Demo / sandbox mock responses
@@ -390,7 +391,17 @@ export default function APIPlayground() {
         headers['X-Tenant-ID'] = tenantId;
       }
 
-      const res = await fetch(url, fetchOptions);
+      // #2885 Must go through fetchWithCsrf, not raw fetch. Playground requests
+      // hit the same-origin BFF proxy (/api/ingestion/...), so src/proxy.ts
+      // applies the double-submit CSRF check to every POST. The exemption list
+      // in src/lib/csrf.ts only covers the next.config.js rewrite path
+      // '/api/v1/webhooks/', which does NOT prefix-match the proxied
+      // '/api/ingestion/api/v1/webhooks/ingest', and the Bearer bypass never
+      // applies here (we send X-RegEngine-API-Key, and a browser always
+      // attaches Origin/Referer). Without X-CSRF-Token the middleware answers
+      // 403 before the proxy ever runs. fetchWithCsrf adds the header from the
+      // JS-readable re_csrf cookie for POST/PUT/PATCH/DELETE only.
+      const res = await fetchWithCsrf(url, fetchOptions);
       const endTime = performance.now();
       setDuration(Math.round(endTime - startTime));
 

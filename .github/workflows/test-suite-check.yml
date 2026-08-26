@@ -81,8 +81,14 @@ jobs:
             echo "$OUTPUT" | grep "^ERROR " || true
             exit 1
           fi
-          if [ "$COUNT" -lt 1500 ]; then
-            echo "::error::Collected tests fell below floor of 1500 (got $COUNT). Did a whole directory get skipped?"
+          # Issue #2843: the floor was 1500 while the suite actually collects
+          # ~9349, so the gate could not detect an entire directory dropping
+          # out. 8400 leaves ~10% headroom below the current count.
+          # RE-RATCHET THIS as the suite grows — a floor left far below the
+          # real count is the same silent no-op this replaced.
+          COLLECTION_FLOOR=8400
+          if [ "$COUNT" -lt "$COLLECTION_FLOOR" ]; then
+            echo "::error::Collected tests fell below floor of $COLLECTION_FLOOR (got $COUNT). Did a whole directory get skipped?"
             exit 1
           fi
           echo "✓ $COUNT tests collected, 0 collection errors"
