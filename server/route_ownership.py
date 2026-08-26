@@ -17,8 +17,7 @@ from typing import Any, TypeVar
 
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
-
-from services.shared.route_introspection import EffectiveRoute, iter_effective_routes
+from shared.route_introspection import EffectiveRoute, iter_effective_routes
 
 ROUTE_OWNER_ATTRIBUTE = "_regengine_route_owner"
 EXCLUDED_ROUTES_STATE_ATTRIBUTE = "_regengine_excluded_owned_routes"

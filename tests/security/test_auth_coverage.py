@@ -59,6 +59,8 @@ class _AuthProbeRedis:
 
 def _build_test_app():
     """Build the exact production route table, without starting its lifespan."""
+    from shared.route_introspection import iter_effective_routes
+
     from server.main import app as inventory_app
     from server.route_ownership import route_owner
     from server.route_security_manifest import (
@@ -66,7 +68,6 @@ def _build_test_app():
         _effective_route_stub,
         build_route_security_manifest,
     )
-    from services.shared.route_introspection import iter_effective_routes
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.router.routes.extend(
@@ -97,7 +98,7 @@ def _extract_endpoints(app) -> list[tuple[str, str]]:
     handful of endpoints and reported success. The helper flattens both
     shapes and raises on any it does not recognise.
     """
-    from services.shared.route_introspection import iter_effective_routes
+    from shared.route_introspection import iter_effective_routes
 
     endpoints = [
         (method, path)

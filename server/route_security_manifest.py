@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from shared.route_introspection import EffectiveRoute, iter_effective_routes
 from starlette.routing import Match, compile_path
 
 from server.route_ownership import excluded_owned_routes, route_owner
@@ -31,7 +32,6 @@ from server.route_security_policy import (
     operation_key,
 )
 from server.router_policy import PRODUCTION_ENABLED_ROUTERS, VALID_ROUTER_NAMES
-from services.shared.route_introspection import EffectiveRoute, iter_effective_routes
 
 _FRAMEWORK_DOC_ROUTE_SIGNATURES = frozenset(
     {

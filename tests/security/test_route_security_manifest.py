@@ -12,6 +12,7 @@ import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from shared.route_introspection import EffectiveRoute, iter_effective_routes
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
@@ -30,7 +31,6 @@ from server.route_security_policy import (
     TenantApiKeyRoutePolicy,
     classify_operation,
 )
-from services.shared.route_introspection import EffectiveRoute, iter_effective_routes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = REPO_ROOT / "docs" / "security" / "route-security-manifest.json"
@@ -595,7 +595,7 @@ def test_disabling_readiness_removes_compatibility_routes():
     script = """
 import json
 from server.main import app
-from services.shared.route_introspection import iter_effective_routes
+from shared.route_introspection import iter_effective_routes
 
 paths = sorted(
     path

@@ -12,11 +12,13 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SERVICES_ROOT = REPO_ROOT / "services"
 MANIFEST_PATH = REPO_ROOT / "docs" / "security" / "route-security-manifest.json"
 PRODUCTION_RESULT_MARKER = "ROUTE_SECURITY_PRODUCTION_RESULT="
 
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+for import_root in (REPO_ROOT, SERVICES_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
 
 def _configure_inventory_import() -> None:

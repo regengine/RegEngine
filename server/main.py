@@ -1248,7 +1248,7 @@ def _iter_registered_endpoints(application):
     diagnostic and the blocking security manifest cannot drift onto different
     interpretations of FastAPI's wrapper topology.
     """
-    from services.shared.route_introspection import iter_effective_routes
+    from shared.route_introspection import iter_effective_routes
 
     for path, route in iter_effective_routes(application):
         for method in route.methods or set():
