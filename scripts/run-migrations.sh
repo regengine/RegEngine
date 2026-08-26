@@ -227,7 +227,8 @@ try:
         # or empty (partial restore, pre-Alembic bootstrap, manual DELETE).
         # There is no safe guess here, so require an explicit decision.
         allow_auto_stamp = os.environ.get('REGENGINE_ALLOW_AUTO_STAMP', '0')
-        stamp_revision = os.environ.get('REGENGINE_AUTO_STAMP_REVISION', '97588ba8edf3')
+        # 97588ba8edf3 is the baseline alembic revision id, not a credential.
+        stamp_revision = os.environ.get('REGENGINE_AUTO_STAMP_REVISION', '97588ba8edf3')  # pragma: allowlist secret
         if allow_auto_stamp != '1':
             print(
                 '!! AMBIGUOUS database state: RegEngine relations exist but the '
