@@ -62,8 +62,6 @@ v1_router.include_router(recall_router, prefix="/fsma/recall", tags=["fsma-recal
 v1_router.include_router(metrics_router, prefix="/fsma/metrics", tags=["fsma-metrics"])
 v1_router.include_router(compliance_router, prefix="/fsma/compliance", tags=["fsma-compliance"])
 
-router.include_router(v1_router)
-
 
 @router.get("/health")
 async def health():
@@ -188,3 +186,10 @@ async def provisions_by_request_id(
     finally:
         if client is not None:
             await client.close()
+
+
+# Include the completed versioned router only after every local endpoint has
+# been registered.  Older FastAPI releases copy routes at include time, while
+# newer releases retain a lazy included-router wrapper; keeping this last makes
+# the effective route table identical under both implementations.
+router.include_router(v1_router)
