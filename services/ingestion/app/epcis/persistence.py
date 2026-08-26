@@ -1022,6 +1022,33 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
                     ),
                 },
             ) from exc
+        # An event whose CTE type is not supported is a client-actionable
+        # REJECTION, not a server fault — but every other ValueError below
+        # falls through to a bare ``raise`` and surfaces as an unhandled 500.
+        # Two distinct paths produce one:
+        #   * the legacy write, where ``_validate_event_type`` refuses a
+        #     non-CTE ``event_type`` (FSMA ``growing`` / CBV ``planting`` are
+        #     real bizSteps that are simply not among the 7 s1.1310 CTEs), and
+        #   * the canonical dual-write, which raises ``UnmappedBizStepError``
+        #     (a ValueError subclass) for the same inputs (#2815).
+        # The canonical path runs unguarded whenever the event is not
+        # idempotent, so this is reachable under the DEFAULT
+        # ``RULES_ENGINE_ENFORCE=off`` too, not only under enforcement.
+        if type(exc).__name__ == "UnmappedBizStepError" or (
+            "is not a recognized FSMA 204 CTE type" in str(exc)
+        ):
+            logger.warning(
+                "epcis_ingest_refused_unsupported_cte_type tenant=%s error=%s",
+                tenant_id,
+                str(exc),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "unsupported_cte_type",
+                    "message": str(exc),
+                },
+            ) from exc
         raise
     except Exception as exc:
         if not _allow_in_memory_fallback():
