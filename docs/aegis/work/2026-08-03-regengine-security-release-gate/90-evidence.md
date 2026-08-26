@@ -1,6 +1,44 @@
 # Evidence Bundle
 
-## Evidence Receipt (L1)
+## Integrated Evidence Receipt — 2026-08-26 (authoritative)
+
+- Source snapshot: `c34cb8a1237135b575ffcfbb92039e005757a4b4` on
+  `codex/security-release-integration-3cb4213e`, based on
+  `3cb4213e0ce8c007707e435c35c5eee203131360`.
+- Evidence record:
+  `docs/security/release-evidence/2026-08-26-security-integration-candidate.json`.
+- Route contract: FastAPI 0.141.1 reported 424 effective routes, 248 enabled
+  operations, and 178 omitted operations across 161 paths; every omitted
+  operation returned exact 404. Manifest SHA-256 is
+  `33a1c4e247f5acc7babedc193835431d49adb2f8fe7ae7965223b5924e1021a5`.
+- Backend bounded gates: 32 manifest/auth tests, 100 admin context/auth tests,
+  157 queue/worker tests, 83 graph-audit tests, 11 scheduler-gate tests, 85
+  EPCIS tests, and 15 router-policy/server-import tests passed with zero skips.
+  Ruff and Python compilation passed over all 243 changed Python files.
+- Frontend gate: 1,048 tests passed with two skips; 443 focused and 265
+  falsifying tests passed; TypeScript passed; ESLint reported zero errors and
+  35 warnings; the production build generated 184 pages; readiness, release,
+  dependency, and Semgrep audits passed; 140/140 disabled-surface requests
+  returned exact empty 404.
+- Migration gate: one connected 75-revision DAG and one head,
+  `036afcef7299`; 20 static/lineage tests passed. Fresh disposable PostgreSQL
+  16 passed eight tests, and both seeded mid-chain role-topology modes passed
+  four tests each with zero skips.
+- Workspace integrity: the immutable checkpoint and original dirty checkout
+  are preserved; the original real index remains empty, and the user-owned
+  copy-remediation plan remains byte-identical.
+- Source verdict: the listed integrated source gates pass. This is bounded
+  evidence, not a claim that the complete repository or deployment matrix has
+  passed.
+- Release verdict: `not_approved`. No candidate deployment is bound to this
+  source. Staging role, two-tenant, replica, timing, CSRF/SSRF, and external
+  public-contract checks remain unrun. Graph also retains its server-side
+  atomic audit-append promotion blocker.
+
+The remaining sections are the historical pre-integration receipt and are
+superseded wherever they conflict with this amendment.
+
+## Historical Evidence Receipt (L1)
 
 - Goal: implement the RegEngine security remediation and make its source and
   runtime release gates executable.
@@ -160,7 +198,7 @@
 - Candidate-bound `security.txt`, OpenAPI, docs, and security-page checks from
   both `vercel curl` and an unauthenticated external network.
 
-## Goal closure
+## Historical goal closure (superseded)
 
 `needs-verification`: the corrected bounded account-erasure slice is locally
 supported and both independent reviews are approved. Integrated source

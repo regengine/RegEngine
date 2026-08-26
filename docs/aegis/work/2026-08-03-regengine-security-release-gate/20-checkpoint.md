@@ -1,6 +1,50 @@
 # TodoCheckpoint
 
-## Resume Amendment — 2026-08-26
+## Integrated Source Amendment — 2026-08-26 (authoritative)
+
+- The security checkpoint is now integrated on branch
+  `codex/security-release-integration-3cb4213e` at source commit
+  `c34cb8a1237135b575ffcfbb92039e005757a4b4`, based exactly on current-main
+  snapshot `3cb4213e0ce8c007707e435c35c5eee203131360`. The immutable pre-rebase
+  checkpoint remains `10bee6dc0e90f0f8cdfa0f99c4dbc3d343dde0f3`.
+- Post-rebase verification found and repaired three integration-only defects:
+  noncanonical route-introspection imports, symlink-unaware shared-module
+  caching in the mixed-service pytest harness, and a graph endpoint registered
+  after router inclusion. It also updated the fresh-database assertion to
+  validate PostgreSQL command-specific `USING` and `WITH CHECK` policy fields.
+- The effective FastAPI 0.141.1 route inventory is 424 routes: 248 operations
+  enabled and 178 operations omitted across 161 paths. Every omitted operation
+  returned exact 404. Manifest SHA-256 is
+  `33a1c4e247f5acc7babedc193835431d49adb2f8fe7ae7965223b5924e1021a5`.
+- Alembic has one connected 75-revision DAG and one head,
+  `036afcef7299`. Twenty static/lineage tests passed. Disposable PostgreSQL 16
+  passed the eight-test fresh-database suite and both four-test seeded
+  mid-chain role-topology modes with zero skips.
+- Final bounded source verification passed: 100 admin authority/authentication
+  tests, 157 task-queue/worker tests, 83 graph-audit tests, 11 scheduler-gate
+  tests, 85 EPCIS tests, and 15 router/server tests. Frontend verification
+  passed 1,048 tests with two skips, TypeScript, build, dependency/static
+  audits, and 140/140 exact-empty disabled-route probes.
+- The original dirty checkout and its real index remain untouched. The
+  user-owned `frontend/COPY_REMEDIATION_PLAN.md` still has SHA-256
+  `18da71fc0fab0009e5e239f87aea10d600e3a79ee858d355e74f46fb861a0a0e`.
+- Decision: integrated source evidence is locally supported for the bounded
+  checks above; release remains `not_approved`. No push, deployment, staging
+  mutation, production mutation, or credential rotation was performed.
+- Promotion still requires the staging pooler role proof, route-complete
+  two-tenant matrix, multi-replica revocation/outage run, enumeration timing,
+  controlled CSRF/SSRF canaries, immutable frontend/backend deployment
+  bindings, and external public-contract checks. Graph promotion additionally
+  requires an atomic server-side audit-append contract that serializes the
+  global head and removes direct runtime insert authority.
+- Current evidence record:
+  `docs/security/release-evidence/2026-08-26-security-integration-candidate.json`.
+
+The sections below are retained as historical pre-integration evidence. This
+amendment controls wherever their branch, manifest, migration, or status facts
+conflict.
+
+## Historical Resume Amendment — 2026-08-26
 
 - The account-erasure identity-global authority repair described in
   `docs/aegis/plans/2026-08-26-account-erasure-authority-boundary.md` is
@@ -138,14 +182,14 @@
   replica-revocation, enumeration, CSRF/SSRF, and deployment-bound public-doc
   gates. The current stop state is `needs-verification`, not release-approved.
 
-## ResumeStateHint
+## Historical ResumeStateHint (superseded; do not use)
 
 Resume on `codex/regengine-security-release-gate`. Never clean or overwrite
 `frontend/COPY_REMEDIATION_PLAN.md`. Read `10-intent.md`, this checkpoint, the
 unapproved release-evidence JSON, ADR-004, `90-evidence.md`, and
 `99-reflection.md`. Production source and database lanes are frozen.
 
-## DriftCheckDraft
+## Historical DriftCheckDraft (superseded)
 
 - Original intent served: yes.
 - Scope fence held: yes; optional routers remain disabled and no Vercel config

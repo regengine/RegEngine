@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "release_id": "2026-08-26-security-integration-candidate",
+  "status": "not_approved",
+  "release_approved": false,
+  "verification_date": "2026-08-26",
+  "source_candidate": {
+    "git_sha": "c34cb8a1237135b575ffcfbb92039e005757a4b4",
+    "base_git_sha": "3cb4213e0ce8c007707e435c35c5eee203131360",
+    "pre_rebase_checkpoint_git_sha": "10bee6dc0e90f0f8cdfa0f99c4dbc3d343dde0f3",
+    "integrated_security_commit_git_sha": "de8585add20e75ca8d8048566e28d25e895c3ca8",
+    "branch": "codex/security-release-integration-3cb4213e"
+  },
+  "frontend": {
+    "git_sha": null,
+    "deployment_id": null
+  },
+  "backend": {
+    "git_sha": null,
+    "deployment_id": null
+  },
+  "alembic_revision": "036afcef7299",
+  "route_manifest": {
+    "sha256": "33a1c4e247f5acc7babedc193835431d49adb2f8fe7ae7965223b5924e1021a5",
+    "effective_route_count": 424,
+    "enabled_operation_count": 248,
+    "disabled_operation_count": 178,
+    "disabled_unique_path_count": 161
+  },
+  "enabled_routers": [
+    "admin",
+    "audit_export_log",
+    "auditor",
+    "billing",
+    "canonical_records",
+    "chain_verification",
+    "compliance_metrics",
+    "csv",
+    "edi",
+    "epcis_ingestion",
+    "exceptions",
+    "export_monitoring",
+    "fda_export",
+    "fsma_compliance",
+    "inflow_workbench",
+    "onboarding",
+    "portal",
+    "proof_recall",
+    "proof_verify",
+    "readiness",
+    "recall",
+    "request_workflow",
+    "rules",
+    "score",
+    "sla_tracking"
+  ],
+  "environment_variable_names": [
+    "ADMIN_DATABASE_URL",
+    "DATABASE_URL",
+    "ENABLED_ROUTERS",
+    "MIGRATIONS_DATABASE_URL",
+    "REDIS_URL",
+    "REGENGINE_AUTH_STRICT",
+    "REGENGINE_PROXY_IP_HMAC_KEY",
+    "REGENGINE_REQUIRE_RLS_ENFORCEMENT",
+    "REGENGINE_SYSTEM_METRICS_API_KEY",
+    "REGENGINE_SYSTEM_METRICS_TENANT_ID",
+    "REGENGINE_TENANT_PROVISIONER_KEY"
+  ],
+  "checks": [
+    {
+      "id": "integrated_git_topology",
+      "environment": "source",
+      "command": "merge-base, rev-list, and diff checks against 3cb4213e0ce8c007707e435c35c5eee203131360; tracked tree clean before evidence drafting",
+      "result": "pass"
+    },
+    {
+      "id": "route_manifest",
+      "environment": "source_fastapi_0_141_1",
+      "command": "manifest check: 424 effective routes, 248 enabled operations, 178 omitted operations exact 404; 32 focused manifest/auth tests passed",
+      "result": "pass"
+    },
+    {
+      "id": "admin_context_and_auth_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "100 focused admin context, failure cleanup, revocation, privileged-auth, allowlist, and module-identity tests",
+      "result": "pass"
+    },
+    {
+      "id": "task_queue_and_worker_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "157-test mixed-service task queue, worker, drain, operator-route, registration, retention, and disabled-handler matrix",
+      "result": "pass"
+    },
+    {
+      "id": "graph_audit_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "83 focused graph audit, buffer reconciler, failure policy, and tenant-scope tests",
+      "result": "pass"
+    },
+    {
+      "id": "scheduler_release_gates_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "11 graph-audit, remediation, and queue-retention scheduler tests",
+      "result": "pass"
+    },
+    {
+      "id": "epcis_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "85 unsupported-phase, persistence-enforcement, and validation tests",
+      "result": "pass"
+    },
+    {
+      "id": "router_policy_and_server_import_source",
+      "environment": "source_fastapi_0_141_1",
+      "command": "15 router-policy and server-import tests; graph include-order compatibility also passed under FastAPI 0.136.0 and 0.141.1",
+      "result": "pass"
+    },
+    {
+      "id": "frontend_source_suite",
+      "environment": "source_node_20",
+      "command": "Vitest 1048 pass and 2 skip; focused 443 and falsifying 265 pass; TypeScript pass; ESLint 0 errors and 35 warnings; build 184 pages; readiness and release audits pass; npm audit 0 vulnerabilities; Semgrep 0 findings",
+      "result": "pass"
+    },
+    {
+      "id": "frontend_disabled_surface",
+      "environment": "local_production_build",
+      "command": "140 of 140 anonymous and credential-bearing requests across ten disabled paths and seven methods returned exact empty 404",
+      "result": "pass"
+    },
+    {
+      "id": "alembic_static_lineage",
+      "environment": "source",
+      "command": "75 revisions, one connected DAG and one head 036afcef7299; revision and orphan scripts passed; 20 focused lineage tests passed",
+      "result": "pass"
+    },
+    {
+      "id": "alembic_ephemeral_rehearsal",
+      "environment": "local_disposable_postgresql_16",
+      "command": "fresh database 8 tests passed; seeded mid-chain upgrade 4 tests passed in each of two supported role-topology modes",
+      "result": "pass"
+    },
+    {
+      "id": "changed_source_static_checks",
+      "environment": "source",
+      "command": "Ruff and Python compilation over all 243 changed Python files",
+      "result": "pass"
+    },
+    {
+      "id": "source_secret_scan",
+      "environment": "source",
+      "command": "detect-secrets-hook against the checked-in baseline, all tracked files, and this evidence candidate",
+      "result": "pass"
+    },
+    {
+      "id": "full_repository_suite",
+      "environment": "source",
+      "command": "complete repository test matrix beyond the focused backend and full frontend gates",
+      "result": "not_run"
+    },
+    {
+      "id": "rls_runtime_roles",
+      "environment": "staging",
+      "command": "runtime role and protected metric probes through the staging pooler",
+      "result": "not_run"
+    },
+    {
+      "id": "two_tenant_matrix",
+      "environment": "staging",
+      "command": "route-complete disposable tenant matrix",
+      "result": "not_run"
+    },
+    {
+      "id": "administrative_authentication",
+      "environment": "staging",
+      "command": "staff assurance, workload scope, throttling, and audit matrix",
+      "result": "not_run"
+    },
+    {
+      "id": "replica_revocation",
+      "environment": "staging",
+      "command": "logout and outage replay across two backend replicas",
+      "result": "not_run"
+    },
+    {
+      "id": "email_enumeration",
+      "environment": "staging",
+      "command": "randomized eligible and ineligible passwordless timing pairs",
+      "result": "not_run"
+    },
+    {
+      "id": "csrf_ssrf",
+      "environment": "staging",
+      "command": "cookie mutation and controlled outbound URL abuse matrix",
+      "result": "not_run"
+    },
+    {
+      "id": "deployment_docs",
+      "environment": "candidate_deployments",
+      "command": "deployment-bound public OpenAPI and documentation checks",
+      "result": "not_run"
+    },
+    {
+      "id": "deployment_environment_contract",
+      "environment": "candidate_deployments",
+      "command": "frontend and backend environment-name contract audit",
+      "result": "not_run"
+    },
+    {
+      "id": "security_txt_external",
+      "environment": "candidate_deployments",
+      "command": "unauthenticated external and deployment-bound retrieval",
+      "result": "not_run"
+    },
+    {
+      "id": "alembic_drift",
+      "environment": "staging",
+      "command": "alembic current, heads, and migrated-database drift check",
+      "result": "not_run"
+    }
+  ],
+  "residual_risks": [
+    "This record identifies the integrated source snapshot and proves only the bounded checks listed above. It is not a deployable or approved release and has no immutable frontend or backend deployment bindings.",
+    "The staging pooler role posture, route-complete two-tenant matrix, multi-replica revocation and outage behavior, passwordless timing, and controlled CSRF and SSRF canaries have not run.",
+    "Graph is release-disabled. Before graph promotion, FSMA audit append must move into one server-side transaction that serializes the global head and checksum, enforces the tenant contract, and removes direct runtime insert authority.",
+    "The shared TaskWorker has no lock heartbeat. A handler that outlives its visibility timeout may execute twice, although stale owners cannot overwrite terminal state.",
+    "The complete repository backend test suite and the seeded Playwright cross-service suite were not run. Focused backend gates and the full frontend unit, type, lint, build, dependency, and static-analysis gates passed.",
+    "The frontend was verified on its explicit Node 20 baseline, not on Vercel's current default Node 24 runtime. Any runtime change remains separate compatibility work; 35 non-blocking ESLint warnings and framework build warnings remain.",
+    "The disposable migration rehearsal used PostgreSQL 16. PostgreSQL 17 and the dedicated multi-role runtime suite were not run in this integration pass.",
+    "No candidate Vercel or Railway deployment, staging database mutation, production mutation, or credential rotation was performed."
+  ],
+  "notes": "Integrated source candidate at c34cb8a1237135b575ffcfbb92039e005757a4b4, rebased linearly onto 3cb4213e0ce8c007707e435c35c5eee203131360. The historical 2026-08-03 record remains a pre-integration receipt and must not be relabeled. Graph and remediation remain release-disabled in the production router policy and frontend aliases. Promotion remains blocked until every required staging and candidate-deployment check passes and immutable deployment identifiers bind both artifacts to an approved source revision."
+}
