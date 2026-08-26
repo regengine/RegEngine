@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,6 +26,7 @@ for _p in (_SHARED_DIR, _SERVICES_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from shared import task_queue as task_queue_module  # noqa: E402
 from shared.task_queue import (  # noqa: E402
     TASK_HANDLERS,
     TaskWorker,
@@ -152,6 +154,106 @@ def test_invoke_propagates_handler_exception():
 
     with pytest.raises(ValueError, match="kaboom"):
         TaskWorker._invoke(handler, {})
+
+
+def test_release_claim_arms_admin_transaction_and_keeps_ownership_guards(monkeypatch):
+    """A foreign-task release is privileged but may affect only our lock."""
+
+    class _Result:
+        rowcount = 1
+
+    class _Connection:
+        def __init__(self):
+            self.statement = None
+            self.params = None
+
+        def execute(self, statement, params):
+            self.statement = str(statement)
+            self.params = params
+            return _Result()
+
+    class _Begin:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __enter__(self):
+            return self.connection
+
+        def __exit__(self, *_args):
+            return False
+
+    class _Engine:
+        def __init__(self):
+            self.connection = _Connection()
+
+        def begin(self):
+            return _Begin(self.connection)
+
+    engine = _Engine()
+    armed = []
+    monkeypatch.setattr(
+        task_queue_module,
+        "_arm_global_queue_transaction",
+        lambda connection: armed.append(connection),
+    )
+
+    worker = TaskWorker(engine, worker_id="worker-a")
+    assert worker._release_claim(42, defer_seconds=1.0) is True
+
+    assert armed == [engine.connection]
+    assert "status = 'processing'" in engine.connection.statement
+    assert "locked_by = :worker_id" in engine.connection.statement
+    assert engine.connection.params["worker_id"] == "worker-a"
+
+
+def _lost_lock_worker(monkeypatch):
+    engine = MagicMock()
+    connection = engine.begin.return_value.__enter__.return_value
+    connection.execute.return_value.rowcount = 0
+    armed = []
+    monkeypatch.setattr(
+        task_queue_module,
+        "_arm_global_queue_transaction",
+        lambda value: armed.append(value),
+    )
+    return TaskWorker(engine, worker_id="worker-a"), connection, armed
+
+
+def _assert_owned_processing_update(connection):
+    statement = str(connection.execute.call_args.args[0])
+    params = connection.execute.call_args.args[1]
+    assert "status = 'processing'" in statement
+    assert "locked_by = :worker_id" in statement
+    assert params["worker_id"] == "worker-a"
+
+
+def test_complete_lost_lock_does_not_overwrite_new_owner(monkeypatch):
+    worker, connection, armed = _lost_lock_worker(monkeypatch)
+
+    assert worker._mark_completed(42) is False
+
+    assert armed == [connection]
+    _assert_owned_processing_update(connection)
+
+
+def test_retry_lost_lock_does_not_overwrite_new_owner(monkeypatch):
+    worker, connection, armed = _lost_lock_worker(monkeypatch)
+    task = {"id": 42, "attempts": 0, "max_attempts": 3}
+
+    assert worker._mark_failed(task, "boom") is False
+
+    assert armed == [connection]
+    _assert_owned_processing_update(connection)
+
+
+def test_dead_letter_lost_lock_does_not_overwrite_new_owner(monkeypatch):
+    worker, connection, armed = _lost_lock_worker(monkeypatch)
+    task = {"id": 42, "attempts": 2, "max_attempts": 3}
+
+    assert worker._mark_failed(task, "boom") is False
+
+    assert armed == [connection]
+    _assert_owned_processing_update(connection)
 
 
 # ===========================================================================

@@ -74,10 +74,32 @@ class TestGetStore:
         s2 = get_store()
         assert s1 is s2
 
-    def test_redis_fallback_on_error(self, monkeypatch):
-        """If Redis is unavailable, should fallback to memory."""
+    def test_explicit_redis_failure_fails_closed(self, monkeypatch):
+        """An explicitly selected shared backend must not silently degrade."""
+        import shared.circuit_breaker_store as store_module
+
+        def _redis_unavailable():
+            raise ConnectionError("redis unavailable")
+
         monkeypatch.setenv("CIRCUIT_BREAKER_BACKEND", "redis")
-        monkeypatch.setenv("CIRCUIT_BREAKER_REDIS_URL", "redis://nonexistent:9999/0")
+        monkeypatch.delenv("CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK", raising=False)
+        monkeypatch.setattr(store_module, "RedisCircuitStore", _redis_unavailable)
+
+        with pytest.raises(RuntimeError, match="explicitly configured") as exc:
+            get_store()
+
+        assert "CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK=1" in str(exc.value)
+
+    def test_redis_failure_uses_memory_only_with_escape_hatch(self, monkeypatch):
+        """Operators can explicitly accept per-replica circuit state."""
+        import shared.circuit_breaker_store as store_module
+
+        def _redis_unavailable():
+            raise ConnectionError("redis unavailable")
+
+        monkeypatch.setenv("CIRCUIT_BREAKER_BACKEND", "redis")
+        monkeypatch.setenv("CIRCUIT_BREAKER_ALLOW_MEMORY_FALLBACK", "1")
+        monkeypatch.setattr(store_module, "RedisCircuitStore", _redis_unavailable)
+
         store = get_store()
-        # Should fallback to MemoryCircuitStore
         assert isinstance(store, MemoryCircuitStore)

@@ -49,6 +49,10 @@ export default function SecurityPage() {
           <p className="mt-6 max-w-[590px] text-[17px] leading-7 text-[var(--re-text-muted)]">
             Compliance security should be mechanical: isolate tenants, preserve lineage, hash the evidence, and make verification possible without asking anyone to believe the UI.
           </p>
+          <p className="mt-4 max-w-[590px] text-sm leading-6 text-[var(--re-text-muted)]">
+            These statements describe controls verified in source and pre-production staging. Production
+            validation requires a release-evidence record bound to the deployed frontend and backend commits.
+          </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/verify" className="inline-flex h-11 items-center gap-2 border border-[var(--re-text-primary)] bg-[var(--re-text-primary)] px-5 text-[13px] font-semibold text-[var(--re-surface-base)]">
               See verification <ArrowRight className="h-4 w-4" />

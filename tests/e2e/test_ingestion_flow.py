@@ -131,28 +131,22 @@ class TestIngestionFlow:
 class TestReviewQueueFlow:
     """Test the human review queue flow."""
 
-    def test_list_review_items(self, admin_client):
-        """Should be able to list review items."""
+    def test_retired_header_cannot_list_review_items(self, admin_client):
+        """The retired shared header cannot read the review queue."""
         response = admin_client.get(
-            "/v1/admin/review/flagged-extractions", headers={"X-Admin-Key": "admin-master-key-dev"}
+            "/v1/admin/review/flagged-extractions", headers={"X-Admin-Key": "retired-test-value"}
         )
 
-        # Should return list or auth error
-        assert response.status_code in [200, 401, 403]
+        assert response.status_code in [401, 403]
 
-        if response.status_code == 200:
-            data = response.json()
-            # Should be a list or have items key
-            assert isinstance(data, (list, dict))
-
-    def test_approve_requires_valid_id(self, admin_client):
-        """Approving requires valid review ID."""
+    def test_retired_header_cannot_approve_review_item(self, admin_client):
+        """The retired shared header cannot decide review items."""
         response = admin_client.post(
-            "/v1/admin/review/flagged-extractions/invalid-id/approve", headers={"X-Admin-Key": "admin-master-key-dev"}
+            "/v1/admin/review/flagged-extractions/invalid-id/approve",
+            headers={"X-Admin-Key": "retired-test-value"},
         )
 
-        # Should return 404 or validation error, not 500
-        assert response.status_code in [400, 404, 401, 403, 422]
+        assert response.status_code in [401, 403]
 
 
 class TestGraphIntegration:

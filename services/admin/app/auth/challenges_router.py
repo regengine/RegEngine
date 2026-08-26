@@ -14,11 +14,11 @@ from typing import Protocol
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from shared.pii import mask_email
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..auth_crypto import AuthCryptoService
-from ..database import get_session
+from ..database import arm_global_admin_context, disarm_global_admin_context, get_session
 from ..dependencies import get_session_store
 from ..e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
 from ..rate_limit_service import RateLimitExceededException, RateLimitService
@@ -44,7 +44,6 @@ AUTH_CHALLENGE_TTL_SECONDS = 10 * 60
 AUTH_BROWSER_NONCE_COOKIE = "regengine_auth_browser_nonce"
 AUTH_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 AUTH_CHALLENGE_INVALID_DETAIL = "Invalid or expired sign-in challenge."
-AUTH_SSO_REQUIRED_MESSAGE = "Organization requires Single Sign-On."
 
 
 class _RateLimitServiceProtocol(Protocol):
@@ -76,14 +75,6 @@ def _browser_nonce_for_request(request: Request, crypto_service: AuthCryptoServi
 
 def _accepted_response(challenge_id: uuid.UUID) -> ChallengeCreateResponse:
     return ChallengeCreateResponse(detail=AUTH_CHALLENGE_DETAIL, challenge_id=str(challenge_id))
-
-
-def _sso_required_response(organization: OrganizationModel) -> ChallengeCreateResponse:
-    return ChallengeCreateResponse(
-        message=AUTH_SSO_REQUIRED_MESSAGE,
-        sso_redirect=True,
-        organization_id=str(organization.id),
-    )
 
 
 def _unauthorized_challenge() -> HTTPException:
@@ -204,26 +195,6 @@ async def create_auth_challenge(
     crypto_service: AuthCryptoService = Depends(get_auth_crypto_service),
 ) -> ChallengeCreateResponse:
     normalized_email = str(payload.email).strip().lower()
-    email_domain = _email_domain(normalized_email)
-    try:
-        organization = _load_organization_by_domain(db, email_domain)
-    except Exception as exc:
-        logger.error(
-            "auth_challenge_policy_lookup_failed",
-            email_domain=email_domain,
-            error=str(exc),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable.",
-        ) from exc
-    if (
-        organization is not None
-        and organization.enforced_auth_policy == "sso_only"
-        and bool(getattr(organization, "domain_verified", False))
-    ):
-        return _sso_required_response(organization)
-
     email_fingerprint = crypto_service.fingerprint_email(normalized_email)
     browser_nonce = _browser_nonce_for_request(request, crypto_service)
     browser_binding_hash = crypto_service.hash_session_token(browser_nonce)
@@ -246,42 +217,34 @@ async def create_auth_challenge(
             ) from exc
 
     try:
+        # Email-to-identity resolution is pre-tenant by definition.  Keep the
+        # global arm within this authentication bootstrap transaction only.
+        arm_global_admin_context(db)
         can_complete_passwordless_login = _has_valid_passwordless_identity(
             db=db,
             email_fingerprint=email_fingerprint,
         )
-    except Exception as exc:
-        logger.error(
-            "auth_challenge_identity_lookup_failed",
-            email=mask_email(normalized_email),
-            error=str(exc),
+
+        challenge_id = uuid.uuid4()
+        code = crypto_service.generate_secure_otp()
+        code_digest = crypto_service.hash_otp(
+            challenge_id=challenge_id,
+            purpose=AUTH_CHALLENGE_PURPOSE,
+            email_fingerprint=email_fingerprint,
+            code=code,
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable.",
-        ) from exc
 
-    challenge_id = uuid.uuid4()
-    code = crypto_service.generate_secure_otp()
-    code_digest = crypto_service.hash_otp(
-        challenge_id=challenge_id,
-        purpose=AUTH_CHALLENGE_PURPOSE,
-        email_fingerprint=email_fingerprint,
-        code=code,
-    )
-
-    challenge = AuthChallengeModel(
-        id=challenge_id,
-        purpose=AUTH_CHALLENGE_PURPOSE,
-        email_fingerprint=email_fingerprint,
-        code_digest=code_digest,
-        browser_binding_hash=browser_binding_hash,
-        status="pending",
-        failed_attempts=0,
-        expires_at=datetime.now(timezone.utc) + timedelta(seconds=AUTH_CHALLENGE_TTL_SECONDS),
-    )
-    db.add(challenge)
-    try:
+        challenge = AuthChallengeModel(
+            id=challenge_id,
+            purpose=AUTH_CHALLENGE_PURPOSE,
+            email_fingerprint=email_fingerprint,
+            code_digest=code_digest,
+            browser_binding_hash=browser_binding_hash,
+            status="pending",
+            failed_attempts=0,
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=AUTH_CHALLENGE_TTL_SECONDS),
+        )
+        db.add(challenge)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -290,6 +253,8 @@ async def create_auth_challenge(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service temporarily unavailable.",
         ) from exc
+    finally:
+        disarm_global_admin_context(db)
 
     if can_complete_passwordless_login:
         background_tasks.add_task(_dispatch_sign_in_code_email, normalized_email, code, challenge_id)
@@ -308,16 +273,9 @@ async def create_auth_challenge(
         samesite="lax",
         path="/auth",
     )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     return _accepted_response(challenge_id)
-
-
-def _email_domain(email: str) -> str:
-    return email.rsplit("@", 1)[1].lower()
-
-
-def _load_organization_by_domain(db: Session, domain_name: str) -> OrganizationModel | None:
-    stmt = select(OrganizationModel).where(OrganizationModel.domain_name == domain_name).limit(1)
-    return db.execute(stmt).scalar_one_or_none()
 
 
 def _load_challenge_for_update(db: Session, challenge_id: uuid.UUID) -> AuthChallengeModel | None:
@@ -354,11 +312,16 @@ def _load_valid_identity(
         select(UserModel, OrganizationMembershipModel)
         .join(UserEmailModel, UserEmailModel.user_id == UserModel.id)
         .join(OrganizationMembershipModel, OrganizationMembershipModel.user_id == UserModel.id)
+        .join(OrganizationModel, OrganizationModel.id == OrganizationMembershipModel.organization_id)
         .where(
             UserEmailModel.email_fingerprint == email_fingerprint,
             UserEmailModel.is_verified.is_(True),
             UserModel.global_status == "active",
             UserModel.status == "active",
+            or_(
+                OrganizationModel.enforced_auth_policy != "sso_only",
+                OrganizationModel.domain_verified.is_(False),
+            ),
         )
         .order_by(OrganizationMembershipModel.id)
         .limit(1)
@@ -396,6 +359,7 @@ async def verify_auth_challenge(
 
     try:
         with db.begin():
+            arm_global_admin_context(db)
             now = datetime.now(timezone.utc)
             challenge = _load_challenge_for_update(db, challenge_id)
             if challenge is None or not _challenge_is_pending(challenge, now):
@@ -451,6 +415,8 @@ async def verify_auth_challenge(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service temporarily unavailable.",
         ) from exc
+    finally:
+        disarm_global_admin_context(db)
 
     if auth_failed or session_token is None:
         raise _unauthorized_challenge()

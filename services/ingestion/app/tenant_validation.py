@@ -37,10 +37,10 @@ def resolve_tenant(tenant_id: Optional[str], principal) -> str:
     actions), not tenant BREADTH (which tenants) — a tenant-bound key with ``*``
     must not be able to pivot to another tenant via an explicit tenant input.
 
-    Explicit-tenant targeting is reserved strictly for principals with NO bound
-    tenant (legacy_master / dev_open, which carry ``tenant_id=None``), so those
-    admin/dev flows can still intentionally target another tenant. Validates the
-    resolved tenant format and raises 400 if no tenant context is available.
+    Explicit-tenant targeting is reserved for the local ``dev_open`` principal,
+    which carries ``tenant_id=None``. Database-backed API keys are rejected by
+    authentication unless they have a tenant binding. The resolved tenant is
+    validated and missing context raises 400.
     """
     principal_tenant_id = getattr(principal, "tenant_id", None)
 
@@ -60,8 +60,8 @@ def resolve_tenant(tenant_id: Optional[str], principal) -> str:
     # #2461: seed the RLS contextvar with the resolved tenant so the
     # Engine begin-hook applies app.tenant_id to every transaction the
     # calling handler opens. Called inline in handler bodies (same
-    # context as the queries that follow); non-UUID slugs (unbound
-    # legacy_master/dev_open principals) are stored but skipped at
+    # context as the queries that follow); non-UUID slugs from the local
+    # dev_open principal are stored but skipped at
     # apply time — slug tolerance mirrors set_tenant_guc_if_uuid.
     set_rls_tenant_id(tid)
     return tid

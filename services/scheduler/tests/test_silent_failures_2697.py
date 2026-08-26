@@ -68,6 +68,7 @@ class TestJobFailuresReRaise:
             svc.run_fsma_nightly_sync()
 
     def test_remediation_drain_reraises_on_crash(self, monkeypatch):
+        monkeypatch.setenv("ENABLED_ROUTERS", "remediation")
         svc = _make_scheduler_service()
 
         db_mod = SimpleNamespace(SessionLocal=MagicMock())

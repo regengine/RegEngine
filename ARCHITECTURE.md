@@ -46,10 +46,9 @@ useful decomposition seams in the codebase:
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
 - **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
-  Alembic (`alembic/versions/`, head is **v111** —
-  `df664d92adba_v111_public_controls_regulations_force_rls`, which FORCEs RLS
-  on `public.controls` and `public.regulations`; verified 2026-08-26);
-  the app performs no runtime DDL as of v098/v099. v111 creates no tables, so
+  Alembic (`alembic/versions/`, head is **v114** —
+  `036afcef7299_v114_runtime_role_grants`; verified 2026-08-26);
+  the app performs no runtime DDL as of v098/v099. v114 creates no tables, so
   the newest tables are
   `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
   rule-evaluation persistence, replayed by the
@@ -61,7 +60,10 @@ useful decomposition seams in the codebase:
   value plus the v105 marker columns that never shipped, v109 adds a
   tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
   RLS INSERT policy letting authenticated users create their own developer
-  profile. v111 then FORCEs RLS on the two regulatory control-plane tables.
+  profile. v111 then FORCEs RLS on the two regulatory control-plane tables,
+  v112 hardens `seed_obligations_for_tenant` without changing its schema,
+  v113 grants the canonical review permissions, and v114 converges the
+  dedicated migration/runtime-role ACL and RLS posture.
   `fsma.compliance_evidence_snapshots` (v103) and the v102 mock-audit drill
   records are no longer the newest tables.
 - **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,

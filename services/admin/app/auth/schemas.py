@@ -34,11 +34,8 @@ class ChallengeCreateRequest(BaseModel):
 
 
 class ChallengeCreateResponse(BaseModel):
-    detail: Optional[str] = None
-    challenge_id: Optional[str] = None
-    message: Optional[str] = None
-    sso_redirect: Optional[bool] = None
-    organization_id: Optional[str] = None
+    detail: str
+    challenge_id: str
 
 
 class ChallengeVerifyRequest(BaseModel):
@@ -61,6 +58,8 @@ class AuthMeResponse(BaseModel):
     tenant_id: Optional[UUID] = None
     role: Optional[str] = None
     auth_method: str
+    is_sysadmin: bool
+    permissions: List[str]
 
 
 class TokenResponse(BaseModel):

@@ -4,15 +4,19 @@ Tests for FSMA 204 Audit Trail / Evidence Ledger.
 Sprint 6: Audit Trail for FDA Compliance
 """
 
+import hashlib
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
 # Add service path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app import fsma_audit as fsma_audit_module
 from app.fsma_audit import (  # Enums; Data classes; Manager class; Global functions; Convenience functions; Decorator
     FSMAAuditAction,
     FSMAAuditActorType,
@@ -30,6 +34,7 @@ from app.fsma_audit import (  # Enums; Data classes; Manager class; Global funct
     log_trace_query,
     reset_audit_log,
 )
+from shared import admin_context as admin_context_module
 
 # ============================================================================
 # FIXTURES
@@ -51,6 +56,30 @@ def reset_log():
 
 class TestFSMAAuditEntry:
     """Tests for FSMAAuditEntry data class."""
+
+    @staticmethod
+    def _complete_entry() -> FSMAAuditEntry:
+        return FSMAAuditEntry(
+            event_id="audit-event-001",
+            actor="reviewer@example.com",
+            actor_type=FSMAAuditActorType.USER,
+            action=FSMAAuditAction.MODIFIED,
+            diff=[
+                FSMAAuditDiff(
+                    field_name="quantity",
+                    previous_value={"value": 100, "unit": "kg"},
+                    new_value={"value": 150, "unit": "kg"},
+                )
+            ],
+            evidence_link="s3://documents/doc-001.pdf",
+            timestamp="2026-08-26T12:34:56.123456+00:00",
+            target_type="Lot",
+            target_id="LOT-2024-001",
+            tenant_id="00000000-0000-0000-0000-000000000001",
+            correlation_id="request-001",
+            confidence=0.95,
+            previous_checksum="v2:previous-checksum",
+        )
 
     def test_entry_creation(self):
         """Test basic audit entry creation."""
@@ -78,14 +107,14 @@ class TestFSMAAuditEntry:
         datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
 
     def test_entry_has_checksum(self):
-        """Test that entries have SHA-256 checksums."""
+        """New entries use an explicitly versioned SHA-256 checksum."""
         entry = FSMAAuditEntry(
             target_type="Lot",
             target_id="LOT-001",
         )
 
-        assert entry.checksum is not None
-        assert len(entry.checksum) == 64  # SHA-256 hex length
+        assert entry.checksum.startswith("v2:")
+        assert len(entry.checksum.removeprefix("v2:")) == 64
 
     def test_entry_integrity_verification(self):
         """Test integrity verification succeeds for unmodified entry."""
@@ -97,6 +126,132 @@ class TestFSMAAuditEntry:
         )
 
         assert entry.verify_integrity() is True
+
+    @pytest.mark.parametrize(
+        ("field_name", "tamper"),
+        [
+            pytest.param("event_id", lambda entry: setattr(entry, "event_id", "audit-event-002"), id="event-id"),
+            pytest.param("actor", lambda entry: setattr(entry, "actor", "attacker@example.com"), id="actor"),
+            pytest.param(
+                "actor_type",
+                lambda entry: setattr(entry, "actor_type", FSMAAuditActorType.ADMIN),
+                id="actor-type",
+            ),
+            pytest.param("action", lambda entry: setattr(entry, "action", FSMAAuditAction.APPROVED), id="action"),
+            pytest.param(
+                "diff.field",
+                lambda entry: setattr(entry.diff[0], "field_name", "unit_of_measure"),
+                id="diff-field",
+            ),
+            pytest.param(
+                "diff.previous",
+                lambda entry: setattr(entry.diff[0], "previous_value", {"value": 99, "unit": "kg"}),
+                id="diff-previous",
+            ),
+            pytest.param(
+                "diff.new",
+                lambda entry: setattr(entry.diff[0], "new_value", {"value": 151, "unit": "kg"}),
+                id="diff-new",
+            ),
+            pytest.param(
+                "evidence_link",
+                lambda entry: setattr(entry, "evidence_link", "s3://documents/substituted.pdf"),
+                id="evidence-link",
+            ),
+            pytest.param(
+                "timestamp",
+                lambda entry: setattr(entry, "timestamp", "2026-08-27T12:34:56.123456+00:00"),
+                id="timestamp",
+            ),
+            pytest.param("target_type", lambda entry: setattr(entry, "target_type", "TraceEvent"), id="target-type"),
+            pytest.param("target_id", lambda entry: setattr(entry, "target_id", "LOT-2024-002"), id="target-id"),
+            pytest.param(
+                "tenant_id",
+                lambda entry: setattr(entry, "tenant_id", "00000000-0000-0000-0000-000000000002"),
+                id="tenant-id",
+            ),
+            pytest.param(
+                "correlation_id",
+                lambda entry: setattr(entry, "correlation_id", "request-002"),
+                id="correlation-id",
+            ),
+            pytest.param("confidence", lambda entry: setattr(entry, "confidence", 0.5), id="confidence"),
+            pytest.param(
+                "previous_checksum",
+                lambda entry: setattr(entry, "previous_checksum", "v2:substituted-previous"),
+                id="previous-checksum",
+            ),
+            pytest.param("checksum", lambda entry: setattr(entry, "checksum", "v2:" + ("0" * 64)), id="checksum"),
+        ],
+    )
+    def test_v2_checksum_detects_tampering_of_persisted_fields(self, field_name, tamper):
+        entry = self._complete_entry()
+
+        tamper(entry)
+
+        assert entry.verify_integrity() is False, field_name
+
+    def test_unprefixed_legacy_checksum_remains_verifiable(self):
+        entry = self._complete_entry()
+        legacy_payload = {
+            "event_id": entry.event_id,
+            "actor": entry.actor,
+            "action": entry.action.value,
+            "timestamp": entry.timestamp,
+            "target_type": entry.target_type,
+            "target_id": entry.target_id,
+            "evidence_link": entry.evidence_link,
+            "previous_checksum": entry.previous_checksum,
+        }
+        entry.checksum = hashlib.sha256(json.dumps(legacy_payload, sort_keys=True).encode()).hexdigest()
+
+        assert entry.verify_integrity() is True
+
+    def test_unknown_checksum_version_fails_closed(self):
+        entry = self._complete_entry()
+        entry.checksum = "v999:" + ("0" * 64)
+
+        assert entry.verify_integrity() is False
+
+    def test_v2_checksum_survives_database_type_normalization(self):
+        created_at = datetime(2026, 8, 26, 7, 34, 56, 123456, tzinfo=timezone(timedelta(hours=-5)))
+        original = FSMAAuditEntry(
+            event_id="audit-event-001",
+            actor="reviewer@example.com",
+            actor_type=FSMAAuditActorType.USER,
+            action=FSMAAuditAction.MODIFIED,
+            diff=[FSMAAuditDiff(field_name="quantity", previous_value=100, new_value=150)],
+            evidence_link="s3://documents/doc-001.pdf",
+            timestamp="2026-08-26T12:34:56.123456+00:00",
+            target_type="Lot",
+            target_id="LOT-2024-001",
+            tenant_id="00000000-0000-0000-0000-000000000001",
+            correlation_id="request-001",
+            confidence=1,
+            previous_checksum="legacy-previous-checksum",
+        )
+
+        class _Row:
+            _mapping = {
+                "event_id": original.event_id,
+                "actor": original.actor,
+                "actor_type": original.actor_type.value,
+                "action": original.action.value,
+                "diff_json": [item.to_dict() for item in original.diff],
+                "evidence_link": original.evidence_link,
+                "created_at": created_at,
+                "target_type": original.target_type,
+                "target_id": original.target_id,
+                "tenant_id": UUID(original.tenant_id),
+                "correlation_id": original.correlation_id,
+                "confidence": 1.0,
+                "checksum": original.checksum,
+                "previous_checksum": original.previous_checksum,
+            }
+
+        rebuilt = fsma_audit_module._row_to_audit_entry(_Row())
+
+        assert rebuilt.verify_integrity() is True
 
     def test_entry_to_dict(self):
         """Test conversion to dictionary."""
@@ -137,6 +292,35 @@ class TestFSMAAuditEntry:
         assert entry.diff[0].previous_value == 100
         assert entry.diff[0].new_value == 150
 
+    def test_tenantless_entry_refuses_database_persistence(self, monkeypatch):
+        """A shared runtime credential must never issue an unscoped write."""
+
+        entry = FSMAAuditEntry(
+            action=FSMAAuditAction.CREATED,
+            target_type="Lot",
+            target_id="LOT-UNSCOPED",
+            tenant_id=None,
+        )
+        monkeypatch.setattr(
+            fsma_audit_module,
+            "_get_audit_db_engine",
+            lambda: pytest.fail("tenantless persistence must stop before DB access"),
+        )
+
+        assert fsma_audit_module._persist_audit_entry(entry) is False
+
+    def test_legacy_checksum_is_verification_only_and_cannot_be_persisted(self, monkeypatch):
+        entry = self._complete_entry()
+        entry.checksum = entry._calculate_legacy_checksum()
+        monkeypatch.setattr(
+            fsma_audit_module,
+            "_get_audit_db_engine",
+            lambda: pytest.fail("legacy checksum refusal must stop before DB access"),
+        )
+
+        assert entry.verify_integrity() is True
+        assert fsma_audit_module._persist_audit_entry(entry) is False
+
 
 # ============================================================================
 # AUDIT LOG MANAGER TESTS
@@ -145,6 +329,72 @@ class TestFSMAAuditEntry:
 
 class TestFSMAAuditLog:
     """Tests for FSMAAuditLog manager."""
+
+    @staticmethod
+    def _admin_read_engine(order, *, checksum="db-checksum", rows=None):
+        class _Result:
+            def fetchone(self):
+                return (checksum,) if checksum is not None else None
+
+            def fetchall(self):
+                return list(rows or [])
+
+        class _Connection:
+            def execute(self, _statement):
+                order.append("select")
+                return _Result()
+
+        class _ConnectionContext:
+            connection = _Connection()
+
+            def __enter__(self):
+                return self.connection
+
+            def __exit__(self, *_args):
+                return False
+
+        class _Engine:
+            def connect(self):
+                return _ConnectionContext()
+
+        return _Engine()
+
+    def test_restart_checksum_read_arms_admin_before_select(self, monkeypatch):
+        order = []
+        monkeypatch.setattr(
+            fsma_audit_module,
+            "_get_audit_admin_engine",
+            lambda: self._admin_read_engine(order),
+        )
+        monkeypatch.setattr(
+            admin_context_module,
+            "arm_global_admin_context",
+            lambda _connection: order.append("arm"),
+        )
+
+        assert FSMAAuditLog._load_last_checksum() == "db-checksum"
+        assert order == ["arm", "select"]
+
+    def test_chain_verification_arms_admin_before_select(self, monkeypatch):
+        monkeypatch.setattr(FSMAAuditLog, "_load_last_checksum", staticmethod(lambda: None))
+        log = FSMAAuditLog()
+        order = []
+        monkeypatch.setattr(
+            fsma_audit_module,
+            "_get_audit_admin_engine",
+            lambda: self._admin_read_engine(order, checksum=None, rows=[]),
+        )
+        monkeypatch.setattr(
+            admin_context_module,
+            "arm_global_admin_context",
+            lambda _connection: order.append("arm"),
+        )
+
+        result = log.verify_chain_integrity()
+
+        assert result["is_valid"] is True
+        assert result["total_entries"] == 0
+        assert order == ["arm", "select"]
 
     def test_log_creates_entry(self):
         """Test that logging creates an entry."""
@@ -257,6 +507,27 @@ class TestFSMAAuditLog:
         assert integrity["is_valid"] is True
         assert integrity["total_entries"] == 3
         assert len(integrity["violations"]) == 0
+
+    def test_chain_integrity_accepts_legacy_to_v2_transition(self, monkeypatch):
+        monkeypatch.setattr(fsma_audit_module, "_get_audit_admin_engine", lambda: None)
+        legacy = FSMAAuditEntry(
+            event_id="legacy-event",
+            target_type="Lot",
+            target_id="LOT-LEGACY",
+        )
+        legacy.checksum = legacy._calculate_legacy_checksum()
+        current = FSMAAuditEntry(
+            event_id="v2-event",
+            target_type="Lot",
+            target_id="LOT-V2",
+            previous_checksum=legacy.checksum,
+        )
+        log = FSMAAuditLog()
+        log._entries.extend([legacy, current])
+
+        integrity = log.verify_chain_integrity()
+
+        assert integrity == {"total_entries": 2, "is_valid": True, "violations": []}
 
     def test_export_for_fda(self):
         """Test FDA export format.

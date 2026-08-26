@@ -106,6 +106,43 @@ def api_key_hash_candidates(raw_key: str) -> tuple[str, ...]:
     return (current,) if current == legacy else (current, legacy)
 
 
+def set_api_key_lookup_context(session: Any, raw_key: str) -> tuple[str, tuple[str, ...]] | None:
+    """Arm one exact API-key row for a synchronous pre-authentication query.
+
+    FORCE RLS cannot use a tenant predicate before the credential has revealed
+    its tenant.  v114 therefore permits SELECT only when transaction-local
+    proof includes both the public key id and one full server-computed digest.
+    Callers receive the digest tuple for their parameterized lookup; raw key
+    material is never placed in a GUC.
+    """
+    if not raw_key or not raw_key.startswith("rge_"):
+        return None
+    try:
+        key_id, secret = raw_key.split(".", 1)
+    except ValueError:
+        return None
+    if not key_id or not secret:
+        return None
+
+    key_hashes = api_key_hash_candidates(raw_key)
+    session.execute(
+        text(
+            """
+            SELECT
+                set_config('regengine.api_key_lookup_id', :key_id, true),
+                set_config('regengine.api_key_lookup_hash_current', :current_hash, true),
+                set_config('regengine.api_key_lookup_hash_legacy', :legacy_hash, true)
+            """
+        ),
+        {
+            "key_id": key_id,
+            "current_hash": key_hashes[0],
+            "legacy_hash": key_hashes[1] if len(key_hashes) > 1 else "",
+        },
+    )
+    return key_id, key_hashes
+
+
 class TenantUUIDText(TypeDecorator):
     """``api_keys.tenant_id`` is ``uuid`` in the production Postgres schema
     but plain text on SQLite test databases. Bind and return ``str`` on both
@@ -283,6 +320,8 @@ class DatabaseAPIKeyStore:
         redis_url: Optional[str] = None,
         pool_size: int = 5,
         max_overflow: int = 10,
+        *,
+        arm_sysadmin_rls: bool = False,
     ):
         """Initialize the database-backed API key store.
 
@@ -292,6 +331,10 @@ class DatabaseAPIKeyStore:
             redis_url: Optional Redis URL for rate limiting
             pool_size: SQLAlchemy connection pool size
             max_overflow: Max additional connections beyond pool_size
+            arm_sysadmin_rls: Arm the global control-plane RLS branch on each
+                transaction. This is reserved for the separately-instantiated
+                human admin key-management store and still verifies that the
+                connected PostgreSQL role is exactly ``regengine_sysadmin``.
         """
         self._database_url = database_url or os.environ.get("DATABASE_URL", "")
         if not self._database_url:
@@ -340,6 +383,7 @@ class DatabaseAPIKeyStore:
             connect_args.setdefault("prepared_statement_cache_size", 0)
 
         self._redis_url = redis_url or os.environ.get("REDIS_URL")
+        self._arm_sysadmin_rls = arm_sysadmin_rls
 
         # Only add pool settings for databases that support them (not SQLite)
         if "sqlite" not in self._database_url:
@@ -374,11 +418,18 @@ class DatabaseAPIKeyStore:
             except ImportError:
                 logger.warning("redis_not_available", message="Install redis for distributed rate limiting")
 
+    def rate_limit_backend_ready(self) -> bool:
+        """Return whether a shared Redis client backs key rate limits."""
+
+        return self._redis is not None
+
     @asynccontextmanager
     async def _session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get a database session with automatic cleanup."""
         session = self._session_factory()
         try:
+            if self._arm_sysadmin_rls and "sqlite" not in self._database_url:
+                await self._set_sysadmin_context(session)
             yield session
             await session.commit()
         except Exception:
@@ -386,6 +437,69 @@ class DatabaseAPIKeyStore:
             raise
         finally:
             await session.close()
+
+    @staticmethod
+    async def _set_sysadmin_context(session: AsyncSession) -> None:
+        """Arm the global API-key RLS branch for the exact admin DB role.
+
+        The GUC is transaction-local, so commit, rollback, and connection-pool
+        reuse all clear it. Merely constructing a store with the admin flag is
+        not enough to elevate a different credential: the role check happens
+        on the database connection before the GUC is set.
+        """
+        posture = (
+            await session.execute(
+                text(
+                    """
+                    SELECT current_user, rolsuper, rolbypassrls
+                      FROM pg_roles
+                     WHERE rolname = current_user
+                    """
+                )
+            )
+        ).one()
+        role, is_superuser, bypasses_rls = posture
+        if role != "regengine_sysadmin" or is_superuser or bypasses_rls:
+            raise RuntimeError(
+                "Admin API-key store requires the NOSUPERUSER/NOBYPASSRLS "
+                "PostgreSQL role regengine_sysadmin; "
+                f"connected as {role!r}"
+            )
+        await session.execute(
+            text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
+        )
+
+    @staticmethod
+    async def _set_key_lookup_context(
+        session: AsyncSession,
+        *,
+        key_id: str,
+        key_hashes: tuple[str, ...],
+    ) -> None:
+        """Set exact, transaction-local proof for the pre-tenant key lookup.
+
+        FORCE RLS must protect ``api_keys`` even before the credential reveals
+        its tenant. The v114 policy admits one row only when both its full key
+        id and its stored 256-bit digest equal these server-computed values.
+        Raw key material is never placed in a GUC.
+        """
+        current_hash = key_hashes[0]
+        legacy_hash = key_hashes[1] if len(key_hashes) > 1 else ""
+        await session.execute(
+            text(
+                """
+                SELECT
+                    set_config('regengine.api_key_lookup_id', :key_id, true),
+                    set_config('regengine.api_key_lookup_hash_current', :current_hash, true),
+                    set_config('regengine.api_key_lookup_hash_legacy', :legacy_hash, true)
+                """
+            ),
+            {
+                "key_id": key_id,
+                "current_hash": current_hash,
+                "legacy_hash": legacy_hash,
+            },
+        )
 
     async def _record_key_usage(self, key_id: str, session: AsyncSession) -> None:
         """Record API-key usage without writing on every request.
@@ -456,7 +570,7 @@ class DatabaseAPIKeyStore:
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
         """Set tenant context for RLS if provided.
 
-        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        Delegates to ``shared.tenant_context.set_tenant_guc`` —
         the canonical Phase B primitive, now async-compatible. Both
         forms (``SET LOCAL`` vs. ``SELECT set_config('app.tenant_id',
         :tid, true)``) are transaction-scoped per Postgres docs; the
@@ -613,6 +727,11 @@ class DatabaseAPIKeyStore:
         current_hash = key_hashes[0]
 
         async with self._session() as session:
+            await self._set_key_lookup_context(
+                session,
+                key_id=key_id,
+                key_hashes=key_hashes,
+            )
             result = await session.execute(select(APIKeyModel).where(APIKeyModel.key_id == key_id))
             api_key = result.scalar_one_or_none()
 
@@ -641,7 +760,14 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_revoked", key_id=key_id)
                 return None
 
-            if not hmac.compare_digest(stored_hash, current_hash):
+            # The ordinary runtime credential has SELECT plus narrowly
+            # column-limited usage-counter UPDATE privileges.  It must never
+            # be able to rewrite credential material during pre-auth lookup.
+            # The separately pooled, posture-verified sysadmin store may
+            # opportunistically migrate a legacy digest when it validates a
+            # key; runtime validation continues to accept the legacy digest
+            # without mutating it.
+            if self._arm_sysadmin_rls and not hmac.compare_digest(stored_hash, current_hash):
                 api_key.key_hash = current_hash
                 logger.info("api_key_hash_upgraded", key_id=key_id)
 

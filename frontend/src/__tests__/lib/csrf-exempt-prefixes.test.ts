@@ -1,52 +1,57 @@
-/**
- * FE-AUDIT-005: CSRF exempt-prefix list snapshot guard.
- *
- * The CSRF exempt list mixes directory prefixes (e.g. `/api/auth/`,
- * `/api/webhooks/`) with exact paths (e.g. `/api/tools/verify`). Any
- * future handler placed under a directory prefix is silently exempted
- * from CSRF protection without a deliberate decision. This snapshot
- * test forces drift to be reviewed: adding or removing an entry
- * requires updating BOTH the list AND this snapshot, in the same PR.
- *
- * If you're updating this snapshot, document in the PR body why each
- * new entry is safe — i.e. why it cannot be reached by an
- * authenticated user's browser without explicit user intent, OR why
- * the endpoint authenticates by a non-cookie scheme (HMAC for
- * webhooks, opaque tokens for invite acceptance).
- */
 import { describe, expect, it } from 'vitest';
-import { CSRF_EXEMPT_PREFIXES } from '@/lib/csrf';
 
-const EXPECTED_CSRF_EXEMPT_PREFIXES = [
-    '/api/auth/',
-    '/api/admin/auth/',
-    '/api/admin/v1/auth/accept-invite',
-    '/api/webhooks/',
-    '/api/v1/webhooks/',
-    // Public read API rewrites (next.config.js): API-key scheme
-    // (X-RegEngine-API-Key), never cookies — the double-submit check can
-    // never pass for these callers and the backend routers are the auth
-    // layer (require_permission scopes + tenant cross-check).
-    '/api/v1/records/',
-    '/api/v1/fda/',
-    '/api/ingestion/api/v1/sandbox/',
-    '/api/ingestion/api/v1/proof/',
-    '/api/inflow-lab/',
-    '/api/tools/check-access',
-    '/api/tools/verify',
-];
+import { CSRF_EXEMPT_RULES, isCsrfExempt } from '@/lib/csrf';
 
-describe('CSRF exempt prefix list (FE-AUDIT-005)', () => {
-    it('matches the reviewed snapshot', () => {
-        expect([...CSRF_EXEMPT_PREFIXES]).toEqual(EXPECTED_CSRF_EXEMPT_PREFIXES);
+describe('reviewed CSRF route-and-method exemptions', () => {
+    it('keeps the reviewed rule inventory explicit', () => {
+        expect(CSRF_EXEMPT_RULES).toMatchSnapshot();
     });
 
-    it('preserves entry ordering (order signals review intent)', () => {
-        // The file is grouped: auth → webhooks → public ingestion → public tools.
-        // Re-ordering breaks the readability of the diff a reviewer sees when
-        // the snapshot is updated.
-        for (let i = 0; i < EXPECTED_CSRF_EXEMPT_PREFIXES.length; i++) {
-            expect(CSRF_EXEMPT_PREFIXES[i]).toBe(EXPECTED_CSRF_EXEMPT_PREFIXES[i]);
+    it('exempts only the pre-auth passwordless and passkey mutations', () => {
+        expect(isCsrfExempt('/api/admin/auth/challenges', 'POST')).toBe(true);
+        expect(
+            isCsrfExempt(
+                '/api/admin/auth/challenges/11111111-1111-4111-8111-111111111111/verify',
+                'POST',
+            ),
+        ).toBe(true);
+        expect(isCsrfExempt('/api/admin/auth/webauthn/login/verify', 'POST')).toBe(true);
+
+        expect(isCsrfExempt('/api/admin/auth/challenges', 'DELETE')).toBe(false);
+        expect(isCsrfExempt('/api/admin/auth/challenges/not-a-uuid/verify', 'POST')).toBe(false);
+        expect(isCsrfExempt('/api/admin/auth/challenges/extra', 'POST')).toBe(false);
+    });
+
+    it('does not expose the retired timing-sensitive email-code routes', () => {
+        expect(isCsrfExempt('/api/admin/auth/email-code/request', 'POST')).toBe(false);
+        expect(isCsrfExempt('/api/admin/auth/email-code/confirm', 'POST')).toBe(false);
+    });
+
+    it('protects every known cookie-authenticated auth mutation', () => {
+        const protectedMutations = [
+            '/api/session',
+            '/api/admin/auth/logout',
+            '/api/admin/auth/logout-all',
+            '/api/admin/auth/session/logout',
+            '/api/admin/auth/webauthn/register/generate-options',
+            '/api/admin/auth/webauthn/register/verify',
+            '/api/admin/v1/admin/keys',
+            '/api/admin/v1/admin/tenants',
+            '/api/review/items/11111111-1111-4111-8111-111111111111/approve',
+            '/api/inflow-lab/api/demo-fixtures/leafy/load',
+            '/api/inflow-lab/api/simulate/reset',
+        ];
+
+        for (const path of protectedMutations) {
+            expect(isCsrfExempt(path, 'POST'), path).toBe(false);
         }
+    });
+
+    it('enforces exact-path and segment boundaries', () => {
+        expect(isCsrfExempt('/api/tools/verify', 'POST')).toBe(true);
+        expect(isCsrfExempt('/api/tools/verify-extra', 'POST')).toBe(false);
+        expect(isCsrfExempt('/api/webhooks/stripe', 'POST')).toBe(true);
+        expect(isCsrfExempt('/api/webhooks-malicious/stripe', 'POST')).toBe(false);
+        expect(isCsrfExempt('/api/webhooks/stripe', 'GET')).toBe(false);
     });
 });

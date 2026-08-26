@@ -194,6 +194,7 @@ jobs:
       - name: Apply RegEngine migrations
         working-directory: regengine
         env:
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_contract  # pragma: allowlist secret
         run: alembic upgrade head
 

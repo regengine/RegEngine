@@ -218,28 +218,6 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 # #2858: no client_host label — the IP lives in the log line above.
                 tenant_header_rejected_total.inc()
 
-        # Method 3: From API key (env service-account fallback only).
-        #
-        # NOTE: This branch resolves a tenant ONLY for the single shared
-        # service-account key configured via REGENGINE_API_KEY /
-        # REGENGINE_API_KEY_TENANT_ID. It does NOT perform a per-key
-        # api_key_store lookup — that is intentional. Per-key DB-issued tenants
-        # are resolved later, in ``get_current_tenant_id``, from the principal
-        # that ``require_api_key`` (the production DatabaseAPIKeyStore validator)
-        # attaches to ``request.state.api_key``. Middleware runs before route
-        # dependencies, so the validated principal is not available here yet.
-        api_key = request.headers.get("X-RegEngine-API-Key")
-        if api_key:
-            configured_key = os.getenv("REGENGINE_API_KEY")
-            configured_tenant = os.getenv("REGENGINE_API_KEY_TENANT_ID")
-            if configured_key and configured_tenant and hmac.compare_digest(api_key, configured_key):
-                try:
-                    return uuid.UUID(configured_tenant)
-                except ValueError:
-                    logger.error(
-                        "REGENGINE_API_KEY_TENANT_ID is not a valid UUID — API key auth disabled until corrected"
-                    )
-
         return None
 
 
@@ -273,7 +251,7 @@ async def get_current_tenant_id(request: Request) -> uuid.UUID:
 
     Resolution order:
     1. ``request.state.tenant_id`` set by ``TenantContextMiddleware``
-       (JWT, internal header, or env service-account key).
+       (JWT or authenticated internal header).
     2. Fallback to the tenant on the authenticated principal that
        ``require_api_key`` attaches to ``request.state.api_key`` — this is how
        per-key DB-issued API keys resolve their own tenant (#2524).

@@ -17,7 +17,8 @@
  *    Instead the spec (a) probes the passwordless challenge surface —
  *    POST /auth/challenges must accept and a wrong code must be rejected —
  *    and (b) runs the workbench loop with an inflow-scoped API key:
- *    DEMO_SMOKE_API_KEY directly, or one minted via ADMIN_MASTER_KEY.
+ *    DEMO_SMOKE_API_KEY, provisioned ahead of the run with the exact scopes
+ *    needed by this scenario.
  *    DEMO_SMOKE_TENANT_ID is required in this mode (in OTP mode the tenant
  *    comes from the authenticated session). The Inflow Lab page and supplier
  *    portal are public routes, so the UI portion works without a user session.
@@ -35,8 +36,6 @@ import { loginWithEmailOtp } from './auth-helpers';
 
 const DEMO_EMAIL = process.env.DEMO_SMOKE_EMAIL || process.env.TEST_USER_EMAIL || '';
 const DEMO_API_KEY = process.env.DEMO_SMOKE_API_KEY || '';
-const DEMO_ADMIN_MASTER_KEY =
-    process.env.DEMO_SMOKE_ADMIN_MASTER_KEY || process.env.ADMIN_MASTER_KEY || '';
 const DEMO_TENANT_ID = process.env.DEMO_SMOKE_TENANT_ID || '';
 const OTP_OUTBOX = process.env.REGENGINE_E2E_EMAIL_OUTBOX || '';
 const COMMIT_MODE = process.env.DEMO_SMOKE_COMMIT_MODE || 'preflight';
@@ -162,42 +161,17 @@ async function bootstrapApiKey(
     page: Page,
     context: BrowserContext,
     tenantId: string,
-    runPrefix: string,
 ): Promise<string> {
     // CSRF double-submit cookies are issued on the first GET, for both
     // authenticated and anonymous visitors.
     await page.request.get('/api/session');
 
-    if (DEMO_API_KEY) {
-        await setSessionApiKey(page, context, DEMO_API_KEY, tenantId);
-        return DEMO_API_KEY;
-    }
-
     expect(
-        DEMO_ADMIN_MASTER_KEY,
-        'Set DEMO_SMOKE_API_KEY or ADMIN_MASTER_KEY to provision an ingestion API key for demo smoke.',
+        DEMO_API_KEY,
+        'Set a pre-provisioned DEMO_SMOKE_API_KEY with inflow.read, inflow.write, and webhooks.ingest scopes.',
     ).toBeTruthy();
-
-    const created = await expectJson<JsonObject>(
-        await postWithCsrf(
-            page,
-            context,
-            '/api/admin/v1/admin/keys',
-            {
-                name: `${runPrefix} Demo Smoke Key`,
-                tenant_id: tenantId,
-                scopes: ['inflow.read', 'inflow.write', 'webhooks.ingest'],
-            },
-            { 'x-admin-key': DEMO_ADMIN_MASTER_KEY },
-        ),
-        'demo smoke API key create',
-    );
-
-    const apiKey = String(created.api_key || '');
-    expect(apiKey, 'API key creation should return a raw key once').toBeTruthy();
-
-    await setSessionApiKey(page, context, apiKey, tenantId);
-    return apiKey;
+    await setSessionApiKey(page, context, DEMO_API_KEY, tenantId);
+    return DEMO_API_KEY;
 }
 
 async function expectJson<T>(response: APIResponse, label: string): Promise<T> {
@@ -216,9 +190,8 @@ async function writeSummary(testInfo: TestInfo, summary: JsonObject) {
 test.describe('Design-partner demo smoke', () => {
     test('runs the Inflow Workbench preflight loop and supplier portal handoff', async ({ page, context }, testInfo) => {
         test.skip(
-            !OTP_MODE && !DEMO_API_KEY && !DEMO_ADMIN_MASTER_KEY,
-            'Set DEMO_SMOKE_EMAIL + REGENGINE_E2E_EMAIL_OUTBOX (email-OTP mode) or '
-            + 'DEMO_SMOKE_API_KEY / ADMIN_MASTER_KEY + DEMO_SMOKE_TENANT_ID (api-key mode) to run the demo smoke.',
+            !DEMO_API_KEY,
+            'Set a pre-provisioned DEMO_SMOKE_API_KEY with inflow.read, inflow.write, and webhooks.ingest scopes.',
         );
         expect(
             COMMIT_MODE !== 'production_evidence' || ALLOW_PRODUCTION_EVIDENCE,
@@ -227,7 +200,7 @@ test.describe('Design-partner demo smoke', () => {
 
         const runPrefix = `demo-smoke-${Date.now()}`;
         const { tenantId, authMode } = await authenticate(page, context);
-        const apiKey = await bootstrapApiKey(page, context, tenantId, runPrefix);
+        const apiKey = await bootstrapApiKey(page, context, tenantId);
 
         const session = await expectJson<JsonObject>(await page.request.get('/api/session'), 'session state');
         expect(session.has_api_key, 'ingestion API key cookie should be set').toBe(true);

@@ -1,0 +1,122 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reviewed CSRF route-and-method exemptions > keeps the reviewed rule inventory explicit 1`] = `
+[
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/admin/auth/challenges",
+  },
+  {
+    "match": "regex",
+    "methods": [
+      "POST",
+    ],
+    "path": "^/api/admin/auth/challenges/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}/verify$",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/admin/auth/webauthn/login/generate-options",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/admin/auth/webauthn/login/verify",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/admin/auth/accept-invite",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/admin/v1/auth/accept-invite",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/webhooks",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/v1/webhooks",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/v1/records",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/v1/fda",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/ingestion/api/v1/sandbox",
+  },
+  {
+    "match": "segment-prefix",
+    "methods": [
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+    ],
+    "path": "/api/ingestion/api/v1/proof",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/tools/check-access",
+  },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/tools/verify",
+  },
+]
+`;

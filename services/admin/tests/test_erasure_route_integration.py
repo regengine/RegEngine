@@ -14,11 +14,12 @@ Every GDPR Article 17 erasure silently failed.
 
 from __future__ import annotations
 
+import inspect
 import sys
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -61,50 +62,102 @@ async def test_erasure_reads_id_email_via_attribute_not_dict():
 
     db = MagicMock()
     db.commit = MagicMock()
-    db.__enter__ = MagicMock(return_value=db)
-    db.__exit__ = MagicMock(return_value=False)
-
-    fake_get_db = MagicMock()
-    fake_get_db.return_value.__enter__ = MagicMock(return_value=db)
-    fake_get_db.return_value.__exit__ = MagicMock(return_value=False)
-
-    fake_manager = MagicMock()
-
-    async def _proc_del(**_kwargs):
-        return {
-            "soft_deleted": True,
-            "hard_delete_scheduled": True,
-            "hard_delete_date": "2027-05-09",
-        }
-
-    async def _anon(**_kwargs):
-        return (3, [])
-
-    fake_manager.process_deletion_request = _proc_del
-    fake_manager.anonymize_audit_logs_for_user = _anon
+    fake_store = MagicMock()
 
     with (
-        patch.object(m, "get_db", fake_get_db),
         patch.object(m.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
-        patch("shared.data_retention.DataRetentionManager", return_value=fake_manager),
-        patch.object(m, "enqueue_graph_write") as enqueue_mock,
-        patch.object(m, "_delete_neo4j_user_graph_data") as neo4j_mock,
+        patch.object(m, "_apply_account_erasure", return_value=3) as erase_mock,
+        patch.object(m, "arm_global_admin_context"),
+        patch.object(m, "_revoke_erased_user_runtime_sessions", new_callable=AsyncMock) as revoke_mock,
+        patch.object(m, "_delete_neo4j_user_graph_data", new_callable=AsyncMock),
     ):
-        # _delete_neo4j_user_graph_data is async — patch with AsyncMock-ish
-        async def _async_noop(*a, **k):
-            return None
-
-        neo4j_mock.side_effect = _async_noop
-
-        resp = await m.request_erasure(body=body, current_user=user)
+        resp = await m.request_erasure(body=body, current_user=user, session_store=fake_store, db=db)
 
     assert resp.status == "accepted"
     assert resp.soft_deleted is True
     assert resp.audit_logs_anonymized is True
-    enqueue_mock.assert_called_once()
+    assert resp.hard_delete_scheduled is False
+    erase_mock.assert_called_once_with(db, user_id=_USER_ID, tenant_id=_TENANT_ID)
+    revoke_mock.assert_awaited_once_with(fake_store, _USER_ID)
+    db.commit.assert_called_once()
     # Confirm the user.get() escape hatch was never invoked — i.e. the
     # handler used attribute access throughout.
     assert user.get.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_erasure_starts_runtime_cleanup_immediately_after_commit_without_disarm():
+    """A durable commit must flow directly to cache/elevation cleanup.
+
+    ``SET LOCAL`` is cleared by PostgreSQL at commit. A post-commit disarm
+    starts a new transaction and can fail after the erasure is durable but
+    before runtime credentials are revoked.
+    """
+    from app import erasure_routes as m
+
+    events: list[str] = []
+    db = MagicMock()
+    db.commit.side_effect = lambda: events.append("commit")
+
+    async def _record_cleanup(_store, _user_id):
+        events.append("runtime-cleanup")
+
+    async def _record_graph_cleanup(_tenant_id, _user_id):
+        events.append("graph-cleanup")
+
+    with (
+        patch.object(m.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
+        patch.object(m, "_apply_account_erasure", return_value=0),
+        patch.object(m, "arm_global_admin_context"),
+        patch.object(m, "_revoke_erased_user_runtime_sessions", side_effect=_record_cleanup),
+        patch.object(m, "_delete_neo4j_user_graph_data", side_effect=_record_graph_cleanup),
+    ):
+        response = await m.request_erasure(
+            body=m.ErasureRequest(confirm=True),
+            current_user=_make_user_model(),
+            session_store=MagicMock(),
+            db=db,
+        )
+
+    assert response.status == "accepted"
+    assert events == ["commit", "runtime-cleanup", "graph-cleanup"]
+    assert "disarm_global_admin_context" not in inspect.getsource(m.request_erasure)
+    db.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_erasure_rolls_back_armed_transaction_before_mapping_db_failure():
+    """A failure before durable commit must clear transaction-local authority."""
+    from app import erasure_routes as m
+    from fastapi import HTTPException
+    from sqlalchemy.exc import SQLAlchemyError
+
+    db = MagicMock()
+
+    with (
+        patch.object(m.TenantContext, "get_tenant_context", return_value=_TENANT_ID),
+        patch.object(m, "arm_global_admin_context"),
+        patch.object(
+            m,
+            "_apply_account_erasure",
+            side_effect=SQLAlchemyError("write failed"),
+        ),
+        patch.object(m, "_revoke_erased_user_runtime_sessions", new_callable=AsyncMock) as revoke_mock,
+        patch.object(m, "_delete_neo4j_user_graph_data", new_callable=AsyncMock) as graph_mock,
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await m.request_erasure(
+                body=m.ErasureRequest(confirm=True),
+                current_user=_make_user_model(),
+                session_store=MagicMock(),
+                db=db,
+            )
+
+    assert exc.value.status_code == 500
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once_with()
+    revoke_mock.assert_not_awaited()
+    graph_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

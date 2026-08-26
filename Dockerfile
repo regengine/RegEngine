@@ -56,6 +56,7 @@ RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
+COPY scripts/apply_runtime_role_cutover.py /app/scripts/apply_runtime_role_cutover.py
 
 # Copy all service code
 COPY services /app/services
@@ -98,4 +99,4 @@ USER appuser
 # Run migrations then start monolith with Gunicorn + Uvicorn workers
 # WEB_CONCURRENCY controls worker count (default: 4).
 # Gunicorn manages process lifecycle; each worker is a Uvicorn async process.
-CMD ["sh", "-c", "bash /app/scripts/run-migrations.sh && gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000} --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "bash /app/scripts/run-migrations.sh && exec env -u MIGRATIONS_DATABASE_URL gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000} --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]

@@ -265,11 +265,11 @@ class TestIngestTenantBinding:
 
         assert tenant_id == "tenant-a"
 
-    def test_legacy_master_preserves_payload_tenant_context(self):
+    def test_dev_open_preserves_payload_tenant_context(self):
         tenant_id = wrv2._resolve_ingest_tenant_id(
             payload_tenant_id="tenant-body",
             principal=_principal(None, scopes=["*"]),
-            x_regengine_api_key="legacy-master",  # pragma: allowlist secret
+            x_regengine_api_key="dev-open",  # pragma: allowlist secret
             x_tenant_id="tenant-header",
         )
 

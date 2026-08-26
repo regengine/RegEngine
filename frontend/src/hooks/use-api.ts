@@ -131,19 +131,19 @@ export const useQAHealth = (enabled = true) => {
   });
 };
 
-export const useAPIKeys = (adminKey: string, enabled = true) => {
+export const useAPIKeys = (enabled = true) => {
   return useQuery({
-    queryKey: ['admin', 'keys', adminKey],
-    queryFn: () => apiClient.listAPIKeys(adminKey),
-    enabled: enabled && !!adminKey,
+    queryKey: ['admin', 'keys'],
+    queryFn: () => apiClient.listAPIKeys(),
+    enabled,
   });
 };
 
 export const useCreateAPIKey = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ adminKey, name, description, tenantId }: { adminKey: string; name: string; description?: string; tenantId?: string }) =>
-      apiClient.createAPIKey(adminKey, { name, description, tenantId }),
+    mutationFn: ({ name, description, tenantId }: { name: string; description?: string; tenantId?: string }) =>
+      apiClient.createAPIKey({ name, description, tenantId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'keys'] });
     },
@@ -153,7 +153,7 @@ export const useCreateAPIKey = () => {
 export const useGenerateAPIKey = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ adminKey, tenantId }: { adminKey: string; tenantId?: string }) => apiClient.generateAPIKey(adminKey, tenantId),
+    mutationFn: ({ tenantId }: { tenantId?: string }) => apiClient.generateAPIKey(tenantId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'keys'] });
     },
@@ -163,8 +163,7 @@ export const useGenerateAPIKey = () => {
 export const useRevokeAPIKey = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ adminKey, keyId }: { adminKey: string; keyId: string }) =>
-      apiClient.revokeAPIKey(adminKey, keyId),
+    mutationFn: ({ keyId }: { keyId: string }) => apiClient.revokeAPIKey(keyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'keys'] });
     },
@@ -188,8 +187,7 @@ export const useIngestFile = () => {
 
 export const useCreateTenant = () => {
   return useMutation({
-    mutationFn: ({ adminKey, name }: { adminKey: string; name: string }) =>
-      apiClient.createTenant(adminKey, name),
+    mutationFn: ({ name }: { name: string }) => apiClient.createTenant(name),
   });
 };
 

@@ -1,4 +1,10 @@
 # RegEngine Dead Code Sweep Report
+
+> **Archived historical snapshot (March 2026).** This document does not
+> describe the current authentication or deployment contract. Any shared
+> administrative-key references below are retired and must not be configured
+> or used.
+
 **Date: March 9, 2026**
 
 ---
@@ -297,4 +303,3 @@ SCHEDULER_API_KEY               (documented, but only used in docker-compose ref
 - Reduces maintenance burden
 - Clarifies which test files are active
 - Prevents future prod deployment failures from opportunity-api references
-

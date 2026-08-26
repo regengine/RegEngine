@@ -62,7 +62,6 @@ _KNOWN_WEAK_VALUES: set[str] = {
 _ALWAYS_REQUIRED: list[str] = [
     "REGENGINE_ENV",
     "AUTH_SECRET_KEY",
-    "ADMIN_MASTER_KEY",
     "POSTGRES_PASSWORD",
     "AUTH_TEST_BYPASS_TOKEN",  # must be SET — value may be empty (disabled)
 ]
@@ -82,7 +81,6 @@ _PRODUCTION_REQUIRED: list[str] = [
 # ---------------------------------------------------------------------------
 _CREDENTIAL_VARS: list[str] = [
     "AUTH_SECRET_KEY",
-    "ADMIN_MASTER_KEY",
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
     "SCHEDULER_API_KEY",

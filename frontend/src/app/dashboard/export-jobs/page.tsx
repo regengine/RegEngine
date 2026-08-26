@@ -1,40 +1,32 @@
 'use client';
 
-import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off, Database, Upload, ArrowRight, CheckCircle2 } from 'lucide-react';
 import type { ArchiveExportJob } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
-import { useTenant } from '@/lib/tenant-context';
 import { filterExperimentalLinks } from '@/lib/experimental-features';
 
 export default function ExportJobsPage() {
     const { isAuthenticated } = useAuth();
-    const { tenantId } = useTenant();
     const [name, setName] = useState('Weekly FSMA archive');
     const [cadence, setCadence] = useState<ArchiveExportJob['cadence']>('Weekly');
     const [format, setFormat] = useState<ArchiveExportJob['format']>('FDA Package');
     const [destination, setDestination] = useState<ArchiveExportJob['destination']>('Object storage archive');
-    const queryClient = useQueryClient();
 
     const { data: exportResponse, isLoading: jobsLoading } = useQuery({
         queryKey: ['export-jobs'],
-        queryFn: async () => {
-            const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
-                credentials: 'include',
-                signal: AbortSignal.timeout(8000),
-            });
-            if (!response.ok) return { jobs: [], meta: { status: 'error' } };
-            return response.json() as Promise<{
-                jobs?: ArchiveExportJob[];
-                meta?: { status?: string; message?: string };
-            }>;
-        },
+        queryFn: async () => ({
+            jobs: [] as ArchiveExportJob[],
+            meta: {
+                status: 'not_connected',
+                message: 'Scheduled export jobs are not available on this workspace.',
+            },
+        }),
         enabled: isAuthenticated,
         retry: false,
     });
@@ -49,37 +41,9 @@ export default function ExportJobsPage() {
 
     const createJobMutation = useMutation({
         mutationFn: async () => {
-            const response = await fetchWithCsrf('/api/fsma/customer-readiness/export-jobs', {
-                method: 'POST',
-                credentials: 'include',
-                signal: AbortSignal.timeout(12000),
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    cadence,
-                    format,
-                    destination,
-                    tenantId: tenantId || '',
-                }),
-            });
-            if (response.status === 501) {
-                throw new Error('Export job scheduling is not yet available — it is still in development. Records remain exportable on demand from FDA Export.');
-            }
-            if (!response.ok) throw new Error('Failed to create export job');
-            return (await response.json()) as { job: ArchiveExportJob };
-        },
-        onSuccess: (data) => {
-            queryClient.setQueryData<{
-                jobs?: ArchiveExportJob[];
-                meta?: { status?: string; message?: string };
-            }>(['export-jobs'], (old) => ({
-                ...(old ?? { meta: { status: 'ok' } }),
-                jobs: [data.job, ...(old?.jobs ?? [])],
-            }));
-            setName('Weekly FSMA archive');
-            setCadence('Weekly');
-            setFormat('FDA Package');
-            setDestination('Object storage archive');
+            throw new Error(
+                'Export job scheduling is not yet available — records remain exportable on demand.',
+            );
         },
     });
 

@@ -59,7 +59,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from shared.tenant_context import apply_system_guc, system_scope, tenant_scope
+from shared.tenant_context import tenant_scope
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -67,6 +67,14 @@ logger = logging.getLogger("task_queue")
 
 TASK_QUEUE_STATUSES = ("pending", "processing", "completed", "failed", "dead")
 _TASK_QUEUE_GAUGES: dict[str, Any] = {}
+
+
+def _arm_global_queue_transaction(db_session: Any) -> None:
+    """Arm one explicit sysadmin transaction for global queue mechanics."""
+
+    from shared.admin_context import arm_global_admin_context
+
+    arm_global_admin_context(db_session)
 
 
 # ---------------------------------------------------------------------------
@@ -247,18 +255,14 @@ def enqueue_task(
 def get_task_queue_summary(db_session: Any) -> dict[str, Any]:
     """Return read-only queue health for operator surfaces and metrics.
 
-    #2461: this is a deliberately CROSS-TENANT operator view of
-    fsma.task_queue (sysadmin-gated at the HTTP layer). It runs under
-    ``system_scope`` so the v095 system arm admits the scan under the
-    least-privilege role; ``apply_system_guc`` additionally covers the
-    case where the caller's session transaction is already open (admin
-    request sessions run auth queries first, so the begin-hook alone
-    would miss the current transaction).
+    This is a deliberately cross-tenant operator view.  Its caller supplies
+    the canonical ADMIN_DATABASE_URL session; RLS pins the global policy to
+    the exact ``regengine_sysadmin`` role.  No caller-settable GUC can widen
+    the ordinary runtime role.
     """
 
-    with system_scope():
-        apply_system_guc(db_session)
-        return _get_task_queue_summary_inner(db_session)
+    _arm_global_queue_transaction(db_session)
+    return _get_task_queue_summary_inner(db_session)
 
 
 def _get_task_queue_summary_inner(db_session: Any) -> dict[str, Any]:
@@ -318,18 +322,15 @@ def replay_dead_tasks(
 ) -> dict[str, Any]:
     """Reset dead task_queue rows to pending without deleting history.
 
-    #2461: cross-tenant sysadmin operation — see get_task_queue_summary
-    for the system_scope / apply_system_guc rationale. Fixes both the
-    tenantless-sysadmin 500 and the tenant-bound-sysadmin silent-scoping
-    bug under the least-privilege role.
+    Cross-tenant authorization comes from the independently authenticated
+    database role supplied by the admin service, not request metadata.
     """
 
     if limit < 1 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
 
-    with system_scope():
-        apply_system_guc(db_session)
-        return _replay_dead_tasks_inner(db_session, ids=ids, limit=limit)
+    _arm_global_queue_transaction(db_session)
+    return _replay_dead_tasks_inner(db_session, ids=ids, limit=limit)
 
 
 def _replay_dead_tasks_inner(
@@ -647,11 +648,11 @@ class TaskWorker:
 
     def _release_stale_locks(self) -> None:
         """Flip ``processing`` rows whose lock expired back to ``pending``."""
-        # #2461: queue mechanics are cross-tenant by design (weighted fair
-        # queuing, ADR #1644) — system_scope + the begin-hook set the
-        # regengine.system_context GUC so the v095 task_queue policy arm
-        # admits the scan under the least-privilege role.
-        with system_scope(), self.engine.begin() as conn:
+        # Queue mechanics are cross-tenant by design (weighted fair queuing,
+        # ADR #1644). ``engine`` is the canonical admin engine; the exact
+        # database role, not a caller-settable GUC, authorizes this scan.
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
             conn.execute(
                 text(
                     """
@@ -687,7 +688,12 @@ class TaskWorker:
         updates zero rows rather than yanking the row out from under the
         new owner. Returns ``True`` when the release actually landed.
         """
-        with system_scope(), self.engine.begin() as conn:
+        # Release is a global queue transition just like claim/complete/dead.
+        # The admin engine starts each checkout disarmed; explicitly arm this
+        # transaction instead of relying on the retired caller-settable
+        # system-context GUC.
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
             result = conn.execute(
                 text(
                     """
@@ -748,8 +754,8 @@ class TaskWorker:
             type_filter = "AND task_type = ANY(:task_types)"
             params["task_types"] = self.task_types
 
-        # #2461: cross-tenant claim — see _release_stale_locks.
-        with system_scope(), self.engine.begin() as conn:
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
             row = conn.execute(
                 text(
                     f"""
@@ -885,10 +891,10 @@ class TaskWorker:
             return asyncio.run(handler(**payload))
         return handler(**payload)
 
-    def _mark_completed(self, task_id: int) -> None:
-        # #2461: state transitions are queue mechanics — system_scope.
-        with system_scope(), self.engine.begin() as conn:
-            conn.execute(
+    def _mark_completed(self, task_id: int) -> bool:
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
+            result = conn.execute(
                 text(
                     """
                     UPDATE fsma.task_queue
@@ -898,22 +904,31 @@ class TaskWorker:
                         locked_until = NULL,
                         last_error = NULL
                     WHERE id = :id
+                      AND status = 'processing'
+                      AND locked_by = :worker_id
                     """
                 ),
-                {"id": task_id},
+                {"id": task_id, "worker_id": self.worker_id},
             )
+        landed = bool(getattr(result, "rowcount", 0))
+        if not landed:
+            logger.warning(
+                "task_complete_lost_lock",
+                extra={"task_id": task_id, "worker_id": self.worker_id},
+            )
+        return landed
 
-    def _mark_failed(self, task: dict[str, Any], error: str) -> None:
+    def _mark_failed(self, task: dict[str, Any], error: str) -> bool:
         """After a handler exception: schedule retry or transition to dead."""
         new_attempts = int(task["attempts"]) + 1
         max_attempts = int(task["max_attempts"])
         if new_attempts >= max_attempts:
-            self._mark_dead(int(task["id"]), error, attempts=new_attempts)
-            return
+            return self._mark_dead(int(task["id"]), error, attempts=new_attempts)
 
         backoff = compute_backoff_seconds(new_attempts)
-        with system_scope(), self.engine.begin() as conn:
-            conn.execute(
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
+            result = conn.execute(
                 text(
                     """
                     UPDATE fsma.task_queue
@@ -925,6 +940,8 @@ class TaskWorker:
                         scheduled_at = NOW() + make_interval(secs => :backoff),
                         started_at = NULL
                     WHERE id = :id
+                      AND status = 'processing'
+                      AND locked_by = :worker_id
                     """
                 ),
                 {
@@ -936,12 +953,27 @@ class TaskWorker:
                     # need megabytes of noise.
                     "error": error[:4000] if error else None,
                     "backoff": backoff,
+                    "worker_id": self.worker_id,
                 },
             )
+        landed = bool(getattr(result, "rowcount", 0))
+        if not landed:
+            logger.warning(
+                "task_retry_lost_lock",
+                extra={"task_id": int(task["id"]), "worker_id": self.worker_id},
+            )
+        return landed
 
-    def _mark_dead(self, task_id: int, error: str, *, attempts: Optional[int] = None) -> None:
-        with system_scope(), self.engine.begin() as conn:
-            conn.execute(
+    def _mark_dead(
+        self,
+        task_id: int,
+        error: str,
+        *,
+        attempts: Optional[int] = None,
+    ) -> bool:
+        with self.engine.begin() as conn:
+            _arm_global_queue_transaction(conn)
+            result = conn.execute(
                 text(
                     """
                     UPDATE fsma.task_queue
@@ -952,11 +984,21 @@ class TaskWorker:
                         locked_until = NULL,
                         attempts = COALESCE(:attempts, attempts)
                     WHERE id = :id
+                      AND status = 'processing'
+                      AND locked_by = :worker_id
                     """
                 ),
                 {
                     "id": task_id,
                     "error": error[:4000] if error else None,
                     "attempts": attempts,
+                    "worker_id": self.worker_id,
                 },
             )
+        landed = bool(getattr(result, "rowcount", 0))
+        if not landed:
+            logger.warning(
+                "task_dead_letter_lost_lock",
+                extra={"task_id": task_id, "worker_id": self.worker_id},
+            )
+        return landed

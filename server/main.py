@@ -148,116 +148,111 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("connector_registration_skipped", error=str(exc))
 
-    # #2461: boot-time RLS role posture. Today (postgres superuser role)
-    # this logs rls_enforcement_inert + sets the gauge but boots; on the
-    # day of the #2461 DATABASE_URL cutover, set
-    # REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 on Railway so the fleet can
-    # never silently regress to a BYPASSRLS role. Deliberately OUTSIDE
-    # the init_db try/except above — the REQUIRE-mode RuntimeError must
-    # abort boot, not be logged and swallowed. The admin engine is
-    # probed separately because it may point at a different database.
-    from shared.database import check_rls_posture as _check_rls_posture
+    # Runtime DB-role gate. Production always fails closed if either role is
+    # unknown, unexpected, SUPERUSER/BYPASSRLS, or connected to a different
+    # PostgreSQL database. REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 keeps the same
+    # hard gate available in staging before promotion.
+    from shared.database import validate_runtime_database_posture
 
-    _check_rls_posture(label="shared")
-    _check_rls_posture(_admin_engine, label="admin")
+    validate_runtime_database_posture(_shared_engine, _admin_engine)
 
-    # Start background task worker (replaces Kafka consumers)
+    # Authentication is a hard production dependency: Redis-backed JWT
+    # revocation and the signing-key registry must be ready before any worker
+    # or request handler can issue/accept credentials. The admin-owned runtime
+    # is shared with the legacy entrypoint so the consolidated deploy cannot
+    # silently omit revocation wiring.
+    from services.admin.app.auth_runtime import initialize_auth_runtime, shutdown_auth_runtime
+
+    auth_runtime = await initialize_auth_runtime()
+
+    # Start background task worker (replaces Kafka consumers). Everything
+    # after auth-runtime initialization is inside this lifecycle guard so a
+    # later startup failure still detaches and closes the Redis client.
     from server.workers.task_processor import start_task_worker, stop_task_worker
 
-    start_task_worker()
-
-    # Register ingestion task handlers and start ingestion worker
     try:
-        from shared.agent_task_bridge import AGENT_ARTIFACT_TASK_TYPE, register_agent_bridge_handlers
-        from shared.database import engine as _db_engine
-        from shared.task_queue import TaskWorker
+        start_task_worker()
 
-        from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
-        from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
-        from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
-        from services.ingestion.app.task_handlers_sources import register_source_handlers
+        # Register only the task handlers whose HTTP surface is enabled, then
+        # start the ingestion worker.  Optional routers are intentionally
+        # absent from production; leaving their queue handlers registered
+        # would preserve an internal path to disabled scraping/discovery/source
+        # fetchers through stale or forged task rows.
+        try:
+            from shared.task_queue import TaskWorker
 
-        register_source_handlers()
-        register_scraping_handlers()
-        register_discovery_handlers()
-        register_regulation_handlers()
-        register_agent_bridge_handlers()
-        # #2830: this worker MUST declare the task types it owns. TaskWorker
-        # only applies its type filter ``if self.task_types:`` — constructed
-        # without one it claimed *any* pending row in fsma.task_queue,
-        # including ``nlp_extraction`` / ``graph_update`` / ``review_item``
-        # rows enqueued for server/workers/task_processor.py. Those types have
-        # no handler registered here, so _dispatch dead-lettered them with zero
-        # retries: work silently destroyed rather than delayed.
-        #
-        # Keep this list in sync with the register_*_handlers() calls directly
-        # above — every entry is a task_type those functions pass to
-        # shared.task_queue.register_task_handler():
-        #   task_handlers_sources     → federal_register_ingest, ecfr_ingest, fda_ingest
-        #   task_handlers_scraping    → state_scrape, generic_scrape
-        #   task_handlers_discovery   → discovery_scrape
-        #   task_handlers_regulation  → regulation_ingest
-        #   agent_task_bridge         → AGENT_ARTIFACT_TASK_TYPE ("agent_artifact_review")
-        _ingestion_task_types = [
-            "federal_register_ingest",
-            "ecfr_ingest",
-            "fda_ingest",
-            "state_scrape",
-            "generic_scrape",
-            "discovery_scrape",
-            "regulation_ingest",
-            AGENT_ARTIFACT_TASK_TYPE,
-        ]
-        _ingestion_worker = TaskWorker(engine=_db_engine, task_types=_ingestion_task_types)
-        # #2518: keep the daemon thread handle so /readiness can tell a live
-        # worker from one whose loop died after start.
-        _ingestion_worker_thread = _ingestion_worker.start()
-        app.state.ingestion_worker = _ingestion_worker
-        app.state.ingestion_worker_thread = _ingestion_worker_thread
-        # #2518: record the start outcome so /readiness can report a swallowed
-        # boot failure instead of silently passing while ingestion jobs pile up.
-        app.state.ingestion_worker_started = True
-        logger.info("ingestion_task_worker_started")
-    except Exception as exc:
-        # #2518: escalate to error (Sentry-captured) — a swallowed worker-start
-        # failure used to vanish into warning noise while /readiness stayed green.
-        logger.error("ingestion_task_worker_start_failed", error=str(exc))
-        app.state.ingestion_worker = None
-        app.state.ingestion_worker_thread = None
-        app.state.ingestion_worker_started = False
+            from services.admin.app.database import get_admin_engine
 
-    # Run scheduler jobs in-process: FDA scrapers, recall→tenant alerting,
-    # deadline monitoring, retention/archival, nightly FSMA sync. Production
-    # has no other home for these — the standalone scheduler entrypoint is
-    # prod-blocked and this is the only deployed container. A Postgres
-    # advisory lock keeps execution single-flight across gunicorn workers
-    # and replicas (see server/workers/embedded_scheduler.py).
-    try:
-        from server.workers.embedded_scheduler import start_embedded_scheduler
+            # #2830: the worker must claim only the release-enabled handler
+            # types it registered. Otherwise a worker can claim another
+            # consumer's task and repeatedly release or destroy that work.
+            _ingestion_task_types = sorted(_register_ingestion_task_handlers())
+            _ingestion_worker = TaskWorker(
+                engine=get_admin_engine(),
+                task_types=_ingestion_task_types,
+            )
+            # #2518: keep the daemon thread handle so /readiness can tell a live
+            # worker from one whose loop died after start.
+            _ingestion_worker_thread = _ingestion_worker.start()
+            app.state.ingestion_worker = _ingestion_worker
+            app.state.ingestion_worker_thread = _ingestion_worker_thread
+            # #2518: record the start outcome so /readiness can report a swallowed
+            # boot failure instead of silently passing while ingestion jobs pile up.
+            app.state.ingestion_worker_started = True
+            logger.info("ingestion_task_worker_started")
+        except Exception as exc:
+            # #2518: escalate to error (Sentry-captured) — a swallowed worker-start
+            # failure used to vanish into warning noise while /readiness stayed green.
+            logger.error("ingestion_task_worker_start_failed", error=str(exc))
+            app.state.ingestion_worker = None
+            app.state.ingestion_worker_thread = None
+            app.state.ingestion_worker_started = False
 
-        app.state.embedded_scheduler = start_embedded_scheduler()
-        # #2518: distinguish "started" from "intentionally disabled". The
-        # runner is None when SCHEDULER_EMBEDDED=0 / non-production — that is a
-        # healthy state, not a failure. Only a raised exception is a failure.
-        app.state.embedded_scheduler_started = True
-    except Exception as exc:
-        # #2518: escalate to error (Sentry-captured). A swallowed scheduler-start
-        # failure silently disables FDA scrapers, recall→tenant alerting,
-        # deadline monitoring, retention/archival, and the nightly FSMA sync —
-        # none of which have another execution home in production.
-        logger.error("embedded_scheduler_start_failed", error=str(exc))
-        app.state.embedded_scheduler = None
-        app.state.embedded_scheduler_started = False
+        # Run scheduler jobs in-process: FDA scrapers, recall→tenant alerting,
+        # deadline monitoring, retention/archival, nightly FSMA sync. Production
+        # has no other home for these — the standalone scheduler entrypoint is
+        # prod-blocked and this is the only deployed container. A Postgres
+        # advisory lock keeps execution single-flight across gunicorn workers
+        # and replicas (see server/workers/embedded_scheduler.py).
+        try:
+            from server.workers.embedded_scheduler import start_embedded_scheduler
 
-    yield
+            app.state.embedded_scheduler = start_embedded_scheduler()
+            # #2518: distinguish "started" from "intentionally disabled". The
+            # runner is None when SCHEDULER_EMBEDDED=0 / non-production — that is a
+            # healthy state, not a failure. Only a raised exception is a failure.
+            app.state.embedded_scheduler_started = True
+        except Exception as exc:
+            # #2518: escalate to error (Sentry-captured). A swallowed scheduler-start
+            # failure silently disables FDA scrapers, recall→tenant alerting,
+            # deadline monitoring, retention/archival, and the nightly FSMA sync —
+            # none of which have another execution home in production.
+            logger.error("embedded_scheduler_start_failed", error=str(exc))
+            app.state.embedded_scheduler = None
+            app.state.embedded_scheduler_started = False
 
-    # Shutdown
-    stop_task_worker()
-    if getattr(app.state, "ingestion_worker", None):
-        app.state.ingestion_worker.stop()
-    if getattr(app.state, "embedded_scheduler", None):
-        app.state.embedded_scheduler.stop()
-    logger.info("regengine_shutdown")
+        yield
+    finally:
+        async def _shutdown_step(name: str, operation) -> None:
+            try:
+                result = operation()
+                if hasattr(result, "__await__"):
+                    await result
+            except Exception as exc:
+                logger.error("regengine_shutdown_step_failed", step=name, error=str(exc))
+
+        await _shutdown_step("stop_task_worker", stop_task_worker)
+        ingestion_worker = getattr(app.state, "ingestion_worker", None)
+        if ingestion_worker is not None:
+            await _shutdown_step("stop_ingestion_worker", ingestion_worker.stop)
+        embedded_scheduler = getattr(app.state, "embedded_scheduler", None)
+        if embedded_scheduler is not None:
+            await _shutdown_step("stop_embedded_scheduler", embedded_scheduler.stop)
+        from services.admin.app.api_key_admin_store import close_admin_api_key_store
+
+        await _shutdown_step("close_admin_api_key_store", close_admin_api_key_store)
+        await _shutdown_step("shutdown_auth_runtime", lambda: shutdown_auth_runtime(auth_runtime))
+        logger.info("regengine_shutdown")
 
 
 # ── App creation ─────────────────────────────────────────────────
@@ -281,6 +276,13 @@ add_observability(app, service_name="regengine")
 from shared.middleware import RequestIDMiddleware, TenantContextMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
+from services.admin.app.audit_middleware import AuditContextMiddleware
+
+# Middleware is registered in reverse execution order. RequestIDMiddleware is
+# added after AuditContextMiddleware so it establishes request.state.request_id
+# first; the audit layer then reuses that ID and applies trusted-proxy source-IP
+# resolution to privileged routes.
+app.add_middleware(AuditContextMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 # default_rpm=100 matches the consolidated services (ingestion/compliance/nlp/
@@ -393,119 +395,27 @@ except RuntimeError as _secrets_exc:
 # to mirror the five per-service entrypoints.
 from shared.observability import install_metrics
 
+from server.route_ownership import claim_existing_operation, include_owned_router, owned_api_route
+
 install_metrics(app, service_name="regengine")
+claim_existing_operation(app, owner="metrics", method="GET", path="/metrics")
 
 
 # ── Router feature flags ─────────────────────────────────────────
-_VALID_ROUTER_NAMES = {
-    "scraping",
-    "discovery",
-    "sources",
-    "sandbox",
-    "inflow_workbench",
-    "fda_export",
-    "csv",
-    "sensitech",
-    "edi",
-    "score",
-    "portal",
-    "audit",
-    "sop",
-    "export",
-    "epcis_ingestion",
-    "qr_decoder",
-    "label_vision",
-    "exchange",
-    "billing",
-    "alerts",
-    "onboarding",
-    "recall",
-    "recall_simulations",
-    "supplier_mgmt",
-    "audit_log",
-    "product_catalog",
-    "notification_prefs",
-    "team_mgmt",
-    "settings",
-    "integration",
-    "canonical_records",
-    "rules",
-    "exceptions",
-    "remediation",
-    "request_workflow",
-    "identity",
-    "auditor",
-    "compliance_metrics",
-    "readiness",
-    "incidents",
-    "chain_verification",
-    "audit_export_log",
-    "sla_tracking",
-    "export_monitoring",
-    "supplier_validation",
-    "disaster_recovery",
-    "admin",
-    "graph",
-    "nlp",
-    "fsma_compliance",
-    "proof_verify",
-    "proof_recall",
-}
+from server.router_policy import COMPLIANCE_ROUTERS, VALID_ROUTER_NAMES, RouterPolicy
 
-_EXPERIMENTAL_ROUTERS = {
-    "scraping",
-    "discovery",
-    "sources",
-    "sandbox",
-    "sensitech",
-    "audit",
-    "sop",
-    "export",
-    "qr_decoder",
-    "label_vision",
-    "exchange",
-    "recall_simulations",
-    "graph",
-    "nlp",
-}
+_ROUTER_POLICY = RouterPolicy.from_environment(production=_is_prod)
+_MOUNTED_ROUTERS = _ROUTER_POLICY.mounted_routers
 
-_DISABLED_ROUTERS = {r.strip().lower() for r in os.getenv("DISABLED_ROUTERS", "").split(",") if r.strip()}
-_ENABLE_EXPERIMENTAL_ROUTERS = os.getenv("ENABLE_EXPERIMENTAL_ROUTERS", "").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-_MOUNTED_ROUTERS: list[str] = []
-_AUTO_DISABLED_ROUTERS: list[str] = []
-
-_unknown_router_flags = _DISABLED_ROUTERS - _VALID_ROUTER_NAMES
-if _unknown_router_flags:
+if _ROUTER_POLICY.unknown_disabled:
     logger.error(
         "unknown_router_names_in_DISABLED_ROUTERS",
-        unknown=sorted(_unknown_router_flags),
-        valid=sorted(_VALID_ROUTER_NAMES),
+        unknown=sorted(_ROUTER_POLICY.unknown_disabled),
+        valid=sorted(VALID_ROUTER_NAMES),
     )
 
-# Compliance-critical routers that must not be silently disabled (#979).
-# Mirrors services/ingestion/main.py — keep the two sets in sync.
-_COMPLIANCE_ROUTERS = {
-    "canonical_records",
-    "rules",
-    "exceptions",
-    "remediation",
-    "fda_export",
-    "chain_verification",
-}
-_disabled_compliance = _DISABLED_ROUTERS & _COMPLIANCE_ROUTERS
+_disabled_compliance = _ROUTER_POLICY.configured_disabled & COMPLIANCE_ROUTERS
 if _disabled_compliance:
-    _allow_disable = os.getenv("ALLOW_DISABLE_COMPLIANCE_ROUTERS", "").lower() == "true"
-    if not _allow_disable:
-        raise RuntimeError(
-            f"CRITICAL: Compliance-critical routers disabled without "
-            f"ALLOW_DISABLE_COMPLIANCE_ROUTERS=true: {sorted(_disabled_compliance)}. "
-            f"This violates FSMA 204 requirements."
-        )
     logger.critical(
         "compliance_routers_disabled",
         disabled=sorted(_disabled_compliance),
@@ -514,36 +424,61 @@ if _disabled_compliance:
 
 
 def _router_enabled(name: str) -> bool:
-    router_name = name.lower()
-    enabled = router_name not in _DISABLED_ROUTERS
-    if enabled and _is_prod and router_name in _EXPERIMENTAL_ROUTERS and not _ENABLE_EXPERIMENTAL_ROUTERS:
-        enabled = False
-        _AUTO_DISABLED_ROUTERS.append(router_name)
-
-    if enabled:
-        _MOUNTED_ROUTERS.append(router_name)
-    return enabled
+    return _ROUTER_POLICY.enable(name)
 
 
 def _subsystem_active(name: str) -> bool:
-    """Pure predicate: would ``name`` be mounted, without _router_enabled's
-    ``_MOUNTED_ROUTERS`` side effect. Safe to call after startup (e.g. from
-    the /readiness probe) to decide whether a subsystem's dependencies are
-    even worth probing."""
-    router_name = name.lower()
-    if router_name in _DISABLED_ROUTERS:
-        return False
-    if _is_prod and router_name in _EXPERIMENTAL_ROUTERS and not _ENABLE_EXPERIMENTAL_ROUTERS:
-        return False
-    return True
+    """Pure predicate used by readiness after app construction."""
+    return _ROUTER_POLICY.is_enabled(name)
+
+
+def _register_ingestion_task_handlers() -> frozenset[str]:
+    """Register queue consumers for the release-enabled ingestion surface.
+
+    Core regulation ingestion and the FSMA agent bridge are always-mounted
+    surfaces.  Source adapters, scraping, and discovery are optional routers;
+    their task handlers must be absent whenever the corresponding router is
+    disabled so a queue row cannot bypass the HTTP exposure policy.
+    """
+    from shared.agent_task_bridge import AGENT_ARTIFACT_TASK_TYPE, register_agent_bridge_handlers
+
+    from services.ingestion.app.task_handlers_regulation import register_regulation_handlers
+
+    registered = {"regulation_ingest", AGENT_ARTIFACT_TASK_TYPE}
+    register_regulation_handlers()
+    register_agent_bridge_handlers()
+
+    if _ROUTER_POLICY.is_enabled("sources"):
+        from services.ingestion.app.task_handlers_sources import register_source_handlers
+
+        register_source_handlers()
+        registered.update({"federal_register_ingest", "ecfr_ingest", "fda_ingest"})
+
+    if _ROUTER_POLICY.is_enabled("scraping"):
+        from services.ingestion.app.task_handlers_scraping import register_scraping_handlers
+
+        register_scraping_handlers()
+        registered.update({"state_scrape", "generic_scrape"})
+
+    if _ROUTER_POLICY.is_enabled("discovery"):
+        from services.ingestion.app.task_handlers_discovery import register_discovery_handlers
+
+        register_discovery_handlers()
+        registered.add("discovery_scrape")
+
+    logger.info("ingestion_task_handlers_registered", task_types=sorted(registered))
+    return frozenset(registered)
 
 
 # Issue #2517 — same diagnostic gate used by /v1/scheduler/status.
 from shared.observability.metrics_auth import require_metrics_key
 
 
-@app.get(
-    "/api/v1/features",
+@owned_api_route(
+    app,
+    owner="features",
+    path="/api/v1/features",
+    methods=["GET"],
     tags=["system"],
     # Issue #2517 — the full router topology (enabled/disabled/experimental) is
     # reconnaissance-grade info that lets an anonymous caller fingerprint the
@@ -557,145 +492,148 @@ from shared.observability.metrics_auth import require_metrics_key
 async def list_enabled_features():
     return {
         "enabled": _MOUNTED_ROUTERS,
-        "disabled": sorted(_DISABLED_ROUTERS),
-        "auto_disabled": sorted(_AUTO_DISABLED_ROUTERS),
-        "experimental_enabled": _ENABLE_EXPERIMENTAL_ROUTERS,
+        "disabled": sorted(_ROUTER_POLICY.disabled_routers),
+        "auto_disabled": sorted(_ROUTER_POLICY.auto_disabled_routers),
+        "experimental_enabled": _ROUTER_POLICY.experimental_bypass_enabled,
     }
 
 
 # =====================================================================
 # DOMAIN: INGESTION — CTE events, document processing, webhooks
 # =====================================================================
-from services.ingestion.app.routes import router as ingestion_core_router
-
-app.include_router(ingestion_core_router, tags=["Document Ingestion"])
+# services/ingestion/app/routes.py is a leftover aggregator with no APIRoute
+# objects. Do not mount it: an empty always-on owner is an ungated place for
+# new production routes to land without ENABLED_ROUTERS or a security policy.
 
 # Ingest endpoints (extracted from routes.py — /v1/ingest, /v1/ingest/file,
 # /v1/ingest/url, /v1/ingest/regulation). Mirrors services/ingestion/main.py.
 from services.ingestion.app.routes_ingest import router as ingest_router
 
-app.include_router(ingest_router, tags=["Document Ingestion"])
+include_owned_router(app, ingest_router, owner="core_ingest", tags=["Document Ingestion"])
 
 from services.ingestion.app.routes_health_metrics import router as health_metrics_router
 
-app.include_router(health_metrics_router, tags=["Health & Metrics"])
-
-from services.ingestion.app.fsma_readiness_compat import router as fsma_readiness_compat_router
-
-app.include_router(fsma_readiness_compat_router)
+include_owned_router(app, health_metrics_router, owner="health", tags=["Health & Metrics"])
 
 from services.ingestion.app.routes_status import router as status_router
 
-app.include_router(status_router)
+include_owned_router(app, status_router, owner="status")
 
 from services.ingestion.app.webhook_router_v2 import router as webhook_router
 
-app.include_router(webhook_router, tags=["Webhooks"])
+include_owned_router(app, webhook_router, owner="webhook", tags=["Webhooks"])
 
 if _router_enabled("scraping"):
     from services.ingestion.app.routes_scraping import router as scraping_router
 
-    app.include_router(scraping_router, tags=["Web Scraping"])
+    include_owned_router(app, scraping_router, owner="scraping", tags=["Web Scraping"])
 
 if _router_enabled("discovery"):
     from services.ingestion.app.routes_discovery import router as discovery_router
 
-    app.include_router(discovery_router, tags=["Discovery"])
+    include_owned_router(app, discovery_router, owner="discovery", tags=["Discovery"])
 
 if _router_enabled("sources"):
     from services.ingestion.app.routes_sources import router as sources_router
 
-    app.include_router(sources_router)
+    include_owned_router(app, sources_router, owner="sources")
 
 if _router_enabled("sandbox"):
     from services.ingestion.app.sandbox.router import router as sandbox_router
 
-    app.include_router(sandbox_router)
+    include_owned_router(app, sandbox_router, owner="sandbox")
 
 if _router_enabled("inflow_workbench"):
     from services.ingestion.app.inflow_workbench import router as inflow_workbench_router
 
-    app.include_router(inflow_workbench_router)
+    include_owned_router(app, inflow_workbench_router, owner="inflow_workbench")
 
 if _router_enabled("fda_export"):
     from services.ingestion.app.fda_export.router import router as fda_export_router
 
-    app.include_router(fda_export_router, tags=["FDA Exports"])
+    include_owned_router(app, fda_export_router, owner="fda_export", tags=["FDA Exports"])
 
 if _router_enabled("proof_verify"):
     # Public hash-chain verifier. Tenantless, no auth, rate-limited.
     # Production-surface justification documented in the router docstring.
     from services.ingestion.app.proof_verify_router import router as proof_verify_router
 
-    app.include_router(proof_verify_router, tags=["Public Proof"])
+    include_owned_router(app, proof_verify_router, owner="proof_verify", tags=["Public Proof"])
 
 if _router_enabled("csv"):
     from services.ingestion.app.csv_templates import router as csv_router
 
-    app.include_router(csv_router, tags=["CSV Import"])
+    include_owned_router(app, csv_router, owner="csv", tags=["CSV Import"])
 
 if _router_enabled("sensitech"):
     from services.ingestion.app.sensitech_parser import router as sensitech_router
 
-    app.include_router(sensitech_router, tags=["IoT Ingestion"])
+    include_owned_router(app, sensitech_router, owner="sensitech", tags=["IoT Ingestion"])
 
 if _router_enabled("edi"):
     from services.ingestion.app.edi_ingestion import router as edi_router
 
-    app.include_router(edi_router, tags=["EDI Ingestion"])
+    include_owned_router(app, edi_router, owner="edi", tags=["EDI Ingestion"])
 
 if _router_enabled("score"):
     from services.ingestion.app.compliance_score import router as score_router
 
-    app.include_router(score_router, tags=["Compliance Scoring"])
+    include_owned_router(app, score_router, owner="score", tags=["Compliance Scoring"])
 
 if _router_enabled("portal"):
     from services.ingestion.app.supplier_portal import router as portal_router
 
-    app.include_router(portal_router, tags=["Supplier Portal"])
+    include_owned_router(app, portal_router, owner="portal", tags=["Supplier Portal"])
 
 if _router_enabled("audit"):
     from services.ingestion.app.mock_audit import router as audit_router
 
-    app.include_router(audit_router, tags=["Audit"])
+    include_owned_router(app, audit_router, owner="audit", tags=["Audit"])
 
 if _router_enabled("sop"):
     from services.ingestion.app.sop_generator import router as sop_router
 
-    app.include_router(sop_router, tags=["SOP Generation"])
+    include_owned_router(app, sop_router, owner="sop", tags=["SOP Generation"])
 
 if _router_enabled("export"):
     from services.ingestion.app.epcis_export import router as export_router
 
-    app.include_router(export_router, tags=["Data Export"])
+    include_owned_router(app, export_router, owner="export", tags=["Data Export"])
 
 if _router_enabled("epcis_ingestion"):
     from services.ingestion.app.epcis.router import router as epcis_ingestion_router
 
-    app.include_router(epcis_ingestion_router, tags=["EPCIS"])
+    include_owned_router(app, epcis_ingestion_router, owner="epcis_ingestion", tags=["EPCIS"])
 
 if _router_enabled("qr_decoder"):
     from services.ingestion.app.qr_decoder import router as qr_decoder_router
 
-    app.include_router(qr_decoder_router, tags=["QR & GS1 Decoding"])
+    include_owned_router(app, qr_decoder_router, owner="qr_decoder", tags=["QR & GS1 Decoding"])
 
 if _router_enabled("label_vision"):
     from services.ingestion.app.label_vision import router as label_vision_router
 
-    app.include_router(label_vision_router, tags=["Computer Vision"])
+    include_owned_router(app, label_vision_router, owner="label_vision", tags=["Computer Vision"])
 
 if _router_enabled("exchange"):
     from services.ingestion.app.exchange_api import router as exchange_router
 
-    app.include_router(exchange_router, tags=["B2B Exchange"])
+    include_owned_router(app, exchange_router, owner="exchange", tags=["B2B Exchange"])
 
 if _router_enabled("billing"):
     from services.ingestion.app.stripe_billing import router as billing_router
     from services.ingestion.app.stripe_billing.routes import list_plans as _list_billing_plans
 
-    app.include_router(billing_router, tags=["Billing"])
+    include_owned_router(app, billing_router, owner="billing", tags=["Billing"])
 
-    @app.get("/billing/plans", tags=["Billing"], include_in_schema=False)
+    @owned_api_route(
+        app,
+        owner="billing",
+        path="/billing/plans",
+        methods=["GET"],
+        tags=["Billing"],
+        include_in_schema=False,
+    )
     async def list_billing_plans_compat():
         return await _list_billing_plans()
 
@@ -703,62 +641,62 @@ if _router_enabled("billing"):
 if _router_enabled("alerts"):
     from services.ingestion.app.alerts import router as alerts_router
 
-    app.include_router(alerts_router, tags=["Alerts"])
+    include_owned_router(app, alerts_router, owner="alerts", tags=["Alerts"])
 
 if _router_enabled("onboarding"):
     from services.ingestion.app.onboarding import router as onboarding_router
 
-    app.include_router(onboarding_router, tags=["Onboarding"])
+    include_owned_router(app, onboarding_router, owner="onboarding", tags=["Onboarding"])
 
 if _router_enabled("recall"):
     from services.ingestion.app.recall_report import router as recall_router
 
-    app.include_router(recall_router, tags=["Recall Reporting"])
+    include_owned_router(app, recall_router, owner="recall", tags=["Recall Reporting"])
 
 if _router_enabled("recall_simulations"):
     from services.ingestion.app.recall_simulations import router as recall_simulations_router
 
-    app.include_router(recall_simulations_router, tags=["Recall Simulations"])
+    include_owned_router(app, recall_simulations_router, owner="recall_simulations", tags=["Recall Simulations"])
 
 if _router_enabled("proof_recall"):
     from services.ingestion.app.proof_recall_router import router as proof_recall_router
 
-    app.include_router(proof_recall_router, tags=["Public Proof"])
+    include_owned_router(app, proof_recall_router, owner="proof_recall", tags=["Public Proof"])
 
 if _router_enabled("supplier_mgmt"):
     from services.ingestion.app.supplier_mgmt import router as supplier_mgmt_router
 
-    app.include_router(supplier_mgmt_router, tags=["Supplier Management"])
+    include_owned_router(app, supplier_mgmt_router, owner="supplier_mgmt", tags=["Supplier Management"])
 
 if _router_enabled("audit_log"):
     from services.ingestion.app.audit_log import router as audit_log_router
 
-    app.include_router(audit_log_router, tags=["Audit Logs"])
+    include_owned_router(app, audit_log_router, owner="audit_log", tags=["Audit Logs"])
 
 if _router_enabled("product_catalog"):
     from services.ingestion.app.product_catalog import router as product_catalog_router
 
-    app.include_router(product_catalog_router, tags=["Product Catalog"])
+    include_owned_router(app, product_catalog_router, owner="product_catalog", tags=["Product Catalog"])
 
 if _router_enabled("notification_prefs"):
     from services.ingestion.app.notification_prefs import router as notification_prefs_router
 
-    app.include_router(notification_prefs_router, tags=["Notifications"])
+    include_owned_router(app, notification_prefs_router, owner="notification_prefs", tags=["Notifications"])
 
 if _router_enabled("team_mgmt"):
     from services.ingestion.app.team_mgmt import router as team_mgmt_router
 
-    app.include_router(team_mgmt_router, tags=["Team Management"])
+    include_owned_router(app, team_mgmt_router, owner="team_mgmt", tags=["Team Management"])
 
 if _router_enabled("settings"):
     from services.ingestion.app.settings import router as settings_router
 
-    app.include_router(settings_router, tags=["Settings"])
+    include_owned_router(app, settings_router, owner="settings", tags=["Settings"])
 
 if _router_enabled("integration"):
     from services.ingestion.app.integration_router import router as integration_router
 
-    app.include_router(integration_router, tags=["Integration Connectors"])
+    include_owned_router(app, integration_router, owner="integration", tags=["Integration Connectors"])
 
 
 # =====================================================================
@@ -767,17 +705,17 @@ if _router_enabled("integration"):
 if _router_enabled("canonical_records"):
     from services.ingestion.app.canonical_router import router as canonical_records_router
 
-    app.include_router(canonical_records_router)
+    include_owned_router(app, canonical_records_router, owner="canonical_records")
 
 if _router_enabled("rules"):
     from services.ingestion.app.rules_router import router as rules_engine_router
 
-    app.include_router(rules_engine_router)
+    include_owned_router(app, rules_engine_router, owner="rules")
 
 if _router_enabled("exceptions"):
     from services.ingestion.app.exception_router import router as exception_queue_router
 
-    app.include_router(exception_queue_router)
+    include_owned_router(app, exception_queue_router, owner="exceptions")
 
 if _router_enabled("remediation"):
     from services.ingestion.app.remediation.router import router as remediation_router
@@ -785,157 +723,176 @@ if _router_enabled("remediation"):
         router as remediation_supplier_router,
     )
 
-    app.include_router(remediation_router)
-    app.include_router(remediation_supplier_router)
+    include_owned_router(app, remediation_router, owner="remediation")
+    include_owned_router(app, remediation_supplier_router, owner="remediation")
 
 if _router_enabled("request_workflow"):
     from services.ingestion.app.request_workflow_router import router as request_workflow_router
 
-    app.include_router(request_workflow_router)
+    include_owned_router(app, request_workflow_router, owner="request_workflow")
 
 if _router_enabled("identity"):
     from services.ingestion.app.identity_router import router as identity_resolution_router
 
-    app.include_router(identity_resolution_router)
+    include_owned_router(app, identity_resolution_router, owner="identity")
 
 if _router_enabled("auditor"):
     from services.ingestion.app.auditor_router import router as auditor_review_router
 
-    app.include_router(auditor_review_router)
+    include_owned_router(app, auditor_review_router, owner="auditor")
 
 if _router_enabled("compliance_metrics"):
     from services.ingestion.app.metrics_router import router as compliance_metrics_router
 
-    app.include_router(compliance_metrics_router)
+    include_owned_router(app, compliance_metrics_router, owner="compliance_metrics")
 
 if _router_enabled("readiness"):
     from services.ingestion.app.readiness_router import router as readiness_wizard_router
 
-    app.include_router(readiness_wizard_router)
+    include_owned_router(app, readiness_wizard_router, owner="readiness")
+
+    # The compatibility readiness views belong to the approved readiness
+    # surface; they must disappear with that owner instead of bypassing the
+    # production allowlist as an unconditional mount.
+    from services.ingestion.app.fsma_readiness_compat import router as fsma_readiness_compat_router
+
+    include_owned_router(app, fsma_readiness_compat_router, owner="readiness")
 
 if _router_enabled("incidents"):
     from services.ingestion.app.incident_router import router as incident_command_router
 
-    app.include_router(incident_command_router)
+    include_owned_router(app, incident_command_router, owner="incidents")
 
 if _router_enabled("chain_verification"):
     from services.ingestion.app.chain_verification_job import router as chain_verification_router
 
-    app.include_router(chain_verification_router)
+    include_owned_router(app, chain_verification_router, owner="chain_verification")
 
 if _router_enabled("audit_export_log"):
     from services.ingestion.app.audit_export_log import router as audit_export_log_router
 
-    app.include_router(audit_export_log_router)
+    include_owned_router(app, audit_export_log_router, owner="audit_export_log")
 
 if _router_enabled("sla_tracking"):
     from services.ingestion.app.sla_tracking import router as sla_tracking_router
 
-    app.include_router(sla_tracking_router)
+    include_owned_router(app, sla_tracking_router, owner="sla_tracking")
 
 if _router_enabled("export_monitoring"):
     from services.ingestion.app.export_monitoring import router as export_monitoring_router
 
-    app.include_router(export_monitoring_router)
+    include_owned_router(app, export_monitoring_router, owner="export_monitoring")
 
 if _router_enabled("supplier_validation"):
     from services.ingestion.app.supplier_validation import router as supplier_validation_router
 
-    app.include_router(supplier_validation_router)
+    include_owned_router(app, supplier_validation_router, owner="supplier_validation")
 
 if _router_enabled("disaster_recovery"):
     from services.ingestion.app.disaster_recovery import router as disaster_recovery_router
 
-    app.include_router(disaster_recovery_router)
+    include_owned_router(app, disaster_recovery_router, owner="disaster_recovery")
 
 
 # =====================================================================
-# DOMAIN: ADMIN — tenant management, auth, overlay, supplier onboarding
+# DOMAIN: ADMIN — tenant management, auth, supplier onboarding
 # =====================================================================
 if _router_enabled("admin"):
     from services.admin.app.agent_review_routes import router as agent_review_router
-    from services.admin.app.api_overlay import router as overlay_router
     from services.admin.app.compliance_routes import router as admin_compliance_router
     from services.admin.app.routes import router as admin_router, v1_router as admin_v1_router
 
-    app.include_router(admin_router, tags=["Admin"])
-    app.include_router(admin_v1_router, tags=["Admin V1"])
-    app.include_router(overlay_router, tags=["Compliance Overlay"])
-    app.include_router(admin_compliance_router, tags=["Admin Compliance"])
-    app.include_router(agent_review_router, prefix="/v1", tags=["Agent Reviews"])
+    # Current main moved the admin dependency probe to /health/deep and removed
+    # its duplicate hand-rolled /metrics handler. Both paths are now unique, so
+    # the admin router can be included without stale collision exclusions.
+    include_owned_router(app, admin_router, owner="admin", tags=["Admin"])
+    include_owned_router(app, admin_v1_router, owner="admin", tags=["Admin V1"])
+    include_owned_router(app, admin_compliance_router, owner="admin", tags=["Admin Compliance"])
+    include_owned_router(app, agent_review_router, owner="admin", prefix="/v1", tags=["Agent Reviews"])
 
     from services.admin.app.system_routes import router as system_router
 
-    app.include_router(system_router, prefix="/v1", tags=["System"])
+    include_owned_router(app, system_router, owner="admin", prefix="/v1", tags=["System"])
 
     from services.admin.app.auth_routes import router as auth_router
 
-    app.include_router(auth_router, tags=["Auth"])
+    include_owned_router(app, auth_router, owner="admin", tags=["Auth"])
 
     from services.admin.app.admin.organizations_router import router as admin_organizations_router
 
-    app.include_router(admin_organizations_router)
+    include_owned_router(app, admin_organizations_router, owner="admin")
 
     from services.admin.app.invite_routes import router as invite_router
 
-    app.include_router(invite_router, prefix="/v1", tags=["Invites"])
+    include_owned_router(app, invite_router, owner="admin", prefix="/v1", tags=["Invites"])
 
     from services.admin.app.user_routes import router as user_router
 
-    app.include_router(user_router, prefix="/v1", tags=["Users"])
+    include_owned_router(app, user_router, owner="admin", prefix="/v1", tags=["Users"])
 
     from services.admin.app.supplier_onboarding_routes import router as supplier_onboarding_router
 
-    app.include_router(supplier_onboarding_router, prefix="/v1", tags=["Supplier Onboarding"])
+    include_owned_router(app, supplier_onboarding_router, owner="admin", prefix="/v1", tags=["Supplier Onboarding"])
 
     from services.admin.app.supplier_facilities_routes import router as supplier_facilities_router
 
-    app.include_router(supplier_facilities_router, prefix="/v1", tags=["Supplier Facilities"])
+    include_owned_router(app, supplier_facilities_router, owner="admin", prefix="/v1", tags=["Supplier Facilities"])
 
     from services.admin.app.supplier_compliance_routes import router as supplier_compliance_router
 
-    app.include_router(supplier_compliance_router, prefix="/v1", tags=["Supplier Compliance"])
+    include_owned_router(app, supplier_compliance_router, owner="admin", prefix="/v1", tags=["Supplier Compliance"])
 
     from services.admin.app.supplier_funnel_routes import router as supplier_funnel_router
 
-    app.include_router(supplier_funnel_router, prefix="/v1", tags=["Supplier Funnel"])
+    include_owned_router(app, supplier_funnel_router, owner="admin", prefix="/v1", tags=["Supplier Funnel"])
 
     from services.admin.app.tenant_settings_routes import router as tenant_settings_router
 
-    app.include_router(tenant_settings_router, prefix="/v1", tags=["Tenant Settings"])
+    include_owned_router(app, tenant_settings_router, owner="admin", prefix="/v1", tags=["Tenant Settings"])
 
     from services.admin.app.bulk_upload.routes import router as bulk_upload_router
 
-    app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Bulk Upload"])
+    include_owned_router(
+        app,
+        bulk_upload_router,
+        owner="admin",
+        prefix="/v1/supplier/bulk-upload",
+        tags=["Supplier Bulk Upload"],
+    )
 
     from services.admin.app.review_routes import router as review_router
 
-    app.include_router(review_router, tags=["Review Queue"])
+    include_owned_router(app, review_router, owner="admin", tags=["Review Queue"])
 
     from services.admin.app.audit_routes import router as admin_audit_router
 
-    app.include_router(admin_audit_router, tags=["Admin Audit"])
+    include_owned_router(app, admin_audit_router, owner="admin", tags=["Admin Audit"])
 
     from services.admin.app.tool_verification_routes import router as tool_verification_router
 
-    app.include_router(tool_verification_router, tags=["Tool Verification"])
+    include_owned_router(app, tool_verification_router, owner="admin", tags=["Tool Verification"])
 
     from services.admin.app.erasure_routes import router as erasure_router
 
-    app.include_router(erasure_router, tags=["Account"])
+    include_owned_router(app, erasure_router, owner="admin", tags=["Account"])
 
     from services.admin.app.data_export_routes import router as data_export_router
 
-    app.include_router(data_export_router, tags=["Account"])
+    include_owned_router(app, data_export_router, owner="admin", tags=["Account"])
 
 
 # =====================================================================
 # DOMAIN: GRAPH — knowledge graph, traceability, lot tracing
 # =====================================================================
 if _router_enabled("graph"):
+    from services.admin.app.api_overlay import router as overlay_router
     from services.graph.app.routes import router as graph_router
 
-    app.include_router(graph_router, prefix="/api/v1", tags=["Graph Operations"])
+    include_owned_router(app, graph_router, owner="graph", prefix="/api/v1", tags=["Graph Operations"])
+    # Overlay data lives in the same Neo4j boundary. It must remain absent
+    # from production until graph is promoted with the required two-tenant
+    # Neo4j matrix and functional route adapters.
+    include_owned_router(app, overlay_router, owner="graph", tags=["Compliance Overlay"])
 
 
 # =====================================================================
@@ -944,7 +901,17 @@ if _router_enabled("graph"):
 if _router_enabled("nlp"):
     from services.nlp.app.routes import router as nlp_router
 
-    app.include_router(nlp_router, prefix="/api/v1", tags=["Text Analysis"])
+    # These service-local diagnostics collide with graph's earlier
+    # compatibility paths in the broad development app and were therefore
+    # unreachable. The consolidated /health and /metrics routes are canonical.
+    include_owned_router(
+        app,
+        nlp_router,
+        owner="nlp",
+        prefix="/api/v1",
+        tags=["Text Analysis"],
+        excluded_operations={("GET", "/api/v1/health"), ("GET", "/api/v1/metrics")},
+    )
 
 
 # =====================================================================
@@ -954,12 +921,12 @@ if _router_enabled("fsma_compliance"):
     from services.compliance.app.routes import router as fsma_router
     from services.compliance.app.snapshots import router as snapshots_router
 
-    app.include_router(fsma_router, tags=["FSMA Compliance"])
-    app.include_router(snapshots_router)
+    include_owned_router(app, fsma_router, owner="fsma_compliance", tags=["FSMA Compliance"])
+    include_owned_router(app, snapshots_router, owner="fsma_compliance")
 
 
 # ── Root endpoint ────────────────────────────────────────────────
-@app.get("/")
+@owned_api_route(app, owner="root", path="/", methods=["GET"])
 async def root():
     from shared.build_info import current_build_info
 
@@ -978,7 +945,7 @@ async def root():
 # router feature flag.
 from server.routes_scheduler_status import router as scheduler_status_router
 
-app.include_router(scheduler_status_router)
+include_owned_router(app, scheduler_status_router, owner="scheduler")
 
 
 # ── Health check ─────────────────────────────────────────────────
@@ -1000,11 +967,19 @@ app.include_router(scheduler_status_router)
 #   /health/live   this — minimal liveness, imports nothing optional
 #   /health/deep   Postgres + Neo4j + Redis verification, 503 when unhealthy
 #   /readiness     Railway's healthcheckPath (railway.toml), 503 when Postgres is down
-@app.get("/health/live", tags=["system"], operation_id="root_liveness_health")
+@owned_api_route(
+    app,
+    owner="health",
+    path="/health/live",
+    methods=["GET"],
+    tags=["system"],
+    operation_id="root_liveness_health",
+)
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
-    from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION
     from shared.build_info import current_build_info
+
+    from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION
 
     return {
         "status": "healthy",
@@ -1014,7 +989,7 @@ async def health():
     }
 
 
-@app.get("/readiness", tags=["system"])
+@owned_api_route(app, owner="health", path="/readiness", methods=["GET"], tags=["system"])
 async def readiness(request: Request):
     """Deep readiness probe — verifies critical dependencies.
 
@@ -1115,8 +1090,8 @@ async def readiness(request: Request):
 
     # --- Neo4j (optional graph mirror — never fatal to readiness) ---
     # WS-6: only probe Neo4j when the graph subsystem is actually mounted.
-    # The graph routers are experimental and auto-disabled in production
-    # (ENABLE_EXPERIMENTAL_ROUTERS off), yet NEO4J_URI is set in prod for the
+    # The graph routers are release-disabled in production (excluded from
+    # ENABLED_ROUTERS), yet NEO4J_URI is set in prod for the
     # best-effort admin supplier-graph mirror. Probing a mirror that no
     # mounted route reads only adds latency to every Railway healthcheck and
     # would flip the deploy-gating payload to ``degraded`` on a Neo4j blip
@@ -1266,26 +1241,18 @@ async def readiness(request: Request):
 #
 # Deliberately a log line and not an assertion: a false positive here must not
 # be able to take production down. Boot continues either way.
-def _iter_registered_endpoints(routes, prefix: str = ""):
+def _iter_registered_endpoints(application):
     """Yield ``(method, path)`` for every endpoint reachable on the app.
 
-    FastAPI >= 0.140 no longer flattens ``include_router`` calls onto the
-    parent router; an included router is kept behind a wrapper exposing
-    ``original_router`` and ``include_context.prefix``. A naive walk of
-    ``app.routes`` therefore sees a handful of wrappers rather than the ~400
-    real endpoints, so recurse through them.
+    Route flattening is centralized in ``shared.route_introspection`` so this
+    diagnostic and the blocking security manifest cannot drift onto different
+    interpretations of FastAPI's wrapper topology.
     """
-    for route in routes:
-        sub = getattr(route, "original_router", None) or getattr(route, "router", None)
-        if sub is not None and hasattr(sub, "routes"):
-            ctx = getattr(route, "include_context", None)
-            sub_prefix = getattr(ctx, "prefix", "") if ctx is not None else getattr(route, "path", "")
-            yield from _iter_registered_endpoints(sub.routes, prefix + (sub_prefix or ""))
-        elif hasattr(route, "path"):
-            # Mounts / websocket routes carry no ``methods``; give them a
-            # placeholder so two of them on one path still collide.
-            for method in getattr(route, "methods", None) or {"*"}:
-                yield method, prefix + route.path
+    from services.shared.route_introspection import iter_effective_routes
+
+    for path, route in iter_effective_routes(application):
+        for method in route.methods or set():
+            yield method, path
 
 
 def _warn_on_duplicate_routes(application) -> None:
@@ -1293,7 +1260,7 @@ def _warn_on_duplicate_routes(application) -> None:
     try:
         from collections import Counter
 
-        counts = Counter(_iter_registered_endpoints(application.routes))
+        counts = Counter(_iter_registered_endpoints(application))
         duplicates = sorted(f"{method} {path}" for (method, path), n in counts.items() if n > 1)
         if duplicates:
             logger.warning(

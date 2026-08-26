@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,6 +13,7 @@ from services.admin.app.metrics import (
     hallucination_duplicates_total,
     hallucination_events_total,
 )
+from services.admin.app.sqlalchemy_models import AuditLogModel
 
 
 class FakeRedis:
@@ -44,14 +46,12 @@ class FakeSession:
         self.storage = storage
         self._pending = None
         # AuditLogger._acquire_chain_lock inspects the bind to decide whether
-        # to issue an advisory lock; a missing attribute makes log_event fail
-        # and (post-#2857) abort the review decision. (#2513)
-        self.bind = None
+        # to issue an advisory lock. Model SQLite so tenant-GUC and advisory-
+        # lock paths are skipped while retaining the audit persistence stub.
+        self.bind = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
         self.audit_entries: list = []
 
     def add(self, item):
-        from services.admin.app.sqlalchemy_models import AuditLogModel
-
         # Route audit rows aside so they don't clobber the pending review item.
         if isinstance(item, AuditLogModel):
             self.audit_entries.append(item)

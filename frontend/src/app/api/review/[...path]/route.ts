@@ -1,6 +1,11 @@
 import { NextRequest } from 'next/server';
-import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import {
+    appendOpaqueSessionCookies,
+    createJsonProxy,
+    passthroughRequestHeaders,
+} from '@/lib/proxy-factory';
 import { getServerServiceURL } from '@/lib/api-config';
+import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 // Proxy review API requests to the Admin backend service.
 // Handles the approve/reject actions on flagged extractions — paths like
@@ -31,26 +36,20 @@ const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
     serviceName: 'review',
     buildTargetUrl: (path, queryString) =>
         `${ADMIN_URL}/v1/admin/review/${resolveBackendPath(path)}${queryString}`,
+    prepareHeaders: (headers, request) => attestPrivilegedProxyClientIp(headers, request),
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers({ 'Content-Type': 'application/json' });
         passthroughRequestHeaders(headers, request, [
-            'authorization',
-            'x-regengine-api-key',
-            'x-api-key',
-            'x-admin-key',
+            'accept',
+            'origin',
+            'referer',
+            'user-agent',
+            'x-csrf-token',
+            'x-request-id',
             'x-tenant-id',
         ]);
-        return applyCookieCredentials(headers, request);
+        return appendOpaqueSessionCookies(headers, request);
     },
-    transformBody: (body) => ({
-        reviewer_id: 'web-frontend',
-        notes: 'Action via web interface',
-        ...(body as Record<string, unknown>),
-    }),
-    defaultBody: (path) => ({
-        reviewer_id: 'web-frontend',
-        notes: `${path.includes('approve') ? 'Approved' : 'Rejected'} via web interface`,
-    }),
 });
 
 export { GET, POST, PUT, PATCH, DELETE };

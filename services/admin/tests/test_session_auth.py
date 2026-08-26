@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from fastapi import HTTPException
@@ -94,6 +94,84 @@ def test_get_current_active_user_rejects_unknown_or_inactive_session():
         )
 
     assert exc_info.value.status_code == 401
+
+
+def test_scoped_session_lookup_failure_rolls_back_without_masking_503(monkeypatch):
+    original = HTTPException(
+        status_code=503,
+        detail="Authentication service temporarily unavailable.",
+    )
+    db = MagicMock()
+    arm = MagicMock()
+    disarm = MagicMock(side_effect=AssertionError("disarm must not run in an aborted transaction"))
+    monkeypatch.setattr(session_auth, "arm_global_admin_context", arm)
+    monkeypatch.setattr(session_auth, "disarm_global_admin_context", disarm)
+    monkeypatch.setattr(
+        session_auth,
+        "get_current_active_session_context",
+        MagicMock(side_effect=original),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        session_auth.get_scoped_active_session_context(
+            request=_request(),
+            db=db,
+            crypto_service=MagicMock(),
+        )
+
+    assert exc_info.value is original
+    arm.assert_called_once_with(db)
+    db.rollback.assert_called_once_with()
+    disarm.assert_not_called()
+
+
+def test_scoped_session_success_disarms_before_binding_user(monkeypatch):
+    user = SimpleNamespace(id="user-id", is_sysadmin=False)
+    context = session_auth.ActiveSessionContext(
+        user=user,
+        session=SimpleNamespace(id="session-id", auth_method="webauthn"),
+    )
+    events = MagicMock()
+
+    def select_context(**_kwargs):
+        events("select")
+        return context
+
+    monkeypatch.setattr(
+        session_auth,
+        "arm_global_admin_context",
+        lambda db: events("arm", db),
+    )
+    monkeypatch.setattr(
+        session_auth,
+        "get_current_active_session_context",
+        select_context,
+    )
+    monkeypatch.setattr(
+        session_auth,
+        "disarm_global_admin_context",
+        lambda db: events("disarm", db),
+    )
+    monkeypatch.setattr(
+        session_auth,
+        "bind_authenticated_user_context",
+        lambda db, user_id: events("bind", db, user_id),
+    )
+    db = MagicMock()
+
+    result = session_auth.get_scoped_active_session_context(
+        request=_request(),
+        db=db,
+        crypto_service=MagicMock(),
+    )
+
+    assert result is context
+    assert events.call_args_list == [
+        call("arm", db),
+        call("select"),
+        call("disarm", db),
+        call("bind", db, user.id),
+    ]
 
 
 def test_get_current_active_user_returns_user_from_context():

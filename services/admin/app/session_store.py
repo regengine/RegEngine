@@ -423,6 +423,11 @@ class InMemoryAsyncRedis:
             data, _ = self._ensure_type_locked(key, "set")
             return set(data)
 
+    async def sismember(self, key: str, value: Any) -> bool:
+        async with self._lock:
+            data, _ = self._ensure_type_locked(key, "set")
+            return str(value) in data
+
     async def scan(
         self,
         cursor: int = 0,
@@ -949,7 +954,7 @@ class RedisSessionStore:
         # Revoke all sessions in parallel (skip the caller's own session if requested)
         client = await self._get_client()
         revoked = 0
-        async with client.pipeline(transaction=False) as pipe:
+        async with client.pipeline(transaction=True) as pipe:
             for session in sessions:
                 if except_session_id is not None and session.id == except_session_id:
                     continue

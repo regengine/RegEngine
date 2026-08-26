@@ -3,10 +3,10 @@ import { getServerServiceURL } from '@/lib/api-config';
 import {
     requireProxyAuth,
     validateProxySession,
-    getServerApiKey,
     validateUuid,
     enforceTenantMatch,
 } from '@/lib/api-proxy';
+import { prepareTenantScopedProxyHeaders, rejectUpstreamRedirect } from '@/lib/proxy-factory';
 import {
     allowDevComplianceSnapshotFallback,
     createDevComplianceSnapshot,
@@ -57,13 +57,11 @@ export async function GET(
     if (tenantError) return tenantError;
 
     const COMPLIANCE_URL = getComplianceUrl();
-    const headers: Record<string, string> = {
+    const headers = new Headers({
         'Content-Type': 'application/json',
-    };
-    const apiKey = getServerApiKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
     const allowFallback = allowDevComplianceSnapshotFallback();
     if (!COMPLIANCE_URL) {
         if (allowFallback) {
@@ -79,7 +77,10 @@ export async function GET(
     try {
         const response = await fetch(`${COMPLIANCE_URL}/v1/compliance/snapshots/${tenantId}`, {
             headers,
+            redirect: 'manual',
         });
+        const redirectError = rejectUpstreamRedirect(response, 'compliance-snapshots');
+        if (redirectError) return redirectError;
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
@@ -135,13 +136,11 @@ export async function POST(
     const parsedBody = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
 
     const COMPLIANCE_URL = getComplianceUrl();
-    const headers: Record<string, string> = {
+    const headers = new Headers({
         'Content-Type': 'application/json',
-    };
-    const apiKey = getServerApiKey();
-    if (apiKey) {
-        headers['X-RegEngine-API-Key'] = apiKey;
-    }
+    });
+    const credentialError = prepareTenantScopedProxyHeaders(headers, request, tenantId);
+    if (credentialError) return credentialError;
     const allowFallback = allowDevComplianceSnapshotFallback();
     if (!COMPLIANCE_URL) {
         if (allowFallback) {
@@ -165,7 +164,10 @@ export async function POST(
             method: 'POST',
             headers,
             body: JSON.stringify(body),
+            redirect: 'manual',
         });
+        const redirectError = rejectUpstreamRedirect(response, 'compliance-snapshots');
+        if (redirectError) return redirectError;
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {

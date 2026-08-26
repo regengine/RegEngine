@@ -1,8 +1,9 @@
 """Database manager for PostgreSQL operations."""
 
 import json
+from contextlib import contextmanager
 from datetime import datetime
-from typing import List, Optional
+from typing import Iterator, List, Optional
 from uuid import UUID
 
 import psycopg
@@ -27,11 +28,30 @@ class DatabaseManager:
             config: Database configuration
         """
         self.config = config
-        self.conn = None
+        self.conn: Optional[psycopg.Connection] = None
+        self._tenant_id: Optional[str] = None
+
+    @staticmethod
+    def _connection_is_open(connection) -> bool:
+        """Return whether a real or injected connection is usable.
+
+        Psycopg exposes ``closed`` as a boolean. Tests and adapters may inject
+        duck-typed connections whose ``closed`` attribute is absent or a mock;
+        only an explicit true boolean/integer means closed.
+        """
+        if connection is None:
+            return False
+        closed = getattr(connection, "closed", False)
+        if isinstance(closed, (bool, int)):
+            return not bool(closed)
+        return True
 
     def connect(self) -> None:
-        """Establish database connection."""
-        self.conn = psycopg.connect(
+        """Establish a non-autocommit database connection once."""
+        if self._connection_is_open(self.conn):
+            return
+
+        connection = psycopg.connect(
             host=self.config.host,
             port=self.config.port,
             dbname=self.config.database,
@@ -39,79 +59,96 @@ class DatabaseManager:
             password=self.config.password,
             row_factory=dict_row,
         )
-        self.conn.autocommit = True
+        connection.autocommit = False
+        self.conn = connection
 
     def close(self) -> None:
-        """Close database connection."""
-        if self.conn:
-            self.conn.close()
-            self.conn = None
+        """Rollback unknown work, close the connection, and clear its tenant."""
+        connection = self.conn
+        self.conn = None
+        self._tenant_id = None
+        if connection is None:
+            return
+
+        try:
+            connection.rollback()
+        finally:
+            connection.close()
 
     def set_tenant_context(self, tenant_id: str) -> None:
-        """Set tenant context for RLS via the Postgres SECURITY DEFINER helper.
+        """Bind this manager to one tenant for its entire connection lifetime.
 
-        Intentionally does NOT delegate to
-        ``services.shared.tenant_context.set_tenant_guc`` (the Phase B
-        canonical primitive, #1934). The other tenant-context callers
-        in the codebase (CTEPersistence #1935, CanonicalEventStore
-        #1936, ExceptionQueueService #1938) all run on top of a
-        SQLAlchemy Session inside an explicit transaction, where
-        ``SET LOCAL app.tenant_id = :tid`` (transaction-scoped) is the
-        right shape.
-
-        ``DatabaseManager`` is structurally different on two axes:
-
-        1. **Raw psycopg connection, not SQLAlchemy.** The session
-           parameter ``set_tenant_guc`` expects (an object with
-           ``.execute(text(...), params)``) doesn't match this layer's
-           ``conn.cursor().execute(sql, tuple)`` API.
-
-        2. **``autocommit = True``** (set in ``connect()`` above).
-           Every statement is its own transaction. ``SET LOCAL`` only
-           takes effect within the current transaction and resets on
-           COMMIT — under autocommit it would set then immediately
-           reset on the implicit commit. Effectively a no-op.
-
-        The SECURITY DEFINER function ``set_tenant_context(uuid)``
-        enforced by the repository-level Alembic RLS migrations.
-        uses ``set_config('app.tenant_id', ..., FALSE)`` which is
-        session-scoped — the right shape under autocommit, where the
-        connection is the unit of context.
-
-        Pool-bleed safety (the reason Phase B exists) is not a concern
-        here because ``DatabaseManager`` opens a per-instance dedicated
-        connection in ``connect()`` and closes it in ``close()`` /
-        ``__exit__``. There is no connection pool; the GUC dies with
-        the connection.
-
-        If this code path ever switches to SQLAlchemy or to a pooled
-        connection model, revisit — the right migration would be the
-        full set: drop autocommit, wrap requests in explicit
-        transactions, switch to a SQLAlchemy session, then delegate
-        to ``set_tenant_guc``. Out of scope for the Phase B per-call-
-        site sweep.
-
-        #2461 note: this raw-psycopg layer is likewise OUT of coverage
-        of the class-level SQLAlchemy Engine "begin" hook installed by
-        ``shared.tenant_context`` (the RLS-readiness mechanism) — by
-        construction, since no SQLAlchemy Engine is involved. This
-        SECURITY DEFINER session-scoped carve-out remains the canonical
-        tenant-context mechanism for DatabaseManager callers.
+        The tenant GUC itself is applied by :meth:`_tenant_cursor` with
+        transaction-local scope. Keeping setup and the protected query in the
+        same explicit transaction makes the boundary safe for both direct
+        PostgreSQL connections and transaction-mode poolers.
         """
-        if not self.conn:
+        if not self._connection_is_open(self.conn):
             self.connect()
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT set_tenant_context(%s)", (tenant_id,))
+        self._resolve_tenant_id(tenant_id)
+
+    @staticmethod
+    def _normalize_tenant_id(tenant_id: str) -> str:
+        """Return a canonical UUID string or fail before issuing SQL."""
+        if tenant_id is None or str(tenant_id).strip() == "":
+            raise RuntimeError("tenant context is required for database operations")
+        try:
+            return str(UUID(str(tenant_id)))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValueError("tenant_id must be a valid UUID") from exc
+
+    def _resolve_tenant_id(self, tenant_id: Optional[str] = None) -> str:
+        """Resolve and permanently bind the connection's tenant identity."""
+        if tenant_id is None:
+            if self._tenant_id is None:
+                raise RuntimeError("tenant context is required for database operations")
+            return self._tenant_id
+
+        resolved = self._normalize_tenant_id(tenant_id)
+        if self._tenant_id is not None and resolved != self._tenant_id:
+            raise ValueError("operation tenant_id does not match bound tenant context")
+        self._tenant_id = resolved
+        return resolved
+
+    @contextmanager
+    def _tenant_cursor(self, tenant_id: Optional[str] = None) -> Iterator[psycopg.Cursor]:
+        """Yield a cursor with a transaction-local tenant GUC.
+
+        The transaction encloses both ``set_config(..., true)`` and the caller's
+        SQL. Any statement or commit failure is rolled back before the
+        connection can be reused.
+        """
+        resolved_tenant_id = self._resolve_tenant_id(tenant_id)
+        if not self._connection_is_open(self.conn):
+            self.connect()
+
+        connection = self.conn
+        if connection is None:  # pragma: no cover - defensive connector contract
+            raise RuntimeError("database connection is unavailable")
+        try:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT set_config('app.tenant_id', %s, true)",
+                        (resolved_tenant_id,),
+                    )
+                    yield cursor
+        except Exception:
+            try:
+                connection.rollback()
+            except Exception:
+                try:
+                    connection.close()
+                finally:
+                    if self.conn is connection:
+                        self.conn = None
+            raise
 
     def __enter__(self):
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type:
-            self.conn.rollback()
-        else:
-            self.conn.commit()
         self.close()
 
     # Document operations
@@ -123,7 +160,7 @@ class DatabaseManager:
         Args:
             document: Document to insert
         """
-        with self.conn.cursor() as cur:
+        with self._tenant_cursor(document.tenant_id) as cur:
             cur.execute(
                 """
                 INSERT INTO ingestion.documents (
@@ -182,7 +219,8 @@ class DatabaseManager:
         Returns:
             Document dict or None
         """
-        with self.conn.cursor() as cur:
+        tenant_id = self._resolve_tenant_id(tenant_id)
+        with self._tenant_cursor(tenant_id) as cur:
             cur.execute(
                 """
                 SELECT * FROM ingestion.documents
@@ -203,7 +241,8 @@ class DatabaseManager:
         Returns:
             Document dict or None
         """
-        with self.conn.cursor() as cur:
+        tenant_id = self._resolve_tenant_id(tenant_id)
+        with self._tenant_cursor(tenant_id) as cur:
             cur.execute(
                 """
                 SELECT * FROM ingestion.documents
@@ -235,8 +274,9 @@ class DatabaseManager:
             List of document dicts
         """
         limit = min(limit, 500)  # Hard cap — prevent full-table dumps
+        tenant_id = self._resolve_tenant_id(tenant_id)
         query = "SELECT * FROM ingestion.documents WHERE tenant_id = %s"
-        params = [tenant_id]
+        params: List[object] = [tenant_id]
 
         if vertical:
             query += " AND vertical = %s"
@@ -249,7 +289,7 @@ class DatabaseManager:
         query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
 
-        with self.conn.cursor() as cur:
+        with self._tenant_cursor(tenant_id) as cur:
             cur.execute(query, params)
             return cur.fetchall()
 
@@ -262,7 +302,7 @@ class DatabaseManager:
         Args:
             job: Job to insert
         """
-        with self.conn.cursor() as cur:
+        with self._tenant_cursor(job.tenant_id) as cur:
             cur.execute(
                 """
                 INSERT INTO ingestion.jobs (
@@ -304,7 +344,7 @@ class DatabaseManager:
         Args:
             job: Job to update
         """
-        with self.conn.cursor() as cur:
+        with self._tenant_cursor(job.tenant_id) as cur:
             cur.execute(
                 """
                 UPDATE ingestion.jobs SET
@@ -346,7 +386,8 @@ class DatabaseManager:
         Returns:
             Job dict or None (None when the job belongs to another tenant)
         """
-        with self.conn.cursor() as cur:
+        tenant_id = self._resolve_tenant_id(tenant_id)
+        with self._tenant_cursor(tenant_id) as cur:
             cur.execute(
                 """
                 SELECT * FROM ingestion.jobs
@@ -365,7 +406,7 @@ class DatabaseManager:
         Args:
             entry: Audit entry to insert
         """
-        with self.conn.cursor() as cur:
+        with self._tenant_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO ingestion.audit_log (
@@ -404,7 +445,8 @@ class DatabaseManager:
         Returns:
             List of audit entry dicts
         """
-        with self.conn.cursor() as cur:
+        tenant_id = self._resolve_tenant_id(tenant_id)
+        with self._tenant_cursor(tenant_id) as cur:
             cur.execute(
                 """
                 SELECT a.* FROM ingestion.audit_log a

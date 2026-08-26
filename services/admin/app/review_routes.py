@@ -14,8 +14,9 @@ Security hardening (issues #1360 / #1361 / #1367 / #1369 / #1389):
     by UUID are blocked at the tracker layer (404).
   - the tracker enforces idempotency and rejects a second decision
     on a non-PENDING item with ``ValueError`` which we map to 409.
-  - list/approve/reject require a tenant-scoped API key; a key with
-    ``tenant_id is None`` cannot list or resolve review items.
+  - tenant and reviewer identity come only from the active opaque browser
+    session. Reads require ``review.read``; decisions additionally require
+    ``review.decide`` and WebAuthn/SSO high assurance.
 """
 
 from datetime import datetime, timezone
@@ -23,9 +24,14 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from shared.auth import APIKey, require_api_key
 from shared.rate_limit import limiter
 
+from .privileged_auth import (
+    PrivilegedActor,
+    audit_privileged_action,
+    require_review_decide,
+    require_review_read,
+)
 from .text_sanitize import sanitize_source_text_for_response
 
 router = APIRouter(prefix="/v1/admin", tags=["review"])
@@ -35,23 +41,6 @@ router = APIRouter(prefix="/v1/admin", tags=["review"])
 # payloads bounded -- see issue #1409. A detail endpoint (not yet wired)
 # is the correct surface for the full OCR text.
 TEXT_PREVIEW_MAX_CHARS = 200
-
-
-def _require_tenant_scoped_key(api_key: APIKey) -> str:
-    """Ensure the API key is bound to a tenant; return the tenant_id.
-
-    Legacy keys with ``tenant_id is None`` must not be able to list or
-    resolve review items -- without a tenant, the tracker queries fall
-    back to "all tenants" (issue #1389). Raise 403 rather than leak.
-    """
-    if not api_key.tenant_id:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "This API key is not bound to a tenant. Create a tenant-scoped key before accessing the review queue."
-            ),
-        )
-    return api_key.tenant_id
 
 
 class ReviewItem(BaseModel):
@@ -134,7 +123,7 @@ async def get_review_queue(
         ),
     ),
     offset: int = Query(default=0, ge=0, description="Number of items to skip"),
-    api_key: APIKey = Depends(require_api_key),
+    actor: PrivilegedActor = Depends(require_review_read),
 ) -> ReviewItemsResponse:
     """Get items pending curator review.
 
@@ -151,7 +140,16 @@ async def get_review_queue(
 
     Rate-limited to 30 requests/minute per remote address (#1409).
     """
-    tenant_id = _require_tenant_scoped_key(api_key)
+    tenant_id = actor.tenant_id
+    if tenant_id is None:  # dependency contract; fail closed if bypassed in a test/integration
+        raise HTTPException(status_code=403, detail="An active tenant membership is required.")
+    audit_privileged_action(
+        request,
+        action="review.queue.read",
+        outcome="attempted",
+        actor=actor,
+        selected_tenant=tenant_id,
+    )
     tracker = _get_tracker()
     try:
         result = tracker.list_hallucinations(
@@ -185,12 +183,21 @@ async def get_review_queue(
                 )
             )
 
-        return ReviewItemsResponse(
+        response = ReviewItemsResponse(
             items=items,
             total=result.get("total", len(items)),
             offset=offset,
             limit=limit,
         )
+        audit_privileged_action(
+            request,
+            action="review.queue.read",
+            outcome="succeeded",
+            actor=actor,
+            target=f"{len(items)} items",
+            selected_tenant=tenant_id,
+        )
+        return response
     except HTTPException:
         raise
     except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
@@ -199,6 +206,14 @@ async def get_review_queue(
 
         logger = structlog.get_logger("review")
         logger.warning("review_queue_query_failed", error=str(e))
+        audit_privileged_action(
+            request,
+            action="review.queue.read",
+            outcome="failed",
+            actor=actor,
+            selected_tenant=tenant_id,
+            reason="tracker_unavailable",
+        )
         return ReviewItemsResponse(
             items=[],
             total=0,
@@ -206,26 +221,12 @@ async def get_review_queue(
             limit=limit,
         )
 
-
-def _extract_actor_identity(request: Request) -> tuple[Optional[str], Optional[str]]:
-    """Pull actor identity from request state if the auth dependency set it.
-
-    Admin routes that run under JWT auth expose ``request.state.user`` /
-    ``request.state.user_id`` via the auth middleware. For API-key-only
-    routes this returns (None, None) and we record the API key alone.
-    """
-    state = getattr(request, "state", None)
-    user_id = getattr(state, "user_id", None) if state is not None else None
-    user_email = getattr(state, "user_email", None) if state is not None else None
-    return user_id, user_email
-
-
 @router.post("/review/{review_id}/approve", response_model=ReviewActionResponse)
 @router.post("/review/flagged-extractions/{review_id}/approve", response_model=ReviewActionResponse)
 async def approve_review_item(
     review_id: str,
     request: Request,
-    api_key: APIKey = Depends(require_api_key),
+    actor: PrivilegedActor = Depends(require_review_decide),
 ):
     """Approve a review item, marking the extraction as validated.
 
@@ -233,25 +234,52 @@ async def approve_review_item(
     approve/reject call raises 409 Conflict (#1361). Writes a
     tamper-evident entry to the audit_logs hash chain (#1369).
     """
-    tenant_id = _require_tenant_scoped_key(api_key)
+    tenant_id = actor.tenant_id
+    if tenant_id is None or actor.user is None:
+        raise HTTPException(status_code=403, detail="An active tenant membership is required.")
     tracker = _get_tracker()
-    actor_user_id, actor_email = _extract_actor_identity(request)
     try:
         updated = tracker.resolve_hallucination(
             review_id,
             new_status="APPROVED",
-            reviewer_id=api_key.key_id,
-            notes=f"Approved via curator review API by key {api_key.key_id}",
+            reviewer_id=actor.actor_id,
+            notes="Approved via curator review API by authenticated reviewer",
             tenant_id=tenant_id,
-            actor_user_id=actor_user_id,
-            actor_email=actor_email,
+            actor_user_id=actor.actor_id,
+            actor_email=getattr(actor.user, "email", None),
+        )
+        audit_privileged_action(
+            request,
+            action="review.approve",
+            outcome="succeeded",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
         )
         return {"status": "approved", "review_id": review_id, "updated": updated}
     except LookupError:
+        audit_privileged_action(
+            request,
+            action="review.approve",
+            outcome="denied",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
+            reason="review_not_found",
+        )
         raise HTTPException(status_code=404, detail="Review item not found")
     except ValueError as e:
         # Idempotency conflict (#1361) -- item already resolved.
         msg = str(e)
+        audit_privileged_action(
+            request,
+            action="review.approve",
+            outcome="denied",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
+            reason="state_conflict" if "already" in msg.lower() else "invalid_review_decision",
+        )
         if "already" in msg.lower():
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=400, detail=msg)
@@ -262,7 +290,7 @@ async def approve_review_item(
 async def reject_review_item(
     review_id: str,
     request: Request,
-    api_key: APIKey = Depends(require_api_key),
+    actor: PrivilegedActor = Depends(require_review_decide),
 ):
     """Reject a review item, marking the extraction as invalid.
 
@@ -270,24 +298,51 @@ async def reject_review_item(
     approve/reject call raises 409 Conflict (#1361). Writes a
     tamper-evident entry to the audit_logs hash chain (#1369).
     """
-    tenant_id = _require_tenant_scoped_key(api_key)
+    tenant_id = actor.tenant_id
+    if tenant_id is None or actor.user is None:
+        raise HTTPException(status_code=403, detail="An active tenant membership is required.")
     tracker = _get_tracker()
-    actor_user_id, actor_email = _extract_actor_identity(request)
     try:
         updated = tracker.resolve_hallucination(
             review_id,
             new_status="REJECTED",
-            reviewer_id=api_key.key_id,
-            notes=f"Rejected via curator review API by key {api_key.key_id}",
+            reviewer_id=actor.actor_id,
+            notes="Rejected via curator review API by authenticated reviewer",
             tenant_id=tenant_id,
-            actor_user_id=actor_user_id,
-            actor_email=actor_email,
+            actor_user_id=actor.actor_id,
+            actor_email=getattr(actor.user, "email", None),
+        )
+        audit_privileged_action(
+            request,
+            action="review.reject",
+            outcome="succeeded",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
         )
         return {"status": "rejected", "review_id": review_id, "updated": updated}
     except LookupError:
+        audit_privileged_action(
+            request,
+            action="review.reject",
+            outcome="denied",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
+            reason="review_not_found",
+        )
         raise HTTPException(status_code=404, detail="Review item not found")
     except ValueError as e:
         msg = str(e)
+        audit_privileged_action(
+            request,
+            action="review.reject",
+            outcome="denied",
+            actor=actor,
+            target=review_id,
+            selected_tenant=tenant_id,
+            reason="state_conflict" if "already" in msg.lower() else "invalid_review_decision",
+        )
         if "already" in msg.lower():
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=400, detail=msg)

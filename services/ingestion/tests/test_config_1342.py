@@ -1,14 +1,12 @@
 """Coverage for app/config.py — environment-driven settings + lru_cache getter.
 
-Locks the field shape of Settings and the production guardrails in
-get_settings() (API_KEY warning + AUTH_TEST_BYPASS_TOKEN force-to-None).
+Locks the field shape of Settings, retirement of environment master keys, and
+the production AUTH_TEST_BYPASS_TOKEN guardrail in get_settings().
 
 Issue: #1342
 """
 
 from __future__ import annotations
-
-import warnings
 
 import pytest
 from app import config as cfg
@@ -80,9 +78,9 @@ class TestSettingsDefaults:
         s = Settings()
         assert s.kafka_topic_normalized == "ingest.normalized"
 
-    def test_api_key_none_by_default(self, _clear_env):
+    def test_static_api_key_is_not_a_setting(self, _clear_env):
         s = Settings()
-        assert s.api_key is None
+        assert not hasattr(s, "api_key")
 
     def test_auth_test_bypass_none_by_default(self, _clear_env):
         s = Settings()
@@ -112,10 +110,11 @@ class TestSettingsDefaults:
 
 
 class TestSettingsEnvOverrides:
-    def test_api_key_from_env(self, monkeypatch, _clear_env):
+    def test_retired_api_key_environment_variables_are_ignored(self, monkeypatch, _clear_env):
         monkeypatch.setenv("API_KEY", "secret-123")
+        monkeypatch.setenv("REGENGINE_API_KEY", "secret-456")
         s = Settings()
-        assert s.api_key == "secret-123"
+        assert not hasattr(s, "api_key")
 
     def test_raw_bucket_from_env(self, monkeypatch, _clear_env):
         monkeypatch.setenv("RAW_DATA_BUCKET", "my-bucket")
@@ -181,65 +180,23 @@ class TestGetSettingsCaching:
 
 
 class TestGetSettingsProductionGuardrails:
-    def test_missing_api_key_in_production_warns(self, _clear_env, monkeypatch, caplog):
+    def test_retired_api_key_environment_variables_are_ignored_in_production(
+        self, _clear_env, monkeypatch, caplog
+    ):
         import shared.env as shared_env
 
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
-            with caplog.at_level("WARNING"):
-                get_settings()
-            # Warning emitted both to stdlib warnings and logger
-            assert any("API_KEY" in str(w.message) for w in recorded)
-
-    def test_missing_api_key_in_production_logs_warning(self, _clear_env, monkeypatch, caplog):
-        import shared.env as shared_env
-
-        monkeypatch.setattr(shared_env, "is_production", lambda: True)
+        monkeypatch.setenv("API_KEY", "retired-one")
+        monkeypatch.setenv("REGENGINE_API_KEY", "retired-two")
         with caplog.at_level("WARNING"):
-            get_settings()
-        assert any("API_KEY" in rec.message for rec in caplog.records)
-
-    def test_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
-        import shared.env as shared_env
-
-        monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        monkeypatch.setenv("API_KEY", "valid-key")
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
             s = get_settings()
-        api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
-        assert api_warnings == []
-        assert s.api_key == "valid-key"
-
-    def test_regengine_api_key_present_in_production_no_warning(self, _clear_env, monkeypatch):
-        import shared.env as shared_env
-
-        monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        monkeypatch.setenv("REGENGINE_API_KEY", "valid-key")
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
-            s = get_settings()
-        api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
-        assert api_warnings == []
-        assert s.api_key is None
-
-    def test_missing_api_key_in_dev_no_warning(self, _clear_env, monkeypatch):
-        import shared.env as shared_env
-
-        monkeypatch.setattr(shared_env, "is_production", lambda: False)
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
-            s = get_settings()
-        api_warnings = [w for w in recorded if "API_KEY" in str(w.message)]
-        assert api_warnings == []
-        assert s.api_key is None
+        assert not hasattr(s, "api_key")
+        assert not any("API_KEY" in rec.message for rec in caplog.records)
 
     def test_auth_bypass_token_forced_none_in_production(self, _clear_env, monkeypatch):
         import shared.env as shared_env
 
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        monkeypatch.setenv("API_KEY", "x")  # suppress the API_KEY warning
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "should-be-killed")
         s = get_settings()
         assert s.auth_test_bypass_token is None
@@ -248,7 +205,6 @@ class TestGetSettingsProductionGuardrails:
         import shared.env as shared_env
 
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        monkeypatch.setenv("API_KEY", "x")
         monkeypatch.setenv("AUTH_TEST_BYPASS_TOKEN", "should-be-killed")
         with caplog.at_level("WARNING"):
             get_settings()
@@ -266,7 +222,6 @@ class TestGetSettingsProductionGuardrails:
         import shared.env as shared_env
 
         monkeypatch.setattr(shared_env, "is_production", lambda: True)
-        monkeypatch.setenv("API_KEY", "x")
         # AUTH_TEST_BYPASS_TOKEN not set -> None
         with caplog.at_level("WARNING"):
             get_settings()

@@ -37,6 +37,29 @@ def _session(*, auth_method: str):
     )
 
 
+def _db_with_authenticated_session(*, user, session):
+    """Model the scoped session lookup separately from its GUC statements."""
+    db = MagicMock()
+    auth_result = MagicMock()
+    auth_result.one_or_none.return_value = (user, session)
+
+    def _execute(statement, *_args, **_kwargs):
+        if "set_config(" in str(statement):
+            return MagicMock()
+        return auth_result
+
+    db.execute.side_effect = _execute
+    return db
+
+
+def _guc_statements(db) -> list[str]:
+    return [
+        str(execute_call.args[0])
+        for execute_call in db.execute.call_args_list
+        if "set_config(" in str(execute_call.args[0])
+    ]
+
+
 def test_update_organization_sso_policy_requires_session_cookie():
     org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
     db = MagicMock()
@@ -59,8 +82,10 @@ def test_update_organization_sso_policy_requires_session_cookie():
 
 def test_update_organization_sso_policy_requires_sysadmin_session():
     org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
-    db = MagicMock()
-    db.execute.return_value.one_or_none.return_value = (_user(is_sysadmin=False), _session(auth_method="webauthn"))
+    db = _db_with_authenticated_session(
+        user=_user(is_sysadmin=False),
+        session=_session(auth_method="webauthn"),
+    )
     client = _client_with_db(db)
     client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
 
@@ -74,15 +99,21 @@ def test_update_organization_sso_policy_requires_sysadmin_session():
     )
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Super admin access required."}
+    assert response.json() == {"detail": "System administrator access required."}
     db.get.assert_not_called()
     db.commit.assert_not_called()
+    gucs = _guc_statements(db)
+    assert "regengine.is_sysadmin', 'true'" in gucs[0]
+    assert "regengine.is_sysadmin', 'false'" in gucs[1]
+    assert "regengine.user_id" in gucs[2]
 
 
 def test_update_organization_sso_policy_rejects_email_otp_session_with_step_up_code():
     org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
-    db = MagicMock()
-    db.execute.return_value.one_or_none.return_value = (_user(is_sysadmin=True), _session(auth_method="email_otp"))
+    db = _db_with_authenticated_session(
+        user=_user(is_sysadmin=True),
+        session=_session(auth_method="email_otp"),
+    )
     client = _client_with_db(db)
     client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
 
@@ -100,6 +131,10 @@ def test_update_organization_sso_policy_rejects_email_otp_session_with_step_up_c
     assert response.json()["detail"]["auth_method"] == "email_otp"
     db.get.assert_not_called()
     db.commit.assert_not_called()
+    gucs = _guc_statements(db)
+    assert "regengine.is_sysadmin', 'true'" in gucs[0]
+    assert "regengine.is_sysadmin', 'false'" in gucs[1]
+    assert "regengine.user_id" in gucs[2]
 
 
 def test_update_organization_sso_policy_allows_webauthn_session_and_updates_database():
@@ -111,8 +146,10 @@ def test_update_organization_sso_policy_allows_webauthn_session_and_updates_data
         domain_verified=False,
         enforced_auth_policy="standard",
     )
-    db = MagicMock()
-    db.execute.return_value.one_or_none.return_value = (_user(is_sysadmin=True), _session(auth_method="webauthn"))
+    db = _db_with_authenticated_session(
+        user=_user(is_sysadmin=True),
+        session=_session(auth_method="webauthn"),
+    )
     db.get.return_value = organization
     client = _client_with_db(db)
     client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
@@ -138,4 +175,9 @@ def test_update_organization_sso_policy_allows_webauthn_session_and_updates_data
     assert organization.domain_verified is True
     assert organization.enforced_auth_policy == "sso_only"
     db.commit.assert_called_once()
-    db.refresh.assert_called_once_with(organization)
+    db.refresh.assert_not_called()
+    gucs = _guc_statements(db)
+    assert "regengine.is_sysadmin', 'true'" in gucs[0]
+    assert "regengine.is_sysadmin', 'false'" in gucs[1]
+    assert "regengine.user_id" in gucs[2]
+    assert "regengine.is_sysadmin', 'true'" in gucs[3]

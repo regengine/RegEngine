@@ -77,13 +77,9 @@ def record_rejection(
         # ``SessionLocal``) pick up the active value at call time.
         from shared.database import SessionLocal  # noqa: PLC0415
     except Exception:  # pragma: no cover  # noqa: BLE001
-        # Two-package layout: ``services.shared`` vs ``shared``.
-        try:
-            from services.shared.database import SessionLocal  # type: ignore[no-redef]  # noqa: PLC0415
-        except Exception:  # noqa: BLE001
-            logger.error("rule_rejection_audit_no_session_factory")
-            _capture_sentry("rule_rejection_audit_no_session_factory", {})
-            return
+        logger.error("rule_rejection_audit_no_session_factory")
+        _capture_sentry("rule_rejection_audit_no_session_factory", {})
+        return
 
     if isinstance(reasons, (dict, list)):
         reasons_json = json.dumps(reasons, default=str)

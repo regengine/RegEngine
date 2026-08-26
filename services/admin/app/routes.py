@@ -3,12 +3,7 @@
 from __future__ import annotations
 
 import html
-import sys
-import time
-from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
-from threading import Lock
 from typing import Optional
 
 import structlog
@@ -18,19 +13,27 @@ from shared.pagination import PaginatedResponse, PaginationParams
 
 # Centralised path resolution
 from shared.paths import ensure_shared_importable
-from shared.rate_limit import BruteForceLimiter, limiter
+from shared.rate_limit import limiter
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 ensure_shared_importable()
 
 from shared.api_key_store import DatabaseAPIKeyStore
-from shared.auth import get_key_store
+from shared.auth import APIKeyStore
 from shared.funnel_events import get_funnel_stage_metrics
+from shared.observability.metrics_auth import require_metrics_key
 
-from .config import get_settings
-from .database import get_session
+from .api_key_admin_store import get_admin_api_key_store
+from .database import arm_global_admin_context, get_session
 from .dependencies import PermissionChecker
+from .models import TenantContext
+from .privileged_auth import (
+    PrivilegedActor,
+    audit_privileged_action,
+    require_sysadmin_high_assurance,
+    require_tenant_provisioner_key,
+)
 from .review_consumer import get_consumer_health
 from .sqlalchemy_models import TenantModel
 from .tenant_slug_helpers import _ensure_unique_tenant_slug
@@ -42,61 +45,6 @@ router = APIRouter()
 v1_router = APIRouter(prefix="/v1", tags=["v1"])
 
 logger = structlog.get_logger("admin")
-
-# ---------------------------------------------------------------------------
-# Admin-key brute-force rate limiter (#534, hardened in #1392)
-#
-# Previously: per-process dict with a thread lock. Multi-worker /
-# multi-replica deployments (Railway, Vercel) turned the "5 attempts
-# per IP" limit into "5 * N_workers * N_replicas" -- an attacker with
-# rotated IPv6 addresses was effectively unconstrained.
-#
-# Now: backed by Redis via ``shared.rate_limit.BruteForceLimiter`` so
-# all workers share the same counter. Falls back to in-memory when
-# Redis is unavailable (local dev) -- the ``is_redis_backed`` flag
-# reports the active mode at startup so ops can alert on fallback in
-# prod.
-# ---------------------------------------------------------------------------
-_ADMIN_MAX_FAILURES = 5
-_ADMIN_WINDOW_SECONDS = 60
-
-_admin_brute_force = BruteForceLimiter(
-    namespace="admin_auth",
-    max_failures=_ADMIN_MAX_FAILURES,
-    window_seconds=_ADMIN_WINDOW_SECONDS,
-)
-
-if not _admin_brute_force.is_redis_backed:
-    logger.warning(
-        "admin_brute_force_limiter_fallback_inmem",
-        note=(
-            "BruteForceLimiter could not connect to Redis. Falling back "
-            "to per-process counter. Set REGENGINE_REDIS_URL to enable "
-            "cross-worker enforcement (#1392)."
-        ),
-    )
-
-
-def _admin_key_rate_limited(ip: str) -> bool:
-    """Return True if this IP has exceeded the admin-key failure threshold."""
-    return _admin_brute_force.is_limited(ip)
-
-
-def _record_admin_failure(ip: str) -> int:
-    """Record a failed attempt and return the current failure count for this IP."""
-    return _admin_brute_force.record_failure(ip)
-
-
-def _reset_admin_failures(ip: str) -> None:
-    """Clear failure counter on a successful admin authentication.
-
-    Without this a successful auth did not reset the counter -- 4
-    failures + 1 success followed by another failure would land at 5
-    and lock out the IP for 60 s needlessly. Reset on success keeps
-    the legitimate path smooth while still triggering lockout on
-    persistent failures.
-    """
-    _admin_brute_force.reset(ip)
 
 
 class CreateKeyRequest(BaseModel):
@@ -202,58 +150,6 @@ class APIKeyRevokeResponse(BaseModel):
 
     status: str
     key_id: str
-
-
-def verify_admin_key(
-    request: Request,
-    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
-) -> bool:
-    """Verify the admin master key with brute-force rate limiting (#534).
-
-    Rate limit: max 5 failed attempts per source IP per 60 seconds.
-    Exceeded limit → HTTP 429 with Retry-After header.
-    All failures are logged with IP and key prefix for audit purposes.
-    """
-    ip: str = request.client.host if request.client else "unknown"
-
-    # Check rate limit BEFORE evaluating the key — don't give timing hints
-    if _admin_key_rate_limited(ip):
-        logger.warning(
-            "admin_key_rate_limited",
-            source_ip=ip,
-            path=request.url.path,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Too many failed admin authentication attempts from this IP. "
-                f"Try again in {_ADMIN_WINDOW_SECONDS} seconds."
-            ),
-            headers={"Retry-After": str(_ADMIN_WINDOW_SECONDS)},
-        )
-
-    settings = get_settings()
-
-    if not x_admin_key or x_admin_key != settings.admin_master_key:
-        count = _record_admin_failure(ip)
-        logger.warning(
-            "unauthorized_admin_access_attempt",
-            key_prefix=x_admin_key[:4] if x_admin_key else "None",
-            source_ip=ip,
-            path=request.url.path,
-            failure_count=count,
-            failures_until_lockout=max(0, _ADMIN_MAX_FAILURES - count),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid admin credentials",
-        )
-
-    # Success path: clear any accumulated failure count for this IP so
-    # a small number of typos before a successful auth does not cause
-    # an unexpected lockout on the next typo.
-    _reset_admin_failures(ip)
-    return True
 
 
 def require_funnel_read(
@@ -403,7 +299,7 @@ async def readiness():
     )
 
 
-@router.get("/health/consumer", dependencies=[Depends(verify_admin_key)])
+@router.get("/health/consumer", dependencies=[Depends(require_metrics_key)])
 def consumer_health():
     """Health check endpoint for the Kafka review consumer."""
     from fastapi.responses import JSONResponse
@@ -428,10 +324,17 @@ def consumer_health():
 async def create_api_key(
     request: Request,
     body: CreateKeyRequest,
-    _: bool = Depends(verify_admin_key),
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
+    key_store: APIKeyStore | DatabaseAPIKeyStore = Depends(get_admin_api_key_store),
 ):
-    """Create a new API key (requires admin authentication)."""
-    key_store = get_key_store()
+    """Create a new API key for an authenticated high-assurance sysadmin."""
+    audit_privileged_action(
+        request,
+        action="api_key.create",
+        outcome="attempted",
+        actor=actor,
+        selected_tenant=body.tenant_id,
+    )
 
     if isinstance(key_store, DatabaseAPIKeyStore):
         # Async DB store — create_key() SHA-256-hashes the key internally;
@@ -443,17 +346,17 @@ async def create_api_key(
             rate_limit_per_minute=body.rate_limit_per_minute,
             expires_at=body.expires_at,
             scopes=body.scopes,
+            created_by=actor.actor_id,
         )
 
         logger.info(
             "api_key_created_via_admin",
             key_id=new_key.key_id,
-            key_prefix=new_key.key_prefix,  # first 12 chars for identification; raw key never logged
             name=body.name,
             tenant_id=body.tenant_id,
         )
 
-        return CreateKeyResponse(
+        response = CreateKeyResponse(
             api_key=new_key.raw_key,  # shown ONCE in creation response only (#548)
             key_id=new_key.key_id,
             name=new_key.name,
@@ -473,17 +376,14 @@ async def create_api_key(
             expires_at=body.expires_at,
             scopes=body.scopes,
         )
-        key_prefix = raw_key[:12]  # first 12 chars for identification; raw key never logged
-
         logger.info(
             "api_key_created_via_admin",
             key_id=api_key.key_id,
-            key_prefix=key_prefix,
             name=body.name,
             tenant_id=body.tenant_id,
         )
 
-        return CreateKeyResponse(
+        response = CreateKeyResponse(
             api_key=raw_key,  # shown ONCE in creation response only (#548)
             key_id=api_key.key_id,
             name=api_key.name,
@@ -494,15 +394,33 @@ async def create_api_key(
             scopes=api_key.scopes,
         )
 
+    audit_privileged_action(
+        request,
+        action="api_key.create",
+        outcome="succeeded",
+        actor=actor,
+        target=response.key_id,
+        selected_tenant=response.tenant_id,
+    )
+    return response
+
 
 @v1_router.get("/admin/keys", response_model=PaginatedResponse[APIKeyInfo])
 async def list_api_keys(
+    request: Request,
     pagination: PaginationParams = Depends(),
-    _: bool = Depends(verify_admin_key),
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
+    key_store: APIKeyStore | DatabaseAPIKeyStore = Depends(get_admin_api_key_store),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
 ):
-    """List API keys with pagination (requires admin authentication)."""
-    key_store = get_key_store()
+    """List API keys for an authenticated high-assurance sysadmin."""
+    audit_privileged_action(
+        request,
+        action="api_key.list",
+        outcome="attempted",
+        actor=actor,
+        selected_tenant=x_tenant_id,
+    )
 
     if isinstance(key_store, DatabaseAPIKeyStore):
         keys = await key_store.list_keys(tenant_id=x_tenant_id)
@@ -516,7 +434,7 @@ async def list_api_keys(
     total = len(keys)
     paged = keys[pagination.skip : pagination.skip + pagination.limit]
 
-    return PaginatedResponse(
+    response = PaginatedResponse(
         items=[
             APIKeyInfo(
                 key_id=key.key_id,
@@ -534,25 +452,63 @@ async def list_api_keys(
         skip=pagination.skip,
         limit=pagination.limit,
     )
+    audit_privileged_action(
+        request,
+        action="api_key.list",
+        outcome="succeeded",
+        actor=actor,
+        target=f"{len(response.items)} keys",
+        selected_tenant=x_tenant_id,
+    )
+    return response
 
 
 @v1_router.delete("/admin/keys/{key_id}", response_model=APIKeyRevokeResponse)
 async def revoke_api_key(
     key_id: str,
-    _: bool = Depends(verify_admin_key),
+    request: Request,
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
+    key_store: APIKeyStore | DatabaseAPIKeyStore = Depends(get_admin_api_key_store),
 ):
-    """Revoke an API key (requires admin authentication)."""
-    key_store = get_key_store()
+    """Revoke an API key for an authenticated high-assurance sysadmin."""
+    selected_tenant: str | None = None
+    audit_privileged_action(
+        request,
+        action="api_key.revoke",
+        outcome="attempted",
+        actor=actor,
+        target=key_id,
+    )
 
     if isinstance(key_store, DatabaseAPIKeyStore):
-        success = await key_store.revoke_key(key_id, revoked_by="admin")
+        key_info = await key_store.get_key(key_id)
+        selected_tenant = key_info.tenant_id if key_info else None
+        success = await key_store.revoke_key(key_id, revoked_by=actor.actor_id)
     else:
+        key_info = next((key for key in key_store.list_keys() if key.key_id == key_id), None)
+        selected_tenant = key_info.tenant_id if key_info else None
         success = key_store.revoke_key(key_id)
 
     if success:
         logger.info("api_key_revoked_via_admin", key_id=key_id)
+        audit_privileged_action(
+            request,
+            action="api_key.revoke",
+            outcome="succeeded",
+            actor=actor,
+            target=key_id,
+            selected_tenant=selected_tenant,
+        )
         return {"status": "revoked", "key_id": key_id}
 
+    audit_privileged_action(
+        request,
+        action="api_key.revoke",
+        outcome="denied",
+        actor=actor,
+        target=key_id,
+        reason="key_not_found",
+    )
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="API key not found",
@@ -561,13 +517,51 @@ async def revoke_api_key(
 
 @v1_router.post("/admin/tenants", response_model=TenantCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
-    request: TenantCreateRequest,
-    _: bool = Depends(verify_admin_key),
+    request: Request,
+    body: TenantCreateRequest,
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
     db: Session = Depends(get_session),
 ) -> TenantCreateResponse:
-    """Create and persist a tenant for onboarding flows."""
+    """Create and persist a tenant as a high-assurance sysadmin."""
+    return _create_tenant_for_actor(request=request, body=body, actor=actor, db=db)
 
-    sanitized_name = html.escape(request.name)
+
+@v1_router.post(
+    "/internal/tenants",
+    response_model=TenantCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+async def create_internal_tenant(
+    request: Request,
+    body: TenantCreateRequest,
+    actor: PrivilegedActor = Depends(require_tenant_provisioner_key),
+    db: Session = Depends(get_session),
+) -> TenantCreateResponse:
+    """Create a tenant for the single-purpose onboarding workload."""
+    return _create_tenant_for_actor(request=request, body=body, actor=actor, db=db)
+
+
+def _create_tenant_for_actor(
+    *,
+    request: Request,
+    body: TenantCreateRequest,
+    actor: PrivilegedActor,
+    db: Session,
+) -> TenantCreateResponse:
+    audit_privileged_action(
+        request,
+        action="tenant.create",
+        outcome="attempted",
+        actor=actor,
+        target="new_tenant",
+    )
+
+    # Both callers reach this helper only after their independent authority
+    # checks (high-assurance human or exact-scope workload key).  Arm the
+    # global RLS branch here, never in the generic DB dependency.
+    arm_global_admin_context(db)
+    sanitized_name = html.escape(body.name)
     try:
         tenant = TenantModel(
             name=sanitized_name,
@@ -576,18 +570,43 @@ async def create_tenant(
             settings={},
         )
         db.add(tenant)
+        db.flush()
+        tenant_id = str(tenant.id)
         db.commit()
-        db.refresh(tenant)
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.error("tenant_create_failed_via_admin", name=sanitized_name, error=str(exc))
+        logger.error(
+            "tenant_create_failed",
+            actor_type=actor.actor_type,
+            actor_id=actor.actor_id,
+            error_class=type(exc).__name__,
+        )
+        audit_privileged_action(
+            request,
+            action="tenant.create",
+            outcome="failed",
+            actor=actor,
+            reason="database_error",
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create tenant",
         ) from exc
 
-    tenant_id = str(tenant.id)
-    logger.info("tenant_created_via_admin", tenant_id=tenant_id, name=sanitized_name)
+    logger.info(
+        "tenant_created",
+        tenant_id=tenant_id,
+        actor_type=actor.actor_type,
+        actor_id=actor.actor_id,
+    )
+    audit_privileged_action(
+        request,
+        action="tenant.create",
+        outcome="succeeded",
+        actor=actor,
+        target=tenant_id,
+        selected_tenant=tenant_id,
+    )
     return TenantCreateResponse(tenant_id=tenant_id, name=sanitized_name)
 
 
@@ -599,6 +618,12 @@ async def create_tenant(
 async def get_funnel_metrics(
     db: Session = Depends(get_session),
 ) -> FunnelResponse:
-    """Return aggregate tenant funnel counts and stage conversion rates."""
-    stages = get_funnel_stage_metrics(db_session=db)
+    """Return funnel counts and stage conversion rates for the active tenant."""
+    tenant_id = TenantContext.get_tenant_context(db)
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="E_NO_TENANT_CONTEXT: funnel metrics require tenant context",
+        )
+    stages = get_funnel_stage_metrics(tenant_id=str(tenant_id), db_session=db)
     return FunnelResponse(stages=[FunnelStageResponse(**stage) for stage in stages])

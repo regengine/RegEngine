@@ -7,8 +7,8 @@ Usage:
   bash scripts/railway/apply_sql_migrations.sh <database_url> <migrations_dir> [glob]
 
 Examples:
-  bash scripts/railway/apply_sql_migrations.sh "$ADMIN_DATABASE_URL" services/admin/migrations
-  bash scripts/railway/apply_sql_migrations.sh "$DATABASE_URL" migrations "V*.sql"
+  bash scripts/railway/apply_sql_migrations.sh "$MIGRATIONS_DATABASE_URL" services/admin/migrations
+  bash scripts/railway/apply_sql_migrations.sh "$MIGRATIONS_DATABASE_URL" migrations "V*.sql"
 EOF
 }
 
@@ -28,6 +28,12 @@ fi
 
 if [[ ! -d "$MIGRATIONS_DIR" ]]; then
     echo "Migration directory not found: $MIGRATIONS_DIR"
+    exit 1
+fi
+
+CURRENT_ROLE="$(psql "$DATABASE_URL" -XAt -v ON_ERROR_STOP=1 -c 'SELECT current_user')"
+if [[ "$CURRENT_ROLE" == "regengine" || "$CURRENT_ROLE" == "regengine_sysadmin" ]]; then
+    echo "Refusing DDL with runtime database role: $CURRENT_ROLE" >&2
     exit 1
 fi
 

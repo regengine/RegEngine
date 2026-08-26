@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from tests.migrations.rls_db import rls_postgres_or_skip
@@ -76,7 +76,7 @@ def _seed_client_roles() -> bool:
     return os.getenv("REGENGINE_SEED_CLIENT_ROLES", "").strip().lower() in {"1", "true", "yes"}
 
 
-def _provision_cluster(engine: Engine) -> None:
+def _provision_cluster(engine: Engine, role_admin_engine: Engine) -> None:
     """Pre-create what the migration chain expects from the cluster.
 
     The app roles + get_tenant_context() bootstrap mirrors
@@ -85,7 +85,10 @@ def _provision_cluster(engine: Engine) -> None:
     reproduces a Supabase-style cluster so role-guarded migration branches
     (e.g. v092's REVOKE ... FROM authenticated) execute rather than no-op.
     """
-    with engine.begin() as conn:
+    # Role creation is provider administration, never a migration-owner
+    # capability. Legacy scratch runs may use the same superuser URL for both;
+    # the dedicated-role CI lane supplies ROLE_ADMIN_DATABASE_URL separately.
+    with role_admin_engine.begin() as conn:
         conn.execute(
             text("""
             DO $$
@@ -113,6 +116,8 @@ def _provision_cluster(engine: Engine) -> None:
                 END$$;
             """)
             )
+    with engine.begin() as conn:
+        if _seed_client_roles():
             # A cluster that has the client roles is a Supabase cluster, and
             # Supabase also guarantees auth.uid(); the role-guarded policies
             # in v051/v056 reference it, so it is part of the same contract.
@@ -153,6 +158,7 @@ def _provision_cluster(engine: Engine) -> None:
 
 def _run_alembic(cmd: list[str], database_url: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
+    env["MIGRATIONS_DATABASE_URL"] = database_url
     env["DATABASE_URL"] = database_url
     return subprocess.run(
         [sys.executable, "-m", "alembic", *cmd],
@@ -161,6 +167,10 @@ def _run_alembic(cmd: list[str], database_url: str) -> subprocess.CompletedProce
         capture_output=True,
         text=True,
     )
+
+
+def _role_admin_url(migration_url: str) -> str:
+    return os.getenv("ROLE_ADMIN_DATABASE_URL", "").strip() or migration_url
 
 
 def _row_counts(engine: Engine) -> dict[str, int]:
@@ -179,6 +189,8 @@ class RehearsalResult:
 def rehearsal() -> Iterator[RehearsalResult]:
     """Upgrade to MID_CHAIN_REVISION, seed, upgrade head — once per module."""
     with rls_postgres_or_skip() as (plain_url, engine):
+        provider_url = _role_admin_url(plain_url)
+        provider_engine = create_engine(provider_url, future=True)
         with engine.connect() as conn:
             already_migrated = conn.execute(
                 text("SELECT to_regclass('public.alembic_version') IS NOT NULL")
@@ -191,35 +203,60 @@ def rehearsal() -> Iterator[RehearsalResult]:
                 "(local) at a dedicated database"
             )
 
-        _provision_cluster(engine)
-
-        mid = _run_alembic(["upgrade", MID_CHAIN_REVISION], plain_url)
-        assert mid.returncode == 0, (
-            f"alembic upgrade {MID_CHAIN_REVISION} failed on an empty database "
-            f"— the mid-chain pin itself is broken:\n{mid.stderr}"
-        )
-
-        # psycopg2 (already required by alembic/env.py) executes the whole
-        # multi-statement seed script in one call; the psycopg3 driver the
-        # test engines use only accepts one statement per execute.
-        import psycopg2
-
-        seed_conn = psycopg2.connect(plain_url)
         try:
-            seed_conn.autocommit = True
-            with seed_conn.cursor() as cur:
-                cur.execute(SEED_SQL.read_text())
+            with engine.connect() as migration_conn, provider_engine.connect() as provider_conn:
+                migration_database = migration_conn.execute(
+                    text("SELECT current_database()")
+                ).scalar_one()
+                provider_database = provider_conn.execute(
+                    text("SELECT current_database()")
+                ).scalar_one()
+            if migration_database != provider_database:
+                pytest.fail(
+                    "ROLE_ADMIN_DATABASE_URL must target the same scratch database "
+                    "as the migration credential"
+                )
+
+            _provision_cluster(engine, provider_engine)
+
+            mid = _run_alembic(["upgrade", MID_CHAIN_REVISION], plain_url)
+            assert mid.returncode == 0, (
+                f"alembic upgrade {MID_CHAIN_REVISION} failed on an empty database "
+                f"— the mid-chain pin itself is broken:\n{mid.stderr}"
+            )
+
+            # Seed through the provider-only fixture seam. At v089 several
+            # tables already use FORCE RLS, so the intentionally NOBYPASSRLS
+            # migration owner cannot manufacture representative legacy rows.
+            # The head upgrade itself still runs only as the migration role.
+            import psycopg2
+
+            seed_conn = psycopg2.connect(
+                provider_url.replace("postgresql+psycopg://", "postgresql://", 1).replace(
+                    "postgresql+psycopg2://", "postgresql://", 1
+                )
+            )
+            try:
+                seed_conn.autocommit = True
+                with seed_conn.cursor() as cur:
+                    cur.execute(SEED_SQL.read_text())
+            finally:
+                seed_conn.close()
+
+            pre_counts = _row_counts(provider_engine)
+            assert all(count > 0 for count in pre_counts.values()), (
+                f"seed_mid_chain.sql left a seeded table empty: {pre_counts} "
+                "— the rehearsal would silently degrade to an empty-DB upgrade"
+            )
+
+            head = _run_alembic(["upgrade", "head"], plain_url)
+            yield RehearsalResult(
+                engine=provider_engine,
+                pre_upgrade_counts=pre_counts,
+                head_upgrade=head,
+            )
         finally:
-            seed_conn.close()
-
-        pre_counts = _row_counts(engine)
-        assert all(count > 0 for count in pre_counts.values()), (
-            f"seed_mid_chain.sql left a seeded table empty: {pre_counts} "
-            "— the rehearsal would silently degrade to an empty-DB upgrade"
-        )
-
-        head = _run_alembic(["upgrade", "head"], plain_url)
-        yield RehearsalResult(engine=engine, pre_upgrade_counts=pre_counts, head_upgrade=head)
+            provider_engine.dispose()
 
 
 def test_upgrade_head_over_seeded_database(rehearsal: RehearsalResult) -> None:

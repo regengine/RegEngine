@@ -1,96 +1,52 @@
 # Credential Rotation Runbook
 
-## Background
+## Current authentication model
 
-Production credentials were committed to `.env.production` in the initial repository commit (`a130816`) and removed in `ff0b721`. While the file is no longer tracked, **the credentials remain in git history** and must be rotated.
+Human key management and tenant creation require an opaque browser session,
+`is_sysadmin=true`, and WebAuthn or SSO high assurance. The former shared
+administrative credential is retired and must be absent from Railway, Vercel,
+local runtime configuration, and callers.
 
-## Exposed Credentials
+Automated tenant creation uses one tenantless database-backed workload key with
+exactly `internal.tenants.create`. Tenant workloads use individually
+attributable, tenant-bound API keys.
 
-| Secret | Environment Variable | Service |
-|--------|---------------------|---------|
-| Admin master key | `ADMIN_MASTER_KEY` | Railway (admin-api, ingestion-service) |
-| JWT signing key | `AUTH_SECRET_KEY` | Railway + Vercel (all services + middleware) |
-| Redis password | `REDIS_PASSWORD` | Railway (Redis instance) |
-| Database password | `DATABASE_URL` (embedded) | Railway (Postgres), Supabase |
+## Rotation order
 
-## Rotation Steps
+1. Inventory the credential by key ID, actor name, scope, environment, expiry,
+   and last use. Do not copy the raw value into a ticket or log.
+2. Create the replacement through the high-assurance staff admin flow.
+3. Store it in the target workload's secret manager.
+4. Deploy the caller and confirm attributable successful use of the new key.
+5. Revoke the old key and verify replay is denied.
+6. Record deployment IDs, key IDs, commands, results, and verification time in
+   the release evidence. Never record secret values.
 
-### 1. Generate New Secrets
+For Stripe onboarding, rotate `REGENGINE_TENANT_PROVISIONER_KEY` at least every
+90 days and verify that the replacement can call only
+`POST /v1/internal/tenants`.
 
-```bash
-# Admin master key (64-char hex)
-openssl rand -hex 32
+## JWT and session-key rotation
 
-# Auth/JWT signing key (base64, 32 bytes)
-openssl rand -base64 32
+Rotate JWT signing material through the Redis-backed key registry. Confirm
+both backend replicas observe the new active key and emergency revocation.
+Logout, session revoke, and logout-all replay must fail on the next request.
+A Redis or key-registry outage must return 503 rather than accepting an
+unverified credential.
 
-# Redis password (alphanumeric, 32 chars)
-openssl rand -base64 32 | tr -d '/+=' | head -c 32
-```
+During the CAS-registry rollout, drain every replica running a pre-CAS build
+before rotating or revoking signing keys. Older writers replace the Redis
+snapshot with an unconditional `SET` and can race a current replica's CAS
+mutation. Record the all-replicas-upgraded check in release evidence; only then
+resume registry mutations.
 
-### 2. Update Railway
+## Retired-credential closeout
 
-1. Go to [Railway Dashboard](https://railway.app/dashboard)
-2. For each service (admin-api, ingestion-service, graph-service, compliance-service):
-   - Click service → Variables
-   - Update `ADMIN_MASTER_KEY` with new value
-   - Update `AUTH_SECRET_KEY` with new value
-3. For the Redis instance:
-   - Update `REDIS_PASSWORD`
-   - Update `REDIS_URL` in all services that reference it
-4. Redeploy all services
-
-### 3. Update Vercel
-
-1. Go to [Vercel Dashboard](https://vercel.com) → RegEngine → Settings → Environment Variables
-2. Update `AUTH_SECRET_KEY` (used by Next.js middleware for JWT verification)
-3. Update `ADMIN_MASTER_KEY` (used by API proxy routes)
-4. Redeploy
-
-### 4. Verify
-
-- [ ] All services start without auth errors
-- [ ] Login flow works end-to-end
-- [ ] API proxy routes return 200 (not 401/403)
-- [ ] Redis sessions are functional (new sessions only — old sessions will expire)
-
-## Git History Scrub (Optional but Recommended)
-
-After rotating all credentials, scrub the old values from git history:
-
-```bash
-# Install BFG Repo-Cleaner
-brew install bfg
-
-# Clone a fresh mirror
-git clone --mirror https://github.com/regengine/RegEngine.git regengine-mirror
-cd regengine-mirror
-
-# Create a file with the secrets to remove (one per line).
-# NEVER list the actual values in this runbook or any tracked file —
-# pull them from the leaked commit (a130816) locally when building the list.
-cat > secrets.txt << 'EOF'
-<OLD_SECRET_VALUE_1>
-<OLD_SECRET_VALUE_2>
-<OLD_SECRET_VALUE_3>
-EOF
-
-# Run BFG to replace secrets with ***REMOVED***
-bfg --replace-text secrets.txt
-
-# Clean up and force push
-git reflog expire --expire=now --all
-git gc --prune=now --aggressive
-git push --force
-
-# Delete the secrets file
-rm secrets.txt
-```
-
-**Warning:** Force-pushing rewrites history. All contributors must re-clone after this operation.
-
-## Prevention
-
-- `.env.production` is now in `.gitignore`
-- Pre-commit hooks with `detect-secrets` are configured (see `.pre-commit-config.yaml`)
-- Never commit files matching `.env.*` patterns except `.env.example`
+- Confirm the retired shared credential is absent from Railway and Vercel.
+- Revoke its value wherever it was accepted historically.
+- Confirm both correct and incorrect legacy header attempts are denied and
+  rate-limited without logging the supplied value.
+- Search active source, configuration, workflows, scripts, and documentation
+  with the retired-credential guard in CI.
+- Preserve historical incident material only under `docs/archive/` with an
+  explicit historical warning.

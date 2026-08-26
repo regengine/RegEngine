@@ -134,10 +134,10 @@ def test_ingestion_principal_with_tenant_returns_context():
     assert ctx.principal_id == "key-42"
 
 
-def test_preshared_master_key_resolves_with_own_kind():
+def test_retired_key_identifier_has_no_special_authority():
     req = _make_request(api_key=_FakeAPIKey(key_id="preshared-master", tenant_id="tenant-C"))
     ctx = _run(req)
-    assert ctx.principal_kind == "preshared"
+    assert ctx.principal_kind == "api_key"
 
 
 def test_test_bypass_key_labeled_correctly():

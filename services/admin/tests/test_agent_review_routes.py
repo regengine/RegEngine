@@ -23,13 +23,23 @@ def _make_user(*, is_sysadmin: bool) -> MagicMock:
     return user
 
 
-def _build_app(user: MagicMock, db: MagicMock) -> FastAPI:
+def _build_app(user: MagicMock, db: MagicMock, tenant_id: uuid.UUID | None) -> FastAPI:
     from services.admin.app.agent_review_routes import router
-    from services.admin.app.dependencies import get_current_user, get_session
+    from services.admin.app.dependencies import get_session
+    from services.admin.app.privileged_auth import PrivilegedActor, require_review_decide, require_review_read
 
     app = FastAPI()
     app.include_router(router, prefix="/v1")
-    app.dependency_overrides[get_current_user] = lambda: user
+    actor = PrivilegedActor(
+        actor_type="tenant_user",
+        actor_id=str(user.id),
+        auth_method="webauthn",
+        tenant_id=str(tenant_id) if tenant_id else None,
+        permissions=("review.read", "review.decide"),
+        user=user,
+    )
+    app.dependency_overrides[require_review_read] = lambda: actor
+    app.dependency_overrides[require_review_decide] = lambda: actor
     app.dependency_overrides[get_session] = lambda: db
     return app
 
@@ -40,10 +50,11 @@ def test_agent_review_items_use_authenticated_tenant(monkeypatch) -> None:
     helper = MagicMock(return_value=AgentReviewListResponse(items=[], total=0, limit=50, offset=0))
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
     monkeypatch.setattr(routes, "fetch_agent_review_items", helper)
+    audit = MagicMock()
+    monkeypatch.setattr(routes, "audit_privileged_action", audit)
 
-    client = TestClient(_build_app(_make_user(is_sysadmin=False), db))
+    client = TestClient(_build_app(_make_user(is_sysadmin=False), db, tenant_id))
     resp = client.get("/v1/agent-reviews/items")
 
     assert resp.status_code == 200
@@ -52,6 +63,11 @@ def test_agent_review_items_use_authenticated_tenant(monkeypatch) -> None:
     assert helper.call_args.kwargs["tenant_id"] == str(tenant_id)
     assert helper.call_args.kwargs["limit"] == 50
     assert helper.call_args.kwargs["offset"] == 0
+    assert [call.kwargs["outcome"] for call in audit.call_args_list] == [
+        "attempted",
+        "succeeded",
+    ]
+    assert audit.call_args_list[-1].kwargs["selected_tenant"] == str(tenant_id)
 
 
 def test_agent_review_items_reject_cross_tenant_filter_for_non_sysadmin(monkeypatch) -> None:
@@ -59,45 +75,44 @@ def test_agent_review_items_reject_cross_tenant_filter_for_non_sysadmin(monkeypa
     other_tenant = uuid.uuid4()
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: auth_tenant)
+    audit = MagicMock()
+    monkeypatch.setattr(routes, "audit_privileged_action", audit)
 
     client = TestClient(
-        _build_app(_make_user(is_sysadmin=False), MagicMock()),
+        _build_app(_make_user(is_sysadmin=False), MagicMock(), auth_tenant),
         raise_server_exceptions=False,
     )
     resp = client.get(f"/v1/agent-reviews/items?tenant_id={other_tenant}")
 
     assert resp.status_code == 403
+    assert [call.kwargs["outcome"] for call in audit.call_args_list] == [
+        "attempted",
+        "denied",
+    ]
+    assert audit.call_args_list[-1].kwargs["reason"] == "tenant_assertion_mismatch"
 
 
-def test_agent_review_items_sysadmin_can_bind_requested_tenant(monkeypatch) -> None:
+def test_agent_review_items_sysadmin_cannot_select_request_tenant(monkeypatch) -> None:
     requested_tenant = uuid.uuid4()
+    active_tenant = uuid.uuid4()
     db = MagicMock()
     helper = MagicMock(return_value=AgentReviewListResponse(items=[], total=0, limit=25, offset=5))
-    bound_tenants = []
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: None)
-    monkeypatch.setattr(routes, "set_tenant_guc", lambda session, tenant_id: bound_tenants.append((session, tenant_id)))
     monkeypatch.setattr(routes, "fetch_agent_review_items", helper)
 
-    client = TestClient(_build_app(_make_user(is_sysadmin=True), db))
+    client = TestClient(_build_app(_make_user(is_sysadmin=True), db, active_tenant))
     resp = client.get(f"/v1/agent-reviews/items?tenant_id={requested_tenant}&limit=25&offset=5")
 
-    assert resp.status_code == 200
-    assert bound_tenants == [(db, str(requested_tenant))]
-    assert helper.call_args.kwargs["tenant_id"] == str(requested_tenant)
-    assert helper.call_args.kwargs["limit"] == 25
-    assert helper.call_args.kwargs["offset"] == 5
+    assert resp.status_code == 403
+    helper.assert_not_called()
 
 
 def test_agent_review_items_require_tenant_context(monkeypatch) -> None:
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: None)
-
     client = TestClient(
-        _build_app(_make_user(is_sysadmin=False), MagicMock()),
+        _build_app(_make_user(is_sysadmin=False), MagicMock(), None),
         raise_server_exceptions=False,
     )
     resp = client.get("/v1/agent-reviews/items")
@@ -125,10 +140,11 @@ def test_agent_review_decision_persists_for_authenticated_tenant(monkeypatch) ->
     )
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
     monkeypatch.setattr(routes, "upsert_agent_artifact_review", helper)
+    audit = MagicMock()
+    monkeypatch.setattr(routes, "audit_privileged_action", audit)
 
-    client = TestClient(_build_app(reviewer, db))
+    client = TestClient(_build_app(reviewer, db, tenant_id))
     resp = client.post(
         f"/v1/agent-reviews/items/{artifact_id}/review",
         json={
@@ -149,6 +165,12 @@ def test_agent_review_decision_persists_for_authenticated_tenant(monkeypatch) ->
     assert helper.call_args.kwargs["reviewed_by"] == str(reviewer.id)
     assert helper.call_args.kwargs["review_reason"] == "Evidence chain verified"
     assert helper.call_args.kwargs["operator_notes"] == "Looks good"
+    assert [call.kwargs["outcome"] for call in audit.call_args_list] == [
+        "attempted",
+        "succeeded",
+    ]
+    assert audit.call_args_list[-1].kwargs["target"] == str(artifact_id)
+    assert audit.call_args_list[-1].kwargs["reason"] == "decision:accepted"
 
 
 def test_agent_review_decision_returns_404_for_missing_artifact(monkeypatch) -> None:
@@ -157,15 +179,16 @@ def test_agent_review_decision_returns_404_for_missing_artifact(monkeypatch) -> 
     db = MagicMock()
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
     monkeypatch.setattr(
         routes,
         "upsert_agent_artifact_review",
         MagicMock(side_effect=LookupError("agent artifact not found for tenant")),
     )
+    audit = MagicMock()
+    monkeypatch.setattr(routes, "audit_privileged_action", audit)
 
     client = TestClient(
-        _build_app(_make_user(is_sysadmin=False), db),
+        _build_app(_make_user(is_sysadmin=False), db, tenant_id),
         raise_server_exceptions=False,
     )
     resp = client.post(
@@ -176,6 +199,11 @@ def test_agent_review_decision_returns_404_for_missing_artifact(monkeypatch) -> 
     assert resp.status_code == 404
     db.rollback.assert_called_once()
     db.commit.assert_not_called()
+    assert [call.kwargs["outcome"] for call in audit.call_args_list] == [
+        "attempted",
+        "denied",
+    ]
+    assert audit.call_args_list[-1].kwargs["reason"] == "artifact_not_found"
 
 
 def test_agent_review_timeline_uses_authenticated_tenant(monkeypatch) -> None:
@@ -214,10 +242,11 @@ def test_agent_review_timeline_uses_authenticated_tenant(monkeypatch) -> None:
     )
     from services.admin.app import agent_review_routes as routes
 
-    monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda session: tenant_id)
     monkeypatch.setattr(routes, "fetch_agent_artifact_timeline", helper)
+    audit = MagicMock()
+    monkeypatch.setattr(routes, "audit_privileged_action", audit)
 
-    client = TestClient(_build_app(_make_user(is_sysadmin=False), db))
+    client = TestClient(_build_app(_make_user(is_sysadmin=False), db, tenant_id))
     resp = client.get(f"/v1/agent-reviews/items/{artifact_id}/timeline")
 
     assert resp.status_code == 200
@@ -226,3 +255,7 @@ def test_agent_review_timeline_uses_authenticated_tenant(monkeypatch) -> None:
         tenant_id=str(tenant_id),
         artifact_id=str(artifact_id),
     )
+    assert [call.kwargs["outcome"] for call in audit.call_args_list] == [
+        "attempted",
+        "succeeded",
+    ]

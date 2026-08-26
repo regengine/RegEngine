@@ -11,7 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth_crypto import AuthCryptoService
-from ..database import get_session
+from ..database import (
+    arm_global_admin_context,
+    bind_authenticated_user_context,
+    disarm_global_admin_context,
+    get_session,
+)
 from ..sqlalchemy_models import SessionModel, UserModel
 
 AUTH_SESSION_COOKIE = "__Host-regengine_session"
@@ -95,15 +100,48 @@ def get_current_active_session_context(
     return ActiveSessionContext(user=user, session=session)
 
 
+def get_scoped_active_session_context(
+    request: Request,
+    db: Session = Depends(get_session),
+    crypto_service: AuthCryptoService = Depends(get_auth_crypto_service),
+) -> ActiveSessionContext:
+    """Resolve an opaque session from a baseline-denied admin connection.
+
+    The cookie-to-user lookup is necessarily pre-tenant.  Global authority is
+    transaction-local and exists only around that lookup; the returned session
+    retains a user-self GUC, not the global sysadmin arm.
+    """
+
+    try:
+        arm_global_admin_context(db)
+        context = get_current_active_session_context(
+            request=request,
+            db=db,
+            crypto_service=crypto_service,
+        )
+    except Exception:
+        # PostgreSQL rejects every query after a statement aborts the current
+        # transaction.  Rollback both clears the transaction-local global arm
+        # and preserves the original 401/503 instead of masking it with a
+        # failing disarm set_config call.
+        db.rollback()
+        raise
+    else:
+        disarm_global_admin_context(db)
+
+    bind_authenticated_user_context(db, context.user.id)
+    return context
+
+
 def get_current_active_user(
-    context: ActiveSessionContext = Depends(get_current_active_session_context),
+    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
 ) -> UserModel:
     """Authenticate the current user from the opaque browser session cookie."""
     return context.user
 
 
 def require_high_assurance_session(
-    context: ActiveSessionContext = Depends(get_current_active_session_context),
+    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
 ) -> UserModel:
     """Require an active WebAuthn or SSO-backed browser session."""
     auth_method = getattr(context.session, "auth_method", None)

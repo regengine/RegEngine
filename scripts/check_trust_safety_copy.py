@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_SRC = ROOT / "frontend" / "src"
 TOOLS_SRC = FRONTEND_SRC / "app" / "tools"
 SCAN_ROOTS = [
+    ROOT / "SECURITY.md",
     FRONTEND_SRC,
     ROOT / "frontend" / "public",
     ROOT / "docs",

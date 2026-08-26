@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,7 @@ _ENV_MARKERS = (
     "DATABASE_URL",
     "ENV",
     "REGENGINE_ENV",
+    "REGENGINE_AUTH_STRICT",
     "RAILWAY_ENVIRONMENT",
     "RAILWAY_ENVIRONMENT_NAME",
     "RAILWAY_ENVIRONMENT_ID",
@@ -25,6 +27,19 @@ _ENV_MARKERS = (
     "FLY_APP_NAME",
     "KUBERNETES_SERVICE_HOST",
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_process_environment_after_reload_tests():
+    """Undo direct mutations performed by the module's import-time gate."""
+
+    before = {name: os.environ.get(name) for name in _ENV_MARKERS}
+    yield
+    for name, value in before.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
 
 
 def _reload_env_module():
@@ -82,6 +97,20 @@ def test_railway_staging_environment_keeps_explicit_staging(monkeypatch):
 
     assert os.environ["REGENGINE_ENV"] == "staging"
     assert env.is_production() is False
+    assert env.requires_strict_auth_runtime() is True
+
+
+def test_self_hosted_staging_can_require_strict_auth_explicitly(monkeypatch):
+    for key in _ENV_MARKERS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("REGENGINE_AUTH_STRICT", "1")
+
+    env = _reload_env_module()
+
+    assert env.is_production() is False
+    assert env.is_cloud_deployment() is False
+    assert env.requires_strict_auth_runtime() is True
 
 
 def test_no_cloud_markers_and_no_regengine_env_remains_non_production(monkeypatch):
@@ -92,6 +121,7 @@ def test_no_cloud_markers_and_no_regengine_env_remains_non_production(monkeypatc
 
     assert "REGENGINE_ENV" not in os.environ
     assert env.is_production() is False
+    assert env.requires_strict_auth_runtime() is False
 
 
 # ─── #2512: non-Railway/Vercel cloud markers force production ────────────────
@@ -129,9 +159,9 @@ def test_shared_marker_constant_is_single_source_of_truth():
         assert marker in env.CLOUD_ENV_VARS
 
     # env.__file__ -> services/shared/env.py; two dirnames up -> services/.
-    services_dir = os.path.dirname(os.path.dirname(env.__file__))
+    services_dir = Path(env.__file__).resolve().parents[1]
     for rel in ("admin/app/database.py", "admin/app/invite_routes.py"):
-        source = open(os.path.join(services_dir, rel), encoding="utf-8").read()
+        source = (services_dir / rel).read_text(encoding="utf-8")
         assert "CLOUD_ENV_VARS" in source, f"{rel} must import the shared CLOUD_ENV_VARS"
         # No divergent local copy: the old hard-coded tuples listed "RENDER".
         assert '"RENDER"' not in source, f"{rel} still defines a divergent cloud-marker list"

@@ -1,6 +1,12 @@
-import type { ReactNode } from 'react';
-import DashboardLayout from '../dashboard/layout';
+import { notFound } from 'next/navigation';
 
-export default function RemediationLayout({ children }: { children: ReactNode }) {
-    return <DashboardLayout>{children}</DashboardLayout>;
+/**
+ * Remediation remains outside the approved production router inventory.
+ *
+ * Keep the dormant page implementation available for a future reviewed
+ * promotion, but make the current UI surface indistinguishable from an absent
+ * route. The ingestion BFF independently enforces the same exact-404 boundary.
+ */
+export default function RemediationLayout(): never {
+    notFound();
 }

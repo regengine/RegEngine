@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import sys
 import time
 from pathlib import Path
@@ -85,10 +88,10 @@ def test_rate_limit_is_per_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     rl._check_stripe_webhook_rate_limit(req_b)  # must not raise
 
 
-def test_rate_limit_uses_x_forwarded_for_when_peer_trusted(
+def test_rate_limit_ignores_unsigned_xff_even_when_legacy_peer_cidr_is_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """X-Forwarded-For must be honored ONLY when the peer is a trusted proxy."""
+    """A public shared edge cannot make caller-supplied XFF authoritative."""
     monkeypatch.setattr(rl, "_redis_failed", True)
     monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)  # #2699: keep cooldown armed
     monkeypatch.setattr(rl, "_rate_buckets", {})
@@ -107,8 +110,44 @@ def test_rate_limit_uses_x_forwarded_for_when_peer_trusted(
         rl._check_stripe_webhook_rate_limit(req)
 
     assert exc_info.value.status_code == 429
-    # Bucket key is the forwarded originator, not the trusted proxy hop
-    assert "203.0.113.10" in rl._rate_buckets
+    assert "10.0.0.1" in rl._rate_buckets
+    assert "203.0.113.10" not in rl._rate_buckets
+
+
+def test_rate_limit_uses_fresh_signed_bff_client_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the HMAC-bound Vercel BFF attribution can select a client bucket."""
+    hmac_key = "test-proxy-ip-hmac-key-material-32-bytes"
+    timestamp = str(int(time.time()))
+    client_ip = "203.0.113.10"
+    request_id = "stripe-rate-limit-request"
+    payload = f"v1\n{client_ip}\n{timestamp}\nPOST\n{request_id}".encode()
+    digest = hmac.new(hmac_key.encode(), payload, hashlib.sha256).digest()
+    signature = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+    monkeypatch.setenv("REGENGINE_PROXY_IP_HMAC_KEY", hmac_key)
+    monkeypatch.setattr(rl, "_redis_failed", True)
+    monkeypatch.setattr(rl, "_redis_retry_at", time.time() + 300)
+    monkeypatch.setattr(rl, "_rate_buckets", {})
+    monkeypatch.setattr(rl, "_WEBHOOK_RATE_LIMIT", 2)
+
+    req = MagicMock()
+    req.method = "POST"
+    req.headers = {
+        "x-request-id": request_id,
+        "x-regengine-proxy-client-ip": client_ip,
+        "x-regengine-proxy-timestamp": timestamp,
+        "x-regengine-proxy-signature": f"v1={signature}",
+    }
+    req.client = MagicMock()
+    req.client.host = "10.0.0.1"
+
+    for _ in range(2):
+        rl._check_stripe_webhook_rate_limit(req)
+    with pytest.raises(HTTPException) as exc_info:
+        rl._check_stripe_webhook_rate_limit(req)
+
+    assert exc_info.value.status_code == 429
+    assert client_ip in rl._rate_buckets
 
 
 def test_redis_path_uses_atomic_eval(monkeypatch: pytest.MonkeyPatch) -> None:

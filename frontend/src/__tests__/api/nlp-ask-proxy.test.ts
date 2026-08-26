@@ -3,8 +3,8 @@
  *
  * This route was the only hand-written proxy that skipped requireProxyAuth /
  * validateProxySession and forwarded caller-supplied credential headers
- * verbatim. It now runs the shared preflight and builds outbound headers from
- * validated cookies/env via applyCookieCredentials / applyFirstPartyServiceCredentials.
+ * verbatim. It now runs the shared preflight, forwards only caller-owned
+ * credentials, and never substitutes an ambient server API key.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
@@ -51,6 +51,7 @@ function makeRequest(options: {
 
 const ORIGINAL = {
     REGENGINE_API_KEY: process.env.REGENGINE_API_KEY,
+    REGENGINE_API_KEY_TENANT_ID: process.env.REGENGINE_API_KEY_TENANT_ID,
     NLP_SERVICE_URL: process.env.NLP_SERVICE_URL,
     EXPERIMENTAL: process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES,
 };
@@ -64,6 +65,7 @@ describe('/api/nlp/ask proxy (#2538)', () => {
         process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES = 'true';
         process.env.NLP_SERVICE_URL = 'http://nlp.test';
         process.env.REGENGINE_API_KEY = 'server-side-key';
+        process.env.REGENGINE_API_KEY_TENANT_ID = TENANT_A;
         mockFetch.mockResolvedValue({
             ok: true,
             status: 200,
@@ -93,7 +95,7 @@ describe('/api/nlp/ask proxy (#2538)', () => {
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('injects the server-side key + cookie tenant and does not forward caller credential headers verbatim', async () => {
+    it('never upgrades a browser-forged credential to the ambient server key', async () => {
         const token = signToken({ tenant_id: TENANT_A });
         const response = await POST(
             makeRequest({
@@ -114,8 +116,8 @@ describe('/api/nlp/ask proxy (#2538)', () => {
         const [, init] = mockFetch.mock.calls[0];
         const sent = new Headers(init.headers as HeadersInit);
 
-        // Server-side first-party key replaces any browser-injected key.
-        expect(sent.get('x-regengine-api-key')).toBe('server-side-key');
+        // Browser-provided keys are stripped and the ambient key is never used.
+        expect(sent.has('x-regengine-api-key')).toBe(false);
         expect(sent.get('x-regengine-api-key')).not.toBe('attacker-injected-key');
 
         // Authoritative tenant comes from the cookie, not the injected header.
@@ -125,5 +127,27 @@ describe('/api/nlp/ask proxy (#2538)', () => {
         // attacker-supplied Bearer value.
         expect(sent.get('authorization')).toBe(`Bearer ${token}`);
         expect(sent.get('authorization')).not.toBe('Bearer attacker-token');
+    });
+
+    it.each([
+        ['junk bearer', { headers: { authorization: 'Bearer definitely-not-valid' } }],
+        ['fake opaque session', { cookies: { '__Host-regengine_session': 'fake-session' } }],
+        ['unsigned JWT cookie', {
+            cookies: { re_access_token: 'eyJhbGciOiJub25lIn0.eyJ0ZW5hbnRfaWQiOiJmb3JnZWQifQ.' }, // pragma: allowlist secret
+        }],
+    ])('does not attach the server key for %s', async (_label, requestOptions) => {
+        const response = await POST(makeRequest(requestOptions));
+
+        // A malformed JWT is rejected locally. Other opaque credentials are
+        // left for the upstream authority, but none receive ambient authority.
+        if (response.status === 401) {
+            expect(mockFetch).not.toHaveBeenCalled();
+            return;
+        }
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [, init] = mockFetch.mock.calls[0];
+        const sent = new Headers(init.headers as HeadersInit);
+        expect(sent.has('x-regengine-api-key')).toBe(false);
     });
 });

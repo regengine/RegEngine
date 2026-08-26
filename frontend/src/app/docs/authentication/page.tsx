@@ -114,6 +114,27 @@ export default function AuthenticationDocsPage() {
                                     &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-re-success">"Content-Type: application/json"</span>
                                 </div>
                             </div>
+                            <p className="text-sm text-muted-foreground">
+                                <code className="bg-muted px-1 py-0.5 rounded text-xs">X-Tenant-ID</code> is optional.
+                                When supplied, it is only an assertion and must match the tenant bound to the API key;
+                                it never authenticates a request.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Human administration</CardTitle>
+                            <CardDescription>
+                                Browser administration is separate from the public API.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">
+                                Staff administration uses an opaque Secure, HttpOnly, SameSite=Lax session cookie and
+                                requires a WebAuthn or SSO-authenticated sysadmin for high-assurance actions. Browser
+                                sessions and internal workload routes are intentionally absent from public OpenAPI.
+                            </p>
                         </CardContent>
                     </Card>
 

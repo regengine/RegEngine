@@ -66,8 +66,14 @@ async def create_api_key(
 
 ### Example: Admin API - Create tenant
 
+Human tenant creation is browser-session-only. The example assumes a local
+staff user already has a high-assurance WebAuthn/SSO session in `cookies.txt`
+and supplies the matching CSRF token; there is no shared administrative key.
+
 ```bash
 curl -X POST http://localhost:8400/v1/admin/tenants \
+  -b cookies.txt \
+  -H "X-CSRF-Token: $CSRF_TOKEN" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{"name": "acme-corp"}'

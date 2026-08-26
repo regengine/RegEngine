@@ -17,7 +17,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .dependencies import get_current_user, get_session
+from .database import arm_global_admin_context
 from .models import TenantContext
+from .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from .qa_health import QAHealthResponse, load_qa_health_summary
 from .sqlalchemy_models import UserModel
 
@@ -227,6 +229,48 @@ def _get_ingestion_base() -> str:
     ).rstrip("/")
 
 
+def _tenant_bound_ingestion_headers(tenant_id: str) -> Dict[str, str]:
+    """Return a database-backed tenant credential only for its bound tenant.
+
+    Requiring the companion tenant id prevents a server-held key from being
+    attached to whichever tenant a browser session selects. The ingestion
+    service independently enforces the same principal-to-tenant binding.
+    """
+    api_key = os.getenv("REGENGINE_SYSTEM_METRICS_API_KEY", "").strip()
+    bound_tenant = os.getenv("REGENGINE_SYSTEM_METRICS_TENANT_ID", "").strip()
+    if not api_key:
+        return {}
+
+    try:
+        requested = str(uuid_module.UUID(tenant_id))
+        configured = str(uuid_module.UUID(bound_tenant))
+    except (ValueError, AttributeError):
+        logger.error("tenant_api_credential_binding_invalid")
+        return {}
+
+    if requested != configured:
+        logger.warning(
+            "tenant_api_credential_binding_mismatch",
+            requested_tenant=requested,
+            configured_tenant=configured,
+        )
+        return {}
+
+    return {
+        "X-RegEngine-API-Key": api_key,
+        "X-Tenant-ID": configured,
+    }
+
+
+async def _get_internal_no_redirect(client, url: str, **kwargs):
+    """GET one internal endpoint without forwarding credentials on redirects."""
+
+    response = await client.get(url, **kwargs)
+    if 300 <= response.status_code < 400:
+        raise RuntimeError("Internal service redirect refused")
+    return response
+
+
 @router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status(
     current_user: UserModel = Depends(get_current_user),
@@ -372,25 +416,25 @@ async def get_system_metrics(
 
     score_data: Dict[str, Any] = {}
     chain_data: Dict[str, Any] = {}
-    ingestion_headers: Dict[str, str] = {}
-    ingestion_api_key = os.getenv("REGENGINE_API_KEY") or os.getenv("API_KEY")
-    if ingestion_api_key:
-        ingestion_headers = {
-            "X-RegEngine-API-Key": ingestion_api_key,
-            "X-Tenant-ID": tenant,
-        }
+    ingestion_headers = _tenant_bound_ingestion_headers(tenant)
 
     # CircuitOpenError raises at client creation (fail-fast), outside the
     # per-request return_exceptions=True net — uncaught it turned the whole
     # metrics endpoint into a 500 whenever the ingestion circuit was open,
     # instead of degrading to the DB-backed counts below.
     try:
-        async with resilient_client(timeout=12.0, circuit_name="ingestion-service") as client:
-            score_task = client.get(
+        async with resilient_client(
+            timeout=12.0,
+            circuit_name="ingestion-service",
+            follow_redirects=False,
+        ) as client:
+            score_task = _get_internal_no_redirect(
+                client,
                 f"{base}/api/v1/compliance/score/{tenant}",
                 headers=ingestion_headers or None,
             )
-            chain_task = client.get(
+            chain_task = _get_internal_no_redirect(
+                client,
                 f"{base}/api/v1/webhooks/chain/verify",
                 params={"tenant_id": tenant},
                 headers=ingestion_headers or None,
@@ -496,9 +540,12 @@ async def get_system_metrics(
 # ── JWT Key Rotation (sysadmin only) ────────────────────────────────
 
 
-def _require_sysadmin(current_user: UserModel = Depends(get_current_user)):
-    """Dependency that requires the authenticated user to be a sysadmin."""
-    if not current_user.is_sysadmin:
+def _require_sysadmin(
+    actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
+) -> UserModel:
+    """Require the shared high-assurance sysadmin boundary for global routes."""
+    current_user = actor.user
+    if current_user is None or not current_user.is_sysadmin:
         raise HTTPException(status_code=403, detail="Sysadmin access required")
     return current_user
 
@@ -527,11 +574,10 @@ async def task_queue_summary(
 ) -> TaskQueueSummaryResponse:
     """Read-only sysadmin health view for fsma.task_queue.
 
-    #2461: deliberately CROSS-TENANT (sysadmin-gated here at the HTTP
-    layer). get_task_queue_summary itself enters system_scope + applies
-    the regengine.system_context GUC so the v095 policy arm admits the
-    scan under the least-privilege role — do NOT scope this to the
-    caller's tenant.
+    Deliberately cross-tenant: the high-assurance sysadmin dependency gates
+    the HTTP request, and the task-queue helper explicitly arms the
+    transaction-local, exact-role sysadmin policy. Do not scope this view to
+    the caller's tenant.
     """
 
     return TaskQueueSummaryResponse(**get_task_queue_summary(db))
@@ -551,9 +597,9 @@ async def replay_task_queue_rows(
 ) -> TaskQueueReplayResponse:
     """Replay dead fsma.task_queue rows without deleting audit history.
 
-    #2461: cross-tenant sysadmin operation — replay_dead_tasks enters
-    system_scope + applies the regengine.system_context GUC internally
-    (see get_task_queue_summary note above).
+    Cross-tenant sysadmin operation: replay_dead_tasks explicitly arms the
+    transaction-local, exact-role sysadmin policy (see the summary note
+    above).
     """
 
     try:
@@ -589,21 +635,20 @@ async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
     """Rotate the JWT signing key (sysadmin only)."""
     # Relative import — same monolith-vs-standalone resolution issue as the
     # supplier-metrics import above; ``app.auth_utils`` fails in the monolith.
-    from shared.jwt_key_registry import get_key_registry
+    from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable, get_key_registry
 
     from .auth_utils import _sync_keys_from_registry
 
     try:
         registry = await get_key_registry()
-    except Exception as exc:
-        logger.error("jwt_rotate_registry_unavailable", error=str(exc))
-        raise HTTPException(status_code=503, detail="Key registry unavailable")
+        new_key = await registry.rotate(rotated_by=str(current_user.id))
 
-    new_key = await registry.rotate(rotated_by=str(current_user.id))
-
-    # Refresh the sync cache so new tokens use the new key immediately
-    signing = await registry.get_signing_key()
-    verifying = await registry.get_verification_keys()
+        # Refresh the sync cache so new tokens use the new key immediately
+        signing = await registry.get_signing_key()
+        verifying = await registry.get_verification_keys()
+    except JWTKeyRegistryBackendUnavailable as exc:
+        logger.error("jwt_rotate_registry_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Key registry unavailable") from exc
     _sync_keys_from_registry(signing, verifying)
 
     return {
@@ -623,15 +668,14 @@ async def rotate_jwt_key(current_user: UserModel = Depends(_require_sysadmin)):
 )
 async def list_jwt_keys(current_user: UserModel = Depends(_require_sysadmin)):
     """List all JWT keys and their status (sysadmin only)."""
-    from shared.jwt_key_registry import get_key_registry
+    from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable, get_key_registry
 
     try:
         registry = await get_key_registry()
-    except Exception as exc:
-        logger.error("jwt_keys_registry_unavailable", error=str(exc))
-        raise HTTPException(status_code=503, detail="Key registry unavailable")
-
-    keys = await registry.get_all_keys()
+        keys = await registry.get_all_keys()
+    except JWTKeyRegistryBackendUnavailable as exc:
+        logger.error("jwt_keys_registry_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Key registry unavailable") from exc
     return {
         "keys": [
             {
@@ -659,9 +703,13 @@ async def revoke_jwt_token(
     current_user: UserModel = Depends(_require_sysadmin),
 ):
     """Revoke a specific JWT token (sysadmin only)."""
-    from app.auth_utils import revoke_token
+    from .auth_utils import RevocationBackendUnavailable, revoke_token
 
-    await revoke_token(jti)
+    try:
+        await revoke_token(jti)
+    except RevocationBackendUnavailable as exc:
+        logger.error("jwt_revocation_backend_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Authentication service temporarily unavailable") from exc
     return {"status": "revoked", "jti": jti}
 
 
@@ -677,15 +725,24 @@ async def revoke_jwt_key(
     current_user: UserModel = Depends(_require_sysadmin),
 ):
     """Revoke an entire signing key (sysadmin only)."""
-    from app.auth_utils import revoke_all_for_kid
-    from shared.jwt_key_registry import get_key_registry
+    from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable, get_key_registry
 
-    registry = await get_key_registry()
-    key = await registry.get_key_by_kid(kid)
+    from .auth_utils import revoke_all_for_kid
+
+    try:
+        registry = await get_key_registry()
+        key = await registry.get_key_by_kid(kid)
+    except JWTKeyRegistryBackendUnavailable as exc:
+        logger.error("jwt_keys_registry_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Key registry unavailable") from exc
     if not key:
         raise HTTPException(status_code=404, detail=f"Key {kid} not found")
 
-    await revoke_all_for_kid(kid)
+    try:
+        await revoke_all_for_kid(kid)
+    except JWTKeyRegistryBackendUnavailable as exc:
+        logger.error("jwt_keys_registry_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Key registry unavailable") from exc
     return {"status": "revoked", "kid": kid}
 
 
@@ -703,9 +760,15 @@ async def revoke_all_jwt_keys(
     current_user: UserModel = Depends(_require_sysadmin),
 ):
     """Revoke all JWT signing keys (sysadmin only). Emergency use."""
-    from app.auth_utils import revoke_all_jwt_keys as _revoke_all
+    from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable
 
-    count = await _revoke_all()
+    from .auth_utils import revoke_all_jwt_keys as _revoke_all
+
+    try:
+        count = await _revoke_all()
+    except JWTKeyRegistryBackendUnavailable as exc:
+        logger.error("jwt_keys_registry_unavailable", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Key registry unavailable") from exc
     return {"status": "all_keys_revoked", "keys_revoked": count}
 
 
@@ -770,6 +833,9 @@ async def replay_dlq_messages(
     - Stamps replayed_at on success.
     - Leaves the record intact on failure (audit trail preserved).
     """
+    # Authentication has already established a high-assurance sysadmin.  The
+    # DLQ is a global operator surface, so elevate only this transaction.
+    arm_global_admin_context(db)
     now = datetime.now(timezone.utc)
     results: List[DLQReplayResult] = []
 

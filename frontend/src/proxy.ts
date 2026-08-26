@@ -478,6 +478,42 @@ function shouldUpgradeInsecureRequests(request: NextRequest): boolean {
     return process.env.NODE_ENV === 'production' && isHttps && !isLocalHost;
 }
 
+const RELEASE_DISABLED_FSMA_GRAPH_SEGMENTS = new Set([
+    'compliance',
+    'traceability',
+    'recall',
+    'science',
+    'metrics',
+    'gaps',
+    'export',
+]);
+
+function isReleaseDisabledApiSurface(pathname: string): boolean {
+    const matchesSegmentPrefix = (prefix: string) =>
+        pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+    // Overlay and supplier-remediation aliases are not part of this release.
+    // They stay absent in every environment so auth/CSRF behavior cannot make
+    // the disabled surface observable or accidentally forward it upstream.
+    if (matchesSegmentPrefix('/api/controls')) return true;
+    if (matchesSegmentPrefix('/api/ingestion/api/v1/remediation')) return true;
+
+    // These first FSMA path segments route to the release-disabled graph
+    // subsystem. Other FSMA aliases (for example /checklists and /industries)
+    // remain on the approved compliance service.
+    if (matchesSegmentPrefix('/api/fsma')) {
+        const firstSegment = pathname.slice('/api/fsma'.length).split('/').filter(Boolean)[0];
+        if (firstSegment && RELEASE_DISABLED_FSMA_GRAPH_SEGMENTS.has(firstSegment)) {
+            return true;
+        }
+    }
+
+    const isGraphSurface = matchesSegmentPrefix('/api/graph');
+    return isGraphSurface && (
+        process.env.NODE_ENV === 'production' || process.env.REGENGINE_ENABLE_GRAPH_PROXY !== '1'
+    );
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -518,13 +554,20 @@ export async function proxy(request: NextRequest) {
         return res;
     };
 
+    // Release-disabled surfaces must be indistinguishable from absent routes.
+    // Resolve this before CSRF so writes cannot reveal that a disabled handler
+    // exists by returning a middleware-generated 403 instead of exact 404.
+    if (isReleaseDisabledApiSurface(pathname)) {
+        return withCsp(new NextResponse(null, { status: 404 }));
+    }
+
     // -----------------------------------------------------------------------
     // CSRF protection for mutating API requests (double-submit cookie check)
     // -----------------------------------------------------------------------
-    if (
+    const csrfProtectedRequest =
         pathname.startsWith('/api/') &&
         CSRF_PROTECTED_METHODS.has(request.method) &&
-        !isCsrfExempt(pathname) &&
+        !isCsrfExempt(pathname, request.method) &&
         // #537 Bearer tokens only bypass CSRF for non-browser API clients (curl, SDKs, server-to-server).
         // Browser requests ALWAYS include an Origin or Referer header. If either is present alongside
         // a Bearer token, the request is from a browser — CSRF protection still applies.
@@ -533,8 +576,23 @@ export async function proxy(request: NextRequest) {
             request.headers.get('authorization')?.startsWith('Bearer ') &&
             !request.headers.get('origin') &&
             !request.headers.get('referer')
-        )
-    ) {
+        );
+
+    if (csrfProtectedRequest) {
+        const sourceUrl = request.headers.get('origin') || request.headers.get('referer');
+        let sourceOrigin: string | null = null;
+        try {
+            sourceOrigin = sourceUrl ? new URL(sourceUrl).origin : null;
+        } catch {
+            sourceOrigin = null;
+        }
+        if (sourceOrigin !== request.nextUrl.origin) {
+            return withCsp(NextResponse.json(
+                { error: 'Cross-origin mutation rejected' },
+                { status: 403 },
+            ));
+        }
+
         const headerToken = request.headers.get(CSRF_HEADER);
         const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
 

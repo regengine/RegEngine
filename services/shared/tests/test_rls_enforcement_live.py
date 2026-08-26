@@ -364,109 +364,170 @@ class TestFailClosedOnForcedTable:
         conn.rollback()
 
 
-class TestV095SystemContextArm:
-    """v095 gives fsma.task_queue / fsma.fsma_audit_trail a
-    ``regengine.system_context`` arm in CASE form. The CASE form is the
-    OR-ordering regression test: with ONLY the system GUC set the
-    predicate must NOT raise (Postgres does not short-circuit OR, and
-    get_tenant_context() raises on an unset tenant GUC)."""
+class TestV114SysadminArm:
+    """v114 retires the forgeable system-context GUC.
 
-    def _v095_applied(self, cur) -> bool:
+    Cross-tenant queue and audit reads require both the exact
+    ``regengine_sysadmin`` database role and an explicitly armed,
+    transaction-local ``regengine.is_sysadmin`` flag.
+    """
+
+    _SYSADMIN_GUARD = (
+        "((CURRENT_USER = 'regengine_sysadmin'::name) AND "
+        "(current_setting('regengine.is_sysadmin'::text, true) = 'true'::text))"
+    )
+
+    def _assert_v114_policy_manifest(self, cur) -> None:
         cur.execute(
             """
-            SELECT COUNT(*) FROM pg_policies
-            WHERE schemaname = 'fsma'
-              AND tablename IN ('task_queue', 'fsma_audit_trail')
-              AND (qual LIKE '%regengine.system_context%' OR with_check LIKE '%regengine.system_context%')
+            SELECT schemaname, tablename, policyname
+            FROM pg_policies
+            WHERE COALESCE(qual, '') LIKE '%regengine.system_context%'
+               OR COALESCE(with_check, '') LIKE '%regengine.system_context%'
+            ORDER BY schemaname, tablename, policyname
             """
         )
-        return cur.fetchone()[0] >= 2
+        assert cur.fetchall() == [], "retired system_context remains in an RLS policy"
 
-    def _provision_probe(self, cur) -> None:
-        """Create the probe role, seed cross-tenant rows (as the privileged
-        role — the policy predicate is never evaluated on empty tables),
-        then drop to the probe role."""
-        cur.execute("CREATE ROLE rls_probe_v095 NOLOGIN NOSUPERUSER NOBYPASSRLS")
-        cur.execute("GRANT USAGE ON SCHEMA fsma TO rls_probe_v095")
-        cur.execute("GRANT SELECT, UPDATE ON fsma.task_queue TO rls_probe_v095")
-        cur.execute("GRANT SELECT ON fsma.fsma_audit_trail TO rls_probe_v095")
         cur.execute(
-            "INSERT INTO fsma.task_queue (task_type, tenant_id) VALUES ('rls_probe', %s), ('rls_probe', %s)",
-            (_T_A, _T_B),
+            """
+            SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
+            FROM pg_policies
+            WHERE schemaname = 'fsma'
+              AND tablename IN ('task_queue', 'fsma_audit_trail')
+              AND 'regengine_sysadmin'::name = ANY(roles)
+            ORDER BY tablename, policyname
+            """
+        )
+        observed = {
+            (
+                row[0],
+                row[1],
+                row[2],
+                tuple(row[3]),
+                row[4],
+                row[5],
+                row[6],
+            )
+            for row in cur.fetchall()
+        }
+        expected = {
+            (
+                "fsma_audit_trail",
+                "fsma_audit_trail_sysadmin_read",
+                "PERMISSIVE",
+                ("regengine_sysadmin",),
+                "SELECT",
+                self._SYSADMIN_GUARD,
+                None,
+            ),
+            (
+                "task_queue",
+                "task_queue_sysadmin_delete",
+                "PERMISSIVE",
+                ("regengine_sysadmin",),
+                "DELETE",
+                self._SYSADMIN_GUARD,
+                None,
+            ),
+            (
+                "task_queue",
+                "task_queue_sysadmin_select",
+                "PERMISSIVE",
+                ("regengine_sysadmin",),
+                "SELECT",
+                self._SYSADMIN_GUARD,
+                None,
+            ),
+            (
+                "task_queue",
+                "task_queue_sysadmin_update",
+                "PERMISSIVE",
+                ("regengine_sysadmin",),
+                "UPDATE",
+                self._SYSADMIN_GUARD,
+                self._SYSADMIN_GUARD,
+            ),
+        }
+        assert observed == expected
+
+    def _seed_cross_tenant_probe(self, cur) -> tuple[str, str]:
+        marker = os.urandom(12).hex()
+        task_type = f"rls-v114-{marker}"
+        actor = f"rls-v114-{marker}"
+        cur.execute(
+            """
+            INSERT INTO fsma.task_queue (task_type, tenant_id)
+            VALUES (%s, %s), (%s, %s)
+            """,
+            (task_type, _T_A, task_type, _T_B),
         )
         cur.execute(
             """
             INSERT INTO fsma.fsma_audit_trail
                 (event_id, actor, actor_type, action, tenant_id, checksum)
-            VALUES (%s, 'rls-probe', 'System', 'CREATED', %s, 'rls-probe-checksum')
+            VALUES
+                (%s, %s, 'System', 'CREATED', %s, %s),
+                (%s, %s, 'System', 'CREATED', %s, %s)
             """,
-            ("00000000-0000-4000-8000-00000000f095", _T_A),
+            (
+                f"{marker}-a",
+                actor,
+                _T_A,
+                f"{marker}-checksum-a",
+                f"{marker}-b",
+                actor,
+                _T_B,
+                f"{marker}-checksum-b",
+            ),
         )
-        cur.execute("SET LOCAL ROLE rls_probe_v095")
+        return task_type, actor
 
-    def test_system_scope_admits_cross_tenant_queue_and_audit_reads(self, conn):
+    def test_sysadmin_arm_admits_cross_tenant_queue_and_audit_reads(self, conn):
         with conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('fsma.task_queue')")
-            if cur.fetchone()[0] is None:
-                conn.rollback()
-                pytest.skip("fsma.task_queue not present — needs a migrated DB")
-            if not self._v095_applied(cur):
-                conn.rollback()
-                pytest.skip("v095 system-context policies not applied")
-            try:
-                self._provision_probe(cur)
-            except psycopg.errors.InsufficientPrivilege:
-                conn.rollback()
-                pytest.skip("connection role cannot CREATE ROLE")
+            self._assert_v114_policy_manifest(cur)
+            task_type, actor = self._seed_cross_tenant_probe(cur)
 
-            # Only the SYSTEM GUC is set — app.tenant_id stays unset. The
-            # CASE form must evaluate to true WITHOUT touching
-            # get_tenant_context() (which would raise), and the scan must
-            # see BOTH tenants' rows (cross-tenant queue mechanics).
-            cur.execute("SELECT set_config('regengine.system_context', 'true', true)")
-            cur.execute("SELECT COUNT(*) FROM fsma.task_queue WHERE task_type = 'rls_probe'")
-            assert cur.fetchone()[0] == 2, "system arm must admit BOTH tenants' queue rows"
+            cur.execute("SET LOCAL ROLE regengine_sysadmin")
+            cur.execute("SELECT current_user")
+            assert cur.fetchone()[0] == "regengine_sysadmin"
+            cur.execute("SELECT set_config('regengine.is_sysadmin', 'true', true)")
+            assert cur.fetchone()[0] == "true"
+
             cur.execute(
-                "UPDATE fsma.task_queue SET locked_by = NULL "
-                "WHERE status = 'processing' AND locked_until < NOW() - INTERVAL '100 years'"
+                "SELECT tenant_id::text FROM fsma.task_queue "
+                "WHERE task_type = %s ORDER BY tenant_id",
+                (task_type,),
             )
-            cur.execute("SELECT COUNT(*) FROM fsma.fsma_audit_trail WHERE actor = 'rls-probe'")
-            assert cur.fetchone()[0] == 1
+            assert {row[0] for row in cur.fetchall()} == {_T_A, _T_B}
+            cur.execute(
+                "SELECT tenant_id::text FROM fsma.fsma_audit_trail "
+                "WHERE actor = %s ORDER BY tenant_id",
+                (actor,),
+            )
+            assert {row[0] for row in cur.fetchall()} == {_T_A, _T_B}
         conn.rollback()
 
-    def test_without_system_scope_same_statements_raise(self, conn):
+    def test_sysadmin_without_arm_sees_no_cross_tenant_rows(self, conn):
         with conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('fsma.task_queue')")
-            if cur.fetchone()[0] is None:
-                conn.rollback()
-                pytest.skip("fsma.task_queue not present — needs a migrated DB")
-            if not self._v095_applied(cur):
-                conn.rollback()
-                pytest.skip("v095 system-context policies not applied")
-            try:
-                self._provision_probe(cur)
-            except psycopg.errors.InsufficientPrivilege:
-                conn.rollback()
-                pytest.skip("connection role cannot CREATE ROLE")
+            task_type, actor = self._seed_cross_tenant_probe(cur)
 
-            with pytest.raises((psycopg.errors.RaiseException, psycopg.errors.InsufficientPrivilege)) as exc_info:
-                cur.execute("SELECT COUNT(*) FROM fsma.task_queue")
-            assert "app.tenant_id not set" in str(exc_info.value)
-        conn.rollback()
+            cur.execute("SET LOCAL ROLE regengine_sysadmin")
+            cur.execute("SELECT current_user")
+            assert cur.fetchone()[0] == "regengine_sysadmin"
+            cur.execute("SELECT set_config('regengine.is_sysadmin', 'false', true)")
+            # The retired flag is deliberately armed as a bypass attempt. No
+            # v114 policy references it, so it must confer no visibility.
+            cur.execute("SELECT set_config('regengine.system_context', 'true', true)")
 
-        # fsma_audit_trail in a fresh transaction (the raise aborted the
-        # previous one).
-        with conn.cursor() as cur:
-            try:
-                self._provision_probe(cur)
-            except psycopg.errors.InsufficientPrivilege:
-                conn.rollback()
-                pytest.skip("connection role cannot CREATE ROLE")
-            with pytest.raises(
-                (
-                    psycopg.errors.RaiseException,
-                    psycopg.errors.InsufficientPrivilege,
-                )
-            ):
-                cur.execute("SELECT COUNT(*) FROM fsma.fsma_audit_trail")
+            cur.execute(
+                "SELECT COUNT(*) FROM fsma.task_queue WHERE task_type = %s",
+                (task_type,),
+            )
+            assert cur.fetchone()[0] == 0
+            cur.execute(
+                "SELECT COUNT(*) FROM fsma.fsma_audit_trail WHERE actor = %s",
+                (actor,),
+            )
+            assert cur.fetchone()[0] == 0
         conn.rollback()

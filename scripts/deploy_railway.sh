@@ -6,11 +6,16 @@
 # Migrations run automatically on startup via scripts/run-migrations.sh.
 #
 # Prerequisites:
-#   1. Set DATABASE_URL from Railway Postgres or Supabase
-#   2. Optionally set NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD (graph features)
+#   1. Set DATABASE_URL to the NOBYPASSRLS regengine runtime role
+#   2. Set ADMIN_DATABASE_URL to the NOBYPASSRLS regengine_sysadmin role
+#   3. Set MIGRATIONS_DATABASE_URL to the schema-owner migration credential
+#   4. Set the exact production ENABLED_ROUTERS allowlist
 #
 # Usage:
-#   export DATABASE_URL="postgresql://postgres:xxx@db.xxx.supabase.co:6543/postgres"
+#   export DATABASE_URL="postgresql://regengine:...@db.example/regengine"
+#   export ADMIN_DATABASE_URL="postgresql://regengine_sysadmin:...@db.example/regengine"
+#   export MIGRATIONS_DATABASE_URL="postgresql://schema_owner:...@db.example/regengine"
+#   export ENABLED_ROUTERS="inflow_workbench,..."
 #   ./scripts/deploy_railway.sh
 
 set -euo pipefail
@@ -32,13 +37,13 @@ echo "========================================"
 echo ""
 
 # ── Step 0: Check prereqs ───────────────────────────────────
-if [ -z "${DATABASE_URL:-}" ]; then
-  echo -e "${RED}ERROR: DATABASE_URL not set${NC}"
-  echo "Get it from Supabase > Settings > Database > Connection string"
-  exit 1
-fi
-
-echo -e "${GREEN}✓${NC} DATABASE_URL set"
+for required_var in DATABASE_URL ADMIN_DATABASE_URL MIGRATIONS_DATABASE_URL ENABLED_ROUTERS; do
+  if [ -z "${!required_var:-}" ]; then
+    echo -e "${RED}ERROR: ${required_var} not set${NC}"
+    exit 1
+  fi
+  echo -e "${GREEN}✓${NC} ${required_var} set"
+done
 
 # ── Step 1: Push to GitHub ──────────────────────────────────
 echo ""
@@ -101,5 +106,5 @@ echo "  Monolith: $MONOLITH_URL"
 echo "  Docs:     $MONOLITH_URL/docs  (dev only)"
 echo "  Health:   $MONOLITH_URL/health"
 echo ""
-echo "  Disable specific routers: DISABLED_ROUTERS=graph,nlp"
-echo "  Scale workers:            WEB_CONCURRENCY=2"
+echo "  Enabled routers: ${ENABLED_ROUTERS}"
+echo "  Scale workers:   WEB_CONCURRENCY=2"

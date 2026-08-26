@@ -380,22 +380,19 @@ test.describe('Security Audit Fixes', () => {
 
             // Click logout (Sign Out button in sidebar)
             const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
-            const hasLogoutButton = await logoutButton.count() > 0;
+            await expect(logoutButton).toBeVisible();
+            await logoutButton.click();
 
-            if (hasLogoutButton) {
-                await logoutButton.click();
+            // Wait for redirect to login (logout may involve API call + client redirect)
+            await page.waitForURL(/\/login|\/auth/, { timeout: 15000 });
 
-                // Wait for redirect to login (logout may involve API call + client redirect)
-                await page.waitForURL(/\/login|\/auth/, { timeout: 15000 });
+            // Verify re_access_token cookie cleared
+            cookies = await context.cookies();
+            const authCookieCleared = !cookies.some(isReAccessToken);
+            expect(authCookieCleared).toBe(true);
 
-                // Verify re_access_token cookie cleared
-                cookies = await context.cookies();
-                const authCookieCleared = !cookies.some(isReAccessToken);
-                expect(authCookieCleared).toBe(true);
-
-                // Verify no localStorage tokens
-                await verifyNoTokensInLocalStorage(page);
-            }
+            // Verify no localStorage tokens
+            await verifyNoTokensInLocalStorage(page);
         });
 
     });
@@ -839,19 +836,16 @@ test.describe('Security Audit Fixes', () => {
 
             // 5. Attempt logout
             const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
-            const hasLogout = await logoutButton.count() > 0;
+            await expect(logoutButton).toBeVisible();
+            await logoutButton.click();
 
-            if (hasLogout) {
-                await logoutButton.click();
+            // Should redirect to login
+            await expect(page).toHaveURL(/\/login|\/auth/);
 
-                // Should redirect to login
-                await expect(page).toHaveURL(/\/login|\/auth/);
-
-                // re_access_token cookie should be cleared
-                cookies = await context.cookies();
-                const authCleared = !cookies.some(isReAccessToken);
-                expect(authCleared).toBe(true);
-            }
+            // re_access_token cookie should be cleared
+            cookies = await context.cookies();
+            const authCleared = !cookies.some(isReAccessToken);
+            expect(authCleared).toBe(true);
         });
 
         test('Sysadmin can access admin routes, regular user cannot', async ({ browser }) => {

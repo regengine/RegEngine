@@ -8,8 +8,8 @@
  * X-Tenant-ID, Authorization, …) verbatim — the exact header-trust drift the
  * proxy factory exists to prevent (#1152). It now runs the standard preflight,
  * strips caller-managed credential headers, and injects the authoritative tenant
- * + first-party service key server-side via applyCookieCredentials /
- * applyFirstPartyServiceCredentials.
+ * caller-owned credentials via the shared proxy helpers. It never substitutes
+ * an ambient server API key for an unverified caller credential.
  *
  * When NLP_SERVICE_URL is not configured the route returns 503 with a clear
  * message so failures are visible rather than silently falling back to stubs.
@@ -22,8 +22,10 @@ import {
     hasSupabaseSessionCookies,
 } from '@/lib/api-proxy';
 import {
+    appendOpaqueSessionCookies,
     applyCookieCredentials,
-    applyFirstPartyServiceCredentials,
+    finalizeCallerServiceCredentials,
+    rejectUpstreamRedirect,
 } from '@/lib/proxy-factory';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
@@ -64,18 +66,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    // Build outbound headers from validated cookies/env — never from caller-
-    // supplied credential headers. applyCookieCredentials strips browser-managed
-    // X-RegEngine-API-Key / X-Tenant-ID / Authorization and re-injects from the
-    // httpOnly cookies; applyFirstPartyServiceCredentials adds the server key and
-    // authoritative tenant for cookie/session callers and fails closed without a
-    // valid tenant context.
+    // Build outbound headers from caller-owned cookies. Browser-managed
+    // credential headers are stripped, and no ambient server API key is
+    // substituted. The upstream remains the authoritative verifier.
     const forwardHeaders = new Headers({ 'Content-Type': 'application/json' });
     const requestId = request.headers.get('X-Request-ID');
     if (requestId) forwardHeaders.set('X-Request-ID', requestId);
 
     applyCookieCredentials(forwardHeaders, request);
-    const credentialError = applyFirstPartyServiceCredentials(forwardHeaders, request);
+    appendOpaqueSessionCookies(forwardHeaders, request);
+    const credentialError = finalizeCallerServiceCredentials(forwardHeaders, request);
     if (credentialError) return credentialError;
 
     const upstreamUrl = `${nlpBaseUrl.replace(/\/$/, '')}/query/traceability`;
@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify(body),
             // 30-second hard timeout to avoid hanging the edge function.
             signal: AbortSignal.timeout(30_000),
+            redirect: 'manual',
         });
     } catch (err) {
         const correlationId = crypto.randomUUID();
@@ -101,6 +102,9 @@ export async function POST(request: NextRequest) {
             { status: 503 },
         );
     }
+
+    const redirectError = rejectUpstreamRedirect(upstreamResponse, 'nlp');
+    if (redirectError) return redirectError;
 
     const data = await upstreamResponse.json().catch(() => ({}));
     return NextResponse.json(data, { status: upstreamResponse.status });

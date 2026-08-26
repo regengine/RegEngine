@@ -463,13 +463,14 @@ jobs:
         env:
           PGPASSWORD: postgres # pragma: allowlist secret
         run: |
-          # Mirror backend-ci's remediation-db recipe: `regengine` owns the
-          # database and applies the migration chain, so table ownership and
-          # RLS policies match prod. get_tenant_context() is referenced by
+          # Mirror the production split: postgres owns migrations while the
+          # two runtime roles are independent NOBYPASSRLS logins. v111 owns
+          # their grants. get_tenant_context() is referenced by
           # baseline RLS policies but created by NO migration — seed the v097
           # fail-hard body or `alembic upgrade head` fails.
-          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine LOGIN SUPERUSER PASSWORD 'regengine';"  # pragma: allowlist secret — throwaway CI-service password
-          psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE regengine_admin OWNER regengine;"
+          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine LOGIN PASSWORD 'regengine' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
+          psql -h localhost -p 5433 -U postgres -c "CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'regengine_sysadmin' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
+          psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE regengine_admin OWNER postgres;"
           psql -h localhost -p 5433 -U postgres -d regengine_admin <<'EOSQL'
           CREATE OR REPLACE FUNCTION get_tenant_context()
           RETURNS UUID AS $fn$
@@ -487,7 +488,8 @@ jobs:
 
       - name: Migrate security test database to alembic head
         env:
-          DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
@@ -501,8 +503,8 @@ jobs:
           # skip theater) need a real migrated Postgres; the secrets-based
           # URLs remain for the legacy live-API test path.
           DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
-          ADMIN_DATABASE_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
-          TEST_DB_URL: postgresql://regengine:regengine@localhost:5433/regengine_admin # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:regengine_sysadmin@localhost:5433/regengine_admin # pragma: allowlist secret
+          TEST_DB_URL: postgresql://postgres:postgres@localhost:5433/regengine_admin # pragma: allowlist secret
           REDIS_URL: redis://localhost:6379/0
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           TEST_API_BASE: ${{ secrets.TEST_API_BASE }}

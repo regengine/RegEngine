@@ -6,15 +6,16 @@ from uuid import UUID
 import httpx
 import structlog
 from fastapi import Depends, HTTPException, Path, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security.utils import get_authorization_scheme_param
 from jwt.exceptions import PyJWTError as JWTError
-from shared.env import is_production
+from shared.env import requires_strict_auth_runtime
+from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable
 from shared.permissions import has_permission
 
 # Supabase Integration
 from shared.supabase_client import get_supabase
 from shared.tenant_context import set_rls_tenant_id
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from .auth.session_auth import (
@@ -22,16 +23,24 @@ from .auth.session_auth import (
     get_auth_crypto_service,
     get_current_active_session_context,
 )
-from .auth_utils import check_revoked_async, decode_access_token
-from .database import get_session, get_tenant_session
+from .auth_utils import (
+    RevocationBackendUnavailable,
+    check_revoked_async,
+    decode_access_token,
+    sync_keys_from_registry,
+)
+from .database import (
+    arm_global_admin_context,
+    bind_authenticated_user_context,
+    disarm_global_admin_context,
+    get_session,
+    get_tenant_session,
+)
 from .models import TenantContext
 
 # Redis Session Store
 from .session_store import InMemorySessionStore, RedisSessionStore, redact_connection_url
 from .sqlalchemy_models import MembershipModel, RoleModel, TenantModel, UserModel
-
-# Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/email-code/confirm", auto_error=False)
 
 logger = structlog.get_logger("auth_dependency")
 
@@ -39,7 +48,30 @@ logger = structlog.get_logger("auth_dependency")
 _session_store: Optional[RedisSessionStore] = None
 
 
+def _optional_bearer_token(request: Request) -> Optional[str]:
+    """Parse legacy bearer access tokens without advertising an OAuth flow.
+
+    Browser authentication is the opaque session contract, and the removed
+    email-code route was never an OAuth token endpoint. Keeping an
+    ``OAuth2PasswordBearer`` dependency produced a stale token URL and leaked
+    a misleading Bearer scheme into generated documentation.
+    """
+    scheme, parameter = get_authorization_scheme_param(request.headers.get("Authorization"))
+    if scheme.lower() != "bearer" or not parameter:
+        return None
+    return parameter
+
+
 def _should_use_in_memory_session_store() -> bool:
+    if requires_strict_auth_runtime():
+        # Reuse the startup policy here as defense in depth. Even if an
+        # entrypoint forgets to initialize the auth runtime, a production
+        # request must never activate the process-local session backend.
+        from .auth_runtime import load_auth_runtime_config
+
+        load_auth_runtime_config()
+        return False
+
     backend = os.getenv("SESSION_STORE_BACKEND", "").strip().lower()
     if backend in {"memory", "inmemory", "local"}:
         return True
@@ -48,7 +80,7 @@ def _should_use_in_memory_session_store() -> bool:
     if allow_in_memory in {"1", "true", "yes", "on"}:
         return True
 
-    return not is_production() and not os.getenv("REDIS_URL")
+    return not requires_strict_auth_runtime() and not os.getenv("REDIS_URL")
 
 
 def _parse_token_version(value: object) -> Optional[int]:
@@ -175,7 +207,7 @@ async def get_current_user(
     # Plain ``Request`` annotation (FastAPI special-cases it); the None
     # default only exists so unit tests can call this directly.
     request: Request = None,  # type: ignore[assignment]
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: Optional[str] = Depends(_optional_bearer_token),
     db: Session = Depends(get_session),
     session_store: Optional[RedisSessionStore] = Depends(get_session_store),
 ) -> UserModel:
@@ -198,20 +230,34 @@ async def get_current_user(
         # request is None only when unit tests call this directly.
         if request is None or not request.cookies.get(AUTH_SESSION_COOKIE):
             raise credentials_exception
-        context = get_current_active_session_context(
-            request=request,
-            db=db,
-            crypto_service=get_auth_crypto_service(),
-        )
+        try:
+            arm_global_admin_context(db)
+            context = get_current_active_session_context(
+                request=request,
+                db=db,
+                crypto_service=get_auth_crypto_service(),
+            )
+        except Exception:
+            # A failed SELECT leaves PostgreSQL in an aborted transaction.
+            # Rollback clears the transaction-local global arm and preserves
+            # the lookup's original HTTP/error contract; attempting another
+            # set_config here would raise InFailedSqlTransaction and mask it.
+            db.rollback()
+            raise
+        else:
+            disarm_global_admin_context(db)
         user_id = str(context.user.id)
         session_cookie_auth = True
 
-    # 1. Try Supabase Auth first. RegEngine also issues its own signed JWTs
-    # from passwordless auth flows, so a Supabase "invalid
-    # JWT" response is not final by itself; it may simply mean this is a
-    # RegEngine session token. Infrastructure failures still fail closed in
-    # production below.
-    sb = get_supabase() if token else None
+    # 1. Retain Supabase bearer compatibility only outside production.
+    # RegEngine also issues its own signed JWTs from passwordless auth flows,
+    # so a Supabase rejection in local/staging may still be a valid RegEngine
+    # token and falls through to the local verifier.
+    # Production/consolidated runtime accepts only RegEngine-issued local
+    # bearer tokens, whose JTI, session row, and token_version all participate
+    # in the local revocation domain. Do not even send bearer material to the
+    # independent Supabase verifier in that runtime.
+    sb = get_supabase() if token and not requires_strict_auth_runtime() else None
     if sb:
         try:
             # Supabase validates the JWT signature and expiration against the project
@@ -231,7 +277,7 @@ async def get_current_user(
                     tv_raw = app_meta.get("token_version")
                 token_version_claim = _parse_token_version(tv_raw)
 
-                # User existence verified at line 101 below (db.get raises if missing)
+                # User existence verified below (db.get raises if missing)
         except Exception as e:
             if _is_supabase_token_rejection(e):
                 logger.warning(
@@ -256,18 +302,19 @@ async def get_current_user(
                 ):
                     raise
                 logger.warning("supabase_auth_failed", error=str(e))
-                # In production, fail closed — do not fall through to local JWT
-                # unless explicitly opted out via ALLOW_LOCAL_JWT_FALLBACK=true
-                if is_production() and os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() not in ("true", "1"):
-                    logger.error("supabase_auth_failed_production_fail_closed", error=str(e))
-                    raise credentials_exception from e
 
     # 2. Fallback to local RegEngine JWT.
     # Reached when Supabase is not configured, or when Supabase rejects a token
-    # that may be a RegEngine-issued session token. Production infrastructure
-    # failures above still fail closed unless explicitly opted out.
+    # that may be a RegEngine-issued session token. This is the only production
+    # bearer path, so all production principals share one revocation domain.
     if not user_id:
         try:
+            # Production workers refresh their verification cache before every
+            # local-JWT verdict. A rotation or emergency key revocation on one
+            # replica is therefore observed by every other replica on its next
+            # request instead of waiting for a process restart.
+            if requires_strict_auth_runtime():
+                await sync_keys_from_registry()
             payload = decode_access_token(token)
             user_id = payload.get("sub")
             # ``payload`` is a verified JWT (decode_access_token validates
@@ -321,6 +368,9 @@ async def get_current_user(
                 )
                 raise credentials_exception
 
+        except (RevocationBackendUnavailable, JWTKeyRegistryBackendUnavailable) as exc:
+            logger.error("jwt_auth_backend_unavailable", error_type=type(exc).__name__)
+            raise _session_store_exception() from exc
         except JWTError:
             raise credentials_exception
 
@@ -343,27 +393,9 @@ async def get_current_user(
                 error_type=type(exc).__name__,
             )
 
-    # Set user_id context for RLS so the user can see themselves (PostgreSQL only).
-    #
-    # SECURITY (#2853): the third set_config argument is ``is_local``. This
-    # used to pass ``false`` — a SESSION-scoped write that outlives the
-    # request and rides the pooled connection back into the pool. public.users
-    # and public.sessions are ENABLE+FORCE RLS with policies keyed on this
-    # exact GUC (``user_self_isolation`` / ``sessions_user_isolation``, v078),
-    # so the next caller to check out that connection inherited the previous
-    # caller's identity scope until its own get_current_user overwrote it —
-    # and pre-auth or non-authenticating routes never overwrite it at all.
-    #
-    # ``true`` makes it transaction-scoped, matching the shared engine's
-    # canonical primitive (``shared.tenant_context.set_tenant_guc``) and
-    # clearing automatically on COMMIT/ROLLBACK. Safe here because
-    # ``SessionLocal`` is built with ``expire_on_commit=False`` (see
-    # services/admin/app/database.py), so a mid-request commit cannot trigger
-    # an implicit re-SELECT of the user row after the GUC has cleared.
-    # database.py's checkout listener resets this GUC as well, as defence in
-    # depth for connections that were orphaned mid-request.
-    if db.bind and db.bind.dialect.name != "sqlite":
-        db.execute(text("SELECT set_config('regengine.user_id', :uid, true)"), {"uid": str(user_id)})
+    # Set a transaction-local user context so self-service RLS can load the
+    # authenticated row without opening the global sysadmin branch.
+    bind_authenticated_user_context(db, user_id)
 
     user = db.get(UserModel, UUID(user_id))
     if user is None:
@@ -411,16 +443,28 @@ async def get_current_user(
     # who belong to multiple tenants must have tenant_id written into
     # app_metadata (or the local JWT) by the server; we refuse to guess.
     if not tenant_id:
-        active_memberships = (
-            db.execute(
-                select(MembershipModel).where(
-                    MembershipModel.user_id == UUID(user_id),
-                    MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+        try:
+            # Selecting a tenant is the final pre-tenant bootstrap query.  The
+            # global arm is removed before any tenant-scoped route work.
+            arm_global_admin_context(db)
+            active_memberships = (
+                db.execute(
+                    select(MembershipModel).where(
+                        MembershipModel.user_id == UUID(user_id),
+                        MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+                    )
                 )
+                .scalars()
+                .all()
             )
-            .scalars()
-            .all()
-        )
+        except Exception:
+            # See the cookie bootstrap above: rollback is the only valid
+            # cleanup operation after an aborted PostgreSQL transaction and
+            # automatically clears the transaction-local admin GUC.
+            db.rollback()
+            raise
+        else:
+            disarm_global_admin_context(db)
         if len(active_memberships) == 1:
             tenant_id = str(active_memberships[0].tenant_id)
             logger.info(
@@ -562,6 +606,10 @@ class PermissionChecker:
             .where(
                 MembershipModel.user_id == user.id,
                 MembershipModel.tenant_id == current_tenant_id,
+                or_(
+                    RoleModel.tenant_id.is_(None),
+                    RoleModel.tenant_id == current_tenant_id,
+                ),
             )
         )
         role = db.execute(stmt).scalar_one_or_none()
@@ -596,12 +644,10 @@ def verify_path_tenant_matches(
 
     auth_tenant = TenantContext.get_tenant_context(db)
     if auth_tenant is None:
-        if user.is_sysadmin:
-            return path_tenant
         logger.warning("path_tenant_check_no_context", user_id=str(user.id))
         raise HTTPException(status_code=403, detail="No tenant context active")
 
-    if path_tenant != auth_tenant and not user.is_sysadmin:
+    if path_tenant != auth_tenant:
         logger.warning(
             "cross_tenant_path_access_denied",
             user_id=str(user.id),
@@ -633,10 +679,9 @@ async def get_tenant_scoped_session(
     referenced inside the request will be enforced by Postgres — even if
     a query in the handler forgets its ``WHERE tenant_id = ...`` clause.
 
-    Sysadmin callers who pass ``verify_path_tenant_matches`` get the
-    requested tenant's GUC; routes that need a literal sysadmin-bypass
-    (cross-tenant scans) should not use this dependency and must instead
-    explicitly opt out of RLS via the appropriate sysadmin context.
+    Global sysadmin status is intentionally not a bypass. Cross-tenant
+    control-plane operations must use a distinct high-assurance sysadmin
+    route and must not reuse this tenant-scoped dependency.
 
     Defense-in-depth, not a substitute for tenant scoping in service code.
     Routes still verify tenant on writes; this just guarantees that an
@@ -646,10 +691,9 @@ async def get_tenant_scoped_session(
     seed below is visible downstream — a sync dependency runs in a
     threadpool context copy whose contextvar sets never propagate to the
     handler. Seeding the VERIFIED path tenant (rather than relying on the
-    auth tenant seeded by ``get_current_user``) matters for sysadmins
-    operating cross-tenant: the Engine begin-hook then re-applies the
-    requested tenant on every transaction, including after a mid-request
-    commit()/rollback() clears the transaction-scoped GUC that
+    auth tenant seeded by ``get_current_user``) makes the Engine begin-hook
+    re-apply the verified tenant on every transaction, including after a
+    mid-request commit()/rollback() clears the transaction-scoped GUC that
     ``get_tenant_session`` set.
     """
     set_rls_tenant_id(str(tenant_id))
@@ -683,8 +727,8 @@ async def get_auth_scoped_session(
     routes WITHOUT a ``{tenant_id}`` path parameter.
 
     Usage on routes where the operating tenant comes from the auth
-    context (API-key row's tenant_id, JWT claim, preshared master key
-    + X-Tenant-ID header), not from the URL path::
+    context (API-key row tenant or signed session claim), not from the
+    URL path::
 
         @router.post("/v1/audit/export")
         async def export_audit_logs(
@@ -696,8 +740,8 @@ async def get_auth_scoped_session(
 
     Resolution order is the canonical EPIC-A one (see
     ``shared.tenant_context.resolve_tenant_context`` for the full
-    contract): API-key principal → JWT principal → preshared master
-    key + X-Tenant-ID. Tenant from URL path / query / body /
+    contract): API-key principal → signed session principal. Tenant from
+    URL path / query / body /
     Supabase ``user_metadata`` is rejected with HTTP 409 if it
     conflicts with the principal's tenant.
 

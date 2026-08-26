@@ -27,6 +27,8 @@ on:
       - 'tests/**'
       - 'sample_data/**'
       - 'demo_exports/**'
+      - 'docs/security/route-security-manifest.json'
+      - 'docs/security/release-evidence/**'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/deploy.yml'
   pull_request:
@@ -46,6 +48,8 @@ on:
       - 'tests/**'
       - 'sample_data/**'
       - 'demo_exports/**'
+      - 'docs/security/route-security-manifest.json'
+      - 'docs/security/release-evidence/**'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/deploy.yml'
 
@@ -222,7 +226,6 @@ jobs:
           NEO4J_URI: bolt://localhost:7687
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test-password-for-ci
-          ADMIN_MASTER_KEY: test-master-key-for-ci
           OBJECT_STORAGE_ACCESS_KEY_ID: ci-test-key
           OBJECT_STORAGE_SECRET_ACCESS_KEY: ci-test-secret
           OBJECT_STORAGE_ENDPOINT_URL: http://localhost:4566
@@ -519,12 +522,12 @@ jobs:
           # (services/ingestion/tests/remediation/) exercise FORCE RLS, the
           # append-only trigger, and the SECURITY DEFINER token lookup
           # against a real migrated Postgres. Reproduce the production role
-          # layout: `regengine` owns the database and applies the migration
-          # chain, so table ownership and the legacy TO-regengine fsma
-          # policies match prod. The guarded CREATE ROLE blocks in
-          # v051/v056/v092 tolerate the pre-existing role.
-          psql -h localhost -U postgres -c "CREATE ROLE regengine LOGIN SUPERUSER PASSWORD 'regengine';"  # pragma: allowlist secret — throwaway CI-service password
-          psql -h localhost -U postgres -c "CREATE DATABASE remediation_test OWNER regengine;"
+          # layout: migrations remain owned by postgres while the app connects
+          # directly as the exact NOBYPASSRLS runtime role. v114 applies the
+          # production grants; no test-only grant block is permitted.
+          psql -h localhost -U postgres -c "CREATE ROLE regengine LOGIN PASSWORD 'regengine' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
+          psql -h localhost -U postgres -c "CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'regengine_sysadmin' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"  # pragma: allowlist secret — throwaway CI-service password
+          psql -h localhost -U postgres -c "CREATE DATABASE remediation_test OWNER postgres;"
           # get_tenant_context() is referenced by baseline RLS policies but
           # created by NO migration — production Supabase carries it from
           # pre-baseline state. Seed it exactly as scripts/init-postgres.sh
@@ -558,7 +561,8 @@ jobs:
 
       - name: Migrate remediation database to alembic head
         env:
-          DATABASE_URL: postgresql://regengine:regengine@localhost:5432/remediation_test # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
@@ -605,12 +609,8 @@ jobs:
           SUPABASE_URL: http://localhost:54321
           SUPABASE_KEY: test-key-for-ci
           PYTHONDONTWRITEBYTECODE: 1
-          # conftest.py creates the non-superuser `remtest` role itself and
-          # grants it the production `regengine` membership; the app engine
-          # connects as remtest so FORCE RLS and the append-only trigger are
-          # genuinely enforced, not mocked.
-          REMEDIATION_TEST_SUPERUSER_DSN: postgresql://regengine:regengine@localhost:5432/remediation_test # pragma: allowlist secret
-          REMEDIATION_TEST_APP_DSN: postgresql://remtest:remtest@localhost:5432/remediation_test # pragma: allowlist secret
+          REMEDIATION_TEST_SUPERUSER_DSN: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
+          REMEDIATION_TEST_APP_DSN: postgresql://regengine:regengine@localhost:5432/remediation_test # pragma: allowlist secret
           # An unreachable DB must FAIL this step, never skip it green (#2530).
           REGENGINE_REQUIRE_DB: "1"
         run: |
@@ -662,7 +662,7 @@ jobs:
         # is enough to exercise the real import chain without a database.
         run: |
           docker run --rm \
-            -e ADMIN_DATABASE_URL="postgresql+psycopg://smoke:smoke@127.0.0.1:5432/smoke" \
+            -e ADMIN_DATABASE_URL="postgresql+psycopg://smoke@127.0.0.1:5432/smoke" \
             regengine:test \
             python -c "import server.main; assert server.main.app is not None; print('server.main imported OK')"
 
@@ -834,6 +834,28 @@ jobs:
       - name: Install dependencies
         run: pip install --require-hashes -r requirements.lock
 
+      - name: Route-complete security manifest and disabled-router gate
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Imports the broad inventory app to execute every operation's auth
+          # adapter, then imports the exact production allowlist in a clean
+          # child process. Every omitted operation is safely concretized with
+          # its actual method and must return exact 404 against that table.
+          python scripts/generate_route_security_manifest.py --check
+
+      - name: Enabled outbound HTTP and queue-handler guard
+        run: |
+          python scripts/check_enabled_outbound_http.py
+          pytest tests/security/test_enabled_outbound_http_guard.py \
+            tests/security/test_disabled_router_task_handlers.py \
+            -v --no-cov -o "testpaths=tests"
+
+      - name: Sanitized release-evidence gate
+        run: |
+          python scripts/validate_release_evidence.py
+          pytest tests/security/test_release_evidence.py -v --no-cov -o "testpaths=tests"
+
       - name: Create isolated test databases
         env:
           PGPASSWORD: postgres
@@ -866,12 +888,20 @@ jobs:
           # Needs the Redis service (job env REDIS_URL) for the job-status
           # tenant-scoping tests; no Postgres — every assertion resolves
           # before DB access. An unreachable Redis FAILS these tests.
-          pytest tests/security/test_security_audit_fixes.py \
+          pytest tests/test_router_policy.py \
+            tests/test_server_import_smoke.py \
+            tests/security/test_account_erasure_live_db_guard.py \
+            tests/security/test_global_admin_context_allowlist.py \
+            tests/security/test_security_audit_fixes.py \
+            tests/security/test_auth_coverage.py \
+            tests/security/test_route_security_manifest.py \
+            tests/security/test_staging_release_gate_runner.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
         env:
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
         run: |
@@ -965,6 +995,7 @@ jobs:
 
       - name: ORM drift gate (alembic check, WS-2b)
         env:
+          MIGRATIONS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated
         run: |
           repo_root="$(pwd)"
@@ -1060,17 +1091,31 @@ jobs:
       - name: Install dependencies
         run: pip install --require-hashes -r requirements.lock
 
-      - name: Create rehearsal database
+      - name: Create dedicated-owner rehearsal database
         env:
           PGPASSWORD: postgres
         run: |
           # The rehearsal drives the DB from empty through v089 + seed to
-          # head itself, so it gets a dedicated database.
-          psql -h localhost -U postgres -c "CREATE DATABASE seeded_migrated;"
+          # head itself. Migrations run as a NOCREATEROLE/NOBYPASSRLS owner;
+          # the provider URL is exposed only to the fixture seeding seam.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d postgres <<'EOSQL'
+          CREATE ROLE regengine LOGIN PASSWORD 'seeded-runtime-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'seeded-admin-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_migrator_seeded LOGIN PASSWORD 'seeded-migration-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE DATABASE seeded_migrated OWNER regengine_migrator_seeded;
+          GRANT CONNECT ON DATABASE seeded_migrated TO regengine, regengine_sysadmin;
+          EOSQL
 
       - name: Seeded mid-chain upgrade rehearsal
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seeded_migrated
+          MIGRATIONS_DATABASE_URL: postgresql://regengine_migrator_seeded:seeded-migration-password@localhost:5432/seeded_migrated # pragma: allowlist secret
+          REGENGINE_MIGRATIONS_ROLE: regengine_migrator_seeded
+          REGENGINE_ENFORCE_MIGRATION_ROLE: "1"
+          DATABASE_URL: postgresql://regengine_migrator_seeded:seeded-migration-password@localhost:5432/seeded_migrated # pragma: allowlist secret
+          ROLE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/seeded_migrated # pragma: allowlist secret
           REGENGINE_SEED_CLIENT_ROLES: ${{ matrix.cluster == 'supabase-client-roles' && '1' || '0' }}
         run: |
           repo_root="$(pwd)"
@@ -1131,36 +1176,34 @@ jobs:
       - name: Install dependencies
         run: pip install --require-hashes -r requirements.lock
 
-      - name: Create scratch database (roles + pre-baseline function)
+      - name: Create scratch database (dedicated migration + runtime roles)
         env:
           PGPASSWORD: postgres
-        run: |
+        run: | # pragma: allowlist secret
           # Database name must NOT be regengine/regengine_admin: the #2646
           # guard (tests/migrations/rls_db.py) refuses loopback URLs with
           # those names even under CI=true, and the whole job would skip.
-          psql -h localhost -U postgres -c "CREATE DATABASE live_suite;"
-          # Roles must exist BEFORE `alembic upgrade head`: v051 runs
-          # unguarded GRANTs to regengine, and v100's memberships policy
-          # silently no-ops (and stamps) without regengine_sysadmin.
-          # NOLOGIN suffices — tests reach the roles via SET LOCAL ROLE
-          # from the postgres superuser connection.
-          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
-          DO $$
-          BEGIN
-              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
-                  CREATE ROLE regengine NOLOGIN;
-              END IF;
-              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin') THEN
-                  CREATE ROLE regengine_sysadmin NOLOGIN INHERIT;
-              END IF;
-          END
-          $$;
+          # The provider credential creates roles and the database only. The
+          # full Alembic chain then runs as the exact NOCREATEROLE,
+          # NOBYPASSRLS schema owner used by production migration jobs.
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d postgres <<'EOSQL'
+          CREATE ROLE regengine LOGIN PASSWORD 'runtime-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_sysadmin LOGIN PASSWORD 'admin-runtime-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE ROLE regengine_migrator_ci LOGIN PASSWORD 'migration-test-password'
+              NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+          CREATE DATABASE live_suite OWNER regengine_migrator_ci;
+          GRANT CONNECT ON DATABASE live_suite TO regengine, regengine_sysadmin;
           EOSQL
           # get_tenant_context() is referenced by baseline RLS policies but
           # created by NO migration — production Supabase carries it from
           # pre-baseline state. Seed it exactly as scripts/init-postgres.sh
-          # does for local databases, or `alembic upgrade head` fails.
-          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
+          # does for local databases, or `alembic upgrade head` fails. Create
+          # it as the migration owner so no provider-owned function is hidden
+          # in an otherwise least-privilege rehearsal.
+          PGPASSWORD=migration-test-password psql -v ON_ERROR_STOP=1 \
+            -h localhost -U regengine_migrator_ci -d live_suite <<'EOSQL'
           CREATE OR REPLACE FUNCTION get_tenant_context()
           RETURNS UUID AS $fn$
           DECLARE
@@ -1175,38 +1218,118 @@ jobs:
           $fn$ LANGUAGE plpgsql STABLE;
           EOSQL
 
-      - name: Migrate scratch database to alembic head
+      - name: Run fresh and managed migration-runner paths
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+          MIGRATIONS_DATABASE_URL: postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_MIGRATIONS_ROLE: regengine_migrator_ci
+          DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:admin-runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          MIGRATION_LOCK_TIMEOUT_S: "10"
         run: |
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          alembic upgrade head
+          # First invocation proves the full chain as the dedicated
+          # NOCREATEROLE migration owner. The second proves the managed-head
+          # path and convergent v114 repair.
+          bash scripts/run-migrations.sh
+          bash scripts/run-migrations.sh
 
-      - name: Apply prod-parity role grants
+      - name: Refuse an unversioned application schema without stamping
         env:
-          PGPASSWORD: postgres
-        run: |
-          # Mirror runbooks/prod-least-privilege-db-role.sql EXACTLY: prod
-          # grants DML to regengine ONLY; regengine_sysadmin reaches tables
-          # through v051's GRANT regengine TO regengine_sysadmin membership
-          # (INHERIT). Granting sysadmin directly would mask regressions in
-          # that membership path — the 2026-07-27 incident class.
-          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d live_suite <<'EOSQL'
-          DO $$
-          DECLARE s TEXT;
-          BEGIN
-              FOREACH s IN ARRAY ARRAY['public','fsma','audit','dlq','ingestion'] LOOP
-                  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = s) THEN
-                      EXECUTE format('GRANT USAGE ON SCHEMA %I TO regengine', s);
-                      EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO regengine', s);
-                      EXECUTE format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA %I TO regengine', s);
-                      EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO regengine', s);
-                  END IF;
-              END LOOP;
-          END
-          $$;
+          PGPASSWORD: postgres # pragma: allowlist secret
+        run: | # pragma: allowlist secret
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d postgres \
+            -c "CREATE DATABASE unmanaged_suite OWNER regengine_migrator_ci;"
+          PGPASSWORD=migration-test-password psql -v ON_ERROR_STOP=1 \
+            -h localhost -U regengine_migrator_ci -d unmanaged_suite \
+            -c "CREATE SCHEMA fsma; CREATE TABLE fsma.preexisting_data (id integer);"
+
+          set +e
+          MIGRATIONS_DATABASE_URL='postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/unmanaged_suite' \
+            MIGRATION_LOCK_TIMEOUT_S=10 \
+            bash scripts/run-migrations.sh > /tmp/unmanaged-migration.log 2>&1
+          runner_status=$?
+          set -e
+
+          if [ "$runner_status" -ne 78 ]; then
+            cat /tmp/unmanaged-migration.log
+            echo "::error::unmanaged schema must require an operator decision with exit 78; got ${runner_status}"
+            exit 1
+          fi
+          grep -q "Refusing to guess" /tmp/unmanaged-migration.log
+          test "$(psql -XAt -h localhost -U postgres -d unmanaged_suite -c \
+            "SELECT to_regclass('public.alembic_version') IS NULL")" = "t"
+
+      - name: Refuse unpublished draft migration artifacts
+        env:
+          PGPASSWORD: postgres # pragma: allowlist secret
+        run: | # pragma: allowlist secret
+          psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d postgres \
+            -c "CREATE DATABASE unpublished_draft_suite OWNER regengine_migrator_ci;"
+          PGPASSWORD=migration-test-password psql -v ON_ERROR_STOP=1 \
+            -h localhost -U regengine_migrator_ci -d unpublished_draft_suite <<'EOSQL'
+          CREATE TABLE public.alembic_version (version_num varchar(32) PRIMARY KEY);
+          INSERT INTO public.alembic_version (version_num) VALUES ('b71d9e4c2a60');
+          CREATE TABLE public.draft_trigger_probe (id integer);
+          CREATE TRIGGER trg_v111_draft_probe
+            BEFORE UPDATE ON public.draft_trigger_probe
+            FOR EACH ROW EXECUTE FUNCTION suppress_redundant_updates_trigger();
           EOSQL
+
+          set +e
+          MIGRATIONS_DATABASE_URL='postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/unpublished_draft_suite' \
+            MIGRATION_LOCK_TIMEOUT_S=10 \
+            bash scripts/run-migrations.sh > /tmp/draft-revision-migration.log 2>&1
+          revision_status=$?
+          set -e
+          if [ "$revision_status" -ne 65 ]; then
+            cat /tmp/draft-revision-migration.log
+            echo "::error::unpublished draft revision must fail with exit 65; got ${revision_status}"
+            exit 1
+          fi
+          grep -q "Unpublished account-security migration draft detected" \
+            /tmp/draft-revision-migration.log
+          grep -q "b71d9e4c2a60" /tmp/draft-revision-migration.log
+
+          PGPASSWORD=migration-test-password psql -v ON_ERROR_STOP=1 \
+            -h localhost -U regengine_migrator_ci -d unpublished_draft_suite \
+            -c "DELETE FROM public.alembic_version;"
+          set +e
+          MIGRATIONS_DATABASE_URL='postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/unpublished_draft_suite' \
+            MIGRATION_LOCK_TIMEOUT_S=10 \
+            bash scripts/run-migrations.sh > /tmp/draft-trigger-migration.log 2>&1
+          trigger_status=$?
+          set -e
+          if [ "$trigger_status" -ne 65 ]; then
+            cat /tmp/draft-trigger-migration.log
+            echo "::error::unpublished draft trigger must fail with exit 65; got ${trigger_status}"
+            exit 1
+          fi
+          grep -q "Unpublished account-security migration draft detected" \
+            /tmp/draft-trigger-migration.log
+          grep -q "trg_v111_draft_probe" /tmp/draft-trigger-migration.log
+
+      - name: Prove v114 grants with actual runtime credentials
+        env:
+          MIGRATIONS_DATABASE_URL: postgresql://regengine_migrator_ci:migration-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_MIGRATIONS_ROLE: regengine_migrator_ci
+          REGENGINE_ENFORCE_MIGRATION_ROLE: "1"
+          DATABASE_URL: postgresql://regengine:runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          ADMIN_DATABASE_URL: postgresql://regengine_sysadmin:admin-runtime-test-password@localhost:5432/live_suite  # pragma: allowlist secret
+          ROLE_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/live_suite  # pragma: allowlist secret
+          REGENGINE_REQUIRE_RLS_ENFORCEMENT: "1"
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          set -o pipefail
+          pytest tests/migrations/test_v114_runtime_role_grants.py \
+            tests/migrations/test_v114_migration_linearization.py \
+            tests/security/test_account_erasure_identity_isolation_pg.py \
+            -v -rs --no-cov -o "testpaths=tests" | tee /tmp/v114-role-cutover.log
+          if grep -qE '[0-9]+ skipped' /tmp/v114-role-cutover.log; then
+            echo "::error::v114 role-cutover proof skipped with all four direct credentials configured"
+            exit 1
+          fi
 
       - name: Run live-DB suite (skips are failures)
         env:

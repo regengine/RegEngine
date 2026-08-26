@@ -27,7 +27,7 @@ export const publicOpenApiSpec = {
     title: 'RegEngine Public API',
     version: '1.0.0',
     description:
-      'Curated public API surface for FSMA 204 traceability ingestion, record lookup, and export workflows.',
+      'Curated public API surface for FSMA 204 traceability ingestion, record lookup, and export workflows. Public callers authenticate only with X-RegEngine-API-Key. Browser and human administration uses opaque session cookies and is not part of this specification. X-Tenant-ID is an optional assertion that must match the credential-bound tenant; it is not an authentication mechanism.',
   },
   servers: [
     {
@@ -190,7 +190,9 @@ export const publicOpenApiSpec = {
       TenantHeader: {
         name: 'X-Tenant-ID',
         in: 'header',
-        required: true,
+        required: false,
+        description:
+          'Optional tenant assertion. When supplied, it must match the tenant bound to X-RegEngine-API-Key.',
         schema: { type: 'string', format: 'uuid' },
       },
       TenantQuery: {

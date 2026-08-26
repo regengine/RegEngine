@@ -1,4 +1,10 @@
 # REGENGINE COMPREHENSIVE CODEBASE AUDIT
+
+> **Archived historical snapshot (March 2026).** This document does not
+> describe the current authentication or deployment contract. Any shared
+> administrative-key references below are retired and must not be configured
+> or used.
+
 Date: 2026-03-09
 Scope: Full codebase examination including all services, frontend, and infrastructure
 

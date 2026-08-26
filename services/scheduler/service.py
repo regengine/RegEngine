@@ -80,6 +80,35 @@ logger = structlog.get_logger("scheduler")
 _STALE_COVERAGE_ZERO_RUNS = 7
 
 
+def _strict_database_role_cutover_enabled() -> bool:
+    """Return whether control-plane work must be absent from DATABASE_URL."""
+    environment = (
+        os.getenv("REGENGINE_ENV", "")
+        or os.getenv("ENVIRONMENT", "")
+        or os.getenv("ENV", "")
+    ).strip().lower()
+    return environment in {"staging", "production"} or os.getenv(
+        "REGENGINE_REQUIRE_RLS_ENFORCEMENT", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _release_router_enabled(router_name: str) -> bool:
+    """Return whether one optional product surface is explicitly enabled.
+
+    The consolidated production app independently enforces the exact release
+    router set. The scheduler also fails closed so a standalone process or a
+    stale scheduled job cannot deliver links for a surface that resolves to
+    404 in the deployed application.
+    """
+
+    enabled = {
+        value.strip().lower()
+        for value in os.getenv("ENABLED_ROUTERS", "").split(",")
+        if value.strip()
+    }
+    return router_name.strip().lower() in enabled
+
+
 class SchedulerService:
     """Main scheduler service orchestrating all components."""
 
@@ -651,15 +680,24 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
-        # Inactive account disablement — NIST AC-2(3) (#974)
-        self._add_tracked_job(
-            self.disable_inactive_accounts,
-            job_id="inactive_account_sweep",
-            trigger=IntervalTrigger(hours=24),
-            next_run_time=self._near_boot_first_run(minutes=6),
-            name="Disable Inactive Accounts (90 days)",
-        )
-        logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
+        # Identity mutation belongs to the audited admin control plane.  Until
+        # that dedicated job exists, strict role-cutover deployments do not
+        # schedule the legacy DATABASE_URL sweep.
+        if _strict_database_role_cutover_enabled():
+            logger.warning(
+                "job_security_disabled",
+                job_id="inactive_account_sweep",
+                reason="requires audited ADMIN_DATABASE_URL control-plane worker",
+            )
+        else:
+            self._add_tracked_job(
+                self.disable_inactive_accounts,
+                job_id="inactive_account_sweep",
+                trigger=IntervalTrigger(hours=24),
+                next_run_time=self._near_boot_first_run(minutes=6),
+                name="Disable Inactive Accounts (90 days)",
+            )
+            logger.info("job_scheduled", job_id="inactive_account_sweep", interval_hours=24)
 
         # KDE retention enforcement — FSMA 204 24-month minimum (#973)
         self._add_tracked_job(
@@ -704,37 +742,7 @@ class SchedulerService:
         )
         logger.info("job_scheduled", job_id="fsma_nightly_sync", cron="02:00 UTC")
 
-        # #2257 follow-up — replay the audit_log_buffer to the primary
-        # KDE_READ audit-log backend on a schedule. Cadence is env-tunable
-        # via AUDIT_BUFFER_RECONCILE_INTERVAL_SECONDS (default 300s).
-        try:
-            from services.graph.app.audit_buffer_reconciler import (  # noqa: PLC0415
-                get_interval_seconds,
-                run_reconcile_tick,
-            )
-
-            audit_buffer_interval = get_interval_seconds()
-            self._add_tracked_job(
-                run_reconcile_tick,
-                job_id="audit_buffer_reconcile",
-                trigger=IntervalTrigger(seconds=audit_buffer_interval),
-                name="Audit Log Buffer Reconciliation (#2257 follow-up)",
-                max_instances=1,  # Never run two reconciliation passes concurrently.
-            )
-            logger.info(
-                "job_scheduled",
-                job_id="audit_buffer_reconcile",
-                interval_seconds=audit_buffer_interval,
-            )
-        except ImportError as exc:
-            # Graph package not on path (e.g. minimal scheduler image): log
-            # and continue. The buffer still grows safely; ops will notice
-            # the missing replays via the unreplayed gauge.
-            logger.warning(
-                "audit_buffer_reconcile_unavailable",
-                error=str(exc),
-                hint="services.graph.app.audit_buffer_reconciler not importable",
-            )
+        self._schedule_audit_buffer_reconcile()
 
         # #2510 — loud-default footgun guard. If webhooks are enabled but no
         # durable outbox path is configured, failed HIGH/CRITICAL alert
@@ -775,24 +783,7 @@ class SchedulerService:
                 outbox_path=self.settings.webhook_outbox_path,
             )
 
-        # Remediation notification-outbox drain — emails supplier
-        # correction links queued by services/ingestion/app/remediation/
-        # outbox.py. Short cadence on purpose: the product promise is
-        # link delivery within seconds of the buyer issuing it.
-        self._add_tracked_job(
-            self.drain_remediation_notifications,
-            job_id="remediation_notification_drain",
-            trigger=IntervalTrigger(
-                seconds=self.settings.remediation_outbox_drain_interval_seconds,
-            ),
-            name="Remediation Notification Outbox Drain",
-            max_instances=1,  # Never run two drain passes concurrently.
-        )
-        logger.info(
-            "job_scheduled",
-            job_id="remediation_notification_drain",
-            interval_seconds=self.settings.remediation_outbox_drain_interval_seconds,
-        )
+        self._schedule_remediation_notification_drain()
 
         # WS-8 (#2709): replay dead-lettered rule evaluations into
         # fsma.rule_evaluations so the audit trail self-heals.
@@ -816,6 +807,99 @@ class SchedulerService:
             scrapers=list(self.scrapers.keys()),
         )
 
+    def _schedule_audit_buffer_reconcile(self) -> None:
+        """Register graph audit replay only with the graph surface enabled.
+
+        The current audit chain is not safe for concurrent HTTP writers across
+        the monolith's Gunicorn workers. Production therefore keeps every
+        graph writer omitted and must also keep this non-route writer absent
+        until the database-serialized append contract is promoted with graph.
+        """
+
+        if not _release_router_enabled("graph"):
+            logger.info(
+                "job_release_disabled",
+                job_id="audit_buffer_reconcile",
+                required_router="graph",
+            )
+            return
+
+        # #2257 follow-up — replay audit_log_buffer to the primary KDE_READ
+        # backend. Cadence is env-tunable (default 300s).
+        try:
+            from services.graph.app.audit_buffer_reconciler import (  # noqa: PLC0415
+                get_interval_seconds,
+            )
+
+            audit_buffer_interval = get_interval_seconds()
+            self._add_tracked_job(
+                self.reconcile_audit_buffer,
+                job_id="audit_buffer_reconcile",
+                trigger=IntervalTrigger(seconds=audit_buffer_interval),
+                name="Audit Log Buffer Reconciliation (#2257 follow-up)",
+                max_instances=1,
+            )
+            logger.info(
+                "job_scheduled",
+                job_id="audit_buffer_reconcile",
+                interval_seconds=audit_buffer_interval,
+            )
+        except ImportError as exc:
+            # Graph package not on path (e.g. minimal scheduler image): log
+            # and continue. The buffer still grows safely; ops will notice
+            # the missing replays via the unreplayed gauge.
+            logger.warning(
+                "audit_buffer_reconcile_unavailable",
+                error=str(exc),
+                hint="services.graph.app.audit_buffer_reconciler not importable",
+            )
+
+    def reconcile_audit_buffer(self) -> None:
+        """Run one graph audit replay tick behind the same release gate."""
+
+        if not _release_router_enabled("graph"):
+            logger.info(
+                "job_execution_release_disabled",
+                job_id="audit_buffer_reconcile",
+                required_router="graph",
+            )
+            return
+
+        from services.graph.app.audit_buffer_reconciler import (  # noqa: PLC0415
+            run_reconcile_tick,
+        )
+
+        run_reconcile_tick()
+
+    def _schedule_remediation_notification_drain(self) -> None:
+        """Register remediation delivery only with its HTTP surface enabled."""
+
+        if not _release_router_enabled("remediation"):
+            logger.info(
+                "job_release_disabled",
+                job_id="remediation_notification_drain",
+                required_router="remediation",
+            )
+            return
+
+        # Emails contain supplier correction links. Scheduling this while the
+        # remediation router is disabled would send customers links that are
+        # guaranteed to 404.
+        self._add_tracked_job(
+            self.drain_remediation_notifications,
+            job_id="remediation_notification_drain",
+            trigger=IntervalTrigger(
+                seconds=self.settings.remediation_outbox_drain_interval_seconds,
+            ),
+            name="Remediation Notification Outbox Drain",
+            max_instances=1,
+        )
+        logger.info(
+            "job_scheduled",
+            job_id="remediation_notification_drain",
+            interval_seconds=self.settings.remediation_outbox_drain_interval_seconds,
+        )
+
     def drain_remediation_notifications(self) -> None:
         """Drain the remediation notification outbox once.
 
@@ -825,6 +909,14 @@ class SchedulerService:
         with backoff inside the drainer; a tenant-level failure is logged
         and skipped so one tenant cannot poison the tick.
         """
+        if not _release_router_enabled("remediation"):
+            logger.info(
+                "job_execution_release_disabled",
+                job_id="remediation_notification_drain",
+                required_router="remediation",
+            )
+            return
+
         try:
             from shared.database import SessionLocal  # noqa: PLC0415
 
@@ -894,30 +986,32 @@ class SchedulerService:
         Postgres.
         """
         try:
-            from shared.database import SessionLocal
-            from shared.tenant_context import system_scope  # noqa: PLC0415
             from sqlalchemy import text as _sqltext
+
+            from services.admin.app.database import (
+                SessionLocal,
+                arm_global_admin_context,
+            )
 
             db = SessionLocal()
             try:
-                # #2461: cross-tenant queue maintenance — system_scope +
-                # begin-hook set regengine.system_context so the v095
-                # task_queue policy arm admits the DELETE under the
-                # least-privilege role.
-                with system_scope():
-                    result = db.execute(
-                        _sqltext(
-                            """
-                            DELETE FROM fsma.task_queue
-                            WHERE status IN ('completed', 'dead')
-                              AND COALESCE(completed_at, created_at)
-                                  < NOW() - INTERVAL '30 days'
-                            RETURNING id
-                            """
-                        )
+                # Cross-tenant retention is an audited control-plane action
+                # and runs through ADMIN_DATABASE_URL.  The database policy
+                # pins it to the exact sysadmin role.
+                arm_global_admin_context(db)
+                result = db.execute(
+                    _sqltext(
+                        """
+                        DELETE FROM fsma.task_queue
+                        WHERE status IN ('completed', 'dead')
+                          AND COALESCE(completed_at, created_at)
+                              < NOW() - INTERVAL '30 days'
+                        RETURNING id
+                        """
                     )
-                    rows = result.fetchall()
-                    db.commit()
+                )
+                rows = result.fetchall()
+                db.commit()
                 if rows:
                     logger.info("task_queue_purged", rows=len(rows))
                 else:
@@ -934,7 +1028,7 @@ class SchedulerService:
         ``{INGESTION_SERVICE_URL}/v1/ingest/all-regulations`` with
         ``REGENGINE_INTERNAL_SECRET`` as ``X-RegEngine-API-Key`` — but
         ``shared.auth.require_api_key`` never accepted that secret (it
-        validates tenant keys and the preshared master key only), so the
+        validates database-backed tenant keys only), so the
         job could not authenticate against the consolidated monolith.
         Scheduler and ingestion now share a process, so call the ingestion
         sweep directly: no HTTP hop, no credentials, and no 120s
@@ -1004,8 +1098,9 @@ class SchedulerService:
                 # tick). Iterate public.tenants instead (infra table,
                 # permissive policy per v092) and let per-tenant
                 # check_deadline_status find the active cases.
-                result = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants"))
-                tenant_ids = [str(r[0]) for r in result.fetchall()]
+                from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
+
+                tenant_ids = list_maintenance_tenant_ids()
 
                 total_overdue = 0
                 total_critical = 0
@@ -1063,6 +1158,12 @@ class SchedulerService:
 
     def disable_inactive_accounts(self) -> None:
         """Disable accounts with no login for 90+ days — NIST AC-2(3) (#974)."""
+        if _strict_database_role_cutover_enabled():
+            logger.warning(
+                "inactive_account_sweep_security_disabled",
+                reason="identity mutation is not authorized through DATABASE_URL",
+            )
+            return
         try:
             from shared.database import SessionLocal
 
@@ -1101,24 +1202,23 @@ class SchedulerService:
         for recent months hasn't dropped (which would indicate premature deletion).
         """
         try:
-            from shared.database import SessionLocal
-            from shared.tenant_context import system_scope  # noqa: PLC0415
+            from services.admin.app.database import (
+                SessionLocal,
+                arm_global_admin_context,
+            )
 
             db = SessionLocal()
             try:
-                # Check that audit trail records within the 24-month window
-                # exist. #2461: deliberately cross-tenant (retention guard
-                # over the whole audit chain) — system_scope + the v095
-                # fsma_audit_trail policy arm admit the COUNT under the
-                # least-privilege role.
-                with system_scope():
-                    result = db.execute(
-                        __import__("sqlalchemy").text("""
-                            SELECT COUNT(*) as cnt
-                            FROM fsma.fsma_audit_trail
-                            WHERE created_at >= NOW() - INTERVAL '24 months'
-                        """)
-                    )
+                # Deliberately global retention guard through the canonical
+                # admin credential; the ordinary role remains tenant-bound.
+                arm_global_admin_context(db)
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT COUNT(*) as cnt
+                        FROM fsma.fsma_audit_trail
+                        WHERE created_at >= NOW() - INTERVAL '24 months'
+                    """)
+                )
                 row = result.fetchone()
                 count = row[0] if row else 0
                 if count == 0:
@@ -1159,21 +1259,14 @@ class SchedulerService:
 
             db = SessionLocal()
             try:
-                # Archive sysadmin access logs older than 7 years (NIST AU-4, #1009)
+                # Sysadmin audit evidence is intentionally not mutable through
+                # DATABASE_URL.  Retention requires a separately approved,
+                # audited admin maintenance path; until then retain it.
                 deleted_audit = 0
-                try:
-                    result = db.execute(
-                        __import__("sqlalchemy").text("""
-                            DELETE FROM audit.sysadmin_access_log
-                            WHERE accessed_at < NOW() - INTERVAL '2555 days'
-                            RETURNING id
-                        """)
-                    )
-                    deleted_audit = len(result.fetchall())
-                except Exception:
-                    pass  # Table may not exist on all databases
-
-                db.commit()
+                logger.debug(
+                    "sysadmin_audit_retention_deferred",
+                    reason="requires audited ADMIN_DATABASE_URL maintenance",
+                )
 
                 # Archive CTE events older than 3 years. #2461:
                 # fsma.cte_events is RLS-forced tenant DATA — it gets NO
@@ -1200,13 +1293,11 @@ class SchedulerService:
                 # and compliance_alerts (ON DELETE CASCADE, no append-only
                 # triggers there).
                 deleted_ctes = 0
-                tenant_rows = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants")).fetchall()
-                # End the discovery transaction so each tenant's DELETE
-                # starts a FRESH transaction inside tenant_scope (the
-                # begin-hook only fires at transaction start).
-                db.commit()
-                for tenant_row in tenant_rows:
-                    with tenant_scope(str(tenant_row[0])):
+                from shared.maintenance_tenants import list_maintenance_tenant_ids  # noqa: PLC0415
+
+                tenant_ids = list_maintenance_tenant_ids()
+                for tenant_id in tenant_ids:
+                    with tenant_scope(tenant_id):
                         db.execute(
                             __import__("sqlalchemy").text("SELECT set_config('fsma.allow_mutation', 'true', true)")
                         )

@@ -62,7 +62,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
     def set_tenant_context(self, tenant_id: str) -> None:
         """Set the RLS tenant context for this session.
 
-        Delegates to ``services.shared.tenant_context.set_tenant_guc`` —
+        Delegates to ``shared.tenant_context.set_tenant_guc`` —
         the canonical Phase B primitive (#1934). Behavior-preserving for
         valid UUIDs (same ``SET LOCAL app.tenant_id = :tid`` SQL with
         the same parameterized binding); the helper additionally
@@ -80,7 +80,7 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         """
         if self._session_dialect_name() == "sqlite":
             return
-        from services.shared.tenant_context import set_tenant_guc  # noqa: PLC0415
+        from shared.tenant_context import set_tenant_guc  # noqa: PLC0415
 
         set_tenant_guc(self.session, tenant_id)
 

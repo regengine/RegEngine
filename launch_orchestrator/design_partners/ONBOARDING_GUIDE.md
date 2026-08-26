@@ -59,7 +59,7 @@ You've been selected to participate in our 8-week design partner evaluation prog
    ```bash
    # Use the REST API directly with curl, httpx, or your preferred HTTP client.
    # Python and Node.js SDKs are planned — see /docs/sdks for status.
-   curl -H "Authorization: Bearer $REGENGINE_API_KEY" \
+   curl -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
      https://api.regengine.co/api/v1/records
    ```
 

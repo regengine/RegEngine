@@ -1,7 +1,9 @@
 """Alembic environment configuration for RegEngine.
 
-Reads DATABASE_URL from the environment (falling back to the local dev default)
+Reads the schema-owner ``MIGRATIONS_DATABASE_URL`` in deployed environments
 and supports both offline (SQL-script) and online (live DB) migration modes.
+Local development and CI may fall back to ``DATABASE_URL`` for disposable
+owner-run databases; a cloud/staging/production process never may.
 """
 
 import os
@@ -22,12 +24,33 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "services"))
 # ---------------------------------------------------------------------------
 config = context.config
 
-# Override sqlalchemy.url from environment variable
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://regengine:regengine@postgres:5432/regengine",
+# Override sqlalchemy.url from the migration-only credential.  Import the
+# canonical cloud-marker inventory after ``services/`` is added to sys.path so
+# Alembic cannot drift from application environment detection.
+from shared.env import CLOUD_ENV_VARS  # noqa: E402
+
+_migration_url = os.environ.get("MIGRATIONS_DATABASE_URL", "").strip()
+_environment = (
+    os.environ.get("REGENGINE_ENV", "").strip().lower()
+    or os.environ.get("ENVIRONMENT", "").strip().lower()
+    or os.environ.get("ENV", "").strip().lower()
 )
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+_deployed = _environment in {"production", "staging"} or any(
+    os.environ.get(marker) for marker in CLOUD_ENV_VARS
+)
+
+if not _migration_url:
+    if _deployed:
+        raise RuntimeError(
+            "MIGRATIONS_DATABASE_URL is required for deployed Alembic runs; "
+            "refusing DATABASE_URL runtime-credential fallback"
+        )
+    _migration_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://regengine:regengine@postgres:5432/regengine",
+    )
+
+config.set_main_option("sqlalchemy.url", _migration_url)
 
 # Python logging from the config file
 if config.config_file_name is not None:

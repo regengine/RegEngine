@@ -16,9 +16,7 @@ the previous tenant's RLS.
 Mitigation (this module): a ``connect`` + ``checkout`` event listener
 on the engine's connection pool runs
 ``SELECT set_config('app.tenant_id', '', false)``, resets
-``regengine.is_sysadmin`` to its role-determined baseline ('true' only
-when connected as ``regengine_sysadmin`` — the #2461 control-plane
-arming; 'false' for every other role), and clears
+``regengine.is_sysadmin`` to the fail-closed ``false`` baseline, and clears
 ``regengine.user_id`` (#2853 — the per-user identity GUC that
 ``public.users`` / ``public.sessions`` FORCE-RLS policies key on)
 BEFORE the session sees the connection. This guarantees every route
@@ -42,11 +40,16 @@ from typing import AsyncIterator, Iterator
 # ``shared.`` alias on purpose — one module instance, one ContextVar pair.
 import shared.tenant_context  # noqa: F401,E402  (side effect: install_rls_guc_hook)
 import structlog
+from shared.admin_context import (
+    arm_global_admin_context,
+    bind_authenticated_user_context,
+    disarm_global_admin_context,
+)
 
 # #2512: single shared cloud-marker tuple — keep this in lockstep with the
 # central security gate in shared.env rather than maintaining a divergent copy.
 from shared.env import CLOUD_ENV_VARS as _CLOUD_ENV_MARKERS
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import DisconnectionError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -56,6 +59,10 @@ _LOCAL_FALLBACK_ENVS = {"development", "dev", "test", "local"}
 
 
 def _sqlalchemy_url(url: str) -> str:
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+psycopg://", 1)
     return url
@@ -147,6 +154,48 @@ SessionLocal = sessionmaker(
 )
 
 
+def get_admin_engine():
+    """Return the canonical audited control-plane engine.
+
+    Cross-tenant queue coordination and global maintenance must use this
+    engine rather than attempting to arm an unprivileged GUC on
+    ``DATABASE_URL``.  Production startup independently verifies that it is
+    connected as the exact ``regengine_sysadmin`` role.
+    """
+
+    return _engine
+
+
+def _dbapi_connection_is_idle(dbapi_connection) -> bool:
+    """Return whether a psycopg connection has no open transaction.
+
+    A checkout hook must never commit an inherited transaction merely to make
+    its GUC reset durable.  Psycopg 2 exposes ``get_transaction_status``;
+    psycopg 3 exposes ``info.transaction_status``.  Unknown drivers fail
+    closed because this listener is installed only on PostgreSQL engines.
+    """
+
+    status = None
+    status_getter = getattr(dbapi_connection, "get_transaction_status", None)
+    if callable(status_getter):
+        status = status_getter()
+    else:
+        info = getattr(dbapi_connection, "info", None)
+        status = getattr(info, "transaction_status", None)
+
+    if status is None:
+        return False
+    status_name = getattr(status, "name", None)
+    if isinstance(status_name, str):
+        return status_name.upper() == "IDLE"
+    try:
+        # psycopg2.extensions.TRANSACTION_STATUS_IDLE and psycopg3's enum
+        # both have the integer value zero.
+        return int(status) == 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connection_proxy):
     """Clear ``app.tenant_id`` and related RLS GUCs when a pooled
     connection is handed out.
@@ -168,39 +217,70 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
     if _engine.dialect.name == "sqlite":
         return
     try:
+        # Pool reset-on-return should already have rolled back application
+        # work.  Prove that invariant before issuing or committing anything;
+        # an unknown/inherited transaction makes the connection disposable.
+        if not _dbapi_connection_is_idle(dbapi_connection):
+            raise RuntimeError(
+                "PostgreSQL connection was not idle before checkout GUC reset"
+            )
+
         cursor = dbapi_connection.cursor()
         try:
             # Clear tenant GUC. Third arg 'false' == session-level set,
             # which matches set_tenant_context's scope.
             cursor.execute("SELECT set_config('app.tenant_id', '', false)")
-            # #2461 cutover: the admin engine is the control plane. When it
-            # connects as the audited ``regengine_sysadmin`` role, arm the
-            # sysadmin RLS branch for this connection so pre-auth flows
-            # (login-by-email against FORCE-RLS ``users``/``sessions``) and
-            # cross-tenant admin operations keep their visibility under RLS
-            # enforcement. For any other role this evaluates to 'false' —
-            # identical to the previous unconditional reset (#1381), and the
-            # policies also check ``current_user``, so the GUC alone can
-            # never elevate a non-sysadmin connection.
-            cursor.execute(
-                "SELECT set_config('regengine.is_sysadmin', (current_user = 'regengine_sysadmin')::text, false)"
-            )
-            # #2853: clear the per-user identity GUC too. public.users and
-            # public.sessions are ENABLE+FORCE RLS with policies keyed on
-            # regengine.user_id (user_self_isolation / sessions_user_isolation,
-            # v078), so a value left behind by the previous request scopes the
-            # next caller's reads to the previous caller's identity. The write
-            # in dependencies.py is transaction-scoped now, which closes the
-            # normal path; this reset covers connections orphaned mid-request
-            # (crash, cancellation) whose transaction never ended cleanly, and
-            # any future caller that reverts to a session-scoped write.
-            # Reset to '' rather than NULL: the v078 policies read it through
-            # NULLIF(current_setting(...), '')::uuid, so '' means "no identity"
-            # and fails closed instead of raising an invalid-uuid cast.
+            cursor.execute("SELECT set_config('app.portal_link_token', '', false)")
+            cursor.execute("SELECT set_config('app.remediation_token_hash', '', false)")
+            cursor.execute("SELECT set_config('regengine.tenant_id', '', false)")
+            # #2853: clear the per-user identity GUC too. The v078 FORCE-RLS
+            # policies use NULLIF(current_setting(...), '')::uuid, so the empty
+            # string means "no identity" and fails closed on connection reuse.
             cursor.execute("SELECT set_config('regengine.user_id', '', false)")
+            # Database-role identity is necessary but not sufficient for a
+            # global operation. Every checkout starts disarmed; classified
+            # global auth/worker/control-plane callers explicitly arm their
+            # own transaction with ``arm_global_admin_context``.
+            cursor.execute(
+                "SELECT set_config('regengine.is_sysadmin', 'false', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('regengine.system_context', 'false', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('regengine.api_key_lookup_id', '', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('regengine.api_key_lookup_hash_current', '', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('regengine.api_key_lookup_hash_legacy', '', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('audit.allow_break_glass', 'false', false)"
+            )
+            cursor.execute(
+                "SELECT set_config('fsma.allow_mutation', 'false', false)"
+            )
         finally:
             cursor.close()
+
+        # SET/set_config is transactional in PostgreSQL.  The connection was
+        # proven idle immediately above, so this commit contains only the
+        # reset statements and makes them immune to a later request rollback.
+        dbapi_connection.commit()
+        if not _dbapi_connection_is_idle(dbapi_connection):
+            raise RuntimeError(
+                "PostgreSQL connection did not return to idle after GUC reset"
+            )
     except Exception as exc:  # noqa: BLE001
+        # Never hand out a connection after a partial reset.  Rollback is safe
+        # here because an inherited transaction was rejected before any reset
+        # statement ran; otherwise it contains only our reset work.
+        try:
+            dbapi_connection.rollback()
+        except Exception:  # noqa: BLE001 - connection is discarded below
+            pass
         # Fail closed: a connection whose GUC reset failed may still carry
         # the previous tenant's session-scoped app.tenant_id — handing it
         # out would scope RLS reads to the WRONG tenant (#1381 re-opened on
@@ -235,7 +315,7 @@ def init_db() -> None:
     try:
         from shared.database import check_rls_posture  # noqa: PLC0415
 
-        check_rls_posture(_engine, label="admin")
+        check_rls_posture(_engine, label="admin", expected_role="regengine_sysadmin")
     except RuntimeError:
         raise
     except Exception as exc:  # pragma: no cover — probe must not block init

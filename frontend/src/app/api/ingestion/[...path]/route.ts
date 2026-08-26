@@ -1,10 +1,11 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
     createStreamProxy,
     applyCookieCredentials,
     passthroughRequestHeaders,
     isPublicHost,
     stripTrailingSlash,
+    type ProxyHandler,
 } from '@/lib/proxy-factory';
 import { applyInflowWorkbenchReadCredentials } from '@/lib/inflow-workbench-proxy';
 
@@ -50,7 +51,7 @@ function getIngestionTargets(): string[] {
     return Array.from(new Set(candidates.map(stripTrailingSlash)));
 }
 
-const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
+const ingestionProxy = createStreamProxy({
     serviceName: 'ingestion',
     resolveTargetBases: getIngestionTargets,
     isUnauthenticatedPath: (path: string) => {
@@ -75,7 +76,6 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         passthroughRequestHeaders(headers, request, [
             'authorization',
             'x-api-key',
-            'x-admin-key',
             'x-regengine-api-key',
             'x-tenant-id',
         ]);
@@ -97,7 +97,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
             headers.set('x-real-ip', realClientIp);
         }
 
-        // Inject access token + API key + admin key + tenant ID from cookies.
+        // Inject access token + tenant API key + tenant ID from cookies.
         // Unlike admin, ingestion overwrites an incoming Authorization header
         // with the cookie token — preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
@@ -106,4 +106,27 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     },
 });
 
-export { GET, POST, PUT, PATCH, DELETE, OPTIONS };
+function isRemediationAlias(path: string[]): boolean {
+    return path[0] === 'api' && path[1] === 'v1' && path[2] === 'remediation';
+}
+
+function releaseDisabledRemediation(handler: ProxyHandler | undefined): ProxyHandler {
+    return async (request, context) => {
+        const { path } = await context.params;
+        // Remediation is release-deferred pending product/compliance sign-off,
+        // worker/UI verification, and an operation-complete security adapter.
+        // Deny before the stream proxy evaluates credentials or upstreams.
+        if (isRemediationAlias(path)) {
+            return new NextResponse(null, { status: 404 });
+        }
+        if (!handler) return new NextResponse(null, { status: 404 });
+        return handler(request, context);
+    };
+}
+
+export const GET = releaseDisabledRemediation(ingestionProxy.GET);
+export const POST = releaseDisabledRemediation(ingestionProxy.POST);
+export const PUT = releaseDisabledRemediation(ingestionProxy.PUT);
+export const PATCH = releaseDisabledRemediation(ingestionProxy.PATCH);
+export const DELETE = releaseDisabledRemediation(ingestionProxy.DELETE);
+export const OPTIONS = releaseDisabledRemediation(ingestionProxy.OPTIONS);

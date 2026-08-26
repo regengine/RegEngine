@@ -1,30 +1,18 @@
-import { NextRequest } from 'next/server';
-import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+    applyCookieCredentials,
+    createJsonProxy,
+    passthroughRequestHeaders,
+    type ProxyHandler,
+} from '@/lib/proxy-factory';
 
-// Proxy FSMA-204 API requests across two backend services based on the path.
+// Proxy the release-approved FSMA compliance routes. Graph-routed aliases are
+// retained only as an explicit exact-404 boundary until graph/Neo4j receives a
+// route-complete tenant/auth review and is promoted into the release manifest.
 //
-// #2836 Every mapping below is pinned to a real backend mount point:
+// The disabled aliases previously mapped to graph sub-routers:
 //
-//   Graph service, mounted at /api/v1 (server/main.py:910
-//   `app.include_router(graph_router, prefix="/api/v1", ...)`), sub-routers from
-//   services/graph/app/routes.py:
-//     :59  trace_router      prefix="/fsma/traceability"  -> /api/v1/fsma/traceability/*
-//     :60  science_router    prefix="/fsma/science"       -> /api/v1/fsma/science/*
-//     :61  recall_router     prefix="/fsma/recall"        -> /api/v1/fsma/recall/*
-//     :62  metrics_router    prefix="/fsma/metrics"       -> /api/v1/fsma/metrics/*
-//     :63  compliance_router prefix="/fsma/compliance"    -> /api/v1/fsma/compliance/*
-//
-//   `gaps` and `export/` are NOT top-level FSMA routes — they are endpoints on
-//   the compliance sub-router (services/graph/app/routers/fsma/compliance.py):
-//     :640 @router.get("/gaps")                    -> /api/v1/fsma/compliance/gaps
-//     :681 @router.get("/gaps/orphans")            -> /api/v1/fsma/compliance/gaps/orphans
-//     :741 @router.get("/export/gaps")             -> /api/v1/fsma/compliance/export/gaps
-//     :419 @router.get("/export/trace/{tlc}")      -> /api/v1/fsma/compliance/export/trace/*
-//     :550 @router.get("/export/recall-contacts/{tlc}")
-//     :84  @router.get("/export/fda-request")
-//     :185 @router.get("/export/epcis")
-//   so they need the `compliance/` segment spliced in, which is what
-//   GRAPH_COMPLIANCE_PATH_PREFIXES below does.
+//   compliance/, traceability/, recall/, science/, metrics/, gaps, export/
 //
 //   `drift/` is deliberately absent: there is NO drift router anywhere in the
 //   backend. `grep -rn "/drift" services/ server/` returns zero results, and no
@@ -59,40 +47,25 @@ function guardUrl(envVar: string, fallback: string): string {
 }
 
 const COMPLIANCE_URL = guardUrl('COMPLIANCE_SERVICE_URL', 'http://localhost:8500');
-const GRAPH_SERVICE_URL = guardUrl('GRAPH_SERVICE_URL', 'http://localhost:8200');
+const GRAPH_ALIAS_SEGMENTS = new Set([
+    'compliance',
+    'traceability',
+    'recall',
+    'science',
+    'metrics',
+    'gaps',
+    'export',
+]);
 
-// Paths that map 1:1 onto a /api/v1/fsma/<prefix> graph sub-router.
-const GRAPH_PATH_PREFIXES = [
-    'compliance/', 'traceability/', 'recall/', 'science/', 'metrics/',
-];
-
-// Paths that live on the graph compliance sub-router and therefore need the
-// 'compliance/' segment inserted: /api/v1/fsma/compliance/<path>.
-const GRAPH_COMPLIANCE_PATH_PREFIXES = [
-    'gaps', 'export/',
-];
-
-function routesToGraphService(path: string): boolean {
-    return GRAPH_PATH_PREFIXES.some(prefix => path.startsWith(prefix));
-}
-
-function routesToGraphCompliance(path: string): boolean {
-    return GRAPH_COMPLIANCE_PATH_PREFIXES.some(prefix => path.startsWith(prefix));
+function isGraphAlias(pathParts: string[]): boolean {
+    return GRAPH_ALIAS_SEGMENTS.has(pathParts[0] ?? '');
 }
 
 export const dynamic = 'force-dynamic';
 
-const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
+const fsmaProxy = createJsonProxy({
     serviceName: 'fsma',
     buildTargetUrl: (path, queryString) => {
-        if (routesToGraphCompliance(path)) {
-            if (!GRAPH_SERVICE_URL) return undefined;
-            return `${GRAPH_SERVICE_URL}/api/v1/fsma/compliance/${path}${queryString}`;
-        }
-        if (routesToGraphService(path)) {
-            if (!GRAPH_SERVICE_URL) return undefined;
-            return `${GRAPH_SERVICE_URL}/api/v1/fsma/${path}${queryString}`;
-        }
         if (!COMPLIANCE_URL) return undefined;
         return `${COMPLIANCE_URL}/${path}${queryString}`;
     },
@@ -102,11 +75,26 @@ const { GET, POST, PUT, PATCH, DELETE } = createJsonProxy({
             'authorization',
             'x-regengine-api-key',
             'x-api-key',
-            'x-admin-key',
             'x-tenant-id',
         ]);
         return applyCookieCredentials(headers, request);
     },
 });
 
-export { GET, POST, PUT, PATCH, DELETE };
+function releaseDisabledGraphAlias(handler: ProxyHandler | undefined): ProxyHandler {
+    return async (request, context) => {
+        const { path } = await context.params;
+        if (isGraphAlias(path)) {
+            return new NextResponse(null, { status: 404 });
+        }
+        if (!handler) return new NextResponse(null, { status: 404 });
+        return handler(request, context);
+    };
+}
+
+export const GET = releaseDisabledGraphAlias(fsmaProxy.GET);
+export const POST = releaseDisabledGraphAlias(fsmaProxy.POST);
+export const PUT = releaseDisabledGraphAlias(fsmaProxy.PUT);
+export const PATCH = releaseDisabledGraphAlias(fsmaProxy.PATCH);
+export const DELETE = releaseDisabledGraphAlias(fsmaProxy.DELETE);
+export const OPTIONS = releaseDisabledGraphAlias(undefined);

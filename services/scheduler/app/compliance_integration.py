@@ -15,6 +15,8 @@ import structlog
 
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
+from shared.maintenance_tenants import list_maintenance_tenant_ids
+from shared.tenant_context import set_tenant_guc
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,23 +66,30 @@ class ComplianceIntegration:
             logger.debug("skipping_non_alert_item", source_type=item.source_type.value)
             return []
 
-        with self.Session() as session:
-            # Find matching tenants
-            matching_tenants = self._find_matching_tenants(session, item)
-
-            if not matching_tenants:
-                logger.info(
-                    "no_matching_tenants",
-                    source_type=item.source_type.value,
-                    source_id=item.source_id,
-                )
-                return []
-
-            # Create alerts for each matching tenant
-            alerted_tenants = []
-            for match in matching_tenants:
+        # Global discovery is a read-only ADMIN_DATABASE_URL operation.  Each
+        # profile/evidence lookup and alert write then runs in a fresh runtime
+        # transaction bound to exactly one tenant.
+        tenant_ids = list_maintenance_tenant_ids()
+        alerted_tenants: list[UUID] = []
+        for tenant_id in tenant_ids:
+            with self.Session() as session:
+                set_tenant_guc(session, tenant_id)
                 try:
-                    alert_id = self._create_alert(session, match["tenant_id"], item, match["reasons"])
+                    matches = self._find_matching_tenants(
+                        session,
+                        item,
+                        tenant_id=tenant_id,
+                    )
+                    if not matches:
+                        session.rollback()
+                        continue
+                    match = matches[0]
+                    alert_id = self._create_alert(
+                        session,
+                        match["tenant_id"],
+                        item,
+                        match["reasons"],
+                    )
                     if alert_id:
                         alerted_tenants.append(match["tenant_id"])
                         logger.warning(
@@ -101,11 +110,25 @@ class ComplianceIntegration:
                         error=str(e),
                         error_type=type(e).__name__,
                     )
+                    session.rollback()
+                    continue
+                session.commit()
 
-            session.commit()
-            return alerted_tenants
+        if not alerted_tenants:
+            logger.info(
+                "no_matching_tenants",
+                source_type=item.source_type.value,
+                source_id=item.source_id,
+            )
+        return alerted_tenants
 
-    def _find_matching_tenants(self, session: Session, item: EnforcementItem) -> List[Dict]:
+    def _find_matching_tenants(
+        self,
+        session: Session,
+        item: EnforcementItem,
+        *,
+        tenant_id: str | None = None,
+    ) -> List[Dict]:
         """Find tenants whose product profile matches the enforcement item.
 
         Matching tiers (highest confidence first):
@@ -125,16 +148,29 @@ class ComplianceIntegration:
 
             if lot_codes:
                 try:
-                    tlc_rows = session.execute(
-                        text(
+                    if tenant_id is None:
+                        tlc_statement = text(
                             """
                             SELECT DISTINCT tenant_id
-                            FROM fsma.traceability_events
-                            WHERE traceability_lot_code = ANY(:lot_codes)
+                              FROM fsma.traceability_events
+                             WHERE traceability_lot_code = ANY(:lot_codes)
                             """
-                        ),
-                        {"lot_codes": lot_codes},
-                    )
+                        )
+                        tlc_params = {"lot_codes": lot_codes}
+                    else:
+                        tlc_statement = text(
+                            """
+                            SELECT DISTINCT tenant_id
+                              FROM fsma.traceability_events
+                             WHERE tenant_id = CAST(:tenant_id AS uuid)
+                               AND traceability_lot_code = ANY(:lot_codes)
+                            """
+                        )
+                        tlc_params = {
+                            "tenant_id": tenant_id,
+                            "lot_codes": lot_codes,
+                        }
+                    tlc_rows = session.execute(tlc_statement, tlc_params)
                     for row in tlc_rows:
                         tid = str(row[0])
                         tier1_tenants[tid] = ["match_tier:lot_code"]
@@ -163,12 +199,20 @@ class ComplianceIntegration:
         # silently swallowing — Tier-2/3 supplier-name compliance alerts
         # never fired in production. The query is static (no interpolation),
         # so the wrapping is byte-identical for valid inputs.
-        result = session.execute(
-            text(
+        if tenant_id is None:
+            profile_statement = text(
                 "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
                 "FROM tenant_product_profile LIMIT 1000"
             )
-        )
+            profile_params = {}
+        else:
+            profile_statement = text(
+                "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
+                "FROM tenant_product_profile "
+                "WHERE tenant_id = CAST(:tenant_id AS uuid) LIMIT 1"
+            )
+            profile_params = {"tenant_id": tenant_id}
+        result = session.execute(profile_statement, profile_params)
 
         matching = []
 

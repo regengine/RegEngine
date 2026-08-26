@@ -2,7 +2,8 @@
 Rule Evaluation Router.
 
 Provides API endpoints for the versioned FSMA 204 compliance rules engine —
-evaluate events, inspect rules, view evaluation history, and seed rule definitions.
+evaluate events, inspect rules, and view evaluation history. Built-in rule
+catalog seeding is migration-owned and has no runtime HTTP operation.
 
 Endpoints:
     GET    /api/v1/rules                           — List active rule definitions
@@ -10,7 +11,6 @@ Endpoints:
     POST   /api/v1/rules/evaluate                   — Evaluate event against rules
     POST   /api/v1/rules/evaluate-batch             — Evaluate multiple events
     GET    /api/v1/rules/evaluations/{event_id}     — Get evaluations for an event
-    POST   /api/v1/rules/seed                       — Seed built-in rule definitions
 """
 
 from __future__ import annotations
@@ -333,23 +333,3 @@ async def get_event_evaluations(
         for r in rows
     ]
     return {"event_id": event_id, "evaluations": evaluations, "total": len(evaluations)}
-
-
-@router.post(
-    "/seed",
-    summary="Seed built-in FSMA rule definitions",
-    description="Idempotent — inserts only rules that don't already exist.",
-)
-async def seed_rules(
-    principal: IngestionPrincipal = Depends(require_permission("rules.write")),
-    db_session=Depends(get_db_session),
-):
-    if db_session is None:
-        _db_unavailable()
-    try:
-        from shared.rules_engine import seed_rule_definitions
-
-        count = seed_rule_definitions(db_session)
-    except RuntimeError:
-        _db_unavailable()
-    return {"seeded": count, "status": "ok"}

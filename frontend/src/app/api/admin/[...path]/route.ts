@@ -1,6 +1,12 @@
 import { NextRequest } from 'next/server';
-import { createStreamProxy, applyCookieCredentials, passthroughRequestHeaders } from '@/lib/proxy-factory';
+import {
+    appendOpaqueSessionCookies,
+    applyCookieCredentials,
+    createStreamProxy,
+    passthroughRequestHeaders,
+} from '@/lib/proxy-factory';
 import { getAdminTargets as resolveAdminTargets, shouldRetryAdminProxyResponse } from '@/lib/admin-targets';
+import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 // force-dynamic makes the proxy run as a serverless function on every request.
 export const dynamic = 'force-dynamic';
@@ -23,11 +29,6 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
 ]);
 
 const AUTH_CHALLENGE_VERIFY_PATH = /^auth\/challenges\/[0-9a-fA-F-]{36}\/verify$/;
-const AUTH_COOKIES_TO_FORWARD = [
-    '__Host-regengine_session',
-    'regengine_auth_browser_nonce',
-] as const;
-
 function getAdminTargets(): string[] {
     const candidates = resolveAdminTargets(process.env);
     const runningOnVercel = Boolean(
@@ -47,24 +48,13 @@ function isUnauthenticatedAuthPath(path: string): boolean {
     return UNAUTHENTICATED_AUTH_PATHS.has(path) || AUTH_CHALLENGE_VERIFY_PATH.test(path);
 }
 
-function appendSelectedCookies(headers: Headers, request: NextRequest): void {
-    const cookies = AUTH_COOKIES_TO_FORWARD
-        .map((name) => {
-            const value = request.cookies.get(name)?.value;
-            return value ? `${name}=${value}` : null;
-        })
-        .filter((cookie): cookie is string => cookie !== null);
-
-    if (cookies.length > 0) {
-        headers.set('cookie', cookies.join('; '));
-    }
-}
-
 const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
     serviceName: 'admin',
     resolveTargetBases: getAdminTargets,
     shouldRetry: shouldRetryAdminProxyResponse,
     isUnauthenticatedPath: isUnauthenticatedAuthPath,
+    prepareHeaders: (headers, request) => attestPrivilegedProxyClientIp(headers, request),
+    prepareHeadersForUnauthenticatedPaths: true,
     buildHeaders: (request: NextRequest) => {
         const headers = new Headers();
         const hasRequestBody = !['GET', 'OPTIONS'].includes(request.method);
@@ -76,16 +66,21 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         }
 
         passthroughRequestHeaders(headers, request, [
+            'accept',
             'authorization',
+            'origin',
+            'referer',
+            'user-agent',
             'x-api-key',
-            'x-admin-key',
+            'x-csrf-token',
             'x-regengine-api-key',
+            'x-request-id',
             'x-tenant-id',
         ]);
 
         // Inject access token from HTTP-only cookie as Bearer token.
         applyCookieCredentials(headers, request, { respectExistingAuthHeader: true });
-        appendSelectedCookies(headers, request);
+        appendOpaqueSessionCookies(headers, request, { includeBrowserNonce: true });
 
         return headers;
     },

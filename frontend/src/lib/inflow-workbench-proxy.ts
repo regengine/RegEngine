@@ -6,7 +6,7 @@ import {
     resolveOpaqueSessionTenantId,
     validateUuid,
 } from './api-proxy';
-import { applyFirstPartyServiceCredentials } from './proxy-factory';
+import { finalizeCallerServiceCredentials } from './proxy-factory';
 
 const READINESS_SUMMARY_PATH = 'api/v1/inflow-workbench/readiness/summary';
 const AUTH_SESSION_COOKIE = '__Host-regengine_session';
@@ -18,8 +18,7 @@ const AUTH_SESSION_COOKIE = '__Host-regengine_session';
  * Direct API-key callers keep their own key and remain backend-authorized.
  * Passwordless browser callers receive the server-held inflow.read key only
  * after /auth/me validates the opaque session and binds it to the requested
- * tenant. Other ingestion routes retain the existing first-party credential
- * behavior.
+ * tenant. Other ingestion routes forward caller-owned credentials only.
  */
 export async function applyInflowWorkbenchReadCredentials(
     headers: Headers,
@@ -27,7 +26,7 @@ export async function applyInflowWorkbenchReadCredentials(
     path: string,
 ): Promise<NextResponse | null> {
     if (path !== READINESS_SUMMARY_PATH) {
-        return applyFirstPartyServiceCredentials(headers, request);
+        return finalizeCallerServiceCredentials(headers, request);
     }
 
     // Cookie-backed and direct API-key integrations remain authoritative at

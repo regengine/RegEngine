@@ -365,10 +365,11 @@ class APIClient {
   }
 
 
-  async createAPIKey(
-    adminKey: string,
-    params: { name: string; description?: string; tenantId?: string },
-  ): Promise<APIKeyResponse> {
+  async createAPIKey(params: {
+    name: string;
+    description?: string;
+    tenantId?: string;
+  }): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/keys',
       {
@@ -376,34 +377,28 @@ class APIClient {
         description: params.description,
         tenant_id: params.tenantId,
       },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
-  async generateAPIKey(adminKey: string, tenantId?: string): Promise<APIKeyResponse> {
+  async generateAPIKey(tenantId?: string): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/keys',
       {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
       },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
-  async listAPIKeys(adminKey: string): Promise<APIKeyResponse[]> {
-    const { data } = await this.adminClient.get('/v1/admin/keys', {
-      headers: credentialHeader('X-Admin-Key', adminKey),
-    });
-    return data;
+  async listAPIKeys(): Promise<APIKeyResponse[]> {
+    const { data } = await this.adminClient.get<CollectionResponse<APIKeyResponse>>('/v1/admin/keys');
+    return normalizeCollection(data);
   }
 
-  async revokeAPIKey(adminKey: string, keyId: string): Promise<void> {
-    await this.adminClient.delete(`/v1/admin/keys/${keyId}`, {
-      headers: credentialHeader('X-Admin-Key', adminKey),
-    });
+  async revokeAPIKey(keyId: string): Promise<void> {
+    await this.adminClient.delete(`/v1/admin/keys/${keyId}`);
   }
 
   // Ingestion API
@@ -579,42 +574,30 @@ class APIClient {
     return data;
   }
 
-  async createTenant(adminKey: string, name: string): Promise<TenantResponse> {
+  async createTenant(name: string): Promise<TenantResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',
       { name },
-      { headers: credentialHeader('X-Admin-Key', adminKey) },
     );
     return data;
   }
 
   // Review Workflow
-  async getReviewItems(adminKey: string, status: string = 'PENDING'): Promise<ReviewItem[]> {
+  async getReviewItems(status: string = 'PENDING'): Promise<ReviewItem[]> {
     const { data } = await this.adminClient.get<ReviewQueueResponse>('/v1/admin/review/flagged-extractions', {
       params: { status_filter: status, limit: 50 },
-      headers: credentialHeader('X-Admin-Key', adminKey)
     });
 
     const items = normalizeCollection(data);
     return items.map(normalizeReviewItem).filter((item) => item.id);
   }
 
-  async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {
-      reviewer_id: 'web-frontend',
-      notes: 'Approved via web interface',
-    }, {
-      headers: credentialHeader('X-Admin-Key', adminKey)
-    });
+  async approveReviewItem(itemId: string): Promise<void> {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {});
   }
 
-  async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {
-      reviewer_id: 'web-frontend',
-      notes: 'Rejected via web interface',
-    }, {
-      headers: credentialHeader('X-Admin-Key', adminKey)
-    });
+  async rejectReviewItem(itemId: string): Promise<void> {
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {});
   }
 
   // --- User Management ---

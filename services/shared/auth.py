@@ -7,7 +7,6 @@ import os
 import secrets
 import threading
 import time
-import uuid
 from datetime import datetime, timezone
 from typing import Optional, Union
 
@@ -30,6 +29,18 @@ def validate_auth_config() -> None:
     by returning None. Duplicating that check here caused production
     outages when env var names didn't match expectations.
     """
+    # Resolve cloud markers before evaluating the controls below. Deployed
+    # staging keeps its environment name, but it must still use the same
+    # durable authentication backends as production.
+    from shared.env import (  # noqa: PLC0415
+        CLOUD_ENV_VARS,
+        is_production,
+        requires_strict_auth_runtime,
+        validate_cloud_environment,
+    )
+
+    validate_cloud_environment()
+    strict_auth = requires_strict_auth_runtime()
     issues: list[str] = []
 
     # JWT secret must be set and non-trivial
@@ -41,25 +52,17 @@ def validate_auth_config() -> None:
     elif jwt_secret in ("dev_secret_key_change_me", "your-secret", "changeme", "secret"):
         issues.append("AUTH_SECRET_KEY is a known default — change it before production")
 
-    # API key should be set for proxy auth
-    api_key = os.getenv("REGENGINE_API_KEY") or os.getenv("API_KEY")
-    if not api_key:
-        logger.warning("validate_auth_config", msg="REGENGINE_API_KEY not set — proxy auth will fail")
-
-    # Test bypass should not be active in production
+    # Test bypass should not be active in any deployed/strict runtime.
     bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
-    env = os.getenv("REGENGINE_ENV", "production").lower()
-    if bypass_token and env == "production":
-        issues.append("AUTH_TEST_BYPASS_TOKEN is set in production — remove it")
+    if bypass_token and strict_auth:
+        issues.append("AUTH_TEST_BYPASS_TOKEN is set in a strict auth environment — remove it")
 
     for issue in issues:
         logger.error("auth_config_validation_failed", issue=issue)
 
-    # Only raise when REGENGINE_ENV is explicitly set to "production".
-    # If unset, we assume local development — warn but don't crash.
+    # Only explicit local development/test may continue after a warning.
     is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
-    is_explicit_production = os.getenv("REGENGINE_ENV", "").lower() == "production"
-    if issues and is_explicit_production and not is_ci:
+    if issues and strict_auth and not is_ci:
         raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
     # #2512: defense-in-depth fail-fast for the dev-auth-fallback surface.
@@ -68,14 +71,6 @@ def validate_auth_config() -> None:
     # Kubernetes), which is the normal, correct path and disables the ephemeral
     # signing-key fallbacks. We call it here too so this check sees the same
     # resolved environment regardless of import order.
-    from shared.env import (  # noqa: PLC0415
-        CLOUD_ENV_VARS,
-        is_production,
-        validate_cloud_environment,
-    )
-
-    validate_cloud_environment()
-
     # If a cloud marker is present yet the environment STILL did not resolve to
     # production (e.g. an explicit REGENGINE_ENV=staging on a non-Railway host —
     # a case the gate intentionally leaves alone), the ephemeral-secret
@@ -287,11 +282,13 @@ def _store_api_key_principal(
 def get_key_store() -> Union[APIKeyStore, DatabaseAPIKeyStore]:
     """Get the global API key store instance.
 
-    In production, always returns DatabaseAPIKeyStore.
-    In development/test, returns in-memory APIKeyStore unless ENABLE_DB_API_KEYS=true.
+    Strict deployed runtimes always return ``DatabaseAPIKeyStore``. Explicit
+    local development/test returns the in-memory store unless
+    ``ENABLE_DB_API_KEYS=true``.
     """
-    env = os.getenv("REGENGINE_ENV", "production").lower()
-    use_db = env == "production" or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
+    from shared.env import requires_strict_auth_runtime
+
+    use_db = requires_strict_auth_runtime() or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
     if use_db:
         global _db_store_instance
         if _db_store_instance is None:
@@ -349,54 +346,6 @@ async def require_api_key(
         )
         return _store_api_key_principal(request, api_key)
 
-    # Check preshared/master key first — same pattern as get_ingestion_principal.
-    # This ensures server-side proxy injection (which uses the configured API_KEY
-    # env var) works for ALL endpoints, not just those using require_permission.
-    _configured_key = os.getenv("API_KEY") or os.getenv("REGENGINE_API_KEY")
-    if _configured_key and x_regengine_api_key:
-        import hmac as _hmac
-
-        if _hmac.compare_digest(
-            x_regengine_api_key.encode("utf-8"),
-            _configured_key.encode("utf-8"),
-        ):
-            # Derive tenant from X-Tenant-ID header so RLS is still enforced.
-            # Without this, tenant_id=None would bypass row-level security.
-            # Require a non-empty, valid-UUID X-Tenant-ID — fail closed to
-            # prevent the master-key path from silently disabling RLS (#1068).
-            _master_tenant_raw = request.headers.get("x-tenant-id") or ""
-            _master_tenant = _master_tenant_raw.strip()
-            if not _master_tenant:
-                logger.warning("master_key_without_tenant_id", path=request.url.path)
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="E_TENANT_HEADER_REQUIRED: preshared master-key auth requires X-Tenant-ID",
-                )
-            try:
-                uuid.UUID(_master_tenant)
-            except (ValueError, AttributeError, TypeError):
-                logger.warning(
-                    "master_key_invalid_tenant_id",
-                    path=request.url.path,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="E_TENANT_HEADER_INVALID: X-Tenant-ID must be a valid UUID",
-                )
-            api_key = APIKey(
-                key_id="preshared-master",
-                key_hash="",
-                name="Preshared Master Key",
-                tenant_id=_master_tenant,
-                created_at=datetime.now(timezone.utc),
-                rate_limit_per_minute=1000,
-                enabled=True,
-                scopes=["read", "write", "admin"],
-                billing_tier="ENTERPRISE",
-                allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
-            )
-            return _store_api_key_principal(request, api_key)
-
     key_store = get_key_store()
 
     if isinstance(key_store, DatabaseAPIKeyStore):
@@ -405,11 +354,27 @@ async def require_api_key(
         api_key = key_store.validate_key(x_regengine_api_key)
 
     if not api_key:
-        logger.warning("invalid_api_key", path=request.url.path, key_prefix=x_regengine_api_key[:10])
+        logger.warning("invalid_api_key", path=request.url.path)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
             headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+    # Tenantless/internal keys are a separate workload credential class.  The
+    # one allowed workload route validates them directly through
+    # require_tenant_provisioner_key; they must never be reusable through the
+    # generic tenant API dependency.
+    scopes = set(getattr(api_key, "scopes", None) or [])
+    if not getattr(api_key, "tenant_id", None) or any(scope.startswith("internal.") for scope in scopes):
+        logger.warning(
+            "workload_key_rejected_on_tenant_api",
+            path=request.url.path,
+            key_id=getattr(api_key, "key_id", None),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Workload credentials are not accepted by tenant APIs",
         )
 
     # Check rate limit
@@ -453,7 +418,10 @@ async def optional_api_key(
     receives a proper 401/429 instead of being silently downgraded
     to the unauthenticated path.
     """
-    if not x_regengine_api_key:
+    # ``None`` means the header was absent and is the only anonymous case.
+    # An explicitly empty header is still a presented credential and must
+    # reach require_api_key so it is rejected with the normal 401 contract.
+    if x_regengine_api_key is None:
         return None
 
     return await require_api_key(request, x_regengine_api_key)
@@ -484,10 +452,12 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
 def init_demo_keys():
     """Initialize demo API keys for development."""
     key_store = get_key_store()
+    demo_tenant_id = os.getenv("REGENGINE_DEMO_TENANT_ID", "11111111-1111-1111-1111-111111111111")
 
     # Create demo keys with different permission levels
     demo_key, _ = key_store.create_key(
         name="Demo Key",
+        tenant_id=demo_tenant_id,
         rate_limit_per_minute=100,
         scopes=["read", "ingest"],
         billing_tier="DEVELOPER",
@@ -496,6 +466,7 @@ def init_demo_keys():
 
     admin_key, _ = key_store.create_key(
         name="Admin Key",
+        tenant_id=demo_tenant_id,
         rate_limit_per_minute=1000,
         scopes=["read", "ingest", "admin"],
         billing_tier="ENTERPRISE",
@@ -513,10 +484,9 @@ def init_demo_keys():
 # ---------------------------------------------------------------------------
 # Standardized Tenant Resolution
 # ---------------------------------------------------------------------------
-# Canonical dependency for deriving tenant_id. Precedence:
-#   1. X-Tenant-ID header (explicit override)
-#   2. Authenticated principal's tenant (from API key)
-# Rejects requests where neither is present.
+# Canonical reconciliation helper for credential-bound tenant identity. The
+# authenticated principal is authoritative; X-Tenant-ID is only an assertion
+# that must match it.
 
 
 def reconcile_tenant_scope(
@@ -529,12 +499,11 @@ def reconcile_tenant_scope(
 
     Handlers that depend on BOTH ``require_api_key`` (authenticated
     principal) and ``get_current_tenant_id`` (TenantContextMiddleware) have
-    two separately-resolved tenant values. They can diverge — most
-    concretely on the preshared master-key path, where the middleware pins
-    one tenant while ``require_api_key`` accepts a caller-supplied
-    ``X-Tenant-ID``. This helper makes them fail closed by construction and
-    returns the authenticated API-key tenant as the single source of truth
-    for downstream scoping (DB selection, query predicates).
+    two separately-resolved tenant values. They can diverge when a caller's
+    optional ``X-Tenant-ID`` assertion does not match the database-bound API
+    key. This helper makes them fail closed by construction and returns the
+    authenticated API-key tenant as the single source of truth for downstream
+    scoping (DB selection, query predicates).
 
     Mirrors ``services/compliance/app/routes.py`` FDA-export tenant binding
     (#1106). See issue #2511.
@@ -584,9 +553,9 @@ def get_tenant_id(
 ) -> str:
     """Resolve tenant_id from the X-Tenant-ID header.
 
-    Services should prefer deriving tenant from the authenticated principal
-    (e.g., IngestionPrincipal.tenant_id) and fall back to this header only
-    for admin/service-to-service calls.
+    This validates syntax only. Services must derive authorization from the
+    authenticated principal and treat this header as a matching assertion,
+    never as an independent authentication or tenant-selection mechanism.
     """
     if not x_tenant_id:
         raise HTTPException(

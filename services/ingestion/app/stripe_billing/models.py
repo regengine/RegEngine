@@ -50,7 +50,7 @@ class SubscriptionStatus(BaseModel):
 class BillingPortalRequest(BaseModel):
     """Request payload for creating a Stripe customer portal session."""
 
-    tenant_id: Optional[str] = Field(default=None, description="Tenant ID override for legacy/master keys")
+    tenant_id: Optional[str] = Field(default=None, description="Optional tenant assertion; must match the credential")
     tenant_name: Optional[str] = Field(
         default=None, description="Tenant display name for first-time Stripe customer creation"
     )

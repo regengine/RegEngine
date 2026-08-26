@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
@@ -64,19 +65,28 @@ def test_get_funnel_stage_metrics_reports_counts_and_conversion() -> None:
         emit_funnel_event("tenant-1", "first_scan", db_session=session)
         session.commit()
 
-        stages = get_funnel_stage_metrics(db_session=session)
+        stages = get_funnel_stage_metrics(tenant_id="tenant-1", db_session=session)
         by_name = {stage["name"]: stage for stage in stages}
 
-        assert by_name["signup_completed"]["count"] == 2
+        assert by_name["signup_completed"]["count"] == 1
         assert by_name["signup_completed"]["conversion_from_previous_pct"] == 100.0
 
         assert by_name["first_ingest"]["count"] == 1
-        assert by_name["first_ingest"]["conversion_from_previous_pct"] == 50.0
+        assert by_name["first_ingest"]["conversion_from_previous_pct"] == 100.0
 
         assert by_name["first_scan"]["count"] == 1
         assert by_name["first_scan"]["conversion_from_previous_pct"] == 100.0
 
         assert by_name["first_nlp_query"]["count"] == 0
         assert by_name["first_nlp_query"]["conversion_from_previous_pct"] == 0.0
+    finally:
+        session.close()
+
+
+def test_get_funnel_stage_metrics_requires_tenant() -> None:
+    session = _session()
+    try:
+        with pytest.raises(ValueError, match="tenant_id is required"):
+            get_funnel_stage_metrics(tenant_id="", db_session=session)
     finally:
         session.close()

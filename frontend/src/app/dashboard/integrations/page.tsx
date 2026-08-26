@@ -157,35 +157,15 @@ export default function DashboardIntegrationsPage() {
     const [previewing, setPreviewing] = useState(false);
 
     useEffect(() => {
-        let cancelled = false;
-
-        async function loadItems() {
-            setStatus('loading');
-
-            try {
-                const response = await fetch('/api/fsma/customer-readiness/mappings');
-                if (!response.ok) {
-                    throw new Error('Failed to load mappings');
-                }
-
-                const data = (await response.json()) as MappingReviewResponse;
-                if (!cancelled) {
-                    setItems(data.items ?? []);
-                    setMeta(data.meta);
-                    setStatus('idle');
-                }
-            } catch {
-                if (!cancelled) {
-                    setStatus('error');
-                }
-            }
-        }
-
-        void loadItems();
-
-        return () => {
-            cancelled = true;
-        };
+        // The former anonymous BFF was a placeholder that proxied any future
+        // upstream 2xx response without tenant authentication. Keep the UI
+        // honest and local until a classified tenant-scoped contract ships.
+        setItems([]);
+        setMeta({
+            status: 'not_connected',
+            message: 'Field mapping review is not yet available on this workspace.',
+        });
+        setStatus('idle');
     }, []);
 
     useEffect(() => {

@@ -19,7 +19,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from shared.blocked_email_domains import extract_domain, is_personal_email
-from shared.env import is_production
+from shared.env import requires_strict_auth_runtime
 from shared.pii import mask_email
 from shared.rate_limit import limiter
 
@@ -36,19 +36,6 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 VERIFICATION_CODE_TTL = 600  # 10 minutes
 MAX_VERIFICATION_ATTEMPTS = 3
 CODE_STORE_UNAVAILABLE_DETAIL = "Verification code store temporarily unavailable."
-_CLOUD_ENV_VARS = (
-    "RAILWAY_ENVIRONMENT",
-    "RAILWAY_ENVIRONMENT_NAME",
-    "RAILWAY_ENVIRONMENT_ID",
-    "RAILWAY_PROJECT_NAME",
-    "RAILWAY_PROJECT_ID",
-    "RAILWAY_SERVICE_NAME",
-    "RAILWAY_SERVICE_ID",
-    "VERCEL",
-    "VERCEL_ENV",
-    "VERCEL_URL",
-)
-
 # ---------------------------------------------------------------------------
 # Tool-access JWT signing secret — MUST be separate from the session key (#1060)
 #
@@ -66,9 +53,9 @@ _CLOUD_ENV_VARS = (
 # ---------------------------------------------------------------------------
 _tool_access_secret_env = os.environ.get("TOOL_ACCESS_SECRET", "").strip()
 if not _tool_access_secret_env:
-    if is_production():
+    if requires_strict_auth_runtime():
         raise RuntimeError(
-            "TOOL_ACCESS_SECRET must be set in production. "
+            "TOOL_ACCESS_SECRET must be set in production and other strict auth environments. "
             "This key signs the tool-access cookie for free compliance tools "
             "and MUST be distinct from AUTH_SECRET_KEY / JWT_SIGNING_KEY "
             "(see issue #1060). "
@@ -112,7 +99,7 @@ def _code_store_unavailable(operation: str, exc: Exception | None = None) -> HTT
 
 
 def _requires_shared_code_store() -> bool:
-    return is_production() or any(os.getenv(name) for name in _CLOUD_ENV_VARS)
+    return requires_strict_auth_runtime()
 
 
 async def _get_redis() -> aioredis.Redis | None:
@@ -370,25 +357,25 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
 
     # Send via Resend
     if RESEND_API_KEY:
-        import httpx
+        from shared.safe_http import safe_httpx_post_async
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "from": "RegEngine <verify@regengine.co>",
-                    "to": [email],
-                    "subject": f"Your RegEngine verification code: {code}",
-                    "html": _build_email_html(code),
-                },
-            )
-            if resp.status_code not in (200, 201):
-                logger.error("resend_api_error", status=resp.status_code, body=resp.text)
-                raise HTTPException(status_code=500, detail="Failed to send verification email")
+        resp = await safe_httpx_post_async(
+            "https://api.resend.com/emails",
+            timeout=10,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": "RegEngine <verify@regengine.co>",
+                "to": [email],
+                "subject": f"Your RegEngine verification code: {code}",
+                "html": _build_email_html(code),
+            },
+        )
+        if resp.status_code not in (200, 201):
+            logger.error("resend_api_error", status=resp.status_code, body_chars=len(resp.text or ""))
+            raise HTTPException(status_code=500, detail="Failed to send verification email")
     else:
         logger.warning("dev_mode_verification_email_not_sent", email=mask_email(email))
 
@@ -522,29 +509,29 @@ async def _send_erasure_email(email: str, code: str) -> None:
     ``RESEND_API_KEY`` is configured -- same contract as ``verify_email``.
     """
     if RESEND_API_KEY:
-        import httpx
+        from shared.safe_http import safe_httpx_post_async
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "from": "RegEngine <verify@regengine.co>",
-                    "to": [email],
-                    "subject": f"RegEngine data-erasure code: {code}",
-                    "html": _build_erasure_email_html(code),
-                },
+        resp = await safe_httpx_post_async(
+            "https://api.resend.com/emails",
+            timeout=10,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": "RegEngine <verify@regengine.co>",
+                "to": [email],
+                "subject": f"RegEngine data-erasure code: {code}",
+                "html": _build_erasure_email_html(code),
+            },
+        )
+        if resp.status_code not in (200, 201):
+            logger.error(
+                "resend_erasure_email_error",
+                status=resp.status_code,
+                body=resp.text,
             )
-            if resp.status_code not in (200, 201):
-                logger.error(
-                    "resend_erasure_email_error",
-                    status=resp.status_code,
-                    body=resp.text,
-                )
-                raise HTTPException(status_code=500, detail="Failed to send erasure email")
+            raise HTTPException(status_code=500, detail="Failed to send erasure email")
     else:
         logger.warning("dev_mode_erasure_email_not_sent", email=mask_email(email))
 

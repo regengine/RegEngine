@@ -2,7 +2,8 @@
 
 ## ADR-001: Security Hardening Architecture
 
-**Status:** Accepted
+**Status:** Accepted; Decision 3 superseded by
+[`ADR-004`](../architecture/decisions/ADR-004-security-release-boundary.md)
 **Date:** 2026-03-27
 **Decision Makers:** Christopher Sellers
 
@@ -90,6 +91,11 @@ Use `Depends(require_permission("scope.action"))` on every endpoint rather than 
 ---
 
 ## Decision 3: RLS — Defense in Depth with Sysadmin Bypass
+
+> **Superseded 2026-08-03:** Production runtime roles are now required to be
+> `NOSUPERUSER NOBYPASSRLS`. See
+> [`ADR-004`](../architecture/decisions/ADR-004-security-release-boundary.md).
+> The text below is retained as historical decision context only.
 
 ### Context
 Row Level Security (RLS) enforces tenant isolation at the database level. The sysadmin role bypasses RLS for migrations, data repair, and support operations. The audit found this bypass was unmonitored and lacked guardrails.
@@ -246,7 +252,7 @@ Add `kid` (Key ID) header to JWTs and implement a key registry supporting multip
 |---|---|---|
 | SQL Injection | Column allowlist | Restrictive but requires manual updates for new columns |
 | Auth Guards | FastAPI `Depends()` | Per-endpoint declaration vs. global middleware |
-| RLS | Audit + alert on bypass | Operational access preserved with visibility |
+| RLS | Superseded by ADR-004: separate `NOBYPASSRLS` runtime roles | Availability may fail closed when isolation posture is unknown |
 | Cookie Migration | Dual-write phased | Zero-downtime migration with temporary complexity |
 | CSRF | Double-submit cookie | Stateless but requires client-side header attachment |
 | JWT Rotation | `kid` header + key registry | Zero-downtime rotation with key lifecycle management |

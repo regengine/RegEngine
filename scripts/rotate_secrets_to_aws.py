@@ -27,7 +27,6 @@ except ImportError:
 REQUIRED_SECRETS = (
     "POSTGRES_PASSWORD",
     "NEO4J_PASSWORD",
-    "ADMIN_MASTER_KEY",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
 )
@@ -67,7 +66,6 @@ def build_secret_payload(environment: str) -> dict[str, str]:
         "OBJECT_STORAGE_SECRET_ACCESS_KEY": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", ""),
         "OBJECT_STORAGE_REGION": os.getenv("OBJECT_STORAGE_REGION", "us-east-1"),
         "OBJECT_STORAGE_ENDPOINT_URL": os.getenv("OBJECT_STORAGE_ENDPOINT_URL", ""),
-        "ADMIN_MASTER_KEY": os.getenv("ADMIN_MASTER_KEY", ""),
     }
     return payload
 

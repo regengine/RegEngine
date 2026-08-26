@@ -27,7 +27,7 @@ SUPERUSER_DSN = os.environ.get(
 )
 APP_DSN = os.environ.get(
     "REMEDIATION_TEST_APP_DSN",
-    "postgresql://remtest:remtest@localhost:55432/regengine",  # pragma: allowlist secret — throwaway scratch-DB role
+    "postgresql://regengine:regengine@localhost:55432/regengine",  # pragma: allowlist secret — throwaway scratch-DB role
 )
 
 DATA_DIR = Path(__file__).parent.parent / "data" / "supplier_sprint"
@@ -74,39 +74,21 @@ def admin_engine():
 
 @pytest.fixture(scope="session")
 def app_engine(admin_engine):
-    """Non-superuser engine so RLS/triggers are actually enforced."""
+    """Exact non-superuser runtime engine; v111 owns every required grant."""
     from sqlalchemy import create_engine, text
 
-    with admin_engine.connect() as conn:
-        conn = conn.execution_options(isolation_level="AUTOCOMMIT")
-        conn.execute(
+    engine = create_engine(APP_DSN)
+    with engine.connect() as conn:
+        posture = conn.execute(
             text(
                 """
-                DO $$ BEGIN
-                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'remtest') THEN
-                        CREATE ROLE remtest LOGIN PASSWORD 'remtest';  -- pragma: allowlist secret
-                    END IF;
-                END $$;
+                SELECT current_user, rolsuper, rolbypassrls
+                  FROM pg_roles
+                 WHERE rolname = current_user
                 """
             )
-        )
-        for stmt in (
-            # Production connects as the `regengine` role, and the legacy fsma
-            # policies are scoped TO regengine. Membership reproduces the
-            # production identity; the new v095 tables use FORCE RLS with
-            # PUBLIC policies, so they remain enforced even for this member.
-            "GRANT regengine TO remtest",
-            "GRANT USAGE ON SCHEMA fsma TO remtest",
-            "GRANT USAGE ON SCHEMA public TO remtest",
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA fsma TO remtest",
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO remtest",
-            "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA fsma TO remtest",
-            "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO remtest",
-            "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA fsma TO remtest",
-            "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO remtest",
-        ):
-            conn.execute(text(stmt))
-    engine = create_engine(APP_DSN)
+        ).one()
+        assert posture == ("regengine", False, False)
     yield engine
     engine.dispose()
 

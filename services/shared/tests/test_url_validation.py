@@ -62,3 +62,29 @@ def test_metadata_ip_literal_blocked():
 def test_localhost_blocked():
     with pytest.raises(SSRFError):
         validate_url("http://localhost/")
+
+
+def test_credential_bearing_url_is_rejected_before_dns():
+    with patch("socket.getaddrinfo") as resolver:
+        with pytest.raises(SSRFError, match="embedded credentials"):
+            validate_url("https://user:password@example.com/document")  # pragma: allowlist secret
+    resolver.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://2130706433/",  # integer-encoded 127.0.0.1
+        "http://0x7f000001/",  # hexadecimal 127.0.0.1
+        "http://127.1/",  # shortened 127.0.0.1
+        "http://[::ffff:127.0.0.1]/",  # IPv4-mapped IPv6 loopback
+    ],
+)
+def test_alternate_loopback_encodings_are_blocked(url):
+    with pytest.raises(SSRFError):
+        validate_url(url)
+
+
+def test_non_global_special_use_address_is_blocked():
+    with pytest.raises(SSRFError):
+        validate_url("http://100.64.0.1/")

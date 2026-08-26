@@ -11,12 +11,14 @@ telemetry. v092 (``b3c8e1f4a627``) closes that with an app-role-only
 policy per table.
 
 Structural test: at alembic head every v092 table that exists has RLS
-enabled, forced where required, and exactly the ``app_only_*`` policy.
+enabled and forced where required. Most retain the client-lockdown
+``app_only_*`` policy; v114 replaces tenant-bearing surfaces with tenant
+policies and leaves release-disabled incidents/exchange surfaces deny-all.
 
 Behavioral test: a transient role shaped like Supabase's
 ``authenticated`` (LOGIN-less, no bypassrls, explicitly GRANTed table
 privileges to simulate the pre-v092 grant surface) sees zero rows and
-cannot insert, while ``regengine`` retains full access. This is the
+cannot insert, while ``regengine`` retains only its explicit v114 access. This is the
 actual exposure the advisory describes, exercised end to end.
 """
 
@@ -72,6 +74,7 @@ def upgraded_engine() -> Iterator[Engine]:
     with rls_postgres_or_skip() as (plain_url, engine):
         driver_url = engine.url.render_as_string(hide_password=False)
         env = {
+            "MIGRATIONS_DATABASE_URL": plain_url,
             "DATABASE_URL": plain_url,
             "PATH": subprocess.os.environ["PATH"],
         }
@@ -106,7 +109,7 @@ def _existing(engine: Engine) -> list[tuple[str, str, bool]]:
         return present
 
 
-def test_v092_tables_have_rls_and_app_only_policy(upgraded_engine: Engine) -> None:
+def test_v092_tables_have_approved_head_policy(upgraded_engine: Engine) -> None:
     problems: list[str] = []
     with upgraded_engine.connect() as conn:
         for schema, table, force in _existing(upgraded_engine):
@@ -126,17 +129,83 @@ def test_v092_tables_have_rls_and_app_only_policy(upgraded_engine: Engine) -> No
             if force and not row.relforcerowsecurity:
                 problems.append(f"{schema}.{table}: RLS not forced")
 
-            policy = conn.execute(
-                text(
-                    """
-                    SELECT count(*) FROM pg_policies
-                    WHERE schemaname = :s AND tablename = :t
-                      AND policyname = :p
-                    """
-                ),
-                {"s": schema, "t": table, "p": f"app_only_{table}"},
-            ).scalar()
-            if policy != 1:
+            policies = set(
+                conn.execute(
+                    text(
+                        """
+                        SELECT policyname FROM pg_policies
+                        WHERE schemaname = :s AND tablename = :t
+                        """
+                    ),
+                    {"s": schema, "t": table},
+                ).scalars()
+            )
+            if (schema, table) in {
+                ("fsma", "incidents"),
+                ("fsma", "exchange_packages"),
+            }:
+                if policies:
+                    problems.append(
+                        f"{schema}.{table}: disabled surface has policies {sorted(policies)}"
+                    )
+            elif (schema, table) == ("public", "funnel_events"):
+                if "tenant_isolation_funnel_events" not in policies:
+                    problems.append(f"{schema}.{table}: tenant policy missing")
+            elif (schema, table) == ("public", "audit_log_buffer"):
+                required = {
+                    "audit_log_buffer_sysadmin_reconcile",
+                    "audit_log_buffer_sysadmin_update",
+                }
+                if not required <= policies:
+                    problems.append(f"{schema}.{table}: admin replay policies missing")
+                if "audit_log_buffer_runtime_insert" in policies:
+                    problems.append(f"{schema}.{table}: disabled producer still admitted")
+            elif (schema, table) == ("public", "admin_mfa_recovery_codes"):
+                replacement = "admin_mfa_recovery_codes_self_or_admin"
+                if policies != {replacement}:
+                    problems.append(
+                        f"{schema}.{table}: expected only {replacement}, "
+                        f"found {sorted(policies)}"
+                    )
+                else:
+                    policy = conn.execute(
+                        text(
+                            """
+                            SELECT permissive, roles, cmd, qual, with_check
+                            FROM pg_policies
+                            WHERE schemaname = :s
+                              AND tablename = :t
+                              AND policyname = :policy
+                            """
+                        ),
+                        {"s": schema, "t": table, "policy": replacement},
+                    ).one()
+                    expected_guard = (
+                        "((CURRENT_USER = 'regengine_sysadmin'::name) AND "
+                        "((user_id = (NULLIF(current_setting("
+                        "'regengine.user_id'::text, true), ''::text))::uuid) OR "
+                        "(current_setting('regengine.is_sysadmin'::text, true) "
+                        "= 'true'::text)))"
+                    )
+                    observed = (
+                        policy.permissive,
+                        tuple(policy.roles),
+                        policy.cmd,
+                        policy.qual,
+                        policy.with_check,
+                    )
+                    expected = (
+                        "PERMISSIVE",
+                        ("regengine_sysadmin",),
+                        "ALL",
+                        expected_guard,
+                        expected_guard,
+                    )
+                    if observed != expected:
+                        problems.append(
+                            f"{schema}.{table}: v114 self-or-admin policy drifted"
+                        )
+            elif f"app_only_{table}" not in policies:
                 problems.append(f"{schema}.{table}: app_only policy missing")
     assert not problems, "v092/v098 lockdown drifted:\n" + "\n".join(problems)
 
@@ -146,7 +215,7 @@ def test_client_shaped_role_sees_nothing_app_role_unaffected(
 ) -> None:
     """Simulate Supabase's ``authenticated``: no bypassrls, explicit
     GRANTs (the pre-v092 exposure surface). RLS must yield zero rows and
-    reject writes; ``regengine`` must keep full access."""
+    reject writes; ``regengine`` keeps only its explicit catalog read."""
     role = "v092_client_probe"
     url = upgraded_engine.url.render_as_string(hide_password=False)
     engine = create_engine(url, future=True)
@@ -183,7 +252,7 @@ def test_client_shaped_role_sees_nothing_app_role_unaffected(
                 )
             conn.rollback()
 
-        # App role keeps read access through the app_only policy.
+        # App role keeps its explicitly granted read-only rules-catalog access.
         with engine.connect() as conn:
             conn.execute(text("SET ROLE regengine"))
             conn.execute(text("SELECT count(*) FROM fsma.rule_definitions")).scalar()

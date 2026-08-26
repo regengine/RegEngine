@@ -167,12 +167,21 @@ def _default_primary_writer(
 
 
 def _open_session():
-    """Return a SQLAlchemy session, or raise RuntimeError if unavailable."""
-    from shared.database import get_db_safe  # type: ignore
+    """Return the audited admin session used for global reconciliation.
 
-    session = get_db_safe()
-    if session is None:
-        raise RuntimeError("audit_buffer_reconciler: no DB session available")
+    The ordinary runtime credential can only append a tenant-bound buffer
+    row.  Global dequeue/update is a control-plane operation and therefore
+    uses the independently pooled ``ADMIN_DATABASE_URL`` engine, whose
+    checkout hook verifies the exact ``regengine_sysadmin`` role. This
+    classified global worker explicitly arms its own transaction.
+    """
+    from services.admin.app.database import (  # type: ignore
+        SessionLocal,
+        arm_global_admin_context,
+    )
+
+    session = SessionLocal()
+    arm_global_admin_context(session)
     return session
 
 

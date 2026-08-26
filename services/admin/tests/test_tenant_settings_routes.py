@@ -4,7 +4,7 @@ Before this suite, ``services/admin/app/tenant_settings_routes.py``
 (326 LOC, 3 endpoints) had no dedicated test file. The module carries
 two high-impact security invariants:
 
-1. **#1386 role gate**: Only Owner / Admin / Sysadmin may mutate
+1. **#1386 role gate**: Only active tenant Owner / Admin members may mutate
    ``tenant.settings``. Before the fix, any Member or Viewer with a
    membership row could overwrite billing/retention/mfa/sso/webhook
    keys via the generic PATCH endpoint. The helper
@@ -220,23 +220,22 @@ class TestRoleGate_Issue1386:
         assert response["status"] == "ok"
         assert response["settings"]["onboarding"]["facility_created"] is True
 
-    def test_sysadmin_bypasses_role_check(self, monkeypatch) -> None:
-        """Sysadmin should be allowed even without a matching membership
-        row — they manage all tenants."""
+    def test_sysadmin_without_membership_cannot_bypass_role_check(self, monkeypatch) -> None:
+        """Global staff status is not a tenant-membership credential."""
         mod = _load_routes(monkeypatch)
         tenant = _fake_tenant()
-        # No membership — sysadmin branch returns "Sysadmin" directly.
         db = _install_db(tenant, membership=None)
 
-        response = asyncio.run(
-            mod.update_tenant_settings(
-                tenant_id=TENANT_ID,
-                payload=mod.SettingsUpdate(workspace_profile={"x": 1}),
-                user=_fake_user(is_sysadmin=True),
-                db=db,
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                mod.update_tenant_settings(
+                    tenant_id=TENANT_ID,
+                    payload=mod.SettingsUpdate(workspace_profile={"x": 1}),
+                    user=_fake_user(is_sysadmin=True),
+                    db=db,
+                )
             )
-        )
-        assert response["status"] == "ok"
+        assert exc.value.status_code == 403
 
 
 # ---------------------------------------------------------------------------
