@@ -66,11 +66,19 @@ def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter
         return Counter(name, description, labelnames, registry=None)
 
 
-# Track spoofing attempts for alerting
+# Track spoofing attempts for alerting.
+#
+# #2858: deliberately UNLABELLED. This counter is incremented from PRE-AUTH
+# middleware, so any label derived from the request (previously the raw peer
+# IP via ``client_host``) is attacker-controlled and unbounded — a remote host
+# can mint a new Prometheus time series per source address and grow the
+# registry without limit. The rejected peer IP is still recorded, at full
+# fidelity and with retention limits, on the structured warning log emitted
+# next to the ``.inc()`` in ``_extract_tenant_id``.
 tenant_header_rejected_total = _safe_counter(
     "tenant_header_rejected_total",
     "Unauthenticated X-RegEngine-Tenant-ID header rejections",
-    ["client_host"],
+    [],
 )
 
 tenant_extraction_failed_total = _safe_counter(
@@ -207,7 +215,8 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         "attempted_tenant": tenant_header,
                     },
                 )
-                tenant_header_rejected_total.labels(client_host=client_host).inc()
+                # #2858: no client_host label — the IP lives in the log line above.
+                tenant_header_rejected_total.inc()
 
         # Method 3: From API key (env service-account fallback only).
         #

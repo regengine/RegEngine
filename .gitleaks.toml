@@ -1,5 +1,13 @@
 title = "RegEngine Gitleaks Config"
 
+# ─── Base Ruleset ─────────────────────────────────────────────────
+# Issue #2809: this config previously contained ONLY an [allowlist]
+# and no [[rules]] / [extend], which meant gitleaks loaded zero
+# detection rules and the required "Secrets Scan (gitleaks)" gate
+# could never fail. Inherit the upstream default ruleset.
+[extend]
+useDefault = true
+
 # ─── Allowlist ────────────────────────────────────────────────────
 # Items here are known non-secrets: test fixtures, example configs,
 # and demo data.

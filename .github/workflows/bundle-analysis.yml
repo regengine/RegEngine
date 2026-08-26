@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
   # Maximum total JS bundle size in bytes (10MB)
   # Full-stack Next.js app with compliance dashboards, charting, and code editors
   BUNDLE_SIZE_LIMIT: 10485760
@@ -37,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 

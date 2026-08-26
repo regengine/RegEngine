@@ -1,0 +1,125 @@
+/**
+ * #2821 — CSP nonce must reach Next.js on the REQUEST headers.
+ * #2886 — GATED_DEV_ROUTES must name real page paths.
+ *
+ * #2821 background: proxy.ts set the nonce as an `x-nonce` REQUEST header and
+ * the CSP on the RESPONSE only. Next.js derives the nonce for its own
+ * bootstrap/chunk <script> tags exclusively from the INCOMING REQUEST's
+ * `content-security-policy` header:
+ *
+ *   node_modules/next/dist/server/app-render/app-render.js:209-210
+ *     const csp = headers['content-security-policy'] || headers['...-report-only'];
+ *     const nonce = typeof csp === 'string' ? getScriptNonceFromHeader(csp) : undefined;
+ *
+ * There is no `x-nonce` convention inside the framework — `x-nonce` is purely
+ * this app's own channel to layout.tsx / providers.tsx. Because buildCsp()
+ * emits 'strict-dynamic', CSP3 browsers ignore 'self' for scripts, so with no
+ * nonce on the framework's own tags every /_next/static/chunks/*.js was
+ * refused and NO page hydrated in production.
+ *
+ * NextResponse.next({ request: { headers } }) encodes the overridden request
+ * headers onto the response as `x-middleware-override-headers` (the list) plus
+ * one `x-middleware-request-<name>` per header; Next.js reads those back to
+ * rebuild the request. Asserting on them is how we prove the header actually
+ * reaches the framework rather than just being set on a local Headers object.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { NextRequest } from 'next/server';
+import { proxy } from '@/proxy';
+
+const NONCE_IN_SCRIPT_SRC = /script-src[^;]*'nonce-([A-Za-z0-9+/=]+)'/;
+
+function overriddenRequestHeaders(res: Response): string[] {
+    return (res.headers.get('x-middleware-override-headers') ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean);
+}
+
+describe('#2821 CSP nonce reaches Next.js via request headers', () => {
+    it('sets Content-Security-Policy on the forwarded REQUEST headers', async () => {
+        const res = await proxy(new NextRequest(new URL('http://localhost/docs')));
+
+        expect(overriddenRequestHeaders(res)).toContain('content-security-policy');
+
+        const requestCsp = res.headers.get('x-middleware-request-content-security-policy');
+        expect(requestCsp).toBeTruthy();
+        // Must be parseable by Next.js's getScriptNonceFromHeader, which looks
+        // for a nonce source inside script-src (falling back to default-src).
+        expect(requestCsp).toMatch(NONCE_IN_SCRIPT_SRC);
+    });
+
+    it('uses the SAME nonce on the request CSP, the response CSP, and x-nonce', async () => {
+        const res = await proxy(new NextRequest(new URL('http://localhost/docs')));
+
+        const requestCsp = res.headers.get('x-middleware-request-content-security-policy') ?? '';
+        const responseCsp = res.headers.get('content-security-policy') ?? '';
+        const xNonce = res.headers.get('x-middleware-request-x-nonce');
+
+        const requestNonce = requestCsp.match(NONCE_IN_SCRIPT_SRC)?.[1];
+        const responseNonce = responseCsp.match(NONCE_IN_SCRIPT_SRC)?.[1];
+
+        expect(requestNonce).toBeTruthy();
+        // A mismatch between any of these three means the browser rejects the
+        // scripts the server nonced.
+        expect(responseNonce).toBe(requestNonce);
+        expect(xNonce).toBe(requestNonce);
+    });
+
+    it('keeps the x-nonce request header the app components read', async () => {
+        // layout.tsx:51 and lib/providers.tsx read headers().get('x-nonce');
+        // #2821's fix must not replace that channel, only add the CSP one.
+        const res = await proxy(new NextRequest(new URL('http://localhost/docs')));
+        expect(overriddenRequestHeaders(res)).toContain('x-nonce');
+        expect(res.headers.get('x-middleware-request-x-nonce')).toBeTruthy();
+    });
+
+    it('still sets the enforced CSP on the response', async () => {
+        const res = await proxy(new NextRequest(new URL('http://localhost/docs')));
+        const responseCsp = res.headers.get('content-security-policy');
+        expect(responseCsp).toContain("'strict-dynamic'");
+        expect(responseCsp).toContain("frame-ancestors 'none'");
+    });
+});
+
+describe('#2886 gated developer routes', () => {
+    // isGatedRoute() matches `pathname === route || pathname.startsWith(route + '/')`,
+    // so an entry with no corresponding page under src/app gates nothing. The
+    // pages are src/app/developer/portal/keys and .../playground; the old
+    // '/api-keys' and '/playground' entries matched neither, leaving the
+    // playground (which makes real API calls with a real key) fully ungated.
+    // Unauthenticated + gated => redirect to /login.
+    async function statusFor(pathname: string): Promise<number> {
+        const res = await proxy(new NextRequest(new URL(`http://localhost${pathname}`)));
+        return res.status;
+    }
+
+    it('gates the real playground page path', async () => {
+        expect(await statusFor('/developer/portal/playground')).toBe(307);
+    });
+
+    it('gates the real keys page path', async () => {
+        expect(await statusFor('/developer/portal/keys')).toBe(307);
+    });
+
+    it('gates sub-paths of the gated routes', async () => {
+        expect(await statusFor('/developer/portal/keys/new')).toBe(307);
+    });
+
+    it('redirects to /login preserving the intended destination', async () => {
+        const res = await proxy(
+            new NextRequest(new URL('http://localhost/developer/portal/playground')),
+        );
+        const location = new URL(res.headers.get('location') ?? '', 'http://localhost');
+        expect(location.pathname).toBe('/login');
+        expect(location.searchParams.get('next')).toBe('/developer/portal/playground');
+    });
+
+    it('leaves the public developer portal ungated', async () => {
+        // Docs, codegen and the portal landing page stay public so developers
+        // can evaluate without an account.
+        expect(await statusFor('/developer/portal')).toBe(200);
+        expect(await statusFor('/docs/api')).toBe(200);
+    });
+});

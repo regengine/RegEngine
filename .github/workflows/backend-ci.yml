@@ -60,10 +60,11 @@ concurrency:
 env:
   PYTHON_VERSION: '3.11'
 
+# Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
+# github-script, no check-run or PR-comment action — so checks:write and
+# pull-requests:write were unused write scope on every run.
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   # ── Dependency Lock Freshness ────────────────────────────
@@ -125,7 +126,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -476,7 +477,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -650,7 +651,20 @@ jobs:
         run: docker build -t regengine:test -f Dockerfile .
 
       - name: Verify image starts
-        run: docker run --rm regengine:test python -c "print('Build OK')"
+        # Issue #2890: this used to run `python -c "print('Build OK')"`, which
+        # overrides CMD and proves only that the image contains a Python
+        # binary — it passed even when the application could not import at
+        # all. Import the module gunicorn actually loads (server.main:app).
+        #
+        # ADMIN_DATABASE_URL is read at import time by
+        # services/admin/app/database.py, which builds the engine at module
+        # scope. SQLAlchemy's create_engine does not connect, so a dummy DSN
+        # is enough to exercise the real import chain without a database.
+        run: |
+          docker run --rm \
+            -e ADMIN_DATABASE_URL="postgresql+psycopg://smoke:smoke@127.0.0.1:5432/smoke" \
+            regengine:test \
+            python -c "import server.main; assert server.main.app is not None; print('server.main imported OK')"
 
   # ── Security (Hard Gate) ─────────────────────────────────
   security:
@@ -773,7 +787,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1011,7 +1025,7 @@ jobs:
         cluster: [app-roles-only, supabase-client-roles]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -1079,7 +1093,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

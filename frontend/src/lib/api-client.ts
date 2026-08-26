@@ -519,17 +519,29 @@ class APIClient {
   }
 
   // Graph API - Labels
+  //
+  // #2887 These paths must carry the full /api/v1 prefix. graphClient's base is
+  // the same-origin proxy /api/graph, and src/app/api/graph/[...path]/route.ts:26
+  // forwards verbatim: `${GRAPH_URL}/${path}`. The labels router is mounted at
+  //   services/graph/app/routes.py:55
+  //     v1_router.include_router(labels.router, prefix="/labels", ...)
+  // and v1_router reaches the app via server/main.py:910
+  //     app.include_router(graph_router, prefix="/api/v1", ...)
+  // giving /api/v1/labels/* (services/graph/app/routers/labels.py:171
+  // `@router.get("/health")`, :177 `@router.post("/batch/init")`). The old
+  // '/v1/labels/...' paths resolved to /v1/labels/... on the backend, which is
+  // registered by nothing and 404'd.
   async initializeLabelBatch(
     request: LabelBatchInitRequest,
     tenantId?: string
   ): Promise<LabelBatchInitResponse> {
     const headers: Record<string, string> = tenantId ? { 'X-Tenant-ID': tenantId } : {};
-    const { data } = await this.graphClient.post('/v1/labels/batch/init', request, { headers });
+    const { data } = await this.graphClient.post('/api/v1/labels/batch/init', request, { headers });
     return data;
   }
 
   async getLabelsHealth(): Promise<HealthCheckResponse> {
-    const { data } = await this.graphClient.get('/v1/labels/health');
+    const { data } = await this.graphClient.get('/api/v1/labels/health');
     return data;
   }
 

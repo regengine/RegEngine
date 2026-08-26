@@ -19,7 +19,12 @@ These surfaces are part of the core production spine when their corresponding ro
 - Inflow Workbench preflight and commit gate
 - Canonical record and CTE/KDE persistence
 - Compliance rules, readiness, exception, and audit review workflows
+- Supplier remediation: manifest intake, scoped correction links, and the
+  token-scoped supplier correction session (`remediation`; compliance-critical,
+  see "Boot-critical routers" below)
 - FDA export and export monitoring
+- Public proof endpoints: export-bundle verification and the recall drill
+  (`proof_verify`, `proof_recall`; tenantless and unauthenticated, see below)
 - Tenant, user, API-key, supplier, and audit-log administration
 - Billing routes required for customer subscription management
 - Health, readiness, metrics, observability, and operational probes
@@ -36,7 +41,8 @@ These surfaces are part of the core production spine when their corresponding ro
 
 ## Current Router Control
 
-The consolidated FastAPI entrypoint is `server/main.py`.
+The consolidated FastAPI entrypoint is `server/main.py`. It is the source of
+truth; `docs/engineering/ROUTER_SURFACE.md` is the per-router audit.
 
 Router exposure is currently controlled by:
 
@@ -54,6 +60,42 @@ ENABLE_EXPERIMENTAL_ROUTERS=true
 ```
 
 Development and test environments retain broad router mounting for local work and CI coverage.
+
+### Boot-critical routers
+
+`server/main.py` defines `_COMPLIANCE_ROUTERS`:
+
+```text
+canonical_records, rules, exceptions, remediation, fda_export, chain_verification
+```
+
+Naming any of these in `DISABLED_ROUTERS` makes the app raise `RuntimeError`
+at import and **refuse to boot**, unless `ALLOW_DISABLE_COMPLIANCE_ROUTERS=true`
+is also set — which does not restore the router, it only downgrades the hard
+failure to a logged "degraded compliance mode". `remediation` is the entry
+most often forgotten, because it is newer than this document's original
+router inventory (#2838).
+
+### Public, tenantless, unauthenticated surfaces
+
+Two routers mount unconditionally in production and are **not** experimental,
+so `ENABLE_EXPERIMENTAL_ROUTERS` does not gate them:
+
+- `proof_verify` — `POST /api/v1/proof/verify` (`server/main.py:556`).
+  Public export-bundle hash-chain/Merkle verifier. No auth, no tenant
+  context. Rate limit 10 req/min/IP.
+- `proof_recall` — `POST /api/v1/proof/recall-drill` (`server/main.py:654`).
+  Public deterministic recall drill over a frozen synthetic dataset. No auth,
+  no tenant context. Rate limit 5 req/min/IP.
+
+Both carry an in-module justification docstring arguing they belong to the
+FSMA pipeline as the export stage's public attestation surface, and both
+assert they read no tenant data. **Neither has a recorded sign-off against
+the Promotion Rule below** — that review is outstanding (#2838).
+
+Together with `remediation` (15 routes across its two routers), these three
+account for 17 routes that were absent from the router inventory before
+2026-08-26.
 
 ## Experimental or Non-Core Surfaces
 

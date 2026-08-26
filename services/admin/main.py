@@ -317,6 +317,38 @@ install_exception_handlers(app)
 # Prometheus /metrics — RED metrics for every route, auth-guarded (#1325)
 install_metrics(app, service_name="admin-service")
 
+
+# Liveness probe for this legacy standalone entrypoint.
+#
+# #2856 moved the admin router's dependency-verifying handler from `/health`
+# to `/health/deep`, because in the monolith three separate routers all
+# claimed `/health` and Starlette served whichever registered first — so the
+# only handler that actually probed Postgres/Neo4j/Redis was unreachable.
+# That remount left THIS app with no `/health` at all, since the admin router
+# was its only source for one.
+#
+# Declared inline rather than via `shared.observability.health.
+# install_health_router`, which would also register `/ready` — a path the
+# admin router owns here, so using it would re-introduce exactly the
+# duplicate-registration problem #2856 removed.
+@app.get("/health", tags=["system"], operation_id="admin_standalone_liveness")
+async def _admin_standalone_health() -> dict[str, str]:
+    """Liveness only: process is up and serving. Dependency health is
+    `/health/deep`, readiness is `/ready`.
+
+    `version` is part of this endpoint's contract — see
+    `tests/contract/test_admin_api_contract.py::test_health_response_has_version`
+    — so it is sourced from the same `current_build_info()` the rest of the
+    platform reports rather than hardcoded.
+    """
+    from shared.build_info import current_build_info
+
+    return {
+        "status": "healthy",
+        "service": "admin-api",
+        "version": current_build_info().version,
+    }
+
 from shared.auth import validate_auth_config
 
 validate_auth_config()

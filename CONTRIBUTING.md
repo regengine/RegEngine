@@ -26,7 +26,13 @@ engineers and authorized agents.
 python3 -m venv venv
 source venv/bin/activate
 pip install --require-hashes -r requirements.lock
+
+# pre-commit is a dev-only tool and is deliberately NOT in requirements.in /
+# requirements.lock — those are the production install set. Install it
+# separately (see .pre-commit-config.yaml), outside the hash-pinned set:
+pip install pre-commit
 pre-commit install
+
 pytest tests/ -v
 
 # Frontend

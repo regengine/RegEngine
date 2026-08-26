@@ -43,15 +43,45 @@ class FakeSession:
     def __init__(self, storage: dict[UUID, object]):
         self.storage = storage
         self._pending = None
+        # AuditLogger._acquire_chain_lock inspects the bind to decide whether
+        # to issue an advisory lock; a missing attribute makes log_event fail
+        # and (post-#2857) abort the review decision. (#2513)
+        self.bind = None
+        self.audit_entries: list = []
 
     def add(self, item):
+        from services.admin.app.sqlalchemy_models import AuditLogModel
+
+        # Route audit rows aside so they don't clobber the pending review item.
+        if isinstance(item, AuditLogModel):
+            self.audit_entries.append(item)
+            return
         self._pending = item
 
     def execute(self, stmt, params=None):
-        """No-op: absorbs SET LOCAL tenant context in tests."""
-        return None
+        """Absorbs SET LOCAL tenant context and the audit chain-head SELECT.
+
+        AuditLogger._get_chain_head calls .one_or_none() on the result, so a
+        bare None makes log_event raise and, post-#2857, abort the decision.
+        Returning None from one_or_none starts the chain at GENESIS.
+        """
+
+        class _Result:
+            def one_or_none(self_inner):
+                return None
+
+            def scalar_one_or_none(self_inner):
+                return None
+
+        return _Result()
 
     def flush(self):
+        # A real flush assigns AuditLogModel's autoincrement BigInteger PK.
+        # log_event returns entry.id, and #2857 treats None as a failed audit
+        # write — so without this a successful write looks like a failure.
+        for entry in self.audit_entries:
+            if getattr(entry, "id", None) is None:
+                entry.id = len(self.audit_entries)
         return None
 
     def refresh(self, item):
@@ -76,11 +106,14 @@ class FakeSession:
 def reset_metrics():
     """Ensure each test starts with clean metric state."""
 
+    # #2867: tenant_id was removed as a metric label (unbounded cardinality).
+    # hallucination_active_reviews is now unlabelled, so it has no ._metrics
+    # child map — reset it by value instead.
     hallucination_events_total._metrics.clear()  # type: ignore[attr-defined]
-    hallucination_active_reviews._metrics.clear()  # type: ignore[attr-defined]
+    hallucination_active_reviews.set(0)
     yield
     hallucination_events_total._metrics.clear()  # type: ignore[attr-defined]
-    hallucination_active_reviews._metrics.clear()  # type: ignore[attr-defined]
+    hallucination_active_reviews.set(0)
 
 
 @pytest.fixture
@@ -129,9 +162,9 @@ def test_record_hallucination_tracks_state(tracker_fixture):
     assert fake_redis.get(cache_key) is not None
 
     counter_value = (
-        hallucination_events_total.labels(tenant_id=tenant_id, extractor="GENERIC")._value.get()  # type: ignore[attr-defined]
+        hallucination_events_total.labels(extractor="GENERIC")._value.get()  # type: ignore[attr-defined]
     )
-    gauge_value = hallucination_active_reviews.labels(tenant_id=tenant_id)._value.get()  # type: ignore[attr-defined]
+    gauge_value = hallucination_active_reviews._value.get()  # type: ignore[attr-defined]
 
     assert counter_value == 1.0
     assert gauge_value == 1.0
@@ -158,7 +191,7 @@ def test_resolve_hallucination_updates_metrics(tracker_fixture):
     assert item.status == "APPROVED"
     assert item.reviewer_id == "human-reviewer"
 
-    gauge_value = hallucination_active_reviews.labels(tenant_id=tenant_id)._value.get()  # type: ignore[attr-defined]
+    gauge_value = hallucination_active_reviews._value.get()  # type: ignore[attr-defined]
     assert gauge_value == 0.0
 
 

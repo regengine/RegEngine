@@ -53,13 +53,13 @@ def get_recall_engine():
         except (ValueError, TypeError):
             db_name = Neo4jClient.get_global_database_name()
 
-        client = Neo4jClient(database=db_name)
-        try:
+        # #2833: driver close on every exit path, expressed as the
+        # canonical `async with` rather than a hand-rolled
+        # try/finally so no future edit can drop it.
+        async with Neo4jClient(database=db_name) as client:
             res = await trace_forward(client, tlc, tenant_id=tenant_str)
             # Convert TraceResult to dict for engine compatibility if needed
             return res.__dict__ if hasattr(res, "__dict__") else res
-        finally:
-            await client.close()
 
     async def wrapped_backward(tlc, tenant_id=None):
         # #2540: require the tenant — see wrapped_forward.
@@ -72,12 +72,12 @@ def get_recall_engine():
         except (ValueError, TypeError):
             db_name = Neo4jClient.get_global_database_name()
 
-        client = Neo4jClient(database=db_name)
-        try:
+        # #2833: driver close on every exit path, expressed as the
+        # canonical `async with` rather than a hand-rolled
+        # try/finally so no future edit can drop it.
+        async with Neo4jClient(database=db_name) as client:
             res = await trace_backward(client, tlc, tenant_id=tenant_str)
             return res.__dict__ if hasattr(res, "__dict__") else res
-        finally:
-            await client.close()
 
     _recall_engine = MockRecallEngine(
         trace_forward_fn=wrapped_forward,
@@ -259,8 +259,10 @@ async def get_recall_readiness(
     try:
         db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
-        client = Neo4jClient(database=db_name)
-        try:
+        # #2833: driver close on every exit path, expressed as the
+        # canonical `async with` rather than a hand-rolled
+        # try/finally so no future edit can drop it.
+        async with Neo4jClient(database=db_name) as client:
             async with client.session() as session:
                 result = await session.run(
                     """
@@ -289,8 +291,6 @@ async def get_recall_readiness(
                     cte_count = int(record["total"] or 0)
                     complete_cte_count = int(record["complete"] or 0)
                     incomplete_kde_count = int(record["incomplete"] or 0)
-        finally:
-            await client.close()
     except Exception as exc:
         logger.warning("recall_readiness_cte_query_failed", error=str(exc))
         neo4j_error = str(exc)

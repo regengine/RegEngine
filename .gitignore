@@ -28,6 +28,9 @@ wheels/
 *.egg
 .pytest_cache/
 .coverage
+# frontend-ci now runs `npm run test:coverage` (#2845), which writes this on
+# every run — ignore it so it stops dirtying working trees.
+frontend/coverage/
 htmlcov/
 .venv*/
 venv*/
@@ -41,6 +44,8 @@ node_modules/
 .env.production
 # .env.example is the safe template — keep tracked despite the .env.* pattern above
 !.env.example
+# Same for scoped example templates such as frontend/.env.test.example (#2873).
+!.env.*.example
 .DS_Store
 .idea/
 .vscode/
@@ -58,6 +63,13 @@ yarn-error.log*
 frontend/out/
 .pytest_cache/
 .audit/
+# NOTE (#2894): build-sha.txt is deliberately NOT ignored. The Dockerfile's
+# unconditional `COPY build-sha.txt` needs the file to exist in every build
+# context, including `docker build` runs in backend-ci.yml and security.yml
+# that never execute deploy.yml's stamping step. The committed placeholder is
+# the literal "unknown", which services/shared/build_info.py rejects as a
+# non-SHA and reports as absent — see the regression test in
+# services/shared/tests/test_build_info.py.
 
 # RegEngine Specific
 *.db
@@ -67,6 +79,12 @@ secrets.md
 
 # Artifacts that should never be tracked
 *.zip
+# ...except the public proof/sample bundles the frontend serves. These are
+# intentionally tracked fixtures (the audit-bundle pair backs the public
+# /api/v1/proof/verify demo, including the deliberately tampered one), and
+# the bare *.zip rule above was silently covering them (#2873).
+!frontend/public/proof/*.zip
+!frontend/public/samples/*.zip
 login_resp.json
 frontend/build_log.txt
 frontend/build_output.txt
@@ -75,6 +93,18 @@ frontend/build_v2_log.txt
 # Stress test / bulk data files (move to external storage)
 fsma_stress_test_*
 test_data/
+# ...except services/test_data/audit/, which holds 25 intentionally-tracked
+# audit job fixtures that the bare test_data/ rule above was covering (#2873).
+# Same shape as the sample_data/ and demo_exports/ blocks below: re-include the
+# directories, re-ignore their contents, then allow only the fixture extension,
+# so bulk scratch dumps under services/test_data/ stay ignored. Each parent
+# directory must be re-included explicitly — a negation for a file inside an
+# excluded directory has no effect.
+!services/test_data/
+services/test_data/*
+!services/test_data/audit/
+services/test_data/audit/*
+!services/test_data/audit/*.jsonl
 
 # MCP / Gemini settings (contains tokens)
 .gemini/settings.json

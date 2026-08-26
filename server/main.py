@@ -168,7 +168,7 @@ async def lifespan(app: FastAPI):
 
     # Register ingestion task handlers and start ingestion worker
     try:
-        from shared.agent_task_bridge import register_agent_bridge_handlers
+        from shared.agent_task_bridge import AGENT_ARTIFACT_TASK_TYPE, register_agent_bridge_handlers
         from shared.database import engine as _db_engine
         from shared.task_queue import TaskWorker
 
@@ -182,7 +182,33 @@ async def lifespan(app: FastAPI):
         register_discovery_handlers()
         register_regulation_handlers()
         register_agent_bridge_handlers()
-        _ingestion_worker = TaskWorker(engine=_db_engine)
+        # #2830: this worker MUST declare the task types it owns. TaskWorker
+        # only applies its type filter ``if self.task_types:`` — constructed
+        # without one it claimed *any* pending row in fsma.task_queue,
+        # including ``nlp_extraction`` / ``graph_update`` / ``review_item``
+        # rows enqueued for server/workers/task_processor.py. Those types have
+        # no handler registered here, so _dispatch dead-lettered them with zero
+        # retries: work silently destroyed rather than delayed.
+        #
+        # Keep this list in sync with the register_*_handlers() calls directly
+        # above — every entry is a task_type those functions pass to
+        # shared.task_queue.register_task_handler():
+        #   task_handlers_sources     → federal_register_ingest, ecfr_ingest, fda_ingest
+        #   task_handlers_scraping    → state_scrape, generic_scrape
+        #   task_handlers_discovery   → discovery_scrape
+        #   task_handlers_regulation  → regulation_ingest
+        #   agent_task_bridge         → AGENT_ARTIFACT_TASK_TYPE ("agent_artifact_review")
+        _ingestion_task_types = [
+            "federal_register_ingest",
+            "ecfr_ingest",
+            "fda_ingest",
+            "state_scrape",
+            "generic_scrape",
+            "discovery_scrape",
+            "regulation_ingest",
+            AGENT_ARTIFACT_TASK_TYPE,
+        ]
+        _ingestion_worker = TaskWorker(engine=_db_engine, task_types=_ingestion_task_types)
         # #2518: keep the daemon thread handle so /readiness can tell a live
         # worker from one whose loop died after start.
         _ingestion_worker_thread = _ingestion_worker.start()
@@ -314,6 +340,49 @@ install_exception_handlers(app)
 from shared.auth import validate_auth_config
 
 validate_auth_config()
+
+# #2808: the insecure-default secret checks had ZERO call sites repo-wide, so
+# the INSECURE_DEFAULTS table (ADMIN_MASTER_KEY=dev-admin-key,
+# NEO4J_PASSWORD=neo4j, object-storage test creds, …) was never consulted and a
+# deployment could boot on shipped placeholder credentials. Wired here next to
+# validate_auth_config() because this module is the single production
+# entrypoint. Both functions no-op unless REGENGINE_ENV is explicitly
+# "production", so local and test boots are untouched.
+#
+# Enforcement follows the #2461 RLS-posture pattern above: run the check on
+# every boot so a violation is impossible to miss, but do not abort by default.
+# validate_production_secrets() fails on any of its four variables being
+# *unset* — OBJECT_STORAGE_ACCESS_KEY_ID / OBJECT_STORAGE_SECRET_ACCESS_KEY
+# included — and this module is the only deployed container, so raising here on
+# an unverified env-var gap is a fleet-wide crash-loop, not a safety net.
+# tests/test_server_import_smoke.py's simulated Railway boot
+# (RAILWAY_ENVIRONMENT_NAME=production, no object-storage creds) demonstrates
+# exactly that: it fails to import when this raises.
+#
+# So: log loudly (Sentry-captured) by default, and set
+# REGENGINE_REQUIRE_SECURE_SECRETS=1 on Railway once the four variables are
+# confirmed present — from that point the fleet can never silently regress to
+# placeholder credentials.
+from shared.secrets_manager import require_secure_secrets_in_production, validate_production_secrets
+
+_REQUIRE_SECURE_SECRETS = os.getenv("REGENGINE_REQUIRE_SECURE_SECRETS", "").strip().lower() in {"1", "true", "yes"}
+
+try:
+    require_secure_secrets_in_production()
+    validate_production_secrets()
+except RuntimeError as _secrets_exc:
+    if _REQUIRE_SECURE_SECRETS:
+        raise
+    # The message names the offending variables only — never their values.
+    logger.error(
+        "insecure_production_secrets_detected",
+        msg=(
+            "Production secret validation FAILED but boot is continuing. Set "
+            "REGENGINE_REQUIRE_SECURE_SECRETS=1 to make this fatal once the "
+            "variables are confirmed on the deploy target (#2808)."
+        ),
+        error=str(_secrets_exc),
+    )
 
 # #1325: mount Prometheus RED metrics on /metrics for the monolith. add_security/
 # add_observability above wire CORS + OTel tracing but NOT the Prometheus
@@ -913,7 +982,25 @@ app.include_router(scheduler_status_router)
 
 
 # ── Health check ─────────────────────────────────────────────────
-@app.get("/health", tags=["system"], operation_id="root_liveness_health")
+# #2856: this handler used to be registered at ``/health``, where it was the
+# third claimant of that path and never ran. Starlette resolves first-match, so
+# ``services/ingestion/app/routes_health_metrics.py`` (included at line ~512,
+# long before this module-level route) answered every request — while FastAPI's
+# OpenAPI ``paths`` dict, being last-write-wins, documented *this* handler. The
+# published schema described a probe that could not be reached.
+#
+# ``/health`` stays with the ingestion handler because
+# ``services/ingestion/main.py`` exposes no other liveness path and
+# .github/workflows/inflow-contract-ci.yml gates on it. This one keeps its
+# distinct value — it is the only probe that touches nothing at all (no Kafka
+# call, no webhook_router_v2 import) — so it is remounted rather than deleted.
+#
+# The probe map after #2856:
+#   /health        liveness (ingestion handler; also the deploy.yml commit gate)
+#   /health/live   this — minimal liveness, imports nothing optional
+#   /health/deep   Postgres + Neo4j + Redis verification, 503 when unhealthy
+#   /readiness     Railway's healthcheckPath (railway.toml), 503 when Postgres is down
+@app.get("/health/live", tags=["system"], operation_id="root_liveness_health")
 async def health():
     """Lightweight liveness probe — always returns 200 if the process is up."""
     from services.ingestion.app.webhook_models import INFLOW_CONTRACT_VERSION
@@ -949,20 +1036,55 @@ async def readiness(request: Request):
     Use this for load balancer health checks so traffic isn't routed
     to instances that can't actually serve requests.
     """
+    import asyncio
+
     from fastapi.responses import JSONResponse
 
     checks: dict[str, dict] = {}
 
     # --- PostgreSQL ---
+    # #2846: every component below runs its blocking client call inside
+    # ``asyncio.to_thread``. Railway polls this path (railway.toml
+    # healthcheckPath=/readiness) every few seconds; running a socket connect,
+    # a redis PING and a bolt handshake directly on the event loop stalled
+    # *all* concurrent request handling for the duration of each probe.
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import text
 
         db_url = os.getenv("DATABASE_URL")
         if db_url:
-            engine = create_engine(db_url, pool_pre_ping=True)
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            engine.dispose()
+
+            def _probe_postgres() -> None:
+                # #2846: reuse the process-wide pooled engine instead of
+                # building (and discarding) a fresh Engine + connection pool on
+                # every probe. shared.database.engine is created once at import
+                # from DATABASE_URL with pool_pre_ping=True — the same options
+                # this probe used to pass — so when the probe URL is the one it
+                # was built from (always true in production, where DATABASE_URL
+                # is set before import) we borrow a pooled connection and never
+                # dispose the shared pool.
+                #
+                # The fallback covers the case where DATABASE_URL changed after
+                # shared.database was imported (readiness contract tests
+                # monkeypatch it); there a private engine is still correct, and
+                # it is disposed so it cannot leak.
+                from shared import database as _shared_db
+
+                if db_url == getattr(_shared_db, "DATABASE_URL", None):
+                    with _shared_db.engine.connect() as conn:
+                        conn.execute(text("SELECT 1"))
+                    return
+
+                from sqlalchemy import create_engine
+
+                probe_engine = create_engine(db_url, pool_pre_ping=True)
+                try:
+                    with probe_engine.connect() as conn:
+                        conn.execute(text("SELECT 1"))
+                finally:
+                    probe_engine.dispose()
+
+            await asyncio.to_thread(_probe_postgres)
             checks["postgres"] = {"status": "ok"}
         else:
             checks["postgres"] = {"status": "not_configured"}
@@ -975,9 +1097,16 @@ async def readiness(request: Request):
 
         redis_url = os.getenv("REDIS_URL")
         if redis_url:
-            r = _redis.from_url(redis_url, socket_connect_timeout=2)
-            r.ping()
-            r.close()
+
+            def _probe_redis() -> None:
+                # #2846: redis-py's sync client blocks; keep it off the loop.
+                r = _redis.from_url(redis_url, socket_connect_timeout=2)
+                try:
+                    r.ping()
+                finally:
+                    r.close()
+
+            await asyncio.to_thread(_probe_redis)
             checks["redis"] = {"status": "ok"}
         else:
             checks["redis"] = {"status": "not_configured"}
@@ -1012,19 +1141,24 @@ async def readiness(request: Request):
         try:
             from neo4j import GraphDatabase
 
-            driver = GraphDatabase.driver(
-                neo4j_uri,
-                auth=(
-                    os.getenv("NEO4J_USER", "neo4j"),
-                    os.getenv("NEO4J_PASSWORD", ""),
-                ),
-                connection_timeout=2.0,
-                connection_acquisition_timeout=2.0,
-            )
-            try:
-                driver.verify_connectivity()
-            finally:
-                driver.close()
+            def _probe_neo4j() -> None:
+                # #2846: verify_connectivity() opens a bolt connection
+                # synchronously — off the loop it goes.
+                driver = GraphDatabase.driver(
+                    neo4j_uri,
+                    auth=(
+                        os.getenv("NEO4J_USER", "neo4j"),
+                        os.getenv("NEO4J_PASSWORD", ""),
+                    ),
+                    connection_timeout=2.0,
+                    connection_acquisition_timeout=2.0,
+                )
+                try:
+                    driver.verify_connectivity()
+                finally:
+                    driver.close()
+
+            await asyncio.to_thread(_probe_neo4j)
             checks["neo4j"] = {"status": "ok"}
         except Exception as exc:
             checks["neo4j"] = {"status": "error", "error": str(exc)[:200]}
@@ -1117,3 +1251,65 @@ async def readiness(request: Request):
         "service": "regengine",
         "checks": checks,
     }
+
+
+# ── Route-topology guard (#2856) ─────────────────────────────────
+# Three separate handlers had registered ``GET /health`` (and two had
+# registered ``GET /metrics``). Nothing complained, because the two frameworks
+# disagree silently: Starlette resolves the FIRST matching route at request
+# time, while FastAPI's OpenAPI ``paths`` dict is a plain mapping and keeps the
+# LAST writer. The result is a documented endpoint that never runs and a
+# running endpoint nobody documented — the shape of bug that only surfaces
+# during an incident, when the probe you are reading is not the probe that
+# answered. This walks the mounted topology at startup and names any
+# ``(method, path)`` pair claimed more than once.
+#
+# Deliberately a log line and not an assertion: a false positive here must not
+# be able to take production down. Boot continues either way.
+def _iter_registered_endpoints(routes, prefix: str = ""):
+    """Yield ``(method, path)`` for every endpoint reachable on the app.
+
+    FastAPI >= 0.140 no longer flattens ``include_router`` calls onto the
+    parent router; an included router is kept behind a wrapper exposing
+    ``original_router`` and ``include_context.prefix``. A naive walk of
+    ``app.routes`` therefore sees a handful of wrappers rather than the ~400
+    real endpoints, so recurse through them.
+    """
+    for route in routes:
+        sub = getattr(route, "original_router", None) or getattr(route, "router", None)
+        if sub is not None and hasattr(sub, "routes"):
+            ctx = getattr(route, "include_context", None)
+            sub_prefix = getattr(ctx, "prefix", "") if ctx is not None else getattr(route, "path", "")
+            yield from _iter_registered_endpoints(sub.routes, prefix + (sub_prefix or ""))
+        elif hasattr(route, "path"):
+            # Mounts / websocket routes carry no ``methods``; give them a
+            # placeholder so two of them on one path still collide.
+            for method in getattr(route, "methods", None) or {"*"}:
+                yield method, prefix + route.path
+
+
+def _warn_on_duplicate_routes(application) -> None:
+    """Log (never raise) when a ``(method, path)`` pair is registered twice."""
+    try:
+        from collections import Counter
+
+        counts = Counter(_iter_registered_endpoints(application.routes))
+        duplicates = sorted(f"{method} {path}" for (method, path), n in counts.items() if n > 1)
+        if duplicates:
+            logger.warning(
+                "duplicate_route_registration",
+                msg=(
+                    "Multiple handlers claim the same (method, path). Starlette serves the "
+                    "first registered; OpenAPI documents the last. Give each path exactly "
+                    "one owner (#2856)."
+                ),
+                duplicates=duplicates,
+                count=len(duplicates),
+            )
+        else:
+            logger.info("route_topology_verified", endpoints=sum(counts.values()))
+    except Exception as exc:  # pragma: no cover - a diagnostic must never break boot
+        logger.warning("duplicate_route_check_failed", error=str(exc))
+
+
+_warn_on_duplicate_routes(app)

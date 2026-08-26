@@ -35,7 +35,29 @@ export default function MyControlsPage() {
     framework: 'FSMA 204'
   });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const router = useRouter();
+
+  // #2835 Every response here previously went straight to .json() with no
+  // response.ok check, so a 404 from the backend deserialized to `{detail: ...}`,
+  // `data.controls` was undefined, and the page rendered its normal
+  // "No controls found" empty state — a hard routing failure was invisible.
+  // Create and delete were worse: they swallowed the failure entirely and
+  // appeared to succeed. Surface the failure instead.
+  const describeFailure = async (response: Response, fallback: string): Promise<string> => {
+    let detail = '';
+    try {
+      const body = await response.json();
+      if (typeof body?.detail === 'string') detail = body.detail;
+      else if (typeof body?.error === 'string') detail = body.error;
+    } catch {
+      // Non-JSON error body (HTML error page, empty 502) — status alone it is.
+    }
+    return detail
+      ? `${fallback} (HTTP ${response.status}): ${detail}`
+      : `${fallback} (HTTP ${response.status})`;
+  };
 
   const fetchControls = useCallback(async () => {
     try {
@@ -45,10 +67,24 @@ export default function MyControlsPage() {
           'Content-Type': 'application/json',
         },
       });
+
+      if (!response.ok) {
+        setLoadError(await describeFailure(response, 'Could not load controls'));
+        setControls([]);
+        return;
+      }
+
       const data = await response.json();
+      setLoadError(null);
       setControls(data.controls || []);
     } catch (error) {
       console.error('Failed to fetch controls:', error);
+      setLoadError(
+        error instanceof Error
+          ? `Could not load controls: ${error.message}`
+          : 'Could not load controls.',
+      );
+      setControls([]);
     } finally {
       setLoading(false);
     }
@@ -69,6 +105,7 @@ export default function MyControlsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setActionError(null);
     try {
       const response = await fetchWithCsrf('/api/controls/controls', {
         method: 'POST',
@@ -79,28 +116,48 @@ export default function MyControlsPage() {
         body: JSON.stringify(formData)
       });
 
-      if (response.ok) {
-        setShowCreateForm(false);
-        setFormData({ control_id: '', title: '', description: '', framework: 'FSMA 204' });
-        fetchControls();
+      if (!response.ok) {
+        setActionError(await describeFailure(response, 'Could not create control'));
+        return;
       }
+
+      setShowCreateForm(false);
+      setFormData({ control_id: '', title: '', description: '', framework: 'FSMA 204' });
+      fetchControls();
     } catch (error) {
       console.error('Failed to create control:', error);
+      setActionError(
+        error instanceof Error
+          ? `Could not create control: ${error.message}`
+          : 'Could not create control.',
+      );
     }
   };
 
   const handleDelete = async (controlId: string) => {
+    setActionError(null);
     try {
-      await fetchWithCsrf(`/api/controls/controls/${controlId}`, {
+      const response = await fetchWithCsrf(`/api/controls/controls/${controlId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
       });
+
+      if (!response.ok) {
+        setActionError(await describeFailure(response, 'Could not delete control'));
+        return;
+      }
+
       fetchControls();
     } catch (error) {
       console.error('Failed to delete control:', error);
+      setActionError(
+        error instanceof Error
+          ? `Could not delete control: ${error.message}`
+          : 'Could not delete control.',
+      );
     } finally {
       setPendingDeleteId(null);
     }
@@ -133,6 +190,32 @@ export default function MyControlsPage() {
           {showCreateForm ? 'Cancel' : 'Create Control'}
         </button>
       </div>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-re-danger bg-re-danger-muted px-4 py-3 text-sm text-re-danger"
+        >
+          <p className="font-semibold">Controls unavailable</p>
+          <p>{loadError}</p>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); fetchControls(); }}
+            className="mt-2 underline underline-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-re-danger bg-re-danger-muted px-4 py-3 text-sm text-re-danger"
+        >
+          {actionError}
+        </div>
+      )}
 
       {showCreateForm && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
@@ -228,7 +311,12 @@ export default function MyControlsPage() {
             {controls.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-re-text-muted">
-                  No controls found. Create your first control to get started.
+                  {/* #2835 An empty list after a failed request is NOT an empty
+                      state — say so rather than inviting the user to create a
+                      control against a backend we could not reach. */}
+                  {loadError
+                    ? 'Controls could not be loaded. See the error above.'
+                    : 'No controls found. Create your first control to get started.'}
                 </td>
               </tr>
             ) : (

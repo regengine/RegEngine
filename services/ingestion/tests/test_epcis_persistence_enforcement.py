@@ -323,6 +323,58 @@ class TestEnforceCteOnly:
         # bails before persistence when enforcement is active.
         assert _FakeCTEPersistence.last_called is False
 
+    def test_unmapped_bizstep_raises_422_not_500(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A legitimate non-CTE bizStep is a rejection, not a crash.
+
+        FSMA ``growing`` and CBV ``planting`` are real bizSteps that the
+        legacy prep gate accepts (``epcis/normalization.py`` maps both to
+        "growing"), but they are not among the 7 s1.1310 CTEs, have no
+        ``CTEType`` member, and are refused by the canonical
+        ``traceability_events`` event_type CHECK constraint. #2815 made the
+        canonical resolver raise instead of silently coercing them to
+        ``receiving`` — correct — but ``UnmappedBizStepError`` subclasses
+        ``ValueError``, so it landed in the broad pre-eval handler and
+        ``handle_preeval_exception`` turned a well-formed client event into a
+        500 plus Sentry noise under cte_only/all.
+
+        This asserts the distinction the broad handler cannot make on its
+        own: a client sending unsupported-but-valid vocabulary gets a clean
+        422 it can act on, while a genuine pre-eval crash still gets the 500
+        the sibling test above pins.
+        """
+        from fastapi import HTTPException
+
+        from shared.canonical_event import UnmappedBizStepError
+
+        _FakeEngine.summary_to_return = _critical_summary()
+
+        def _raise_unmapped(event: Any, tenant_id: str) -> Any:
+            raise UnmappedBizStepError(
+                "bizStep 'urn:fsma:traceability:growing' maps to the non-CTE "
+                "activity 'growing'"
+            )
+
+        import shared.canonical_event as _canon_mod
+
+        monkeypatch.setattr(_canon_mod, "normalize_epcis_event", _raise_unmapped)
+
+        from app.epcis import persistence as persistence_mod
+
+        with pytest.raises(HTTPException) as exc:
+            persistence_mod._persist_prepared_event_in_session(
+                db_session=MagicMock(),
+                tenant_id="t-1",
+                prepared=_make_prepared(),
+            )
+        assert exc.value.status_code == 422, (
+            "an unsupported-but-valid bizStep must be a client-actionable 422, "
+            "not the 500 the broad pre-eval handler would produce"
+        )
+        detail = exc.value.detail if isinstance(exc.value.detail, dict) else {}
+        assert "growing" in str(detail.get("errors", "")), detail
+        # Same invariant as the 500 case: no legacy write on a rejected event.
+        assert _FakeCTEPersistence.last_called is False
+
 
 # ---------------------------------------------------------------------------
 # ALL mode
