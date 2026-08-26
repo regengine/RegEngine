@@ -42,7 +42,15 @@ jobs:
           node-version: '20'
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
+        # Issue #2812: this job holds issues:write + pull-requests:write and
+        # checks out untrusted PR head code, so the CLI must be pinned to an
+        # exact version rather than resolving to whatever `latest` is.
+        # Mirrors the RAILWAY_CLI_VERSION pattern in deploy.yml.
+        env:
+          CLAUDE_CODE_VERSION: 2.1.246
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
 
       - name: Verify gh + anchor index
         env:

@@ -63,6 +63,9 @@ jobs:
           pinned_sha = re.compile(r"^[0-9a-f]{40}$")
           install_patterns = [
               re.compile(r"npm\s+install\s+-g\s+@railway/cli(?!@)"),
+              # Issue #2812: sentinel.yml installs this CLI in a job holding
+              # issues:write + pull-requests:write on untrusted PR head code.
+              re.compile(r"npm\s+install\s+-g\s+\"?@anthropic-ai/claude-code(?!@)"),
               re.compile(r"pip\s+install(?:\s+[^\n#]*)?\s+semgrep(?!==)"),
               re.compile(r"pip\s+install(?:\s+[^\n#]*)?\s+pip-audit(?!==)"),
               re.compile(r"python\s+-m\s+pip\s+install(?:\s+[^\n#]*)?\s+semgrep(?!==)"),
@@ -401,7 +404,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres # pragma: allowlist secret — throwaway CI-service password

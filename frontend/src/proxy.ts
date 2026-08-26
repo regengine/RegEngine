@@ -102,9 +102,17 @@ const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 // Developer-facing routes that require portal auth.
 // Documentation and developer portal are PUBLIC to enable developer evaluation.
 // Only key generation and playground (makes real API calls) are gated.
+//
+// #2886 These MUST be the real rendered page paths. isGatedRoute() matches on
+// `pathname === route || pathname.startsWith(route + '/')`, so a route listed
+// here that has no corresponding page under src/app gates nothing. The pages
+// live at src/app/developer/portal/keys and src/app/developer/portal/playground;
+// the previous '/api-keys' and '/playground' entries matched neither. (The
+// leftover src/app/api-keys/page.tsx is a bare redirect() to
+// /developer/portal/keys, so it is gated transitively by its destination.)
 const GATED_DEV_ROUTES = [
-    '/api-keys',
-    '/playground',
+    '/developer/portal/keys',
+    '/developer/portal/playground',
 ];
 
 // All docs are public — developer evaluation requires accessible documentation.
@@ -490,6 +498,17 @@ export async function proxy(request: NextRequest) {
     // Clone request headers and inject the nonce so server components can use it
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-nonce', nonce);
+    // #2821 Next.js derives the nonce for its OWN bootstrap/chunk <script> tags
+    // exclusively from the INCOMING REQUEST's content-security-policy header —
+    // see getScriptNonceFromHeader() in next/dist/server/app-render/app-render.js,
+    // which parses script-src/default-src out of that string. There is no
+    // `x-nonce` convention inside the framework; `x-nonce` above is purely our
+    // own channel for layout.tsx / providers.tsx. Without the CSP on the
+    // request, the framework emits un-nonced script tags, and because
+    // buildCsp() includes 'strict-dynamic' (which makes CSP3 browsers ignore
+    // 'self' for scripts) every /_next/static/chunks/*.js is refused and no
+    // page hydrates. Setting it here is what makes hydration work in prod.
+    requestHeaders.set('Content-Security-Policy', csp);
 
     // Helper: attach the enforced CSP to any response before returning.
     // Applied to ALL responses (redirects, 4xx, page responses) so the
