@@ -351,6 +351,27 @@ jobs:
             --extend-exclude __pycache__,.venv,venv,build,dist,services \
             --statistics
 
+  # ── Documentation link guard (hard gate) ─────────────────
+  # #2915 / #2926: root docs pointed readers at `docs/CODEBASE_MAP.md`,
+  # `services/graph/app/consumers/fsma_consumer.py` and other deleted paths.
+  # Fails when a doc in the live set (root *.md plus runbooks/) references a
+  # repo path that does not exist. Paths named deliberately because they were
+  # removed are declared in `.docs-link-allowlist` with a reason.
+  docs-link-check:
+    name: Documentation link guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check documentation references resolve
+        run: python scripts/check_docs_links.py
+
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
   # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
@@ -1234,7 +1255,7 @@ jobs:
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples, docs-link-check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1256,6 +1277,7 @@ jobs:
           echo "Dep drift guard:   ${{ needs.dep-version-check.result }}"
           echo "tenant_id UUID:    ${{ needs.tenant-id-uuid-check.result }}"
           echo "Public samples:    ${{ needs.regenerate-public-samples.result }}"
+          echo "Docs links:        ${{ needs.docs-link-check.result }}"
           # Lint is now blocking — ruff F821 (undefined name) would
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
@@ -1275,7 +1297,8 @@ jobs:
              || "${{ needs.alembic-revision-check.result }}" != "success" \
              || "${{ needs.dep-version-check.result }}" != "success" \
              || "${{ needs.tenant-id-uuid-check.result }}" != "success" \
-             || "${{ needs.regenerate-public-samples.result }}" != "success" ]]; then
+             || "${{ needs.regenerate-public-samples.result }}" != "success" \
+             || "${{ needs.docs-link-check.result }}" != "success" ]]; then
             echo "::error::One or more required backend checks failed, were cancelled, or were skipped"
             exit 1
           fi
