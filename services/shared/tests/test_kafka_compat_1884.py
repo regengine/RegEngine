@@ -99,6 +99,8 @@ class _FakeConsumer:
         self.config = config
         self.subscribed = []
         self.committed = False
+        self.commit_offsets = None
+        self.seeks = []
         self.closed = False
 
     def subscribe(self, topics):
@@ -107,8 +109,16 @@ class _FakeConsumer:
     def poll(self, timeout):
         return _FakeMessage()
 
-    def commit(self, asynchronous):
+    # #2971: the real confluent signature is
+    # ``commit(message=None, offsets=None, asynchronous=True)``. This double
+    # previously accepted only ``asynchronous``, which is exactly the
+    # assignment-wide commit that silently acked skipped records.
+    def commit(self, message=None, offsets=None, asynchronous=True):
         self.committed = not asynchronous
+        self.commit_offsets = offsets
+
+    def seek(self, partition):
+        self.seeks.append(partition)
 
     def close(self):
         self.closed = True
@@ -143,3 +153,7 @@ def test_consumer_poll_returns_legacy_batch_shape(monkeypatch):
     consumer.close()
     assert holder["consumer"].committed is True
     assert holder["consumer"].closed is True
+    # #2971: the commit must name the record being acknowledged (offset+1)
+    # rather than sweeping up the assignment's stored offsets.
+    committed = holder["consumer"].commit_offsets
+    assert committed and committed[0].offset == 43

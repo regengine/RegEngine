@@ -12,8 +12,11 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional
 
-from confluent_kafka import Consumer, KafkaException, Producer
+import structlog
+from confluent_kafka import Consumer, KafkaException, Producer, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
+
+logger = structlog.get_logger("kafka_compat")
 
 try:
     from confluent_kafka.error import KafkaError as ConfluentKafkaError
@@ -120,7 +123,28 @@ class KafkaProducerCompat:
 
 
 class KafkaConsumerCompat:
-    """Subset of the legacy ``KafkaConsumer`` API implemented with Confluent."""
+    """Subset of the legacy ``KafkaConsumer`` API implemented with Confluent.
+
+    Offset semantics (#2971)
+    ------------------------
+    Callers that pass ``enable_auto_commit=False`` manage offsets by hand:
+    they process a record and call :meth:`commit`, or they deliberately
+    *skip* the commit to force redelivery of a record they could not
+    process. Two librdkafka defaults used to break that contract:
+
+    * ``enable.auto.offset.store`` defaults to ``true`` and is independent
+      of ``enable.auto.commit`` — the offset is stored the instant
+      ``poll()`` hands the message to the application.
+    * ``Consumer.commit()`` with neither ``message=`` nor ``offsets=``
+      commits the whole assignment's *stored* offsets.
+
+    Together they meant a skipped record's offset was committed by the next
+    record's ``commit()``, so it was never redelivered and never retried.
+    In manual mode this class now turns the auto-store off, acknowledges
+    exactly the record passed to (or last returned by) :meth:`commit`, and
+    rewinds to any record that was delivered but never acknowledged so the
+    "force redelivery" contract is real.
+    """
 
     def __init__(
         self,
@@ -129,8 +153,24 @@ class KafkaConsumerCompat:
         group_id: Optional[str] = None,
         enable_auto_commit: bool = True,
         auto_offset_reset: str = "latest",
-        **_: Any,
+        enable_auto_offset_store: Optional[bool] = None,
+        **unsupported: Any,
     ) -> None:
+        if unsupported:
+            # #2971: ``**_: Any`` used to swallow every unrecognised kwarg,
+            # so a typo'd or unimplemented option vanished without a trace.
+            raise TypeError(
+                "KafkaConsumerCompat received unsupported keyword argument(s): "
+                + ", ".join(sorted(unsupported))
+                + " — add an explicit librdkafka translation in "
+                "shared/kafka_compat.py rather than passing it blindly."
+            )
+        if enable_auto_offset_store is None:
+            # Manual-commit callers must decide when an offset becomes
+            # eligible for commit; auto-storing at poll time is what let a
+            # later commit() ack records they deliberately skipped.
+            enable_auto_offset_store = enable_auto_commit
+
         bootstrap = ",".join(bootstrap_servers) if not isinstance(bootstrap_servers, str) else bootstrap_servers
         self._consumer = Consumer(
             {
@@ -138,12 +178,23 @@ class KafkaConsumerCompat:
                 "group.id": group_id or "regengine-default",
                 "enable.auto.commit": enable_auto_commit,
                 "auto.offset.reset": auto_offset_reset,
+                "enable.auto.offset.store": enable_auto_offset_store,
             }
         )
+        # Only manage offsets by hand when the caller opted out of BOTH
+        # auto-commit and auto-store; otherwise librdkafka owns them.
+        self._manual_offsets = not enable_auto_commit and not enable_auto_offset_store
+        self._pending: Any = None
+        self._pending_record: Optional[ConsumerRecord] = None
         if topics:
             self._consumer.subscribe(list(topics))
 
     def poll(self, timeout_ms: int = 0) -> dict[TopicPartitionKey, list[ConsumerRecord]]:
+        if self._manual_offsets and self._pending is not None:
+            # The previous record was delivered but never acknowledged: the
+            # caller skipped the commit to force redelivery (#2971). Rewind
+            # instead of advancing past it.
+            self._rewind_to_pending()
         msg = self._consumer.poll(timeout_ms / 1000.0)
         if msg is None:
             return {}
@@ -158,10 +209,70 @@ class KafkaConsumerCompat:
             value=msg.value(),
             headers=msg.headers() or [],
         )
+        if self._manual_offsets:
+            self._pending = msg
+            self._pending_record = record
         return {TopicPartitionKey(record.topic, record.partition): [record]}
 
-    def commit(self) -> None:
-        self._consumer.commit(asynchronous=False)
+    def _rewind_to_pending(self) -> None:
+        record = self._pending_record
+        self._pending = None
+        self._pending_record = None
+        if record is None:
+            return
+        logger.warning(
+            "kafka_offset_rewind_uncommitted_record",
+            topic=record.topic,
+            partition=record.partition,
+            offset=record.offset,
+            reason="record delivered but never committed — forcing redelivery",
+        )
+        try:
+            self._consumer.seek(
+                TopicPartition(record.topic, record.partition, record.offset)
+            )
+        except Exception as exc:  # pragma: no cover - requires a live broker
+            # A revoked partition makes seek() fail; the offset was never
+            # committed, so the broker redelivers from the last commit anyway.
+            logger.warning(
+                "kafka_offset_rewind_failed",
+                topic=record.topic,
+                partition=record.partition,
+                offset=record.offset,
+                error=str(exc),
+            )
+
+    def commit(self, record: Optional[ConsumerRecord] = None) -> None:
+        """Acknowledge a single record.
+
+        With manual offsets this commits ``record.offset + 1`` for that one
+        partition — never the assignment's stored offsets, which would ack
+        records the caller skipped on purpose (#2971). ``record`` defaults
+        to the record most recently returned by :meth:`poll`.
+        """
+        if not self._manual_offsets:
+            self._consumer.commit(asynchronous=False)
+            return
+        target = record if record is not None else self._pending_record
+        if target is None:
+            # Nothing delivered since the last commit. Committing here would
+            # fall back to the assignment's stored offsets.
+            logger.warning("kafka_commit_without_record", reason="no record to acknowledge")
+            return
+        self._consumer.commit(
+            offsets=[TopicPartition(target.topic, target.partition, target.offset + 1)],
+            asynchronous=False,
+        )
+        if self._pending_record is not None and (
+            (target.topic, target.partition, target.offset)
+            == (
+                self._pending_record.topic,
+                self._pending_record.partition,
+                self._pending_record.offset,
+            )
+        ):
+            self._pending = None
+            self._pending_record = None
 
     def close(self) -> None:
         self._consumer.close()
