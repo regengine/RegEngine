@@ -742,14 +742,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install minimal deps
+      - name: Install deps
         run: |
-          # The regenerator imports a handful of production helpers from
-          # services/ingestion/app and services/shared. It exits 0 with a
-          # warning if imports fail, so we install only the modules needed
-          # for the helpers' transitive imports to resolve.
+          # #2842: this used to install three hand-picked packages
+          # (pydantic fastapi sqlalchemy) on the reasoning that the script
+          # "exits 0 with a warning if imports fail". It no longer does — an
+          # unimportable helper is now a hard failure — so guessing at the
+          # import closure would turn every transitive-dependency addition
+          # into a red build. Install the same lockfile every other backend
+          # job uses.
           python -m pip install --upgrade pip
-          python -m pip install pydantic fastapi sqlalchemy
+          pip install --require-hashes -r requirements.lock
 
       - name: Regenerate public samples
         run: python scripts/regenerate_public_samples.py
@@ -901,8 +904,12 @@ jobs:
           set -o pipefail
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          # services/shared/tests is covered by NO other job — `lint-shared`
-          # runs ruff only — so until now all 12 tests in
+          # #2923 correction: the claim that used to sit here — "services/shared
+          # /tests is covered by NO other job" — was already false when written.
+          # The `test` matrix at :124 includes `shared` and cd's into
+          # services/shared, and since #2923 `services/shared/tests` is also in
+          # pyproject `testpaths`, so the repo-root collection guard imports it
+          # too. What is true is narrower: all 12 tests in
           # test_rls_enforcement_live.py skipped everywhere: locally for want of
           # DATABASE_URL, and in CI because the step above only passes tests/…
           # paths. They are the sole end-to-end proof that an unset

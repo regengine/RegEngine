@@ -387,7 +387,7 @@ def _compute_scores(data: dict) -> dict:
     """
     scores = {}
 
-    # --- 1) Chain Integrity (30% weight) ---
+    # --- 1) Chain Integrity (10% weight — see the overall weighting below) ---
     # Uses cryptographic hash recalculation, not just gap detection
     if data["chain_length"] == 0:
         scores["chain_integrity"] = (0, "No events in audit trail")
@@ -539,16 +539,29 @@ def _compute_scores(data: dict) -> dict:
             detail += f" — {open_alerts} open compliance alert(s)"
         scores["obligation_coverage"] = (obl_score, detail)
 
-    # --- 6) Export Readiness (10% weight) ---
+    # --- 6) Export Readiness (30% weight — the heaviest dimension) ---
     # Requires: chain intact, KDEs present, multiple CTE types
     if data["event_count"] == 0:
         scores["export_readiness"] = (0, "Cannot produce FDA report — no data")
     else:
         export_score = 0
         issues = []
+        chain_verification_failed = False
         # Chain must be intact
         if data.get("chain_verified") is True:
             export_score += 40
+        elif data.get("chain_verified") is False:
+            # #2960: verification RAN and returned invalid. This used to fall
+            # through to the sequence-gap arm below and collect +30 — and hash
+            # tampering rewrites payloads without deleting rows, so
+            # ``chain_gaps == 0`` holds for exactly the case that arm is meant
+            # to exclude. A chain that failed cryptographic verification is
+            # strictly worse than one that could not be verified, so it gets
+            # no credit, and the dimension is clamped to 0: an export built on
+            # a broken chain is not submittable, and must never render
+            # "FDA export ready".
+            chain_verification_failed = True
+            issues.append("chain verification FAILED — tamper suspected")
         elif data.get("chain_verification_error"):
             # Fail closed: no chain credit when verification failed to run.
             issues.append("chain verification unavailable")
@@ -573,6 +586,12 @@ def _compute_scores(data: dict) -> dict:
             issues.append("limited CTE coverage")
         else:
             issues.append("no CTE types")
+
+        if chain_verification_failed:
+            # #2960: no partial credit for the rest of the dimension either —
+            # KDE completeness and CTE variety mean nothing on a chain that
+            # failed verification.
+            export_score = 0
 
         detail = (
             "FDA export ready"

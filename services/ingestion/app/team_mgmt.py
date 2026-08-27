@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.tenant_context import TenantContext
@@ -312,7 +312,11 @@ async def update_role(
 
             return {"updated": True, "member_id": member_id, "new_role": role}
 
-    return {"error": "Member not found"}
+    # #2865: this used to ``return {"error": ...}`` with HTTP 200, so a
+    # client checking ``response.ok`` recorded a role change that never
+    # happened. Raise so the installed handler renders the standard
+    # error envelope with a 404.
+    raise HTTPException(status_code=404, detail="Member not found")
 
 
 @router.get(
