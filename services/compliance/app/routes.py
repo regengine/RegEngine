@@ -160,6 +160,25 @@ for _cl_data in _rules["checklists"]:
 
 _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS}
 
+# Industry filter aliases (#2851).
+#
+# ``checklists[].industry`` in fsma_rules.json holds the industry *display
+# name* ("Dairy", "Fresh Produce"), but ``GET /industries`` hands callers the
+# *id* ("dairy", "fresh-produce"). Matching the query param against the
+# display name alone meant ``?industry=fresh-produce``, ``?industry=deli-
+# prepared`` and ``?industry=shell-eggs`` — three of the five ids this API
+# publishes — returned an empty list. An empty checklist is not an error
+# response, so a client reads it as "this industry has no requirements".
+#
+# Both spellings resolve here. An unrecognised value still falls through to a
+# literal comparison and yields an empty list, so the documented
+# unknown-industry behaviour is unchanged.
+_INDUSTRY_FILTER_ALIASES: dict[str, str] = {
+    alias.lower(): _i["name"].lower()
+    for _i in _rules["industries"]
+    for alias in (_i["id"], _i["name"])
+}
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -185,7 +204,8 @@ async def list_industries() -> IndustriesResponse:
 async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
     results = _CHECKLISTS
     if industry:
-        results = [c for c in results if c.industry.lower() == industry.lower()]
+        wanted = _INDUSTRY_FILTER_ALIASES.get(industry.lower(), industry.lower())
+        results = [c for c in results if c.industry.lower() == wanted]
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 
 
