@@ -149,18 +149,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      neo4j:
-        image: neo4j:5.24-community
-        env:
-          NEO4J_AUTH: neo4j/test-password-for-ci
-        ports:
-          - 7687:7687
-          - 7474:7474
-        options: >-
-          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+      # NOTE (#2877): the neo4j:5.24-community service container used to be
+      # provisioned here, on all seven matrix legs, and NO test in any leg
+      # ever dialed it — the only Neo4j-touching graph test outside the
+      # integration file patches AsyncGraphDatabase with a MagicMock. The
+      # container now lives in the dedicated `graph-neo4j-integration` job,
+      # which is the one place a test actually connects. The NEO4J_* env
+      # vars below stay: several modules branch on their presence and every
+      # suite is green with them pointing at nothing (verified by running
+      # the graph and admin suites with an unreachable NEO4J_URI).
 
       localstack:
         image: localstack/localstack:3
@@ -253,14 +250,33 @@ jobs:
             graph)      THRESHOLD=60 ;;  # was 50; actual 64%
             ingestion)  THRESHOLD=48 ;;  # was 42; actual ~50% on CI
             nlp)        THRESHOLD=65 ;;  # was 50; actual 68%
-            shared)     THRESHOLD=35; COV_TARGET=. ;;  # measured ~44% locally; floor 35 absorbs CI-vs-local variance, ratchet to 40 after a stable run.
+            # #2891: the 35 floor was set from an INFLATED basis. --cov=. with
+            # no omit put services/shared's own 53 test modules in the
+            # denominator, fully executed by definition. Measured in one
+            # environment before and after the fix below: 16,747 statements /
+            # 51% (5,460 of those statements were test code) -> 11,287
+            # statements / 33% product-only. The floor is deliberately NOT
+            # lowered to 33 to make this green: 33% is the real number and it
+            # is BELOW the floor the repo believed it was clearing. Raise
+            # actual shared coverage; do not move the floor.
+            shared)     THRESHOLD=35; COV_TARGET=. ;;  # product-only; see #2891
           esac
           # NOTE: --ignore=tests/integration/ is intentionally removed so that
           # integration tests contribute to the coverage report when they run.
           # Tests that require live external services should be marked with
           # @pytest.mark.integration and can be skipped via -m "not integration"
           # in environments without those services.
+          #
+          # --cov-config is REQUIRED, not decorative (#2891): this step cd's
+          # into services/<svc>, and coverage.py looks for its config only in
+          # the current directory. Without the explicit path the repo-root
+          # [tool.coverage.run] omit is silently ignored and test modules go
+          # straight back into the denominator. Verified: the same command
+          # without this flag still reports tests/test_build_info.py at 100%.
+          # No-op for the six app-targeted legs (services/<svc>/app contains no
+          # tests/ or conftest.py) — graph measured 66% both with and without.
           pytest tests/ -v --cov=$COV_TARGET --cov-report=term \
+            --cov-config="${repo_root}/pyproject.toml" \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=$THRESHOLD \
             -o "testpaths=tests"
@@ -273,6 +289,73 @@ jobs:
           path: services/${{ matrix.service }}/coverage.xml
           retention-days: 14
           if-no-files-found: ignore
+
+  # ── Neo4j integration (the ONLY job that needs a Neo4j) ──
+  # #2877: services/graph/tests/test_neo4j_integration_testcontainers.py was
+  # double-guarded and ran nowhere — the graph-tree conftest auto-skipped it
+  # locally (integration marker, no --run-integration) and an `_IN_CI` guard
+  # skipped it in CI with the reason "uses CI service container instead",
+  # which was false: nothing connected to the container.
+  #
+  # This job makes that reason true. It provisions the Neo4j the test dials
+  # via NEO4J_URI, passes --run-integration so the conftest gate stands down,
+  # and sets REGENGINE_REQUIRE_NEO4J=1 so an unreachable Neo4j FAILS instead
+  # of skipping — the container can never be provisioned for a test that
+  # then does not run.
+  graph-neo4j-integration:
+    name: Graph Neo4j integration (live)
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/test-password-for-ci
+        ports:
+          - 7687:7687
+          - 7474:7474
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: test-password-for-ci
+      REGENGINE_REQUIRE_NEO4J: "1"
+      PYTHONDONTWRITEBYTECODE: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Real-Neo4j traceability tests
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${PYTHONPATH}"
+          cd services/graph
+          pytest tests/test_neo4j_integration_testcontainers.py \
+            --run-integration -v --no-cov -o "testpaths=tests"
 
   # ── Lint ─────────────────────────────────────────────────
   lint:
@@ -913,9 +996,14 @@ jobs:
           # golden corpus (V036 obligations + V037 obligation-CTE rules)
           # against the ingest-time checker that consumes it, offline — so an
           # obligation-mapping regression turns a PR red here.
+          # #2876 rewrote the same file against the NLP extractor instead;
+          # both rewrites were kept, so the second one is listed below too.
+          # Leaving it out would put it in no blocking job — the defect
+          # #2924 is about.
           pytest tests/security/test_security_audit_fixes.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
             tests/data_integrity/test_fsma_204_phase_2b_structure.py \
+            tests/data_integrity/test_fsma_204_phase_2b_obligation_extraction.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
@@ -931,8 +1019,15 @@ jobs:
           # REGENGINE_REQUIRE_DB=1 and DATABASE_URL is reachable.
           # test_client_role_lockdown_v092 asserts the v092 client-role
           # lockdown (Supabase anon/authenticated exposure) holds at head.
+          # services/admin/tests/test_isolation_testcontainers.py is the admin
+          # cross-tenant isolation gate (#2876). It used to skip everywhere and
+          # end in `assert True`; it is now behavioural and belongs in a job
+          # that both provides a Postgres and sets REGENGINE_REQUIRE_DB=1, so
+          # it cannot report green by not running. The per-service `test`
+          # matrix collects it too, but only this job makes skipping fatal.
           pytest tests/migrations/test_rls_coverage.py \
             tests/migrations/test_client_role_lockdown_v092.py \
+            services/admin/tests/test_isolation_testcontainers.py \
             tests/test_e2e_tenant_isolation.py \
             tests/invariants/test_dual_write_parity.py \
             tests/invariants/test_fda_export_v1_golden.py \
@@ -1286,7 +1381,7 @@ jobs:
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples, docs-link-check]
+    needs: [dependency-lock, test, graph-neo4j-integration, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples, docs-link-check]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1294,6 +1389,7 @@ jobs:
         run: |
           echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
           echo "Test:              ${{ needs.test.result }}"
+          echo "Neo4j integration: ${{ needs.graph-neo4j-integration.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
           echo "Lint repo roots:   ${{ needs.lint-repo-roots.result }}"
@@ -1315,6 +1411,7 @@ jobs:
           # the next occurrence trips on PR open rather than in prod.
           if [[ "${{ needs.dependency-lock.result }}" != "success" \
              || "${{ needs.test.result }}" != "success" \
+             || "${{ needs.graph-neo4j-integration.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \
              || "${{ needs.lint-repo-roots.result }}" != "success" \
