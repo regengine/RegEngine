@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import HTTPException
+
 from .constants import _FROM_ENTITY_CODES, _TO_ENTITY_CODES
 from .parser import _first_segment
 from .utils import _safe_float
@@ -120,6 +122,8 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
         data["ship_date_raw"] = bsn[3] if len(bsn) > 3 else None
         data["ship_time_raw"] = bsn[4] if len(bsn) > 4 else None
 
+    total_quantity = 0.0
+    sn1_units: list[str] = []
     for segment in segments:
         if not segment:
             continue
@@ -138,10 +142,19 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                 data["ship_to_gln"] = data["ship_to_gln"] or location_id
 
         elif seg_id == "SN1":
+            # #2974: accumulate across the item-level SN1 lines the way
+            # PO1/IT1/RCD already do, and make the unit first-wins to
+            # match them. Assigning per segment made the 856 the sole
+            # last-segment-wins handler, so a multi-line ASN persisted
+            # only its final line's quantity. The fallback is aligned to
+            # 0.0 for the same reason the siblings use it: a zero or
+            # non-numeric SN1 must leave ``quantity`` unset rather than
+            # synthesize 1.0.
             if len(segment) > 2 and segment[2]:
-                data["quantity"] = _safe_float(segment[2], fallback=1.0)
+                total_quantity += _safe_float(segment[2], fallback=0.0)
             if len(segment) > 3 and segment[3]:
-                data["unit_of_measure"] = segment[3]
+                data["unit_of_measure"] = data["unit_of_measure"] or segment[3]
+                sn1_units.append(segment[3].strip().upper())
 
         elif seg_id == "PID":
             if len(segment) > 5 and segment[5]:
@@ -167,6 +180,29 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                     data["carrier"] = data["carrier"] or candidate
                     if data["carrier"]:
                         break
+
+    # #2974: a summed quantity is only meaningful when every SN1 line
+    # measures in the same unit. 120 cases + 80 pounds is not 200 of
+    # anything, so refuse rather than pair the total with whichever unit
+    # happened to come first.
+    distinct_units = {unit for unit in sn1_units if unit}
+    if len(distinct_units) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_856_mixed_units_of_measure",
+                "message": (
+                    "EDI 856 SN1 lines disagree on the unit of measure. "
+                    "Quantities across differing units cannot be summed "
+                    "into a single shipping CTE; split the ASN or correct "
+                    "the SN1 unit codes."
+                ),
+                "units": sorted(distinct_units),
+            },
+        )
+
+    if total_quantity > 0:
+        data["quantity"] = total_quantity
 
     if not data["reference_document_number"]:
         data["reference_document_number"] = data["asn_number"]
