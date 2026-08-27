@@ -70,10 +70,20 @@ class KafkaEventProducer:
         - ``acks="all"``: wait for all in-sync replicas
         - ``retries=10`` (was 3) and ``retry_backoff_ms=500`` for
           exponential-ish backoff on transient broker errors
-        - ``max_in_flight_requests_per_connection=5`` (was 1) — with
-          retries>0 and acks=all this is still ordered per partition
-          via Confluent's producer ordering
+        - ``max_in_flight_requests_per_connection=5`` (was 1)
         - ``request_timeout_ms=30000``
+
+        Ordering (#2977): librdkafka preserves produce order across retries
+        only when ``enable_idempotence`` is on — ``acks=all`` plus
+        ``retries>0`` alone does NOT give per-partition ordering, and until
+        #2977 the in-flight limit was silently discarded by the compat layer,
+        leaving librdkafka's default of 1000000. With idempotence enabled
+        librdkafka enforces ``acks=all``, ``max.in.flight<=5`` and
+        ``queuing.strategy=fifo``, which is exactly what the values above ask
+        for, so each event key stays ordered per partition and retries cannot
+        duplicate a record. The cost is a hard cap of 5 in-flight requests per
+        connection (peak per-connection throughput) and a mandatory wait for
+        all in-sync replicas.
         """
         if self._producer is None:
             try:
@@ -86,6 +96,7 @@ class KafkaEventProducer:
                     retry_backoff_ms=500,  # #1147
                     max_in_flight_requests_per_connection=5,  # #1147
                     request_timeout_ms=30000,
+                    enable_idempotence=True,  # #2977 — what actually orders
                 )
                 self._initialized = True
                 logger.info(
@@ -325,10 +336,14 @@ class KafkaEventProducer:
             # Don't block here - let caller flush if needed. Async delivery
             # failures surface via the errback and are reconciled by the
             # batch emitters after flush() (#2711).
-            try:
-                future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
-            except Exception:  # pragma: no cover — test doubles without futures
-                pass
+            #
+            # #2969: this used to sit inside `except Exception: pass`, which
+            # swallowed the AttributeError raised on every send while
+            # KafkaProducerCompat.send() returned None — the whole #2711 fix
+            # was dead code for the life of the fix. A producer that yields no
+            # delivery handle is now a FAILED send (caught below), never a
+            # silent success.
+            future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
             return True
 
         except KafkaError as e:
@@ -352,6 +367,13 @@ class KafkaEventProducer:
     def flush(self, timeout: int = 30) -> None:
         """Flush all pending messages.
 
+        A flush that times out means messages are still buffered and
+        UNACKNOWLEDGED. #2969: that used to be logged and discarded, so the
+        batch emitters reconciled against a zero failure count and reported a
+        broker-side loss as complete success. It now counts as a delivery
+        failure, which is what ``services/scheduler/service.py`` reads when it
+        decides whether items are safe to mark seen.
+
         Args:
             timeout: Maximum time to wait in seconds
         """
@@ -359,6 +381,7 @@ class KafkaEventProducer:
             try:
                 self._producer.flush(timeout=timeout)
             except Exception as e:
+                self._note_delivery_failure("<flush>", e)
                 logger.error("kafka_flush_failed", error=str(e))
 
     def close(self) -> None:

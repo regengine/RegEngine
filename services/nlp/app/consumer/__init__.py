@@ -56,6 +56,7 @@ from confluent_kafka.admin import NewTopic
 from shared.kafka_compat import (
     KafkaAdminClientCompat as KafkaAdminClient,
     KafkaConsumerCompat as KafkaConsumer,
+    KafkaError,
     KafkaProducerCompat as KafkaProducer,
     KafkaTimeoutError,
     TopicAlreadyExistsError,
@@ -139,9 +140,17 @@ from .dlq import _collect_ftl_flags, _is_fsma_event, _retry_counts
 from .dlq import _send_to_dlq, _send_to_fsma_dlq
 from .health import (
     _HEALTH_PORT,
+    _POLL_ERROR_UNHEALTHY_THRESHOLD,
     _HealthHandler,
     _shutdown_event,
     _start_health_server,
+    consumer_health,
+    mark_loop_started,
+    mark_loop_stopped,
+    record_poll_error,
+    record_poll_success,
+    record_topic_creation_failure,
+    reset_consumer_health,
     stop_consumer,
 )
 
@@ -203,6 +212,19 @@ def _get_llm_extractor() -> LLMGenerativeExtractor:
     if _LLM_EXTRACTOR is None:
         _LLM_EXTRACTOR = LLMGenerativeExtractor()
     return _LLM_EXTRACTOR
+
+
+class FSMARoutingError(RuntimeError):
+    """Raised when ``_run_fsma_extractor`` reported ``status="error"`` (#2972).
+
+    The extractor catches its own routing (flush timeout / connection error)
+    and signing (``KafkaAuthError``) failures and returns an error status
+    rather than raising, so the outer ``except (ValidationError,
+    KafkaTimeoutError)`` handler never saw them and the record was committed
+    as a success with its CTEs dropped. The consumer loop converts that
+    status into this exception so the existing retry / DLQ escalation — the
+    one every sibling failure path already uses — engages.
+    """
 
 
 def _run_fsma_extractor(
@@ -361,8 +383,12 @@ def _ensure_topic(topic: str) -> None:
         admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
     except TopicAlreadyExistsError:
         pass
-    except (ConnectionError, TimeoutError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
+    except (ConnectionError, TimeoutError, RuntimeError, OSError) as exc:
+        # #2979 — a swallowed creation failure surfaces later as the
+        # UNKNOWN_TOPIC_OR_PART poll error that used to kill the loop, so
+        # record it on the liveness probe rather than only logging it.
         logger.warning("topic_creation_failed", topic=topic, error=str(exc))
+        record_topic_creation_failure(topic)
     finally:
         if admin is not None:
             try:
@@ -401,6 +427,16 @@ def run_consumer() -> None:
 
     try:
         _run_consumer_loop(consumer, producer)
+        mark_loop_stopped()
+    except BaseException as exc:
+        # #2979 — the loop used to propagate out of a daemon thread and simply
+        # vanish: no restart, no supervision, and /health still 200. Record the
+        # fatal condition so the liveness probe reports the consumer dead and
+        # an orchestrator can restart the process, then re-raise so the death
+        # is visible to threading.excepthook rather than swallowed.
+        logger.exception("nlp_consumer_loop_died", error=str(exc))
+        mark_loop_stopped(exc)
+        raise
     finally:
         # #1220 — explicitly flush the producer before close so buffered
         # DLQ messages are persisted on SIGTERM. librdkafka's internal
@@ -435,9 +471,46 @@ def _graceful_producer_shutdown(producer: KafkaProducer) -> None:
         logger.warning("producer_close_error", error=str(exc))
 
 
+# #2979 — poll-error backoff. A transient broker/topic error must not end
+# message processing for the life of the process; it backs off and retries,
+# and the liveness probe reports unhealthy while the errors persist.
+_POLL_ERROR_BACKOFF_SECONDS = float(os.getenv("NLP_POLL_ERROR_BACKOFF_SECONDS", "1.0"))
+_POLL_ERROR_BACKOFF_MAX_SECONDS = float(os.getenv("NLP_POLL_ERROR_BACKOFF_MAX_SECONDS", "30.0"))
+
+
+def _wait_backoff(seconds: float) -> None:
+    """Interruptible sleep — a shutdown during backoff exits immediately."""
+    _shutdown_event.wait(seconds)
+
+
 def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None:
+    mark_loop_started()
+    consecutive_poll_errors = 0
     while not _shutdown_event.is_set():
-        messages = consumer.poll(timeout_ms=500)
+        try:
+            messages = consumer.poll(timeout_ms=500)
+        except (KafkaError, ConnectionError, OSError) as poll_exc:
+            # #2979 — KafkaConsumerCompat.poll() raises on any message-level
+            # error (e.g. UNKNOWN_TOPIC_OR_PART). Without this the exception
+            # left the loop, killed the daemon thread and stopped processing
+            # permanently with no signal.
+            consecutive_poll_errors += 1
+            record_poll_error(str(poll_exc))
+            backoff = min(
+                _POLL_ERROR_BACKOFF_SECONDS * (2 ** (consecutive_poll_errors - 1)),
+                _POLL_ERROR_BACKOFF_MAX_SECONDS,
+            )
+            logger.error(
+                "kafka_poll_failed",
+                error=str(poll_exc),
+                consecutive_errors=consecutive_poll_errors,
+                backoff_seconds=backoff,
+                unhealthy=consecutive_poll_errors >= _POLL_ERROR_UNHEALTHY_THRESHOLD,
+            )
+            _wait_backoff(backoff)
+            continue
+        consecutive_poll_errors = 0
+        record_poll_success()
         if not messages:
             continue
         for records in messages.values():
@@ -493,7 +566,22 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             consumer.commit()
                             continue
 
-                        if not evt: continue
+                        if not evt:
+                            # #2971 — an empty payload (tombstone / null
+                            # value) carries nothing to process, but skipping
+                            # the commit now means real redelivery, which
+                            # would spin this record forever and block the
+                            # partition. Nothing can be lost by acking it, so
+                            # ack it — same as the other "nothing to do"
+                            # skips below.
+                            logger.warning(
+                                "skipping_empty_event",
+                                offset=record.offset,
+                                topic=record.topic,
+                            )
+                            MESSAGES_COUNTER.labels(status="skipped").inc()
+                            consumer.commit()
+                            continue
 
                         # --- HMAC producer authentication (#1078) ---
                         # Before routing by ``tenant_id``, verify that
@@ -762,6 +850,20 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 tenant_id=tenant_id,
                                 kafka_headers=kafka_headers,
                             )
+                            # #2972 — the extractor swallows its own routing
+                            # and signing failures and reports them as a
+                            # status. Ignoring that status committed the
+                            # source offset, skipped the DLQ and counted the
+                            # record as a success, so the CTEs were dropped
+                            # with only a log line. Raise so the retry /
+                            # max-retries-to-DLQ escalation below handles it
+                            # exactly like every sibling failure path.
+                            if fsma_summary.get("status") == "error":
+                                raise FSMARoutingError(
+                                    "fsma_routing_failed "
+                                    f"(cte_count={fsma_summary.get('cte_count')}, "
+                                    f"topic={fsma_summary.get('routed')})"
+                                )
 
                         # --- Legacy regex extractor (backstop) ---
                         entities = extract_entities(text)
@@ -928,7 +1030,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
 
                         consumer.commit()
-                    except (ValidationError, KafkaTimeoutError) as exc:
+                    except (ValidationError, KafkaTimeoutError, FSMARoutingError) as exc:
                         # #1122 — tenant-scoped retry-count key. Prior code
                         # keyed only by doc_id which meant two tenants with
                         # the same doc_id shared a retry bucket (e.g.
