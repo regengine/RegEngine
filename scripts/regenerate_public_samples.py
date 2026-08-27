@@ -335,13 +335,18 @@ def main() -> int:
 
     helpers = _try_import_production_helpers()
     if helpers is None:
-        # Best-effort: emit only the SYNTHETIC.md guard, leave previously
-        # checked-in artifacts untouched. CI's diff check will still
-        # pass because we didn't write anything.
-        logger.warning(
-            "regenerate_public_samples: production helpers not importable; exiting 0 without rewriting demo_exports/."
+        # #2842: this used to `return 0`, so an import failure looked exactly
+        # like a pass — nothing regenerated, empty `git diff`, green check.
+        # The drift gate's whole job is to prove demo_exports/ still matches
+        # production behavior; it cannot prove that from an environment where
+        # production code will not import, so it must go red instead.
+        logger.error(
+            "regenerate_public_samples: production helpers not importable — "
+            "cannot verify demo_exports/ against current production behavior. "
+            "Install the full requirements.lock and re-run; see the warning "
+            "above for the failing import."
         )
-        return 0
+        return 2
 
     generate_csv, cte_to_bizstep, compute_merkle_root = helpers
 
