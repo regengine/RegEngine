@@ -203,6 +203,19 @@ def _get_llm_extractor() -> LLMGenerativeExtractor:
     return _LLM_EXTRACTOR
 
 
+class FSMARoutingError(RuntimeError):
+    """Raised when ``_run_fsma_extractor`` reported ``status="error"`` (#2972).
+
+    The extractor catches its own routing (flush timeout / connection error)
+    and signing (``KafkaAuthError``) failures and returns an error status
+    rather than raising, so the outer ``except (ValidationError,
+    KafkaTimeoutError)`` handler never saw them and the record was committed
+    as a success with its CTEs dropped. The consumer loop converts that
+    status into this exception so the existing retry / DLQ escalation — the
+    one every sibling failure path already uses — engages.
+    """
+
+
 def _run_fsma_extractor(
     text: str,
     doc_id: str,
@@ -760,6 +773,20 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 tenant_id=tenant_id,
                                 kafka_headers=kafka_headers,
                             )
+                            # #2972 — the extractor swallows its own routing
+                            # and signing failures and reports them as a
+                            # status. Ignoring that status committed the
+                            # source offset, skipped the DLQ and counted the
+                            # record as a success, so the CTEs were dropped
+                            # with only a log line. Raise so the retry /
+                            # max-retries-to-DLQ escalation below handles it
+                            # exactly like every sibling failure path.
+                            if fsma_summary.get("status") == "error":
+                                raise FSMARoutingError(
+                                    "fsma_routing_failed "
+                                    f"(cte_count={fsma_summary.get('cte_count')}, "
+                                    f"topic={fsma_summary.get('routed')})"
+                                )
 
                         # --- Legacy regex extractor (backstop) ---
                         entities = extract_entities(text)
@@ -915,7 +942,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
 
                         consumer.commit()
-                    except (ValidationError, KafkaTimeoutError) as exc:
+                    except (ValidationError, KafkaTimeoutError, FSMARoutingError) as exc:
                         # #1122 — tenant-scoped retry-count key. Prior code
                         # keyed only by doc_id which meant two tenants with
                         # the same doc_id shared a retry bucket (e.g.
