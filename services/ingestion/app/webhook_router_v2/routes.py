@@ -216,6 +216,13 @@ async def ingest_events(
                     "location_gln": event.location_gln,
                     "location_name": event.location_name,
                     "kdes": event.kdes,
+                    # #2902 — without this key ``store_events_batch`` reads an
+                    # empty alert list, derives validation_status='valid' for
+                    # every event and writes no compliance_alerts row, while
+                    # the per-event fallback below persists both. Always pass
+                    # the list (even when empty) so "no alerts" is stated
+                    # rather than inferred from a missing key.
+                    "alerts": alerts,
                 })
                 event_objs.append(event)
 
@@ -238,6 +245,19 @@ async def ingest_events(
                         chain_hash=store_result.chain_hash,
                     ))
                     accepted += 1
+
+                    # Tenant-configured obligation-CTE rules (#2901). Runs
+                    # after the store because it keys its fsma.compliance_alerts
+                    # rows to the persisted event id. Its alerts are NOT merged
+                    # into ``alerts`` above: a CRITICAL-risk obligation emits
+                    # severity='critical', which _derive_validation_status
+                    # treats as rejecting, so merging would silently turn
+                    # accepted events into validation_status='rejected'.
+                    # An unmet obligation is a detection signal, not an ingest
+                    # gate — gating on it is a separate product decision.
+                    _pkg._check_obligations(
+                        db_session, event, store_result.event_id, tenant_id
+                    )
 
                     # Canonical normalization + rule evaluation + exception creation.
                     # This is required evidence now: it runs synchronously in the
@@ -326,6 +346,15 @@ async def ingest_events(
                             location_name=event.location_name,
                             kdes=event.kdes,
                             alerts=alerts,
+                        )
+
+                        # Obligation-CTE rules (#2901) — same call as the batch
+                        # path above, so the fallback is not a hole in
+                        # obligation coverage. Inside the per-event savepoint,
+                        # so an obligation-query failure cannot poison the
+                        # shared transaction.
+                        _pkg._check_obligations(
+                            db_session, event, store_result.event_id, tenant_id
                         )
 
                         # Canonical normalization + rule evaluation. Required in
