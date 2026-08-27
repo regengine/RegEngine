@@ -1,4 +1,4 @@
-"""Pool-checkout tenant-GUC reset must fail closed (silent-failure sweep).
+"""Pool-checkout GUC reset: fail-closed behaviour, and full GUC coverage.
 
 #1381's mitigation clears the session-scoped ``app.tenant_id`` GUC when a
 pooled connection is handed out. Before this fix, a failure in that reset
@@ -7,6 +7,15 @@ tenant's GUC, so RLS reads ran under the wrong tenant scope on exactly the
 error path of the isolation mitigation. Raising ``DisconnectionError``
 makes the pool discard the connection and retry the checkout on a fresh
 one instead.
+
+#2853 adds the second half: the listener cleared only two of the three RLS
+GUCs the admin engine writes. ``regengine.user_id`` — read by the
+``user_self_isolation`` / ``sessions_user_isolation`` policies on the
+ENABLE+FORCE-RLS ``public.users`` and ``public.sessions`` tables — was
+written session-scoped and rode the pooled connection into the next request,
+handing it the previous caller's identity scope. Both halves of that fix are
+locked below: the write is transaction-scoped, and the listener resets the
+GUC anyway for connections orphaned mid-request.
 """
 
 from __future__ import annotations
@@ -61,6 +70,57 @@ class TestCheckoutGucReset:
         assert "app.tenant_id" in executed
         assert "regengine.is_sysadmin" in executed
         cursor.close.assert_called_once()
+
+    def test_reset_clears_the_per_user_identity_guc(self, _postgres_engine):
+        """#2853: ``regengine.user_id`` must be cleared like the other two.
+
+        The listener's docstring promises "every route starts from a clean
+        slate". Leaving this GUC set means the next caller on that pooled
+        connection evaluates ``user_self_isolation`` against the PREVIOUS
+        caller's id — the isolation predicate applied to the wrong principal.
+        """
+        cursor = MagicMock()
+        dbapi_connection = MagicMock()
+        dbapi_connection.cursor.return_value = cursor
+
+        admin_database._reset_tenant_guc_on_checkout(dbapi_connection, MagicMock(), MagicMock())
+
+        executed = [str(c.args[0]) for c in cursor.execute.call_args_list]
+        resets = [stmt for stmt in executed if "regengine.user_id" in stmt]
+        assert resets, f"regengine.user_id is never reset on checkout: {executed}"
+        # Reset to '' rather than NULL: the v078 policies read the GUC through
+        # NULLIF(current_setting(...), '')::uuid, so '' means "no identity" and
+        # fails closed instead of raising an invalid-uuid cast.
+        assert any("''" in stmt for stmt in resets), resets
+
+
+class TestIdentityGucIsTransactionScoped:
+    """#2853's preferred remedy: don't write a session-scoped value at all."""
+
+    def test_identity_guc_write_is_transaction_scoped(self):
+        """``set_config(name, value, is_local)`` — the third arg must be true.
+
+        ``false`` is SESSION-scoped: it outlives the request and rides the
+        pooled connection back into the pool. ``true`` clears automatically on
+        COMMIT/ROLLBACK, matching the shared engine's canonical primitive
+        (``shared.tenant_context.set_tenant_guc``).
+        """
+        import inspect
+
+        from services.admin.app import dependencies as admin_dependencies
+
+        source = inspect.getsource(admin_dependencies)
+        writes = [
+            line.strip()
+            for line in source.splitlines()
+            if "set_config('regengine.user_id'" in line and "db.execute" in line
+        ]
+        assert writes, "no regengine.user_id write found — did the GUC move?"
+        for line in writes:
+            assert ", true)" in line, (
+                "regengine.user_id is written SESSION-scoped; it will survive "
+                f"the request on the pooled connection: {line}"
+            )
 
     def test_sqlite_engine_skips_silently(self, monkeypatch):
         # SQLite does not honor set_config and does not use RLS — the
