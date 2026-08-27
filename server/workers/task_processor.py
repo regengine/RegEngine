@@ -907,6 +907,40 @@ def enqueue_task(
     ID — the task is enqueued exactly once. If the key is ``None`` the
     legacy behavior is preserved (duplicates are possible).
 
+    Tenantless rows (#2852)
+    -----------------------
+    ``tenant_id=None`` with a key is legal here and dedupes like any
+    other row — but only because migration v113 rebuilt
+    ``idx_task_queue_idempotency`` with ``NULLS NOT DISTINCT``. Under the
+    v063 definition PostgreSQL's default NULLS-DISTINCT semantics meant
+    two NULL tenants never conflicted, so the ON CONFLICT below could not
+    fire and every re-run of a tenantless ``nlp_extraction`` task appended
+    another copy of the same ``review_item`` — a duplicate
+    human-in-the-loop review item per retry, invisible in metrics because
+    the ``enqueue_task_idempotent_hit`` branch never ran. Tenanted rows
+    were never affected.
+
+    Note this deliberately diverges from
+    ``services.shared.task_queue.enqueue_task``, which rejects a
+    tenantless key with ``ValueError``. Raising is not an option on this
+    path: the ``except Exception`` below swallows it into ``return None``,
+    which turns a duplicated review item into a silently dropped one.
+    The conflict-recovery SELECT further down already reads
+    ``tenant_id IS NOT DISTINCT FROM :tenant_id``, so it is NULL-safe and
+    needs no change.
+
+    Both INSERTs below cast with ``CAST(:payload AS jsonb)``, never
+    ``:payload::jsonb``. SQLAlchemy's ``text()`` bind regex is
+    ``(?<![:\\w\\x5c]):(\\w+)(?!:)`` — a name may not be followed by a
+    colon — so in ``:payload::jsonb`` it backtracks and binds a parameter
+    named ``payloa``. The supplied ``payload`` key then goes unused, the
+    unbound name reaches the driver, and psycopg raises a syntax error
+    which ``except Exception`` below turns into a silent ``return None``:
+    every enqueue on this path failed and the caller only saw "no task
+    id". ``services.shared.task_queue`` has always used the CAST form.
+    Unit tests never caught it because they stub ``enqueue_task`` itself;
+    it only reproduces against a real database.
+
     Recommended keys:
 
     * NLP extraction: ``f"nlp_extraction:{document_id}"``
@@ -932,7 +966,7 @@ def enqueue_task(
                         INSERT INTO fsma.task_queue
                             (task_type, payload, tenant_id, priority, idempotency_key)
                         VALUES
-                            (:task_type, :payload::jsonb, :tenant_id, :priority, :key)
+                            (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority, :key)
                         ON CONFLICT (tenant_id, idempotency_key)
                             WHERE idempotency_key IS NOT NULL
                             DO NOTHING
@@ -986,7 +1020,7 @@ def enqueue_task(
             row = db.execute(
                 text("""
                     INSERT INTO fsma.task_queue (task_type, payload, tenant_id, priority)
-                    VALUES (:task_type, :payload::jsonb, :tenant_id, :priority)
+                    VALUES (:task_type, CAST(:payload AS jsonb), :tenant_id, :priority)
                     RETURNING id
                 """),
                 {
