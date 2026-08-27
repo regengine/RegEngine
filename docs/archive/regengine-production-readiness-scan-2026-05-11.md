@@ -1,10 +1,40 @@
+> **ARCHIVED — HISTORICAL SNAPSHOT, NOT CURRENT STATE.**
+>
+> This report describes RegEngine as it stood on **2026-05-11**. It was moved
+> from the repository root to `docs/archive/` on 2026-08-27 (#2872) because a
+> root-level file reads as current status, and parts of it have since drifted.
+> Do not cite it as the present state of the codebase.
+>
+> Known-stale claims, left in place rather than rewritten so the snapshot stays
+> an honest record of what was true on the scan date:
+>
+> - PROD-001 states `next` is pinned to `16.2.6`. It is now `16.3.1`
+>   (`frontend/package.json`).
+> - PROD-002 cites `pip-audit -r cli/requirements.txt`. That file no longer
+>   declares any dependency — it is a deprecation stub (#2894).
+>
+> Still accurate as of the archive date: the locked `urllib3` is `2.7.0`, and
+> the PROD-001 remediation is live — `frontend/scripts/production-readiness.mjs`,
+> the `readiness:production` npm script, and the blocking `Production Readiness
+> Gate` job in `.github/workflows/frontend-ci.yml` all still exist. This file is
+> the record of why that gate was added, which is why it was archived rather
+> than deleted.
+>
+> The preview URL and deployment id have been redacted; they embedded the Vercel
+> account slug.
+>
+> The unresolved "Testing Gap" section at the end was never closed here; treat it
+> as an open question, not a completed verification.
+
+---
+
 # Production Readiness Scan
 
 Date: 2026-05-11
 
-Target deployment: `https://regengine-me8h7b76w-petrefiedthunders-projects.vercel.app`
+Target deployment: _(preview URL redacted — it embedded the Vercel account slug, #2872)_
 
-Deployment id: `dpl_eT6J33dHx3C8QjFGW25VYFFuSHAW`
+Deployment id: _(redacted, #2872)_
 
 ## Executive Summary
 
@@ -57,7 +87,7 @@ Fix applied:
 
 ## Verified Good
 
-- Preview deployment is `Ready` according to `vercel inspect dpl_eT6J33dHx3C8QjFGW25VYFFuSHAW`.
+- Preview deployment is `Ready` according to `vercel inspect <deployment-id>` (id redacted, #2872).
 - Vercel Production env includes `AUTH_SECRET_KEY`, `JWT_SIGNING_KEY`, `CSRF_SECRET`, `ALLOWED_ORIGINS`, `ADMIN_SERVICE_URL`, `NEXT_PUBLIC_ADMIN_URL`, `INGESTION_SERVICE_URL`, `COMPLIANCE_SERVICE_URL`, and `GRAPH_SERVICE_URL`.
 - `/login` returns `HTTP/2 200` through `vercel curl`, with enforced `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and HSTS.
 - `/api/session` returns `HTTP/2 200`, `Cache-Control: no-store`, sets `re_csrf` and `re_csrf_sig`, and returns an unauthenticated session shape without exposing tokens.

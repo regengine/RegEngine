@@ -52,7 +52,7 @@ jobs:
         run: |
           # Install the full runtime requirements so test modules that
           # import real libraries (httpx, fastapi, sqlalchemy, pydantic[email],
-          # scipy, etc.) can be collected. Without this step, collection
+          # etc.) can be collected. Without this step, collection
           # breaks on the first third-party import.
           # --require-hashes enforces the pip-compile lockfile (#1139).
           if [ -f requirements.lock ]; then

@@ -213,3 +213,48 @@ frontend/test-results/
 # in version control.
 launch_orchestrator/generated/
 launch_orchestrator/orchestration_result.json
+
+# ── Re-includes for already-tracked paths (#2873) ────────────────────────────
+# `git ls-files | git check-ignore` reported 80 tracked files as ignored. Most
+# were negation patterns above doing their job. Twelve were real: rules aimed at
+# generated reports and local scratch were also covering curated, deliberately
+# tracked files. Narrowed here with negations rather than by untracking, because
+# every path below is either referenced documentation or a live CI input.
+#
+# Appended as a single block on purpose — two other branches are editing this
+# file, so nothing above is reordered or reformatted.
+
+# The "*AUDIT*.md" / "UI-AUDIT-*.md" rules target generated audit dumps, but they
+# also matched curated docs: docs/audits/ is a maintained directory, AUDIT_EVENTS
+# and INTERNAL_TOOLS_AUDIT_SUMMARY are linked from docs/README.md and
+# docs/product/DATA_ROOM_INDEX.md, and the two frontend files are hand-maintained
+# (frontend/scripts/promise-audit.mjs only reads, it never writes them).
+!docs/audits/*.md
+!docs/engineering/AUDIT_EVENTS.md
+!docs/internal/INTERNAL_TOOLS_AUDIT_SUMMARY.md
+!frontend/PAGE_AUDIT.md
+!frontend/PROMISE_AUDIT.md
+
+# sales_enablement/ is NOT safe to untrack: scripts/check_trust_safety_copy.py
+# scans it (SCAN_ROOTS) and frontend-ci.yml runs that check on every PR touching
+# these paths, so removing the kit would drop it out of the trust-and-safety copy
+# gate. Re-include the directories, re-ignore their contents, then allow only
+# the two files that are actually tracked. Deliberately exact filenames, not a
+# *.md glob: the block below warns that local sales work may carry personal
+# contact data, so a new markdown file here should stay ignored until someone
+# consciously adds it.
+!sales_enablement/
+sales_enablement/*
+!sales_enablement/fsma_204_sales_enablement_kit_v2.md
+!sales_enablement/_archive/
+sales_enablement/_archive/*
+!sales_enablement/_archive/fsma_204_sales_enablement_kit_v1.1.md
+
+# output/ holds generated pilot artifacts and stays ignored. The one exception is
+# the README that documents that rule — untracking it would delete the very
+# warning that tells readers not to treat output/pilots/ as source of truth.
+!output/
+output/*
+!output/pilots/
+output/pilots/*
+!output/pilots/README.md
