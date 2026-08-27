@@ -176,13 +176,33 @@ def _load_production_app() -> Any:
     import os
 
     _bootstrap_imports()
+    # ASSIGNED, not setdefault. The published contract must be a function of
+    # the code alone, never of whoever ran the generator. `setdefault` looks
+    # equivalent and is not: under pytest, or for any developer with
+    # REGENGINE_ENV=development exported, the inherited value wins and the
+    # generator silently builds the NON-production app — mounting every
+    # experimental router and reproducing exactly the #2861 drift this
+    # function exists to remove.
     for key, value in _IMPORT_ONLY_ENV.items():
-        os.environ.setdefault(key, value)
+        os.environ[key] = value
     # Test-only variables that the production config validator rejects. A
     # developer or CI job with these exported would otherwise see the generator
     # fail with an auth-config error that has nothing to do with the schema.
     for _test_only in ("AUTH_TEST_BYPASS_TOKEN", "ALLOW_LEGACY_ENTRYPOINT_IN_PROD"):
         os.environ.pop(_test_only, None)
+
+    # Deployment knobs that legitimately vary per environment but MUST NOT
+    # reach a published contract. `ENABLE_EXPERIMENTAL_ROUTERS=1` re-mounts
+    # every experimental router, putting all 9 paths #2861 removed straight
+    # back into the spec; `DISABLED_ROUTERS` drops arbitrary live ones. Either
+    # would make the committed spec a function of whoever ran the generator,
+    # and the drift-check workflow would then enforce that accident.
+    #
+    # The published contract is defined as: default production posture, no
+    # per-deploy overrides. Anyone needing an experimental route documented
+    # should promote it out of _EXPERIMENTAL_ROUTERS, not export a flag.
+    for _override in ("ENABLE_EXPERIMENTAL_ROUTERS", "DISABLED_ROUTERS"):
+        os.environ.pop(_override, None)
 
     # Local import only after bootstrap and env setup.
     from server.main import app  # type: ignore[import-not-found]

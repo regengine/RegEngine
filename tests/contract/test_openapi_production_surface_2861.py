@@ -122,3 +122,56 @@ def test_every_published_path_is_mounted_in_production(published_paths, producti
         f"`python scripts/generate_openapi.py`, which now builds from the production "
         f"app, rather than adding the path to an allowlist (#2861)."
     )
+
+
+class TestGeneratorIsEnvironmentIndependent:
+    """The published spec must not depend on who ran the generator.
+
+    Caught in review on #3025: the generator set the production env but did not
+    strip `ENABLE_EXPERIMENTAL_ROUTERS` / `DISABLED_ROUTERS`. Fixing that
+    surfaced a larger one — it used `os.environ.setdefault`, so an inherited
+    `REGENGINE_ENV` won outright and the generator built the non-production
+    app. The env is now assigned, not defaulted. Both are
+    legitimate per-deploy knobs, and both change the mount set — so a developer
+    or CI job with either exported would regenerate a different contract.
+    `ENABLE_EXPERIMENTAL_ROUTERS=1` put all 9 paths #2861 removed straight back
+    in (37 -> 46), and the drift-check workflow would then enforce that
+    accident as the published spec.
+
+    These run the real generator in a subprocess with the variable set and
+    assert `--check` still passes against the committed file.
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            # Router overrides — the finding as originally reported.
+            ("ENABLE_EXPERIMENTAL_ROUTERS", "1"),
+            ("DISABLED_ROUTERS", "fda_export,csv"),
+            # The deeper cause found while fixing it: the generator used
+            # os.environ.setdefault, so an inherited REGENGINE_ENV won and it
+            # built the non-production app. This is the common case, not an
+            # exotic one — pytest exports REGENGINE_ENV=test, and plenty of
+            # developers have REGENGINE_ENV=development in their shell.
+            ("REGENGINE_ENV", "development"),
+            ("REGENGINE_ENV", "test"),
+            ("ENV", "staging"),
+        ],
+    )
+    def test_router_overrides_do_not_change_the_published_spec(self, name, value):
+        env = {**os.environ, name: value}
+        proc = subprocess.run(
+            [sys.executable, str(_REPO_ROOT / "scripts" / "generate_openapi.py"), "--check"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(_REPO_ROOT),
+            timeout=600,
+        )
+        assert proc.returncode == 0, (
+            f"With {name}={value!r} exported, the generator produces a spec that no longer "
+            f"matches the committed file. The published contract must be the default "
+            f"production posture regardless of per-deploy overrides, or the drift-check "
+            f"workflow will enforce whichever accident was last committed (#2861).\n"
+            f"stdout tail:\n{proc.stdout[-1200:]}\nstderr tail:\n{proc.stderr[-1200:]}"
+        )
