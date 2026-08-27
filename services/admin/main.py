@@ -334,7 +334,8 @@ install_metrics(app, service_name="admin-service")
 @app.get("/health", tags=["system"], operation_id="admin_standalone_liveness")
 async def _admin_standalone_health() -> dict[str, str]:
     """Liveness only: process is up and serving. Dependency health is
-    `/health/deep`, readiness is `/ready`.
+    `/health/deep` (X-Metrics-Key required since #2822), readiness is
+    `/ready`.
 
     `version` is part of this endpoint's contract — see
     `tests/contract/test_admin_api_contract.py::test_health_response_has_version`
