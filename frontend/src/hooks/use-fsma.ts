@@ -14,9 +14,6 @@ import type {
   CreateRecallDrillRequest,
   RecallSchedule,
   KDEQualityMetrics,
-  FTLCategoriesResponse,
-  WizardApplicabilityResult,
-  WizardExemptionResult,
 } from '@/types/fsma';
 
 const GRAPH_API_BASE = typeof window !== 'undefined'
@@ -369,73 +366,6 @@ export function useExportComplianceReport() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     },
-  });
-}
-
-// ============================================================================
-// V2 Applicability & Exemption Wizard Hooks
-// These call public endpoints — no API key required.
-// ============================================================================
-
-/**
- * Fetch all 23 FTL categories with CTE/KDE metadata.
- * Results are cached for 24 hours (data is static regulatory content).
- */
-export function useFTLCategories() {
-  return useQuery<FTLCategoriesResponse>({
-    queryKey: ['fsma', 'wizard', 'ftl-categories'],
-    queryFn: async () => {
-      const url = `${GRAPH_API_BASE}/wizard/ftl-categories`;
-      const response = await fetchWithCsrf(url);
-      if (!response.ok) throw new Error(`FTL categories fetch failed: ${response.status}`);
-      return response.json();
-    },
-    staleTime: 24 * 60 * 60 * 1000, // 24 hours — regulatory data is stable
-    gcTime: 24 * 60 * 60 * 1000,
-  });
-}
-
-/**
- * Check if a list of selected FTL category IDs makes the user subject to FSMA 204.
- * Only runs when selections is non-empty.
- */
-export function useCheckApplicability(selections: string[]) {
-  return useQuery<WizardApplicabilityResult>({
-    queryKey: ['fsma', 'wizard', 'applicability', selections],
-    queryFn: async () => {
-      const url = `${GRAPH_API_BASE}/wizard/applicability`;
-      const response = await fetchWithCsrf(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selections }),
-      });
-      if (!response.ok) throw new Error(`Applicability check failed: ${response.status}`);
-      return response.json();
-    },
-    enabled: selections.length > 0,
-  });
-}
-
-/**
- * Evaluate exemption status from wizard yes/no answers.
- * answers is a map of exemption ID → boolean (true = Yes, false = No).
- * Only runs when at least one answer has been provided.
- */
-export function useCheckExemptions(answers: Record<string, boolean>) {
-  const answerCount = Object.keys(answers).length;
-  return useQuery<WizardExemptionResult>({
-    queryKey: ['fsma', 'wizard', 'exemptions', answers],
-    queryFn: async () => {
-      const url = `${GRAPH_API_BASE}/wizard/exemptions`;
-      const response = await fetchWithCsrf(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers }),
-      });
-      if (!response.ok) throw new Error(`Exemption check failed: ${response.status}`);
-      return response.json();
-    },
-    enabled: answerCount > 0,
   });
 }
 
