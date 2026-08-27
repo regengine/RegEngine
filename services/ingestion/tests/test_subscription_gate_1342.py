@@ -101,7 +101,13 @@ def _install_redis(monkeypatch, client):
     import types
 
     fake_redis_lib = types.ModuleType("redis")
-    fake_redis_lib.from_url = lambda url, decode_responses=False: client
+    # **kwargs, not a fixed signature: #2849 added bounded socket timeouts to
+    # the real construction (socket_connect_timeout / socket_timeout). A fake
+    # that pins the old signature raises TypeError inside the try block, which
+    # the gate reports as "Redis unavailable" — so the test fails asserting a
+    # status while the production path is behaving correctly. Accept whatever
+    # the caller passes and let the assertions test behaviour, not arity.
+    fake_redis_lib.from_url = lambda url, **_kwargs: client
     monkeypatch.setitem(sys.modules, "redis", fake_redis_lib)
 
 
@@ -203,6 +209,15 @@ class TestCheckSubscriptionAndHealth:
         from shared.circuit_breaker import redis_circuit
 
         redis_circuit.reset()
+        # #2849 made the Redis client a module-level singleton built once per
+        # process. Without dropping it here, the first test in this class wins:
+        # every later test installs its own `redis.from_url` fake, the gate
+        # reuses the cached client from the first one, and the assertions
+        # describe the wrong double. The sibling suites added for #2849 already
+        # do this; this pre-existing file was not updated with them.
+        from app.subscription_gate import reset_redis_client
+
+        reset_redis_client()
 
     def test_returns_none_false_when_no_redis_url(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
