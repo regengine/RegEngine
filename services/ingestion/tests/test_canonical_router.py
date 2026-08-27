@@ -542,8 +542,11 @@ class TestGetRecordHistory:
 
 class TestListIngestionRuns:
     def test_returns_runs(self, principal: IngestionPrincipal) -> None:
+        # #2864: the endpoint now issues COUNT(*) then the page, same as
+        # list_records — ``total`` is the real row count, not ``len(runs)``.
         session = _FakeSession(
             [
+                _Result(row=(2,)),  # COUNT(*)
                 _Result(rows=[_make_run_row(), _make_run_row(run_id="run-002")]),
             ]
         )
@@ -558,6 +561,7 @@ class TestListIngestionRuns:
     def test_run_shape(self, principal: IngestionPrincipal) -> None:
         session = _FakeSession(
             [
+                _Result(row=(1,)),  # COUNT(*)
                 _Result(rows=[_make_run_row()]),
             ]
         )
@@ -582,6 +586,7 @@ class TestListIngestionRuns:
     def test_filter_by_status(self, principal: IngestionPrincipal) -> None:
         session = _FakeSession(
             [
+                _Result(row=(1,)),  # COUNT(*)
                 _Result(rows=[_make_run_row(status="failed")]),
             ]
         )
@@ -594,7 +599,7 @@ class TestListIngestionRuns:
         assert resp.json()["runs"][0]["status"] == "failed"
 
     def test_empty_runs(self, principal: IngestionPrincipal) -> None:
-        session = _FakeSession([_Result(rows=[])])
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
         c = _make_app_and_client(principal, session)
         resp = c.get("/api/v1/records/ingestion-runs", params={"tenant_id": TENANT_ID})
         assert resp.status_code == 200

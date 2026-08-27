@@ -41,8 +41,12 @@ jobs:
       - name: FSMA 204 compliance checks
         run: node qa/fsma-lite-check.js
 
-      - name: Tenant isolation checks
-        run: node qa/tenant-test.js
+      # #2824: renamed. This step is a static text scan of frontend sources --
+      # credential hygiene and auth-wiring conventions. It does NOT verify
+      # tenant isolation, which is enforced by PostgreSQL RLS policies that a
+      # .tsx scan cannot see. Real isolation coverage runs in backend-ci.
+      - name: Frontend security scan (credentials, auth patterns)
+        run: node qa/frontend-security-scan.js
 
   # ── Stage 2: System Simulation ─────────────────────────
   system-sim:

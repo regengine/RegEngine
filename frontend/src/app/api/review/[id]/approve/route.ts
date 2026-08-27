@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
-import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { getAdminMasterKey, requireAdminCapability, requireProxyAuth, validateProxySession, validateUuid } from '@/lib/api-proxy';
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
 
@@ -31,10 +31,22 @@ export async function POST(
     }
 
     const { id } = await params;
+    // Validate the caller-controlled segment before interpolating it into the
+    // upstream admin URL (#2907). Without this, an id containing `?`, `#` or an
+    // encoded `/` rewrites the outbound path while the request still carries the
+    // server's admin credential. Review ids are UUIDs — services/admin/app/metrics.py
+    // does `session.get(ReviewItemModel, UUID(review_id))`.
+    const reviewId = validateUuid(id);
+    if (!reviewId) {
+        return NextResponse.json(
+            { error: 'Invalid review identifier' },
+            { status: 400 }
+        );
+    }
 
     try {
         const response = await fetch(
-            `${ADMIN_URL}/v1/admin/review/flagged-extractions/${id}/approve`,
+            `${ADMIN_URL}/v1/admin/review/flagged-extractions/${reviewId}/approve`,
             {
                 method: 'POST',
                 headers: {

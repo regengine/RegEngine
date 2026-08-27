@@ -5,9 +5,10 @@ Source of truth: `server/main.py`
 Date: 2026-08-26 (previously 2026-05-03)
 
 Re-audited 2026-08-26 against `_VALID_ROUTER_NAMES` in `server/main.py`,
-which holds **52** names. The 2026-05-03 revision of this file enumerated
+which holds **53** names. The 2026-05-03 revision of this file enumerated
 only 49 and omitted `remediation`, `proof_verify`, and `proof_recall`
-(#2838). All three are now listed below and in the allowlist.
+(#2838). All three are now listed below and in the allowlist. The 53rd,
+`fsma_readiness_compat`, was added by #2893 and is recorded below.
 
 ## Current Mount Model
 
@@ -72,6 +73,14 @@ These routers belong closest to the FSMA production story:
 - `supplier_validation`
 - `admin`
 - `fsma_compliance`
+- `fsma_readiness_compat` — **mounted by default, not in
+  `_EXPERIMENTAL_ROUTERS`.** Two `include_in_schema=False` routes under
+  `/api/v1/fsma` that answer **501 Not Implemented** for the customer-readiness
+  probes the dashboard makes before export jobs and field-mapping review are
+  configured (#2893). Naming it makes it removable via `DISABLED_ROUTERS`;
+  removing it does not break the dashboard — the Next.js BFF falls through to
+  its own `not_connected` payload on any non-ok response — it only restores
+  the 404 log noise the shim exists to suppress.
 
 These are not automatically safe. They are production-relevant only when tests prove tenant isolation, validation behavior, and failure handling.
 
@@ -168,7 +177,7 @@ The stronger follow-up is to replace deny-by-configuration with allow-by-configu
 
 ```text
 ENABLE_EXPERIMENTAL_ROUTERS=false
-ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,canonical_records,rules,exceptions,remediation,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance,proof_verify,proof_recall
+ENABLED_ROUTERS=inflow_workbench,fda_export,csv,edi,epcis_ingestion,score,portal,canonical_records,rules,exceptions,remediation,request_workflow,auditor,compliance_metrics,readiness,chain_verification,audit_export_log,sla_tracking,export_monitoring,supplier_validation,admin,fsma_compliance,fsma_readiness_compat,proof_verify,proof_recall
 ```
 
 > **Corrected 2026-08-26 (#2838).** The previous allowlist was **not**

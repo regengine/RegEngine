@@ -35,6 +35,17 @@ _EVENT_DEDUP_TTL_SECONDS = 24 * 60 * 60
 # through the cracks if checkout processing itself is delayed.
 _PENDING_SUB_UPDATE_TTL_SECONDS = 72 * 60 * 60
 
+# #2953: statuses after which the tenant's Stripe identifiers are dead. The
+# ``customer.deleted`` handler deletes the ``billing:customer:{id}`` and
+# ``billing:subscription:{id}`` lookups precisely so a later out-of-order
+# webhook carrying those stale ids cannot silently re-bind to the tenant —
+# while deliberately preserving the tenant hash (and therefore those ids) as
+# an audit record. Any writer that persists that hash back would otherwise
+# rebuild the lookups from it and reverse the cleanup; the guard in
+# ``_store_subscription_mapping`` makes the deletion stick for every caller,
+# not just the one that was found reversing it (``routes.get_subscription``).
+_TERMINAL_STATUSES = frozenset({"customer_deleted"})
+
 
 def _redis_client() -> redis.Redis:
     settings = get_settings()
@@ -193,6 +204,20 @@ def _store_subscription_mapping(tenant_id: str, payload: dict[str, str]) -> None
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     client.hset(key, mapping=payload)
+
+    # #2953: the audit hash is always written; the lookup keys are not.
+    # Re-creating them for a terminal status would restore exactly the
+    # routing ``_handle_customer_deleted`` removed, so a delayed webhook
+    # carrying the deleted customer/subscription id could mutate this
+    # tenant's entitlement state again.
+    status = str(payload.get("status") or "")
+    if status in _TERMINAL_STATUSES:
+        logger.info(
+            "stripe_lookup_bind_skipped_terminal_status",
+            tenant_id=tenant_id,
+            status=status,
+        )
+        return
 
     subscription_id = payload.get("subscription_id")
     if subscription_id:

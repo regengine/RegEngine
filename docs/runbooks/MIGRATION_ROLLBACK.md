@@ -224,12 +224,42 @@ Every Alembic revision has a `downgrade()` function. Here's what each drops:
 
 | Revision | Downgrade Action | Data Loss? |
 |----------|-----------------|------------|
+| `a43b0fb1edd0` → `c35358cae7d4` (v108) | **DELETEs every `result='error'` row from `fsma.rule_evaluations`**, then drops `fsma.traceability_events.evaluation_error` and `.evaluated_at` | **Loses FDA evidentiary data.** `rule_evaluations` is "the evidentiary record that a specific check was run" (`alembic/sql/V044__versioned_rules_engine.sql`); the error verdicts are the record that a check ran and failed to complete, and the dropped columns are *why* and *when*. **Guarded — see 4.2.1.** |
 | `e5f6a7b8c9d0` → `d4e5f6a7b8c9` | Drops RLS policies from 8 tenant tables, drops sysadmin role/triggers/audit schema, drops reference table RLS | **No data loss** — only policy/role removal. **But tenant isolation is disabled.** |
 | `d4e5f6a7b8c9` → `c3d4e5f6a7b8` | Drops `fsma.task_queue` table, notify trigger, function | **Loses queued tasks** (pending/processing) |
 | `c3d4e5f6a7b8` → `b2c3d4e5f6a7` | Drops `fsma.fsma_audit_trail` table | **Loses persistent audit trail entries** |
 | `b2c3d4e5f6a7` → `a1b2c3d4e5f6` | Drops `fsma.fda_sla_requests` and `fsma.chain_verification_log` | **Loses SLA tracking and verification history** |
 | `a1b2c3d4e5f6` → `97588ba8edf3` | Drops V043–V047 tables: `traceability_events`, `ingestion_runs`, `evidence_attachments`, `rule_definitions`, `rule_evaluations`, `rule_audit_log`, `exception_cases`, `exception_comments/attachments/signoffs`, `request_cases`, `response_packages`, `submission_log`, `request_signoffs`, `canonical_entities`, `entity_aliases`, `entity_merge_history`, `identity_review_queue` | **MASSIVE data loss.** All canonical events, rule evaluations, exception cases, request workflows, identity resolution data. **Do NOT downgrade past this point unless you are willing to lose everything from the compliance control plane.** |
 | `97588ba8edf3` → `base` | Drops ALL FSMA tables: `cte_events`, `cte_kdes`, `hash_chain`, `compliance_alerts`, `fda_export_log`, plus regulatory seed data, obligation rules, organizations, tenant feature tables | **TOTAL data loss.** Everything. |
+
+#### 4.2.1 Revisions that refuse to downgrade without an acknowledgement
+
+Most downgrades above drop what their own upgrade added. **`a43b0fb1edd0` (v108) is
+different: it deletes rows it did not create**, because the older, tighter CHECK
+constraint cannot be re-applied while `result='error'` rows exist.
+
+That revision therefore refuses to run unless *both* variables are set:
+
+```bash
+REGENGINE_ENV=development \
+REGENGINE_ALLOW_BASELINE_DOWNGRADE=1 \
+alembic downgrade a43b0fb1edd0
+```
+
+`REGENGINE_ENV` must name a non-production environment (`development`, `dev`,
+`test`, `ci`) **and** `REGENGINE_ALLOW_BASELINE_DOWNGRADE` must be `1`. Anything
+else raises `RuntimeError` and the downgrade does not run.
+
+**In production or staging the recovery path is a snapshot restore, not a
+destructive downgrade** — see [disaster-recovery.md](disaster-recovery.md).
+
+> **Why the guard lives in the revision.** `alembic/env.py:_guard_baseline_downgrade`
+> only covers `downgrade base`. A targeted `alembic downgrade -1` from head reaches
+> v108 without ever consulting it, which is the common incident-time command.
+
+If you set the two variables, understand that the deletion is **not reversible by
+re-upgrading**: `upgrade()` restores the constraint and the columns, but the rows
+and their error text are gone. Take a snapshot first.
 
 ### 4.3 Verify After Alembic Rollback
 

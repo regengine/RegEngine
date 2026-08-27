@@ -12,8 +12,11 @@ from .safe_text import (
     xml_escape,
     zpl_safe,
 )
+from .trace_csv import TRACE_CSV_HEADER, build_trace_csv_rows
 
 __all__ = [
+    "TRACE_CSV_HEADER",
+    "build_trace_csv_rows",
     "csv_safe",
     "header_filename",
     "rfc5987_filename",

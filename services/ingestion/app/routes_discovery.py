@@ -27,6 +27,17 @@ logger = structlog.get_logger("ingestion.discovery")
 router = APIRouter(include_in_schema=False)
 
 
+def _manual_queue_key(tenant_id: str) -> str:
+    """The one place the manual-upload queue key is built (#2921).
+
+    Must stay byte-identical to the producer in ``discovery.py`` —
+    ``EthicalScraper.scrape`` rpushes robots-denied sources here. A bare
+    ``manual_upload_queue`` key is by construction cross-tenant, so every
+    reader goes through this helper.
+    """
+    return f"manual_upload_queue:{tenant_id}"
+
+
 def _discovery_task_key(tenant_id: str, body: str, url: str) -> str:
     source_hash = hashlib.sha256(f"{body}{url}".encode("utf-8")).hexdigest()
     return f"discovery_scrape:{tenant_id}:{source_hash}"
@@ -37,8 +48,9 @@ async def get_discovery_queue(api_key: APIKey = Depends(require_api_key)):
     """Retrieve all items in the manual discovery queue."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
+    queue_key = _manual_queue_key(api_key.tenant_id)
 
-    items = r.lrange("manual_upload_queue", 0, -1)
+    items = r.lrange(queue_key, 0, -1)
     results = []
     for i, item in enumerate(items):
         try:
@@ -63,7 +75,7 @@ async def get_manual_queue(
     r = redis.from_url(settings.redis_url)
     tenant_id = api_key.tenant_id
 
-    queue_key = f"manual_upload_queue:{tenant_id}"
+    queue_key = _manual_queue_key(tenant_id)
     total = r.llen(queue_key)
     raw_items = r.lrange(queue_key, skip, skip + limit - 1)
 
@@ -103,14 +115,15 @@ async def approve_discovery(
     """Approve a discovery item and trigger a scrape."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
+    queue_key = _manual_queue_key(api_key.tenant_id)
 
-    item = r.lindex("manual_upload_queue", index)
+    item = r.lindex(queue_key, index)
     if not item:
         raise HTTPException(status_code=404, detail="Discovery item not found at index")
 
     val = item.decode("utf-8")
     body, url = val.split(":", 1)
-    r.lrem("manual_upload_queue", 1, item)
+    r.lrem(queue_key, 1, item)
 
     db = SessionLocal()
     try:
@@ -137,12 +150,13 @@ async def reject_discovery(
     """Reject and remove a discovery item from the queue."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
+    queue_key = _manual_queue_key(api_key.tenant_id)
 
-    item = r.lindex("manual_upload_queue", index)
+    item = r.lindex(queue_key, index)
     if not item:
         raise HTTPException(status_code=404, detail="Discovery item not found at index")
 
-    r.lrem("manual_upload_queue", 1, item)
+    r.lrem(queue_key, 1, item)
     logger.info("discovery_rejected", index=index, tenant_id=api_key.tenant_id)
     return {"status": "rejected", "index": index}
 
@@ -155,20 +169,26 @@ async def bulk_approve_discovery(
     """Approve multiple discovery items and trigger scrapes."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
+    queue_key = _manual_queue_key(api_key.tenant_id)
 
     approved = []
     items_to_process = []
+    skipped: list[int] = []
     for index in payload.indices:
-        item = r.lindex("manual_upload_queue", index)
+        item = r.lindex(queue_key, index)
         if item:
             items_to_process.append(item)
+        else:
+            # #2921: an index that resolves to nothing used to vanish into a
+            # 200/count:0, indistinguishable from "nothing was requested".
+            skipped.append(index)
 
     db = SessionLocal()
     try:
         for item in items_to_process:
             val = item.decode("utf-8")
             body, url = val.split(":", 1)
-            r.lrem("manual_upload_queue", 1, item)
+            r.lrem(queue_key, 1, item)
             enqueue_task(
                 db,
                 task_type="discovery_scrape",
@@ -181,8 +201,13 @@ async def bulk_approve_discovery(
     finally:
         db.close()
 
-    logger.info("bulk_discovery_approved", count=len(approved), tenant_id=api_key.tenant_id)
-    return {"status": "approved", "count": len(approved), "items": approved}
+    logger.info(
+        "bulk_discovery_approved",
+        count=len(approved),
+        skipped=len(skipped),
+        tenant_id=api_key.tenant_id,
+    )
+    return {"status": "approved", "count": len(approved), "items": approved, "skipped": skipped}
 
 
 @router.post("/v1/ingest/discovery/bulk-reject", response_model=BulkDiscoveryRejectionResponse)
@@ -193,17 +218,26 @@ async def bulk_reject_discovery(
     """Reject and remove multiple discovery items from the queue."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
+    queue_key = _manual_queue_key(api_key.tenant_id)
 
     items_to_remove = []
+    skipped: list[int] = []
     for index in payload.indices:
-        item = r.lindex("manual_upload_queue", index)
+        item = r.lindex(queue_key, index)
         if item:
             items_to_remove.append(item)
+        else:
+            skipped.append(index)
 
     rejected_count = 0
     for item in items_to_remove:
-        r.lrem("manual_upload_queue", 1, item)
+        r.lrem(queue_key, 1, item)
         rejected_count += 1
 
-    logger.info("bulk_discovery_rejected", count=rejected_count, tenant_id=api_key.tenant_id)
-    return {"status": "rejected", "count": rejected_count}
+    logger.info(
+        "bulk_discovery_rejected",
+        count=rejected_count,
+        skipped=len(skipped),
+        tenant_id=api_key.tenant_id,
+    )
+    return {"status": "rejected", "count": rejected_count, "skipped": skipped}

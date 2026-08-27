@@ -219,3 +219,163 @@ class TestExtractorClassesImportable:
         from services.nlp.app.extractors import LLMGenerativeExtractor as CanonicalLLM
 
         assert consumer.LLMGenerativeExtractor is CanonicalLLM
+
+
+# ----------------------------------------------------------------------
+# #2947 — the LLM extractor's output must reach the review queue
+# ----------------------------------------------------------------------
+#
+# `_run_llm_extractor` was called, counted into a log line, and discarded: the
+# routing loop below it iterates `extractions`, which only the regex path fed.
+# Enabling NLP_ENABLE_LLM_EXTRACTOR paid a third-party provider for output
+# nothing read. These tests pin the bridge, and pin it as fail-closed: nothing
+# from a generative extractor may auto-publish on its own confidence.
+
+
+def _llm_item(**overrides):
+    """Build a real LLMExtraction; overrides replace defaults."""
+    from services.nlp.app.extractors.llm_extractor import LLMExtraction
+
+    fields = {
+        "provision_text": "Covered entities shall maintain traceability records.",
+        "obligation_type": "REQUIREMENT",
+        "confidence": 0.91,
+        "source_document_id": "doc-llm",
+        "source_span_start": 120,
+        "source_span_end": 172,
+    }
+    fields.update(overrides)
+    return LLMExtraction(**fields)
+
+
+def _bridge(items):
+    from services.nlp.app.consumer import _convert_llm_results_to_extractions
+
+    return _convert_llm_results_to_extractions(
+        items, doc_id="doc-llm", source_url="https://example.gov/rule.pdf"
+    )
+
+
+class TestLLMResultsReachTheReviewQueue:
+    def test_results_are_converted_into_extractions(self):
+        extractions = _bridge([_llm_item()])
+        assert len(extractions) == 1
+        extraction = extractions[0]
+        assert extraction.source_text == (
+            "Covered entities shall maintain traceability records."
+        )
+        assert extraction.source_offset == 120
+        assert extraction.obligation_type.value == "MUST"
+        assert extraction.attributes["extractor"] == "llm_generative_v1"
+        assert extraction.attributes["document_id"] == "doc-llm"
+
+    def test_prohibition_maps_to_must_not(self):
+        extraction = _bridge(
+            [_llm_item(obligation_type="PROHIBITION", provision_text="No person shall adulterate food.")]
+        )[0]
+        assert extraction.obligation_type.value == "MUST_NOT"
+
+    def test_exemption_does_not_become_a_mandate(self):
+        extraction = _bridge([_llm_item(obligation_type="EXEMPTION")])[0]
+        assert extraction.obligation_type.value == "MAY"
+
+    def test_reporting_is_preserved(self):
+        extraction = _bridge([_llm_item(obligation_type="REPORTING")])[0]
+        assert extraction.obligation_type.value == "REPORTING"
+
+    def test_self_reported_confidence_cannot_unlock_auto_approval(self):
+        from services.nlp.app.consumer import _current_thresholds
+
+        extraction = _bridge([_llm_item(confidence=1.0)])[0]
+        _high, medium = _current_thresholds()
+        assert extraction.confidence_score < medium
+        assert extraction.attributes["llm_reported_confidence"] == 1.0
+
+    def test_needs_review_item_routes_to_review_not_graph(self):
+        from unittest.mock import MagicMock as _MagicMock
+
+        from services.nlp.app.consumer import (
+            TOPIC_GRAPH_UPDATE,
+            TOPIC_NEEDS_REVIEW,
+            _route_extraction,
+        )
+
+        extraction = _bridge(
+            [_llm_item(confidence=1.0, needs_review=True, review_reason="output_injection_marker")]
+        )[0]
+        producer = _MagicMock()
+        _route_extraction(
+            extraction,
+            doc_id="doc-llm",
+            doc_hash="hash-llm",
+            source_url="https://example.gov/rule.pdf",
+            producer=producer,
+            tenant_id="tenant-a",
+        )
+        producer.send.assert_called_once()
+        assert producer.send.call_args.args[0] == TOPIC_NEEDS_REVIEW
+        assert producer.send.call_args.args[0] != TOPIC_GRAPH_UPDATE
+
+    def test_guardrail_flags_are_surfaced_to_the_reviewer(self):
+        from services.nlp.app.consumer import _build_review_reasons
+
+        extraction = _bridge(
+            [
+                _llm_item(
+                    needs_review=True,
+                    review_reason="output_injection_marker",
+                    truncated_input=True,
+                )
+            ]
+        )[0]
+        codes = {r["reason_code"] for r in _build_review_reasons(extraction, "low")}
+        assert "llm_flagged_for_review" in codes
+        assert "llm_truncated_input" in codes
+
+    def test_item_without_a_provenance_span_is_not_routed(self):
+        """Fail closed: an item with no quote cannot be checked against source."""
+        assert _bridge([{"obligation_type": "REQUIREMENT", "confidence": 0.9}]) == []
+
+    def test_every_llm_extraction_field_is_read_by_the_bridge(self):
+        """#2947 acceptance: no LLMExtraction field may be write-only."""
+        import inspect
+
+        from services.nlp.app.consumer import _convert_llm_results_to_extractions
+        from services.nlp.app.extractors.llm_extractor import LLMExtraction
+
+        bridge_source = inspect.getsource(_convert_llm_results_to_extractions)
+        unread = [
+            name for name in LLMExtraction.model_fields if name not in bridge_source
+        ]
+        assert not unread, f"LLMExtraction fields with no non-test reader: {unread}"
+
+
+class TestConsumerLoopDoesNotDiscardLLMResults:
+    def test_llm_results_is_consumed_not_just_counted(self):
+        """The defect in source form: `llm_results` used only by `len()`."""
+        import ast
+
+        consumer = _reload_consumer()
+        tree = ast.parse(Path(consumer.__file__).read_text())
+
+        counted = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "len"
+            ):
+                counted.update(id(arg) for arg in node.args)
+
+        real_uses = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name)
+            and node.id == "llm_results"
+            and isinstance(node.ctx, ast.Load)
+            and id(node) not in counted
+        ]
+        assert real_uses, (
+            "llm_results is only counted into a log line — the paid LLM call "
+            "produces nothing any consumer reads (#2947)"
+        )

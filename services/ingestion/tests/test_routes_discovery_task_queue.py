@@ -86,7 +86,9 @@ class TestApproveDiscovery:
 
         client.post(self.ENDPOINT, params={"index": 0})
 
-        fake_redis.lrem.assert_called_once_with("manual_upload_queue", 1, raw)
+        # #2921: approve must remove from the tenant-namespaced key the
+        # scraper actually writes, not the bare one.
+        fake_redis.lrem.assert_called_once_with("manual_upload_queue:tenant-disco", 1, raw)
 
     def test_404_when_item_missing(self, monkeypatch):
         client, fake_redis, _, _ = _build_client(monkeypatch)

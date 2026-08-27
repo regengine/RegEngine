@@ -46,11 +46,12 @@ useful decomposition seams in the codebase:
 - **Frontend:** Next.js App Router app in `frontend/` with a separate CI
   workflow.
 - **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
-  Alembic (`alembic/versions/`, head is **v111** —
-  `df664d92adba_v111_public_controls_regulations_force_rls`, which FORCEs RLS
-  on `public.controls` and `public.regulations`; verified 2026-08-26);
-  the app performs no runtime DDL as of v098/v099. v111 creates no tables, so
-  the newest tables are
+  Alembic (`alembic/versions/`, head is **v112** —
+  `d8b2056471a7_v112_seed_obligations_security_definer`, which makes
+  `seed_obligations_for_tenant` `SECURITY DEFINER` with a pinned `search_path`
+  and fail-closed behaviour; verified 2026-08-27);
+  the app performs no runtime DDL as of v098/v099. Neither v111 nor v112
+  creates a table, so the newest tables are
   `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
   rule-evaluation persistence, replayed by the
   `rule_evaluation_deadletter_replay` scheduler job) and
@@ -61,7 +62,8 @@ useful decomposition seams in the codebase:
   value plus the v105 marker columns that never shipped, v109 adds a
   tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
   RLS INSERT policy letting authenticated users create their own developer
-  profile. v111 then FORCEs RLS on the two regulatory control-plane tables.
+  profile. v111 then FORCEs RLS on the two regulatory control-plane tables, and
+  v112 hardens the `seed_obligations_for_tenant` function used at onboarding.
   `fsma.compliance_evidence_snapshots` (v103) and the v102 mock-audit drill
   records are no longer the newest tables.
 - **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
@@ -146,9 +148,9 @@ These are refactor candidates, not proof of broken behavior by
 themselves.
 
 Resolved since the 2026-05-23 list (verified 2026-07-31): three entries
-no longer exist as files — `services/nlp/app/consumer.py`,
-`services/ingestion/app/webhook_router_v2.py`, and
-`services/nlp/app/extractors/fsma_extractor.py` are now packages of the
+no longer exist as files — `services/nlp/app/consumer/`,
+`services/ingestion/app/webhook_router_v2/`, and
+`services/nlp/app/extractors/fsma_extractor/` are now packages of the
 same name. Four shrank below the threshold:
 `services/shared/cte_persistence/core.py` (2067 → 387, split into
 `queries`/`verification`/mixins), `services/shared/identity_resolution/service.py`

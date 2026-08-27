@@ -250,8 +250,11 @@ class TestFormatExportLogRows:
 
 class TestBuildRecallWhereClause:
     def test_tenant_only_base_conditions(self):
+        # #2897: the base clause also excludes ``rejected`` events — they
+        # carry no KDEs and no hash-chain entry and must never reach an
+        # FDA package.
         where, params = build_recall_where_clause("tenant-42", None, None, None, None, None, None)
-        assert where == "e.tenant_id = :tid"
+        assert where == "e.tenant_id = :tid AND e.validation_status != 'rejected'"
         assert params == {"tid": "tenant-42"}
 
     def test_product_filter_adds_like(self):
@@ -297,9 +300,10 @@ class TestBuildRecallWhereClause:
             "tenant-1", "Prod", "Loc", "TLC", "shipping", "2026-04-01", "2026-04-10"
         )
         clauses = where.split(" AND ")
-        # 1 base + 6 extras = 7 clauses total (location adds one clause
-        # with an OR inside it).
-        assert len(clauses) == 7
+        # 2 base (tenant + #2897 status) + 6 extras = 8 clauses total
+        # (location adds one clause with an OR inside it).
+        assert len(clauses) == 8
+        assert "e.validation_status != 'rejected'" in clauses
         assert params["tid"] == "tenant-1"
         assert params["product"] == "%Prod%"
         assert params["loc"] == "%Loc%"
@@ -310,9 +314,9 @@ class TestBuildRecallWhereClause:
         assert params["end"] == "2026-04-11T00:00:00+00:00"
 
     def test_empty_strings_treated_as_unset(self):
-        # Empty strings are falsy, so no extra clauses.
+        # Empty strings are falsy, so no extra clauses beyond the base pair.
         where, params = build_recall_where_clause("t", "", "", "", "", "", "")
-        assert where == "e.tenant_id = :tid"
+        assert where == "e.tenant_id = :tid AND e.validation_status != 'rejected'"
         assert params == {"tid": "t"}
 
 
@@ -646,8 +650,10 @@ class TestLogRecallExport:
 
 class TestBuildV2WhereClause:
     def test_tenant_only_base(self):
+        # #2897: the canonical base clause pins the lifecycle head, so a
+        # superseded / rejected / draft row never reaches /export/v2.
         where, params = build_v2_where_clause("t", None, None, None, None)
-        assert where == "e.tenant_id = :tid"
+        assert where == "e.tenant_id = :tid AND e.status = 'active'"
         assert params == {"tid": "t"}
 
     def test_tlc_exact_when_no_percent(self):
@@ -681,7 +687,9 @@ class TestBuildV2WhereClause:
     def test_all_filters_combined(self):
         where, params = build_v2_where_clause("t", "TLC-ABC", "shipping", "2026-04-01", "2026-04-10")
         clauses = where.split(" AND ")
-        assert len(clauses) == 5
+        # 2 base (tenant + #2897 status) + 4 filters.
+        assert len(clauses) == 6
+        assert "e.status = 'active'" in clauses
         assert params == {
             "tid": "t",
             "tlc": "TLC-ABC",

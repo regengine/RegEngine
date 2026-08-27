@@ -114,13 +114,17 @@
 
 ### 7. Secrets Rotation Tool
 
-**Location:** `scripts/rotate_secrets_to_aws.py`, `scripts/sync_prod_secrets.py`
+**Location:** `scripts/export_env_bundle.py` (renamed from
+`rotate_secrets_to_aws.py`, #2938; `scripts/sync_prod_secrets.py` does not exist)
 
-**Status:** Initial upload works, but no rotation/renewal
+**Status:** Validates the local secret set only. It performs **no** rotation
+and makes **no** AWS call — there is no AWS SDK, subprocess, or network call
+in the file. The old name implied otherwise, which was the trap.
 
 **Missing:**
 - Secret versioning
 - Service integration to pull from Secrets Manager
+- Any actual rotation — use the platform secret manager
 
 ---
 

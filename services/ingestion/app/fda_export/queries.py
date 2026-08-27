@@ -91,7 +91,10 @@ def build_recall_where_clause(
 
     Returns (where_clause_sql, params_dict).
     """
-    conditions = ["e.tenant_id = :tid"]
+    # #2897: ``rejected`` events have no KDE rows and no fsma.hash_chain
+    # entry — writes.py states they must never be "included in FDA export".
+    # ``warning`` events stay in: they are chained, complete records.
+    conditions = ["e.tenant_id = :tid", "e.validation_status != 'rejected'"]
     params: dict = {"tid": tenant_id}
 
     if product:
@@ -245,7 +248,10 @@ def build_recall_where_clause_canonical(
     dual-write mapping derives the legacy columns from — so a filter that
     matched a legacy row matches its canonical twin and vice versa.
     """
-    conditions = ["e.tenant_id = :tid"]
+    # #2897: only the current head of an amendment chain is exportable.
+    # ``superseded`` is the pre-correction version the writer deliberately
+    # leaves in place, ``rejected``/``draft`` were never exportable.
+    conditions = ["e.tenant_id = :tid", "e.status = 'active'"]
     params: dict = {"tid": tenant_id}
 
     location_expr = "COALESCE(e.from_facility_reference, e.to_facility_reference)"
@@ -329,6 +335,82 @@ def _verify_chain_for_export(persistence, db_session, tenant_id: str):
 
         return CanonicalEventStore(db_session, dual_write=False).verify_chain_canonical(tenant_id)
     return persistence.verify_chain(tenant_id=tenant_id)
+
+
+# Row cap for the full-tenant export. Shared so the exporter and
+# ``/export/verify`` can never truncate at different points (#2898).
+FULL_EXPORT_LIMIT = 10000
+
+# ``fda_export_log.export_type`` values whose rows are full-tenant exports
+# (no ``query_tlc``) and are therefore reproducible via
+# :func:`reconstruct_full_export_events`. The ``fda_spreadsheet`` /
+# ``fda_package`` pair predates the ``fda_export_all*`` names and is kept
+# so historical audit rows stay verifiable.
+FULL_EXPORT_TYPES = frozenset(
+    {
+        "fda_export_all",
+        "fda_export_all_package",
+        "fda_spreadsheet",
+        "fda_package",
+    }
+)
+
+
+def reconstruct_full_export_events(
+    persistence,
+    *,
+    tenant_id: str,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    event_type: Optional[str],
+    limit: int = FULL_EXPORT_LIMIT,
+) -> tuple[list[dict], int]:
+    """Build the ``/export/all`` event set. Single source of truth (#2898).
+
+    ``/export/verify`` must regenerate the exporter's bytes exactly, so both
+    sides call this one function. Previously the exporter used the set-based
+    ``query_events_by_tlcs`` (#2515) while the verifier re-derived the set
+    with a per-seed ``query_events_by_tlc`` fan-out; the two produced the
+    same rows in a different order, and the resulting hash difference was
+    reported to auditors as ``MISMATCH_DETECTED`` on untampered data.
+
+    Seed order is preserved (``dict.fromkeys``, not ``set``) so the
+    reconstruction is deterministic across processes.
+
+    Returns ``(deduplicated_events, total_seed_events)``.
+    """
+    seed_events, total = persistence.query_all_events(
+        tenant_id=tenant_id,
+        start_date=start_date,
+        end_date=end_date,
+        event_type=event_type,
+        limit=limit,
+    )
+
+    # Expand every distinct seed TLC through transformation_links in a
+    # bounded number of round-trips.
+    tlcs = list(dict.fromkeys(evt["traceability_lot_code"] for evt in seed_events))
+    full_events = persistence.query_events_by_tlcs(
+        tenant_id=tenant_id,
+        tlcs=tlcs,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+    )
+
+    # Deduplicate by event id (defensive — the set-based query returns each
+    # event once, but a transformation link shared by two seeds must not
+    # double-count).
+    seen: set = set()
+    deduped: list[dict] = []
+    for event in full_events:
+        event_id = event["id"]
+        if event_id in seen:
+            continue
+        seen.add(event_id)
+        deduped.append(event)
+
+    return deduped, total
 
 
 class AuditLogWriteError(RuntimeError):
@@ -461,7 +543,10 @@ def build_v2_where_clause(
 
     Returns (where_clause_sql, params_dict).
     """
-    conditions = ["e.tenant_id = :tid"]
+    # #2897: same canonical lifecycle filter as
+    # ``build_recall_where_clause_canonical`` — without it every amended
+    # event is emitted twice (superseded row beside its active correction).
+    conditions = ["e.tenant_id = :tid", "e.status = 'active'"]
     params: dict[str, Any] = {"tid": tenant_id}
 
     if tlc:

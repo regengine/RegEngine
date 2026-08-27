@@ -193,6 +193,15 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 alerts.append(alert)
 
                 # Write to compliance_alerts table
+                # Savepoint per alert (#2901). This function is called from
+                # inside the ingest request transaction, so an INSERT that
+                # fails — bad uuid cast, RLS denial, schema skew — would abort
+                # the whole transaction on Postgres and take the already-stored
+                # events down with it at commit time. Catching the exception is
+                # not enough without rolling back to a savepoint first. Same
+                # guard the rules SELECT above and writes.store_event already
+                # use.
+                alert_sp = db_session.begin_nested()
                 try:
                     db_session.execute(
                         text("""
@@ -214,7 +223,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             }),
                         },
                     )
+                    alert_sp.commit()
                 except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
+                    alert_sp.rollback()
                     _pkg.logger.warning("obligation_alert_write_failed: %s", str(alert_err))
 
         return alerts

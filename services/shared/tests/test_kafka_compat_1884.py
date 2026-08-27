@@ -42,21 +42,22 @@ def test_producer_uses_confluent_config_and_serializes(monkeypatch):
         retries=7,
     )
 
-    producer.send("topic", key="id", value="body", headers=[("h", b"v")])
+    handle = producer.send("topic", key="id", value="body", headers=[("h", b"v")])
 
     fake = _FakeProducer.instances[0]
     assert fake.config["bootstrap.servers"] == "a:9092,b:9092"
     assert fake.config["message.send.max.retries"] == 7
-    assert fake.produce_calls == [
-        (
-            "topic",
-            {
-                "key": b"k:id",
-                "value": b"v:body",
-                "headers": [("h", b"v")],
-            },
-        )
-    ]
+    assert len(fake.produce_calls) == 1
+    produced_topic, produced_kwargs = fake.produce_calls[0]
+    assert produced_topic == "topic"
+    assert produced_kwargs["key"] == b"k:id"
+    assert produced_kwargs["value"] == b"v:body"
+    assert produced_kwargs["headers"] == [("h", b"v")]
+    # #2969: produce() must carry the delivery report callback, and send()
+    # must return the handle the legacy `add_errback` call sites need —
+    # without it the scheduler's delivery-failure accounting is dead code.
+    assert produced_kwargs["on_delivery"] == handle._on_delivery
+    assert set(produced_kwargs) == {"key", "value", "headers", "on_delivery"}
     assert fake.poll_calls == [0]
     assert producer.bootstrap_connected() is True
 
@@ -99,6 +100,8 @@ class _FakeConsumer:
         self.config = config
         self.subscribed = []
         self.committed = False
+        self.commit_offsets = None
+        self.seeks = []
         self.closed = False
 
     def subscribe(self, topics):
@@ -107,8 +110,16 @@ class _FakeConsumer:
     def poll(self, timeout):
         return _FakeMessage()
 
-    def commit(self, asynchronous):
+    # #2971: the real confluent signature is
+    # ``commit(message=None, offsets=None, asynchronous=True)``. This double
+    # previously accepted only ``asynchronous``, which is exactly the
+    # assignment-wide commit that silently acked skipped records.
+    def commit(self, message=None, offsets=None, asynchronous=True):
         self.committed = not asynchronous
+        self.commit_offsets = offsets
+
+    def seek(self, partition):
+        self.seeks.append(partition)
 
     def close(self):
         self.closed = True
@@ -143,3 +154,7 @@ def test_consumer_poll_returns_legacy_batch_shape(monkeypatch):
     consumer.close()
     assert holder["consumer"].committed is True
     assert holder["consumer"].closed is True
+    # #2971: the commit must name the record being acknowledged (offset+1)
+    # rather than sweeping up the assignment's stored offsets.
+    committed = holder["consumer"].commit_offsets
+    assert committed and committed[0].offset == 43

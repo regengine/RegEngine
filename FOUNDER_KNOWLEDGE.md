@@ -19,7 +19,7 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 ### Auth and Environment Detection
 
 - `REGENGINE_ENV` controls whether auth bypass tokens work. If unset in a cloud
-  environment (Railway, Vercel), the code in `shared/env.py` **forces it to
+  environment (Railway, Vercel), the code in `services/shared/env.py` **forces it to
   "production"** and logs a critical warning. This means auth bypass is impossible
   on Railway/Vercel even if you forget to set the variable. But in manual/local
   deploys outside of recognized cloud providers, the default is "development"
@@ -46,7 +46,7 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 
 ### Tenant Context Resolution
 
-- Tenant identity is resolved in this priority order (see `shared/middleware/tenant_context.py`):
+- Tenant identity is resolved in this priority order (see `services/shared/middleware/tenant_context.py`):
   1. JWT token claims (user requests)
   2. `X-RegEngine-Tenant-ID` header — **only trusted** if `X-RegEngine-Internal-Secret`
      matches the `REGENGINE_INTERNAL_SECRET` env var. If the secret doesn't match,
@@ -73,9 +73,21 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 - The FSMA nightly sync job (when running) fires at 02:00 UTC daily and calls the
   ingestion HTTP endpoint. If that endpoint is down at that time, the sync
   silently fails (logged, but no retry until the next 02:00 UTC run).
-- The in-memory webhook DLQ in `scheduler/app/notifications.py` is **volatile** —
-  lost on service restart. The persistent DLQ in `shared/webhook_dlq.py`
-  (PostgreSQL-backed) survives restarts but is a separate system.
+- The in-memory webhook DLQ in `services/scheduler/app/notifications.py` is **volatile** —
+  lost on service restart. The module this doc used to name for durable retries,
+  `shared/webhook_dlq.py`, no longer exists in the tree. Two separate durable paths
+  replaced it, and they are not interchangeable:
+  - **Scheduler alert webhooks** persist only when `WEBHOOK_OUTBOX_PATH` points at a
+    path on a persistent volume. Railway's container filesystem is ephemeral and
+    `railway.toml` declares no volume, so on the current production config this is
+    **not** durable — setting `WEBHOOK_URLS` without `WEBHOOK_OUTBOX_PATH` logs the
+    `webhook_dlq_persistence_disabled` warning at startup
+    (`services/scheduler/service.py`, #2510) and failed deliveries are lost on
+    every deploy.
+  - **Admin/review webhooks** use the transactional outbox in
+    `services/admin/app/webhook_outbox.py` (#1408), which is genuinely
+    PostgreSQL-backed (`webhook_outbox` table) and drained by
+    `services/admin/scripts/drain_webhook_outbox.py`.
 
 ---
 
@@ -138,8 +150,8 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 | `cte_persistence.py` hash chain logic | Tamper-evident integrity. Any bug here is a compliance breach. |
 | `stripe_billing.py` webhook handling | Stripe webhook signature verification is fiddly. Breaking it silently drops payment events. Also: this file lives in the ingestion service but is functionally admin/billing — confusing. |
 | EDI segment mapping in `edi_ingestion.py` | Fragile string parsing with no snapshot tests. |
-| `shared/auth.py` JWT validation | Multiple auth strategies (JWT, API key, bypass token) with subtle priority ordering. |
-| `graph/app/routers/fsma/compliance.py` | Heavy Neo4j dependency. Will be rewritten entirely during Neo4j→PostgreSQL consolidation. Not worth incremental fixes. |
+| `services/shared/auth.py` JWT validation | Multiple auth strategies (JWT, API key, bypass token) with subtle priority ordering. |
+| `services/graph/app/routers/fsma/compliance.py` | Heavy Neo4j dependency. Will be rewritten entirely during Neo4j→PostgreSQL consolidation. Not worth incremental fixes. |
 | Alembic migration v051 (RLS tenant tables) | Largest migration (20.8KB). Adds RLS infrastructure. Do not modify — add new migrations instead. |
 
 ---
@@ -210,10 +222,10 @@ v073 and should not be treated as production storage.
 
 | Thing | What You'd Expect | What It Actually Is |
 |-------|-------------------|---------------------|
-| `services/ingestion/app/stripe_billing.py` | Billing code in the billing service | Billing code in the **ingestion** service (historical accident) |
+| `services/ingestion/app/stripe_billing/` | Billing code in the billing service | Billing code in the **ingestion** service (historical accident) |
 | `services/shared/` (56 modules) | Lightweight shared utilities | A hidden monolith — contains core domain logic, persistence, identity resolution, rules engine, and audit |
 | `fsma.cte_events` table | The canonical event store | Legacy table being replaced by `fsma.traceability_events`. Still written to (dual-write) and read from (exports, graph sync). |
-| Graph service compliance router | Compliance evaluation | Neo4j-based graph queries + CSV export. Separate from the actual rules engine in `shared/rules/`. |
+| Graph service compliance router | Compliance evaluation | Neo4j-based graph queries + CSV export. Separate from the actual rules engine in `services/shared/rules/`. |
 | `services/scheduler` | Simple cron runner | Leader-elected orchestrator with APScheduler jobs, Kafka producer, webhook delivery, and FDA scraping — runs in production embedded in the monolith via `server/workers/embedded_scheduler.py`, single-flighted by a PostgreSQL advisory lock (see `ASYNC_PROCESSES.md` lines 65+) |
 
 ---
