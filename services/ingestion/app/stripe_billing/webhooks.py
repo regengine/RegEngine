@@ -15,6 +15,19 @@ from . import customers as _customers_mod, helpers as _helpers_mod, plans as _pl
 
 logger = structlog.get_logger("stripe-billing")
 
+# #2930: the only statuses ``subscription_gate`` admits (see
+# ``subscription_gate.py`` ``allowed_statuses``). Anything the checkout
+# handler writes from this set unlocks every paid surface, so it must be
+# reached only from a verified Stripe read of a settled payment.
+_ENTITLING_STATUSES = {"active", "trialing"}
+
+# Checkout ``payment_status`` values that mean the money actually moved
+# (or none was owed). Delayed payment methods — ACH/SEPA/Bacs, common in
+# B2B food distribution — report ``"unpaid"`` on
+# ``checkout.session.completed`` and only settle later via
+# ``checkout.session.async_payment_succeeded``.
+_SETTLED_PAYMENT_STATUSES = {"paid", "no_payment_required"}
+
 
 async def _handle_checkout_completed(
     session: dict[str, Any],
@@ -100,25 +113,64 @@ async def _handle_checkout_completed(
             tenant_id=tenant_id,
             session_id=session_id,
         )
+        # #2930: bind the new tenant to this session/customer immediately.
+        # Provisioning is an external side effect that Stripe's redelivery
+        # cannot undo, and the mapping write that normally records these
+        # lookups happens further down — past the Subscription.retrieve that
+        # may now fail the ack. Without this, every retry of a failed lookup
+        # would provision another tenant and orphan this one.
+        _state_mod._bind_tenant_lookups(
+            tenant_id,
+            session_id=session_id,
+            customer_id=customer_id,
+        )
 
     subscription_id = session.get("subscription")
 
     plan_id = _plans_mod._normalize_plan_id(str(metadata.get("plan_id", "growth")))
     billing_period = _plans_mod._normalize_billing_period(str(metadata.get("billing_period", "monthly")))
 
-    subscription_status = "active"
+    # #2930: never pre-set an entitling status. This value is persisted to
+    # the very hash the subscription gate reads, so the pre-verification
+    # default must be one the gate denies — a session with no subscription
+    # (or one we could not verify) entitles nothing.
+    subscription_status = "incomplete"
     current_period_end = None
+    payment_status = str(session.get("payment_status") or "")
     if subscription_id:
         try:
             subscription = stripe.Subscription.retrieve(subscription_id)
-            subscription_status = subscription.get("status", subscription_status)
-            current_period_end = _helpers_mod._format_period_end(subscription.get("current_period_end"))
-        except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
-            logger.warning(
+        except stripe.error.StripeError as exc:
+            # #2930: do NOT fall through with the default and ack 200 — the
+            # dedup slot is already claimed, so a swallowed error would be
+            # final. Fail the ack instead; ``_process_stripe_webhook``
+            # releases the claim and Stripe redelivers.
+            logger.error(
                 "subscription_lookup_failed",
                 subscription_id=subscription_id,
+                session_id=session_id,
                 error=str(exc),
             )
+            raise HTTPException(
+                status_code=503,
+                detail="Stripe subscription lookup failed; webhook not processed",
+            ) from exc
+        subscription_status = subscription.get("status", subscription_status)
+        current_period_end = _helpers_mod._format_period_end(subscription.get("current_period_end"))
+
+    # #2930: ``checkout.session.completed`` also fires for payments that have
+    # not settled. Until the money lands the tenant is entitled to nothing,
+    # whatever the subscription object says — ``async_payment_succeeded``
+    # (handled in the dispatcher) is what promotes it.
+    if subscription_status in _ENTITLING_STATUSES and payment_status not in _SETTLED_PAYMENT_STATUSES:
+        logger.warning(
+            "checkout_payment_not_settled",
+            session_id=session_id,
+            subscription_id=subscription_id,
+            payment_status=payment_status or "(missing)",
+            stripe_status=subscription_status,
+        )
+        subscription_status = "incomplete"
 
     # #1196: the checkout event itself is the first write that establishes
     # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
@@ -482,6 +534,22 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
 
     if event_type == "checkout.session.completed":
         await _handle_checkout_completed(data_object, event_created=event_created)
+        return
+
+    # #2930: delayed payment methods settle after checkout completes. These
+    # two events are the only thing that resolves the non-entitling status
+    # written above, so the dispatcher must not ignore them.
+    if event_type == "checkout.session.async_payment_succeeded":
+        await _handle_checkout_completed(data_object, event_created=event_created)
+        return
+
+    if event_type == "checkout.session.async_payment_failed":
+        _update_subscription_status(
+            subscription_id=data_object.get("subscription"),
+            customer_id=data_object.get("customer"),
+            status="incomplete",
+            event_created=event_created,
+        )
         return
 
     if event_type == "invoice.payment_failed":

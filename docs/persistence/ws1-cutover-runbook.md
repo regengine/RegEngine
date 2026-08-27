@@ -636,6 +636,14 @@ canonical verifier's existence-only `cte_events` probe, retires
 `scripts/validate_data_integrity.py`'s reconciliation check from the ops runbook,
 and deletes `DUAL_WRITE_RECONCILIATION_NEEDED`.
 
+> **Until then, when you run `scripts/validate_data_integrity.py` (#2934):**
+> exit 0 counts as evidence only if the output shows a `[PASS]` line for all
+> four named checks — Hash Chain Continuity, Orphaned Records, Dual-Write
+> Reconciliation, Tenant Isolation. Paste the printed check table into the
+> evidence log, not just the exit status. No database means no verification:
+> the script exits `2` (or `64` when `DATABASE_URL` is unset) and prints the
+> connection error — treat that as NO-GO, not as a pass.
+
 **Entry gate — all of:**
 1. Steps 2 and 3 soaked with **no** rollback, on evidence (Appendix A), for a
    full release cycle — not 12 hours.
