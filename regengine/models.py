@@ -1,10 +1,32 @@
 """
 RegEngine SDK Data Models
+
+Deserialisation contract (#2933): the dataclass constructors are strict —
+an unrecognised keyword raises ``TypeError`` rather than silently dropping a
+field. Server payloads, whose key names differ from the SDK field names, are
+mapped by the ``from_api`` classmethods (``Record``, ``Facility``,
+``TimelineEvent``), which ignore keys the SDK does not model. The remaining
+models keep a kwargs constructor that reads every field through
+``kwargs.get``, so unknown keys are likewise ignored and no field is unset.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+
+def _first(payload: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the first present, non-None value among ``keys``.
+
+    Lets a model read both the canonical server key
+    (``traceability_lot_code``) and any short alias (``tlc``) — the same
+    alias handling ``verify_records._first`` uses.
+    """
+    for key in keys:
+        value = payload.get(key)
+        if value is not None:
+            return value
+    return default
 
 
 class CTEType(str, Enum):
@@ -36,10 +58,28 @@ class Record:
     created_at: Optional[str] = None
     hash: Optional[str] = None
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "Record":
+        """Build a ``Record`` from a ``GET /api/v1/records`` response row.
+
+        The canonical endpoint emits the server's key names (``event_id``,
+        ``event_type``, ``traceability_lot_code``, ...); this maps them onto
+        the SDK field names and ignores keys the SDK does not model.
+        """
+        return cls(
+            id=_first(payload, "event_id", "id", default=""),
+            tlc=_first(payload, "traceability_lot_code", "tlc", default=""),
+            cte_type=_first(payload, "event_type", "cte_type", default=""),
+            location=_first(payload, "from_facility_reference", "location", default=""),
+            quantity=_first(payload, "quantity", default=0.0),
+            quantity_uom=_first(payload, "unit_of_measure", "quantity_uom", default=""),
+            event_date=_first(payload, "event_timestamp", "event_date", default=""),
+            product_description=_first(payload, "product_reference", "product_description"),
+            reference_document=_first(payload, "reference_document"),
+            input_tlcs=_first(payload, "input_tlcs"),
+            created_at=_first(payload, "created_at"),
+            hash=_first(payload, "sha256_hash", "hash"),
+        )
 
 
 @dataclass
@@ -52,10 +92,22 @@ class Facility:
     address: Optional[str] = None
     facility_type: Optional[str] = None
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "Facility":
+        """Build a ``Facility`` from a facility object in a trace response.
+
+        Trace results carry ``gln``/``name``/``address``/``facility_type``
+        with no separate identifier, so ``id`` falls back to the GLN. Keys
+        the SDK does not model are ignored.
+        """
+        gln = _first(payload, "gln", default="")
+        return cls(
+            id=_first(payload, "facility_id", "id", default=gln),
+            gln=gln,
+            name=_first(payload, "name", default=""),
+            address=_first(payload, "address"),
+            facility_type=_first(payload, "facility_type", "type"),
+        )
 
 
 @dataclass
@@ -88,10 +140,22 @@ class TimelineEvent:
     quantity: Optional[float] = None
     description: Optional[str] = None
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "TimelineEvent":
+        """Build a ``TimelineEvent`` from a timeline response entry.
+
+        ``GET /api/v1/fsma/traceability/timeline/{tlc}`` emits ``type``,
+        ``event_date`` and a nested ``facility`` object (or ``None``); the
+        facility name supplies ``location``. Unknown keys are ignored.
+        """
+        facility = payload.get("facility") or {}
+        return cls(
+            cte=_first(payload, "type", "cte_type", "cte", default=""),
+            date=_first(payload, "event_date", "date", default=""),
+            location=_first(payload, "location") or _first(facility, "name", "gln", default=""),
+            quantity=_first(payload, "quantity"),
+            description=_first(payload, "description", "product_description"),
+        )
 
 
 @dataclass

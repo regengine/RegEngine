@@ -8,6 +8,10 @@ from ..fsma_types import CTE, FSMAExtractionResult
 
 logger = structlog.get_logger("fsma-extractor")
 
+# The KDE minimums enforced by the extractor's gate: a CTE missing either
+# is withheld from the graph and surfaced to a human reviewer instead.
+REQUIRED_KDE_FIELDS = ("traceability_lot_code", "event_date")
+
 
 class GraphEventSerializationMixin:
     """Conversion of FSMAExtractionResult to downstream event payloads."""
@@ -34,38 +38,69 @@ class GraphEventSerializationMixin:
             "tenant_id": result.tenant_id,
             "document_type": result.document_type.value,
             "timestamp": result.extraction_timestamp,
-            "ctes": [
-                {
-                    # #1123 — per-event UUID so paired SHIPPING/RECEIVING
-                    # CTEs from the same BOL are distinguishable on ingest.
-                    "event_id": cte.event_id,
-                    "type": cte.type.value,
-                    "kdes": {
-                        "traceability_lot_code": cte.kdes.traceability_lot_code,
-                        "product_description": cte.kdes.product_description,
-                        "quantity": cte.kdes.quantity,
-                        "unit_of_measure": cte.kdes.unit_of_measure,
-                        "location_identifier": cte.kdes.location_identifier,
-                        "tlc_source_gln": cte.kdes.tlc_source_gln,
-                        "tlc_source_fda_reg": cte.kdes.tlc_source_fda_reg,
-                        "ship_from_gln": cte.kdes.ship_from_gln,
-                        "ship_to_gln": cte.kdes.ship_to_gln,
-                        "event_date": cte.kdes.event_date,
-                        "event_time": cte.kdes.event_time,
-                        # #1123 — RECEIVING carries a back-pointer so the
-                        # graph can link the two halves of the handoff.
-                        "prior_source_tlc": cte.kdes.prior_source_tlc,
-                    },
-                    "confidence": cte.confidence,
-                }
-                for cte in qualified_ctes
-            ],
+            "ctes": [self._serialize_cte(cte) for cte in qualified_ctes],
             "warnings": result.warnings,
             "risk_assessment": {
                 "level": result.confidence_level.value,
                 "review_required": result.review_required
             }
         }
+
+    def to_review_event(self, result: FSMAExtractionResult) -> Dict[str, Any]:
+        """
+        Convert extraction result to the human-in-the-loop review payload.
+
+        Same envelope shape as :meth:`to_graph_event`, differing only in
+        ``ctes``: **every** CTE is emitted — including the ones the KDE
+        minimum gate rejects, which are precisely the CTEs that triggered
+        review (#2932). Filtering them out left the reviewer with nothing
+        to complete. Each CTE carries a machine-readable ``missing_kdes``
+        list naming the KDE minimums it lacks.
+        """
+        event = self.to_graph_event(result)
+        event["ctes"] = [
+            {**self._serialize_cte(cte), "missing_kdes": self._missing_required_kdes(cte)}
+            for cte in result.ctes
+        ]
+        return event
+
+    def _serialize_cte(self, cte: CTE) -> Dict[str, Any]:
+        """Serialize one CTE into the routing envelope's per-event shape."""
+        return {
+            # #1123 — per-event UUID so paired SHIPPING/RECEIVING
+            # CTEs from the same BOL are distinguishable on ingest.
+            "event_id": cte.event_id,
+            "type": cte.type.value,
+            "kdes": {
+                "traceability_lot_code": cte.kdes.traceability_lot_code,
+                "product_description": cte.kdes.product_description,
+                "quantity": cte.kdes.quantity,
+                "unit_of_measure": cte.kdes.unit_of_measure,
+                "location_identifier": cte.kdes.location_identifier,
+                "tlc_source_gln": cte.kdes.tlc_source_gln,
+                "tlc_source_fda_reg": cte.kdes.tlc_source_fda_reg,
+                "ship_from_gln": cte.kdes.ship_from_gln,
+                "ship_to_gln": cte.kdes.ship_to_gln,
+                "event_date": cte.kdes.event_date,
+                "event_time": cte.kdes.event_time,
+                # #1123 — RECEIVING carries a back-pointer so the
+                # graph can link the two halves of the handoff.
+                "prior_source_tlc": cte.kdes.prior_source_tlc,
+            },
+            "confidence": cte.confidence,
+        }
+
+    def _missing_required_kdes(self, cte: CTE) -> List[str]:
+        """Names of the KDE minimums (TLC + Event Date) absent from ``cte``.
+
+        Mirrors the qualification gate in :meth:`to_graph_event`: a CTE with
+        an empty list here is graph-eligible, anything else is a review gap.
+        """
+        return [
+            name
+            for name in REQUIRED_KDE_FIELDS
+            if not getattr(cte.kdes, name)
+        ]
 
     def to_fsma_events(self, result: FSMAExtractionResult) -> List[Dict[str, Any]]:
         """

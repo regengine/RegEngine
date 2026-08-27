@@ -324,3 +324,67 @@ class TestReviewItemSchemaCompatibility:
         kwargs = tracker.record_hallucination.call_args.kwargs
         assert "<script>" not in kwargs["text_raw"]
         assert "must report" in kwargs["text_raw"]
+
+
+# ---------------------------------------------------------------------------
+# FSMA review envelope contents (#2932)
+# ---------------------------------------------------------------------------
+
+
+# A BOL with a lot code but no ship date — the KDE-minimum gate fires, so the
+# extraction is routed to review and its single CTE is the one the reviewer
+# has to complete.
+BOL_MISSING_EVENT_DATE = """
+BILL OF LADING
+Shipper: Fresh Farms Inc.
+GLN: 1234567890123
+
+Ship To: Metro Distribution Center
+
+ITEM DETAILS:
+Product: Romaine Lettuce Hearts 12ct
+Lot: L-2025-1105-A
+Quantity: 50 cases
+GTIN: 00012345678901
+"""
+
+
+class TestFSMAReviewEnvelope:
+    """The enqueued ``review_item`` must carry the CTEs that triggered review.
+
+    Runs the REAL FSMAExtractor (not the stub used above) because the defect
+    lived in the extractor's own choice of serializer: ``route_extraction``
+    built the HITL payload with ``to_graph_event``, which drops exactly the
+    KDE-deficient CTEs that caused the routing decision (#2932).
+    """
+
+    def _enqueued_fsma_envelope(self):
+        from services.nlp.app.extractors.fsma_extractor import FSMAExtractor
+
+        enqueue = MagicMock(return_value=1)
+        with (
+            patch.object(task_processor, "_get_fsma_extractor", return_value=FSMAExtractor()),
+            patch.object(task_processor, "enqueue_task", enqueue),
+        ):
+            task_processor._handle_nlp_extraction(
+                _payload(text=BOL_MISSING_EVENT_DATE), TENANT_ID
+            )
+
+        fsma_calls = [c for c in _review_item_calls(enqueue) if c.args[1]["entity_type"] == "FSMA_EXTRACTION"]
+        assert len(fsma_calls) == 1
+        return fsma_calls[0].args[1]["extraction"]["attributes"]["fsma_envelope"]
+
+    def test_review_item_envelope_carries_the_deficient_cte(self):
+        envelope = self._enqueued_fsma_envelope()
+
+        assert envelope["risk_assessment"]["review_required"] is True
+        # Pre-fix this was [] — the reviewer saw only warnings and a
+        # 1000-char redacted snippet, and the partial KDEs were discarded.
+        assert len(envelope["ctes"]) == 1
+        assert envelope["ctes"][0]["kdes"]["traceability_lot_code"] == "L-2025-1105-A"
+        assert envelope["ctes"][0]["kdes"]["quantity"] == 50.0
+
+    def test_review_item_envelope_lists_missing_kdes(self):
+        envelope = self._enqueued_fsma_envelope()
+
+        assert envelope["ctes"][0]["missing_kdes"] == ["event_date"]
