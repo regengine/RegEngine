@@ -72,6 +72,32 @@ def _build_review_reasons(extraction: ExtractionPayload, tier: str) -> list[dict
                 "severity": "error",
             }
         )
+    if attributes.get("llm_needs_review"):
+        # #2947 — the generative extractor's output-side guardrails (injection
+        # markers, ambiguous spans) set this. It was computed and discarded
+        # until the LLM bridge landed.
+        reasons.append(
+            {
+                "reason_code": "llm_flagged_for_review",
+                "description": (
+                    "LLM extraction flagged by output guardrails: "
+                    f"{attributes.get('llm_review_reason') or 'unspecified'}"
+                ),
+                "severity": "error",
+            }
+        )
+    if attributes.get("llm_truncated_input"):
+        reasons.append(
+            {
+                "reason_code": "llm_truncated_input",
+                "description": (
+                    "LLM extraction was made from a truncated prefix of the "
+                    "source document (#1370); the rest of the document was "
+                    "never read"
+                ),
+                "severity": "warning",
+            }
+        )
     if attributes.get("negation_detected"):
         # #2942 — the obligation direction was derived from a negated reading
         # ("shall not", "not required to"). A reviewer skimming the structured

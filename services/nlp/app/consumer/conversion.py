@@ -21,7 +21,10 @@ from ..classification import SignalClassifier
 from ..extractor import infer_obligation_type
 from ..resolution import MASTER_DATA_SOURCE, EntityResolver
 
-from .constants import _LEGACY_HEURISTIC_CONFIDENCE_CAP
+from .constants import (
+    _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+    _LLM_EXTRACTION_CONFIDENCE_CAP,
+)
 
 logger = structlog.get_logger("nlp-consumer")
 
@@ -285,6 +288,125 @@ def _convert_entities_to_extraction(
 
     return extractions
 
+
+# ---------------------------------------------------------------------------
+# Generative-LLM results → canonical ExtractionPayload (#2947)
+# ---------------------------------------------------------------------------
+
+# LLMExtraction.obligation_type vocabulary → canonical enum. PROHIBITION maps
+# to MUST_NOT for the same reason the regex path does (#2942): a ban stored as
+# a mandate is the inversion of the rule. EXEMPTION lifts a duty, so it is a
+# permission, not a ban. UNKNOWN asserts neither and is flagged for the
+# reviewer instead of defaulting to a mandate.
+_LLM_OBLIGATION_TYPE = {
+    "REQUIREMENT": ObligationType.MUST,
+    "PROHIBITION": ObligationType.MUST_NOT,
+    "REPORTING": ObligationType.REPORTING,
+    "EXEMPTION": ObligationType.MAY,
+    "UNKNOWN": ObligationType.SHOULD,
+}
+
+_LLM_ACTION = {
+    ObligationType.MUST: "must",
+    ObligationType.MUST_NOT: "must not",
+    ObligationType.REPORTING: "must report",
+    ObligationType.MAY: "may",
+    ObligationType.SHOULD: "should",
+}
+
+
+def _llm_field(item, name: str, default=None):
+    """Read *name* off an LLMExtraction or an equivalent mapping."""
+
+    if isinstance(item, dict):
+        value = item.get(name, default)
+    else:
+        value = getattr(item, name, default)
+    return default if value is None else value
+
+
+def _convert_llm_results_to_extractions(
+    llm_results: list, doc_id: str, source_url: str
+) -> list[ExtractionPayload]:
+    """Bridge ``LLMGenerativeExtractor`` output into canonical extractions.
+
+    Before this existed the consumer called the extractor, logged
+    ``result_count``, and dropped the list on the floor: the routing loop
+    iterated only the regex path's ``extractions``, so an operator who enabled
+    ``NLP_ENABLE_LLM_EXTRACTOR`` paid a third-party provider per document for
+    output nothing read, and the hallucination, provenance, injection-marker
+    and truncation guardrails in ``llm_extractor.py`` protected nothing (#2947).
+
+    Fail-closed by construction:
+
+    * confidence is capped at :data:`_LLM_EXTRACTION_CONFIDENCE_CAP`, below the
+      medium routing threshold, so nothing here can auto-publish to the graph
+      on an LLM's self-reported score;
+    * an item with no ``provision_text`` is dropped, because there is no span a
+      reviewer could check against the source document;
+    * ``needs_review`` / ``review_reason`` / ``truncated_input`` ride along in
+      ``attributes`` and become review-reason codes.
+    """
+
+    extractions: list[ExtractionPayload] = []
+    dropped = 0
+
+    for item in llm_results or []:
+        provision_text = str(_llm_field(item, "provision_text", "")).strip()
+        if not provision_text:
+            dropped += 1
+            continue
+
+        raw_type = str(_llm_field(item, "obligation_type", "UNKNOWN"))
+        obl_type = _LLM_OBLIGATION_TYPE.get(raw_type, ObligationType.SHOULD)
+
+        try:
+            reported_confidence = float(_llm_field(item, "confidence", 0.0))
+        except (TypeError, ValueError):
+            reported_confidence = 0.0
+        confidence = max(
+            0.0, min(reported_confidence, _LLM_EXTRACTION_CONFIDENCE_CAP)
+        )
+
+        span_start = _llm_field(item, "source_span_start", 0)
+        parts = provision_text.split()
+        attributes = {
+            "document_id": doc_id,
+            "source_url": source_url,
+            "extractor": "llm_generative_v1",
+            "confidence_capped_at": _LLM_EXTRACTION_CONFIDENCE_CAP,
+            "llm_reported_confidence": reported_confidence,
+            "llm_obligation_type": raw_type,
+            "llm_source_document_id": _llm_field(item, "source_document_id"),
+            "llm_source_span_end": _llm_field(item, "source_span_end"),
+            "llm_needs_review": bool(_llm_field(item, "needs_review", False)),
+            "llm_review_reason": _llm_field(item, "review_reason"),
+            "llm_truncated_input": bool(_llm_field(item, "truncated_input", False)),
+        }
+        if raw_type not in _LLM_OBLIGATION_TYPE:
+            attributes["llm_obligation_type_unmapped"] = True
+
+        extractions.append(
+            ExtractionPayload(
+                subject=" ".join(parts[: min(3, len(parts))]),
+                action=_LLM_ACTION.get(obl_type, "must"),
+                object=None,
+                obligation_type=obl_type,
+                confidence_score=confidence,
+                source_text=provision_text,
+                source_offset=int(span_start or 0),
+                attributes=attributes,
+            )
+        )
+
+    if dropped:
+        logger.warning(
+            "llm_results_dropped_no_provenance_span",
+            document_id=doc_id,
+            dropped=dropped,
+        )
+
+    return extractions
 
 def _score_regulatory_date(date_value: Optional[str], attrs: dict) -> float:
     """Score a REGULATORY_DATE match by signal quality (#1206).
