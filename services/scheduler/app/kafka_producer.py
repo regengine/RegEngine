@@ -17,8 +17,10 @@ from .models import AlertEvent, EnforcementItem
 
 logger = structlog.get_logger("kafka_producer")
 
-# Producer identity for HMAC signing. Must match the consumer-side
-# allowlist in services/graph/app/consumers/fsma_consumer.py (#2190).
+# Producer identity for HMAC signing. Must be a key of
+# shared.kafka_auth._PRODUCER_KEY_ENV_MAP (which resolves the per-service
+# signing secret) and must appear in whatever per-topic allowlist a consumer
+# configures via KAFKA_ALLOWED_PRODUCERS_<TOPIC> (#2190).
 PRODUCER_SERVICE = "scheduler-service"
 
 
@@ -221,10 +223,17 @@ class KafkaEventProducer:
     def emit_fsma_event(self, fsma_event: dict) -> bool:
         """Emit an FSMA trace event for graph ingestion.
 
-        The graph consumer enforces HMAC verification on this topic
-        (services/graph/app/consumers/fsma_consumer.py); unsigned events
-        are DLQ'd in any environment where ``KAFKA_EVENT_SIGNING_KEY`` is
-        configured (#2190).
+        Events are HMAC-signed here via ``shared.kafka_auth.sign_event``
+        before publish (#2190).
+
+        No consumer currently subscribes to this topic. The graph-side
+        consumer that used to verify these signatures was removed, so
+        nothing verifies, DLQ-routes or otherwise acts on what is published
+        here today; messages accumulate until Kafka retention drops them.
+        Signing is retained so the envelope contract stays valid for a
+        future consumer. ``shared.kafka_auth.verify_event`` is the function
+        such a consumer would call — its only production caller today is
+        services/admin/app/review_consumer.py, on a different topic.
         """
         event_id = fsma_event.get("event_id", "unknown")
         base_headers = inject_correlation_headers_tuples()

@@ -19,6 +19,98 @@ from .types import TraceResult
 logger = structlog.get_logger("fsma-utils")
 
 
+# #2945: the deduplicated facilities/events/lots lists on ``TraceResult``
+# discard which lot took part in which event, and where. Exporters cannot
+# reconstruct that from three flat lists — the FDA trace CSV "compensated" by
+# pairing every lot with every event and stamping the first GLN-bearing
+# facility on each row, i.e. by fabricating the association. This query
+# re-reads the (lot, event, facility) edges for the nodes the traversal
+# already returned, so the association survives to the exporter.
+_TRACE_ROWS_QUERY = """
+MATCH (l:Lot)-[:UNDERWENT|PRODUCED|CONSUMED]-(e:TraceEvent)
+WHERE l.tenant_id = $tenant_id
+  AND e.tenant_id = $tenant_id
+  AND l.tlc IN $tlcs
+  AND e.event_id IN $event_ids
+OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
+WHERE f.tenant_id = $tenant_id
+RETURN properties(l) AS lot, properties(e) AS event, properties(f) AS facility
+LIMIT 5000
+"""
+
+
+async def _collect_trace_rows(
+    client: Neo4jClient,
+    tlc: str,
+    tenant_id: str,
+    lots: List[Dict[str, Any]],
+    events: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Return the (lot, event, facility) associations behind a trace (#2945).
+
+    Best-effort enrichment: the deduplicated node lists remain the contract, so
+    a failure here degrades the CSV to "association unknown" (blank cells)
+    rather than failing the whole trace or, worse, licensing a guess.
+    """
+    tlcs = sorted({lot.get("tlc") for lot in lots if lot.get("tlc")})
+    event_ids = sorted({event.get("event_id") for event in events if event.get("event_id")})
+    if not tlcs or not event_ids:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    try:
+        async with client.session() as session:
+            result = await session.run(
+                _TRACE_ROWS_QUERY,
+                tenant_id=tenant_id,
+                tlcs=tlcs,
+                event_ids=event_ids,
+            )
+            async for record in result:
+                lot_props = record["lot"] or {}
+                event_props = record["event"] or {}
+                facility_props = record["facility"] or None
+                # SECURITY (#1256): mirror the per-node tenant invariant used
+                # on the traversal itself rather than trusting the predicate.
+                for props in (lot_props, event_props, facility_props or {}):
+                    node_tenant = props.get("tenant_id")
+                    if node_tenant not in (None, "", tenant_id):
+                        raise ValueError(f"trace association tenant invariant violation: tenant={node_tenant!r}")
+                rows.append(
+                    {
+                        "lot": {
+                            "tlc": lot_props.get("tlc"),
+                            "product_description": lot_props.get("product_description"),
+                            "quantity": lot_props.get("quantity"),
+                            "unit_of_measure": lot_props.get("unit_of_measure"),
+                        },
+                        "event": {
+                            "event_id": event_props.get("event_id"),
+                            "type": event_props.get("type"),
+                            "event_date": event_props.get("event_date"),
+                            "event_time": event_props.get("event_time"),
+                            "confidence": event_props.get("confidence"),
+                        },
+                        "facility": (
+                            {
+                                "gln": facility_props.get("gln"),
+                                "name": facility_props.get("name"),
+                                "address": facility_props.get("address"),
+                            }
+                            if facility_props
+                            else None
+                        ),
+                    }
+                )
+    except ValueError:
+        raise
+    except Exception as err:  # pragma: no cover - defensive
+        logger.warning("trace_rows_collection_failed", tlc=tlc, error=str(err))
+        return []
+
+    return rows
+
+
 async def trace_forward(
     client: Neo4jClient,
     tlc: str,
@@ -320,6 +412,9 @@ async def trace_forward(
     # Collect risk flags from events
     risk_flags = list(set(e.get("risk_flag") for e in events if e.get("risk_flag")))
 
+    # #2945: preserve the lot<->event<->facility association for exporters.
+    trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)
+
     query_time = (time.time() - start_time) * 1000  # Convert to ms
 
     logger.info(
@@ -344,6 +439,7 @@ async def trace_forward(
         hop_count=max_hops,
         time_violations=time_violations if time_violations else None,
         risk_flags=risk_flags if risk_flags else None,
+        trace_rows=trace_rows or None,
     )
 
 
@@ -385,7 +481,33 @@ async def trace_backward(
     rel_depth = min(max_depth * 2, 20)
 
     # Optimized Cypher query to trace backward through transformations.
-    # Path: Lot <- PRODUCED <- TraceEvent <- CONSUMED <- Lot
+    # Path: Lot <-[:PRODUCED]- TraceEvent -[:CONSUMED]-> Lot, repeated.
+    #
+    # #2940 — DIRECTION. ``FSMARelationships`` persists *both* transformation
+    # edges pointing event -> lot:
+    #     EVENT_PRODUCED_LOT:  MERGE (e)-[:PRODUCED]->(l)
+    #     EVENT_CONSUMED_LOT:  MERGE (e)-[:CONSUMED]->(l)
+    # so a transformation's *inputs* hang off the event's OUTGOING ``CONSUMED``
+    # edge. This query used to walk incoming edges only
+    # (``<-[:PRODUCED|CONSUMED*1..N]-``): hop 1 reached the producing event and
+    # hop 2 would have needed an edge pointing *into* a TraceEvent, which no
+    # writer ever creates. The traversal could not extend past length 1 for any
+    # ``max_depth``, so "one step back" returned no source lot at all.
+    #
+    # A single directed variable-length pattern cannot express "incoming
+    # PRODUCED, then outgoing CONSUMED" — every hop shares one direction. So
+    # the pattern is undirected and each hop's direction is asserted
+    # explicitly: for PRODUCED the relationship must point *at* the node we
+    # arrived on (``endNode(r) = nodes(path)[idx]``), for CONSUMED it must
+    # point *away* from it. That is not merely cosmetic — an undirected
+    # traversal without this predicate walks the incoming ``CONSUMED`` edge of
+    # a *downstream* transformation and reports the products this lot was made
+    # into as if they were its sources.
+    #
+    # Because no writer creates an incoming PRODUCED on an event or an
+    # outgoing CONSUMED on a lot, the predicate also makes the traversal
+    # self-alternating (Lot -> Event -> Lot -> ...) with no extra check.
+    #
     # Performance notes:
     # - USING INDEX hint anchors on indexed Lot(tlc) start node
     # - Capped rel_depth prevents combinatorial blowup
@@ -396,13 +518,20 @@ async def trace_backward(
     # boundaries via shared events or facilities.
     query = (
         """
-    MATCH path = (start:Lot {tlc: $tlc})<-[:PRODUCED|CONSUMED*1.."""
+    MATCH path = (start:Lot {tlc: $tlc})-[:PRODUCED|CONSUMED*1.."""
         + str(rel_depth)
         + """]-(source)
     USING INDEX start:Lot(tlc)
     WHERE start.tenant_id = $tenant_id
       AND ALL(
               n IN nodes(path) WHERE n.tenant_id = $tenant_id
+          )
+      AND ALL(
+              idx IN range(0, size(relationships(path)) - 1)
+              WHERE CASE type(relationships(path)[idx])
+                        WHEN 'PRODUCED' THEN endNode(relationships(path)[idx]) = nodes(path)[idx]
+                        ELSE startNode(relationships(path)[idx]) = nodes(path)[idx]
+                    END
           )
     WITH path, nodes(path) as path_nodes
     UNWIND path_nodes as node
@@ -481,11 +610,20 @@ async def trace_backward(
                 )
 
     # Also get source facilities via SHIPPED relationship.
+    #
+    # #2940 — this used to match ``(e:TraceEvent)-[:INCLUDED]->(l:Lot)``.
+    # Nothing in the repository writes an ``:INCLUDED`` relationship (no
+    # MERGE, no migration, no fixture), so the query returned zero rows
+    # unconditionally and ``facilities`` came back empty no matter what the
+    # graph held. The real inbound-shipment shape is the event that produced
+    # or consumed this lot, reached from the facility that shipped it
+    # (``FSMARelationships.SHIPPED_FROM`` writes ``(f)-[:SHIPPED]->(e)``).
+    #
     # #1256: enforce tenant on Facility, Event, AND Lot — all three nodes
     # on the path must belong to the caller so we never return a source
     # facility reached via a cross-tenant event.
     facility_query = """
-    MATCH (f:Facility)-[:SHIPPED]->(e:TraceEvent)-[:INCLUDED]->(l:Lot {tlc: $tlc})
+    MATCH (f:Facility)-[:SHIPPED]->(e:TraceEvent)-[:PRODUCED|CONSUMED]->(l:Lot {tlc: $tlc})
     WHERE l.tenant_id = $tenant_id
       AND e.tenant_id = $tenant_id
       AND f.tenant_id = $tenant_id
@@ -516,6 +654,9 @@ async def trace_backward(
                     }
                 )
 
+    # #2945: preserve the lot<->event<->facility association for exporters.
+    trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)
+
     query_time = (time.time() - start_time) * 1000
 
     logger.info(
@@ -536,4 +677,5 @@ async def trace_backward(
         total_quantity=total_quantity if total_quantity > 0 else None,
         query_time_ms=round(query_time, 2),
         hop_count=max_hops,
+        trace_rows=trace_rows or None,
     )

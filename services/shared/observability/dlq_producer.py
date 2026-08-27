@@ -1,9 +1,11 @@
 """Shared DLQ (Dead Letter Queue) producer singleton.
 
-#1228: Previously each service (graph/consumer.py, graph/consumers/fsma_consumer.py,
-admin/review_consumer.py) kept its own copy of a DLQ producer singleton.  This
-module consolidates that logic in one place.  Services import ``DLQProducer``
-from here rather than defining it locally.
+#1228: Previously each service kept its own copy of a DLQ producer singleton.
+This module consolidates that logic in one place.  Services import
+``DLQProducer`` from here rather than defining it locally.  Of the three
+original copies, only admin/app/review_consumer.py still exists; the two graph
+consumers that held the others (a graph consumer module and an FSMA consumer
+module) have since been deleted from the tree.
 
 Usage example::
 

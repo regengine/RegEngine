@@ -41,7 +41,9 @@ setup(
         "License :: Other/Proprietary License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
+        # #2954: 3.8 removed. verify_records.py — the module behind the sole
+        # console script — is not exercised on 3.8 by any CI job, and the
+        # declared floor must not advertise a version nothing verifies.
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
@@ -58,12 +60,23 @@ setup(
     # in-repo tests out of the customer artifact.
     packages=["regengine"],
     package_dir={"regengine": "."},
-    python_requires=">=3.8",
+    # #2954: the floor is what is actually exercised, not an aspiration.
+    python_requires=">=3.9",
     install_requires=[
         "httpx>=0.27,<1.0",
         "requests>=2.28.0",
     ],
     extras_require={
+        # #2957: regengine/labels.py is swept into the distribution by
+        # package_dir={"regengine": "."}. Its third-party imports (qrcode,
+        # Pillow, fpdf2) are declared here and imported lazily inside the
+        # label functions, so importing the module never raises
+        # ModuleNotFoundError for an undeclared package.
+        "labels": [
+            "qrcode>=7.4",
+            "Pillow>=10.0.0",
+            "fpdf2>=2.8.0",
+        ],
         "dev": [
             "pytest>=7.0",
             "pytest-cov",

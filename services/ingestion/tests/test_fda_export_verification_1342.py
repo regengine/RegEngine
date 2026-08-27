@@ -5,9 +5,17 @@ Locks:
 - Single-TLC export path: query_events_by_tlc called with stored tlc;
   returned events feed into _generate_csv(); regenerated_hash computed
   from UTF-8-encoded CSV SHA-256; hashes_match reflects equality.
-- Full-export path (fda_spreadsheet / fda_package): query_all_events
-  called once, then query_events_by_tlc per event; duplicate event ids
-  dedup'd by str(event.get("id")).
+- Full-export path (fda_export_all / fda_spreadsheet / ...):
+  reconstructed through the shared ``reconstruct_full_export_events``
+  helper the exporter also calls — query_all_events once, then ONE
+  set-based query_events_by_tlcs over every seed lot code; duplicate
+  event ids dedup'd. The per-seed query_events_by_tlc fan-out this file
+  used to pin was mechanism (b) of #2898: it re-derived the event set
+  with a different algorithm than the exporter, so an untampered
+  multi-lot export verified as MISMATCH_DETECTED.
+- include_pii is read from the audit row and passed to _generate_csv;
+  a row that never recorded it (NULL) fails closed with 409 rather than
+  being reported as tampered (#2898).
 - 409 for unreproducible export types (e.g., "fda_recall").
 - HTTPException pass-through (not wrapped as 500).
 - (ImportError | ValueError | RuntimeError | OSError) → 500 with
@@ -18,7 +26,7 @@ Locks:
   through when None.
 - start_date / end_date coerced to str() when present, else None.
 
-Issue: #1342
+Issue: #1342 (audit-row shape and reconstruction extended by #2898)
 """
 
 from __future__ import annotations
@@ -71,6 +79,9 @@ class _FakePersistence:
         self.tlc_return = []
         self.all_events_return = ([], None)
         self.tlc_side_effect = None  # callable(tlc) -> list
+        self.tlcs_calls: list[dict] = []
+        self.tlcs_return: list[dict] = []
+        self.tlcs_side_effect = None  # callable(tlcs) -> list
 
     def query_events_by_tlc(self, *, tenant_id, tlc, start_date, end_date):
         self.tlc_calls.append(
@@ -84,6 +95,20 @@ class _FakePersistence:
         if self.tlc_side_effect is not None:
             return self.tlc_side_effect(tlc)
         return list(self.tlc_return)
+
+    def query_events_by_tlcs(self, *, tenant_id, tlcs, start_date, end_date, limit):
+        self.tlcs_calls.append(
+            {
+                "tenant_id": tenant_id,
+                "tlcs": list(tlcs),
+                "start_date": start_date,
+                "end_date": end_date,
+                "limit": limit,
+            }
+        )
+        if self.tlcs_side_effect is not None:
+            return self.tlcs_side_effect(list(tlcs))
+        return list(self.tlcs_return)
 
     def query_all_events(self, *, tenant_id, start_date, end_date, event_type, limit):
         self.all_events_calls.append(
@@ -168,6 +193,8 @@ class TestRowLookup:
             0,  # record_count
             "hash-0",  # export_hash
             None,  # generated_at
+            False,  # include_pii — recorded, so the 409 below is about the type
+            None,  # query_event_type
         )
         sess, _ = _install_deps(monkeypatch, session=_FakeSession(row=row))
         with pytest.raises(HTTPException) as exc_info:
@@ -185,7 +212,15 @@ class TestRowLookup:
 
 class TestSingleTLCVerification:
     def _make_row(
-        self, *, tlc="TLC-A", start="2026-01-01", end="2026-01-31", count=3, original_hash="orig", generated_at=None
+        self,
+        *,
+        tlc="TLC-A",
+        start="2026-01-01",
+        end="2026-01-31",
+        count=3,
+        original_hash="orig",
+        generated_at=None,
+        include_pii=False,
     ):
         return (
             "fda_csv",
@@ -195,6 +230,8 @@ class TestSingleTLCVerification:
             count,
             original_hash,
             generated_at,
+            include_pii,
+            None,  # query_event_type (unused on the single-TLC path)
         )
 
     def test_hashes_match_path(self, monkeypatch):
@@ -206,7 +243,7 @@ class TestSingleTLCVerification:
         persist.tlc_return = [{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]
         _install_deps(monkeypatch, session=sess, persistence=persist)
 
-        monkeypatch.setattr(v, "_generate_csv", lambda events: csv_out)
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: csv_out)
         out = asyncio.run(v.verify_export_handler("exp-1", "tenant-1"))
 
         assert out["export_id"] == "exp-1"
@@ -230,7 +267,7 @@ class TestSingleTLCVerification:
         _install_deps(monkeypatch, session=sess, persistence=persist)
 
         csv_out = "different content"
-        monkeypatch.setattr(v, "_generate_csv", lambda events: csv_out)
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: csv_out)
         out = asyncio.run(v.verify_export_handler("exp-1", "tenant-1"))
 
         assert out["original_hash"] == "stored-hash-abc"
@@ -246,7 +283,7 @@ class TestSingleTLCVerification:
         persist = _FakePersistence(sess)
         persist.tlc_return = []
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         asyncio.run(v.verify_export_handler("x", "t"))
         call = persist.tlc_calls[0]
         assert call["start_date"] is None
@@ -261,7 +298,7 @@ class TestSingleTLCVerification:
         persist = _FakePersistence(sess)
         persist.tlc_return = []
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         asyncio.run(v.verify_export_handler("x", "t"))
         call = persist.tlc_calls[0]
         assert call["start_date"] == "2026-02-01"
@@ -274,7 +311,7 @@ class TestSingleTLCVerification:
         persist = _FakePersistence(sess)
         persist.tlc_return = []
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         out = asyncio.run(v.verify_export_handler("x", "t"))
         assert out["original_generated_at"] == "2026-04-01T12:00:00+00:00"
 
@@ -284,7 +321,7 @@ class TestSingleTLCVerification:
         persist = _FakePersistence(sess)
         persist.tlc_return = []
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         out = asyncio.run(v.verify_export_handler("x", "t"))
         assert out["original_generated_at"] is None
 
@@ -294,7 +331,7 @@ class TestSingleTLCVerification:
         persist = _FakePersistence(sess)
         persist.tlc_return = []
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         out = asyncio.run(v.verify_export_handler("x", "t"))
         # ISO-8601 with timezone
         parsed = datetime.fromisoformat(out["verified_at"])
@@ -307,8 +344,11 @@ class TestSingleTLCVerification:
 
 
 class TestFullExportVerification:
-    @pytest.mark.parametrize("export_type", ["fda_spreadsheet", "fda_package"])
-    def test_full_export_expands_per_tlc_and_dedups(self, monkeypatch, export_type):
+    @pytest.mark.parametrize(
+        "export_type",
+        ["fda_spreadsheet", "fda_package", "fda_export_all", "fda_export_all_package"],
+    )
+    def test_full_export_expands_via_batch_query_and_dedups(self, monkeypatch, export_type):
         row = (
             export_type,
             None,  # no TLC
@@ -317,6 +357,8 @@ class TestFullExportVerification:
             0,
             "hash",
             None,
+            False,  # include_pii
+            None,  # query_event_type
         )
         sess = _FakeSession(row=row)
         persist = _FakePersistence(sess)
@@ -329,20 +371,19 @@ class TestFullExportVerification:
             None,
         )
 
-        # Per-TLC expansion returns overlapping events (e1 appears in both)
-        def _by_tlc(tlc):
-            if tlc == "TLC-X":
-                return [{"id": "e1"}, {"id": "e3"}]
-            if tlc == "TLC-Y":
-                return [{"id": "e1"}, {"id": "e4"}]  # e1 dup
-            return []
+        # #2898: the seed TLCs are expanded in ONE set-based call, exactly as
+        # the exporter does. The union can still contain a duplicate (a lot
+        # reachable from two seeds through transformation_links).
+        def _by_tlcs(tlcs):
+            assert tlcs == ["TLC-X", "TLC-Y"]
+            return [{"id": "e1"}, {"id": "e3"}, {"id": "e1"}, {"id": "e4"}]
 
-        persist.tlc_side_effect = _by_tlc
+        persist.tlcs_side_effect = _by_tlcs
         _install_deps(monkeypatch, session=sess, persistence=persist)
 
         captured_events: list = []
 
-        def _gen_csv(events):
+        def _gen_csv(events, *, include_pii=False):
             captured_events.extend(events)
             return "csv"
 
@@ -354,41 +395,45 @@ class TestFullExportVerification:
         assert persist.all_events_calls[0]["limit"] == 10000
         assert persist.all_events_calls[0]["event_type"] is None
 
-        # query_events_by_tlc called once per event_page entry
-        tlc_queried = [c["tlc"] for c in persist.tlc_calls]
-        assert tlc_queried == ["TLC-X", "TLC-Y"]
+        # #2898: exactly one set-based expansion over all seeds, and NO
+        # per-seed fan-out — the exporter's algorithm, not a second one.
+        assert len(persist.tlcs_calls) == 1
+        assert persist.tlcs_calls[0]["tlcs"] == ["TLC-X", "TLC-Y"]
+        assert persist.tlc_calls == []
 
-        # Dedup by str(id): e1 should only appear once
+        # Dedup by id: e1 should only appear once
         event_ids = [str(e.get("id")) for e in captured_events]
         assert event_ids.count("e1") == 1
         assert set(event_ids) == {"e1", "e3", "e4"}
         assert out["current_record_count"] == 3
 
     def test_full_export_empty_page(self, monkeypatch):
-        row = ("fda_spreadsheet", None, None, None, 0, "h", None)
+        row = ("fda_spreadsheet", None, None, None, 0, "h", None, False, None)
         sess = _FakeSession(row=row)
         persist = _FakePersistence(sess)
         persist.all_events_return = ([], None)
         _install_deps(monkeypatch, session=sess, persistence=persist)
-        monkeypatch.setattr(v, "_generate_csv", lambda events: "")
+        monkeypatch.setattr(v, "_generate_csv", lambda events, *, include_pii=False: "")
         out = asyncio.run(v.verify_export_handler("x", "t"))
         # No per-TLC calls when query_all_events returns []
         assert persist.tlc_calls == []
         assert out["current_record_count"] == 0
 
-    def test_full_export_events_with_none_id_dedup_by_str(self, monkeypatch):
-        """Dedup key is str(event.get('id')) — None → 'None', still dedupes."""
-        row = ("fda_package", None, None, None, 0, "h", None)
+    def test_full_export_events_with_none_id_dedup(self, monkeypatch):
+        """Dedup key is the raw event id — two None ids still collapse to one."""
+        row = ("fda_package", None, None, None, 0, "h", None, False, None)
         sess = _FakeSession(row=row)
         persist = _FakePersistence(sess)
         persist.all_events_return = (
             [{"id": None, "traceability_lot_code": "TLC-Z"}],
             None,
         )
-        persist.tlc_side_effect = lambda tlc: [{"id": None}, {"id": None}]
+        persist.tlcs_side_effect = lambda tlcs: [{"id": None}, {"id": None}]
         _install_deps(monkeypatch, session=sess, persistence=persist)
         captured: list = []
-        monkeypatch.setattr(v, "_generate_csv", lambda events: (captured.extend(events), "x")[1])
+        monkeypatch.setattr(
+            v, "_generate_csv", lambda events, *, include_pii=False: (captured.extend(events), "x")[1]
+        )
         out = asyncio.run(v.verify_export_handler("x", "t"))
         assert len(captured) == 1  # both None-ids collapse to one
         assert out["current_record_count"] == 1
@@ -402,7 +447,7 @@ class TestFullExportVerification:
 class TestErrorHandling:
     def test_http_exception_passes_through(self, monkeypatch):
         """409/404 raised inside the try-block is re-raised as-is."""
-        row = ("fda_recall", None, None, None, 0, "h", None)
+        row = ("fda_recall", None, None, None, 0, "h", None, False, None)
         sess = _FakeSession(row=row)
         _install_deps(monkeypatch, session=sess)
         with pytest.raises(HTTPException) as exc_info:
@@ -454,13 +499,13 @@ class TestErrorHandling:
 
     def test_generate_csv_raises_value_error(self, monkeypatch):
         """Downstream CSV generation raising ValueError is mapped to 500."""
-        row = ("fda_csv", "TLC-A", "2026-01-01", "2026-01-31", 1, "h", None)
+        row = ("fda_csv", "TLC-A", "2026-01-01", "2026-01-31", 1, "h", None, False, None)
         sess = _FakeSession(row=row)
         persist = _FakePersistence(sess)
         persist.tlc_return = [{"id": "e1"}]
         _install_deps(monkeypatch, session=sess, persistence=persist)
 
-        def _raise(events):
+        def _raise(events, *, include_pii=False):
             raise ValueError("bad csv")
 
         monkeypatch.setattr(v, "_generate_csv", _raise)

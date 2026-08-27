@@ -369,12 +369,13 @@ Implement production-grade security hardening including secrets management, audi
   - Environment-based configuration (production/staging/dev)
   - Graceful fallback for local development
 
-- `scripts/rotate_secrets_to_aws.py` - Secrets rotation script
-  - Migrate secrets from .env to AWS Secrets Manager
-  - Support for all credential types (DB, Neo4j, Kafka, S3, Admin)
-  - Dry-run mode for validation
-  - Create or update secrets
-  - Comprehensive error handling
+- `scripts/export_env_bundle.py` - Secret-set **validator** (renamed from
+  `rotate_secrets_to_aws.py`, #2938)
+  - Checks every required credential is present in .env / the environment
+  - Optionally emits the bundle as JSON to **stdout** for piping to a secret
+    manager; never writes it to disk
+  - **Does not rotate any credential and does not contact AWS.** Rotation is
+    performed by the platform's own secret manager (e.g. `railway variables set`)
 
 - `infra/iam/secrets_policy.json` - IAM policy for secrets access
   - GetSecretValue and DescribeSecret permissions
@@ -539,10 +540,11 @@ If allowed: Add rate limit headers + process request
    export AWS_REGION=us-east-1
    ```
 
-2. **Rotate Secrets to AWS**:
+2. **Validate the secret set** (this does *not* rotate anything, #2938):
    ```bash
-   python scripts/rotate_secrets_to_aws.py --environment production
+   python scripts/export_env_bundle.py --environment production
    ```
+   Rotate the values themselves in the platform secret manager.
 
 3. **Attach IAM Policy**:
    ```bash

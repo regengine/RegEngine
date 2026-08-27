@@ -48,6 +48,63 @@ _CONDITIONAL_PATTERNS = re.compile(
 # Window size (tokens) to check around a modal keyword for negation.
 _NEGATION_WINDOW = 5
 
+# ---------------------------------------------------------------------------
+# Negation scope (#2942)
+# ---------------------------------------------------------------------------
+# A PROHIBITED verdict covers two regulatory constructs whose canonical
+# ObligationType is *opposite*:
+#
+#   prohibition  "the handler shall not exceed", "no person shall introduce"
+#                — the conduct is banned                       → MUST_NOT
+#   exemption    "small farms are not required to file",
+#                "shall not be required to maintain", "exempt from"
+#                — the duty is lifted, the conduct stays legal → MAY
+#
+# Typing an exemption MUST_NOT forbids conduct the regulation merely stopped
+# mandating; that is the same inversion as typing a prohibition MUST, in the
+# other direction. ``negation_scope`` on the verdict lets the conversion layer
+# tell them apart without re-deriving modality itself.
+#
+# Exemptions are matched FIRST because "shall not be required to" contains
+# "shall not": phrase order, not sentence order, decides the reading.
+_EXEMPTION_PATTERNS = re.compile(
+    r"""(?xi)
+    \b(?:
+        (?:shall|must|may|will|would|is|are|was|were|do|does|did)\s+not\s+
+            (?:be\s+)?(?:required|obligated|obliged|compelled|expected)
+      | not\s+required
+      | need\s+not
+      | no\s+obligation
+      | exempt(?:ion)?\s+from
+      | (?:does|do|did)\s+not\s+(?:require|need)
+      # "no person shall be required to ..." — nobody has to, so the duty is
+      # lifted rather than the conduct banned.
+      | no\s+(?:\w+\s+){0,3}?(?:shall|may|must|will)\s+be\s+
+            (?:required|obligated|obliged|compelled|expected)
+    )\b
+    """
+)
+
+# Bans. The "no <actor> shall/may" branch is deliberately keyed to an actor
+# noun: a bare "no ... shall" would swallow "no later than X, the firm shall
+# file" and "no fewer than two records shall be retained", which are mandates.
+_PROHIBITION_PATTERNS = re.compile(
+    r"""(?xi)
+    (?:
+        \b(?:shall|must|may|can|will)\s+not\b
+      | \b(?:shall|must|may)\s+never\b
+      | \b(?:is|are|was|were)\s+(?:prohibited|forbidden|barred|banned)\b
+      | \b(?:is|are)\s+not\s+(?:permitted|allowed)\b
+      | \bno\s+(?:person|persons|entity|entities|facility|facilities
+                |firm|firms|establishment|establishments|individual|individuals
+                |operator|operators|supplier|suppliers|distributor|distributors
+                |retailer|retailers|manufacturer|manufacturers|carrier|carriers
+                |importer|importers|shipper|shippers|company|companies|one)\b
+            (?:\s+\w+){0,3}?\s+(?:shall|may|must|will)\b
+    )
+    """
+)
+
 
 def _tokenise(text: str) -> list:
     """Whitespace-split, strip trailing punctuation from each token."""
@@ -62,11 +119,20 @@ def infer_obligation_type(text: str) -> dict:
                           or ``"CONDITIONAL"``.
         ``negation_detected`` – ``True`` when a negation token flipped the
                                 base modality.
+        ``negation_scope`` – ``"prohibition"`` (conduct banned) or
+                             ``"exemption"`` (duty lifted) when
+                             ``obligation`` is PROHIBITED, else ``None``
+                             (#2942). The two map to opposite canonical
+                             ObligationTypes, so consumers must not collapse
+                             them.
 
     Rules (applied in order):
-    1. Explicit prohibited phrases ("shall not", "must not", "may not",
-       "not required", "no obligation", "exempt from", "does not require")
-       → PROHIBITED (negation_detected=True).
+    0. Exemption phrasings ("not required", "shall not be required to",
+       "no obligation", "exempt from", "does not require") → PROHIBITED with
+       ``negation_scope="exemption"``. Checked before the ban phrasings
+       because "shall not be required to" contains "shall not".
+    1. Ban phrasings ("shall not", "must not", "may not", "is prohibited",
+       "no person shall") → PROHIBITED with ``negation_scope="prohibition"``.
     2. Conditional hedge ("unless", "except", "exempt") alongside a
        mandatory keyword → CONDITIONAL (WARNING logged).
     3. Mandatory keywords ("shall", "must", "required") without negation
@@ -89,21 +155,21 @@ def infer_obligation_type(text: str) -> dict:
                     return True
         return False
 
-    # --- Phase 1: explicit negated-modal phrases (highest priority) ----------
-    _PROHIBITED_PHRASES = [
-        "shall not",
-        "must not",
-        "may not",
-        "is not required",
-        "not required",
-        "no obligation",
-        "exempt from",
-        "does not require",
-        "does not need",
-    ]
-    for phrase in _PROHIBITED_PHRASES:
-        if phrase in text_lower:
-            return {"obligation": "PROHIBITED", "negation_detected": True}
+    # --- Phase 0: exemption phrasings — the duty is lifted (#2942) -----------
+    if _EXEMPTION_PATTERNS.search(text):
+        return {
+            "obligation": "PROHIBITED",
+            "negation_detected": True,
+            "negation_scope": "exemption",
+        }
+
+    # --- Phase 1: explicit ban phrasings (highest priority) ------------------
+    if _PROHIBITION_PATTERNS.search(text):
+        return {
+            "obligation": "PROHIBITED",
+            "negation_detected": True,
+            "negation_scope": "prohibition",
+        }
 
     # --- Phase 2: conditional hedge ------------------------------------------
     _MANDATORY_KW = ["shall", "must", "required"]
@@ -113,26 +179,42 @@ def infer_obligation_type(text: str) -> dict:
             "obligation_type CONDITIONAL inferred from hedge phrase",
             extra={"text_snippet": text[:120]},
         )
-        return {"obligation": "CONDITIONAL", "negation_detected": False}
+        return {
+            "obligation": "CONDITIONAL",
+            "negation_detected": False,
+            "negation_scope": None,
+        }
 
     # --- Phase 3: positive mandatory keywords --------------------------------
     for kw in _MANDATORY_KW:
         if kw in text_lower and not _has_negation_near(kw):
-            return {"obligation": "MANDATORY", "negation_detected": False}
+            return {
+                "obligation": "MANDATORY",
+                "negation_detected": False,
+                "negation_scope": None,
+            }
 
     # --- Phase 4: positive permissive keywords --------------------------------
     _PERMISSIVE_KW = ["may", "can", "permitted", "allowed"]
     for kw in _PERMISSIVE_KW:
         if kw in text_lower and not _has_negation_near(kw):
-            return {"obligation": "PERMITTED", "negation_detected": False}
+            return {
+                "obligation": "PERMITTED",
+                "negation_detected": False,
+                "negation_scope": None,
+            }
 
     # --- Phase 5: negated permissive → PROHIBITED ----------------------------
     for kw in _PERMISSIVE_KW:
         if kw in text_lower and _has_negation_near(kw):
-            return {"obligation": "PROHIBITED", "negation_detected": True}
+            return {
+                "obligation": "PROHIBITED",
+                "negation_detected": True,
+                "negation_scope": "prohibition",
+            }
 
     # --- Fallback -------------------------------------------------------------
-    return {"obligation": "MANDATORY", "negation_detected": False}
+    return {"obligation": "MANDATORY", "negation_detected": False, "negation_scope": None}
 
 
 def extract_entities(text: str) -> List[Dict]:
@@ -167,6 +249,9 @@ def extract_entities(text: str) -> List[Dict]:
                 "attrs": {
                     "obligation": modality["obligation"],
                     "negation_detected": modality["negation_detected"],
+                    # #2942 — ban vs lifted duty; the conversion layer maps
+                    # these onto opposite ObligationTypes.
+                    "negation_scope": modality.get("negation_scope"),
                 },
             }
         )

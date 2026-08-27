@@ -64,12 +64,15 @@ def _captured_sdk_calls() -> list[tuple[str, str]]:
     client = RegEngineClient(api_key="rge_test")
     calls: list[tuple[str, str]] = []
 
-    def fake_request(method, path, params=None, json=None):
+    # **kwargs absorbs the transport-only options the real helpers take
+    # (#2956 added parse/accept/expected_content_type); this stub asserts on
+    # (method, path) only, so those are irrelevant here.
+    def fake_request(method, path, params=None, json=None, **kwargs):
         calls.append((method.upper(), path))
         # Return shapes the SDK methods expect to parse without error.
         return {"events": [], "drills": [], "records": []}
 
-    def fake_request_bytes(method, path, params=None):
+    def fake_request_bytes(method, path, params=None, **kwargs):
         calls.append((method.upper(), path))
         return b""
 

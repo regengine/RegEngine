@@ -11,7 +11,13 @@ import structlog
 from fastapi import HTTPException, Request
 from shared import funnel_events as _funnel_mod
 
-from . import customers as _customers_mod, helpers as _helpers_mod, plans as _plans_mod, state as _state_mod
+from . import (
+    customers as _customers_mod,
+    helpers as _helpers_mod,
+    plans as _plans_mod,
+    rate_limiting as _rate_limiting_mod,
+    state as _state_mod,
+)
 
 logger = structlog.get_logger("stripe-billing")
 
@@ -156,7 +162,10 @@ async def _handle_checkout_completed(
                 detail="Stripe subscription lookup failed; webhook not processed",
             ) from exc
         subscription_status = subscription.get("status", subscription_status)
-        current_period_end = _helpers_mod._format_period_end(subscription.get("current_period_end"))
+        # #2951: read the period end from wherever the negotiated API version
+        # puts it — it lives on the subscription items now, not the
+        # subscription — so the first mapping write no longer stores "".
+        current_period_end = _helpers_mod._extract_subscription_period_end(subscription)
 
     # #2930: ``checkout.session.completed`` also fires for payments that have
     # not settled. Until the money lands the tenant is entitled to nothing,
@@ -613,10 +622,15 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             except (ValueError, TypeError):
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
-                existing["current_period_end"] = (
-                    _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
-                )
-                _state_mod._store_subscription_mapping(tenant_id, existing)
+                # #2951: same relocated field on the event's subscription
+                # payload. Persist only a value we actually resolved — a
+                # missing period end means "unknown", not "cleared", and
+                # blanking it here would destroy the renewal date the
+                # ``invoice.paid`` handler derived from the invoice.
+                event_period_end = _helpers_mod._extract_subscription_period_end(data_object)
+                if event_period_end:
+                    existing["current_period_end"] = event_period_end
+                    _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 
     # #1189: trial expiration notice (~3 days before trial_end).
@@ -647,7 +661,14 @@ async def _process_stripe_webhook(
     if not webhook_secret:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
 
+    # #2929: the rate limiter used to run in the route, BEFORE this point, on
+    # a bucket keyed by client IP — which behind a shared reverse proxy is one
+    # bucket for Stripe and every anonymous caller alike. Verification gates
+    # first now: unverified traffic is charged to its own budget only once it
+    # has been shown not to be Stripe, so a junk flood can no longer 429 a
+    # genuine delivery and stall billing-state transitions.
     if not stripe_signature:
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
 
     body = await request.body()
@@ -659,10 +680,17 @@ async def _process_stripe_webhook(
             secret=webhook_secret,
         )
     except ValueError as exc:
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     except stripe.error.SignatureVerificationError as exc:
         logger.warning("stripe_webhook_signature_invalid", error=str(exc))
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
+
+    # #2929: only a delivery Stripe actually signed consumes the genuine-
+    # traffic budget, and its bucket key comes from the verified envelope —
+    # never from a client-supplied header.
+    _rate_limiting_mod._check_verified_stripe_webhook_rate_limit(event)
 
     # #1076: Stripe retries any webhook that doesn't ack within a few seconds
     # (and for up to 3 days on 5xx/timeouts), so the same real-world event

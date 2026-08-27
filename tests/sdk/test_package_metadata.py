@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import regengine
@@ -57,3 +58,92 @@ def test_verifier_version_derives_from_package() -> None:
     from regengine import verify_records
 
     assert verify_records._sdk_version() == regengine.__version__
+
+
+def _python_floor() -> tuple[int, int]:
+    """The minimum Python version setup.py's python_requires advertises."""
+    python_requires = ast.literal_eval(_setup_kwargs()["python_requires"])
+    match = re.search(r">=\s*(\d+)\.(\d+)", python_requires)
+    assert match, f"cannot parse a floor out of python_requires={python_requires!r}"
+    return int(match.group(1)), int(match.group(2))
+
+
+def _classifier_versions() -> list[tuple[int, int]]:
+    classifiers = ast.literal_eval(_setup_kwargs()["classifiers"])
+    versions = []
+    for classifier in classifiers:
+        match = re.fullmatch(r"Programming Language :: Python :: (\d+)\.(\d+)", classifier)
+        if match:
+            versions.append((int(match.group(1)), int(match.group(2))))
+    return versions
+
+
+def _minimum_python_for_source(path: Path) -> tuple[int, int]:
+    """Lowest Python on which importing ``path`` can succeed.
+
+    PEP 585 builtin generics (``list[X]``) in annotations that are *evaluated*
+    — i.e. no ``from __future__ import annotations`` — raise
+    ``TypeError: 'type' object is not subscriptable`` below 3.9.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    has_future_annotations = any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "__future__"
+        and any(alias.name == "annotations" for alias in node.names)
+        for node in ast.walk(tree)
+    )
+    if has_future_annotations:
+        return (3, 8)
+
+    builtin_generics = {"list", "dict", "tuple", "set", "frozenset", "type"}
+    annotations: list[ast.AST] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.returns is not None:
+                annotations.append(node.returns)
+            annotations.extend(a.annotation for a in node.args.args if a.annotation is not None)
+        elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
+            annotations.append(node.annotation)
+
+    for annotation in annotations:
+        for sub in ast.walk(annotation):
+            if isinstance(sub, ast.Subscript) and getattr(sub.value, "id", None) in builtin_generics:
+                return (3, 9)
+    return (3, 8)
+
+
+def test_python_requires_matches_the_console_script_module() -> None:
+    """#2954: python_requires must not advertise a Python on which the module
+    behind the only console script cannot even be imported.
+
+    ``regengine-verify=regengine.verify_records:main`` is that module; it used
+    to carry evaluated ``list[VerificationResult]`` annotations with no
+    ``from __future__ import annotations`` while setup.py claimed ``>=3.8``.
+    """
+    verifier = Path(__file__).resolve().parents[2] / "regengine" / "verify_records.py"
+    required = _minimum_python_for_source(verifier)
+    floor = _python_floor()
+    assert floor >= required, (
+        f"setup.py declares python_requires floor {floor[0]}.{floor[1]}, but "
+        f"{verifier.name} cannot be imported below {required[0]}.{required[1]}"
+    )
+
+
+def test_classifiers_do_not_advertise_versions_below_the_floor() -> None:
+    floor = _python_floor()
+    below = [v for v in _classifier_versions() if v < floor]
+    assert not below, "classifiers advertise Python versions below python_requires: " + ", ".join(
+        f"{major}.{minor}" for major, minor in below
+    )
+
+
+def test_deprecation_shim_still_imports() -> None:
+    """The verify_chain shim re-exports from verify_records, so it breaks
+    wherever that module breaks (#2954)."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        import regengine.verify_chain as shim
+
+    assert callable(shim.main)

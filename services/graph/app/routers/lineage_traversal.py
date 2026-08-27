@@ -113,7 +113,9 @@ RETURN
 
 
 @router.get(
-    "/lineage/{tlc}/history",
+    # Mounted under prefix="/lineage" in services/graph/app/routes.py — the
+    # segment must not be repeated here or the served path doubles (#2946).
+    "/{tlc}/history",
     response_model=FactLineageResponse,
     summary="Get fact version history",
     description=(

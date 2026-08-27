@@ -1,57 +1,50 @@
-"""Phase 2b: FSMA-204 golden-corpus obligation mapping (#2924).
+"""Phase 2b: FSMA-204 golden-corpus structural verification (#2924).
 
-What this file used to be
--------------------------
-Two function bodies that were a single ``pass``.
-``test_obligation_mapping_logic`` carried no marker at all, so it
-contributed a green PASS to every run while asserting nothing;
-``test_ingestion_pipeline_correctness`` was ``skipif(not
-DOCKER_RUNNING)`` over a ``pass`` that would still have asserted
-nothing had the gate ever opened. A class docstring advertising
-"Verification of mapped obligations against the golden standard" sat
-on top of both.
+History
+-------
+This module used to hold two empty function bodies. ``test_obligation_mapping_logic``
+was a docstring plus a bare ``pass`` with no marker at all, so it contributed a
+green PASS to every run and to the collected-test floor that CI reads as
+evidence the suite is intact. ``test_ingestion_pipeline_correctness`` was a
+``pass  # TODO`` behind ``skipif(not DOCKER_RUNNING)`` — it asserted nothing
+even when the Docker stack was up. A compliance platform's data-integrity
+directory advertised golden-corpus verification of the FSMA-204 obligation
+mapping and delivered nothing.
 
-Proof they could not fail (mutation, reverted): breaking the
-production mapping so that ``infer_obligation_type`` returned
-PROHIBITED for every rule and ``extract_requirements`` returned no
-obligations at all left this file at "1 passed, 1 skipped" — and at
-"2 passed" with ``DOCKER_RUNNING=1``.
+What the golden corpus actually is
+----------------------------------
+The FSMA-204 "golden standard" in this repo is a pair of Alembic SQL files
+that a live revision ``op.execute``s, so a fresh ``alembic upgrade head``
+depends on them:
 
-What it is now
---------------
-``test_obligation_mapping_logic`` is implemented in-process (no Docker,
-no network, no DB) against a pinned golden corpus of real 21 CFR Part 1
-Subpart S rule prose, asserting the extracted-fact → compliance-
-obligation mapping the product's verdicts depend on:
+* ``alembic/sql/V036__fsma_204_regulatory_seed_data.sql`` seeds the
+  ``obligations`` rows (the regulatory requirements themselves).
+* ``alembic/sql/V037__obligation_cte_rules.sql`` maps each obligation to a
+  CTE type and the Key Data Element that satisfies it — the
+  extracted-fact-to-obligation mapping this module's class docstring
+  advertises.
 
-  * ``services/nlp/app/extractor.infer_obligation_type`` — the modality
-    a rule sentence maps to (MANDATORY / PROHIBITED / CONDITIONAL).
-  * ``services/nlp/app/extractor.extract_entities`` — the OBLIGATION
-    facts carried out of the document, with that modality attached.
-  * ``services/nlp/app/extractor.extract_fsma_facts`` — the compliance
-    date, the fact an enforcement-posture change turns on.
-  * ``services/ingestion/app/regulation_parser.extract_requirements``
-    and ``RegulationParser._detect_jurisdiction`` — the ingestion-side
-    half of the same mapping.
+The consumer is ``_check_obligations`` in
+``services/ingestion/app/webhook_router_v2/validation.py``. For every ingested
+CTE event it selects the rules whose ``cte_type`` matches the event (or
+``'all'``), joins them to ``obligations``, and evaluates the rule's
+``validation_rule`` against the event's KDEs.
 
-This is deliberately corpus-level, not unit-level: the modality rules
-themselves are unit-tested against synthetic sentences in
-``services/nlp/tests/test_obligation_negation_1299.py``. What is only
-covered here is that they still produce the right answer on ACTUAL
-regulation prose — the case a heuristic tweak can break while every
-synthetic unit test stays green.
+Both tests below assert couplings that are load-bearing for that flow and
+that fail *silently* when broken — an obligation whose row is missing, or
+whose ``validation_rule`` the consumer does not implement, does not raise:
+it is quietly treated as satisfied. That is the same false-assurance defect
+class these tests themselves used to be.
 
-``test_ingestion_pipeline_correctness`` is genuinely not implemented.
-It is now ``xfail(strict=True)`` over an explicit ``pytest.fail`` so
-the gap reports as XFAIL — visible in CI output — instead of as a pass
-or as a skip with an untrue reason. strict=True means that if someone
-implements it, the unexpected pass turns the suite red and forces the
-marker off.
+Everything here is parsed from committed files plus one in-process import.
+No Docker, no database, no network — so this module runs in the ordinary
+offline suite rather than skipping.
 """
 
 from __future__ import annotations
 
-import os
+import ast
+import re
 import sys
 from pathlib import Path
 
@@ -59,177 +52,275 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Ensure repo root and services/ are importable (mirrors the sibling
-# test_fsma_204_verification_phase2b.py — this package has no conftest).
+# Mirror tests/data_integrity/test_fsma_204_verification_phase2b.py — this
+# package has no conftest of its own.
 for _p in (str(_REPO_ROOT), str(_REPO_ROOT / "services")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from services.ingestion.app.regulation_parser import (  # noqa: E402
-    RegulationParser,
-    extract_requirements,
-)
-from services.nlp.app.extractor import (  # noqa: E402
-    extract_entities,
-    extract_fsma_facts,
-    infer_obligation_type,
-)
+_SEED_SQL = _REPO_ROOT / "alembic" / "sql" / "V036__fsma_204_regulatory_seed_data.sql"
+_RULES_SQL = _REPO_ROOT / "alembic" / "sql" / "V037__obligation_cte_rules.sql"
+_CONSUMER_PY = _REPO_ROOT / "services" / "ingestion" / "app" / "webhook_router_v2" / "validation.py"
 
-# Retained for the not-yet-implemented end-to-end test below.
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
-INGEST_SERVICE_URL = os.environ.get("INGEST_SERVICE_URL", "http://localhost:8001")
+# ``cte_type`` values in the rules table that are not CTE events at all:
+# ``all`` fans out to every event, ``record_maintenance`` covers record-level
+# duties (translations, 24-hour FDA production) with no ingest event to hang
+# off. Both are declared in V037's own CHECK constraint.
+_NON_EVENT_CTE_TYPES = frozenset({"all", "record_maintenance"})
+
+_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
 
 # ---------------------------------------------------------------------------
-# Golden corpus — real 21 CFR Part 1 Subpart S (FSMA 204) rule prose.
-#
-# (id, rule text, expected obligation modality, expected negation flag)
-#
-# Every entry is a sentence the product must classify correctly for its
-# compliance verdicts to mean anything: a MANDATORY recordkeeping duty
-# read as PROHIBITED silently excuses a tenant from the rule, and a
-# PROHIBITED exemption read as MANDATORY raises a finding against a
-# tenant the rule does not reach.
+# Corpus parsing helpers
 # ---------------------------------------------------------------------------
 
-GOLDEN_OBLIGATIONS = [
-    (
-        "records_retention",
-        "You must maintain all records required under this subpart for 2 years from the date you created them.",
-        "MANDATORY",
-        False,
-    ),
-    (
-        "recall_24_hour_sla",
-        "When FDA requests it, you must make an electronic sortable spreadsheet available to FDA "
-        "within 24 hours of the request.",
-        "MANDATORY",
-        False,
-    ),
-    (
-        "traceability_lot_code",
-        "You shall assign a traceability lot code to a food on the Food Traceability List when you "
-        "initially pack a raw agricultural commodity.",
-        "MANDATORY",
-        False,
-    ),
-    (
-        "farm_exemption",
-        "A farm is exempt from the requirements of this subpart when it sells food directly to a consumer.",
-        "PROHIBITED",
-        True,
-    ),
-    (
-        "receiver_carve_out",
-        "You are not required to keep records of the traceability lot code source for food you receive "
-        "from a person exempt under this subpart.",
-        "PROHIBITED",
-        True,
-    ),
-    (
-        "conditional_recordkeeping",
-        "Unless you are exempt under 1.1305, you must maintain traceability records for each critical tracking event.",
-        "CONDITIONAL",
-        False,
-    ),
-]
 
-COMPLIANCE_DATE_TEXT = (
-    "FDA has extended the compliance date for all persons subject to the recordkeeping requirements "
-    "of this subpart to July 20, 2028."
-)
+def _split_sql_values(values: str) -> list[str]:
+    """Split a SQL VALUES tuple body on top-level commas, honouring quotes."""
+    parts: list[str] = []
+    current = ""
+    in_quote = False
+    i = 0
+    while i < len(values):
+        ch = values[i]
+        if ch == "'":
+            if in_quote and i + 1 < len(values) and values[i + 1] == "'":
+                current += "''"
+                i += 2
+                continue
+            in_quote = not in_quote
+            current += ch
+        elif ch == "," and not in_quote:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += ch
+        i += 1
+    parts.append(current.strip())
+    return parts
+
+
+def _unquote(field: str) -> str | None:
+    field = field.strip()
+    if field.upper() == "NULL":
+        return None
+    if field.startswith("'") and field.endswith("'"):
+        return field[1:-1].replace("''", "'")
+    return field
+
+
+def _read(path: Path) -> str:
+    assert path.is_file(), (
+        f"golden corpus file is missing: {path.relative_to(_REPO_ROOT)}. "
+        "A fresh `alembic upgrade head` op.executes this file — losing it "
+        "silently drops the FSMA-204 obligation mapping."
+    )
+    return path.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def obligation_rules() -> list[dict]:
+    """Every row seeded into ``obligation_cte_rules`` by V037."""
+    text = _read(_RULES_SQL)
+    rows = re.findall(
+        r"INSERT\s+INTO\s+obligation_cte_rules\s*\([^)]*\)\s*VALUES\s*\((.*?)\);",
+        text,
+        re.S | re.I,
+    )
+    assert rows, "V037 seeded no obligation_cte_rules — the mapping corpus is empty"
+    parsed = []
+    for raw in rows:
+        fields = _split_sql_values(raw)
+        assert len(fields) == 6, f"unexpected obligation_cte_rules arity {len(fields)}: {raw[:120]}"
+        parsed.append(
+            {
+                "id": _unquote(fields[0]),
+                "obligation_id": _unquote(fields[1]),
+                "cte_type": _unquote(fields[2]),
+                "required_kde_key": _unquote(fields[3]),
+                "validation_rule": _unquote(fields[4]),
+                "description": _unquote(fields[5]),
+            }
+        )
+    return parsed
+
+
+@pytest.fixture(scope="module")
+def seeded_obligation_ids() -> set[str]:
+    """Every ``obligations.id`` seeded by V036."""
+    text = _read(_SEED_SQL)
+    ids = set(re.findall(rf"INSERT\s+INTO\s+obligations\s*\([^)]*\)\s*VALUES\s*\('({_UUID})'", text, re.S | re.I))
+    assert ids, "V036 seeded no obligations — the golden corpus is empty"
+    return ids
+
+
+def _check_constraint_values(text: str, constraint: str) -> set[str]:
+    """Pull the IN (...) literal set out of a named CHECK constraint."""
+    match = re.search(
+        re.escape(constraint) + r"[\s\S]{0,400}?IN\s*\(([^)]*)\)",
+        text,
+        re.I,
+    )
+    assert match, f"could not locate CHECK constraint {constraint!r}"
+    return set(re.findall(r"'([^']+)'", match.group(1)))
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
 class TestFSMA204GoldenCorpus:
     """
     Phase 2b: Golden Corpus Verification.
 
-    This suite executes the "Happy Path" for FSMA 204 compliance data:
-    1. Ingestion of a known FDA "Golden Corpus" document (PDF/HTML).
-    2. NLP Extraction of Authority and Facts.
-    3. Verification of mapped obligations against the golden standard.
+    Verifies the committed FSMA-204 golden corpus (V036 obligations + V037
+    obligation-to-CTE rules) against the ingestion pipeline that consumes it:
+
+    1. Every mapping rule resolves to a seeded obligation, and every seeded
+       obligation is mapped (nothing unenforceable, nothing dangling).
+    2. Every ``validation_rule`` in the corpus is one the ingest-time checker
+       actually implements.
+    3. The corpus's CTE-type vocabulary matches, in both directions, the CTE
+       types the ingestion pipeline accepts and the database will store.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "NOT IMPLEMENTED (#2924): the submit/poll/verify-authority/verify-facts "
-            "end-to-end flow has never had a body. The live end-to-end path is covered "
-            "opt-in by tests/data_integrity/test_fsma_204_verification_phase2b.py::"
-            "TestGoldenCorpusLiveSmoke (REGENGINE_LIVE_SMOKE=1); the in-process ingestion "
-            "contract is covered by TestIngestionPipelineContract in the same file. "
-            "strict=True: implementing this must turn the suite red until the marker goes."
-        ),
-    )
-    def test_ingestion_pipeline_correctness(self):
+    def test_ingestion_pipeline_correctness(self, obligation_rules):
+        """The corpus's CTE vocabulary matches the ingestion pipeline's, both ways.
+
+        ``_check_obligations`` selects rules with
+        ``WHERE r.cte_type IN (:cte_type, 'all')`` using ``event.cte_type.value``
+        straight off the validated ``IngestEvent``. So the two vocabularies are
+        a live coupling:
+
+        * A CTE type the webhook accepts but the corpus never mentions is
+          ingested with **zero** obligation evaluation — a silently unpoliced
+          event type.
+        * A ``cte_type`` in the corpus that no ingest event can carry is a dead
+          rule: an FSMA-204 obligation that can never be evaluated.
+
+        Neither shows up as an error at runtime; both just quietly check
+        nothing. This is also the invariant the previous ``pass``-bodied,
+        Docker-gated stub claimed to cover.
         """
-        End-to-End verification of the ingestion pipeline.
+        from services.ingestion.app.webhook_models import WebhookCTEType
 
-        Step 1: Submit Document
-        Step 2: Poll for Completion
-        Step 3: Verify Authority Created
-        Step 4: Verify Facts Extracted
-        """
-        pytest.fail(f"not implemented — needs the full stack: {INGEST_SERVICE_URL} + {API_BASE_URL} + a database")
+        # GROWING is documented in WebhookCTEType as legacy/internal — "not an
+        # FDA-defined CTE", it normalises to farm metadata. It is the one
+        # accepted value with no CTE obligations, so it is excluded explicitly
+        # rather than by letting the assertion be one-directional.
+        pipeline_cte_types = {m.value for m in WebhookCTEType} - {WebhookCTEType.GROWING.value}
+        assert pipeline_cte_types, "WebhookCTEType exposes no FDA-defined CTE types"
 
-    def test_obligation_mapping_logic(self):
-        """
-        Verifies that extracted facts correctly map to Compliance Obligations.
-        e.g. If 'RETENTION_PERIOD_YEARS' = 2, then Recordkeeping Obligation should reflect that.
-        """
-        # --- 1. Each golden rule maps to the right obligation modality -----
-        mapped = {rule_id: infer_obligation_type(text) for rule_id, text, _, _ in GOLDEN_OBLIGATIONS}
-        for rule_id, _text, expected_obligation, expected_negation in GOLDEN_OBLIGATIONS:
-            assert mapped[rule_id]["obligation"] == expected_obligation, (
-                f"{rule_id}: FSMA-204 rule text mapped to {mapped[rule_id]['obligation']}, "
-                f"expected {expected_obligation}"
-            )
-            assert mapped[rule_id]["negation_detected"] is expected_negation, (
-                f"{rule_id}: negation_detected={mapped[rule_id]['negation_detected']}, expected {expected_negation}"
-            )
+        corpus_cte_types = {r["cte_type"] for r in obligation_rules}
+        corpus_event_types = corpus_cte_types - _NON_EVENT_CTE_TYPES
 
-        # The corpus must actually discriminate — if every rule came back with
-        # the same verdict the assertions above would be satisfiable by a
-        # constant, which is exactly the defect class #2924 is about.
-        assert {m["obligation"] for m in mapped.values()} == {"MANDATORY", "PROHIBITED", "CONDITIONAL"}
-
-        # --- 2. Obligations survive extraction as facts, with modality -----
-        # The recordkeeping duty and the 24-hour recall SLA are the two
-        # obligations every FSMA-204 verdict rests on.
-        retention_text = GOLDEN_OBLIGATIONS[0][1]
-        recall_text = GOLDEN_OBLIGATIONS[1][1]
-        entities = extract_entities(f"{retention_text} {recall_text}")
-        obligations = [e for e in entities if e["type"] == "OBLIGATION"]
-
-        assert len(obligations) == 2, f"expected one OBLIGATION fact per rule sentence, got {len(obligations)}"
-        assert all(o["attrs"]["obligation"] == "MANDATORY" for o in obligations)
-        assert all(o["attrs"]["negation_detected"] is False for o in obligations)
-        # The retention duty keeps its "2 years" term, and the recall duty its
-        # "24 hours" term — a span that dropped the number would map to an
-        # obligation with no deadline.
-        assert "2 years" in obligations[0]["text"]
-        assert "24 hours" in obligations[1]["text"]
-
-        # --- 3. The compliance date is extracted as a dated fact -----------
-        facts = extract_fsma_facts(COMPLIANCE_DATE_TEXT)
-        assert len(facts) == 1, f"expected exactly one REGULATORY_DATE fact, got {facts!r}"
-        assert facts[0]["type"] == "REGULATORY_DATE"
-        assert facts[0]["attrs"]["key"] == "Compliance Date"
-        assert facts[0]["attrs"]["value"] == "July 20, 2028"
-        # An undated sentence must NOT yield a compliance date.
-        assert extract_fsma_facts("The rule was published on July 20, 2028 in the Federal Register.") == []
-
-        # --- 4. Ingestion-side extraction agrees with the NLP side ---------
-        corpus = " ".join(text for _id, text, _o, _n in GOLDEN_OBLIGATIONS)
-        requirements = extract_requirements(corpus)
-        assert any("must maintain all records" in r for r in requirements), (
-            f"the recordkeeping obligation was not extracted as a requirement: {requirements!r}"
-        )
-        assert any("within 24 hours" in r for r in requirements), (
-            f"the 24-hour recall obligation was not extracted as a requirement: {requirements!r}"
+        unpoliced = sorted(pipeline_cte_types - corpus_event_types)
+        assert not unpoliced, (
+            f"CTE types the webhook accepts but the golden corpus has no obligation rule for: "
+            f"{unpoliced}. Events of these types are ingested with no obligation check at all."
         )
 
-        parser = RegulationParser()
-        assert parser._detect_jurisdiction("This FSMA rule is issued by FDA under 21 CFR 1.1455.") == "FDA"
-        assert parser._detect_jurisdiction("See the Code of Federal Regulations.") == "US-FEDERAL"
-        assert parser._detect_jurisdiction("Nothing regulatory here.") == "UNKNOWN"
+        dead_rules = sorted(corpus_event_types - pipeline_cte_types)
+        assert not dead_rules, (
+            f"golden-corpus cte_type values no IngestEvent can carry: {dead_rules}. "
+            f"_check_obligations matches on event.cte_type.value, so these rules never fire."
+        )
+
+        # The database side must accept the same set: V037 rewrites the
+        # fsma.cte_events event_type CHECK in the same migration that seeds the
+        # rules, so a divergence here means a rule matches an event the table
+        # will reject on insert.
+        rules_text = _read(_RULES_SQL)
+        storable = _check_constraint_values(rules_text, "cte_events_event_type_check")
+        assert corpus_event_types == storable, (
+            "golden-corpus CTE types and fsma.cte_events.event_type disagree: "
+            f"corpus-only={sorted(corpus_event_types - storable)}, "
+            f"table-only={sorted(storable - corpus_event_types)}"
+        )
+
+        # And every cte_type seeded must satisfy V037's own CHECK constraint,
+        # or the migration aborts partway through on a fresh database.
+        allowed = _check_constraint_values(rules_text, "obligation_cte_rules_cte_type_check")
+        illegal = sorted(corpus_cte_types - allowed)
+        assert not illegal, f"seeded cte_type values rejected by V037's own CHECK constraint: {illegal}"
+
+    def test_obligation_mapping_logic(self, obligation_rules, seeded_obligation_ids):
+        """Extracted facts map to real, evaluable Compliance Obligations.
+
+        Three couplings, each of which fails silently rather than loudly:
+
+        1. ``obligation_cte_rules.obligation_id`` is a FK to ``obligations.id``.
+           A rule pointing at an unseeded obligation aborts the migration on a
+           fresh database; on an existing one the ``JOIN obligations`` in
+           ``_check_obligations`` simply drops the rule, so the obligation is
+           never checked and nothing reports an error.
+        2. An obligation with no rule is unreachable from the ingest path — a
+           regulatory requirement in the corpus that no event can ever be
+           measured against.
+        3. ``_check_obligations`` dispatches on ``validation_rule`` through an
+           if/elif chain with no else. A ``validation_rule`` the consumer does
+           not implement leaves ``passed = True``: the obligation reports as
+           met without anything having been evaluated.
+        """
+        rule_obligation_ids = {r["obligation_id"] for r in obligation_rules}
+
+        dangling = sorted(rule_obligation_ids - seeded_obligation_ids)
+        assert not dangling, (
+            f"{len(dangling)} obligation_cte_rules row(s) reference obligations V036 never seeds: "
+            f"{dangling[:5]}. The FK aborts a fresh migration; on a live DB the "
+            f"JOIN in _check_obligations silently drops the rule."
+        )
+
+        unmapped = sorted(seeded_obligation_ids - rule_obligation_ids)
+        assert not unmapped, (
+            f"{len(unmapped)} seeded FSMA-204 obligation(s) have no obligation_cte_rules row: "
+            f"{unmapped[:5]}. _check_obligations can never evaluate them."
+        )
+
+        # Every rule must carry a validation_rule at all.
+        ruleless = [r["id"] for r in obligation_rules if not r["validation_rule"]]
+        assert not ruleless, f"obligation_cte_rules rows with no validation_rule: {ruleless[:5]}"
+
+        implemented = _implemented_validation_rules()
+        assert implemented, (
+            f"parsed no validation_rule branches out of {_CONSUMER_PY.relative_to(_REPO_ROOT)} — "
+            "the consumer moved; this assertion must be repointed, not deleted."
+        )
+
+        corpus_rules = {r["validation_rule"] for r in obligation_rules}
+        unimplemented = sorted(corpus_rules - implemented)
+        assert not unimplemented, (
+            f"golden-corpus validation_rule value(s) with no branch in _check_obligations: "
+            f"{unimplemented}. Those obligations fall through the if/elif chain with "
+            f"passed=True — reported as satisfied without being evaluated. "
+            f"Implemented branches: {sorted(implemented)}"
+        )
+
+
+def _implemented_validation_rules() -> set[str]:
+    """String literals ``_check_obligations`` compares ``validation_rule`` against.
+
+    Read via ``ast`` from the consumer's source rather than by importing it:
+    the set of branches is a source-level fact, and parsing keeps this module
+    collectable without the ingestion router's runtime dependencies.
+    """
+    source = _read(_CONSUMER_PY)
+    tree = ast.parse(source)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Compare):
+            continue
+        left = node.left
+        if not (isinstance(left, ast.Name) and left.id == "validation_rule"):
+            continue
+        for op, comparator in zip(node.ops, node.comparators):
+            if isinstance(op, (ast.Eq, ast.In)) and isinstance(comparator, ast.Constant):
+                if isinstance(comparator.value, str):
+                    found.add(comparator.value)
+            elif isinstance(op, ast.In) and isinstance(comparator, (ast.Tuple, ast.List, ast.Set)):
+                for elt in comparator.elts:
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                        found.add(elt.value)
+    return found

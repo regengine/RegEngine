@@ -29,6 +29,41 @@ from .persistence import (
     _upsert_drill_row,
 )
 
+# #2943: the drill warning appended when no trace function is wired and the
+# engine falls back to hardcoded demo counts. Without it the fallback's 5/3 and
+# 3/2 are indistinguishable from a real trace's numbers — and healthier-looking
+# than the zeroes the real path used to record.
+SIMULATED_TRACE_WARNING = "simulated trace: no graph backend wired — counts below are demo values, not traced data"
+
+
+def _trace_field(trace_result: Any, name: str, default: Any, required: bool = True) -> Any:
+    """Read ``name`` off a trace result that may be an object or a mapping.
+
+    #2943 — the engine used to read ``result.get("lots_count")`` and
+    ``result.get("max_depth")``. ``TraceResult``
+    (``services/graph/app/fsma/types.py``) has neither field: the real ones are
+    ``lots`` and ``hop_count``. Both ``.get()`` calls fell through to their
+    ``0`` default on every real trace and the zeroes were persisted onto the
+    drill record — the artifact a firm shows FDA to evidence 24-hour
+    traceability.
+
+    The router now hands the engine the ``TraceResult`` itself rather than
+    ``TraceResult.__dict__``, so a renamed field surfaces as a missing
+    attribute instead of a silent zero. Mappings are still accepted for
+    callers that pass a plain dict; with ``required=True`` an absent key
+    raises rather than defaulting, because a defaulted metric is exactly the
+    failure mode this issue is about — the drill would record 0 and look like
+    a clean trace.
+    """
+    if hasattr(trace_result, name):
+        return getattr(trace_result, name)
+    if isinstance(trace_result, dict):
+        if name in trace_result:
+            return trace_result[name]
+        if required:
+            raise KeyError(f"trace result is missing required field {name!r}; got keys {sorted(trace_result)}")
+    return default
+
 
 class MockRecallEngine:
     """
@@ -158,6 +193,8 @@ class MockRecallEngine:
         max_forward = 0
         max_backward = 0
         trace_time = 0.0
+        # #2943: set when a trace branch falls back to hardcoded demo counts.
+        simulated = False
 
         try:
             # Execute traces based on drill type
@@ -171,11 +208,16 @@ class MockRecallEngine:
                         result = self._trace_forward(drill.target_lot, tenant_id=drill.tenant_id)
 
                     if result:
-                        lots_traced += result.get("lots_count", 0)
-                        max_forward = result.get("max_depth", 0)
+                        # #2943: read TraceResult's real fields (`lots`,
+                        # `hop_count`), not the never-present `lots_count` /
+                        # `max_depth` keys that silently yielded 0.
+                        lots_traced += len(_trace_field(result, "lots", []) or [])
+                        max_forward = _trace_field(result, "hop_count", 0) or 0
                         facilities.extend(self._extract_facilities(result, "downstream"))
                 else:
-                    # Simulate trace for testing
+                    # Simulate trace for testing — #2943: flagged, so the
+                    # stored record cannot be mistaken for a real trace.
+                    simulated = True
                     lots_traced += 5
                     max_forward = 3
                     facilities.append(
@@ -196,11 +238,13 @@ class MockRecallEngine:
                         result = self._trace_backward(drill.target_lot, tenant_id=drill.tenant_id)
 
                     if result:
-                        lots_traced += result.get("lots_count", 0)
-                        max_backward = result.get("max_depth", 0)
+                        # #2943: see the forward branch above.
+                        lots_traced += len(_trace_field(result, "lots", []) or [])
+                        max_backward = _trace_field(result, "hop_count", 0) or 0
                         facilities.extend(self._extract_facilities(result, "upstream"))
                 else:
-                    # Simulate trace for testing
+                    # Simulate trace for testing — #2943: flagged.
+                    simulated = True
                     lots_traced += 3
                     max_backward = 2
                     facilities.append(
@@ -233,6 +277,13 @@ class MockRecallEngine:
                     lots_traced = 1
 
             trace_time = time.time() - trace_start
+
+            # #2943: say so on the record, not just in the logs. A drill with
+            # no graph backend reports 5/3 and 3/2, which looks healthier than
+            # a real trace — nobody reading the retained evidence would guess
+            # the numbers were invented.
+            if simulated:
+                warnings.append(SIMULATED_TRACE_WARNING)
 
             # Generate exports if export function available
             export_time = 0.0
@@ -287,6 +338,7 @@ class MockRecallEngine:
                 contact_list_path=contact_path,
                 errors=errors,
                 warnings=warnings,
+                simulated=simulated,
             )
 
             drill.status = RecallStatus.COMPLETED
@@ -322,13 +374,17 @@ class MockRecallEngine:
 
     def _extract_facilities(
         self,
-        trace_result: Dict[str, Any],
+        trace_result: Any,
         direction: str,
     ) -> List[AffectedFacility]:
-        """Extract facility info from trace results."""
+        """Extract facility info from trace results.
+
+        #2943: accepts a ``TraceResult`` or a mapping — the router no longer
+        flattens the dataclass through ``__dict__``.
+        """
         facilities = []
 
-        raw_facilities = trace_result.get("facilities", [])
+        raw_facilities = _trace_field(trace_result, "facilities", [], required=False) or []
         for f in raw_facilities:
             facilities.append(
                 AffectedFacility(

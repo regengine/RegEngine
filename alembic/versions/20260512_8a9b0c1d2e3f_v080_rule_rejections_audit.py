@@ -89,14 +89,19 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        -- #2935: fail-CLOSED. This policy originally coalesced an unset
+        -- app.tenant_id to the nil UUID, which makes the predicate match
+        -- nil-tenant rows instead of refusing the query -- the exact
+        -- fail-open shape #1091 exists to prevent. get_tenant_context()
+        -- (available since V056) raises when app.tenant_id is unset.
+        -- Existing databases were already repaired by V083; correcting it
+        -- here removes the transient window during a fresh `upgrade head`
+        -- and stops this file being copied as a template.
         CREATE POLICY tenant_isolation_rule_rejections
             ON fsma.rule_rejections
-            USING (
-                tenant_id = COALESCE(
-                    NULLIF(current_setting('app.tenant_id', true), ''),
-                    '00000000-0000-0000-0000-000000000000'
-                )::uuid
-            )
+            FOR ALL
+            USING (tenant_id = get_tenant_context())
+            WITH CHECK (tenant_id = get_tenant_context())
         """
     )
 

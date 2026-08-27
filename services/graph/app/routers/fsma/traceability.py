@@ -649,7 +649,12 @@ async def log_traceability_event(
                 unit_of_measure=payload.uom,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Lot.merge_cypher(), tlc=payload.tlc, properties=lot.node_properties)
+            await session.run(
+                Lot.merge_cypher(),
+                tlc=payload.tlc,
+                tenant_id=str(tenant_id),
+                properties=lot.node_properties,
+            )
 
             # Create/Merge Facility
             facility = Facility(
@@ -657,7 +662,10 @@ async def log_traceability_event(
                 tenant_id=str(tenant_id),
             )
             await session.run(
-                Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties
+                Facility.merge_cypher(),
+                gln=payload.location_identifier,
+                tenant_id=str(tenant_id),
+                properties=facility.node_properties,
             )
 
             # Link Relationships
@@ -689,7 +697,12 @@ async def log_traceability_event(
                     extraction_timestamp=datetime.now().isoformat(),
                     tenant_id=str(tenant_id),
                 )
-                await session.run(Document.merge_cypher(), document_id=doc_id, properties=document.node_properties)
+                await session.run(
+                    Document.merge_cypher(),
+                    document_id=doc_id,
+                    tenant_id=str(tenant_id),
+                    properties=document.node_properties,
+                )
                 # Link Document to Event — tenant-scoped to prevent cross-tenant
                 # edges when a document_id or event_id collides across tenants (#1284).
                 await session.run(

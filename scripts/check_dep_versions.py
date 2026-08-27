@@ -1,15 +1,36 @@
 #!/usr/bin/env python3
-"""CI guard — reject per-service requirements files that drift below pyproject.toml floors.
+"""CI guard — reject dependency version drift between the declared floors and the lock.
 
-Scans all ``services/*/requirements*.txt`` files and compares every package
-that also appears in ``[tool.poetry.dependencies]`` against the canonical
-minimum version declared there.  A service file is allowed to raise the floor
-(e.g. >=2.8.0 when pyproject says >=2.7.0) but MUST NOT lower it.
+``requirements.in`` is the human-edited single source of truth for what
+RegEngine depends on (``pyproject.toml`` says so verbatim, and declares no
+dependencies of its own).  ``requirements.lock`` is its pip-compile output
+and the only thing Docker and CI ever install.  Those two files can drift:
+a hand-edited lock, a bad merge, or a cherry-picked revert can leave the
+lock pinning a version that does not satisfy the floor (or the cap) the
+``.in`` file declares — and because installs read only the lock, nothing
+else in the repo notices.
 
-Hard-pinned ``==X.Y.Z`` specs in service files are also checked: the pinned
-version must be >= the canonical minimum.
+This guard asserts, for every direct requirement in ``requirements.in``:
 
-Exit code 0 = clean.  Non-zero = drift detected.
+* it has a pin in ``requirements.lock`` (a direct dep missing from the lock
+  is never installed), and
+* that pin satisfies the ``.in`` specifier — floor *and* cap.
+
+It additionally re-checks any ``services/*/requirements*.txt`` file that
+still exists against the same floors.  Those files were deprecated in
+#1429; if one comes back it must not lower a floor.
+
+History (#2936): this script used to read ``[tool.poetry.dependencies]``
+from ``pyproject.toml``.  That table has never existed — ``pyproject.toml``
+states in a comment that dependencies are deliberately *not* declared there
+— so ``load_canonical_floors`` always returned ``{}``, the guard printed a
+WARNING, returned 0 before opening a single requirements file, and the
+"Dep version drift guard" hard gate in backend-ci.yml passed on every PR
+while checking nothing.  Empty inputs are now fatal rather than green: a
+guard with no inputs is not a guard.
+
+Exit code 0 = clean.  Non-zero = drift detected, or the guard has no
+inputs to check.
 
 Usage:
     python scripts/check_dep_versions.py
@@ -21,62 +42,231 @@ import re
 import sys
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomllib  # type: ignore[no-redef]
-    except ImportError:
-        import tomli as tomllib  # type: ignore[no-redef]
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Packages whose version floors must not regress in per-service files.
-# Extend this list as new shared dependencies are added to pyproject.toml.
-GUARDED_PACKAGES = {
-    "pydantic",
-    "pydantic-settings",
-    "fastapi",
-    "sqlalchemy",
-    "uvicorn",
-    "httpx",
-    "alembic",
-}
+REQUIREMENTS_IN = REPO_ROOT / "requirements.in"
+REQUIREMENTS_LOCK = REPO_ROOT / "requirements.lock"
 
-# Regex to extract a minimum version from a PEP 440 constraint string.
-# Handles: >=X, ==X, ~=X.  Ignores upper-bound-only specs (<X, <=X).
-_VER_RE = re.compile(r"(>=|==|~=)\s*([\d]+(?:\.[\d]+)*)")
+# ---------------------------------------------------------------------------
+# Minimal PEP 440 version + specifier handling.
+#
+# Deliberately dependency-free: the ``dep-version-check`` job in
+# backend-ci.yml runs this script straight after actions/setup-python with
+# no ``pip install`` step, so ``packaging`` is not importable there.  The
+# subset below covers epoch/release/pre/post/dev and the operators that
+# appear in requirements files (>=, >, <=, <, ==, ===, !=, ~=), including
+# ``.*`` wildcards on == and !=.
+# ---------------------------------------------------------------------------
 
-# Requirement-line parser: "package-name[extras] spec  # comment"
-_REQ_RE = re.compile(
-    r"^\s*(?P<pkg>[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)"  # package name
-    r"(?:\[.*?\])?"  # optional extras
-    r"(?P<spec>[^#\n]*)",  # version spec
+_VERSION_RE = re.compile(
+    r"^\s*v?"
+    r"(?:(?P<epoch>\d+)!)?"
+    r"(?P<release>\d+(?:\.\d+)*)"
+    r"(?P<pre>[-_.]?(?:a|b|c|rc|alpha|beta|pre|preview)[-_.]?\d*)?"
+    r"(?P<post>[-_.]?(?:post|rev|r)[-_.]?\d*|-\d+)?"
+    r"(?P<dev>[-_.]?dev[-_.]?\d*)?"
+    r"(?:\+[a-z0-9]+(?:[-_.][a-z0-9]+)*)?"
+    r"\s*$",
+    re.IGNORECASE,
 )
 
-
-def _parse_version(v: str) -> tuple[int, ...]:
-    """Convert '2.7.0' → (2, 7, 0)."""
-    return tuple(int(x) for x in v.split(".") if x.isdigit())
+_PRE_NORM = {"alpha": "a", "beta": "b", "c": "rc", "pre": "rc", "preview": "rc"}
 
 
-def load_canonical_floors(pyproject: Path) -> dict[str, tuple[int, ...]]:
-    """Return {normalised-package-name: min_version_tuple} from pyproject.toml."""
-    with pyproject.open("rb") as fh:
-        data = tomllib.load(fh)
+class InvalidVersion(ValueError):
+    """Raised when a version string cannot be parsed."""
 
-    deps: dict[str, str] = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
-    floors: dict[str, tuple[int, ...]] = {}
-    for pkg, spec in deps.items():
-        pkg_norm = pkg.lower().replace("_", "-")
-        if pkg_norm not in GUARDED_PACKAGES:
+
+class Version:
+    """Comparable PEP 440 version (subset — see module note)."""
+
+    __slots__ = ("raw", "_key")
+
+    def __init__(self, raw: str) -> None:
+        m = _VERSION_RE.match(raw)
+        if not m:
+            raise InvalidVersion(raw)
+        self.raw = raw.strip()
+
+        epoch = int(m.group("epoch") or 0)
+        release = tuple(int(p) for p in m.group("release").split("."))
+
+        pre = m.group("pre")
+        if pre:
+            pm = re.match(r"[-_.]?([a-z]+)[-_.]?(\d*)$", pre, re.IGNORECASE)
+            letter = pm.group(1).lower()
+            letter = _PRE_NORM.get(letter, letter)
+            pre_key: tuple = (letter, int(pm.group(2) or 0))
+        else:
+            # No pre-release sorts AFTER any pre-release of the same release.
+            pre_key = ("zzz", 0)
+
+        post = m.group("post")
+        if post:
+            pm = re.search(r"(\d+)$", post)
+            post_key = int(pm.group(1)) if pm else 0
+        else:
+            post_key = -1
+
+        dev = m.group("dev")
+        if dev:
+            pm = re.search(r"(\d+)$", dev)
+            dev_key = int(pm.group(1)) if pm else 0
+        else:
+            # No dev segment sorts AFTER any dev release.
+            dev_key = 1 << 30
+
+        self._key = (epoch, release, pre_key, post_key, dev_key)
+
+    def _cmp_key(self, other: "Version") -> tuple[tuple, tuple]:
+        """Right-pad the release tuples so 2.0 and 2.0.0 compare equal."""
+        a, b = self._key, other._key
+        width = max(len(a[1]), len(b[1]))
+
+        def pad(release: tuple) -> tuple:
+            return tuple(release) + (0,) * (width - len(release))
+
+        return ((a[0], pad(a[1]), *a[2:]), (b[0], pad(b[1]), *b[2:]))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        a, b = self._cmp_key(other)
+        return a == b
+
+    def __lt__(self, other: "Version") -> bool:
+        a, b = self._cmp_key(other)
+        return a < b
+
+    def __le__(self, other: "Version") -> bool:
+        return self == other or self < other
+
+    def __gt__(self, other: "Version") -> bool:
+        return not self <= other
+
+    def __ge__(self, other: "Version") -> bool:
+        return not self < other
+
+    def __hash__(self) -> int:
+        return hash(self._key)
+
+    def __str__(self) -> str:
+        return self.raw
+
+
+_SPEC_RE = re.compile(r"(===|==|!=|~=|>=|<=|>|<)\s*([^,;\s]+)")
+
+
+def _release_prefix_match(pin: Version, prefix: str) -> bool:
+    """``==2.7.*`` style comparison."""
+    want = tuple(int(p) for p in prefix.split(".") if p.isdigit())
+    got = tuple(pin._key[1][: len(want)])
+    return got == want
+
+
+def specifier_allows(spec: str, pin: Version) -> tuple[bool, str]:
+    """Return (satisfied, first-failing-clause) for *spec* against *pin*."""
+    clauses = _SPEC_RE.findall(spec or "")
+    if not clauses:
+        return True, ""
+    for op, raw in clauses:
+        wildcard = raw.endswith(".*")
+        base = raw[:-2] if wildcard else raw
+        if op == "===":
+            ok = pin.raw == raw
+        elif wildcard and op in ("==", "!="):
+            hit = _release_prefix_match(pin, base)
+            ok = hit if op == "==" else not hit
+        else:
+            try:
+                other = Version(base)
+            except InvalidVersion:
+                # Unparseable bound — treat as unchecked rather than silently
+                # passing the whole requirement.
+                return False, f"{op}{raw} (unparseable version)"
+            if op == "==":
+                ok = pin == other
+            elif op == "!=":
+                ok = pin != other
+            elif op == ">=":
+                ok = pin >= other
+            elif op == ">":
+                ok = pin > other
+            elif op == "<=":
+                ok = pin <= other
+            elif op == "<":
+                ok = pin < other
+            elif op == "~=":
+                # ~=X.Y  ==  >=X.Y, ==X.*   /   ~=X.Y.Z == >=X.Y.Z, ==X.Y.*
+                rel = other._key[1]
+                if len(rel) < 2:
+                    return False, f"~={raw} (needs at least two release segments)"
+                prefix = ".".join(str(p) for p in rel[:-1])
+                ok = pin >= other and _release_prefix_match(pin, prefix)
+            else:  # pragma: no cover - _SPEC_RE cannot produce anything else
+                ok = True
+        if not ok:
+            return False, f"{op}{raw}"
+    return True, ""
+
+
+# ---------------------------------------------------------------------------
+# Requirement-file parsing
+# ---------------------------------------------------------------------------
+
+_NAME_RE = re.compile(r"^\s*(?P<pkg>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?P<extras>\[[^\]]*\])?\s*(?P<spec>.*)$")
+
+
+def normalise(pkg: str) -> str:
+    """PEP 503 name normalisation: 'PyJWT' and 'py_jwt' -> 'pyjwt'."""
+    return re.sub(r"[-_.]+", "-", pkg).lower()
+
+
+def _logical_lines(path: Path):
+    """Yield (lineno, text) with comments stripped and backslash joins applied."""
+    buf = ""
+    start = 0
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
             continue
-        # spec can be a string like ">=2.7.0" or a dict like {"version": ">=2.7.0", ...}
-        spec_str: str = spec if isinstance(spec, str) else spec.get("version", "")
-        match = _VER_RE.search(spec_str)
-        if match:
-            floors[pkg_norm] = _parse_version(match.group(2))
-    return floors
+        if not buf:
+            start = lineno
+        if line.endswith("\\"):
+            buf += line[:-1]
+            continue
+        buf += line
+        text = buf.strip()
+        buf = ""
+        if text:
+            yield start, text
+    if buf.strip():
+        yield start, buf.strip()
+
+
+def parse_requirements(path: Path) -> dict[str, tuple[str, int]]:
+    """Return {normalised-name: (specifier, lineno)} for a requirements file.
+
+    Environment markers (``; python_version < "3.12"``) are stripped — the
+    guard compares version bounds, not marker applicability.  ``--hash=``
+    continuation lines and pip options are skipped.
+    """
+    out: dict[str, tuple[str, int]] = {}
+    for lineno, text in _logical_lines(path):
+        if text.startswith("-"):  # -r / -c / --index-url / --hash
+            continue
+        text = text.split(";", 1)[0].strip()
+        if not text:
+            continue
+        m = _NAME_RE.match(text)
+        if not m:
+            continue
+        spec = m.group("spec").strip()
+        # A bare URL / path requirement carries no comparable version.
+        if spec.startswith("@"):
+            continue
+        out[normalise(m.group("pkg"))] = (spec, lineno)
+    return out
 
 
 def iter_service_req_files() -> list[Path]:
@@ -84,87 +274,144 @@ def iter_service_req_files() -> list[Path]:
     return sorted(services_dir.glob("*/requirements*.txt"))
 
 
-def check_file(path: Path, floors: dict[str, tuple[int, ...]]) -> list[str]:
-    """Return violation strings for any guarded package that dips below its floor."""
+def floors_from(specs: dict[str, tuple[str, int]]) -> dict[str, Version]:
+    """Extract the lower bound (>=, ==, ~=) declared for each package."""
+    floors: dict[str, Version] = {}
+    for pkg, (spec, _lineno) in specs.items():
+        for op, raw in _SPEC_RE.findall(spec):
+            if op not in (">=", "==", "~=", "==="):
+                continue
+            try:
+                v = Version(raw[:-2] if raw.endswith(".*") else raw)
+            except InvalidVersion:
+                continue
+            if pkg not in floors or v > floors[pkg]:
+                floors[pkg] = v
+    return floors
+
+
+def check_service_file(path: Path, floors: dict[str, Version]) -> list[str]:
+    """Violations for any package whose service-file bound dips below the floor."""
     violations: list[str] = []
     try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        specs = parse_requirements(path)
     except OSError as exc:
         return [f"could not read: {exc}"]
 
-    for lineno, raw in enumerate(lines, start=1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
+    for pkg, (spec, lineno) in specs.items():
+        floor = floors.get(pkg)
+        if floor is None:
             continue
-        m = _REQ_RE.match(line)
-        if not m:
-            continue
-        pkg_norm = m.group("pkg").lower().replace("_", "-")
-        if pkg_norm not in floors:
-            continue
-        spec_str = m.group("spec").strip()
-        floor = floors[pkg_norm]
-
-        ver_matches = _VER_RE.findall(spec_str)
-        if not ver_matches:
-            # No version constraint — nothing to check against.
-            continue
-
-        for op, ver_str in ver_matches:
-            pinned = _parse_version(ver_str)
-            if pinned < floor:
+        for op, raw in _SPEC_RE.findall(spec):
+            if op not in (">=", "==", "~=", "==="):
+                continue
+            try:
+                v = Version(raw[:-2] if raw.endswith(".*") else raw)
+            except InvalidVersion:
+                continue
+            if v < floor:
                 violations.append(
-                    f"  L{lineno}: {pkg_norm}{spec_str!r} — "
-                    f"floor {'.'.join(str(x) for x in pinned)} is below "
-                    f"canonical minimum {'.'.join(str(x) for x in floor)} "
-                    f"(pyproject.toml)"
+                    f"  L{lineno}: {pkg}{spec!r} — bound {v} is below the "
+                    f"requirements.in floor {floor}"
                 )
     return violations
 
 
 def main() -> int:
-    pyproject = REPO_ROOT / "pyproject.toml"
-    if not pyproject.is_file():
-        print(f"ERROR: {pyproject} not found — cannot determine canonical floors.")
+    for required in (REQUIREMENTS_IN, REQUIREMENTS_LOCK):
+        if not required.is_file():
+            print(f"ERROR: {required.relative_to(REPO_ROOT)} not found — the guard has no inputs.")
+            print("A dependency guard that cannot read its inputs is not checking anything.")
+            return 1
+
+    declared = parse_requirements(REQUIREMENTS_IN)
+    pinned_specs = parse_requirements(REQUIREMENTS_LOCK)
+
+    if not declared:
+        print("ERROR: requirements.in declared ZERO parseable requirements.")
+        print("The guard has no inputs — it is not checking anything. See #2936.")
+        return 1
+    if not pinned_specs:
+        print("ERROR: requirements.lock contains ZERO parseable pins.")
+        print("The guard has no inputs — it is not checking anything. See #2936.")
         return 1
 
-    floors = load_canonical_floors(pyproject)
-    if not floors:
-        print("WARNING: No guarded packages found in pyproject.toml — nothing to check.")
-        return 0
+    pins: dict[str, Version] = {}
+    for pkg, (spec, _lineno) in pinned_specs.items():
+        for op, raw in _SPEC_RE.findall(spec):
+            if op in ("==", "==="):
+                try:
+                    pins[pkg] = Version(raw)
+                except InvalidVersion:
+                    pass
+                break
 
-    req_files = iter_service_req_files()
-    if not req_files:
-        print("No services/*/requirements*.txt files found — nothing to check.")
-        return 0
+    if not pins:
+        print("ERROR: requirements.lock yielded ZERO '==' pins — it is not a lockfile.")
+        return 1
 
-    any_violations = False
-    for path in req_files:
-        rel = path.relative_to(REPO_ROOT)
-        violations = check_file(path, floors)
-        if violations:
-            any_violations = True
-            print(f"\nFAIL {rel}")
-            for v in violations:
-                print(v)
-        else:
-            print(f"  OK  {rel}")
+    missing: list[str] = []
+    drifted: list[str] = []
+    checked = 0
 
-    print(f"\nCanonical floors from pyproject.toml:")
-    for pkg, ver in sorted(floors.items()):
-        print(f"  {pkg}: >={'.'.join(str(x) for x in ver)}")
+    for pkg, (spec, lineno) in sorted(declared.items()):
+        pin = pins.get(pkg)
+        if pin is None:
+            missing.append(f"  requirements.in:{lineno}: {pkg}{spec} — no '==' pin in requirements.lock")
+            continue
+        checked += 1
+        ok, clause = specifier_allows(spec, pin)
+        if not ok:
+            drifted.append(
+                f"  requirements.in:{lineno}: {pkg}{spec} — lock pins {pkg}=={pin}, "
+                f"which violates {clause}"
+            )
 
-    if any_violations:
+    print(f"requirements.in: {len(declared)} direct requirement(s)")
+    print(f"requirements.lock: {len(pins)} pinned distribution(s)")
+    print(f"Compared {checked} direct requirement(s) against their lock pin.")
+
+    if checked == 0:
+        print("\nERROR: zero requirements were actually compared — the guard is vacuous.")
+        return 1
+
+    service_files = iter_service_req_files()
+    floors = floors_from(declared)
+    service_violations = False
+    if service_files:
+        print("\nPer-service requirements files (deprecated — see #1429):")
+        for path in service_files:
+            rel = path.relative_to(REPO_ROOT)
+            violations = check_service_file(path, floors)
+            if violations:
+                service_violations = True
+                print(f"\nFAIL {rel}")
+                for v in violations:
+                    print(v)
+            else:
+                print(f"  OK  {rel}")
+
+    if missing:
+        print("\nDirect requirements with no pin in requirements.lock:")
+        for m in missing:
+            print(m)
+    if drifted:
+        print("\nLock pins that violate the requirements.in specifier:")
+        for d in drifted:
+            print(d)
+
+    if missing or drifted or service_violations:
         print(
-            "\nVersion drift detected in per-service requirements file(s).\n"
-            "Per-service files MUST NOT lower the floor set by pyproject.toml.\n"
-            "Either raise the floor in the service file or update pyproject.toml\n"
-            "if the platform-wide minimum is intentionally changing.\n"
-            "See issue #1886."
+            "\nDependency version drift detected.\n"
+            "requirements.in declares the floors and caps; requirements.lock is the\n"
+            "only thing Docker and CI install. They must agree. Re-run\n"
+            "  pip-compile --allow-unsafe --generate-hashes \\\n"
+            "      --output-file=requirements.lock requirements.in\n"
+            "rather than hand-editing the lock. See issues #1886 and #2936."
         )
         return 1
 
-    print("\nOK — no version drift in per-service requirements files.")
+    print("\nOK — every direct requirement is pinned in requirements.lock within its declared bounds.")
     return 0
 
 
