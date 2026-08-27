@@ -266,8 +266,10 @@ def test_export_csv_format_still_supported(client: TestClient) -> None:
 
 def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.MonkeyPatch) -> None:
     persistence = _FakePersistence(None)
-    events = persistence.query_events_by_tlc("", "TLC-2026-001") + persistence.query_events_by_tlc("", "TLC-2026-002")
-    original_hash = hashlib.sha256(_generate_csv(events).encode("utf-8")).hexdigest()
+    # Reconstruct exactly as the exporter does — one set-based batch call
+    # over every seed lot code (#2515/#2898), not a per-TLC fan-out.
+    events = persistence.query_events_by_tlcs("", ["TLC-2026-001", "TLC-2026-002"])
+    original_hash = hashlib.sha256(_generate_csv(events, include_pii=False).encode("utf-8")).hexdigest()
     export_log_row = (
         "fda_spreadsheet",
         None,  # query_tlc
@@ -276,6 +278,8 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
         len(events),
         original_hash,
         datetime.now(timezone.utc),
+        False,  # include_pii — recorded, so the export is reproducible
+        None,  # query_event_type
     )
 
     app = FastAPI()
