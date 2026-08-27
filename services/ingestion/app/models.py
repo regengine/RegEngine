@@ -314,6 +314,10 @@ class BulkDiscoveryApprovalResponse(BaseModel):
     status: str
     count: int
     items: List[BulkDiscoveryApprovalItem]
+    # #2921: requested indices that resolved to no queue entry. Always
+    # present (empty when everything resolved) so a caller can tell
+    # "nothing matched" apart from "nothing was asked for".
+    skipped: List[int] = Field(default_factory=list)
 
 
 class BulkDiscoveryRejectionResponse(BaseModel):
@@ -321,6 +325,8 @@ class BulkDiscoveryRejectionResponse(BaseModel):
 
     status: str
     count: int
+    # #2921 — see BulkDiscoveryApprovalResponse.skipped.
+    skipped: List[int] = Field(default_factory=list)
 
 
 class ScrapeResponse(BaseModel):
