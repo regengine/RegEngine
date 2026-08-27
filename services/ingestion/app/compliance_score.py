@@ -26,6 +26,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from .config import get_settings
 from .tenant_validation import validate_tenant_id
 from .webhook_compat import require_tenant_context
+from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
 logger = logging.getLogger("compliance-score")
 
@@ -78,14 +79,147 @@ def _compute_grade(score: int) -> str:
         return "F"
 
 
+# ---------------------------------------------------------------------------
+# Required-KDE coverage (#2962)
+# ---------------------------------------------------------------------------
+# The FSMA-required KDE set is per CTE type (21 CFR §1.1325–§1.1350), so the
+# denominator for KDE completeness is REQUIRED_KDES_BY_CTE — the same source
+# of truth the FDA export path scores against
+# (fda_export_service._build_completeness_summary). It cannot be a COUNT(*)
+# over fsma.cte_kdes: every production writer skips absent values, so a
+# required KDE that was never supplied has no row and would land in neither
+# the numerator nor the denominator.
+#
+# Required fields split across two stores. These live as columns on
+# fsma.cte_events; everything else is an fsma.cte_kdes row. location_name may
+# arrive either way, which mirrors _event_value_for_required_field in
+# fda_export_service. The presence query below folds both into one
+# (event_type, field) stream so this module never has to know which is which.
+
+
+def _required_fields_for(event_type) -> list[str]:
+    """Required KDE list for a CTE type, or [] when it has no checklist."""
+    member = WebhookCTEType.__members__.get(str(event_type or "").strip().upper())
+    if member is None:
+        return []
+    # .get(), not [] — GROWING is a WebhookCTEType member with no
+    # REQUIRED_KDES_BY_CTE entry (it normalizes to farm metadata, not a CTE),
+    # so subscripting would raise KeyError on a legitimately-ingested type.
+    return REQUIRED_KDES_BY_CTE.get(member, [])
+
+
+def _required_kde_coverage(type_counts: dict, present_counts: dict) -> dict:
+    """
+    Score recorded events against the FSMA-required KDE set for their CTE type.
+
+    ``type_counts``    maps event_type -> number of events of that type.
+    ``present_counts`` maps (event_type, field) -> number of events of that
+                       type carrying a non-blank value for ``field``, from
+                       either the fsma.cte_events column or an fsma.cte_kdes
+                       row.
+    """
+    checks_total = 0
+    checks_passed = 0
+    unchecked_events = 0
+    unchecked_types: set[str] = set()
+
+    for event_type, event_count in (type_counts or {}).items():
+        if not event_count:
+            continue
+        required = _required_fields_for(event_type)
+        if not required:
+            # #2698 pattern: an event type with no required-KDE checklist
+            # (canonical/EPCIS types, "growing", typos) is UNCHECKED — never
+            # silently counted as fully covered.
+            unchecked_events += event_count
+            unchecked_types.add(str(event_type))
+            continue
+        for field in required:
+            checks_total += event_count
+            # Clamp: a malformed aggregate must never push passed > total.
+            checks_passed += min(present_counts.get((event_type, field), 0), event_count)
+
+    return {
+        "required_kde_checks_total": checks_total,
+        "required_kde_checks_passed": checks_passed,
+        "events_unchecked_type": unchecked_events,
+        "unchecked_event_types": sorted(unchecked_types),
+    }
+
+
+def _query_required_kde_coverage(db_session, tenant_id: str) -> dict:
+    """Read the per-CTE-type required-KDE coverage signals for a tenant.
+
+    Both reads aggregate server-side — one row per event type, one row per
+    (event_type, field) — so this stays bounded regardless of event volume.
+    """
+    type_rows = db_session.execute(
+        text("""
+            /* required_kde_event_types */
+            SELECT event_type, COUNT(*)
+            FROM fsma.cte_events
+            WHERE tenant_id = :tid
+            GROUP BY event_type
+        """),
+        {"tid": tenant_id},
+    ).fetchall()
+    type_counts = {row[0]: row[1] for row in (type_rows or []) if row and row[0]}
+
+    presence_rows = db_session.execute(
+        text("""
+            /* required_kde_presence */
+            WITH ev AS (
+                SELECT id, event_type, traceability_lot_code, product_description,
+                       quantity, unit_of_measure, location_name
+                FROM fsma.cte_events
+                WHERE tenant_id = :tid
+            ),
+            present AS (
+                SELECT id, event_type, 'traceability_lot_code' AS field FROM ev
+                    WHERE NULLIF(BTRIM(traceability_lot_code), '') IS NOT NULL
+                UNION ALL
+                SELECT id, event_type, 'product_description' FROM ev
+                    WHERE NULLIF(BTRIM(product_description), '') IS NOT NULL
+                UNION ALL
+                SELECT id, event_type, 'quantity' FROM ev
+                    WHERE quantity IS NOT NULL
+                UNION ALL
+                SELECT id, event_type, 'unit_of_measure' FROM ev
+                    WHERE NULLIF(BTRIM(unit_of_measure), '') IS NOT NULL
+                UNION ALL
+                SELECT id, event_type, 'location_name' FROM ev
+                    WHERE NULLIF(BTRIM(location_name), '') IS NOT NULL
+                UNION ALL
+                SELECT e.id, e.event_type, k.kde_key
+                FROM fsma.cte_kdes k
+                JOIN ev e ON e.id = k.cte_event_id
+                WHERE NULLIF(BTRIM(k.kde_value #>> '{}'), '') IS NOT NULL
+            )
+            SELECT event_type, field, COUNT(DISTINCT id)
+            FROM present
+            GROUP BY event_type, field
+        """),
+        {"tid": tenant_id},
+    ).fetchall()
+    present_counts = {(row[0], row[1]): row[2] for row in (presence_rows or []) if row}
+
+    return _required_kde_coverage(type_counts, present_counts)
+
+
 def _query_scoring_data(db_session, tenant_id: str) -> dict:
     """
     Query all scoring signals from the database in a single round-trip.
 
     Returns dict with keys:
-      event_count, distinct_cte_types, total_kdes, required_kdes_present,
+      event_count, distinct_cte_types, total_kdes, filled_kdes,
+      required_kde_checks_total, required_kde_checks_passed,
+      events_unchecked_type, unchecked_event_types,
       chain_length, chain_valid, last_chain_hash, obligation_count,
       ftl_category_count, product_categories_covered
+
+    #2962: the docstring previously advertised a ``required_kdes_present``
+    key that was never assigned anywhere in the module. The required-KDE
+    coverage keys above are the real thing.
     """
     from sqlalchemy import text
 
@@ -173,6 +307,27 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
 
     result["total_kdes"] = kde_row[0] if kde_row else 0
     result["filled_kdes"] = kde_row[1] if kde_row else 0
+
+    # 2b) KDE completeness against the FSMA-required set (#2962).
+    # The counts above measure only "of the KDEs we recorded, how many are
+    # non-blank" and cannot see a required KDE that was never supplied. The
+    # scored denominator comes from REQUIRED_KDES_BY_CTE instead.
+    try:
+        result.update(_query_required_kde_coverage(db_session, tenant_id))
+    except (OperationalError, ProgrammingError) as _kde_err:
+        # Fail closed (#2694 pattern): an unavailable required-KDE read must
+        # poison the dimension, not silently fall back to the recorded-KDE
+        # ratio that reports 100% for a mostly-empty event.
+        logger.error("compliance_score: required KDE coverage read failed: %s", _kde_err)
+        try:
+            db_session.rollback()
+        except Exception:
+            logger.debug("Rollback failed", exc_info=True)
+        result["required_kde_checks_total"] = 0
+        result["required_kde_checks_passed"] = 0
+        result["events_unchecked_type"] = 0
+        result["unchecked_event_types"] = []
+        result["required_kde_data_error"] = True
 
     # 3) Chain integrity
     chain_row = db_session.execute(
@@ -387,7 +542,7 @@ def _compute_scores(data: dict) -> dict:
     """
     scores = {}
 
-    # --- 1) Chain Integrity (30% weight) ---
+    # --- 1) Chain Integrity (10% weight) ---
     # Uses cryptographic hash recalculation, not just gap detection
     if data["chain_length"] == 0:
         scores["chain_integrity"] = (0, "No events in audit trail")
@@ -430,32 +585,62 @@ def _compute_scores(data: dict) -> dict:
             )
 
     # --- 2) KDE Completeness (25% weight) ---
-    if data["total_kdes"] == 0:
-        scores["kde_completeness"] = (0, "No KDEs recorded")
+    # #2962: scored against the FSMA-required KDE set for each event's CTE
+    # type (REQUIRED_KDES_BY_CTE), NOT against the KDEs that happen to be
+    # recorded. The old denominator was a COUNT(*) over fsma.cte_kdes, which
+    # contains a row only for KDEs the ingest actually supplied — so an event
+    # carrying 2 of its 7 required KDEs scored 2/2 = 100%.
+    required_total = data.get("required_kde_checks_total", 0)
+    required_passed = data.get("required_kde_checks_passed", 0)
+    unchecked_events = data.get("events_unchecked_type", 0)
+    events_missing_time = data.get("events_missing_time", 0)
+    time_note = f"; {events_missing_time} events lack precise time" if events_missing_time > 0 else ""
+
+    if data.get("required_kde_data_error"):
+        # Fail closed (#2694 pattern): no required-KDE signal means no claim.
+        scores["kde_completeness"] = (
+            0,
+            "KDE completeness could not be assessed — score withheld until the "
+            "required-KDE read succeeds (fail-closed)",
+        )
+    elif required_total == 0:
+        if unchecked_events > 0:
+            # #2698 pattern: events exist but none of their types has a
+            # required-KDE checklist — report 0, never a vacuous 100.
+            unchecked_types = data.get("unchecked_event_types") or []
+            type_note = f" ({', '.join(str(t) for t in unchecked_types[:5])})" if unchecked_types else ""
+            scores["kde_completeness"] = (
+                0,
+                f"{unchecked_events} event(s) have no FSMA required-KDE checklist{type_note} — coverage unverified",
+            )
+        else:
+            scores["kde_completeness"] = (0, "No KDEs recorded")
     else:
-        kde_ratio = data["filled_kdes"] / data["total_kdes"]
+        kde_ratio = required_passed / required_total
         kde_score = int(kde_ratio * 100)
 
         # Penalize for missing event time precision (FDA requires time, not just date)
-        events_missing_time = data.get("events_missing_time", 0)
         if events_missing_time > 0 and data["event_count"] > 0:
             time_penalty = min(10, int((events_missing_time / data["event_count"]) * 10))
             kde_score = max(0, kde_score - time_penalty)
 
-        missing = data["total_kdes"] - data["filled_kdes"]
-        time_note = f"; {events_missing_time} events lack precise time" if events_missing_time > 0 else ""
+        missing = required_total - required_passed
+        unchecked_note = (
+            f"; {unchecked_events} event(s) unchecked (no required-KDE checklist)" if unchecked_events else ""
+        )
         if missing > 0:
             scores["kde_completeness"] = (
                 kde_score,
-                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank{time_note}",
+                f"{required_passed}/{required_total} required KDE fields present — "
+                f"{missing} missing{time_note}{unchecked_note}",
             )
         else:
             scores["kde_completeness"] = (
                 kde_score if events_missing_time > 0 else 100,
-                f"All {data['total_kdes']} KDE fields populated{time_note}",
+                f"All {required_total} required KDE fields present{time_note}{unchecked_note}",
             )
 
-    # --- 3) CTE Completeness (20% weight) ---
+    # --- 3) CTE Completeness (15% weight) ---
     # Self-normalize by tenant's active CTE types instead of assuming all 7.
     # A cold-chain distributor may only use 3 CTE types (receiving, shipping,
     # transformation) and should score 100% when all 3 are tracked.
@@ -539,30 +724,50 @@ def _compute_scores(data: dict) -> dict:
             detail += f" — {open_alerts} open compliance alert(s)"
         scores["obligation_coverage"] = (obl_score, detail)
 
-    # --- 6) Export Readiness (10% weight) ---
+    # --- 6) Export Readiness (30% weight) ---
     # Requires: chain intact, KDEs present, multiple CTE types
     if data["event_count"] == 0:
         scores["export_readiness"] = (0, "Cannot produce FDA report — no data")
     else:
         export_score = 0
         issues = []
-        # Chain must be intact
+        # Chain must be intact. Three distinct verification states, three
+        # distinct outcomes — "not run" must never score as "passed" (#2960).
+        chain_verification_failed = data.get("chain_verified") is False
         if data.get("chain_verified") is True:
+            # PASSED: verification ran and the chain recomputed clean.
             export_score += 40
+        elif chain_verification_failed:
+            # #2960: FAILED — verification RAN and returned invalid. This arm
+            # did not exist, so the state fell through to the gap check below
+            # and collected +30. Hash tampering rewrites payloads without
+            # deleting rows, so chain_gaps == 0 holds for exactly the case
+            # that check is supposed to catch, and the emitted issue read
+            # "chain not cryptographically verified" — the opposite of what
+            # happened. No credit, and the dimension is clamped below.
+            issues.append("chain verification FAILED — tamper suspected")
         elif data.get("chain_verification_error"):
-            # Fail closed: no chain credit when verification failed to run.
+            # NOT RUN: fail closed — no chain credit when verification could
+            # not run. Strictly better than FAILED, so not clamped.
             issues.append("chain verification unavailable")
         elif data["chain_length"] > 0 and data["chain_gaps"] == 0:
+            # NOT ATTEMPTED: gap detection only, which cannot see tampering.
             export_score += 30
             issues.append("chain not cryptographically verified")
         else:
             issues.append("chain integrity")
-        # KDEs must be mostly complete
-        if data["total_kdes"] > 0:
-            kde_ratio = data["filled_kdes"] / data["total_kdes"]
+        # KDEs must be mostly complete, measured against the FSMA-required
+        # set for each event's CTE type (#2962) — the recorded-KDE ratio this
+        # used to read reported 100% for an event missing most of its KDEs.
+        if data.get("required_kde_data_error"):
+            issues.append("KDE completeness unavailable")
+        elif required_total > 0:
+            kde_ratio = required_passed / required_total
             export_score += int(kde_ratio * 30)
             if kde_ratio < 0.8:
                 issues.append("KDE gaps")
+        elif unchecked_events > 0:
+            issues.append("no required-KDE checklist for recorded event types")
         else:
             issues.append("no KDEs")
         # Multiple CTE types present
@@ -573,6 +778,13 @@ def _compute_scores(data: dict) -> dict:
             issues.append("limited CTE coverage")
         else:
             issues.append("no CTE types")
+
+        # #2960: an export built on a chain that failed cryptographic
+        # verification is not submittable — the records' integrity is
+        # disproven, not merely unproven. Clamp the dimension so no
+        # combination of KDE and CTE credit can render "FDA export ready".
+        if chain_verification_failed:
+            export_score = 0
 
         detail = (
             "FDA export ready"
