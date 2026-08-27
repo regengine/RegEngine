@@ -34,6 +34,7 @@ import {
     isCookieManagedCredentialHeader,
     isUsableCallerCredential,
     hasSupabaseSessionCookies,
+    resolveOpaqueSessionTenantId,
 } from './api-proxy';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
@@ -537,15 +538,68 @@ export function applyCookieCredentials(
     return headers;
 }
 
+const AUTH_SESSION_COOKIE = '__Host-regengine_session';
+
+/** True when the caller's only session credential is the opaque
+ *  `__Host-regengine_session` cookie (SSO / passkey / email-OTP).
+ *
+ *  JWT callers are excluded because `validateProxySession` already cross-checks
+ *  the `re_access_token` `tenant_id` claim against the `re_tenant_id` cookie and
+ *  403s on mismatch, so their tenant is server-anchored before we get here.
+ *  Opaque-session callers have no such check — hence #2806.
+ */
+function isOpaqueSessionOnlyCaller(request: NextRequest): boolean {
+    if (isUsableCallerCredential(request.cookies.get('re_access_token')?.value)) return false;
+    return isUsableCallerCredential(request.cookies.get(AUTH_SESSION_COOKIE)?.value);
+}
+
+/** Resolve the authoritative tenant for an opaque-session caller via the
+ *  backend `/auth/me` (#2806). Returns `null` — and costs no network hop — for
+ *  every other caller shape, whose tenant is already anchored elsewhere. */
+export async function resolveFirstPartySessionTenantId(
+    request: NextRequest,
+): Promise<string | null> {
+    if (!isOpaqueSessionOnlyCaller(request)) return null;
+    const sessionToken = request.cookies.get(AUTH_SESSION_COOKIE)?.value;
+    return sessionToken ? resolveOpaqueSessionTenantId(sessionToken) : null;
+}
+
+/** Async form of `applyFirstPartyServiceCredentials` that resolves the opaque
+ *  session's authoritative tenant server-side first. Route handlers and
+ *  `prepareHeaders` hooks should call THIS one — the sync form fails closed for
+ *  opaque-session callers precisely so that forgetting to is a 403, never a
+ *  silent cross-tenant grant. */
+export async function applyFirstPartyServiceCredentialsForSession(
+    headers: Headers,
+    request: NextRequest,
+): Promise<NextResponse | null> {
+    return applyFirstPartyServiceCredentials(headers, request, {
+        verifiedSessionTenantId: await resolveFirstPartySessionTenantId(request),
+    });
+}
+
 /** Inject first-party service credentials for server-side proxy calls.
  *
  * Browser JavaScript never receives the configured service API key. The proxy
  * only injects it after caller/session validation has already passed, and only
  * when a valid tenant context is present so backend RLS remains scoped.
+ *
+ * #2806: the injected key is `REGENGINE_API_KEY`, which
+ * `services/ingestion/app/authz.py` maps to a `scopes=["*"]` principal for
+ * WHATEVER tenant the `X-Tenant-ID` header names — membership is never checked,
+ * by design, since "the legacy master key may authenticate ANY tenant". The
+ * tenant here therefore has to be server-derived. It used to come from the
+ * `re_tenant_id` cookie, which `app/api/session/route.ts` sets `httpOnly:false`
+ * so the UI can read it — i.e. any script on an allowed origin could rewrite it
+ * with `document.cookie` and have the proxy attach the master key to a victim
+ * tenant. Opaque-session callers must now supply `verifiedSessionTenantId`
+ * (see `applyFirstPartyServiceCredentialsForSession`) and it must agree with
+ * the requested tenant.
  */
 export function applyFirstPartyServiceCredentials(
     headers: Headers,
     request: NextRequest,
+    options: { verifiedSessionTenantId?: string | null } = {},
 ): NextResponse | null {
     const existingApiKey = headers.get('x-regengine-api-key');
     const cookieApiKey = request.cookies.get('re_api_key')?.value;
@@ -584,6 +638,24 @@ export function applyFirstPartyServiceCredentials(
         return proxyError('Tenant context required for first-party service proxy', 401, {
             code: 'TENANT_CONTEXT_REQUIRED',
         });
+    }
+
+    // #2806: for an opaque-session caller the requested tenant is forgeable, so
+    // it must be confirmed against the tenant the backend binds to the session.
+    // No verified tenant (route did not resolve one, session expired, backend
+    // unreachable) => fail closed rather than fall back to the cookie.
+    if (isOpaqueSessionOnlyCaller(request)) {
+        const verifiedTenantId = options.verifiedSessionTenantId;
+        if (!verifiedTenantId || verifiedTenantId !== tenantId) {
+            headers.delete('x-regengine-api-key');
+            headers.delete('x-tenant-id');
+            return proxyError('Tenant context does not match authenticated session', 403, {
+                code: 'TENANT_CONTEXT_MISMATCH',
+            });
+        }
+        headers.set('x-regengine-api-key', serverApiKey);
+        headers.set('x-tenant-id', verifiedTenantId);
+        return null;
     }
 
     headers.set('x-regengine-api-key', serverApiKey);
