@@ -290,6 +290,41 @@ def _extract_invoice_period_end(invoice_payload: dict[str, Any]) -> Optional[str
     return None
 
 
+def _extract_subscription_period_end(subscription: Any) -> Optional[str]:
+    """Resolve a subscription's current period end across Stripe API shapes (#2951).
+
+    Under the API version the pinned SDK sends by default
+    (``2026-03-25.dahlia``) the ``Subscription`` resource no longer carries a
+    top-level ``current_period_end`` — the field moved onto the subscription
+    items, at ``subscription.items.data[].current_period_end``. Reading only
+    the old location yields ``None`` for every live subscription, which the
+    call sites then persisted as ``""`` over a good renewal date.
+
+    BOTH shapes are supported, items first then the legacy top-level key, so
+    older stored/replayed payloads (and any account still pinned to an
+    earlier API version) keep working. Accepts plain dicts and SDK
+    ``StripeObject``/``ListObject`` values alike.
+
+    Returns ``None`` when no period end is present anywhere. Callers must
+    treat that as *unknown* and leave any stored value alone — never as a
+    reset. ``_update_subscription_status`` already takes that stance
+    (``if current_period_end is not None``).
+    """
+    items = _stripe_get(subscription, "items", None)
+    data = _stripe_get(items, "data", None) if items is not None else None
+    if isinstance(data, (list, tuple)):
+        for item in data:
+            item_period_end = _coerce_optional_int(_stripe_get(item, "current_period_end"))
+            if item_period_end:
+                return _format_period_end(item_period_end)
+
+    legacy_period_end = _coerce_optional_int(_stripe_get(subscription, "current_period_end"))
+    if legacy_period_end:
+        return _format_period_end(legacy_period_end)
+
+    return None
+
+
 def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
     status_transitions = invoice_payload.get("status_transitions") or {}
     paid_at = _coerce_optional_int(status_transitions.get("paid_at"))
