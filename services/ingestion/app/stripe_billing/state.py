@@ -114,6 +114,29 @@ def _mark_event_seen(event_id: str) -> bool:
     return bool(claimed)
 
 
+def _clear_event_seen(event_id: str) -> None:
+    """Release a dedup claim taken by :func:`_mark_event_seen` (#2930).
+
+    Called when handler processing failed: the endpoint answers non-2xx so
+    Stripe redelivers, and the retry must actually run the handler rather
+    than be short-circuited as a duplicate. Best-effort — a Redis error
+    here is logged, not raised, because the caller is already unwinding a
+    failure and Stripe retries for up to 3 days.
+    """
+    if not event_id:
+        return
+
+    client = _redis_client()
+    try:
+        client.delete(_event_dedup_key(event_id))
+    except redis.RedisError as exc:
+        logger.error(
+            "stripe_webhook_dedup_release_failed event_id=%s error=%s",
+            event_id,
+            exc,
+        )
+
+
 def _store_subscription_mapping(tenant_id: str, payload: dict[str, str]) -> None:
     client = _redis_client()
     key = _tenant_subscription_key(tenant_id)

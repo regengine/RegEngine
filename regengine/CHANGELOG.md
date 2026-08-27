@@ -50,3 +50,15 @@ Pre-PyPI development line. Not yet published.
   EDI) and no per-category FTL lookup (use the category listing at
   `/api/v1/products/categories/ftl`). Advertising them in the README while
   they always raised was a documentation lie (#2531).
+
+### Fixed
+- Response deserialisation (#2933): `Record`, `Facility` and `TimelineEvent`
+  each defined a hand-written `__init__` that filtered kwargs through
+  `hasattr`. `@dataclass` leaves an existing `__init__` alone, and a field
+  declared without a default is not a class attribute, so every required
+  field was silently dropped — `client.get_record(tlc).tlc` and
+  `repr(record)` both raised `AttributeError`. The generated (strict)
+  constructors are back, and each model gained a `from_api(payload)`
+  classmethod that maps the server's key names (`event_id`,
+  `traceability_lot_code`, `unit_of_measure`, ...) onto the SDK field names
+  and ignores keys the SDK does not model.

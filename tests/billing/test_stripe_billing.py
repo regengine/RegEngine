@@ -188,12 +188,17 @@ class TestResolvePriceId:
         assert exc_info.value.status_code == 400
 
     @patch.dict("os.environ", {"STRIPE_PRICE_GROWTH_MONTHLY": "price_growth_m"})
-    def test_annual_falls_back_to_monthly_price(self):
-        """Annual billing should fall back to monthly price ID if annual is unconfigured."""
-        # Only monthly env is set; annual is not
-        plan, price_id, amount = _resolve_price_id("growth", "annual")
-        assert price_id == "price_growth_m"
-        assert amount == 832  # Annual amount, not monthly
+    def test_annual_without_annual_price_raises_500(self):
+        """#2928: an unconfigured annual price must 500, not silently bill
+        the monthly price ID while reporting the annual amount."""
+        import os
+
+        # Only monthly env is set; annual is not (patch.dict restores it).
+        os.environ.pop("STRIPE_PRICE_GROWTH_ANNUAL", None)
+        with pytest.raises(HTTPException) as exc_info:
+            _resolve_price_id("growth", "annual")
+        assert exc_info.value.status_code == 500
+        assert "STRIPE_PRICE_GROWTH_ANNUAL" in exc_info.value.detail
 
 
 # ── Checkout Session Creation ────────────────────────────────────
@@ -401,6 +406,9 @@ class TestHandleCheckoutCompleted:
             "id": "cs_test_123",
             "subscription": "sub_test_456",
             "customer": "cus_test_789",
+            # #2930: a settled checkout — an entitling status is only written
+            # for a payment Stripe reports as actually collected.
+            "payment_status": "paid",
             "customer_details": {"email": "user@example.com"},
             "metadata": {
                 "tenant_id": "tenant-abc",

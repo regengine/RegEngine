@@ -382,8 +382,10 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
 
     bra = _first_segment(segments, "BRA")
     if bra:
-        data["receiving_advice_number"] = bra[2] if len(bra) > 2 else None
-        data["receive_date_raw"] = bra[3] if len(bra) > 3 else None
+        # BRA01 is the reference identification and BRA02 the date; unlike
+        # BSN01/BEG01 the purpose code sits at BRA03, per X12 spec.
+        data["receiving_advice_number"] = bra[1] if len(bra) > 1 else None
+        data["receive_date_raw"] = bra[2] if len(bra) > 2 else None
 
     data["reference_document_number"] = data["receiving_advice_number"]
 

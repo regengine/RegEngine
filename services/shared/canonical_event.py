@@ -830,17 +830,21 @@ def _extract_epcis_quantity(
 ) -> tuple[Optional[float], Optional[str]]:
     """Extract (quantity, uom) from an EPCIS event.
 
-    Handles both the real EPCIS 2.0 shape —
-    ``extension.quantityList[0].quantity`` — and the flattened
-    ``quantity.value`` shape used by some test harnesses and legacy
-    webhook shims. Returns ``(None, None)`` when no quantity is present
-    so the caller can decide how to respond (reject vs. preserve vs.
-    default). #1249: this function must never fabricate a value — the
-    whole point of the fix is that silent 1.0 defaulting falsified FDA
-    traceability records.
+    Handles the EPCIS 2.0 shape — a top-level
+    ``quantityList[0].quantity`` — the EPCIS 1.x
+    ``extension.quantityList`` wrapper the XML parser still writes, and
+    the flattened ``quantity.value`` shape used by some test harnesses
+    and legacy webhook shims. Returns ``(None, None)`` when no quantity
+    is present so the caller can decide how to respond (reject vs.
+    preserve vs. default). #1249: this function must never fabricate a
+    value — the whole point of the fix is that silent 1.0 defaulting
+    falsified FDA traceability records.
     """
-    # Real EPCIS 2.0 shape — quantityList is nested under extension
-    # (some shims put it at the top level, handle both).
+    # #2968: the EPCIS 1.x XML wrapper (``extension.quantityList``) is
+    # checked first for backward compatibility; the top-level member is
+    # the real EPCIS 2.0 JSON/JSON-LD shape. Keep this precedence in sync
+    # with ``_normalize_epcis_to_cte`` so the two writers cannot disagree
+    # about the same event.
     quantity_list = epcis_data.get("extension", {}).get("quantityList") or epcis_data.get("quantityList") or []
     if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
         raw = quantity_list[0].get("quantity")

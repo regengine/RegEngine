@@ -237,13 +237,18 @@ def _parse_epcis_document(kdes: dict[str, Any], normalized: dict[str, Any]) -> d
     if normalized.get("tlc"):
         ilmd["fsma:traceabilityLotCode"] = normalized["tlc"]
 
+    event_type = normalized.get("epcis_event_type") or "ObjectEvent"
     event: dict[str, Any] = {
-        "type": normalized.get("epcis_event_type") or "ObjectEvent",
+        "type": event_type,
         "eventTime": normalized.get("event_time") or datetime.now(timezone.utc).isoformat(),
-        "action": normalized.get("epcis_action") or "OBSERVE",
         "bizStep": normalized.get("epcis_biz_step") or "urn:epcglobal:cbv:bizstep:receiving",
         "ilmd": ilmd,
     }
+    # #2970: EPCIS 2.0 TransformationEvent has no ``action`` member — a
+    # rebuilt transformation must not round-trip out carrying a
+    # fabricated "OBSERVE".
+    if event_type != "TransformationEvent":
+        event["action"] = normalized.get("epcis_action") or "OBSERVE"
     if normalized.get("source_location_id"):
         event["sourceList"] = [
             {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": normalized["source_location_id"]}

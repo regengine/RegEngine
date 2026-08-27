@@ -310,6 +310,77 @@ class TestCreateCheckoutErrorBranches:
         assert response.session_id == "cs_hint_failed"
 
 
+# ── create_checkout — billing period must match the price ID used ──────────
+
+
+class TestCheckoutBillingPeriodMatchesPriceId:
+    """#2928: the ``billing_period`` stamped into Stripe metadata (and from
+    there into the persisted ``billing:tenant:{tenant_id}`` mapping) must
+    always describe the Price ID actually sent in ``line_items``, and the
+    returned ``amount`` must be that Price's amount."""
+
+    @pytest.fixture(autouse=True)
+    def _stub_customer_lookups(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
+
+    @pytest.mark.asyncio
+    async def test_annual_checkout_uses_the_annual_price_and_amount(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Both price envs configured: annual must win end to end."""
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_ANNUAL", "price_growth_annual")
+
+        captured: dict[str, Any] = {}
+
+        class _Session:
+            id = "cs_annual"
+            url = "https://checkout.stripe.com/c/pay/cs_annual"
+
+        def _create(**kwargs: Any) -> _Session:
+            captured.update(kwargs)
+            return _Session()
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _create)
+
+        response = await routes_mod.create_checkout(
+            CheckoutRequest(plan_id="growth", billing_period="annual"),
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-annual"),
+        )
+
+        assert captured["line_items"] == [{"price": "price_growth_annual", "quantity": 1}]
+        # Metadata travels to the webhook, which persists billing_period.
+        assert captured["metadata"]["billing_period"] == "annual"
+        assert captured["subscription_data"]["metadata"]["billing_period"] == "annual"
+        assert response.billing_period == "annual"
+        assert response.amount == plans_mod.PLANS["growth"]["price_annual"]
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_annual_price_500s_without_creating_a_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The regression itself: with only the monthly env set, an annual
+        checkout used to succeed against the monthly Price. It must now
+        fail before Stripe is ever called."""
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+        monkeypatch.delenv("STRIPE_PRICE_GROWTH_ANNUAL", raising=False)
+
+        def _must_not_run(**_kwargs: Any) -> Any:
+            raise AssertionError("no Stripe session may be created for an unresolved price")
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _must_not_run)
+
+        with pytest.raises(Exception) as excinfo:
+            await routes_mod.create_checkout(
+                CheckoutRequest(plan_id="growth", billing_period="annual"),
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-annual"),
+            )
+        exc = excinfo.value
+        assert getattr(exc, "status_code", None) == 500
+        assert "STRIPE_PRICE_GROWTH_ANNUAL" in getattr(exc, "detail", "")
+
+
 # ── get_subscription ───────────────────────────────────────────────────────
 
 

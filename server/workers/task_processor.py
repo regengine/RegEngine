@@ -192,9 +192,11 @@ def _run_hardened_extraction(
                         "document_id": doc_id,
                         "source_url": source_url,
                         "extractor": "fsma_extractor",
-                        # Full routing envelope (to_graph_event) so the
-                        # reviewer sees CTEs/KDEs/warnings, mirroring the
-                        # payload the Kafka path puts on nlp.needs_review.
+                        # Full routing envelope (to_review_event) so the
+                        # reviewer sees every CTE — including the ones the
+                        # KDE gate withheld from the graph, each tagged with
+                        # its missing_kdes (#2932) — plus warnings, mirroring
+                        # the payload the Kafka path puts on nlp.needs_review.
                         "fsma_envelope": routing["payload"],
                     },
                 },
