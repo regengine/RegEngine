@@ -53,6 +53,11 @@
     # Upload
     aws s3 cp backups/postgres/*.gz s3://regengine-backups/postgres/
     ```
+*   **Automation**: `scripts/backup_postgres.sh` produces the *same* artifact
+    (plain SQL piped through gzip, named `*.sql.gz`) and is restored by the
+    identical command in 4.1 below. Both sides must stay on this format: a
+    `pg_dump --format=custom` archive is binary, is not gzip, and is readable
+    only by `pg_restore` — see #2937.
 
 ### 3.3 Redis
 *   **Strategy**: AOF (Append Only File) persistence is enabled (`appendonly yes`).
