@@ -27,6 +27,7 @@ ensure_shared_importable()
 from shared.api_key_store import DatabaseAPIKeyStore
 from shared.auth import get_key_store
 from shared.funnel_events import get_funnel_stage_metrics
+from shared.observability.metrics_auth import require_metrics_key
 
 from .config import get_settings
 from .database import get_session
@@ -366,9 +367,28 @@ def _build_dependency_checker():
 # services/ingestion/app/routes_health_metrics.py (the one path
 # .github/workflows/inflow-contract-ci.yml gates the standalone ingestion
 # entrypoint on); the root liveness probe moved to ``/health/live``.
-@router.get("/health/deep", operation_id="admin_deep_health")
+# #2822: gated behind X-Metrics-Key. The payload
+# ``shared.observability.health.HealthCheck.check()`` builds carries the
+# container ``hostname``, the deployed ``version``, and the name+status of
+# every configured backing store — the same reconnaissance-grade
+# fingerprint #2517 closed on ``/api/v1/features`` and
+# ``/v1/scheduler/status``, and it was answering anonymous callers. Nothing
+# consumes it: Railway polls ``/readiness`` (railway.toml healthcheckPath,
+# Dockerfile HEALTHCHECK), the k8s manifests probe ``/health`` and
+# ``/ready``, and no frontend or script references this path. Operators
+# keep it by sending the metrics key they already hold.
+@router.get(
+    "/health/deep",
+    operation_id="admin_deep_health",
+    dependencies=[Depends(require_metrics_key)],
+)
 async def health():
     """Deep health check — verifies Postgres, Neo4j and Redis connectivity.
+
+    Requires ``X-Metrics-Key``: the response names the host, the build and
+    every backing store, which is operator information, not public liveness
+    (#2822). Liveness without a key is ``/health`` and ``/health/live``;
+    readiness is ``/ready`` and ``/readiness``.
 
     Returns 503 when any configured dependency is unreachable. Previously this
     hardcoded ``status_code=200`` even for ``status == "unhealthy"``, so an

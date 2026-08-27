@@ -870,6 +870,27 @@ jobs:
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: Auth-coverage gate on the deployed monolith (#2822)
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
+          # Walks every route on server.main:app — the monolith the repo-root
+          # Dockerfile builds and railway.toml deploys — unauthenticated, and
+          # fails on any 2xx that is not explicitly allow-listed. Until #2822
+          # this module built services/ingestion/main.py, so every admin,
+          # graph, NLP and compliance route was outside the gate, and it ran
+          # in no PR-blocking job at all (only weekly, via security.yml's
+          # tenant-isolation job).
+          #
+          # Its own pytest process on purpose: the module pins REGENGINE_ENV
+          # and the admin DB to build the monolith with the dev_open auth
+          # fallback disarmed, and sharing a process with suites that import
+          # server.main under different env would decide which app it gets.
+          # No Postgres: sqlite is enough to construct the app, and every
+          # probe resolves at the auth layer.
+          pytest tests/security/test_auth_coverage.py \
+            -v --no-cov -o "testpaths=tests"
+
       - name: RLS coverage + tenant-isolation e2e (alembic head)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rls_migrated

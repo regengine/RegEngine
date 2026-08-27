@@ -998,7 +998,9 @@ app.include_router(scheduler_status_router)
 # The probe map after #2856:
 #   /health        liveness (ingestion handler; also the deploy.yml commit gate)
 #   /health/live   this — minimal liveness, imports nothing optional
-#   /health/deep   Postgres + Neo4j + Redis verification, 503 when unhealthy
+#   /health/deep   Postgres + Neo4j + Redis verification, 503 when unhealthy.
+#                  Requires X-Metrics-Key (#2822) — the payload names the
+#                  host, build and every backing store.
 #   /readiness     Railway's healthcheckPath (railway.toml), 503 when Postgres is down
 @app.get("/health/live", tags=["system"], operation_id="root_liveness_health")
 async def health():
