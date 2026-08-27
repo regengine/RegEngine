@@ -502,7 +502,11 @@ Contact: sales@regengine.ai
             self.result.add_event(
                 phase,
                 f"deploy_terraform_{workspace}",
-                "failed",
+                # "failure", not "failed": OrchestrationResult.add_event and the
+                # summary counter both key on the exact string "failure". Any
+                # other spelling is recorded but never counted, so the run still
+                # reports success -- the precise defect this PR exists to fix.
+                "failure",
                 details={"workspace": workspace, "root_module": root_module, "dry_run": False},
                 error=f"Terraform root module not found: {root_module}",
             )

@@ -228,3 +228,44 @@ def test_admin_master_key_is_not_collected():
             f"{path.name} still collects a production admin master key that "
             f"nothing in the repo reads: {collected}"
         )
+
+
+# --- Status vocabulary: a misspelled status is silently uncounted -------------
+
+
+def test_every_add_event_status_is_one_the_counters_recognise():
+    """A status string outside the known set is recorded but never counted.
+
+    `OrchestrationResult.add_event` keys on the exact string "failure" to set
+    `success = False` and append to `errors`, and `_generate_summary` counts
+    `failed_events` the same way. Passing "failed" instead records the event,
+    logs the error, and still reports the run as successful with zero failures
+    -- found by review on this PR, on a line this PR itself introduced.
+    """
+    import ast
+
+    known = {"success", "failure", "skipped", "warning"}
+    source = _ORCH.read_text()
+    tree = ast.parse(source)
+
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "add_event"):
+            continue
+        # add_event(phase, action, status, ...) -- status is the third positional
+        args = [a for a in node.args]
+        status_node = args[2] if len(args) >= 3 else None
+        for kw in node.keywords:
+            if kw.arg == "status":
+                status_node = kw.value
+        if isinstance(status_node, ast.Constant) and isinstance(status_node.value, str):
+            if status_node.value not in known:
+                offenders.append((node.lineno, status_node.value))
+
+    assert offenders == [], (
+        "add_event called with a status the counters do not recognise "
+        f"(known: {sorted(known)}): {offenders}"
+    )
