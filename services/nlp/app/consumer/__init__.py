@@ -121,12 +121,14 @@ from .constants import (
     TOPIC_GRAPH_UPDATE,
     TOPIC_NEEDS_REVIEW,
     _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+    _LLM_EXTRACTION_CONFIDENCE_CAP,
 )
 from .tenancy import _kafka_key_for, _resolve_tenant_id, _retry_key_for
 from .conversion import (
     CLASSIFIER,
     RESOLVER,
     _convert_entities_to_extraction,
+    _convert_llm_results_to_extractions,
     _now_iso,
     _score_regulatory_date,
 )
@@ -788,15 +790,26 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                     doc_id=doc_id,
                                     jurisdiction=jurisdiction,
                                 )
+                                # #2947 — bridge the results into the
+                                # canonical extraction list. Without this the
+                                # paid provider call produced nothing but a
+                                # count in the log line below: the routing
+                                # loop iterates ``extractions``, which only
+                                # the regex path fed. Every LLM item is
+                                # capped below the medium threshold inside
+                                # the bridge, so it can only reach HITL.
+                                llm_extractions = (
+                                    _convert_llm_results_to_extractions(
+                                        llm_results, doc_id, source_url
+                                    )
+                                )
+                                extractions.extend(llm_extractions)
                                 logger.info(
                                     "llm_extractor_run",
                                     document_id=doc_id,
                                     result_count=len(llm_results),
+                                    routed_count=len(llm_extractions),
                                 )
-                                # LLM results currently augment the log and
-                                # feed the review queue via extractions
-                                # below; bridging to the legacy entity
-                                # schema is handled by a follow-up PR.
 
                         # Route each extraction based on confidence
                         for extraction in extractions:
