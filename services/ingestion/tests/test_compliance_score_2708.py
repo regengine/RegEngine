@@ -101,3 +101,96 @@ class TestSeedMarkerCrossCheck:
 
         assert data["obligation_count"] == 7
         assert not any("tenant_seed_state" in sql for sql in session.executed)
+
+
+# ---------------------------------------------------------------------------
+# #2960: a chain that FAILED cryptographic verification must earn no
+# export-readiness credit and must never render "FDA export ready".
+# ---------------------------------------------------------------------------
+
+
+class TestExportReadinessChainVerificationFailed:
+    """The export-readiness chain branch handled ``chain_verified is True``
+    (+40) and ``chain_verification_error`` (verification could not RUN — no
+    credit, "fail closed"), then fell through to a sequence-gap check that
+    awarded +30 for any chain with rows and no gaps.
+
+    ``chain_verified is False`` — verification RAN and returned invalid —
+    had no arm, so it landed on the gap check. Hash tampering rewrites
+    payloads without deleting rows, so ``chain_gaps == 0`` holds for
+    exactly the case that arm exists to catch: the "safe" fallback fired
+    on the unsafe input, the dimension reached 90, and the detail string
+    read the literal "FDA export ready" next to an issue claiming the
+    chain was "not cryptographically verified" — which is the opposite of
+    what happened.
+    """
+
+    @staticmethod
+    def _tampered_data(**overrides):
+        from services.ingestion.tests.test_compliance_score_1342 import _base_data
+
+        data = _base_data(
+            chain_verified=False,
+            chain_verification_errors=["hash mismatch at sequence 7"],
+            chain_length=10,
+            # The load-bearing detail: tampering leaves the sequence
+            # contiguous, so the old fallback predicate was satisfied.
+            chain_gaps=0,
+        )
+        data.pop("chain_verification_error", None)
+        data.update(overrides)
+        return data
+
+    def test_failed_verification_earns_no_export_credit(self):
+        from app.compliance_score import _compute_scores
+
+        scores = _compute_scores(self._tampered_data())
+        score, detail = scores["export_readiness"]
+
+        # Pre-fix this was 90 (30 chain + 30 KDEs + 30 CTE types).
+        assert score == 0, f"a failed chain verification must earn no export credit, got {score}"
+        assert "FDA export ready" not in detail
+
+    def test_issue_text_distinguishes_failed_from_not_performed(self):
+        from app.compliance_score import _compute_scores
+
+        _, detail = _compute_scores(self._tampered_data())["export_readiness"]
+
+        assert "FAILED" in detail, detail
+        assert "chain not cryptographically verified" not in detail, (
+            "a chain that WAS verified and failed must not be described as unverified"
+        )
+
+    def test_verification_could_not_run_is_still_distinct(self):
+        """The pre-existing ``chain_verification_error`` arm is unchanged:
+        verification that could not RUN still reports 'unavailable', not
+        'FAILED'.
+        """
+        from app.compliance_score import _compute_scores
+
+        data = self._tampered_data(chain_verified=None)
+        data["chain_verification_error"] = "connection refused"
+
+        _, detail = _compute_scores(data)["export_readiness"]
+        assert "chain verification unavailable" in detail
+        assert "FAILED" not in detail
+
+    def test_intact_verified_chain_is_unaffected(self):
+        """Regression guard: the happy path still reaches FDA-export-ready."""
+        from app.compliance_score import _compute_scores
+
+        from services.ingestion.tests.test_compliance_score_1342 import _base_data
+
+        score, detail = _compute_scores(_base_data(chain_verified=True))["export_readiness"]
+        assert score >= 80
+        assert detail == "FDA export ready"
+
+    def test_tamper_is_still_reported_by_the_chain_dimension(self):
+        """The same response must keep saying TAMPER DETECTED — this fix
+        changes the export dimension only.
+        """
+        from app.compliance_score import _compute_scores
+
+        chain_score, chain_detail = _compute_scores(self._tampered_data())["chain_integrity"]
+        assert "TAMPER DETECTED" in chain_detail
+        assert chain_score < 100

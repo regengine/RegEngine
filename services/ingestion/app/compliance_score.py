@@ -542,7 +542,7 @@ def _compute_scores(data: dict) -> dict:
     """
     scores = {}
 
-    # --- 1) Chain Integrity (10% weight) ---
+    # --- 1) Chain Integrity (10% weight — see the overall weighting below) ---
     # Uses cryptographic hash recalculation, not just gap detection
     if data["chain_length"] == 0:
         scores["chain_integrity"] = (0, "No events in audit trail")
@@ -724,27 +724,29 @@ def _compute_scores(data: dict) -> dict:
             detail += f" — {open_alerts} open compliance alert(s)"
         scores["obligation_coverage"] = (obl_score, detail)
 
-    # --- 6) Export Readiness (30% weight) ---
+    # --- 6) Export Readiness (30% weight — the heaviest dimension) ---
     # Requires: chain intact, KDEs present, multiple CTE types
     if data["event_count"] == 0:
         scores["export_readiness"] = (0, "Cannot produce FDA report — no data")
     else:
         export_score = 0
         issues = []
-        # Chain must be intact. Three distinct verification states, three
-        # distinct outcomes — "not run" must never score as "passed" (#2960).
-        chain_verification_failed = data.get("chain_verified") is False
+        chain_verification_failed = False
+        # Chain must be intact
         if data.get("chain_verified") is True:
             # PASSED: verification ran and the chain recomputed clean.
             export_score += 40
-        elif chain_verification_failed:
-            # #2960: FAILED — verification RAN and returned invalid. This arm
-            # did not exist, so the state fell through to the gap check below
-            # and collected +30. Hash tampering rewrites payloads without
-            # deleting rows, so chain_gaps == 0 holds for exactly the case
-            # that check is supposed to catch, and the emitted issue read
-            # "chain not cryptographically verified" — the opposite of what
-            # happened. No credit, and the dimension is clamped below.
+        elif data.get("chain_verified") is False:
+            # #2960: verification RAN and returned invalid. This used to fall
+            # through to the sequence-gap arm below and collect +30 — and hash
+            # tampering rewrites payloads without deleting rows, so
+            # ``chain_gaps == 0`` holds for exactly the case that arm is meant
+            # to exclude. A chain that failed cryptographic verification is
+            # strictly worse than one that could not be verified, so it gets
+            # no credit, and the dimension is clamped to 0: an export built on
+            # a broken chain is not submittable, and must never render
+            # "FDA export ready".
+            chain_verification_failed = True
             issues.append("chain verification FAILED — tamper suspected")
         elif data.get("chain_verification_error"):
             # NOT RUN: fail closed — no chain credit when verification could
@@ -779,11 +781,10 @@ def _compute_scores(data: dict) -> dict:
         else:
             issues.append("no CTE types")
 
-        # #2960: an export built on a chain that failed cryptographic
-        # verification is not submittable — the records' integrity is
-        # disproven, not merely unproven. Clamp the dimension so no
-        # combination of KDE and CTE credit can render "FDA export ready".
         if chain_verification_failed:
+            # #2960: no partial credit for the rest of the dimension either —
+            # KDE completeness and CTE variety mean nothing on a chain that
+            # failed verification.
             export_score = 0
 
         detail = (
