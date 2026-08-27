@@ -221,11 +221,18 @@ class FSMAExtractor(
            not met), route to ``nlp.needs_review`` for human-in-the-loop.
         2. Otherwise route to ``graph.update`` for automated graph ingestion.
 
+        Each topic gets its own serializer: ``graph.update`` keeps
+        ``to_graph_event``'s qualified-only filter, while ``nlp.needs_review``
+        uses ``to_review_event`` so the reviewer receives every CTE — the
+        deficient ones above all, since those are what triggered review
+        (#2932).
+
         Returns:
             Dict with ``topic``, ``payload``, and ``routed_at`` keys.
         """
         if result.review_required:
             topic = TOPIC_NEEDS_REVIEW
+            payload = self.to_review_event(result)
             logger.info(
                 "fsma_extraction_routed_hitl",
                 document_id=result.document_id,
@@ -234,6 +241,7 @@ class FSMAExtractor(
             )
         else:
             topic = TOPIC_GRAPH_UPDATE
+            payload = self.to_graph_event(result)
             logger.info(
                 "fsma_extraction_routed_graph",
                 document_id=result.document_id,
@@ -243,6 +251,6 @@ class FSMAExtractor(
 
         return {
             "topic": topic,
-            "payload": self.to_graph_event(result),
+            "payload": payload,
             "routed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }

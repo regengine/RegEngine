@@ -225,7 +225,7 @@ class RegEngineClient:
         events = data.get("events", [])
         if not events:
             raise NotFoundError(f"No record found for TLC: {tlc}")
-        return Record(**events[0])
+        return Record.from_api(events[0])
 
     def query_records(
         self,
@@ -255,7 +255,7 @@ class RegEngineClient:
             params["event_type"] = cte_type.value if isinstance(cte_type, CTEType) else cte_type
 
         data = self._request("GET", "/api/v1/records", params=params)
-        return [Record(**r) for r in data.get("events", [])]
+        return [Record.from_api(r) for r in data.get("events", [])]
 
     # =========================================================================
     # Supply Chain Tracing
@@ -315,7 +315,7 @@ class RegEngineClient:
             List of TimelineEvent objects in chronological order
         """
         data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{tlc}")
-        return [TimelineEvent(**e) for e in data.get("events", [])]
+        return [TimelineEvent.from_api(e) for e in data.get("events", [])]
 
     # =========================================================================
     # FTL Checker

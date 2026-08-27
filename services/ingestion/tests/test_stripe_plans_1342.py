@@ -1,10 +1,10 @@
 """Unit tests for ``app.stripe_billing.plans`` — issue #1342.
 
 Raises coverage from 80% to 100% by exercising the error branches
-in ``_normalize_billing_period``, ``_resolve_price_id``, and the
-annual→monthly fallback. Happy-path coverage already comes from
-the Stripe webhook / router test suites; this file fills the
-error-surface gaps they leave behind.
+in ``_normalize_billing_period`` and ``_resolve_price_id``,
+including the unconfigured-price failures. Happy-path coverage
+already comes from the Stripe webhook / router test suites; this
+file fills the error-surface gaps they leave behind.
 
 Pinned branches:
   - ``_normalize_billing_period``: raises HTTPException(400) on
@@ -16,9 +16,9 @@ Pinned branches:
         never leaks a Stripe price ID.
       * Missing monthly env → HTTPException(500) with plan + period
         in detail.
-      * Missing annual env → falls back to monthly env before 500ing;
-        this is the "annual pricing not configured yet" fallback
-        that keeps the checkout page from 500ing mid-launch.
+      * Missing annual env → HTTPException(500) naming the missing
+        env var (#2928: the old annual→monthly fallback billed the
+        monthly Price under an "annual" label and was removed).
       * Plan with None amount (after a successful env lookup) →
         HTTPException(400) "does not support self-serve checkout".
   - ``_normalize_plan_id``: maps every alias in ``PLAN_ALIASES`` to
@@ -140,17 +140,38 @@ class TestResolvePriceIdErrors:
         assert "growth" in ei.value.detail
         assert "monthly" in ei.value.detail
 
-    def test_missing_annual_env_falls_back_to_monthly(self, monkeypatch):
-        # Annual pricing not configured yet — the checkout page
-        # degrades to the monthly price rather than 500ing. Pins the
-        # fallback precedence so the ordering doesn't flip silently.
+    def test_missing_annual_env_raises_500_and_never_uses_monthly(self, monkeypatch):
+        # #2928 regression: this used to fall back to the monthly price
+        # ID while still reporting the annual amount / period, so the
+        # customer was enrolled on a monthly-interval subscription that
+        # every RegEngine surface called "annual". An unconfigured annual
+        # price must now 500 and name the env var the operator forgot.
         monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_fallback_m")
         monkeypatch.delenv("STRIPE_PRICE_GROWTH_ANNUAL", raising=False)
-        plan, price_id, amount = _resolve_price_id("growth", "annual")
-        assert price_id == "price_fallback_m"
-        # Amount still comes from the annual column (the discounted one).
-        assert amount == PLANS["growth"]["price_annual"]
-        assert plan is PLANS["growth"]
+        with pytest.raises(HTTPException) as ei:
+            _resolve_price_id("growth", "annual")
+        assert ei.value.status_code == 500
+        assert "growth" in ei.value.detail
+        assert "annual" in ei.value.detail
+        assert "STRIPE_PRICE_GROWTH_ANNUAL" in ei.value.detail
+        # The monthly price ID must never leak into the annual path.
+        assert "price_fallback_m" not in ei.value.detail
+
+    @pytest.mark.parametrize("plan_id", ["growth", "scale"])
+    @pytest.mark.parametrize("requested,other", [("annual", "monthly"), ("monthly", "annual")])
+    def test_never_substitutes_the_other_periods_price_id(self, monkeypatch, plan_id, requested, other):
+        # #2928: the price ID returned for a period may only come from
+        # that period's env var, in either direction — otherwise the
+        # billing_period stamped into Stripe metadata and persisted to
+        # ``billing:tenant:{tenant_id}`` diverges from the interval of
+        # the Price that Stripe actually bills.
+        plan = PLANS[plan_id]
+        monkeypatch.setenv(plan[f"stripe_price_env_{other}"], f"price_{plan_id}_{other}")
+        monkeypatch.delenv(plan[f"stripe_price_env_{requested}"], raising=False)
+        with pytest.raises(HTTPException) as ei:
+            _resolve_price_id(plan_id, requested)
+        assert ei.value.status_code == 500
+        assert plan[f"stripe_price_env_{requested}"] in ei.value.detail
 
     def test_missing_annual_and_monthly_env_raises_500(self, monkeypatch):
         monkeypatch.delenv("STRIPE_PRICE_GROWTH_MONTHLY", raising=False)
