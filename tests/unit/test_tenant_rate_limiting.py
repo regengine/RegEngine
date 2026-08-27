@@ -23,6 +23,30 @@ def _reset_rate_limit_bucket(monkeypatch):
     monkeypatch.setattr(tenant_rate_limiting, "_bucket", _InMemoryBucket())
 
 
+# #2844: the middleware no longer buckets on the raw ``X-Tenant-ID`` header —
+# it is unauthenticated client input and this middleware runs before route
+# auth, so a caller could rotate it to evade the throttle, drain a victim
+# tenant's counter, or claim another tenant's override. Tests that need a
+# per-tenant bucket now authenticate the tenant through the secret-gated
+# internal service header, the same gate ``shared/middleware/tenant_context.py``
+# applies. Spoofing/evasion coverage lives in
+# ``tests/unit/test_tenant_rate_limit_header_spoof_2844.py``.
+_INTERNAL_SECRET = "test-internal-secret-2844"
+
+
+@pytest.fixture(autouse=True)
+def _internal_secret_configured(monkeypatch):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+
+
+def _tenant_headers(tenant: str) -> dict:
+    """Headers that authenticate an internal caller as ``tenant``."""
+    return {
+        "X-RegEngine-Tenant-ID": tenant,
+        "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
+    }
+
+
 # ── Bucket Tests ────────────────────────────────────────────────
 
 
@@ -103,13 +127,13 @@ class TestTenantRateLimitMiddleware:
 
         # First 3 should pass
         for i in range(3):
-            resp = client.get("/api/data", headers={"X-Tenant-ID": "test-tenant"})
+            resp = client.get("/api/data", headers=_tenant_headers("test-tenant"))
             assert resp.status_code == 200
             assert "X-RateLimit-Limit" in resp.headers
             assert resp.headers["X-RateLimit-Tenant"] == "test-tenant"
 
         # 4th should be blocked
-        resp = client.get("/api/data", headers={"X-Tenant-ID": "test-tenant"})
+        resp = client.get("/api/data", headers=_tenant_headers("test-tenant"))
         assert resp.status_code == 429
         assert "rate_limit_exceeded" in resp.json()["error"]
 
@@ -119,14 +143,14 @@ class TestTenantRateLimitMiddleware:
 
         # Exhaust tenant-a
         for _ in range(2):
-            client.get("/api/data", headers={"X-Tenant-ID": "tenant-a"})
+            client.get("/api/data", headers=_tenant_headers("tenant-a"))
 
         # tenant-a blocked
-        resp = client.get("/api/data", headers={"X-Tenant-ID": "tenant-a"})
+        resp = client.get("/api/data", headers=_tenant_headers("tenant-a"))
         assert resp.status_code == 429
 
         # tenant-b unaffected
-        resp = client.get("/api/data", headers={"X-Tenant-ID": "tenant-b"})
+        resp = client.get("/api/data", headers=_tenant_headers("tenant-b"))
         assert resp.status_code == 200
 
     def test_tenant_override_higher_limit(self):
@@ -135,13 +159,13 @@ class TestTenantRateLimitMiddleware:
 
         # Premium tenant gets 10 RPM
         for _ in range(5):
-            resp = client.get("/api/data", headers={"X-Tenant-ID": "premium"})
+            resp = client.get("/api/data", headers=_tenant_headers("premium"))
             assert resp.status_code == 200
 
     def test_rate_limit_headers(self):
         app = _create_test_app(default_rpm=5)
         client = TestClient(app)
-        resp = client.get("/api/data", headers={"X-Tenant-ID": "metrics-tenant"})
+        resp = client.get("/api/data", headers=_tenant_headers("metrics-tenant"))
         assert resp.status_code == 200
         assert resp.headers["X-RateLimit-Limit"] == "5"
         assert int(resp.headers["X-RateLimit-Remaining"]) == 4
@@ -150,7 +174,7 @@ class TestTenantRateLimitMiddleware:
     def test_no_tenant_falls_back_to_ip(self):
         app = _create_test_app(default_rpm=3)
         client = TestClient(app)
-        # Without X-Tenant-ID, falls back to IP-based
+        # Without an authenticated tenant, falls back to IP-based
         for _ in range(3):
             resp = client.get("/api/data")
             assert resp.status_code == 200
