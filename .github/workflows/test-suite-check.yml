@@ -65,7 +65,15 @@ jobs:
           # first ERROR and the summary line is never printed.
           # No -q so the "N tests collected, M errors" line survives.
           set +e
-          OUTPUT=$(python3 -m pytest --collect-only --continue-on-collection-errors 2>&1)
+          # ``-q`` is passed EXPLICITLY, not inherited from pyproject addopts.
+          # The root-representation grep below is path-anchored ("^tests/"),
+          # which only holds while collection prints nodeids; stock pytest
+          # --collect-only prints an indented <Module> tree with no anchored
+          # lines, and every root would then read as missing and fail the job
+          # on every run. Flagged by review on #2990 — refuted today only
+          # because addopts happens to carry -q, so pin it here instead of
+          # depending on that.
+          OUTPUT=$(python3 -m pytest --collect-only -q --continue-on-collection-errors 2>&1)
           STATUS=$?
           set -e
           echo "--- pytest output (tail) ---"
@@ -94,7 +102,27 @@ jobs:
             echo "::error::Collected tests fell below floor of $COLLECTION_FLOOR (got $COUNT). Did a whole directory get skipped?"
             exit 1
           fi
-          echo "✓ $COUNT tests collected, 0 collection errors"
+
+          # A single global floor cannot detect one directory dropping out:
+          # services/shared/tests is 580 of the 10081 tests, so losing all of
+          # it lands at 9501 — still above any floor with usable headroom.
+          # That is exactly the blind spot #2923 was filed about, so assert
+          # directory *representation* directly instead of inferring it from a
+          # total. Add a root here whenever ``testpaths`` gains one.
+          MISSING_ROOTS=""
+          for root in tests regengine/tests services/admin/tests \
+                      services/compliance/tests services/graph/tests \
+                      services/ingestion/tests services/nlp/tests \
+                      services/scheduler/tests services/shared/tests; do
+            if ! echo "$OUTPUT" | grep -q "^${root}/"; then
+              MISSING_ROOTS="$MISSING_ROOTS $root"
+            fi
+          done
+          if [ -n "$MISSING_ROOTS" ]; then
+            echo "::error::Collection produced no tests from:$MISSING_ROOTS. A whole directory dropped out of pyproject testpaths."
+            exit 1
+          fi
+          echo "✓ $COUNT tests collected, 0 collection errors, all testpaths roots represented"
 
   # ── Repo-root execution shard ─────────────────────────────
   # Collection-only checks prove importability, but they do not catch broken
@@ -195,6 +223,12 @@ jobs:
           }
           echo "✓ Test collection passed"
       
+      # services/shared is not a FastAPI service: it has no ``app/`` package
+      # (backend-ci special-cases its coverage target for the same reason) and
+      # no per-service conftest.py — its tests resolve against the repo-root
+      # conftest. Exempted by name, loudly, rather than by leaving `shared`
+      # out of the matrix the way #2923 found it. Drop the exemption if
+      # services/shared/conftest.py is ever added.
       - name: Verify conftest.py Exists
         # services/shared is a library package, not a service: it has no
         # app/ dir for the root conftest's sys.path switching to target and
