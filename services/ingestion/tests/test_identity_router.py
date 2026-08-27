@@ -23,6 +23,27 @@ TENANT = "tenant-id-1"
 OTHER_TENANT = "tenant-id-other"
 
 
+def _routed_entity_db(count: int, rows: list) -> MagicMock:
+    """Fake db_session answering the COUNT(*) and the listing query separately.
+
+    ``list_entities`` runs both since #2864; a single MagicMock return value
+    would otherwise answer the COUNT with a MagicMock.
+    """
+    db = MagicMock()
+
+    def _execute(sql, params=None, *_a, **_kw):
+        result = MagicMock()
+        if "COUNT(*)" in str(sql):
+            result.fetchone.return_value = (count,)
+        else:
+            result.fetchall.return_value = rows
+        return result
+
+    db.execute.side_effect = _execute
+    return db
+
+
+
 def _make_principal(
     tenant_id: str = TENANT,
     scopes: list[str] | None = None,
@@ -101,10 +122,11 @@ def test_list_entities_without_search_queries_db(monkeypatch):
     """When no search param is passed, the endpoint runs a raw SQL query."""
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kw: (True, 99))
 
-    mock_db = MagicMock()
-    # Simulate a row returned from the raw SQL query
+    # Simulate a row returned from the raw SQL query. #2864: the endpoint
+    # now issues a COUNT(*) alongside the page, so the fake has to answer
+    # both queries — ``total`` is the real row count, not ``len(entities)``.
     fake_row = ("e-1", "firm", "Acme Foods", "1234567890123", None, "verified", 0.95)
-    mock_db.execute.return_value.fetchall.return_value = [fake_row]
+    mock_db = _routed_entity_db(count=1, rows=[fake_row])
 
     principal = _make_principal()
     c = _build_client(principal, mock_svc=None, mock_db=mock_db)

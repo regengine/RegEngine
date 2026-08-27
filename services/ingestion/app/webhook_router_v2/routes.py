@@ -43,6 +43,38 @@ from .security import (
 
 _pkg = sys.modules[__package__]
 
+
+def _failure_diagnostics(request: Request, exc: Exception) -> dict:
+    """Structured fields for a 5xx log line on the ingest spine (#2868).
+
+    These endpoints answer a 500 with "Check server logs for details", so the
+    log line has to actually carry details: which tenant, which request, and
+    what kind of failure. ``error_type`` matters because the batch handler
+    catches bare ``Exception`` — without it a database outage and a
+    programming error look identical in the logs.
+
+    Deliberately **not** included: traceability lot codes, product
+    descriptions, KDEs, or anything else from the request body. Those
+    identify a specific customer's shipment, and this is a food-safety
+    compliance platform — an over-eager log line is its own incident. The
+    caller gets the correlation id in the response, and support joins the
+    two on that.
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    if not correlation_id:
+        try:
+            from shared.observability.correlation import get_correlation_id
+
+            correlation_id = get_correlation_id()
+        except Exception:  # pragma: no cover - correlation is best-effort
+            correlation_id = None
+    return {
+        "correlation_id": correlation_id or str(uuid.uuid4()),
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
+
+
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
 
 
@@ -408,8 +440,25 @@ async def ingest_events(
     except Exception as e:
         if db_session:
             db_session.rollback()
-        _pkg.logger.error("ingest_batch_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Ingestion failed. Check server logs for details.")
+        diagnostics = _failure_diagnostics(request, e)
+        # ``.exception`` captures the traceback via the structlog chain's
+        # ``format_exc_info`` processor — the old ``error(..., extra={...})``
+        # emitted strictly less than the caller already had.
+        _pkg.logger.exception(
+            "ingest_batch_failed",
+            tenant_id=tenant_id,
+            event_count=len(payload.events),
+            source=payload.source,
+            accepted_before_failure=accepted,
+            **diagnostics,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Ingestion failed. Check server logs for details "
+                f"(correlation: {diagnostics['correlation_id']})."
+            ),
+        )
     finally:
         if db_session:
             db_session.close()
@@ -598,8 +647,19 @@ async def verify_chain(
             "checked_at": result.checked_at,
         }
     except (ImportError, ValueError, RuntimeError) as e:
-        _pkg.logger.error("chain_verification_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail="Chain verification failed. Check server logs for details.")
+        diagnostics = _failure_diagnostics(request, e)
+        _pkg.logger.exception(
+            "chain_verification_failed",
+            tenant_id=tenant_id,
+            **diagnostics,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Chain verification failed. Check server logs for details "
+                f"(correlation: {diagnostics['correlation_id']})."
+            ),
+        )
     finally:
         if db_session:
             db_session.close()
