@@ -1408,6 +1408,11 @@
       }
     },
     "securitySchemes": {
+      "APIKeyHeader": {
+        "in": "header",
+        "name": "X-Metrics-Key",
+        "type": "apiKey"
+      },
       "OAuth2PasswordBearer": {
         "flows": {
           "password": {
