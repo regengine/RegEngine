@@ -216,6 +216,8 @@ _VALID_ROUTER_NAMES = {
     "audit_export_log",
     "proof_verify",
     "proof_recall",
+    # #2893 — lets operators suppress the /api/v1/fsma readiness stubs.
+    "fsma_readiness_compat",
 }
 
 # Validate DISABLED_ROUTERS — catch typos early
@@ -297,9 +299,12 @@ from app.routes_health_metrics import router as health_metrics_router
 
 app.include_router(health_metrics_router, tags=["Health & Metrics"])
 
-from app.fsma_readiness_compat import router as fsma_readiness_compat_router
+# #2893: named and gated so an operator can remove the stubs via
+# DISABLED_ROUTERS. Mounted by default — this changes no deployment.
+if _router_enabled("fsma_readiness_compat"):
+    from app.fsma_readiness_compat import router as fsma_readiness_compat_router
 
-app.include_router(fsma_readiness_compat_router)
+    app.include_router(fsma_readiness_compat_router)
 
 
 # Decomposed sub-routers (extracted from routes.py god file)

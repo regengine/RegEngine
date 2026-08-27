@@ -43,7 +43,11 @@ def test_fsma_customer_readiness_compat_paths_are_explicitly_not_connected() -> 
     export_jobs = client.get("/api/v1/fsma/export-jobs")
     mappings = client.get("/api/v1/fsma/mappings")
 
-    assert export_jobs.status_code == 200
+    # #2893: "explicitly not connected" now means exactly that on the status
+    # line. These asserted 200, which is an affirmative claim that the tenant
+    # has no export jobs and is indistinguishable from real emptiness to any
+    # client that only checks response.ok.
+    assert export_jobs.status_code == 501
     assert export_jobs.json()["meta"]["status"] == "not_connected"
-    assert mappings.status_code == 200
+    assert mappings.status_code == 501
     assert mappings.json()["meta"]["status"] == "not_connected"
