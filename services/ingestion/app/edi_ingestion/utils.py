@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from shared.fsma_validation import verify_gs1_check_digit
 
 from ..webhook_models import VALID_UNITS_OF_MEASURE
-from .constants import _X12_UOM_MAP
+from .constants import _NON_X12_UOM_ALIASES, _X12_UOM_MAP
 
 logger = logging.getLogger("edi-ingestion")
 
@@ -54,15 +54,46 @@ def _parse_edi_date_digits(digits: str) -> datetime:
     return datetime(year=year, month=month, day=day, tzinfo=timezone.utc)
 
 
+def _resolve_unit_code(unit_value: Optional[str]) -> Optional[str]:
+    """Resolve a raw X12 unit element to an FSMA vocabulary unit.
+
+    Returns ``None`` when the value is blank or cannot be resolved, so
+    callers can choose between coercing (``_normalize_unit``) and failing
+    closed (``routes._valid_unit_or_none``) without the two drifting
+    apart on which codes they accept (#2978).
+
+    Lookup order: the X12 element-355 table, then the explicitly
+    non-DE355 alias table, then the raw lowercased value (which lets a
+    partner sending "cases" outright still match the vocabulary).
+    """
+    if unit_value is None:
+        return None
+    raw = str(unit_value).strip()
+    if not raw:
+        return None
+
+    x12_code = re.sub(r"[^A-Za-z]", "", raw).upper()
+    mapped = _X12_UOM_MAP.get(x12_code) or _NON_X12_UOM_ALIASES.get(x12_code) or raw.lower()
+    return mapped if mapped in VALID_UNITS_OF_MEASURE else None
+
+
 def _normalize_unit(unit_value: Optional[str]) -> str:
     if not unit_value:
         return "units"
 
-    x12_code = re.sub(r"[^A-Za-z]", "", unit_value).upper()
-    mapped = _X12_UOM_MAP.get(x12_code, unit_value.strip().lower())
-    if mapped not in VALID_UNITS_OF_MEASURE:
+    resolved = _resolve_unit_code(unit_value)
+    if resolved is None:
+        # #2978: the miss path used to be entirely silent, so a valid X12
+        # unit that this table simply did not know about became "units"
+        # with nothing in the logs to show the KDE had been degraded.
+        logger.warning(
+            "edi_uom_unmapped raw=%r coerced_to=units — unit is not an X12 "
+            "element-355 code this route recognizes; the quantity KDE is "
+            "numerically intact but semantically degraded",
+            unit_value,
+        )
         return "units"
-    return mapped
+    return resolved
 
 
 def _safe_float(value: Optional[str], fallback: float = 1.0) -> float:

@@ -24,7 +24,6 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -36,24 +35,32 @@ from ..shared.tenant_resolution import resolve_principal_tenant_id, resolve_tena
 from ..shared.upload_limits import MAX_EDI_FILE_SIZE_BYTES, read_upload_with_limit
 from ..webhook_compat import ingest_events
 from ..webhook_models import (
-    VALID_UNITS_OF_MEASURE,
     IngestEvent,
     WebhookCTEType,
     WebhookPayload,
 )
 from .constants import (
     _CTE_TYPE_BY_SET,
+    _QUANTITY_SEGMENT_BY_SET,
     _REQUIRED_856_SEGMENTS,
     _REQUIRED_SEGMENTS_BY_SET,
     _SUPPORTED_TRANSACTION_SETS,
-    _X12_UOM_MAP,
 )
 from .dedup import check_and_record_interchange, verify_trading_partner_allowed
 from .extractors import _extract_856_fields, _extract_fields_for_set
 from .models import EDIIngestResponse
-from .parser import _detect_transaction_set, _first_segment, _parse_x12_segments, _segment_id_set
+from .parser import (
+    _count_segments,
+    _declared_transaction_set_count,
+    _detect_transaction_set,
+    _first_segment,
+    _parse_x12_segments,
+    _segment_id_set,
+    _split_transaction_sets,
+)
 from .utils import (
     _normalize_unit,
+    _resolve_unit_code,
     _safe_float,
     _ship_timestamp_and_date,
     _valid_gln_or_none,
@@ -150,22 +157,14 @@ def _positive_float_or_none(value: Any) -> float | None:
 
 
 def _valid_unit_or_none(value: Any) -> str | None:
-    if value is None:
-        return None
-    raw = str(value).strip()
-    if not raw:
-        return None
-
-    x12_code = re.sub(r"[^A-Za-z]", "", raw).upper()
-    mapped = _X12_UOM_MAP.get(x12_code, raw.lower())
-    if mapped not in VALID_UNITS_OF_MEASURE:
-        return None
-    return mapped
+    # #2978: share one lookup with ``_normalize_unit`` so the fail-closed
+    # gate and the coercing path can never disagree on which X12
+    # element-355 codes they recognize.
+    return _resolve_unit_code(value)
 
 
 def _legacy_856_placeholder_errors(
     *,
-    segments: list[list[str]],
     extracted: dict[str, Any],
     product_description_override: str | None,
     quantity_override: float | None,
@@ -186,8 +185,12 @@ def _legacy_856_placeholder_errors(
             }
         )
 
-    sn1 = _first_segment(segments, "SN1") or []
-    raw_quantity = sn1[2] if len(sn1) > 2 else None
+    # #2974: read the aggregate the extractor actually persists rather
+    # than re-reading the FIRST SN1 segment. The guard used to validate a
+    # different line than the one that was kept, so an ASN whose first
+    # line was valid and whose last line was zero slipped through and
+    # persisted a fabricated quantity.
+    raw_quantity = extracted.get("quantity")
     if quantity_override is None and _positive_float_or_none(raw_quantity) is None:
         _add(
             "quantity",
@@ -195,7 +198,7 @@ def _legacy_856_placeholder_errors(
             "EDI 856 is missing a positive SN1 quantity; refusing to synthesize quantity=1.0.",
         )
 
-    raw_unit = sn1[3] if len(sn1) > 3 else None
+    raw_unit = extracted.get("unit_of_measure")
     unit_candidate = unit_override if unit_override is not None else raw_unit
     if _valid_unit_or_none(unit_candidate) is None:
         unit_message = (
@@ -364,6 +367,67 @@ def _enforce_envelope_integrity(
         )
 
 
+def _enforce_interchange_structure(
+    segments: list[list[str]],
+    set_slices: list[list[list[str]]],
+) -> None:
+    """Validate the ST/SE framing of an interchange before extraction.
+
+    #2976: nothing counted ST segments or looked at GE01, so a batched
+    interchange whose functional group was truncated or mis-assembled
+    parsed exactly as a well-formed single-set one. Two structural
+    invariants are checked here:
+
+    - every ST is closed by an SE (an unterminated transaction set would
+      otherwise swallow the segments of everything that follows it);
+    - GE01, the declared number of transaction sets in the functional
+      group, agrees with the ST segments that actually arrived.
+    """
+    st_count = _count_segments(segments, "ST")
+    se_count = _count_segments(segments, "SE")
+    if st_count != se_count or len(set_slices) != st_count:
+        logger.warning(
+            "edi_unbalanced_transaction_sets st=%d se=%d slices=%d",
+            st_count,
+            se_count,
+            len(set_slices),
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "unbalanced_transaction_sets",
+                "message": (
+                    "Every X12 ST segment must be closed by a matching SE. "
+                    "This interchange is rejected rather than parsed with "
+                    "transaction-set boundaries guessed."
+                ),
+                "st_count": st_count,
+                "se_count": se_count,
+            },
+        )
+
+    declared = _declared_transaction_set_count(segments)
+    if declared is not None and declared != st_count:
+        logger.warning(
+            "edi_transaction_set_count_mismatch declared=%d actual=%d",
+            declared,
+            st_count,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "transaction_set_count_mismatch",
+                "message": (
+                    "GE01 declares a different number of transaction sets than "
+                    "the interchange contains. The batch is truncated or "
+                    "mis-assembled; no events were ingested."
+                ),
+                "declared": declared,
+                "actual": st_count,
+            },
+        )
+
+
 @router.post(
     "",
     response_model=EDIIngestResponse,
@@ -432,6 +496,27 @@ async def ingest_edi_856(
     if transaction_set != "856":
         raise HTTPException(status_code=400, detail="Only X12 856 is currently supported")
 
+    # #2976: this endpoint's contract is one ASN in, one shipping CTE out,
+    # and it extracts from the flat segment list. A batched interchange
+    # would silently merge every ST/SE pair into that single event, so it
+    # is refused here rather than half-ingested. Use /document, which
+    # emits one event per transaction set.
+    set_slices = _split_transaction_sets(segments)
+    _enforce_interchange_structure(segments, set_slices)
+    if len(set_slices) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "multiple_transaction_sets",
+                "message": (
+                    "This endpoint accepts a single X12 856 transaction set. "
+                    "POST batched interchanges to /api/v1/ingest/edi/document, "
+                    "which emits one CTE per ST/SE pair."
+                ),
+                "transaction_set_count": len(set_slices),
+            },
+        )
+
     present_segments = _segment_id_set(segments)
     missing_segments = sorted(_REQUIRED_856_SEGMENTS - present_segments)
     if missing_segments:
@@ -449,7 +534,6 @@ async def ingest_edi_856(
     _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
 
     placeholder_errors = _legacy_856_placeholder_errors(
-        segments=segments,
         extracted=extracted,
         product_description_override=product_description,
         quantity_override=quantity_override,
@@ -548,6 +632,22 @@ async def ingest_edi_856(
     )
 
 
+def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -> bool:
+    """True when the set's line-item segment actually carried a quantity.
+
+    #2974: lets the route tell "this document has no quantity element at
+    all" (leave today's behaviour alone) apart from "a quantity element
+    was sent but is zero or non-numeric" (fail closed rather than let
+    ``_safe_float``'s 1.0 fallback fabricate a KDE).
+    """
+    wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
+    if not wanted:
+        return False
+    return any(
+        segment and segment[0].upper() == wanted and len(segment) > 2 and segment[2].strip() for segment in segments
+    )
+
+
 def _build_ingest_event_for_set(
     transaction_set: str,
     extracted: dict[str, Any],
@@ -556,14 +656,65 @@ def _build_ingest_event_for_set(
     quantity_override: float | None,
     unit_override: str | None,
     location_override: str | None,
+    segments: list[list[str]] | None = None,
 ) -> IngestEvent:
     """Build an IngestEvent from extracted EDI fields for any supported set."""
     cte_type = _CTE_TYPE_BY_SET.get(transaction_set, WebhookCTEType.SHIPPING)
 
     # Resolve quantity
     quantity = quantity_override if quantity_override is not None else extracted.get("quantity")
+
+    # #2974: the legacy 856 endpoint refuses to synthesize a quantity;
+    # this unified route silently re-created the same placeholder via the
+    # 1.0 fallback below. Fail closed when the document DID send a
+    # quantity element that could not produce a positive value — a
+    # document with no quantity element at all keeps the old default.
+    if quantity is None and segments is not None and _quantity_element_present(transaction_set, segments):
+        logger.warning(
+            "edi_non_positive_quantity set=%s — refusing to synthesize quantity=1.0",
+            transaction_set,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_non_positive_quantity",
+                "message": (
+                    f"EDI {transaction_set} carries a line-item quantity that is zero or "
+                    "non-numeric; refusing to synthesize quantity=1.0. Correct the "
+                    "supplier document or supply an operator-reviewed quantity override."
+                ),
+                "transaction_set": transaction_set,
+            },
+        )
+
     resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
-    resolved_unit = _normalize_unit(unit_override or extracted.get("unit_of_measure"))
+
+    # #2978: an X12 unit that is PRESENT but unrecognized must not be
+    # coerced to "units" — that persists a numerically-correct,
+    # semantically-meaningless quantity KDE with nothing in the response
+    # to signal it. Matches the legacy 856 endpoint's behaviour.
+    raw_unit = unit_override or extracted.get("unit_of_measure")
+    if raw_unit is not None and str(raw_unit).strip() and _valid_unit_or_none(raw_unit) is None:
+        logger.warning(
+            "edi_uom_unmapped set=%s raw=%r — refusing to coerce to units",
+            transaction_set,
+            str(raw_unit).strip(),
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "edi_unmapped_unit_of_measure",
+                "message": (
+                    "EDI unit of measure is not a recognized X12 element-355 code; "
+                    "refusing to coerce it to unit_of_measure='units'. Correct the "
+                    "supplier document or supply an operator-reviewed unit override."
+                ),
+                "transaction_set": transaction_set,
+                "unit_of_measure": str(raw_unit).strip(),
+            },
+        )
+
+    resolved_unit = _normalize_unit(raw_unit)
 
     # Resolve product description
     product_name = product_description_override or extracted.get("product_description") or f"EDI {transaction_set} Item"
@@ -753,21 +904,57 @@ async def ingest_edi_document(
             detail=f"Unsupported or unrecognized transaction set. Supported: {sorted(_SUPPORTED_TRANSACTION_SETS)}",
         )
 
-    required_segments = _REQUIRED_SEGMENTS_BY_SET.get(transaction_set, set())
-    present_segments = _segment_id_set(segments)
-    missing_segments = sorted(required_segments - present_segments)
-    if missing_segments:
+    # #2976: decompose the interchange into ST/SE transaction sets before
+    # anything reads a body segment. Previously every extractor walked
+    # the whole flat list and exactly one event was built, so a batched
+    # file returned 201 while sets 2..N were dropped and their segments
+    # bled into the survivor.
+    set_slices = _split_transaction_sets(segments)
+    _enforce_interchange_structure(segments, set_slices)
+
+    slice_sets = [_detect_transaction_set(slice_segments) for slice_segments in set_slices]
+    if any(slice_set is None for slice_set in slice_sets):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported or unrecognized transaction set. Supported: {sorted(_SUPPORTED_TRANSACTION_SETS)}",
+        )
+    if len(set(slice_sets)) > 1:
+        # A functional group is pinned to one transaction set type by
+        # GS01, so a mixed group is malformed — and the response contract
+        # carries a single ``document_type``.
         raise HTTPException(
             status_code=422,
             detail={
-                "message": f"EDI {transaction_set} missing required segments",
-                "missing_segments": missing_segments,
+                "error": "mixed_transaction_sets",
+                "message": (
+                    "One X12 functional group must carry a single transaction "
+                    "set type. Split the interchange by document type."
+                ),
+                "transaction_sets": sorted(set(slice_sets)),
             },
         )
 
-    extracted = _extract_fields_for_set(transaction_set, segments)
+    extractions: list[dict[str, Any]] = []
+    for slice_index, (slice_segments, slice_set) in enumerate(zip(set_slices, slice_sets)):
+        required_segments = _REQUIRED_SEGMENTS_BY_SET.get(slice_set, set())
+        present_segments = _segment_id_set(slice_segments)
+        missing_segments = sorted(required_segments - present_segments)
+        if missing_segments:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": f"EDI {slice_set} missing required segments",
+                    "missing_segments": missing_segments,
+                    "transaction_set_index": slice_index,
+                },
+            )
+        extractions.append(_extract_fields_for_set(slice_set, slice_segments))
 
-    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
+    extracted = extractions[0]
+
+    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup. Run once
+    # per interchange — the envelope is shared by every slice, and
+    # re-running it would 409 the interchange against its own first set.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
 
     # #1174: FSMA validation is fail-closed by default. A schema failure
@@ -780,69 +967,94 @@ async def ingest_edi_document(
     # out of the valid-event surface. The caller receives a response
     # with ``status='rejected'`` and a rejection_id it can use to look
     # up the record.
+    #
+    # #2976: every transaction set is validated. If ANY set fails, the
+    # whole interchange stays out of the canonical stream — a batch must
+    # not half-land.
     rejection_record: dict[str, Any] | None = None
-    try:
-        _validate_edi_as_fsma_event(
-            extracted,
-            transaction_set,
-            traceability_lot_code,
-            sender_tenant_id,
-        )
-        extracted["fsma_validation_status"] = "passed"
-    except ValidationError as ve:
-        strict_effective = strict and _edi_strict_mode()
-        if strict_effective:
-            logger.warning(
-                "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
-                transaction_set,
+    for slice_set, slice_extracted in zip(slice_sets, extractions):
+        try:
+            _validate_edi_as_fsma_event(
+                slice_extracted,
+                slice_set,
                 traceability_lot_code,
-                len(ve.errors()),
+                sender_tenant_id,
             )
-            # Record on the strict path too — the canonical stream is
-            # untouched either way, but auditors still need the trail.
-            _record_edi_rejection(
+            slice_extracted["fsma_validation_status"] = "passed"
+        except ValidationError as ve:
+            strict_effective = strict and _edi_strict_mode()
+            if strict_effective:
+                logger.warning(
+                    "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
+                    slice_set,
+                    traceability_lot_code,
+                    len(ve.errors()),
+                )
+                # Record on the strict path too — the canonical stream is
+                # untouched either way, but auditors still need the trail.
+                _record_edi_rejection(
+                    tenant_id=sender_tenant_id,
+                    transaction_set=slice_set,
+                    traceability_lot_code=traceability_lot_code,
+                    errors=ve.errors(),
+                    extracted=slice_extracted,
+                    partner_id=x_partner_id,
+                    source=source,
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "error": "fsma_validation_failed",
+                        "transaction_set": slice_set,
+                        "tlc": traceability_lot_code,
+                        "message": (
+                            "EDI document failed FSMAEvent schema validation. "
+                            "No events were persisted. Pass ?strict=false or "
+                            "set EDI_STRICT_MODE=false only for migration "
+                            "windows — failed rows are written to the EDI "
+                            "rejection log, never the canonical FSMA stream."
+                        ),
+                        "errors": ve.errors(),
+                    },
+                )
+            # Advisory mode: record the rejection separately and short-
+            # circuit before the canonical write. We do NOT call
+            # ``ingest_events`` — that would put the invalid event into the
+            # audit trail with ``fsma_validation_status=failed``, which is
+            # exactly the pollution #1174 is meant to stop.
+            slice_extracted["fsma_validation_status"] = "failed"
+            recorded = _record_edi_rejection(
                 tenant_id=sender_tenant_id,
-                transaction_set=transaction_set,
+                transaction_set=slice_set,
                 traceability_lot_code=traceability_lot_code,
                 errors=ve.errors(),
-                extracted=extracted,
+                extracted=slice_extracted,
                 partner_id=x_partner_id,
                 source=source,
             )
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "fsma_validation_failed",
-                    "transaction_set": transaction_set,
-                    "tlc": traceability_lot_code,
-                    "message": (
-                        "EDI document failed FSMAEvent schema validation. "
-                        "No events were persisted. Pass ?strict=false or "
-                        "set EDI_STRICT_MODE=false only for migration "
-                        "windows — failed rows are written to the EDI "
-                        "rejection log, never the canonical FSMA stream."
-                    ),
-                    "errors": ve.errors(),
-                },
-            )
-        # Advisory mode: record the rejection separately and short-
-        # circuit before the canonical write. We do NOT call
-        # ``ingest_events`` — that would put the invalid event into the
-        # audit trail with ``fsma_validation_status=failed``, which is
-        # exactly the pollution #1174 is meant to stop.
-        extracted["fsma_validation_status"] = "failed"
-        rejection_record = _record_edi_rejection(
-            tenant_id=sender_tenant_id,
-            transaction_set=transaction_set,
-            traceability_lot_code=traceability_lot_code,
-            errors=ve.errors(),
-            extracted=extracted,
-            partner_id=x_partner_id,
-            source=source,
-        )
-    except ImportError:
-        logger.debug("shared.schemas not available — skipping FSMA validation")
-        extracted["fsma_validation_status"] = "unknown"
+            rejection_record = rejection_record or recorded
+        except ImportError:
+            logger.debug("shared.schemas not available — skipping FSMA validation")
+            slice_extracted["fsma_validation_status"] = "unknown"
+
+    def _summarize(slice_set: str, slice_extracted: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "transaction_set": slice_set,
+            "control_number": slice_extracted.get("control_number"),
+            "quantity": slice_extracted.get("quantity"),
+            "unit_of_measure": slice_extracted.get("unit_of_measure"),
+            "product_description": slice_extracted.get("product_description"),
+            "reference_document_number": slice_extracted.get("reference_document_number"),
+            "fsma_validation_status": slice_extracted.get("fsma_validation_status"),
+        }
+
+    summaries = [_summarize(slice_set, slice_extracted) for slice_set, slice_extracted in zip(slice_sets, extractions)]
+    # Keep the first set's fields at the top level for callers written
+    # against the single-transaction-set response, and expose the full
+    # batch alongside them (#2976).
+    extracted_summary: dict[str, Any] = dict(summaries[0])
+    extracted_summary["transaction_set_count"] = len(summaries)
+    extracted_summary["transaction_sets"] = summaries
 
     if rejection_record is not None:
         # Rejected in advisory mode: respond 201 (document was accepted
@@ -856,14 +1068,7 @@ async def ingest_edi_document(
             sender_tenant_id=sender_tenant_id,
             partner_id=x_partner_id,
             traceability_lot_code=traceability_lot_code,
-            extracted={
-                "transaction_set": transaction_set,
-                "quantity": extracted.get("quantity"),
-                "unit_of_measure": extracted.get("unit_of_measure"),
-                "product_description": extracted.get("product_description"),
-                "reference_document_number": extracted.get("reference_document_number"),
-                "fsma_validation_status": extracted.get("fsma_validation_status"),
-            },
+            extracted=extracted_summary,
             ingestion_result=None,
             rejection={
                 "rejection_id": rejection_record["rejection_id"],
@@ -873,19 +1078,64 @@ async def ingest_edi_document(
             },
         )
 
-    event = _build_ingest_event_for_set(
-        transaction_set=transaction_set,
-        extracted=extracted,
-        traceability_lot_code=traceability_lot_code,
-        product_description_override=product_description,
-        quantity_override=quantity_override,
-        unit_override=unit_of_measure_override,
-        location_override=location_override,
-    )
+    # Review on #2991: scalar form overrides describe ONE shipment. Applying
+    # them across a batch would overwrite each transaction set's distinct
+    # extracted values with a single value -- reintroducing, through the
+    # override path, exactly the cross-shipment field bleed #2976 fixes.
+    # Refuse rather than silently collapse; a caller who means it can post
+    # each transaction set separately.
+    if len(slice_sets) > 1:
+        _supplied_overrides = [
+            name
+            for name, value in (
+                ("product_description", product_description),
+                ("quantity_override", quantity_override),
+                ("unit_of_measure_override", unit_of_measure_override),
+                ("location_override", location_override),
+            )
+            if value is not None
+        ]
+        if _supplied_overrides:
+            logger.warning(
+                "edi_overrides_rejected_for_batch partner=%s sets=%d overrides=%s",
+                x_partner_id,
+                len(slice_sets),
+                ",".join(_supplied_overrides),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "edi_overrides_with_multiple_transaction_sets",
+                    "message": (
+                        "Field overrides apply to a single shipment, but this "
+                        "interchange carries "
+                        f"{len(slice_sets)} transaction sets. Applying one "
+                        "override across all of them would overwrite each "
+                        "set's own values. Post each transaction set "
+                        "separately, or resubmit without overrides."
+                    ),
+                    "overrides": _supplied_overrides,
+                    "transaction_set_count": len(slice_sets),
+                },
+            )
+
+    events = [
+        _build_ingest_event_for_set(
+            transaction_set=slice_set,
+            extracted=slice_extracted,
+            traceability_lot_code=traceability_lot_code,
+            product_description_override=product_description,
+            quantity_override=quantity_override,
+            unit_override=unit_of_measure_override,
+            location_override=location_override,
+            segments=slice_segments,
+        )
+        for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices)
+    ]
 
     payload = WebhookPayload(
         source=f"{source}_{transaction_set}" if source == "edi_inbound" else source,
-        events=[event],
+        events=events,
         tenant_id=sender_tenant_id,
     )
     ingestion_result = await ingest_events(
@@ -899,13 +1149,6 @@ async def ingest_edi_document(
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
         traceability_lot_code=traceability_lot_code,
-        extracted={
-            "transaction_set": transaction_set,
-            "quantity": extracted.get("quantity"),
-            "unit_of_measure": extracted.get("unit_of_measure"),
-            "product_description": extracted.get("product_description"),
-            "reference_document_number": extracted.get("reference_document_number"),
-            "fsma_validation_status": extracted.get("fsma_validation_status"),
-        },
+        extracted=extracted_summary,
         ingestion_result=ingestion_result,
     )
