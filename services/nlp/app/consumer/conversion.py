@@ -19,7 +19,7 @@ from shared.schemas import (
 
 from ..classification import SignalClassifier
 from ..extractor import infer_obligation_type
-from ..resolution import EntityResolver
+from ..resolution import MASTER_DATA_SOURCE, EntityResolver
 
 from .constants import _LEGACY_HEURISTIC_CONFIDENCE_CAP
 
@@ -185,13 +185,28 @@ def _convert_entities_to_extraction(
                 }
 
                 if resolution:
-                    entity_info["entity_id"] = resolution["id"]
                     entity_info["normalized_name"] = resolution["name"]
                     entity_info["entity_type"] = resolution["type"]
                     entity_info["match_strategy"] = resolution.get(
                         "match_strategy", "unknown"
                     )
                     entity_info["match_score"] = resolution.get("match_score")
+                    source = resolution.get("source")
+                    entity_info["resolution_source"] = source or "unknown"
+                    if source and source != MASTER_DATA_SOURCE:
+                        # A real master-data lookup: the identifier is
+                        # authoritative and belongs in the audit trail.
+                        entity_info["entity_id"] = resolution["id"]
+                    else:
+                        # #2944 — the id would be a repository literal
+                        # (``duns:007874200``). Persisting it into FSMA
+                        # compliance evidence fabricates provenance that looks
+                        # like an MDM resolution, so the field is omitted
+                        # rather than stubbed. The raw name, the candidate
+                        # name and the match score still reach the reviewer.
+                        entity_info["entity_id_withheld_reason"] = (
+                            "stub_master_data_is_not_an_authoritative_identifier"
+                        )
 
                 resolved_entities.append(entity_info)
 
