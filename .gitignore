@@ -76,6 +76,10 @@ frontend/out/
 *.sqlite3
 /data/
 secrets.md
+# Plaintext credential bundles. scripts/export_env_bundle.py no longer
+# writes these (#2938) - this is belt-and-braces for hand-made copies.
+secrets.json
+*.secrets.json
 
 # Artifacts that should never be tracked
 *.zip
