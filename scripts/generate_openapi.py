@@ -132,10 +132,80 @@ def _bootstrap_imports() -> None:
     os.environ.setdefault("NEO4J_PASSWORD", "openapi-generator-dummy")
 
 
-def _load_ingestion_app() -> Any:
+# Placeholder secrets for the import below (#2861). `server.main` validates
+# secret material at import time, so these must be long and non-obvious enough
+# to survive that check — including if `REGENGINE_REQUIRE_SECURE_SECRETS` is
+# ever enabled, which #2808 argues it should be. They are used to build a
+# schema and nothing else: this process never serves a request or opens a
+# socket, and the values never leave it.
+_IMPORT_ONLY_ENV: dict[str, str] = {
+    # Reproduces the production router gate. `_router_enabled` consults
+    # `_is_prod`, derived from REGENGINE_ENV, and there is no narrower switch.
+    "REGENGINE_ENV": "production",
+    "ENV": "production",
+    "DATABASE_URL": "sqlite:///:memory:",
+    "ADMIN_DATABASE_URL": "sqlite:///:memory:",
+    "ADMIN_FALLBACK_SQLITE": "1",
+    "AUTH_SECRET_KEY": "openapi-generator-import-only-not-a-real-secret-4f2b",
+    "JWT_SECRET": "openapi-generator-import-only-not-a-real-jwt-secret-9c7e",
+    "REGENGINE_API_KEY": "openapi-generator-import-only-not-a-real-api-key-1a3d",
+    "TOOL_ACCESS_SECRET": "openapi-generator-import-only-not-a-real-tool-secret-8e5c",
+}
+
+
+def _load_production_app() -> Any:
+    """Build the app the production monolith actually serves (#2861).
+
+    This used to import ``services/ingestion/main.py``. That entrypoint has no
+    experimental-router gate, so the published spec advertised 9 paths that are
+    not mounted in production — 20% of the public contract, 404 for every
+    integrator and every SDK generated from it. Worse, the
+    ``openapi-public-spec`` workflow enforces that the committed file matches
+    the generator, so the drift was locked in and looked verified.
+
+    Deriving the spec from ``server.main`` under the production environment
+    removes the class of drift rather than patching this instance: a router
+    that becomes experimental drops out of the published contract on the next
+    regeneration, with no list here to maintain.
+
+    Note the two apps cannot both be loaded in one process. The ingestion
+    entrypoint calls ``assert_legacy_entrypoint_not_in_production`` and raises
+    under ``REGENGINE_ENV=production``, which is exactly the environment this
+    needs — so this is a replacement, not an addition.
+    """
+    import os
+
     _bootstrap_imports()
-    # Local import only after bootstrap.
-    from services.ingestion.main import app  # type: ignore[import-not-found]
+    # ASSIGNED, not setdefault. The published contract must be a function of
+    # the code alone, never of whoever ran the generator. `setdefault` looks
+    # equivalent and is not: under pytest, or for any developer with
+    # REGENGINE_ENV=development exported, the inherited value wins and the
+    # generator silently builds the NON-production app — mounting every
+    # experimental router and reproducing exactly the #2861 drift this
+    # function exists to remove.
+    for key, value in _IMPORT_ONLY_ENV.items():
+        os.environ[key] = value
+    # Test-only variables that the production config validator rejects. A
+    # developer or CI job with these exported would otherwise see the generator
+    # fail with an auth-config error that has nothing to do with the schema.
+    for _test_only in ("AUTH_TEST_BYPASS_TOKEN", "ALLOW_LEGACY_ENTRYPOINT_IN_PROD"):
+        os.environ.pop(_test_only, None)
+
+    # Deployment knobs that legitimately vary per environment but MUST NOT
+    # reach a published contract. `ENABLE_EXPERIMENTAL_ROUTERS=1` re-mounts
+    # every experimental router, putting all 9 paths #2861 removed straight
+    # back into the spec; `DISABLED_ROUTERS` drops arbitrary live ones. Either
+    # would make the committed spec a function of whoever ran the generator,
+    # and the drift-check workflow would then enforce that accident.
+    #
+    # The published contract is defined as: default production posture, no
+    # per-deploy overrides. Anyone needing an experimental route documented
+    # should promote it out of _EXPERIMENTAL_ROUTERS, not export a flag.
+    for _override in ("ENABLE_EXPERIMENTAL_ROUTERS", "DISABLED_ROUTERS"):
+        os.environ.pop(_override, None)
+
+    # Local import only after bootstrap and env setup.
+    from server.main import app  # type: ignore[import-not-found]
 
     return app
 
@@ -309,7 +379,7 @@ def _apply_real_error_envelope(spec: dict[str, Any]) -> None:
 
 
 def build_public_spec() -> dict[str, Any]:
-    app = _load_ingestion_app()
+    app = _load_production_app()
     spec = app.openapi()
 
     # Deep copy by JSON round-trip so we don't mutate FastAPI's cached spec.
@@ -320,7 +390,7 @@ def build_public_spec() -> dict[str, Any]:
         "version": PUBLIC_VERSION,
         "description": (
             "Curated public REST API for the RegEngine FSMA 204 platform. "
-            "Generated at build time from the ingestion service; internal, "
+            "Generated at build time from the production monolith; internal, "
             "admin, and control-plane routes are excluded. Source of truth: "
             "`scripts/generate_openapi.py` in the RegEngine repo."
         ),

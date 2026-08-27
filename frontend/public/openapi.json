@@ -15,78 +15,6 @@
         "title": "BatchIngestRequest",
         "type": "object"
       },
-      "Body_decode_qr_image_api_v1_qr_decode_post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "description": "Image containing a QR/barcode",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_decode_qr_image_api_v1_qr_decode_post",
-        "type": "object"
-      },
-      "Body_import_sensitech_api_v1_ingest_iot_sensitech_post": {
-        "properties": {
-          "cold_threshold": {
-            "default": 5.0,
-            "description": "Max temperature threshold (\u00b0C)",
-            "title": "Cold Threshold",
-            "type": "number"
-          },
-          "cte_type": {
-            "default": "cooling",
-            "description": "CTE type: cooling or receiving",
-            "title": "Cte Type",
-            "type": "string"
-          },
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "description": "Sensitech TempTale CSV export",
-            "title": "File",
-            "type": "string"
-          },
-          "location_gln": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Facility GLN (optional)",
-            "title": "Location Gln"
-          },
-          "location_name": {
-            "description": "Facility name where logger was deployed",
-            "title": "Location Name",
-            "type": "string"
-          },
-          "product_description": {
-            "description": "Product name",
-            "title": "Product Description",
-            "type": "string"
-          },
-          "traceability_lot_code": {
-            "description": "TLC to link temperature data to",
-            "title": "Traceability Lot Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file",
-          "traceability_lot_code",
-          "product_description",
-          "location_name"
-        ],
-        "title": "Body_import_sensitech_api_v1_ingest_iot_sensitech_post",
-        "type": "object"
-      },
       "Body_ingest_csv_api_v1_ingest_csv_post": {
         "properties": {
           "cte_type": {
@@ -525,58 +453,6 @@
         "title": "DocumentHash",
         "type": "object"
       },
-      "ECFRIngestRequest": {
-        "description": "Request payload for eCFR ingestion.",
-        "properties": {
-          "cfr_part": {
-            "minimum": 1.0,
-            "title": "Cfr Part",
-            "type": "integer"
-          },
-          "cfr_title": {
-            "maximum": 50.0,
-            "minimum": 1.0,
-            "title": "Cfr Title",
-            "type": "integer"
-          },
-          "vertical": {
-            "description": "Regulatory vertical",
-            "title": "Vertical",
-            "type": "string"
-          }
-        },
-        "required": [
-          "vertical",
-          "cfr_title",
-          "cfr_part"
-        ],
-        "title": "ECFRIngestRequest",
-        "type": "object"
-      },
-      "ECFRResponse": {
-        "description": "Response from POST /v1/ingest/ecfr.",
-        "properties": {
-          "job_id": {
-            "title": "Job Id",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "job_id",
-          "message"
-        ],
-        "title": "ECFRResponse",
-        "type": "object"
-      },
       "EDIIngestResponse": {
         "description": "Response for EDI ingestion requests.",
         "properties": {
@@ -865,63 +741,6 @@
         "title": "ExportHistoryResponse",
         "type": "object"
       },
-      "ExportRequest": {
-        "description": "Request for data export.",
-        "properties": {
-          "date_from": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Start date (YYYY-MM-DD)",
-            "title": "Date From"
-          },
-          "date_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "End date (YYYY-MM-DD)",
-            "title": "Date To"
-          },
-          "format": {
-            "default": "epcis",
-            "description": "Export format: epcis, fda, csv",
-            "title": "Format",
-            "type": "string"
-          },
-          "lot_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Filter by specific TLC",
-            "title": "Lot Code"
-          },
-          "tenant_id": {
-            "description": "Tenant ID",
-            "title": "Tenant Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "tenant_id"
-        ],
-        "title": "ExportRequest",
-        "type": "object"
-      },
       "ExportVerifyResponse": {
         "description": "Response for POST /api/v1/fda/export/verify.",
         "properties": {
@@ -981,124 +800,6 @@
           "verified_at"
         ],
         "title": "ExportVerifyResponse",
-        "type": "object"
-      },
-      "FDAIngestRequest": {
-        "description": "Request payload for FDA ingestion.",
-        "properties": {
-          "max_documents": {
-            "default": 10,
-            "maximum": 100.0,
-            "minimum": 1.0,
-            "title": "Max Documents",
-            "type": "integer"
-          },
-          "vertical": {
-            "description": "Regulatory vertical",
-            "title": "Vertical",
-            "type": "string"
-          }
-        },
-        "required": [
-          "vertical"
-        ],
-        "title": "FDAIngestRequest",
-        "type": "object"
-      },
-      "FDAResponse": {
-        "description": "Response from POST /v1/ingest/fda.",
-        "properties": {
-          "job_id": {
-            "title": "Job Id",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "job_id",
-          "message"
-        ],
-        "title": "FDAResponse",
-        "type": "object"
-      },
-      "FederalRegisterIngestRequest": {
-        "description": "Request payload for Federal Register ingestion.",
-        "properties": {
-          "agencies": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agencies"
-          },
-          "date_from": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date From"
-          },
-          "max_documents": {
-            "default": 10,
-            "maximum": 100.0,
-            "minimum": 1.0,
-            "title": "Max Documents",
-            "type": "integer"
-          },
-          "vertical": {
-            "description": "Regulatory vertical (e.g., fsma)",
-            "title": "Vertical",
-            "type": "string"
-          }
-        },
-        "required": [
-          "vertical"
-        ],
-        "title": "FederalRegisterIngestRequest",
-        "type": "object"
-      },
-      "FederalRegisterResponse": {
-        "description": "Response from POST /v1/ingest/federal-register.",
-        "properties": {
-          "job_id": {
-            "title": "Job Id",
-            "type": "string"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "job_id",
-          "message"
-        ],
-        "title": "FederalRegisterResponse",
         "type": "object"
       },
       "IngestEvent": {
@@ -1352,23 +1053,6 @@
         "title": "ListDocumentsResponse",
         "type": "object"
       },
-      "ListSourcesResponse": {
-        "description": "Response from GET /v1/ingest/sources.",
-        "properties": {
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/SourceItem"
-            },
-            "title": "Sources",
-            "type": "array"
-          }
-        },
-        "required": [
-          "sources"
-        ],
-        "title": "ListSourcesResponse",
-        "type": "object"
-      },
       "NormalizedEvent": {
         "description": "Kafka event emitted after normalization.",
         "properties": {
@@ -1464,108 +1148,6 @@
           "content_sha256"
         ],
         "title": "NormalizedEvent",
-        "type": "object"
-      },
-      "QRDecodeResponse": {
-        "description": "Response payload for QR decode endpoint.",
-        "properties": {
-          "fields": {
-            "$ref": "#/components/schemas/QRDecodedFields"
-          },
-          "fsma_compatible": {
-            "description": "True when payload includes a valid GTIN or traceability lot code.",
-            "title": "Fsma Compatible",
-            "type": "boolean"
-          },
-          "raw_value": {
-            "title": "Raw Value",
-            "type": "string"
-          }
-        },
-        "required": [
-          "raw_value",
-          "fields",
-          "fsma_compatible"
-        ],
-        "title": "QRDecodeResponse",
-        "type": "object"
-      },
-      "QRDecodedFields": {
-        "description": "Structured GS1 fields decoded from image payloads.",
-        "properties": {
-          "expiry_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expiry Date"
-          },
-          "gtin": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gtin"
-          },
-          "pack_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pack Date"
-          },
-          "serial": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Serial"
-          },
-          "source_format": {
-            "default": "unknown",
-            "title": "Source Format",
-            "type": "string"
-          },
-          "traceability_lot_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Traceability Lot Code"
-          },
-          "valid_gtin": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Valid Gtin"
-          }
-        },
-        "title": "QRDecodedFields",
         "type": "object"
       },
       "RecallDimension": {
@@ -1742,166 +1324,6 @@
         "title": "RecentEventsResponse",
         "type": "object"
       },
-      "SensitechImportResponse": {
-        "description": "Response from Sensitech import.",
-        "properties": {
-          "avg_temperature": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avg Temperature"
-          },
-          "duration_hours": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Duration Hours"
-          },
-          "events_created": {
-            "default": 0,
-            "title": "Events Created",
-            "type": "integer"
-          },
-          "excursions": {
-            "items": {
-              "$ref": "#/components/schemas/TemperatureExcursion"
-            },
-            "title": "Excursions",
-            "type": "array"
-          },
-          "excursions_detected": {
-            "default": 0,
-            "title": "Excursions Detected",
-            "type": "integer"
-          },
-          "ingestion_result": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IngestResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "max_temperature": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Temperature"
-          },
-          "min_temperature": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Min Temperature"
-          },
-          "readings_parsed": {
-            "default": 0,
-            "title": "Readings Parsed",
-            "type": "integer"
-          }
-        },
-        "title": "SensitechImportResponse",
-        "type": "object"
-      },
-      "SourceItem": {
-        "description": "Individual source in the sources list.",
-        "properties": {
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Capabilities",
-            "type": "array"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "jurisdiction": {
-            "title": "Jurisdiction",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "type",
-          "jurisdiction",
-          "capabilities"
-        ],
-        "title": "SourceItem",
-        "type": "object"
-      },
-      "TemperatureExcursion": {
-        "description": "A temperature excursion detected during parsing.",
-        "properties": {
-          "serial_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Serial Number"
-          },
-          "severity": {
-            "default": "WARNING",
-            "title": "Severity",
-            "type": "string"
-          },
-          "temperature_celsius": {
-            "title": "Temperature Celsius",
-            "type": "number"
-          },
-          "threshold_celsius": {
-            "title": "Threshold Celsius",
-            "type": "number"
-          },
-          "timestamp": {
-            "title": "Timestamp",
-            "type": "string"
-          }
-        },
-        "required": [
-          "timestamp",
-          "temperature_celsius",
-          "threshold_celsius"
-        ],
-        "title": "TemperatureExcursion",
-        "type": "object"
-      },
       "VerifyDocumentResponse": {
         "description": "Response from GET /v1/verify/{document_id}.",
         "properties": {
@@ -1984,6 +1406,17 @@
         "title": "WebhookPayload",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/email-code/confirm"
+          }
+        },
+        "type": "oauth2"
+      }
     }
   },
   "info": {
@@ -1991,7 +1424,7 @@
       "name": "RegEngine Support",
       "url": "https://regengine.co/contact"
     },
-    "description": "Curated public REST API for the RegEngine FSMA 204 platform. Generated at build time from the ingestion service; internal, admin, and control-plane routes are excluded. Source of truth: `scripts/generate_openapi.py` in the RegEngine repo.",
+    "description": "Curated public REST API for the RegEngine FSMA 204 platform. Generated at build time from the production monolith; internal, admin, and control-plane routes are excluded. Source of truth: `scripts/generate_openapi.py` in the RegEngine repo.",
     "license": {
       "name": "Proprietary"
     },
@@ -2499,185 +1932,6 @@
         "tags": [
           "EPCIS",
           "EPCIS 2.0 Ingestion"
-        ]
-      }
-    },
-    "/api/v1/export/epcis": {
-      "post": {
-        "description": "Generates a GS1 EPCIS 2.0 compliant JSON-LD document containing all traceability events. Compatible with Walmart, Kroger, and Costco portals.",
-        "operationId": "export_epcis_api_v1_export_epcis_post",
-        "parameters": [
-          {
-            "description": "Run GS1 EPCIS 2.0 structural validation on the output",
-            "in": "query",
-            "name": "validate",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Run GS1 EPCIS 2.0 structural validation on the output",
-              "title": "Validate",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExportRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Export in GS1 EPCIS 2.0 JSON-LD format",
-        "tags": [
-          "Data Export",
-          "EPCIS & FDA Export"
-        ]
-      }
-    },
-    "/api/v1/export/fda": {
-      "post": {
-        "description": "Generates a CSV-compatible sortable spreadsheet for FDA records requests. Includes all required KDEs organized by CTE type.",
-        "operationId": "export_fda_api_v1_export_fda_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExportRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Export in FDA 21 CFR 1.1455 sortable spreadsheet format",
-        "tags": [
-          "Data Export",
-          "EPCIS & FDA Export"
-        ]
-      }
-    },
-    "/api/v1/export/formats": {
-      "get": {
-        "description": "List available export formats and their descriptions.",
-        "operationId": "list_export_formats_api_v1_export_formats_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List available export formats",
-        "tags": [
-          "Data Export",
-          "EPCIS & FDA Export"
         ]
       }
     },
@@ -4015,67 +3269,6 @@
         ]
       }
     },
-    "/api/v1/ingest/iot/sensitech": {
-      "post": {
-        "description": "Parse a Sensitech TempTale CSV temperature log, detect excursions, and create CTE events linked to a specified Traceability Lot Code.",
-        "operationId": "import_sensitech_api_v1_ingest_iot_sensitech_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_import_sensitech_api_v1_ingest_iot_sensitech_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SensitechImportResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Import Sensitech TempTale data",
-        "tags": [
-          "IoT Ingestion",
-          "IoT Import"
-        ]
-      }
-    },
     "/api/v1/monitoring/alerts/{tenant_id}": {
       "get": {
         "description": "Generate monitoring alerts based on current health checks.",
@@ -4244,67 +3437,6 @@
         "summary": "Export pipeline health check",
         "tags": [
           "Export Monitoring"
-        ]
-      }
-    },
-    "/api/v1/qr/decode": {
-      "post": {
-        "description": "Decodes an uploaded barcode/QR image and returns structured GS1 fields (GTIN, lot, serial, expiry, pack date).",
-        "operationId": "decode_qr_image_api_v1_qr_decode_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_decode_qr_image_api_v1_qr_decode_post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QRDecodeResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Decode GS1 QR/barcode image",
-        "tags": [
-          "QR & GS1 Decoding",
-          "QR & GS1"
         ]
       }
     },
@@ -4808,6 +3940,26 @@
         ]
       }
     },
+    "/health/live": {
+      "get": {
+        "description": "Lightweight liveness probe \u2014 always returns 200 if the process is up.",
+        "operationId": "root_liveness_health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "system"
+        ]
+      }
+    },
     "/v1/ingest/documents": {
       "get": {
         "description": "List and search ingested documents.",
@@ -4969,186 +4121,6 @@
         ]
       }
     },
-    "/v1/ingest/ecfr": {
-      "post": {
-        "description": "Ingest documents from eCFR API.",
-        "operationId": "ingest_ecfr_v1_ingest_ecfr_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ECFRIngestRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ECFRResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Ingest Ecfr",
-        "tags": [
-          "ingestion-sources"
-        ]
-      }
-    },
-    "/v1/ingest/fda": {
-      "post": {
-        "description": "Ingest documents from openFDA API.",
-        "operationId": "ingest_fda_v1_ingest_fda_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FDAIngestRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FDAResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Ingest Fda",
-        "tags": [
-          "ingestion-sources"
-        ]
-      }
-    },
-    "/v1/ingest/federal-register": {
-      "post": {
-        "description": "Ingest documents from Federal Register API.",
-        "operationId": "ingest_federal_register_v1_ingest_federal_register_post",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FederalRegisterIngestRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FederalRegisterResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Ingest Federal Register",
-        "tags": [
-          "ingestion-sources"
-        ]
-      }
-    },
     "/v1/ingest/file": {
       "post": {
         "description": "Ingest a single document from a file upload (v2).",
@@ -5293,56 +4265,6 @@
         "tags": [
           "Document Ingestion",
           "Document Ingestion"
-        ]
-      }
-    },
-    "/v1/ingest/sources": {
-      "get": {
-        "description": "List available source adapters and their capabilities.",
-        "operationId": "list_sources_v1_ingest_sources_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-RegEngine-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Regengine-Api-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListSourcesResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Sources",
-        "tags": [
-          "ingestion-sources"
         ]
       }
     },
