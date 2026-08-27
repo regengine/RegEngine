@@ -270,7 +270,7 @@ async def create_invite(
     db.flush()  # Ensure ID is generated
 
     # Audit Log
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
         event_type="invite.create",
@@ -281,6 +281,26 @@ async def create_invite(
         actor_id=current_user.id,
         metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_create_audit_chain_write_failed_aborting",
+            tenant_id=str(tenant_id),
+            invite_id=str(new_invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite creation was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
     db.refresh(new_invite)
@@ -374,7 +394,7 @@ async def revoke_invite(
 
     invite.revoked_at = datetime.now(timezone.utc)
 
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
         event_type="invite.revoke",
@@ -385,6 +405,26 @@ async def revoke_invite(
         actor_id=current_user.id,
         metadata={"revoked_by": str(current_user.id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_revoke_audit_chain_write_failed_aborting",
+            tenant_id=str(tenant_id),
+            invite_id=str(invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite revocation was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
     return {"status": "revoked"}
@@ -532,7 +572,7 @@ async def accept_invite(
     accepted_at = datetime.now(timezone.utc)
     invite.accepted_at = accepted_at
 
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=invite.tenant_id,
         event_type="invite.accept",
@@ -543,6 +583,26 @@ async def accept_invite(
         actor_id=user.id,
         metadata={"role_id": str(invite.role_id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_accept_audit_chain_write_failed_aborting",
+            tenant_id=str(invite.tenant_id),
+            invite_id=str(invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite acceptance was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
 
