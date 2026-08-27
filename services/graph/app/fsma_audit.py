@@ -19,10 +19,11 @@ import os
 import threading
 import time as _time
 import uuid
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Deque, Dict, List, Optional, Union
 
 import structlog
 
@@ -61,6 +62,52 @@ def _get_audit_db_engine():
 
 
 _PERSIST_MAX_RETRIES = 3
+
+# #2850: cap on the in-process audit history. The DB is the source of truth
+# for every query path, so this only bounds the fallback/recent-history copy.
+# Sized to keep a meaningful recent window (enough to answer a chain-integrity
+# or by-target query during a DB outage) without unbounded growth in a
+# long-lived monolith.
+_DEFAULT_MEMORY_MAX_ENTRIES = 10_000
+_MEMORY_MAX_ENTRIES_ENV = "FSMA_AUDIT_MEMORY_MAX_ENTRIES"
+
+
+def _resolve_max_memory_entries(explicit: Optional[int] = None) -> int:
+    """Resolve the in-memory entry cap (#2850).
+
+    Precedence: explicit constructor argument, then
+    ``FSMA_AUDIT_MEMORY_MAX_ENTRIES``, then the default. A non-positive or
+    unparseable value falls back to the default rather than disabling the
+    log: ``maxlen=0`` would silently drop every entry and break both the
+    checksum chain and the DB-outage fallback.
+    """
+    if explicit is not None:
+        candidate: Any = explicit
+    else:
+        raw = os.getenv(_MEMORY_MAX_ENTRIES_ENV, "").strip()
+        if not raw:
+            return _DEFAULT_MEMORY_MAX_ENTRIES
+        candidate = raw
+
+    try:
+        value = int(candidate)
+    except (TypeError, ValueError):
+        logging.getLogger("fsma_audit").warning(
+            "Ignoring non-integer %s=%r; using default %d",
+            _MEMORY_MAX_ENTRIES_ENV,
+            candidate,
+            _DEFAULT_MEMORY_MAX_ENTRIES,
+        )
+        return _DEFAULT_MEMORY_MAX_ENTRIES
+
+    if value <= 0:
+        logging.getLogger("fsma_audit").warning(
+            "Ignoring non-positive audit memory cap %d; using default %d",
+            value,
+            _DEFAULT_MEMORY_MAX_ENTRIES,
+        )
+        return _DEFAULT_MEMORY_MAX_ENTRIES
+    return value
 
 # Warn loudly the first time we discover the audit DB is unconfigured, then
 # drop to DEBUG. Read endpoints emit a KDE_READ per request, so an
@@ -463,12 +510,56 @@ class FSMAAuditLog:
     - Export for FDA audits
     """
 
-    def __init__(self):
-        self._entries: List[FSMAAuditEntry] = []
+    def __init__(self, max_entries: Optional[int] = None):
+        # #2850: bounded. This is a process-global singleton in a monolith
+        # that Railway never recycles, and every KDE_READ on a traceability
+        # route appends an entry that retains its full ``diff`` payload
+        # (record-id lists included). Unbounded, it is monotonic heap growth
+        # proportional to lifetime audit volume — and reads amplify it,
+        # because ``get_by_target``/``get_by_tenant`` log a READ entry of
+        # their own before querying, so a polling dashboard grows the
+        # structure on its own.
+        #
+        # Postgres (``fsma.fsma_audit_trail``) is the source of truth: every
+        # query path prefers ``_query_audit_trail`` and only falls back here
+        # when the DB is unreachable. So this is a bounded recent-history
+        # cache, not a store, and evicting the oldest entries costs nothing
+        # a working deployment relies on.
+        self._max_entries = _resolve_max_memory_entries(max_entries)
+        self._entries: Deque[FSMAAuditEntry] = deque(maxlen=self._max_entries)
         self._lock = threading.RLock()
-        self._by_target: Dict[str, List[str]] = {}  # target_id -> [event_ids]
-        self._by_tenant: Dict[str, List[str]] = {}  # tenant_id -> [event_ids]
+        self._by_target: Dict[str, Deque[str]] = {}  # target_id -> [event_ids]
+        self._by_tenant: Dict[str, Deque[str]] = {}  # tenant_id -> [event_ids]
         self._last_db_checksum: Optional[str] = self._load_last_checksum()
+
+    def _evict_from_indexes(self, entry: "FSMAAuditEntry") -> None:
+        """Drop ``entry``'s event_id from both indexes (#2850).
+
+        Called with the lock held, for the entry the deque just pushed out.
+        Bounding ``_entries`` alone would not bound memory: the two index
+        dicts would keep every event_id (and every target/tenant key) for the
+        life of the process. Entries are appended in order, so the evicted
+        id is the oldest for its target/tenant and sits at the head of its
+        index deque — ``popleft`` is the common case, with ``remove`` as the
+        fallback if anything ever appends out of order.
+        """
+        for index, key in ((self._by_target, entry.target_id), (self._by_tenant, entry.tenant_id)):
+            if not key:
+                continue
+            event_ids = index.get(key)
+            if event_ids is None:
+                continue
+            if event_ids and event_ids[0] == entry.event_id:
+                event_ids.popleft()
+            else:
+                try:
+                    event_ids.remove(entry.event_id)
+                except ValueError:
+                    pass
+            if not event_ids:
+                # Drop the key too, or the dicts grow one entry per distinct
+                # target/tenant forever even with the ids evicted.
+                del index[key]
 
     @staticmethod
     def _load_last_checksum() -> Optional[str]:
@@ -560,6 +651,10 @@ class FSMAAuditLog:
                 previous_checksum=previous_checksum,
             )
 
+            # #2850: capture what the bounded deque is about to push out so
+            # the indexes can be evicted in step with it. ``deque.append``
+            # discards the oldest silently once maxlen is reached.
+            evicted = self._entries[0] if len(self._entries) == self._max_entries else None
             self._entries.append(entry)
 
             # Persist to database. Best-effort by default; verifiable on
@@ -570,14 +665,20 @@ class FSMAAuditLog:
 
             # Index by target
             if target_id not in self._by_target:
-                self._by_target[target_id] = []
+                self._by_target[target_id] = deque()
             self._by_target[target_id].append(entry.event_id)
 
             # Index by tenant
             if tenant_id:
                 if tenant_id not in self._by_tenant:
-                    self._by_tenant[tenant_id] = []
+                    self._by_tenant[tenant_id] = deque()
                 self._by_tenant[tenant_id].append(entry.event_id)
+
+            if evicted is not None:
+                # After indexing the new entry, so an evicted entry that
+                # shares a target/tenant key with it does not delete the key
+                # the new entry just claimed.
+                self._evict_from_indexes(evicted)
 
             logger.info(
                 "audit_entry_created",
