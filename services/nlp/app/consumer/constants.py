@@ -27,3 +27,11 @@ MAX_RETRIES = 3
 # can bypass HITL. Only the FSMA extractor (calibrated from KDE completeness)
 # may exceed this ceiling.
 _LEGACY_HEURISTIC_CONFIDENCE_CAP = 0.60
+
+# Confidence cap for generative-LLM extractions (#2947).
+# The number an LLM reports about its own output is not a calibrated
+# probability, and the document it read is supplier-controlled. Capping below
+# the medium routing threshold means a generative extraction can only ever land
+# in HITL: it can never be the key that unlocks the auto-approve path to
+# graph.update. Raising this above the medium threshold re-opens exactly that.
+_LLM_EXTRACTION_CONFIDENCE_CAP = 0.60

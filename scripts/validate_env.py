@@ -64,7 +64,19 @@ _ALWAYS_REQUIRED: list[str] = [
     "AUTH_SECRET_KEY",
     "ADMIN_MASTER_KEY",
     "POSTGRES_PASSWORD",
-    "AUTH_TEST_BYPASS_TOKEN",  # must be SET — value may be empty (disabled)
+]
+
+# ---------------------------------------------------------------------------
+# Variables that must be PRESENT but whose value may legitimately be empty.
+#
+# ``AUTH_TEST_BYPASS_TOKEN`` is the only member: an empty value is what
+# *disables* the bypass, so requiring a non-empty value would be backwards.
+# It is listed separately from _ALWAYS_REQUIRED because that list is
+# non-empty-checked (#2913) and blanket-applying that rule here would make
+# the "disabled" state unrepresentable.
+# ---------------------------------------------------------------------------
+_ALWAYS_PRESENT_MAY_BE_EMPTY: list[str] = [
+    "AUTH_TEST_BYPASS_TOKEN",
 ]
 
 # ---------------------------------------------------------------------------
@@ -75,6 +87,15 @@ _PRODUCTION_REQUIRED: list[str] = [
     "SCHEDULER_API_KEY",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    # #2911 — absence of either of these raises in production: the monolith
+    # import aborts at services/admin/app/tool_verification_routes.py, and the
+    # v094 Alembic backfill refuses to run.
+    "TOOL_ACCESS_SECRET",
+    "AUTH_OTP_HMAC_SECRET",
+    # #2912 — absence of these does NOT crash: email OTP silently never
+    # delivers and every Stripe webhook 500s. Caught here instead.
+    "RESEND_API_KEY",
+    "STRIPE_WEBHOOK_SECRET",
 ]
 
 # ---------------------------------------------------------------------------
@@ -122,7 +143,16 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
     is_production = env.get("REGENGINE_ENV", "").lower() == "production"
 
     # ── 1. Always-required variables ────────────────────────────────────────
+    # #2913: this was ``if var not in env``, i.e. presence-only, so the empty
+    # values .env.example ships for AUTH_SECRET_KEY / ADMIN_MASTER_KEY /
+    # POSTGRES_PASSWORD passed and printed "Environment valid". The docstring
+    # has always said "set and non-empty"; now the code agrees.
     for var in _ALWAYS_REQUIRED:
+        if not env.get(var):
+            result.errors.append(f"Missing required environment variable: {var}")
+
+    # ── 1b. Must be present, may be empty ───────────────────────────────────
+    for var in _ALWAYS_PRESENT_MAY_BE_EMPTY:
         if var not in env:
             result.errors.append(f"Missing required environment variable: {var}")
 
@@ -136,7 +166,11 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
     for var in _CREDENTIAL_VARS:
         value = env.get(var, "")
         if not value:
-            continue  # empty is caught by required checks above
+            # Nothing to weak-value-scan. Required-ness is decided by the
+            # _ALWAYS_REQUIRED / _PRODUCTION_REQUIRED checks above, which now
+            # genuinely reject empty values (#2913); vars in neither list
+            # (NEO4J_PASSWORD, GRAFANA_PASSWORD, …) are optional by design.
+            continue
         if value.lower() in _KNOWN_WEAK_VALUES:
             msg = (
                 f"Insecure default value detected for {var}: '{value}'. "

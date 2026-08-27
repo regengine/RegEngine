@@ -1,5 +1,5 @@
 {
-  "chainTip": "94dbd7b6462353f8b01cc2ed0256836e478ec5dddcc58a5aab61150e3798f399",
+  "chainTip": "edd15e3fae1c21ee1534a3707075d371a2e56bad5ebf1c269ddf457de341dd50",
   "dataSource": "synthetic_sample",
   "eventCount": 19,
   "events": [
@@ -52,95 +52,95 @@
       "traceabilityLotCode": "LOT-ROM-2026-0311C"
     },
     {
-      "chainHash": "1bc4f7f391e43a79f69ba601f09d69052c722b9018c3b65a92884974cbf558d5",
+      "chainHash": "349c66038d794d25e5d91f0f7bc6a1c9a42a86d314395800f19f366faf608238",
       "eventTimestamp": "2026-03-13T12:00:00+00:00",
       "eventType": "initial_packing",
       "index": 6,
-      "recordHash": "255d08853a648109346704d4453d484e5438fe5202c9d6a7476ec4870f5c33cb",
+      "recordHash": "68cb298924eac700f421aafd114ff96c4974b6e1ae98a685abef8dd53ef42c1e",
       "traceabilityLotCode": "LOT-ROM-2026-0312A-PK"
     },
     {
-      "chainHash": "d4728deffd8bcd11a09a42eaebe46385e76a7948fc97e0c3e56ec442d3a87ec5",
+      "chainHash": "a952a897d59074e2871b4d2ac44e5a4e015a35ff40f2bdc979cb1faa6f76ee9a",
       "eventTimestamp": "2026-03-13T12:07:00+00:00",
       "eventType": "initial_packing",
       "index": 7,
-      "recordHash": "b7a0f70218beb8ea277cd09228551acc9ffacb4330fafcec2b7fce5735c8e7d8",
+      "recordHash": "0671af84d46489051b14ebdbac7d1721dcef4532d416d047178257d122e96ef1",
       "traceabilityLotCode": "LOT-ROM-2026-0312B-PK"
     },
     {
-      "chainHash": "bbb1752f52e4f7069149e07672147b7c4905a65f1d6839310eb048373fb764d6",
+      "chainHash": "efc5ad75408e7f817e9459300fd72880dbbf4311f43e765cd97ac0d6bcbb604b",
       "eventTimestamp": "2026-03-12T12:14:00+00:00",
       "eventType": "initial_packing",
       "index": 8,
-      "recordHash": "16a2ac375ee47fbed32ee4cad19518041bcc9e4e3951073683790c22969a61b7",
+      "recordHash": "c8fc8383eb8c04dd7a8949297fcbad568bf84b859ac4aed4dcb6d42736082ddb",
       "traceabilityLotCode": "LOT-ROM-2026-0311C-PK"
     },
     {
-      "chainHash": "945764e957af5cbd58f9bcb71488a4c0fb6112e0e3a49df48bd20a8c692ebfe1",
+      "chainHash": "c27dfb7419681f4e29e8e1fb4743603607cdae524321ee640a08fda13a7109f4",
       "eventTimestamp": "2026-03-14T15:00:00+00:00",
       "eventType": "shipping",
       "index": 9,
-      "recordHash": "070593238a0acfd14cf79e3ed8d52b8fb407d447336e91383717746f3186ed41",
+      "recordHash": "8b723a72122c06d8d1f95f6540e834e482f3c908b2443546a33042141ea3b15e",
       "traceabilityLotCode": "LOT-ROM-2026-0312A-PK"
     },
     {
-      "chainHash": "aac01f63e00792a65159b642984b5b0011e2442d063e3765ac5865c136f32035",
+      "chainHash": "248da44cc351f1b6665babca0a88eca97a39ecb072920ea14d3e9f7642855fe6",
       "eventTimestamp": "2026-03-14T15:07:00+00:00",
       "eventType": "shipping",
       "index": 10,
-      "recordHash": "7210f88d475af9dd8e63ed022f0b343c4ba5962bc71ebdd5c09a6f55270d3275",
+      "recordHash": "ef20b80ee44c8b11b4dc5b06c33cc90b2e44c8529cfd5967be4f6adf0c373d89",
       "traceabilityLotCode": "LOT-ROM-2026-0312A-PK"
     },
     {
-      "chainHash": "d088d2c9a89408441975f146d62f75d7e90e2e05621975304e0c953496b74a86",
+      "chainHash": "f01b5151d1300eab4b6534ccf5a17524a74e8e3c71a682ddb76ec3ee5bd79ed3",
       "eventTimestamp": "2026-03-14T15:14:00+00:00",
       "eventType": "shipping",
       "index": 11,
-      "recordHash": "ebd8ee5ac2ffdb87a4d12bd3b336e5a655a78c579e5b6a27d4ef36827dc7850c",
+      "recordHash": "7ea97b491cb5a9c2a8acfe9aa544fe6cbd9cf565a0f8af60f3b7b8ac0cdb8574",
       "traceabilityLotCode": "LOT-ROM-2026-0312B-PK"
     },
     {
-      "chainHash": "090fc683e1653f7f16a3056a3b26c74819b5877af84b6038c7b515d951dd5beb",
+      "chainHash": "eb4bf1b0372a9299e4678f5f57be3700e5ee25715b5f8330686667d68a3bf78b",
       "eventTimestamp": "2026-03-13T15:21:00+00:00",
       "eventType": "shipping",
       "index": 12,
-      "recordHash": "6ee6a04717731894ab546efd20114165ea622957f331754c2fdd4445ca912b44",
+      "recordHash": "bc3e809652198aa374c27144b4fa23ea070a27927e817caf9fd7ff59c4e72896",
       "traceabilityLotCode": "LOT-ROM-2026-0311C-PK"
     },
     {
-      "chainHash": "1ae706c0bd1ebee74a6c2297bd415d4d6f89e186db8c014a5a54cc5ded36ab20",
+      "chainHash": "f919ef51294d05182609ae344f463ea6fda82993153942f5fb158b861286b1ff",
       "eventTimestamp": "2026-03-15T18:00:00+00:00",
       "eventType": "receiving",
       "index": 13,
-      "recordHash": "8dd9d30e489fae6565766fe002b0293e3234f04d05e01c9236d3a4ff82404bc3",
+      "recordHash": "bb074aa9c996c9ddbbc726fa6cb0f64dd29920275e65f4b5eea86abe35030f99",
       "traceabilityLotCode": "LOT-ROM-2026-0312A-PK"
     },
     {
-      "chainHash": "854d216c7f65cc30532de06982cbb2cbe8da99f93de52c4fa1f8e022631b867f",
+      "chainHash": "8c533f4d121d964de3d0ed8f3358fef5191807ff4e9a8f35065145f7caf12e5e",
       "eventTimestamp": "2026-03-15T18:07:00+00:00",
       "eventType": "receiving",
       "index": 14,
-      "recordHash": "25fd0c18cf5e67d7cce4d344de2e261646f9b7c49268e6228327fc1bc84bc451",
+      "recordHash": "865b5453d9359aba5d162d985b99f39073002acb57a0a3a99b28cf6a44f83386",
       "traceabilityLotCode": "LOT-ROM-2026-0312A-PK"
     },
     {
-      "chainHash": "a42a41c9b36c2627565e435d3f79ff20d7dd40744e21d8c7d51947b9784e9bd0",
+      "chainHash": "cd79b87dc13bcaaa874a00a37b79f5f6c01f991f74dfe57aaf896dd3cd9fe966",
       "eventTimestamp": "2026-03-15T18:14:00+00:00",
       "eventType": "receiving",
       "index": 15,
-      "recordHash": "aabab41dbd376c6a97ea6015bcb96b242a7127a5f21533f8d564a0bbf57b1bf2",
+      "recordHash": "91c65d25cbc2a9b49a4943ab9ac79f14e9acb0fd2727c501fa017c2faa83db21",
       "traceabilityLotCode": "LOT-ROM-2026-0312B-PK"
     },
     {
-      "chainHash": "7fa38c7ef6ad5c30cfab39cfd61ada44d23db5741a4a1f43f044236552c24005",
+      "chainHash": "ce9c2e9842a528f0532c3cdf9c6b3dd6e64c99be517141a60264c357002ee79a",
       "eventTimestamp": "2026-03-14T18:21:00+00:00",
       "eventType": "receiving",
       "index": 16,
-      "recordHash": "4324ff51f9229cdc36ab370b1e4495a9b9ebf4b3a6655fe60a4ba51993ea3dba",
+      "recordHash": "11277c0f3e0a10bf8bfcb3809795b88dc0fe50e5277b8fecda4e95ac4bfacb19",
       "traceabilityLotCode": "LOT-ROM-2026-0311C-PK"
     },
     {
-      "chainHash": "2e6bcf68914c1afafd7c2736f9dffad7eda0968e6f264d4632c259cca56a2a1b",
+      "chainHash": "3f4e54f03c084e60b4486b357f1ca70fccd9233c0e66bcaf9208698db4b6432f",
       "eventTimestamp": "2026-03-16T21:00:00+00:00",
       "eventType": "transformation",
       "index": 17,
@@ -148,7 +148,7 @@
       "traceabilityLotCode": "SALAD-2026-0316-001"
     },
     {
-      "chainHash": "94dbd7b6462353f8b01cc2ed0256836e478ec5dddcc58a5aab61150e3798f399",
+      "chainHash": "edd15e3fae1c21ee1534a3707075d371a2e56bad5ebf1c269ddf457de341dd50",
       "eventTimestamp": "2026-03-16T21:07:00+00:00",
       "eventType": "transformation",
       "index": 18,
@@ -157,7 +157,7 @@
     }
   ],
   "generatedAt": "2026-01-01T00:00:00+00:00",
-  "merkleRoot": "b3202b6a4ec1b4beb9ff3fbeef9b4886ac6341e1ae55599177b3e5c542d38760",
+  "merkleRoot": "266e1df8160325013a8c3df7b93a88dfa931166e6ae2f74cf0aaa732687faf6b",
   "syntheticDisclaimer": "Audit bundle generated from synthetic CTE data in sample_data/. See demo_exports/SYNTHETIC.md.",
   "tenantId": "00000000-0000-4000-8000-0000000000d1"
 }

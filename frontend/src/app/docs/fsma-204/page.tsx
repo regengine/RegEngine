@@ -366,7 +366,7 @@ export default function FSMA204GuidePage() {
                         color: 'var(--re-text-tertiary)',
                         overflowX: 'auto',
                     }}>
-                        <code>Traceability Lot Code, Traceability Lot Code Description, Product Description, Quantity, Unit of Measure, Location Description, Location Identifier (GLN), Date, Time, Reference Document Type, Reference Document Number</code>
+                        <code>Traceability Lot Code, Event Type (CTE), Product Description, Quantity, Unit of Measure, Location Description, Location Identifier (GLN), Date, Time, Reference Document Type, Reference Document Number</code>
                     </div>
                 </section>
 

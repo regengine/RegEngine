@@ -193,6 +193,11 @@ class RecallResult:
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
+    # #2943: True when no trace function was wired and the engine emitted
+    # hardcoded demo counts. Recall drills are retained as FSMA evidence, so a
+    # record built from invented numbers has to identify itself as such.
+    simulated: bool = False
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize result for API response."""
         return {
@@ -227,6 +232,7 @@ class RecallResult:
             "contact_list_path": self.contact_list_path,
             "errors": self.errors,
             "warnings": self.warnings,
+            "simulated": self.simulated,
         }
 
     def get_summary(self) -> Dict[str, Any]:
