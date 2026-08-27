@@ -845,7 +845,23 @@ def _extract_epcis_quantity(
     # the real EPCIS 2.0 JSON/JSON-LD shape. Keep this precedence in sync
     # with ``_normalize_epcis_to_cte`` so the two writers cannot disagree
     # about the same event.
-    quantity_list = epcis_data.get("extension", {}).get("quantityList") or epcis_data.get("quantityList") or []
+    # #2970 follow-up: a conformant EPCIS 2.0 ``TransformationEvent`` has
+    # no ``quantityList`` at all — its quantities live in the input/output
+    # lists. Before #2970 such an event was rejected at validation for its
+    # missing ``action``, so this writer never saw one; making the required
+    # fields event-type-dependent opened that path and left this function
+    # raising on a *conformant* event. Prefer the output list: for a
+    # transformation CTE the FSMA quantity is the lot it creates. This
+    # mirrors ``epcis/normalization.py`` exactly — that module's comment
+    # already claims the two agree on every event, and this is what makes
+    # that true.
+    quantity_list = (
+        epcis_data.get("extension", {}).get("quantityList")
+        or epcis_data.get("quantityList")
+        or epcis_data.get("outputQuantityList")
+        or epcis_data.get("inputQuantityList")
+        or []
+    )
     if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
         raw = quantity_list[0].get("quantity")
         uom = quantity_list[0].get("uom")
