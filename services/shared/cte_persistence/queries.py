@@ -10,6 +10,7 @@ this code exactly as before the split.
 
 from __future__ import annotations
 
+from datetime import date as _date, datetime as _datetime, time as _time, timedelta as _timedelta, timezone as _timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -18,6 +19,39 @@ from sqlalchemy.exc import (
     OperationalError,
     ProgrammingError,
 )
+
+
+def _end_bound_utc(end_date: str) -> str:
+    """Convert a user-supplied ``YYYY-MM-DD`` end-date to a strict
+    UTC-based upper bound at the NEXT day 00:00.
+
+    Callers use the returned value in a strict ``<`` comparison, which
+    captures every event with ``event_timestamp`` on ``end_date`` in any
+    timezone. If the supplied value is not ISO ``YYYY-MM-DD`` we fall back
+    to the raw string so upstream validation remains the authoritative
+    source of 4xx responses.
+
+    #2817: the three read-path queries below used ``event_timestamp <=
+    :end_date`` with the bare ``YYYY-MM-DD`` string. Postgres casts that to
+    midnight, so EVERY event ON the end date was excluded from the result
+    set — an FDA export for 2026-06-01..2026-06-15 silently omitted all of
+    June 15.
+
+    Semantics are deliberately identical to
+    ``services/ingestion/app/fda_export/queries.py::_end_bound_utc``
+    (issue #1224), which already fixed the same class of bug on the FDA
+    export read path. It is duplicated rather than imported because
+    ``shared`` must not depend on a specific service package: this module is
+    also loaded by admin / compliance / graph, where ``app`` resolves to a
+    different service entirely. If the helper is ever promoted to a neutral
+    shared module, both copies should be replaced by that import.
+    """
+    try:
+        parsed = _date.fromisoformat(end_date)
+    except (TypeError, ValueError):
+        return end_date
+    bound = _datetime.combine(parsed + _timedelta(days=1), _time(0, 0, 0), tzinfo=_timezone.utc)
+    return bound.isoformat()
 
 
 def _is_missing_table_error(exc: DatabaseError) -> bool:
@@ -225,8 +259,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
 
         where = " AND ".join(where_clauses)
 
@@ -474,8 +510,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
 
         where = " AND ".join(where_clauses)
 
@@ -586,8 +624,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
         if event_type:
             where_clauses.append("event_type = :event_type")
             params["event_type"] = event_type

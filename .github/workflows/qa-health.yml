@@ -61,7 +61,6 @@ jobs:
     # before a step bound does (runs 30973063688/30979898499 proved it).
     timeout-minutes: 55
     env:
-      NODE_VERSION: "24"
       PYTHON_VERSION: "3.11"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -74,7 +73,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 

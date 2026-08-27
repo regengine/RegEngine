@@ -9,7 +9,9 @@ Last updated: 2026-04-14. Topology language corrected 2026-06-10.
 > service names (ingestion, admin, compliance, graph...). Production is a **single
 > consolidated FastAPI monolith** (`server/main.py` on Railway); those names refer to
 > router domains and code paths inside that one process, not separate deployments.
-> The data-model content itself is current. See `docs/CODEBASE_MAP.md` (project level).
+> The data-model content itself is current. See [`ARCHITECTURE.md`](ARCHITECTURE.md)
+> for the project-level view of the consolidated deployment and the service
+> directories' current roles.
 
 ---
 

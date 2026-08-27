@@ -1,8 +1,17 @@
-# DEPRECATED — use root requirements.txt (single source of truth)
-# This file is retained for backward compatibility only. Do not add deps here.
-# See pyproject.toml for canonical dependency specifications.
-click>=8.4.2
-pyyaml>=6.0.3
-pydantic>=2.13.4
-black>=26.5.1
-jinja2>=3.1.6
+# DEPRECATED — do not add dependencies here. Canonical spec: ../requirements.in
+#
+# (#2894) The previous header was wrong twice over: it redirected to a root
+# `requirements.txt` that does not exist, and named `pyproject.toml` as
+# canonical when pyproject.toml itself disclaims declaring dependencies. The
+# real chain is requirements.in (human-edited) -> requirements.lock (pinned +
+# hashed by pip-compile); Docker and CI install exclusively from the lock.
+#
+# The pins that used to live here are all obsolete: `cli/regengine.py` is a
+# command-less stub left behind by the kernel retirement (PR #2205) and imports
+# only `click`, which the root requirements.in already carries — as it does
+# pydantic and PyYAML. `jinja2` served the retired vertical compiler, and
+# `black` was replaced repo-wide by ruff and appears in neither requirements.in
+# nor requirements.lock.
+#
+# This file is retained only because untracking it is a separate git operation.
+# It installs nothing by design.

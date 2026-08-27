@@ -176,8 +176,20 @@ def test_metrics_path_none_skips_endpoint(monkeypatch):
     assert client.get("/").status_code == 200
 
 
-def test_business_counters_registered(monkeypatch):
-    """The install_metrics helper seeds the regengine_* business counters."""
+def test_dead_business_counters_are_not_seeded(monkeypatch):
+    """Regression guard for #2866.
+
+    Four ``regengine_*`` business counters were registered at install time
+    "so they're visible on the first scrape", but nothing in the repo ever
+    incremented them — so any alert built on them (e.g. an "ingest has
+    stopped" rule on ``rate(regengine_events_ingested_total[5m]) == 0``) was
+    permanently satisfied. The seeding was removed.
+
+    This test is deliberately the inverse of the one it replaces: it fails if
+    someone re-introduces seeding WITHOUT a real increment call site. If you
+    are wiring one of these counters up for real, add its ``.inc()`` at the
+    production call site and drop the name from this list in the same change.
+    """
     monkeypatch.delenv("METRICS_API_KEY", raising=False)
 
     app = _build_app(require_auth=False)
@@ -185,12 +197,13 @@ def test_business_counters_registered(monkeypatch):
 
     resp = client.get("/metrics")
     body = resp.text
-    # We don't require them to have non-zero values; we just want them
-    # visible on the first scrape (they should be 0 until traffic flows).
     for name in [
         "regengine_events_ingested_total",
         "regengine_auth_failures_total",
         "regengine_compliance_evaluations_total",
         "regengine_nlp_extractions_total",
     ]:
-        assert name in body, f"expected business counter {name!r} in /metrics output"
+        assert name not in body, (
+            f"business counter {name!r} is exported but never incremented — "
+            "seed it only alongside a real .inc() call site (#2866)"
+        )

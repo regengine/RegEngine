@@ -10,13 +10,11 @@ concurrency:
   group: qa-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NODE_VERSION: '20'
-
+# Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
+# github-script, no check-run or PR-comment action — so checks:write and
+# pull-requests:write were unused write scope on every run.
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
   # ── Stage 1: Fast Gate ─────────────────────────────────
@@ -30,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -58,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
 
       - name: Full ingestion-to-export flow
         run: node qa/full-flow.js
@@ -81,7 +79,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
 
       - name: Run AI analysis
         run: node qa/ai-analysis.js
@@ -99,7 +97,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
 
       - name: Run decision gate
         env:

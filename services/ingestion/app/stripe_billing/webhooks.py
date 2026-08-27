@@ -677,14 +677,27 @@ async def _process_stripe_webhook(
             "duplicate": True,
         }
 
+    # #2818: the dedup claim above is taken BEFORE the handler runs (it has
+    # to be — the gate must close before any side effect). But it was never
+    # released when the handler raised, so the failed event stayed "seen"
+    # for the full 24h TTL and every Stripe retry short-circuited into the
+    # duplicate branch above with 200 {"duplicate": true}. The event was
+    # permanently dropped: a failed checkout.session.completed left a paying
+    # tenant with no subscription mapping, a failed invoice.paid left them
+    # stuck past_due.
+    #
+    # Releasing the claim ONLY on the failure path keeps duplicate
+    # suppression intact for events that actually completed, while letting
+    # Stripe's at-least-once retry do its job for the ones that did not.
     try:
         await _handle_stripe_event(event)
-    except Exception:
-        # #2930: the handler failed, so this delivery is answered non-2xx and
-        # Stripe redelivers. Release the dedup claim taken above — otherwise
-        # the retry is short-circuited as a duplicate and acked 200 without
-        # the handler ever running, and nothing self-heals.
-        _state_mod._clear_event_seen(event_id or "")
+    except BaseException:
+        _state_mod._release_event_claim(event_id or "")
+        logger.warning(
+            "stripe_webhook_handler_failed_claim_released",
+            event_id=event_id,
+            event_type=event_type,
+        )
         raise
     logger.info("stripe_webhook_processed", event_type=event_type)
     return {"received": True, "event_type": event_type}

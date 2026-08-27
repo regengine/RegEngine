@@ -15,10 +15,12 @@ the previous tenant's RLS.
 
 Mitigation (this module): a ``connect`` + ``checkout`` event listener
 on the engine's connection pool runs
-``SELECT set_config('app.tenant_id', '', false)`` and resets
+``SELECT set_config('app.tenant_id', '', false)``, resets
 ``regengine.is_sysadmin`` to its role-determined baseline ('true' only
 when connected as ``regengine_sysadmin`` — the #2461 control-plane
-arming; 'false' for every other role)
+arming; 'false' for every other role), and clears
+``regengine.user_id`` (#2853 — the per-user identity GUC that
+``public.users`` / ``public.sessions`` FORCE-RLS policies key on)
 BEFORE the session sees the connection. This guarantees every route
 starts from a clean slate; authenticated routes re-set tenant context
 as the first step, and unauthenticated paths are genuinely scoped to
@@ -183,6 +185,19 @@ def _reset_tenant_guc_on_checkout(dbapi_connection, connection_record, connectio
             cursor.execute(
                 "SELECT set_config('regengine.is_sysadmin', (current_user = 'regengine_sysadmin')::text, false)"
             )
+            # #2853: clear the per-user identity GUC too. public.users and
+            # public.sessions are ENABLE+FORCE RLS with policies keyed on
+            # regengine.user_id (user_self_isolation / sessions_user_isolation,
+            # v078), so a value left behind by the previous request scopes the
+            # next caller's reads to the previous caller's identity. The write
+            # in dependencies.py is transaction-scoped now, which closes the
+            # normal path; this reset covers connections orphaned mid-request
+            # (crash, cancellation) whose transaction never ended cleanly, and
+            # any future caller that reverts to a session-scoped write.
+            # Reset to '' rather than NULL: the v078 policies read it through
+            # NULLIF(current_setting(...), '')::uuid, so '' means "no identity"
+            # and fails closed instead of raising an invalid-uuid cast.
+            cursor.execute("SELECT set_config('regengine.user_id', '', false)")
         finally:
             cursor.close()
     except Exception as exc:  # noqa: BLE001

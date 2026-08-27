@@ -886,6 +886,136 @@ def _require_epcis_quantity(epcis_data: Dict[str, Any]) -> float:
     return value
 
 
+class UnmappedBizStepError(ValueError):
+    """Raised when an EPCIS ``bizStep`` has no canonical CTE mapping.
+
+    Subclasses :class:`ValueError` so existing callers that catch
+    ``ValueError`` around :func:`normalize_epcis_event` (the #1249
+    quantity contract) keep working unchanged.
+    """
+
+
+# ---------------------------------------------------------------------------
+# #2815 — EPCIS bizStep -> canonical CTEType
+# ---------------------------------------------------------------------------
+#
+# THIS MAP MUST STAY BYTE-FOR-BYTE KEY-COMPATIBLE WITH
+# ``services/ingestion/app/epcis/normalization.py::_EVENT_TYPE_MAP``.
+#
+# Both maps run against the SAME event inside a single transaction
+# (``epcis/persistence.py`` writes the legacy ``fsma.cte_events`` row from
+# ``_normalize_epcis_to_cte`` and the canonical ``fsma.traceability_events``
+# row from ``normalize_epcis_event``). Until #2815 the canonical side used a
+# 6-entry FUZZY SUBSTRING loop with ``CTEType.RECEIVING`` as a silent
+# default, so the two sides disagreed on five bizSteps -- every one of them
+# landing in the canonical table (the table FDA exports read) as
+# ``receiving``:
+#
+#   urn:fsma:traceability:transformation            -> was receiving, is transformation
+#   urn:fsma:traceability:initial_packing           -> was receiving, is initial_packing
+#   urn:fsma:traceability:first_land_based_receiving-> was receiving, is first_land_based_receiving
+#   urn:epcglobal:cbv:bizstep:packing               -> was receiving, is initial_packing
+#   urn:epcglobal:cbv:bizstep:storing               -> was receiving, is cooling
+#
+# IMPORT DIRECTION (#2815): the ideal fix is for this module to import
+# ``_EVENT_TYPE_MAP`` directly. It cannot: ``shared.canonical_event`` is
+# imported (transitively, at module scope) by the ingestion EPCIS package,
+# so importing back into ``app.epcis.normalization`` is a hard circular
+# import -- verified empirically: it breaks BOTH import orders with
+# "cannot import name 'normalize_webhook_event' from partially initialized
+# module 'shared.canonical_event'". ``shared`` is also imported by admin /
+# compliance / graph, where the service-scoped ``app`` package resolves to a
+# DIFFERENT service entirely. So the canonical map is defined HERE (the
+# shared layer, which is the correct home for it) and
+# ``epcis/normalization.py`` should later be changed to import
+# ``BIZSTEP_TO_CTE_TYPE`` from this module instead of keeping its own copy.
+# Until then, ``test_audit_fixes_bizstep_mapping.py`` asserts the two key
+# sets are identical so they cannot drift again.
+#
+# ``None`` values mean "recognized bizStep, but no canonical CTEType": FSMA
+# ``growing`` is a real bizStep in ``_EVENT_TYPE_MAP`` but is NOT one of the
+# 7 FSMA 204 s1.1310 CTEs, has no ``CTEType`` member, and is rejected by the
+# ``fsma.traceability_events`` event_type CHECK constraint
+# (V043__canonical_traceability_events.sql). Those raise rather than get
+# coerced into a neighbouring CTE.
+BIZSTEP_TO_CTE_TYPE: Dict[str, Optional[CTEType]] = {
+    # CBV bizSteps used by FSMA-participating partners
+    "urn:epcglobal:cbv:bizstep:receiving": CTEType.RECEIVING,
+    "urn:epcglobal:cbv:bizstep:shipping": CTEType.SHIPPING,
+    "urn:epcglobal:cbv:bizstep:transforming": CTEType.TRANSFORMATION,
+    "urn:epcglobal:cbv:bizstep:commissioning": CTEType.INITIAL_PACKING,
+    "urn:epcglobal:cbv:bizstep:packing": CTEType.INITIAL_PACKING,
+    "urn:epcglobal:cbv:bizstep:harvesting": CTEType.HARVESTING,
+    "urn:epcglobal:cbv:bizstep:planting": None,  # "growing" -- not a canonical CTE
+    "urn:epcglobal:cbv:bizstep:storing": CTEType.COOLING,
+    "urn:epcglobal:cbv:bizstep:landing": CTEType.FIRST_LAND_BASED_RECEIVING,
+    # FSMA 204 explicit CTE URIs
+    "urn:fsma:traceability:growing": None,  # not a canonical CTE
+    "urn:fsma:traceability:harvesting": CTEType.HARVESTING,
+    "urn:fsma:traceability:cooling": CTEType.COOLING,
+    "urn:fsma:traceability:initial_packing": CTEType.INITIAL_PACKING,
+    "urn:fsma:traceability:first_land_based_receiving": CTEType.FIRST_LAND_BASED_RECEIVING,
+    "urn:fsma:traceability:shipping": CTEType.SHIPPING,
+    "urn:fsma:traceability:receiving": CTEType.RECEIVING,
+    "urn:fsma:traceability:transformation": CTEType.TRANSFORMATION,
+}
+
+
+def _resolve_bizstep_to_cte_type(biz_step: Any) -> CTEType:
+    """Resolve an EPCIS ``bizStep`` to a canonical :class:`CTEType`.
+
+    EXACT lookup only -- no substring matching, no default (#2815).
+
+    Accepted forms, in order:
+      1. A bizStep URI present in :data:`BIZSTEP_TO_CTE_TYPE` (the
+         authoritative map, mirrored from ``epcis/normalization.py``).
+      2. The same URI in a different case (URIs are matched
+         case-insensitively; every key in the map is already lowercase).
+      3. A bare canonical CTE token, e.g. ``"shipping"`` -- the
+         "or direct value" form this function has always documented and
+         which non-EPCIS callers/tests rely on. Still an exact match
+         against the ``CTEType`` value set, never a substring.
+
+    Anything else raises :class:`UnmappedBizStepError`. We do NOT fall back
+    to ``CTEType.RECEIVING``: for the same reason the quantity default was
+    removed in #1249, a silent default fabricates an FDA traceability
+    record that says something the supplier never reported.
+    """
+    raw = "" if biz_step is None else str(biz_step).strip()
+    if not raw:
+        raise UnmappedBizStepError(
+            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. "
+            "Supply a CBV or FSMA bizStep URI. (#2815)"
+        )
+
+    lowered = raw.lower()
+
+    if lowered in BIZSTEP_TO_CTE_TYPE:
+        resolved = BIZSTEP_TO_CTE_TYPE[lowered]
+        if resolved is None:
+            raise UnmappedBizStepError(
+                f"bizStep {raw!r} maps to the non-CTE activity 'growing', which is "
+                "not one of the 7 FSMA 204 §1.1310 Critical Tracking Events and is "
+                "rejected by the canonical traceability_events event_type "
+                "constraint. Reject or reclassify the event upstream rather than "
+                "persisting it as a neighbouring CTE. (#2815)"
+            )
+        return resolved
+
+    # Bare canonical CTE token ("shipping", "receiving", ...).
+    try:
+        return CTEType(lowered)
+    except ValueError:
+        pass
+
+    raise UnmappedBizStepError(
+        f"bizStep {raw!r} has no FSMA 204 CTE mapping — refusing to default to "
+        "'receiving'. Supply one of the mapped bizStep URIs "
+        f"({', '.join(sorted(BIZSTEP_TO_CTE_TYPE))}) or a bare canonical CTE type "
+        f"({', '.join(sorted(t.value for t in CTEType))}). (#2815)"
+    )
+
+
 def normalize_epcis_event(
     epcis_data: Dict[str, Any],
     tenant_id: str,
@@ -905,23 +1035,23 @@ def normalize_epcis_event(
         silently fabricated FDA traceability records.
       * Zero is preserved (consistent with FSMAEvent ``ge=0`` and the
         updated canonical constraint).
+
+    #2815 — bizStep handling:
+      * ``bizStep`` is resolved by EXACT lookup against
+        :data:`BIZSTEP_TO_CTE_TYPE` (see :func:`_resolve_bizstep_to_cte_type`),
+        the same key set ``epcis/normalization.py::_EVENT_TYPE_MAP`` uses.
+      * An unmapped bizStep raises :class:`UnmappedBizStepError` (a
+        ``ValueError``). The previous fuzzy substring match with a
+        ``CTEType.RECEIVING`` default silently fabricated FDA traceability
+        records for five real bizSteps — same reasoning as the #1249
+        quantity default above.
     """
-    # Map EPCIS bizStep to CTE type
+    # Map EPCIS bizStep to CTE type — EXACT lookup against the single
+    # authoritative map, raising on anything unmapped (#2815). The old
+    # 6-entry fuzzy substring loop silently defaulted to CTEType.RECEIVING
+    # and disagreed with epcis/normalization.py on five real bizSteps.
     biz_step = epcis_data.get("bizStep", "")
-    event_type_map = {
-        "shipping": CTEType.SHIPPING,
-        "receiving": CTEType.RECEIVING,
-        "commissioning": CTEType.INITIAL_PACKING,
-        "transforming": CTEType.TRANSFORMATION,
-        "harvesting": CTEType.HARVESTING,
-        "cooling": CTEType.COOLING,
-    }
-    # Extract CTE type from bizStep URI or direct value
-    cte_type = CTEType.RECEIVING  # default
-    for key, val in event_type_map.items():
-        if key in biz_step.lower():
-            cte_type = val
-            break
+    cte_type = _resolve_bizstep_to_cte_type(biz_step)
 
     # Extract identifiers
     epc_list = epcis_data.get("epcList", [])

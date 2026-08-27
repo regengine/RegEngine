@@ -106,8 +106,7 @@ jobs:
             gh issue create \
               --title "🔒 [Bot-Security] Manual Sweep - Findings $(date +%Y-%m-%d)" \
               --body "$BODY" \
-              --label "agent-task,security,agent:security" \
-              || echo "Issue creation skipped (may lack permissions)"
+              --label "agent-task,security,agent:security"
           else
             echo "✅ No findings — no issue created."
           fi
@@ -176,8 +175,7 @@ jobs:
             gh issue create \
               --title "🎨 [Bot-UI] Manual Drift Check - Findings $(date +%Y-%m-%d)" \
               --body "$BODY" \
-              --label "agent-task,frontend,agent:ui" \
-              || echo "Issue creation skipped (may lack permissions)"
+              --label "agent-task,frontend,agent:ui"
           else
             echo "✅ No drift detected — no issue created."
           fi
@@ -202,30 +200,53 @@ jobs:
           echo "" >> infra-report.md
           echo "### Dockerfile Audit" >> infra-report.md
 
-          # Check for 'latest' tags
-          LATEST=$(grep -rn "FROM.*:latest" services/*/Dockerfile 2>/dev/null || true)
-
-          if [ -n "$LATEST" ]; then
-            echo "⚠️ Found ':latest' tags (pin specific versions):" >> infra-report.md
-            echo '```' >> infra-report.md
-            echo "$LATEST" >> infra-report.md
-            echo '```' >> infra-report.md
-          else
-            echo "✅ All Dockerfile base images use pinned versions." >> infra-report.md
-          fi
-
-          # Check for HEALTHCHECK
-          echo "" >> infra-report.md
-          echo "### Health Check Coverage" >> infra-report.md
-
-          for df in services/*/Dockerfile; do
-            SERVICE=$(dirname "$df" | xargs basename)
-            if grep -q "HEALTHCHECK" "$df"; then
-              echo "- ✅ $SERVICE: HEALTHCHECK defined" >> infra-report.md
-            else
-              echo "- ⚠️ $SERVICE: Missing HEALTHCHECK" >> infra-report.md
+          # Issue #2888: this audit used to glob services/*/Dockerfile. Those
+          # files no longer exist (the services were consolidated into the root
+          # Dockerfile), and without nullglob an unmatched glob stays LITERAL —
+          # so every run emitted a fabricated "⚠️ * : Missing HEALTHCHECK" and
+          # tripped the issue-filing step below on every single sweep.
+          shopt -s nullglob
+          # Patterns containing glob characters expand to nothing when they
+          # match no files; plain literals are not subject to nullglob, so the
+          # existence guard below still has to filter them.
+          CANDIDATES=(Dockerfile frontend/Dockerfile services/*/Dockerfile)
+          DOCKERFILES=()
+          for df in "${CANDIDATES[@]}"; do
+            if [ -f "$df" ]; then
+              DOCKERFILES+=("$df")
             fi
           done
+
+          if [ ${#DOCKERFILES[@]} -eq 0 ]; then
+            echo "⚠️ No Dockerfiles found at any known path — the audit targets have drifted." >> infra-report.md
+          else
+            echo "Auditing: ${DOCKERFILES[*]}" >> infra-report.md
+            echo "" >> infra-report.md
+
+            # Check for 'latest' tags
+            LATEST=$(grep -Hn "FROM.*:latest" "${DOCKERFILES[@]}" || true)
+
+            if [ -n "$LATEST" ]; then
+              echo "⚠️ Found ':latest' tags (pin specific versions):" >> infra-report.md
+              echo '```' >> infra-report.md
+              echo "$LATEST" >> infra-report.md
+              echo '```' >> infra-report.md
+            else
+              echo "✅ All Dockerfile base images use pinned versions." >> infra-report.md
+            fi
+
+            # Check for HEALTHCHECK
+            echo "" >> infra-report.md
+            echo "### Health Check Coverage" >> infra-report.md
+
+            for df in "${DOCKERFILES[@]}"; do
+              if grep -q "HEALTHCHECK" "$df"; then
+                echo "- ✅ $df: HEALTHCHECK defined" >> infra-report.md
+              else
+                echo "- ⚠️ $df: Missing HEALTHCHECK" >> infra-report.md
+              fi
+            done
+          fi
 
       - name: Upload infra report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
@@ -241,8 +262,7 @@ jobs:
             gh issue create \
               --title "🏗️ [Bot-Infra] Health Check — Findings $(date +%Y-%m-%d)" \
               --body "$BODY" \
-              --label "agent-task,agent:infra" \
-              || echo "Issue creation skipped (may lack permissions)"
+              --label "agent-task,agent:infra"
           else
             echo "✅ All infra checks passed — no issue created."
           fi

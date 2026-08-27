@@ -33,6 +33,12 @@ Failure handling:
       ``locked_until`` in the future. On the next poll cycle, any
       worker sees the stale lock (``locked_until < now()``) and
       releases the row back to ``pending``.
+    - Worker claims a row whose ``task_type`` it has no handler for →
+      the claim is released back to ``pending`` (attempts untouched)
+      so the worker that *does* own that type can pick it up (#2830).
+      ``dead`` means "a handler rejected this row", never "the wrong
+      worker saw it first". Pass ``task_types`` to keep a worker from
+      claiming foreign rows in the first place.
 
 Idempotency:
     - When callers supply ``idempotency_key``, the queue uses the
@@ -528,6 +534,16 @@ class TaskWorker:
     DEFAULT_LOCK_DURATION_SECONDS = 300  # 5 minutes — must exceed the longest
     # expected handler wall-clock; stale-lock recovery kicks in after this.
 
+    #: How far a row claimed by the *wrong* worker is deferred when the
+    #: claim is released (#2830). Without a small deferral this worker
+    #: would re-claim the same foreign row on every poll — the claim
+    #: query picks one global winner, so a foreign row sitting at the
+    #: head of the queue would starve this worker's own task types. One
+    #: second is long enough to fall through to the next candidate and
+    #: short enough that the worker which *does* own the type sees only
+    #: a sub-poll-cycle delay.
+    FOREIGN_TASK_DEFER_SECONDS = 1.0
+
     def __init__(
         self,
         engine: Engine,
@@ -592,8 +608,13 @@ class TaskWorker:
                 self._release_stale_locks()
                 claimed = self._claim_one()
                 if claimed is not None:
-                    self._dispatch(claimed)
-                    continue  # drain the queue as long as work is pending
+                    if self._dispatch(claimed):
+                        continue  # drain the queue as long as work is pending
+                    # #2830: the row belonged to another worker and the
+                    # claim was released. Back off a poll interval
+                    # instead of spinning on rows we cannot run.
+                    self._stop_event.wait(self.poll_interval)
+                    continue
                 self._stop_event.wait(self.poll_interval)
             except Exception as exc:
                 logger.exception(
@@ -606,12 +627,20 @@ class TaskWorker:
     def run_once(self) -> Optional[int]:
         """Process up to one task and return its id, or ``None`` if the
         queue is empty. Used by tests and any synchronous caller that
-        wants to drain deterministically."""
+        wants to drain deterministically.
+
+        A row this worker cannot run (no handler for its ``task_type``)
+        also returns ``None`` (#2830): it was released back to the queue
+        for its owning worker, not processed here, and returning its id
+        would make ``while worker.run_once() is not None`` spin forever
+        on a row this worker will never handle.
+        """
         self._release_stale_locks()
         claimed = self._claim_one()
         if claimed is None:
             return None
-        self._dispatch(claimed)
+        if not self._dispatch(claimed):
+            return None
         return int(claimed["id"])
 
     # -- claim + state transitions -----------------------------------------
@@ -638,6 +667,54 @@ class TaskWorker:
                     """
                 )
             )
+
+    def _release_claim(self, task_id: int, *, defer_seconds: float = 0.0) -> bool:
+        """Hand a claimed row back to the queue without consuming an attempt.
+
+        Used when this worker claimed a row it cannot run (#2830): the
+        lock is represented by ``status='processing'`` plus
+        ``locked_by``/``locked_until``, so releasing it is the same
+        transition :meth:`_release_stale_locks` performs — flip back to
+        ``pending`` and clear the lock columns — except we know *now*
+        that we are giving it up.
+
+        ``attempts`` is deliberately untouched: no attempt was made, so
+        the row must not burn part of its ``max_attempts`` budget.
+
+        The ``locked_by``/``status`` predicate makes this safe against a
+        lock we no longer hold (e.g. the visibility timeout expired and
+        another worker re-claimed the row mid-dispatch) — that case
+        updates zero rows rather than yanking the row out from under the
+        new owner. Returns ``True`` when the release actually landed.
+        """
+        with system_scope(), self.engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE fsma.task_queue
+                    SET status = 'pending',
+                        locked_by = NULL,
+                        locked_until = NULL,
+                        started_at = NULL,
+                        scheduled_at = NOW() + make_interval(secs => :defer)
+                    WHERE id = :id
+                      AND status = 'processing'
+                      AND locked_by = :worker_id
+                    """
+                ),
+                {
+                    "id": task_id,
+                    "worker_id": self.worker_id,
+                    "defer": float(max(0.0, defer_seconds)),
+                },
+            )
+        released = bool(getattr(result, "rowcount", 0))
+        if not released:
+            logger.warning(
+                "task_release_claim_no_row",
+                extra={"task_id": task_id, "worker_id": self.worker_id},
+            )
+        return released
 
     def _claim_one(self) -> Optional[dict[str, Any]]:
         """Atomically claim the highest-priority eligible pending row.
@@ -735,19 +812,36 @@ class TaskWorker:
             "tenant_id": row.tenant_id,
         }
 
-    def _dispatch(self, task: dict[str, Any]) -> None:
-        """Run the registered handler and transition state accordingly."""
+    def _dispatch(self, task: dict[str, Any]) -> bool:
+        """Run the registered handler and transition state accordingly.
+
+        Returns ``True`` when this worker took responsibility for the row
+        (it ran the handler and marked the outcome), ``False`` when the
+        claim was released untouched because this worker has no handler
+        for the row's ``task_type``.
+        """
         handler = TASK_HANDLERS.get(task["task_type"])
         if handler is None:
-            logger.error(
-                "task_handler_missing",
-                extra={"task_id": task["id"], "task_type": task["task_type"]},
+            # #2830: an unregistered task_type means "not MY task", not
+            # "unprocessable". Several workers poll this one table in a
+            # single process (e.g. the shared TaskWorker alongside
+            # server/workers/task_processor.py) and each registers only
+            # its own handlers. Dead-lettering here destroyed another
+            # worker's rows — review_item / nlp_extraction included —
+            # with zero retries and no recovery path. Release the claim
+            # instead and let the owning worker claim it on its next
+            # poll. Dead-lettering stays reserved for rows a handler
+            # actually rejected.
+            logger.info(
+                "task_released_unowned_type",
+                extra={
+                    "task_id": task["id"],
+                    "task_type": task["task_type"],
+                    "worker_id": self.worker_id,
+                },
             )
-            self._mark_dead(
-                task["id"],
-                f"No handler registered for task_type={task['task_type']!r}",
-            )
-            return
+            self._release_claim(int(task["id"]), defer_seconds=self.FOREIGN_TASK_DEFER_SECONDS)
+            return False
 
         try:
             # #2461: the claimed row's tenant_id column is the declared
@@ -772,9 +866,10 @@ class TaskWorker:
                 },
             )
             self._mark_failed(task, str(exc))
-            return
+            return True
 
         self._mark_completed(int(task["id"]))
+        return True
 
     @staticmethod
     def _invoke(handler: Callable[..., Any], payload: dict[str, Any]) -> Any:

@@ -38,6 +38,10 @@ _INSTALLED_FLAG = "_regengine_metrics_installed"
 # route handlers and background jobs can increment without a second import.
 # Declared lazily on first import so tests that reload modules don't hit
 # "already registered" errors from the global prometheus registry.
+#
+# #2866: declare a counter here ONLY in the same change that adds its real
+# ``.inc()`` call site. A registered-but-never-incremented counter is a dead
+# series that makes alerts built on it vacuously green.
 _BUSINESS_COUNTERS_CACHE: dict[str, object] = {}
 
 
@@ -88,9 +92,11 @@ def install_metrics(
           ``http_response_size_bytes``.
         - Labels are the route **template** (``/users/{user_id}``), the HTTP
           method, and status code class — no raw paths, no tenant IDs.
-        - Seeds the module-level business counters (``regengine_events_ingested_total``
-          etc.) into the registry so they're visible on the first scrape even
-          before any event flows through.
+        - Does **not** pre-seed any business counters. See #2866: seeding a
+          counter that no code increments exports a permanently-flat series
+          that alerts cannot distinguish from "healthy". Business counters
+          must be declared alongside their increment call site in the
+          owning service.
     """
     if getattr(app.state, _INSTALLED_FLAG, False):
         # Idempotent — safe to call twice during hot-reload.
@@ -138,23 +144,25 @@ def install_metrics(
                 should_gzip=False,
             )
 
-    # Seed business counters so they're visible on the first scrape.
-    _get_business_counter(
-        "regengine_events_ingested_total",
-        "Total canonical events ingested across all sources.",
-    )
-    _get_business_counter(
-        "regengine_auth_failures_total",
-        "Total authentication failures (bad password / invalid API key / expired JWT).",
-    )
-    _get_business_counter(
-        "regengine_compliance_evaluations_total",
-        "Total FSMA compliance rule evaluations executed.",
-    )
-    _get_business_counter(
-        "regengine_nlp_extractions_total",
-        "Total NLP extraction events published to downstream topics.",
-    )
+    # #2866: the business counters that used to be seeded here have been
+    # REMOVED. They were registered at install time so they'd show up on the
+    # first scrape, but nothing anywhere in the repo ever incremented them:
+    #
+    #   regengine_events_ingested_total
+    #   regengine_auth_failures_total
+    #   regengine_compliance_evaluations_total
+    #   regengine_nlp_extractions_total
+    #
+    # A counter that is exported but never incremented is worse than a
+    # missing one: it reads as a flat 0 forever, so any alert written against
+    # it ("auth failures spiked", "ingestion stalled") is permanently
+    # satisfied and silently provides no coverage. None of these can be
+    # incremented from shared/observability — the events they describe happen
+    # in the ingestion, auth, compliance and NLP code paths.
+    #
+    # Re-add each declaration TOGETHER WITH its real ``.inc()`` call site in
+    # the owning service, never on its own. ``_get_business_counter`` below is
+    # kept for exactly that purpose.
 
     setattr(app.state, _INSTALLED_FLAG, True)
     logger.info(

@@ -539,9 +539,23 @@ def test_worker_uses_row_visibility_timeout_seconds(pg_engine, clean_queue):
 
 
 @integration_only
-def test_missing_handler_transitions_straight_to_dead(pg_engine, clean_queue):
-    """No handler → row is immediately 'dead' — retry can't produce a
-    handler that isn't there."""
+def test_unhandled_task_type_is_released_not_dead_lettered(pg_engine, clean_queue):
+    """An unrecognized task_type is released back to the queue, not killed.
+
+    #2830: two workers poll this table in one process with separate handler
+    registries, and only ``task_processor`` filtered its claim by type. So a
+    ``TaskWorker`` that won the race on another worker's row dead-lettered it
+    on first claim with zero retries — silently destroying human-in-the-loop
+    ``review_item`` rows.
+
+    "No handler in THIS worker's registry" means "not mine", not
+    "unprocessable". The claim is released so the owning worker can take it,
+    and ``attempts`` is untouched because no attempt was made — burning the
+    retry budget for someone else's row would just relocate the bug.
+
+    This test previously asserted the dead-letter behavior and so encoded the
+    defect; it is inverted rather than deleted, to pin the new contract.
+    """
     from sqlalchemy import text
     from sqlalchemy.orm import sessionmaker
 
@@ -555,15 +569,27 @@ def test_missing_handler_transitions_straight_to_dead(pg_engine, clean_queue):
         )
 
     worker = TaskWorker(pg_engine, poll_interval_seconds=0.1)
-    worker.run_once()
+    # A released row is not "work done" — the drain contract is None so
+    # ``while run_once() is not None`` loops terminate instead of spinning.
+    assert worker.run_once() is None
 
     with pg_engine.begin() as conn:
         row = conn.execute(
-            text("SELECT status, last_error FROM fsma.task_queue WHERE id = :id"),
+            text(
+                "SELECT status, last_error, attempts, locked_by, "
+                "EXTRACT(EPOCH FROM (scheduled_at - NOW())) AS defer_seconds "
+                "FROM fsma.task_queue WHERE id = :id"
+            ),
             {"id": task_id},
         ).fetchone()
-    assert row.status == "dead"
-    assert "No handler registered" in (row.last_error or "")
+
+    assert row.status == "pending", "a foreign task type must return to the queue"
+    assert row.last_error is None, "no attempt was made, so there is no error to record"
+    assert row.attempts == 0, "releasing must not burn the owning worker's retry budget"
+    assert row.locked_by is None, "the claim must actually be given up"
+    # Deferred slightly so this worker does not re-claim the same foreign row
+    # every poll and starve its own task types.
+    assert 0 < float(row.defer_seconds) <= 5
 
 
 @integration_only
@@ -675,7 +701,10 @@ def test_task_type_allowlist(pg_engine, clean_queue):
         ran_a.append(True)
 
     register_task_handler("fixture.a", handler_a)
-    # No handler for 'fixture.b' so an unscoped worker would mark it 'dead'.
+    # No handler for 'fixture.b'. Since #2830 an unscoped worker RELEASES a
+    # foreign type rather than dead-lettering it, so what this test pins is
+    # the task_types filter itself: a scoped worker never claims 'fixture.b'
+    # in the first place, leaving it untouched for its real owner.
 
     SessionLocal = sessionmaker(bind=pg_engine, future=True)
     with SessionLocal.begin() as session:

@@ -187,22 +187,56 @@ def _inject_service_context(logger_instance, method_name, event_dict):
     """Inject service name, tenant_id, and request_id into every log record.
 
     These fields are required for multi-tenant isolation audit compliance.
+
+    Resolution order per field (#2859):
+      1. Whatever ``structlog.contextvars.merge_contextvars`` already merged
+         into the event dict — that processor runs *first* in the chain, so
+         bindings made by CorrelationIdMiddleware / RequestIDMiddleware /
+         TenantContextMiddleware are authoritative.
+      2. The raw ContextVars seeded by :func:`set_tenant_context` /
+         :func:`_restore_observability_context` (background jobs, worker
+         threads, Kafka consumers).
+      3. The literal ``"unknown"`` placeholder, so the audit fields are
+         never simply absent from a record.
+
+    A previously-bound literal ``"unknown"`` is treated as "no value" so a
+    real ContextVar value still wins over a stale placeholder.
     """
     event_dict.setdefault("service", os.getenv("SERVICE_NAME", "regengine"))
-    event_dict.setdefault("tenant_id", _tenant_id_ctx.get("unknown"))
-    event_dict.setdefault("request_id", _request_id_ctx.get("unknown"))
+
+    for key, ctx_var in (("tenant_id", _tenant_id_ctx), ("request_id", _request_id_ctx)):
+        bound = event_dict.get(key)
+        if bound and bound != "unknown":
+            # merge_contextvars (or an explicit bind on the call) already
+            # supplied a real value — never clobber it.
+            continue
+        value = ctx_var.get("unknown")
+        event_dict[key] = value if value else "unknown"
+
     return event_dict
 
 
 # Configure base structlog processors with JSON output and audit fields
 structlog.configure(
     processors=[
+        # #2859: MUST be first. Without it every binding made by
+        # CorrelationIdMiddleware / RequestIDMiddleware / TenantContextMiddleware
+        # via structlog.contextvars.bind_contextvars is silently discarded and
+        # every log line reads tenant_id="unknown" / request_id="unknown".
+        # Running first also means _inject_service_context sees the real values
+        # already present in the event dict and leaves them alone.
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
         _inject_service_context,
+        # #2855: MUST run before the renderer. logger.exception() sets
+        # exc_info=True; without this processor JSONRenderer emits a bare
+        # {"exc_info": true} and the traceback never reaches production logs.
+        # (log_config.configure_logging has always had this — see #556.)
+        structlog.processors.format_exc_info,
         structlog.processors.JSONRenderer(),
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),

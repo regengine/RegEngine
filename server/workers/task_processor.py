@@ -529,20 +529,50 @@ def _execute_claim(db, handler_types, now, lock_until, default_timeout_seconds):
     return row
 
 
-def _complete_task(db, task_id: int) -> None:
+def _complete_task(db, task_id: int) -> bool:
+    """Mark a task completed — but only while this worker still owns the lock.
+
+    #2831: the ``locked_by = :worker`` predicate is the ownership check
+    the ``_run_handler_with_heartbeat`` docstring has always promised.
+    When the heartbeat detects a lost lock it returns, but the handler
+    keeps running to completion and lands here; without the predicate
+    this UPDATE stamped ``completed`` over a row another worker had
+    re-claimed and was actively re-executing — masking a genuine
+    failure as success and silently dropping the second execution's
+    outcome. Zero affected rows now means "we lost the race"; the
+    worker that owns the lock decides the row's fate.
+
+    Returns True when this worker's completion actually landed.
+    """
     from sqlalchemy import text
 
     # #2461: queue-state transition — system_scope (see _claim_task).
     with system_scope():
-        db.execute(
+        result = db.execute(
             text("""
                 UPDATE fsma.task_queue
                 SET status = 'completed', completed_at = NOW(), locked_by = NULL, locked_until = NULL
                 WHERE id = :id
+                  AND locked_by = :worker
             """),
-            {"id": task_id},
+            {"id": task_id, "worker": WORKER_ID},
         )
         db.commit()
+
+    if result.rowcount == 0:
+        logger.warning(
+            "complete_task_lost_lock",
+            task_id=task_id,
+            worker=WORKER_ID,
+            detail=(
+                "Task was re-claimed by another worker (or already "
+                "finalized) while this worker's handler was still "
+                "running; completion discarded so the current owner's "
+                "outcome stands."
+            ),
+        )
+        return False
+    return True
 
 
 def _heartbeat_extend(db, task_id: int, timeout_seconds: int) -> bool:
@@ -592,8 +622,11 @@ def _run_handler_with_heartbeat(
     bumps ``locked_until`` by ``timeout_seconds``. If the heartbeat UPDATE
     affects zero rows (we lost the lock — another worker stole the task
     after visibility expired), the heartbeat thread exits quietly; the
-    handler continues to run but its results will be ignored by
-    ``_complete_task`` if the lock was re-claimed.
+    handler continues to run but its results are ignored by
+    ``_complete_task`` / ``_fail_task`` if the lock was re-claimed —
+    both pin ``locked_by = WORKER_ID`` in their UPDATE predicate and log
+    ``complete_task_lost_lock`` / ``fail_task_lost_lock`` on a zero-row
+    update rather than overwriting the current owner's outcome (#2831).
 
     Uses ``db_factory`` (a callable returning a fresh Session) to obtain
     its own DB session so the heartbeat does not share state with the
@@ -668,7 +701,7 @@ def _retry_delay_seconds(attempts: int, cap_seconds: int = 3600) -> int:
     return min(int(delay), cap_seconds)
 
 
-def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
+def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
     """Transition a task to a retry or terminal state.
 
     When ``attempts < max_attempts``:
@@ -678,17 +711,23 @@ def _fail_task(db, task_id: int, error: str, attempts: int, max_attempts: int) -
     When ``attempts >= max_attempts``:
         - status  → 'dead'
         - locks cleared; scheduled_at left alone (dead never runs again).
+
+    #2831: both UPDATEs are guarded by ``locked_by = :worker``. A worker
+    whose lock expired mid-handler must not push a row another worker is
+    re-executing into backoff — or worse, dead-letter it — on the
+    strength of its own stale failure. Returns True when the transition
+    landed, False when the lock had already moved on.
     """
     # #2461: queue-state transition — system_scope (see _claim_task).
     with system_scope():
-        _fail_task_inner(db, task_id, error, attempts, max_attempts)
+        return _fail_task_inner(db, task_id, error, attempts, max_attempts)
 
 
-def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> None:
+def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: int) -> bool:
     from sqlalchemy import text
 
     if attempts >= max_attempts:
-        db.execute(
+        result = db.execute(
             text(
                 """
                 UPDATE fsma.task_queue
@@ -697,9 +736,10 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     locked_by = NULL,
                     locked_until = NULL
                 WHERE id = :id
+                  AND locked_by = :worker
                 """
             ),
-            {"id": task_id, "error": error[:2000]},
+            {"id": task_id, "error": error[:2000], "worker": WORKER_ID},
         )
     else:
         # Retry path — defer via scheduled_at so the next claim does NOT
@@ -708,7 +748,7 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
         # and the 2s poller grabbed it within 2s, causing a tight retry
         # loop on persistent errors.
         delay = _retry_delay_seconds(attempts)
-        db.execute(
+        result = db.execute(
             text(
                 """
                 UPDATE fsma.task_queue
@@ -718,11 +758,33 @@ def _fail_task_inner(db, task_id: int, error: str, attempts: int, max_attempts: 
                     locked_until = NULL,
                     scheduled_at = NOW() + (:delay_seconds || ' seconds')::interval
                 WHERE id = :id
+                  AND locked_by = :worker
                 """
             ),
-            {"id": task_id, "error": error[:2000], "delay_seconds": int(delay)},
+            {
+                "id": task_id,
+                "error": error[:2000],
+                "delay_seconds": int(delay),
+                "worker": WORKER_ID,
+            },
         )
     db.commit()
+
+    if result.rowcount == 0:
+        logger.warning(
+            "fail_task_lost_lock",
+            task_id=task_id,
+            worker=WORKER_ID,
+            terminal=attempts >= max_attempts,
+            detail=(
+                "Task was re-claimed by another worker (or already "
+                "finalized) while this worker's handler was still "
+                "running; failure transition discarded so the current "
+                "owner's outcome stands."
+            ),
+        )
+        return False
+    return True
 
 
 def _worker_loop() -> None:
@@ -791,8 +853,11 @@ def _worker_loop() -> None:
                         attempts=task["attempts"],
                         tenant_id=task.get("tenant_id"),
                     )
-                _complete_task(db, task["id"])
-                logger.debug("task_completed", task_id=task["id"], task_type=task_type)
+                # #2831: _complete_task no-ops (and warns) if this worker
+                # lost the lock mid-handler — the current owner's
+                # re-execution decides the row's final state.
+                if _complete_task(db, task["id"]):
+                    logger.debug("task_completed", task_id=task["id"], task_type=task_type)
             except Exception as exc:
                 logger.warning(
                     "task_failed",

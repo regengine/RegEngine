@@ -179,22 +179,29 @@ def _get_or_create_gauge(name, documentation, labelnames):
         return REGISTRY._names_to_collectors[name]
 
 
+# #2867: these three metrics are deliberately NOT labelled by tenant_id.
+# A raw tenant UUID label makes the series count grow linearly with the
+# customer base and the old series are never reclaimed when a tenant is
+# offboarded — exactly the unbounded-cardinality pattern that
+# ``shared.observability.fastapi_metrics`` forbids ("never tenant_id,
+# user_id, or raw path"). Per-tenant detail is still available at full
+# fidelity in the structured log lines and in the review_items table.
 hallucination_events_total = _get_or_create_counter(
     "hallucination_events_total",
     "Total hallucinations routed to human review",
-    ["tenant_id", "extractor"],
+    ["extractor"],
 )
 
 hallucination_active_reviews = _get_or_create_gauge(
     "hallucination_active_reviews",
     "Active hallucination review items awaiting decision",
-    ["tenant_id"],
+    [],
 )
 
 hallucination_duplicates_total = _get_or_create_counter(
     "hallucination_duplicates_total",
     "Duplicate hallucination submissions detected",
-    ["tenant_id"],
+    [],
 )
 
 hallucination_webhook_calls_total = _get_or_create_counter(
@@ -292,14 +299,18 @@ class HallucinationTracker:
         return datetime.now(timezone.utc)
 
     def _bump_metrics(self, tenant_id: Optional[UUID], extractor: Optional[str]) -> None:
-        label_tenant = self._tenant_label(tenant_id)
+        # ``tenant_id`` is intentionally unused as a metric label (#2867);
+        # it is kept in the signature because callers pass it and the
+        # accompanying log lines still record it.
+        del tenant_id
         label_extractor = extractor or "unknown"
-        hallucination_events_total.labels(tenant_id=label_tenant, extractor=label_extractor).inc()
-        hallucination_active_reviews.labels(tenant_id=label_tenant).inc()
+        hallucination_events_total.labels(extractor=label_extractor).inc()
+        hallucination_active_reviews.inc()
 
     def _decrement_active_metric(self, tenant_id: Optional[UUID]) -> None:
-        label_tenant = self._tenant_label(tenant_id)
-        gauge = hallucination_active_reviews.labels(tenant_id=label_tenant)
+        # ``tenant_id`` is intentionally unused as a metric label (#2867).
+        del tenant_id
+        gauge = hallucination_active_reviews
         # Gauge.dec() doesn't raise on negative; clamp manually
         current = gauge._value.get()
         if current > 0:
@@ -417,7 +428,8 @@ class HallucinationTracker:
         except IntegrityError as exc:
             # Duplicate detected - return existing record
             label_tenant = self._tenant_label(tenant_uuid)
-            hallucination_duplicates_total.labels(tenant_id=label_tenant).inc()
+            # #2867: no tenant_id label — the tenant stays on the log line below.
+            hallucination_duplicates_total.inc()
             logger.info(
                 "hallucination_duplicate_detected",
                 tenant_id=label_tenant,
@@ -743,7 +755,7 @@ class HallucinationTracker:
 
                     audit_metadata["review_notes_sha256"] = _hashlib.sha256(notes.encode("utf-8")).hexdigest()
 
-                AuditLogger.log_event(
+                audit_entry_id = AuditLogger.log_event(
                     db=session,
                     tenant_id=item.tenant_id,
                     event_type="review.decision",
@@ -767,6 +779,29 @@ class HallucinationTracker:
                     error=str(audit_err),
                 )
                 raise
+
+            # #2857: ``AuditLogger.log_event`` catches its own failures
+            # (SQLAlchemyError from schema drift, chain-head read errors, ...)
+            # and RETURNS None rather than raising — see audit.py. The
+            # ``except`` above therefore never fires for the most common
+            # failure mode, and the review decision would commit with no
+            # tamper-evident record. Check the return value explicitly and
+            # abort, mirroring the supplier demo-reset guard (#1407).
+            if audit_entry_id is None:
+                logger.error(
+                    "review_audit_chain_write_failed",
+                    review_id=review_id,
+                    status=normalized_status,
+                    error="AuditLogger.log_event returned None",
+                    reviewer_id=reviewer_id,
+                )
+                # log_event may have left the session in a failed
+                # transaction; roll back before letting the error escape.
+                session.rollback()
+                raise RuntimeError(
+                    f"Audit chain entry could not be written for review {review_id}; "
+                    "review decision aborted — no state was changed"
+                )
 
             session.refresh(item)
             serialized = self._serialize(item)

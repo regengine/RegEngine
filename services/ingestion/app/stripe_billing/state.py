@@ -114,24 +114,36 @@ def _mark_event_seen(event_id: str) -> bool:
     return bool(claimed)
 
 
-def _clear_event_seen(event_id: str) -> None:
-    """Release a dedup claim taken by :func:`_mark_event_seen` (#2930).
+def _release_event_claim(event_id: str) -> None:
+    """Release the dedup claim taken by :func:`_mark_event_seen`.
 
-    Called when handler processing failed: the endpoint answers non-2xx so
-    Stripe redelivers, and the retry must actually run the handler rather
-    than be short-circuited as a duplicate. Best-effort — a Redis error
-    here is logged, not raised, because the caller is already unwinding a
-    failure and Stripe retries for up to 3 days.
+    #2818: the claim is a ``SET NX EX`` with a 24h TTL and was never
+    released when the handler raised. Because the claim is taken BEFORE
+    the handler runs, a handler failure left the key in place, so every
+    one of Stripe's retries hit the duplicate branch and got
+    ``200 {"duplicate": true}`` — the event was permanently dropped. A
+    failed ``checkout.session.completed`` leaves a paying tenant with no
+    subscription mapping; a failed ``invoice.paid`` leaves them stuck
+    ``past_due``, for 24 hours, silently.
+
+    Deleting the key on failure re-opens the event for Stripe's next
+    retry. Genuine duplicates are unaffected: the claim is only released
+    on the path where the handler did NOT complete, so a concurrent or
+    repeat delivery of an event that DID process still finds the key.
+
+    Best-effort by design: a Redis error here is logged, not raised —
+    ``_mark_event_seen`` already fails OPEN on Redis errors, and we must
+    not convert a handler exception into a different exception and lose
+    the original traceback.
     """
     if not event_id:
         return
-
     client = _redis_client()
     try:
         client.delete(_event_dedup_key(event_id))
-    except redis.RedisError as exc:
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
         logger.error(
-            "stripe_webhook_dedup_release_failed event_id=%s error=%s",
+            "stripe_webhook_dedup_release_redis_error event_id=%s error=%s",
             event_id,
             exc,
         )

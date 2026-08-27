@@ -1,3 +1,16 @@
+> **ARCHIVED — HISTORICAL SNAPSHOT, NOT CURRENT STATE.**
+>
+> This report describes RegEngine as it stood on **2026-04-12**. It was moved
+> from the repository root to `docs/archive/` on 2026-08-26 (#2872) because
+> its findings had drifted out of date and a root-level file reads as current.
+> Do not cite it as the present state of the codebase, and do not action its
+> recommendations without re-verifying them against the tree first.
+>
+> For current state see `ARCHITECTURE.md`, `PRODUCTION_SURFACE.md`, and
+> `docs/engineering/ROUTER_SURFACE.md` at the repository root.
+
+---
+
 # RegEngine Architecture Review
 
 **Date:** April 12, 2026
