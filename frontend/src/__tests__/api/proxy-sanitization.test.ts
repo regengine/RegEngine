@@ -43,10 +43,16 @@ const ORIGINAL_REGENGINE_API_KEY = process.env.REGENGINE_API_KEY;
 const ORIGINAL_API_KEY = process.env.API_KEY;
 const ORIGINAL_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ORIGINAL_SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const ORIGINAL_ADMIN_MASTER_KEY = process.env.ADMIN_MASTER_KEY;
 
 afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    if (ORIGINAL_ADMIN_MASTER_KEY === undefined) {
+        delete process.env.ADMIN_MASTER_KEY;
+    } else {
+        process.env.ADMIN_MASTER_KEY = ORIGINAL_ADMIN_MASTER_KEY;
+    }
     if (ORIGINAL_REGENGINE_API_KEY === undefined) {
         delete process.env.REGENGINE_API_KEY;
     } else {
@@ -450,9 +456,14 @@ describe('requireAdminCapability', () => {
     });
 
     it('allows explicit admin keys', () => {
+        // #2825: "explicit admin key" now means the caller actually holds
+        // ADMIN_MASTER_KEY. This used to pass on ANY non-empty string, which is
+        // what made the gate decorative — see admin-capability-gate.test.ts for
+        // the forged-value cases.
+        process.env.ADMIN_MASTER_KEY = 'synthetic-admin-master-key-for-tests'; // pragma: allowlist secret
         expect(
             requireAdminCapability(
-                makeProxyRequest({}, { re_admin_key: 'real-admin-key' }),
+                makeProxyRequest({}, { re_admin_key: 'synthetic-admin-master-key-for-tests' }), // pragma: allowlist secret
             ),
         ).toBeNull();
     });
@@ -520,10 +531,14 @@ describe('requireFreshAdminCapability', () => {
     });
 
     it('allows explicit admin keys without a backend session check', async () => {
+        // #2825: the short-circuit is safe only because hasAdminCapability now
+        // verifies the value against ADMIN_MASTER_KEY; a forged cookie falls
+        // through to the /auth/me lookup and is rejected.
+        process.env.ADMIN_MASTER_KEY = 'synthetic-admin-master-key-for-tests'; // pragma: allowlist secret
         vi.stubGlobal('fetch', vi.fn());
 
         const response = await requireFreshAdminCapability(
-            makeProxyRequest({}, { re_admin_key: 'real-admin-key' }),
+            makeProxyRequest({}, { re_admin_key: 'synthetic-admin-master-key-for-tests' }), // pragma: allowlist secret
         );
 
         expect(response).toBeNull();
