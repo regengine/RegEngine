@@ -1,8 +1,24 @@
 #!/usr/bin/env node
 /**
- * Tenant Isolation Checks
- * Validates that auth patterns, RLS references, and credential handling
- * follow security best practices across the frontend codebase.
+ * Frontend Security Scan
+ *
+ * A STATIC TEXT SCAN of frontend TypeScript sources. It checks credential
+ * hygiene (no hardcoded keys, no passwords in localStorage) and a few auth
+ * wiring conventions.
+ *
+ * WHAT THIS DOES NOT DO (#2824): it does not verify tenant isolation. It
+ * opens no database, starts no app, issues no request, and never attempts a
+ * cross-tenant read. Tenant isolation in this platform is enforced by
+ * PostgreSQL RLS policies, which are invisible to a .tsx text scan -- a
+ * policy could be dropped, inverted, or written fail-open and every check
+ * below would still pass.
+ *
+ * This file used to be named `tenant-test.js` and ran under a CI step called
+ * "Tenant isolation checks", which is why it was mistaken for that. Real
+ * isolation coverage lives in:
+ *   - services/shared/tests/test_rls_enforcement_live.py
+ *   - tests/migrations/test_rls_coverage.py
+ *   - services/admin/tests/test_isolation_testcontainers.py
  */
 
 const fs = require('fs');
@@ -82,7 +98,7 @@ function fileReferencesTenant(file, seen = new Set()) {
   return false;
 }
 
-console.log('\n=== Tenant Isolation Checks ===\n');
+console.log('\n=== Frontend Security Scan (static text scan; NOT tenant-isolation verification) ===\n');
 
 const allFiles = readAllTsx(SRC);
 console.log(`Scanning ${allFiles.length} TypeScript files...\n`);
@@ -143,7 +159,7 @@ if (fs.existsSync(authContext)) {
 }
 
 // ── 3. Dashboard pages use tenantId ─────────────────────
-console.log('\n3. Dashboard Tenant Scoping');
+console.log('\n3. Dashboard Tenant-Reference Convention (lint-level; proves nothing about isolation)');
 
 const dashboardDir = path.join(SRC, 'app', 'dashboard');
 if (fs.existsSync(dashboardDir)) {
@@ -152,11 +168,11 @@ if (fs.existsSync(dashboardDir)) {
   for (const page of dashPages) {
     const rel = path.relative(SRC, page);
     const hasTenant = fileReferencesTenant(page);
-    if (hasTenant) { console.log(`  \u2713 ${rel} references tenant`); passed++; }
+    if (hasTenant) { console.log(`  \u2713 ${rel} mentions a tenant identifier`); passed++; }
     else { tenantMissing.push(rel); }
   }
   if (tenantMissing.length > 0) {
-    console.log(`  \u26a0 ${tenantMissing.length} dashboard pages missing tenant scoping (non-blocking):`);
+    console.log(`  \u26a0 ${tenantMissing.length} dashboard pages do not mention a tenant identifier (non-blocking convention check):`);
     tenantMissing.forEach(f => console.log(`    - ${f}`));
   }
 }
@@ -177,7 +193,7 @@ check('No passwords in localStorage', storedPasswords === 0, `Found ${storedPass
 
 // ── Summary ─────────────────────────────────────────────
 console.log(`\n${'='.repeat(50)}`);
-console.log(`Tenant Checks: ${passed} passed, ${failed} failed`);
+console.log(`Frontend Security Scan: ${passed} passed, ${failed} failed`);
 console.log(`${'='.repeat(50)}\n`);
 
 if (failed > 0) process.exit(1);

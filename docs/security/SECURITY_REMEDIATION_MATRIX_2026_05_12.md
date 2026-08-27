@@ -50,7 +50,7 @@ The highest-risk remediation queue is:
 - Branch was rebased onto `origin/main`; the original remediation patch is already present on `main`, so the PR branch now carries focused CI cleanup commits.
 - Frontend lint and the production-readiness ESLint slice pass locally after restoring the supported ESLint 9.x line for `eslint-config-next@16.2.6`.
 - `requirements.lock` matches the CI `pip-compile --allow-unsafe --generate-hashes --output-file=requirements.lock requirements.in` freshness command; hash dry-run install and `pip-audit` both pass locally.
-- `qa/tenant-test.js` passes locally with `24 passed, 0 failed`, confirming the auth context wires a live session source.
+- `qa/frontend-security-scan.js` (then named `qa/tenant-test.js`) passes locally with `24 passed, 0 failed`, confirming the auth context wires a live session source.
 - `detect-secrets-hook` passes locally after synthetic test fixtures were allowlisted and baseline line numbers were refreshed.
 - The prior ingestion CI failure narrowed to `services/ingestion/tests/test_qr_decoder_api.py`; its sample image fixture now uses a real PIL-generated PNG so byte-level image validation succeeds before the monkeypatched QR decoder path. The focused QR decoder test slice passes locally.
 - The fresh PR #2367 shared-test failure narrowed to duplicate Prometheus collector registration when `services/shared/middleware/tenant_context.py` is re-imported during collection; tenant-context counters now reuse existing collectors. The exact shared CI command passes locally with `443 passed, 10 skipped` and `46.13%` coverage.
