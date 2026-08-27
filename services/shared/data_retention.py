@@ -109,10 +109,103 @@ RETENTION_CONFIGS: Dict[RetentionPolicy, RetentionConfig] = {
 }
 
 
+class RetentionSchemaError(RuntimeError):
+    """A retention statement was issued against a relation that does not exist.
+
+    Raised instead of returning ``False``, because "no row matched" and "the
+    table has never existed" must not be indistinguishable to a caller that
+    then tells a data subject their erasure was honoured (#2900).
+    """
+
+
+# Every retention resource name -> the relation that actually holds that data,
+# or ``None`` when no such relation exists in the alembic-managed schema.
+#
+# #2900: these names were interpolated straight into SQL as table names. On a
+# database at `alembic upgrade head`, `to_regclass()` resolves NONE of them,
+# and — decisively — the migrated schema contains ZERO columns named
+# `deleted_at`, the column this entire soft-delete layer reads and writes.
+# There is nothing to repoint to: this is not a rename, the schema these
+# statements were written for has never existed in this repository. The
+# nearest real relations are recorded below for whoever designs the migration
+# that fixes this properly; they are deliberately NOT wired up, because doing
+# so would change what erasure and retention actually delete.
+#
+# Keep every RetentionPolicy value present here. tests/shared/
+# test_retention_relations_live.py checks both directions of this map against
+# a live migrated database, so an entry that becomes true (or false) fails CI
+# instead of rotting.
+_RESOURCE_RELATIONS: Dict[str, Optional[str]] = {
+    # Nearest real relation: public.users — but it has no deleted_at column,
+    # and its erasure marker in this codebase is users.status = 'erased'
+    # (see services/admin/app/invite_routes.py's inactive-user refusal).
+    "user_account": None,
+    # Nearest real relations: fsma.suppliers.contact_email and
+    # public.supplier_facilities — neither carries a soft-delete column;
+    # services/admin/app/supplier_funnel_routes.py:175 already notes that
+    # supplier deletes are hard "(no deleted_at column on these ...)".
+    "supplier_contact": None,
+    # public.audit_logs is real, but it is append-only by trigger (v066) and
+    # has none of the columns the batch anonymiser reads (details, tags,
+    # anonymized_at); it carries `metadata` instead. Anonymisation for a
+    # single user goes through anonymize_audit_logs_for_user(), which uses
+    # real columns and an append-only marker row.
+    "audit_log": None,
+    # No relation, and no candidate. The FDA 7-year retention this policy
+    # claims to enforce would live on fsma.critical_tracking_events, which
+    # nothing in this module references.
+    "transaction_log": None,
+    # No relation and no candidate anywhere in the schema.
+    "temporary_pii": None,
+}
+
+
 # Allowlist of table names that may be used in retention SQL queries.
 # Derived from RetentionPolicy enum values — prevents SQL injection
 # if resource_type is ever populated from untrusted input.
 _ALLOWED_RESOURCE_TABLES: frozenset[str] = frozenset(policy.value.replace("-", "_") for policy in RetentionPolicy)
+
+
+# Postgres SQLSTATEs for "you named something that does not exist": undefined
+# table / column / object / function. A retention statement that trips one of
+# these is a schema fault, never a data outcome.
+_SCHEMA_FAULT_SQLSTATES = frozenset({"42P01", "42703", "42704", "42883"})
+
+
+def _is_schema_fault(exc: BaseException) -> bool:
+    """True when *exc* means the SQL named a relation/column that is absent."""
+    code = getattr(getattr(exc, "orig", None), "sqlstate", None) or getattr(exc, "sqlstate", None)
+    if code in _SCHEMA_FAULT_SQLSTATES:
+        return True
+    # psycopg wraps the driver error; SQLAlchemy wraps that again. Fall back to
+    # the rendered message, which carries the relation name in every dialect.
+    text_form = str(exc).lower()
+    return "does not exist" in text_form or "undefinedtable" in text_form or "no such table" in text_form
+
+
+def _rollback_quietly(db: Session) -> None:
+    """Roll back so a failed statement does not poison the caller's session.
+
+    Without this the caller's next statement dies in
+    ``InFailedSqlTransaction`` — which is how #2900's erasure 500s were
+    actually produced, several frames away from the real fault.
+    """
+    try:
+        db.rollback()
+    except Exception as rollback_error:  # noqa: BLE001
+        logger.warning("retention_rollback_failed", error=str(rollback_error))
+
+
+def _schema_fault(resource_type: str, exc: BaseException) -> RetentionSchemaError:
+    relation = _RESOURCE_RELATIONS.get(resource_type, "unmapped")
+    if relation is None:
+        detail = (
+            f"retention resource '{resource_type}' has no backing relation in the migrated "
+            "schema (see _RESOURCE_RELATIONS / #2900) — nothing was deleted"
+        )
+    else:
+        detail = f"retention statement for '{resource_type}' failed against the schema — nothing was deleted"
+    return RetentionSchemaError(f"{detail}: {exc}")
 
 
 # Resources whose rows span all tenants (no tenant_id column). Tenant
@@ -380,12 +473,18 @@ class DataRetentionManager:
             return True
 
         except Exception as e:
+            # #2900: this used to swallow the exception and return False with
+            # no rollback, so a phantom table read as "row not found" and the
+            # caller's transaction stayed poisoned.
+            _rollback_quietly(db)
             logger.error(
                 "soft_delete_record_failed",
                 resource_type=resource_type,
                 record_id=record_id,
                 error=str(e),
             )
+            if _is_schema_fault(e):
+                raise _schema_fault(resource_type, e) from e
             return False
 
     async def hard_delete_record(
@@ -462,12 +561,18 @@ class DataRetentionManager:
             return True
 
         except Exception as e:
+            # Same contract as soft_delete_record (#2900): never leave the
+            # caller's transaction poisoned, and never let a missing relation
+            # read as "nothing to delete".
+            _rollback_quietly(db)
             logger.error(
                 "hard_delete_record_failed",
                 resource_type=resource_type,
                 record_id=record_id,
                 error=str(e),
             )
+            if _is_schema_fault(e):
+                raise _schema_fault(resource_type, e) from e
             return False
 
     async def anonymize_audit_logs_for_user(
@@ -868,9 +973,16 @@ async def cleanup_deleted_records_job():
                             stats["errors"] += 1
 
                 except Exception as e:
+                    # #2900: a failed statement leaves the session in
+                    # InFailedSqlTransaction, so without this rollback ONE
+                    # broken policy took down every later policy and the
+                    # audit anonymisation step as collateral — all reported
+                    # as separate, unrelated-looking errors.
+                    _rollback_quietly(db)
                     logger.error(
                         "cleanup_policy_error",
                         policy=policy.value,
+                        target=_RESOURCE_RELATIONS.get(policy.value.replace("-", "_"), "unmapped"),
                         error=str(e),
                     )
                     stats["errors"] += 1
@@ -917,6 +1029,7 @@ __all__ = [
     "DataRetentionManager",
     "RetentionPolicy",
     "RetentionConfig",
+    "RetentionSchemaError",
     "DeletionRequest",
     "DeletedRecord",
     "PIIAnonymizer",

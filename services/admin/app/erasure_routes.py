@@ -233,6 +233,40 @@ async def request_erasure(
                 reason=body.reason or "GDPR Article 17 right-to-erasure request",
             )
 
+            # 1b. Fail closed if nothing was actually deleted (#2900).
+            #
+            # The retention layer wrote to relations that do not exist in the
+            # migrated schema; soft_delete_record swallowed the resulting
+            # UndefinedTable and returned False, and this handler went on to
+            # return HTTP 200 status="accepted" with "Your account data has
+            # been marked for deletion." Telling a data subject their Article
+            # 17 request was honoured when no row was touched is a regulatory
+            # misstatement, so an unperformed erasure is now a 5xx.
+            #
+            # Nothing downstream runs either: enqueuing the Neo4j deletion
+            # would erase the graph half while Postgres keeps the user, and
+            # the "hard delete scheduled" audit marker would record work that
+            # is not going to happen.
+            if not result.get("soft_deleted"):
+                logger.error(
+                    "erasure_failed_nothing_deleted",
+                    user_id=str(user_id),
+                    tenant_id=str(tenant_id) if tenant_id else None,
+                    resource_type=result.get("resource_type"),
+                    error=result.get("error"),
+                )
+                try:
+                    db.rollback()
+                except Exception as rollback_error:  # noqa: BLE001
+                    logger.warning("erasure_rollback_failed", error=str(rollback_error))
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Erasure could not be completed and no data was deleted. "
+                        "The request has been logged for manual follow-up; please contact support."
+                    ),
+                )
+
             # 2. Emit a per-user GDPR anonymization order for the
             # tenant's audit trail.  Uses the new
             # ``anonymize_audit_logs_for_user`` method introduced for
