@@ -67,7 +67,14 @@ if ! gzip -t "${DUMP_FILE}"; then
     echo "ERROR: ${DUMP_FILE} is not valid gzip; refusing to keep it." >&2
     exit 1
 fi
-if ! gunzip -c "${DUMP_FILE}" | head -n 20 | grep -q "PostgreSQL database dump"; then
+# Read the header into a variable first. Piping `gunzip -c` straight into
+# `head` breaks under `set -o pipefail` on any real-sized dump: head closes the
+# pipe after 20 lines, gunzip is killed by SIGPIPE (exit 141), and pipefail
+# propagates that status -- so verification would fail on every genuine backup
+# and the EXIT trap would delete it. A tiny fixture never triggers it, because
+# gunzip finishes before head exits, which is why the unit tests passed.
+DUMP_HEADER="$(gunzip -c "${DUMP_FILE}" 2>/dev/null | head -n 20 || true)"
+if ! printf '%s\n' "${DUMP_HEADER}" | grep -q "PostgreSQL database dump"; then
     echo "ERROR: ${DUMP_FILE} does not contain a pg_dump SQL stream." >&2
     exit 1
 fi

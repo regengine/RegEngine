@@ -58,9 +58,20 @@ DUMP_FILE="${DUMP_DIR}/${NEO4J_DATABASE}.dump"
 
 mkdir -p "${DUMP_DIR}"
 
-# A failed dump must never leave a plausible-looking backup behind.
+# Community Edition dumps must be taken offline, so this script stops Neo4j
+# before dumping. Restarting it therefore cannot live only on the success path:
+# a failed dump would otherwise turn one missed nightly backup into an
+# indefinite graph-database outage. The trap restarts the service on EVERY exit
+# path, and only then cleans up a partial dump.
+SERVICE_STOPPED=0
+
 cleanup_failed_dump() {
     local status=$?
+    if [ "${SERVICE_STOPPED}" -eq 1 ]; then
+        echo "==> Restarting Neo4j (exit status ${status})" >&2
+        service_control start || echo "ERROR: failed to restart Neo4j -- it is STILL DOWN." >&2
+        SERVICE_STOPPED=0
+    fi
     if [ "${status}" -ne 0 ] && [ -d "${DUMP_DIR}" ]; then
         rm -rf "${DUMP_DIR}"
         echo "==> Removed incomplete backup ${DUMP_DIR}" >&2
@@ -86,6 +97,7 @@ service_control() {
 
 # Community Edition dumps must be taken offline for a consistent snapshot.
 service_control stop
+SERVICE_STOPPED=1
 
 if command -v neo4j-admin >/dev/null 2>&1; then
     echo "==> Using local neo4j-admin"
@@ -103,6 +115,7 @@ else
 fi
 
 service_control start
+SERVICE_STOPPED=0
 
 # Verify the artifact before calling it a backup.
 echo "==> Verifying backup..."

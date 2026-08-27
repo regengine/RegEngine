@@ -199,3 +199,60 @@ def test_script_and_runbook_agree_on_the_neo4j_format():
     )
     # The header must no longer claim APOC is used - it never was.
     assert "using APOC" not in script
+
+
+def _service_control_harness(tmp_path: Path, *, fail: bool):
+    """Harness with service control ACTIVE and `docker` stubbed to a log file."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "neo4j-admin").write_text(_NEO4J_ADMIN_STUB)
+    (bin_dir / "neo4j-admin").chmod(0o755)
+
+    log = tmp_path / "docker-calls.log"
+    docker = bin_dir / "docker"
+    docker.write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$@" >> "{log}"\n'
+        "exit 0\n"
+    )
+    docker.chmod(0o755)
+
+    backup_dir = tmp_path / "backups"
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin"
+    env["BACKUP_DIR"] = str(backup_dir)
+    env["NEO4J_DATABASE"] = "neo4j"
+    env.pop("SKIP_SERVICE_CONTROL", None)  # service control must actually run
+    if fail:
+        env["STUB_FAIL"] = "1"
+
+    proc = subprocess.run(
+        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
+        cwd=tmp_path, timeout=120,
+    )
+    calls = log.read_text().splitlines() if log.exists() else []
+    return proc, calls
+
+
+def test_successful_backup_restarts_neo4j(tmp_path):
+    proc, calls = _service_control_harness(tmp_path, fail=False)
+    assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
+    assert any("stop" in c for c in calls), f"never stopped Neo4j: {calls}"
+    assert any("start" in c for c in calls), f"never restarted Neo4j: {calls}"
+
+
+def test_failed_dump_still_restarts_neo4j(tmp_path):
+    """A failed backup must not become a graph-database outage.
+
+    Found by review: Community Edition dumps are taken offline, so the script
+    stops Neo4j before dumping. `service_control start` sat only on the success
+    path, so a dump failure left the database stopped indefinitely -- one missed
+    nightly backup turning into an outage until someone noticed.
+    """
+    proc, calls = _service_control_harness(tmp_path, fail=True)
+    assert proc.returncode != 0, "precondition: the dump was supposed to fail"
+    assert any("stop" in c for c in calls), f"never stopped Neo4j: {calls}"
+    assert any("start" in c for c in calls), (
+        "Neo4j was stopped for the dump and never restarted after it failed -- "
+        f"the database is left down. docker calls: {calls}"
+    )

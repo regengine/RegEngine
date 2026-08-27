@@ -272,3 +272,58 @@ def test_live_roundtrip_restores_seeded_rows(tmp_path):
     finally:
         for db in (src, dst):
             subprocess.run(["dropdb", "--if-exists", db], capture_output=True, timeout=60)
+
+
+def test_verification_survives_a_realistically_sized_dump(tmp_path):
+    """A real dump must not be destroyed by its own integrity check.
+
+    Found by review, not by the tests above: the verification step piped
+    `gunzip -c` into `head -n 20`. Under `set -o pipefail`, head closes the pipe
+    after 20 lines, gunzip dies of SIGPIPE (141), and pipefail propagates that
+    status -- so verification failed and the EXIT trap deleted a perfectly good
+    backup. Every test above used a fixture small enough that gunzip finished
+    before head exited, so none of them could catch it. This one emits enough
+    output that gunzip is still writing when head is done.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "pg_dump"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        "echo '--'\n"
+        "echo '-- PostgreSQL database dump'\n"
+        "echo '--'\n"
+        # ~200k lines: far past head's 20-line cutoff and past the pipe buffer.
+        "for i in $(seq 1 200000); do\n"
+        "  echo \"INSERT INTO traceability_lot VALUES ($i, 'padding padding padding');\"\n"
+        "done\n"
+    )
+    stub.chmod(0o755)
+
+    backup_dir = tmp_path / "backups"
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["BACKUP_DIR"] = str(backup_dir)
+    env["PGDATABASE"] = "regengine"
+    env.pop("S3_BUCKET", None)
+    env.pop("RETENTION_DAYS", None)
+
+    proc = subprocess.run(
+        ["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
+        cwd=tmp_path, timeout=300,
+    )
+
+    assert proc.returncode == 0, (
+        f"backup of a realistically-sized database failed:\n{proc.stdout}\n{proc.stderr}"
+    )
+
+    dumps = list(backup_dir.rglob("*.sql.gz"))
+    assert dumps, (
+        "verification deleted a valid backup -- the EXIT trap fired on a "
+        f"SIGPIPE from the integrity check.\n{proc.stdout}\n{proc.stderr}"
+    )
+
+    # And it is genuinely the dump, not a truncated artifact.
+    with gzip.open(dumps[0], "rt") as handle:
+        head = "".join(next(handle) for _ in range(3))
+    assert "PostgreSQL database dump" in head
