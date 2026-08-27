@@ -29,7 +29,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional, Tuple
 
 import structlog
 from apscheduler.events import (
@@ -93,6 +93,15 @@ class SchedulerService:
         )
         self.kafka_producer = get_kafka_producer()
         self.distributed_context = DistributedContext()
+
+        # #2908: deadline alert state — the monotonic timestamp of the
+        # last ERROR/WARNING raised for a breach, bucketed BY TENANT so
+        # the per-tick prune is O(that tenant's cases) rather than
+        # O(tenants x total state). Inner key is (urgency, case_id), so
+        # overdue and critical dedupe independently. See
+        # _deadline_alert_due.
+        self._deadline_alert_state: Dict[str, Dict[Tuple[str, str], float]] = {}
+        self._deadline_alert_entries = 0
 
         # Fortune Top 15 Resilience Configuration
         jobstores = {"default": MemoryJobStore()}
@@ -648,6 +657,11 @@ class SchedulerService:
             job_id="deadline_monitor",
             trigger=IntervalTrigger(minutes=5),
             name="FDA Request Deadline Monitor",
+            # #2908: without this the job_defaults max_instances=3 applies,
+            # so a tick that overruns the 5-minute interval stacks up to
+            # three concurrent passes — each holding a session from the
+            # pool the API's request handlers share.
+            max_instances=1,
         )
         logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
 
@@ -1015,17 +1029,100 @@ class SchedulerService:
             logger.error("fsma_nightly_sync_failed", error=str(exc))
             raise
 
+    # ── #2908: deadline alert state ──────────────────────────────────
+    # An FDA request case that goes overdue STAYS overdue by definition,
+    # so a stateless alert re-emits an identical ERROR every 5 minutes
+    # forever — 288 events per case per day into Sentry and the log
+    # stream. That buries genuinely new breaches under a permanent stream
+    # of repeats and makes the ERROR channel unusable as the
+    # compliance-deadline signal, which is the job's entire purpose.
+    #
+    # State is deliberately in-process, not persisted: a scheduler
+    # restart or a leadership handover re-raises every live breach, which
+    # is the fail-loud direction. A migration would buy nothing a
+    # compliance reviewer needs — the authoritative record is
+    # fsma.request_cases.response_due_at, not the alert log.
+    DEADLINE_RENOTIFY_SECONDS = int(os.getenv("DEADLINE_RENOTIFY_SECONDS", str(24 * 3600)))
+    DEADLINE_ALERT_STATE_MAX = int(os.getenv("DEADLINE_ALERT_STATE_MAX", "10000"))
+    # Upper bound on tenants scanned per tick. Exceeding it is an ERROR,
+    # never a silent skip — an unmonitored tenant is an unmonitored FDA
+    # deadline.
+    DEADLINE_TENANT_SCAN_LIMIT = int(os.getenv("DEADLINE_TENANT_SCAN_LIMIT", "5000"))
+
     def check_request_deadlines(self) -> None:
         """Check all tenants for overdue/critical FDA request deadlines.
 
-        Queries all active request cases and logs warnings for any that are
-        overdue or approaching their deadline (<2 hours). Designed to run
-        every 5 minutes via APScheduler.
+        Queries active request cases and alerts on any that are overdue or
+        approaching their deadline (<2 hours). Runs every 5 minutes via
+        APScheduler.
+
+        #2908 — alerting is state-tracked: ERROR/WARNING fire on the
+        *transition* into overdue/critical and then only on the
+        :data:`DEADLINE_RENOTIFY_SECONDS` cadence. Repeats are still
+        observed on every tick (counted in ``deadline_monitor_summary``
+        and logged at DEBUG as ``deadline_overdue_repeat``) — the
+        condition is deduped, never dropped.
         """
         with _tracer.start_as_current_span("scheduler.check_request_deadlines"):
             self._check_request_deadlines_inner()
 
+    def _deadline_alert_due(self, tenant_id: str, key: Tuple[str, str], now: float) -> Optional[str]:
+        """Decide whether this (tenant, urgency, case) raises a fresh alert.
+
+        Returns ``"new"`` on the transition into the alerting state,
+        ``"renotify"`` once the re-notify window has elapsed, and ``None``
+        while the alert is inside its cooldown. Records the alert time as
+        a side effect so a caller cannot forget to.
+        """
+        bucket = self._deadline_alert_state.setdefault(tenant_id, {})
+        last = bucket.get(key)
+        if last is not None and (now - last) < self.DEADLINE_RENOTIFY_SECONDS:
+            return None
+        if last is None:
+            if self._deadline_alert_entries >= self.DEADLINE_ALERT_STATE_MAX:
+                # Bounded cache. Evicting the OLDEST alert is the safe
+                # direction: the worst case is re-raising an alert we
+                # already sent, never suppressing one we never did. Only
+                # walks the state when actually at the cap.
+                self._evict_oldest_deadline_alert()
+            self._deadline_alert_entries += 1
+        bucket[key] = now
+        return "renotify" if last is not None else "new"
+
+    def _evict_oldest_deadline_alert(self) -> None:
+        oldest_tenant = None
+        oldest_key = None
+        oldest_at = None
+        for tid, bucket in self._deadline_alert_state.items():
+            for key, at in bucket.items():
+                if oldest_at is None or at < oldest_at:
+                    oldest_tenant, oldest_key, oldest_at = tid, key, at
+        if oldest_tenant is None:
+            return
+        self._deadline_alert_state[oldest_tenant].pop(oldest_key, None)
+        self._deadline_alert_entries -= 1
+        if not self._deadline_alert_state[oldest_tenant]:
+            del self._deadline_alert_state[oldest_tenant]
+
+    def _prune_deadline_alert_state(self, tenant_id: str, still_alerting: set) -> None:
+        """Forget this tenant's cases that are no longer alerting.
+
+        Scoped to one tenant's bucket, so a tick costs O(cases for that
+        tenant) — not O(tenants x total state). Dropping the entry is
+        what lets a case that recovers and later relapses raise a fresh
+        alert instead of being suppressed by a stale timestamp.
+        """
+        bucket = self._deadline_alert_state.get(tenant_id)
+        if not bucket:
+            return
+        for key in [k for k in bucket if k not in still_alerting]:
+            del bucket[key]
+            self._deadline_alert_entries -= 1
+        if not bucket:
+            del self._deadline_alert_state[tenant_id]
+
     def _check_request_deadlines_inner(self) -> None:
+        now_monotonic = time.monotonic()
         try:
             from shared.database import SessionLocal
             from shared.request_workflow import RequestWorkflow
@@ -1041,11 +1138,34 @@ class SchedulerService:
                 # tick). Iterate public.tenants instead (infra table,
                 # permissive policy per v092) and let per-tenant
                 # check_deadline_status find the active cases.
-                result = db.execute(__import__("sqlalchemy").text("SELECT id FROM public.tenants"))
+                #
+                # #2908: bounded and deterministically ordered. The
+                # per-tenant fan-out below is NOT removable — v096 grants
+                # the regengine.system_context RLS arm to queue/audit
+                # metadata only, explicitly NOT to tenant DATA tables like
+                # fsma.request_cases, so a single cross-tenant sweep would
+                # be refused. Per-tenant iteration is the design; what it
+                # must not be is unbounded.
+                result = db.execute(
+                    __import__("sqlalchemy").text("SELECT id FROM public.tenants ORDER BY id LIMIT :limit"),
+                    {"limit": self.DEADLINE_TENANT_SCAN_LIMIT},
+                )
                 tenant_ids = [str(r[0]) for r in result.fetchall()]
+                if len(tenant_ids) >= self.DEADLINE_TENANT_SCAN_LIMIT:
+                    logger.error(
+                        "deadline_monitor_tenant_scan_truncated",
+                        limit=self.DEADLINE_TENANT_SCAN_LIMIT,
+                        detail=(
+                            "Tenant count reached the deadline-monitor scan "
+                            "limit; tenants beyond it were NOT checked for "
+                            "overdue FDA deadlines this tick. Raise "
+                            "DEADLINE_TENANT_SCAN_LIMIT or shard the job."
+                        ),
+                    )
 
                 total_overdue = 0
                 total_critical = 0
+                suppressed_overdue = 0
 
                 for tid in tenant_ids:
                     # Set tenant context for RLS before per-tenant queries.
@@ -1062,30 +1182,66 @@ class SchedulerService:
                     total_overdue += len(overdue)
                     total_critical += len(critical)
 
+                    # #2908: forget cases that are no longer in an alerting
+                    # state, so a case that recovers and later relapses
+                    # raises a fresh alert rather than being suppressed by
+                    # a stale entry.
+                    still_alerting = {("overdue", c["request_case_id"]) for c in overdue}
+                    still_alerting |= {("critical", c["request_case_id"]) for c in critical}
+                    self._prune_deadline_alert_state(tid, still_alerting)
+
                     for case in overdue:
-                        logger.error(
-                            "deadline_overdue",
-                            tenant_id=tid,
-                            case_id=case["request_case_id"],
-                            hours_overdue=abs(case["hours_remaining"]),
-                            status=case["package_status"],
-                            requesting_party=case["requesting_party"],
-                        )
+                        key = ("overdue", case["request_case_id"])
+                        reason = self._deadline_alert_due(tid, key, now_monotonic)
+                        if reason:
+                            logger.error(
+                                "deadline_overdue",
+                                tenant_id=tid,
+                                case_id=case["request_case_id"],
+                                hours_overdue=abs(case["hours_remaining"]),
+                                status=case["package_status"],
+                                requesting_party=case["requesting_party"],
+                                renotify=(reason == "renotify"),
+                            )
+                        else:
+                            suppressed_overdue += 1
+                            # The breach is still recorded every tick — at
+                            # DEBUG, so the detail is recoverable without
+                            # flooding the ERROR channel.
+                            logger.debug(
+                                "deadline_overdue_repeat",
+                                tenant_id=tid,
+                                case_id=case["request_case_id"],
+                                hours_overdue=abs(case["hours_remaining"]),
+                                status=case["package_status"],
+                            )
 
                     for case in critical:
-                        logger.warning(
-                            "deadline_critical",
-                            tenant_id=tid,
-                            case_id=case["request_case_id"],
-                            hours_remaining=case["hours_remaining"],
-                            status=case["package_status"],
-                        )
+                        key = ("critical", case["request_case_id"])
+                        if self._deadline_alert_due(tid, key, now_monotonic):
+                            logger.warning(
+                                "deadline_critical",
+                                tenant_id=tid,
+                                case_id=case["request_case_id"],
+                                hours_remaining=case["hours_remaining"],
+                                status=case["package_status"],
+                            )
+                        else:
+                            logger.debug(
+                                "deadline_critical_repeat",
+                                tenant_id=tid,
+                                case_id=case["request_case_id"],
+                                hours_remaining=case["hours_remaining"],
+                            )
 
                 if total_overdue > 0 or total_critical > 0:
+                    # The aggregate is unconditional: dedupe suppresses the
+                    # per-case shouting, never the fact that breaches exist.
                     logger.warning(
                         "deadline_monitor_summary",
                         total_overdue=total_overdue,
                         total_critical=total_critical,
+                        suppressed_overdue_repeats=suppressed_overdue,
                         tenants_checked=len(tenant_ids),
                     )
                 else:
