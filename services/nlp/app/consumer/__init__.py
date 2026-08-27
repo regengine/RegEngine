@@ -564,7 +564,22 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             consumer.commit()
                             continue
 
-                        if not evt: continue
+                        if not evt:
+                            # #2971 — an empty payload (tombstone / null
+                            # value) carries nothing to process, but skipping
+                            # the commit now means real redelivery, which
+                            # would spin this record forever and block the
+                            # partition. Nothing can be lost by acking it, so
+                            # ack it — same as the other "nothing to do"
+                            # skips below.
+                            logger.warning(
+                                "skipping_empty_event",
+                                offset=record.offset,
+                                topic=record.topic,
+                            )
+                            MESSAGES_COUNTER.labels(status="skipped").inc()
+                            consumer.commit()
+                            continue
 
                         # --- HMAC producer authentication (#1078) ---
                         # Before routing by ``tenant_id``, verify that
