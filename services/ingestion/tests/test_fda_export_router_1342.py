@@ -644,8 +644,15 @@ class TestExportAllEvents:
             )
         assert resp.status_code == 500
 
-    def test_truncation_header_emitted_when_total_exceeds_limit(self, monkeypatch):
-        """Total > 10000 triggers the X-Truncated header."""
+    def test_over_limit_export_is_refused_with_413(self, monkeypatch):
+        """Total > 10000 is refused, not truncated (#2860).
+
+        This test previously asserted a 200 carrying ``X-Truncated``. That
+        encoded the bug: the header was computed from the seed count while the
+        delivered bytes came from the strictly larger transformation-link
+        expansion, so a package could be cut at the limit while reporting
+        itself complete. ``/export/all`` now refuses like ``/export/v2`` does.
+        """
 
         class _HugePersistence(_FakePersistence):
             def query_all_events(self, *a, **kw):
@@ -666,8 +673,9 @@ class TestExportAllEvents:
                 "/api/v1/fda/export/all",
                 params=_all_events_params(format="csv"),
             )
-        assert resp.status_code == 200
-        assert "x-truncated" in {k.lower() for k in resp.headers}
+        assert resp.status_code == 413
+        assert "x-truncated" not in {k.lower() for k in resp.headers}
+        assert "20000" in resp.json()["detail"]
 
     def test_kde_coverage_below_threshold_with_ack_emits_warning_header(self, monkeypatch):
         """allow_incomplete=true bypasses the 409 and the compliance-warning
