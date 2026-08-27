@@ -73,7 +73,9 @@ class TestGetDiscoveryQueue:
             "index": 0,
         }
         assert items[1]["url"] == "https://fda.gov/rec/2"
-        fake_redis.lrange.assert_called_once_with("manual_upload_queue", 0, -1)
+        # #2921: the queue is tenant-namespaced — this assertion used to pin
+        # the bare key, which no producer ever writes.
+        fake_redis.lrange.assert_called_once_with("manual_upload_queue:tenant-disco", 0, -1)
 
     def test_skips_items_without_colon_separator(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, fake_redis = _build(monkeypatch)

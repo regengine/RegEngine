@@ -55,6 +55,11 @@ testpaths = [
     "services/ingestion/tests",
     "services/nlp/tests",
     "services/scheduler/tests",
+    # #2923: omitted until now, so the repo-root --collect-only import guard
+    # in test-suite-check.yml — the check whose stated job is to stop "N test
+    # files silently fail to import" — could not see these 53 files, and a
+    # bare `pytest` from the repo root skipped them.
+    "services/shared/tests",
 ]
 asyncio_mode = "auto"
 python_files = "test_*.py"
@@ -66,4 +71,24 @@ filterwarnings = [
 ]
 markers = [
     "integration: tests requiring docker/testcontainers or other live external services. Auto-skipped in services/graph/tests unless ``--run-integration`` is passed; opt in elsewhere via ``pytest -m integration``.",
+]
+
+[tool.coverage.run]
+# #2891: the coverage denominator must be PRODUCT code only.
+#
+# The `shared` matrix leg runs `--cov=.` from services/shared, and with no
+# omit configuration pytest's own test modules landed in the denominator.
+# They are fully executed by definition, so they entered the report at
+# ~86% covered and pulled the total up: 5,460 of 16,747 measured statements
+# (33%) were test code. The "~44% locally" note the 35% floor was set from
+# rested on that inflated basis.
+#
+# CI passes --cov-config=<repo root>/pyproject.toml because the matrix step
+# `cd`s into services/<svc> and coverage.py only looks for a config file in
+# the current directory — without the explicit flag this section would be
+# silently ignored, which is the same class of defect it exists to fix.
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/__pycache__/*",
 ]

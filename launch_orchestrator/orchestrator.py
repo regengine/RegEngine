@@ -20,6 +20,7 @@ import secrets
 import string
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -379,17 +380,36 @@ Contact: sales@regengine.ai
         """Provision a single sandbox environment"""
         logger.info(f"Provisioning sandbox: {sandbox_id}")
 
-        # Generate API Key
+        # #2958: this method registers nothing. The module imports no HTTP
+        # client of any kind (see the import block at the top of this file), so
+        # no RegEngine API is contacted to create the tenant or register a key.
+        # A key minted here would be rejected on the partner's first call.
+        #
+        # The candidate key is still generated so the shape of a real
+        # implementation is visible, but it is NEVER written to disk: the
+        # previous code appended it in cleartext to generated/sandbox_keys.txt
+        # (mode 0644) inside the working tree, in a directory README.md:90
+        # calls gitignored. Only the prefix is ever recorded.
         api_key = "sk_test_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
+        api_key_prefix = api_key[:12] + "..."
+        del api_key  # nothing below may persist or return the full value
 
-        # Create tenant config
+        # Platform tenant ids are UUIDs; "dp-sandbox-1" could not be loaded.
+        tenant_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"regengine-sandbox/{sandbox_id}"))
+
         tenant_config = {
-            "tenant_id": sandbox_id,
-            "api_key": api_key,
+            "tenant_id": tenant_uuid,
+            "sandbox_label": sandbox_id,
+            "api_key_prefix": api_key_prefix,
             "max_docs": config.get("max_docs_per_partner", 100),
             "jurisdictions": config.get("jurisdictions", {}).get("default", ["US-NY"]),
             "rate_limit_rpm": config.get("rate_limits", {}).get("rpm_per_api_key", 60),
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "provisioned": False,
+            "note": (
+                "Template only. No tenant was created and no API key was "
+                "registered -- launch_orchestrator has no platform client."
+            ),
         }
 
         output_dir = self.base_dir / "generated" / "tenants"
@@ -399,19 +419,20 @@ Contact: sales@regengine.ai
             with open(config_path, "w") as f:
                 json.dump(tenant_config, f, indent=2)
 
-            # Also append to a master keys file for easy access
-            keys_file = self.base_dir / "generated" / "sandbox_keys.txt"
-            with open(keys_file, "a") as f:
-                f.write(f"{sandbox_id}: {api_key}\n")
-
         self.result.add_event(
             phase,
             f"provision_sandbox_{sandbox_id}",
-            "success",
+            "skipped",
             details={
                 "sandbox_id": sandbox_id,
-                "api_key_prefix": api_key[:12] + "...",
+                "tenant_id": tenant_uuid,
+                "api_key_prefix": api_key_prefix,
                 "config_path": str(output_dir / f"{sandbox_id}.json"),
+                "reason": "not_implemented",
+                "detail": (
+                    "No platform API call was made; the sandbox does not exist "
+                    "and the key is not registered."
+                ),
             },
         )
 
@@ -448,13 +469,19 @@ Contact: sales@regengine.ai
 
     def _deploy_terraform_workspace(self, phase: OrchestrationPhase, root_module: str, workspace: str):
         """Deploy a Terraform workspace"""
-        command = (
-            f"terraform -chdir={root_module} workspace select {workspace} && "
-            f"terraform -chdir={root_module} plan -out={workspace}.tfplan && "
-            f"terraform -chdir={root_module} apply {workspace}.tfplan"
-        )
+        # #2961: this used to be one string joined with `&&`, handed to
+        # _execute_deployment, which runs shlex.split(command). shlex does not
+        # interpret `&&` -- it becomes a literal argv entry, so terraform was
+        # invoked with "&&" as a positional argument and every non-dry-run
+        # deployment failed. Three separate invocations, run in order.
+        steps = [
+            ("workspace_select", f"terraform -chdir={root_module} workspace select {workspace}"),
+            ("plan", f"terraform -chdir={root_module} plan -out={workspace}.tfplan"),
+            ("apply", f"terraform -chdir={root_module} apply {workspace}.tfplan"),
+        ]
 
         if self.dry_run:
+            command = "; ".join(cmd for _, cmd in steps)
             self.result.add_event(
                 phase,
                 f"deploy_terraform_{workspace}",
@@ -468,12 +495,30 @@ Contact: sales@regengine.ai
             )
             return
 
-        self._execute_deployment(
-            phase,
-            f"deploy_terraform_{workspace}",
-            command,
-            {"workspace": workspace, "root_module": root_module, "dry_run": False},
-        )
+        # #2961: the default root_module_path is "infra/terraform", which does
+        # not exist in this repository. Report that rather than letting each
+        # step fail with an opaque terraform error.
+        if not (self.base_dir / root_module).is_dir() and not Path(root_module).is_dir():
+            self.result.add_event(
+                phase,
+                f"deploy_terraform_{workspace}",
+                # "failure", not "failed": OrchestrationResult.add_event and the
+                # summary counter both key on the exact string "failure". Any
+                # other spelling is recorded but never counted, so the run still
+                # reports success -- the precise defect this PR exists to fix.
+                "failure",
+                details={"workspace": workspace, "root_module": root_module, "dry_run": False},
+                error=f"Terraform root module not found: {root_module}",
+            )
+            return
+
+        for step_name, step_command in steps:
+            self._execute_deployment(
+                phase,
+                f"deploy_terraform_{workspace}_{step_name}",
+                step_command,
+                {"workspace": workspace, "root_module": root_module, "dry_run": False},
+            )
 
     def _execute_deployment(self, phase: OrchestrationPhase, action: str, command: str, details: Dict[str, Any]):
         """Execute a deployment command"""

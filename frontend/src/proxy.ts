@@ -110,7 +110,10 @@ const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 // the previous '/api-keys' and '/playground' entries matched neither. (The
 // leftover src/app/api-keys/page.tsx is a bare redirect() to
 // /developer/portal/keys, so it is gated transitively by its destination.)
-const GATED_DEV_ROUTES = [
+// Exported for the structural guard in
+// src/__tests__/proxy-gated-dev-routes.test.ts, which fails the build if an
+// entry here stops naming a real page. Runtime behavior is unchanged.
+export const GATED_DEV_ROUTES = [
     '/developer/portal/keys',
     '/developer/portal/playground',
 ];

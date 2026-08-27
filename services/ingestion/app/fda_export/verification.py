@@ -16,6 +16,7 @@ from ..authz import require_permission
 from ..export_models import ExportVerifyResponse
 from ..fda_export_service import _generate_csv
 from ..subscription_gate import require_active_subscription
+from .queries import FULL_EXPORT_TYPES, reconstruct_full_export_events
 
 logger = logging.getLogger("fda-export")
 
@@ -41,7 +42,8 @@ async def verify_export_handler(
         row = db_session.execute(
             sql_text("""
                 SELECT export_type, query_tlc, query_start_date, query_end_date,
-                       record_count, export_hash, generated_at
+                       record_count, export_hash, generated_at, include_pii,
+                       query_event_type
                 FROM fsma.fda_export_log
                 WHERE id = :eid AND tenant_id = :tid
             """),
@@ -51,47 +53,26 @@ async def verify_export_handler(
         if not row:
             raise HTTPException(status_code=404, detail=f"Export '{export_id}' not found")
 
-        export_type, original_tlc, start_date, end_date, original_count, original_hash, generated_at = row
+        (
+            export_type,
+            original_tlc,
+            start_date,
+            end_date,
+            original_count,
+            original_hash,
+            generated_at,
+            include_pii,
+            query_event_type,
+        ) = row
 
         start = str(start_date) if start_date else None
         end = str(end_date) if end_date else None
 
-        # Re-query and re-generate deterministically based on stored query scope.
+        # Decide reproducibility BEFORE touching the event tables.
         if original_tlc:
-            # Single-TLC export path
-            events = persistence.query_events_by_tlc(
-                tenant_id=tenant_id,
-                tlc=original_tlc,
-                start_date=start,
-                end_date=end,
-            )
-        elif export_type in {"fda_spreadsheet", "fda_package"}:
-            # Full export path (no TLC filter)
-            events_page, _ = persistence.query_all_events(
-                tenant_id=tenant_id,
-                start_date=start,
-                end_date=end,
-                event_type=None,
-                limit=10000,
-            )
-            expanded: list[dict] = []
-            for event in events_page:
-                expanded.extend(
-                    persistence.query_events_by_tlc(
-                        tenant_id=tenant_id,
-                        tlc=event["traceability_lot_code"],
-                        start_date=start,
-                        end_date=end,
-                    )
-                )
-            seen: set[str] = set()
-            events = []
-            for event in expanded:
-                event_id = str(event.get("id"))
-                if event_id in seen:
-                    continue
-                seen.add(event_id)
-                events.append(event)
+            reconstruction = "single_tlc"
+        elif export_type in FULL_EXPORT_TYPES:
+            reconstruction = "full"
         else:
             # Recall exports can include product/location wildcard filters that are
             # not fully persisted in fda_export_log today.
@@ -103,7 +84,42 @@ async def verify_export_handler(
                 ),
             )
 
-        csv_content = _generate_csv(events)
+        # #2898: ``include_pii`` decides whether five columns and the
+        # Additional-KDEs blob carry real values or ``[REDACTED]``, so an
+        # audit row that never recorded it cannot determine the exported
+        # bytes. Fail closed with the same 409 shape rather than emit a
+        # tamper verdict against an export we simply cannot regenerate.
+        if include_pii is None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Export '{export_id}' predates PII-disclosure capture in the "
+                    "audit log, so its bytes cannot be regenerated deterministically. "
+                    "This is not a tamper finding. Verify via package manifest and "
+                    "chain artifact."
+                ),
+            )
+        include_pii = bool(include_pii)
+
+        # Re-query and re-generate deterministically based on stored query scope.
+        if reconstruction == "single_tlc":
+            events = persistence.query_events_by_tlc(
+                tenant_id=tenant_id,
+                tlc=original_tlc,
+                start_date=start,
+                end_date=end,
+            )
+        else:
+            # Same helper the exporter uses — one algorithm, one row order.
+            events, _total = reconstruct_full_export_events(
+                persistence,
+                tenant_id=tenant_id,
+                start_date=start,
+                end_date=end,
+                event_type=query_event_type,
+            )
+
+        csv_content = _generate_csv(events, include_pii=include_pii)
         regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
 
         match = regenerated_hash == original_hash

@@ -350,3 +350,107 @@ class TestEntityResolverHardening:
         assert r.resolve_organization(None) is None
         assert r.resolve_organization("") is None
         assert r.resolve_organization("   ") is None
+
+
+# ----------------------------------------------------------------------
+# #2944 — stub master data must not masquerade as a DUNS resolution
+# ----------------------------------------------------------------------
+
+
+def _convert_with_org(raw_name: str):
+    """Run the conversion layer over one OBLIGATION + one ORGANIZATION entity."""
+    from services.nlp.app.consumer import _convert_entities_to_extraction
+
+    obligation_text = "The retailer shall maintain traceability records."
+    entities = [
+        {
+            "type": "OBLIGATION",
+            "text": obligation_text,
+            "start": 0,
+            "end": len(obligation_text),
+        },
+        {
+            "type": "ORGANIZATION",
+            "text": raw_name,
+            "start": len(obligation_text) + 1,
+            "end": len(obligation_text) + 1 + len(raw_name),
+            "attrs": {"name": raw_name},
+        },
+    ]
+    extractions = _convert_entities_to_extraction(
+        entities, doc_id="doc-2944", source_url="https://example.gov/rule.pdf"
+    )
+    assert extractions
+    return extractions[0].attributes.get("resolved_entities") or []
+
+
+class TestStubMasterDataProvenance:
+    """MASTER_DATA is a ten-row literal in the repository. Nothing it produces
+    may be persisted as though it were an MDM/DUNS lookup (#2944)."""
+
+    def test_resolver_marks_records_as_stub_sourced(self):
+        from services.nlp.app.resolution import EntityResolver
+
+        r = EntityResolver()
+        exact = r.resolve_organization("Costco Wholesale")
+        assert exact is not None
+        assert exact["source"] == "stub_master_data"
+
+        fuzzy = r.resolve_organization("Wal-Mart Stores Inc.")
+        assert fuzzy is not None
+        assert fuzzy["match_strategy"] == "fuzzy"
+        assert fuzzy["source"] == "stub_master_data"
+
+    def test_persisted_provenance_carries_no_duns_identifier(self):
+        resolved = _convert_with_org("Walmart Inc.")
+        assert resolved, "expected the organization to be recorded"
+        entry = resolved[0]
+        assert "entity_id" not in entry, (
+            "a stub id must not be persisted as an entity identifier"
+        )
+        assert entry["resolution_source"] == "stub_master_data"
+        assert entry["entity_id_withheld_reason"]
+        for value in entry.values():
+            assert not (isinstance(value, str) and value.startswith("duns:")), entry
+
+    def test_lookalike_name_cannot_launder_a_duns_id(self):
+        """Two-token master keys still fuzzy-match one attacker-added token
+        ("Wal Mart Fake" scores 66.7% against the "WAL-MART" key). Whatever the
+        matcher decides, no DUNS identifier reaches the audit trail."""
+        resolved = _convert_with_org("Wal Mart Fake")
+        for entry in resolved:
+            assert "entity_id" not in entry
+            for value in entry.values():
+                assert not (isinstance(value, str) and value.startswith("duns:")), entry
+
+    def test_raw_name_is_always_preserved_for_the_reviewer(self):
+        resolved = _convert_with_org("Walmart Inc.")
+        assert resolved[0]["raw_name"] == "Walmart Inc."
+
+
+class TestFuzzyThresholdDocumentationMatchesCode:
+    """The in-force guard and the prose describing it must state one number
+    (#2944). The code value is authoritative: 60.0 is load-bearing for
+    ``test_walmart_variants_resolve`` above, which resolves a legitimate
+    extension scoring 66.6%."""
+
+    def test_documented_threshold_equals_constant(self):
+        import re as _re
+
+        from services.nlp.app import resolution
+
+        source = Path(resolution.__file__).read_text()
+        documented = _re.findall(r"(\d+(?:\.\d+)?)\s*%\s*threshold", source, _re.I)
+        assert documented, "expected the threshold to be described in prose"
+        for value in documented:
+            assert float(value) == resolution._FUZZY_RATIO_THRESHOLD, (
+                f"prose says {value}%, code enforces "
+                f"{resolution._FUZZY_RATIO_THRESHOLD}"
+            )
+
+    def test_threshold_still_admits_the_documented_legitimate_extension(self):
+        """Guard against 'fixing' the drift by silently retuning the matcher."""
+        from services.nlp.app.resolution import EntityResolver, _token_set_ratio
+
+        assert _token_set_ratio("Wal-Mart Stores Inc.", "WAL-MART") < 90.0
+        assert EntityResolver().resolve_organization("Wal-Mart Stores Inc.") is not None

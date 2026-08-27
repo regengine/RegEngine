@@ -43,7 +43,7 @@ if (allPassed) {
   console.error('  Fix the failing checks before deploying.');
   console.error('  Run individual check scripts locally:');
   console.error('    node qa/fsma-lite-check.js');
-  console.error('    node qa/tenant-test.js');
+  console.error('    node qa/frontend-security-scan.js');
   console.error('    node qa/full-flow.js');
   console.error('    node qa/bad-data.js');
   console.error('    node qa/export-validate.js');

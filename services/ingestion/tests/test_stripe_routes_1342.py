@@ -37,6 +37,7 @@ from app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
     helpers as helpers_mod,
     plans as plans_mod,
+    rate_limiting as rate_limiting_mod,
     routes as routes_mod,
     state as state_mod,
 )
@@ -519,7 +520,18 @@ class TestGetSubscription:
 class TestWebhookRouteWrappers:
     """Lines 297 and 311 are the one-line bodies of the two webhook routes.
     They both delegate to ``_webhooks_mod._process_stripe_webhook``. Cover
-    both so future refactors don't silently drop one endpoint."""
+    both so future refactors don't silently drop one endpoint.
+
+    #2929: these two tests used to stub out
+    ``routes._rate_limiting_mod._check_stripe_webhook_rate_limit`` because
+    each route consumed the limiter as its first statement — before
+    signature verification, on a bucket that collapses to the shared proxy
+    peer, which is what let an anonymous caller 429 every genuine Stripe
+    delivery. The routes no longer rate-limit at all; the limiter moved
+    inside ``_process_stripe_webhook``, past
+    ``stripe.Webhook.construct_event``. The stub is replaced by a spy that
+    asserts the route does NOT consume the unverified budget on the way in.
+    """
 
     @pytest.mark.asyncio
     async def test_primary_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -531,10 +543,11 @@ class TestWebhookRouteWrappers:
             return {"received": True}
 
         monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        limiter_calls: list[Any] = []
         monkeypatch.setattr(
-            routes_mod._rate_limiting_mod,
+            rate_limiting_mod,
             "_check_stripe_webhook_rate_limit",
-            lambda _request: None,
+            limiter_calls.append,
         )
 
         request = MagicMock()
@@ -542,6 +555,7 @@ class TestWebhookRouteWrappers:
         assert result == {"received": True}
         assert called["request"] is request
         assert called["sig"] == "t=1,v1=fake"
+        assert limiter_calls == [], "#2929: the route must not rate-limit ahead of signature verification"
 
     @pytest.mark.asyncio
     async def test_legacy_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -555,16 +569,18 @@ class TestWebhookRouteWrappers:
             return {"received": True, "legacy": True}
 
         monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        limiter_calls: list[Any] = []
         monkeypatch.setattr(
-            routes_mod._rate_limiting_mod,
+            rate_limiting_mod,
             "_check_stripe_webhook_rate_limit",
-            lambda _request: None,
+            limiter_calls.append,
         )
 
         request = MagicMock()
         result = await routes_mod.stripe_webhook_legacy(request, stripe_signature="t=2,v1=fake")
         assert result == {"received": True, "legacy": True}
         assert called["sig"] == "t=2,v1=fake"
+        assert limiter_calls == [], "#2929: the legacy route must not rate-limit ahead of verification"
 
 
 # ── create_portal_session_for_tenant ───────────────────────────────────────

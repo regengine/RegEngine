@@ -30,6 +30,56 @@ def set_tenant_context(tenant_id: str, request_id: str) -> None:
     _request_id_ctx.set(request_id)
 
 
+def bind_tenant_log_context(tenant_id: str) -> Optional[contextvars.Token]:
+    """Bind ``tenant_id`` so every subsequent log line in this request carries it.
+
+    #2859: ``merge_contextvars`` now runs first in the processor chain, so
+    ``correlation_id`` and ``request_id`` reach log lines via the bindings
+    made by CorrelationIdMiddleware / RequestIDMiddleware. Nothing performed
+    the equivalent binding for ``tenant_id``, so ``_inject_service_context``
+    fell through to the ``"unknown"`` placeholder on every request even when
+    TenantContextMiddleware had successfully resolved a tenant.
+
+    Both mechanisms this module supports are seeded, because they feed
+    different consumers:
+
+    * ``structlog.contextvars`` — merged into the event dict by
+      ``merge_contextvars``, which is what puts the value on the log line.
+    * the raw :data:`_tenant_id_ctx` ContextVar — read by
+      :func:`_capture_observability_context`, so a background task or
+      APScheduler job enqueued during this request inherits the tenant
+      instead of recording ``"unknown"``.
+
+    Returns the ContextVar token to hand back to
+    :func:`unbind_tenant_log_context`, or ``None`` if ``tenant_id`` is empty.
+    """
+    if tenant_id is None:
+        return None
+    tenant_id = str(tenant_id)
+    if not tenant_id:
+        return None
+    token = _tenant_id_ctx.set(tenant_id)
+    structlog.contextvars.bind_contextvars(tenant_id=tenant_id)
+    return token
+
+
+def unbind_tenant_log_context(token: Optional[contextvars.Token] = None) -> None:
+    """Undo :func:`bind_tenant_log_context` (#2859).
+
+    Mirrors the ``finally`` cleanup RequestIDMiddleware / CorrelationIdMiddleware
+    perform, so one request's tenant can never bleed into the next request
+    served on the same context.
+    """
+    structlog.contextvars.unbind_contextvars("tenant_id")
+    if token is not None:
+        try:
+            _tenant_id_ctx.reset(token)
+        except ValueError:
+            # Token was created in a different Context (task boundary); that
+            # Context — and the value set in it — is discarded anyway.
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Context propagation helpers for background tasks and APScheduler jobs.
 #

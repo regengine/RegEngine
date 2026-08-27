@@ -79,6 +79,31 @@ class _FakeAsyncRedis:
         self.store[key] = value
 
 
+# ---------------------------------------------------------------------------
+# Trusted tenant headers (#2841)
+# ---------------------------------------------------------------------------
+#
+# The raw ``X-Tenant-ID`` header is no longer a tenant source: it is client
+# input, and this middleware serves cache hits before any authentication runs.
+# Tests that merely need *a* tenant now present the secret-gated internal
+# service header that ``shared/middleware/tenant_context.py`` already treats as
+# the only trustworthy pre-auth tenant claim.
+_INTERNAL_SECRET = "test-internal-secret-2841"
+
+
+@pytest.fixture(autouse=True)
+def _internal_secret_configured(monkeypatch):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+
+
+def _tenant_headers(tenant: str) -> Dict[str, str]:
+    """Headers that authenticate an internal caller as ``tenant``."""
+    return {
+        "X-RegEngine-Tenant-ID": tenant,
+        "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
+    }
+
+
 def _patched_middleware(
     monkeypatch: pytest.MonkeyPatch,
     fake: Optional[_FakeAsyncRedis] = None,
@@ -242,7 +267,10 @@ class TestResolveTenantId:
         *,
         principal_tenant: Optional[str] = None,
         header_tenant: Optional[str] = None,
+        internal_tenant: Optional[str] = None,
     ) -> Request:
+        """``header_tenant`` is the UNTRUSTED ``X-Tenant-ID``; ``internal_tenant``
+        is the secret-gated ``X-RegEngine-Tenant-ID``."""
         request = MagicMock(spec=Request)
         request.state = MagicMock()
         request.state.tenant_id = None
@@ -254,6 +282,8 @@ class TestResolveTenantId:
         headers = {}
         if header_tenant is not None:
             headers["X-Tenant-ID"] = header_tenant
+        if internal_tenant is not None:
+            headers.update(_tenant_headers(internal_tenant))
         request.headers = headers
         return request  # type: ignore[return-value]
 
@@ -265,9 +295,47 @@ class TestResolveTenantId:
         )
         assert middleware._resolve_tenant_id(req) == "principal-wins"
 
-    def test_header_used_when_no_principal(self, middleware):
+    def test_raw_tenant_header_is_never_a_tenant_source(self, middleware):
+        """#2841: ``X-Tenant-ID`` is client input and must not name a namespace.
+
+        This case previously asserted the opposite (``== "from-header"``) —
+        it encoded the vulnerability. Resolution must now fail closed so
+        ``dispatch`` skips the cache entirely.
+        """
         req = self._request(header_tenant="from-header")
-        assert middleware._resolve_tenant_id(req) == "from-header"
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_internal_tenant_header_used_when_no_principal(self, middleware):
+        """The secret-gated internal header keeps service-to-service dedup."""
+        req = self._request(internal_tenant="from-internal-header")
+        assert middleware._resolve_tenant_id(req) == "from-internal-header"
+
+    def test_internal_tenant_header_ignored_without_the_secret(self, middleware):
+        req = self._request()
+        req.headers = {"X-RegEngine-Tenant-ID": "unproven"}
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_internal_tenant_header_ignored_with_a_wrong_secret(self, middleware):
+        req = self._request()
+        req.headers = {
+            "X-RegEngine-Tenant-ID": "unproven",
+            "X-RegEngine-Internal-Secret": "not-the-secret",
+        }
+        assert middleware._resolve_tenant_id(req) is None
+
+    def test_raw_header_cannot_override_the_api_key_tenant(self, middleware, monkeypatch):
+        """#2841's cleanest exploit: authenticated as A, forging B.
+
+        The header branch used to sit *above* the API-key lookup, so a
+        legitimate caller could redirect their namespace into another
+        tenant's. The authenticated key must now win.
+        """
+        import shared.idempotency as idemp_mod
+
+        monkeypatch.setattr(idemp_mod, "_lookup_tenant_id_for_api_key", lambda raw: "tenant-attacker")
+        req = self._request(header_tenant="tenant-victim")
+        req.headers = {"X-Tenant-ID": "tenant-victim", "X-RegEngine-API-Key": "rge_attacker.secret"}
+        assert middleware._resolve_tenant_id(req) == "tenant-attacker"
 
     def test_api_key_lookup_used_when_no_principal_or_header(self, middleware, monkeypatch):
         import shared.idempotency as idemp_mod
@@ -280,19 +348,24 @@ class TestResolveTenantId:
     def test_header_stripped_of_whitespace(self, middleware):
         """Header value should be trimmed — otherwise ``" tenant"`` and
         ``"tenant"`` would land in different cache namespaces."""
-        req = self._request(header_tenant="  spaced-tenant  ")
+        req = self._request(internal_tenant="  spaced-tenant  ")
         assert middleware._resolve_tenant_id(req) == "spaced-tenant"
 
     def test_none_when_neither_principal_nor_header(self, middleware):
         req = self._request()
         assert middleware._resolve_tenant_id(req) is None
 
-    def test_empty_principal_tenant_falls_through_to_header(self, middleware):
+    def test_empty_principal_tenant_falls_through_to_next_trusted_source(self, middleware):
         """An authenticated principal with an empty tenant_id is a
-        defensive impossibility — but if it happens, fall back to the
-        header rather than stamp ``_anonymous_`` on a real session."""
-        req = self._request(principal_tenant="", header_tenant="fallback")
+        defensive impossibility — but if it happens, fall through to the
+        next TRUSTED source rather than stamp ``_anonymous_`` on a real
+        session."""
+        req = self._request(principal_tenant="", internal_tenant="fallback")
         assert middleware._resolve_tenant_id(req) == "fallback"
+
+    def test_empty_principal_tenant_does_not_fall_through_to_raw_header(self, middleware):
+        req = self._request(principal_tenant="", header_tenant="fallback")
+        assert middleware._resolve_tenant_id(req) is None
 
     def test_missing_principal_attribute_is_safe(self, middleware):
         """``request.state.principal`` may be entirely absent (no auth
@@ -303,7 +376,7 @@ class TestResolveTenantId:
             pass
 
         request.state = _Empty()  # no ``.principal`` attribute at all
-        request.headers = {"X-Tenant-ID": "solo-header"}
+        request.headers = _tenant_headers("solo-header")
         assert middleware._resolve_tenant_id(request) == "solo-header"
 
     def test_principal_without_tenant_id_attr_falls_through(self, middleware):
@@ -317,7 +390,7 @@ class TestResolveTenantId:
 
         request.state.principal = _PrincipalNoTenant()
         request.state.tenant_id = None
-        request.headers = {"X-Tenant-ID": "fallback"}
+        request.headers = _tenant_headers("fallback")
         assert middleware._resolve_tenant_id(request) == "fallback"
 
 
@@ -491,7 +564,7 @@ class TestDispatchCacheHit:
         app = _build_app(handler=handler)
         client = TestClient(app)
 
-        headers = {"Idempotency-Key": "k1", "X-Tenant-ID": "t1"}
+        headers = {"Idempotency-Key": "k1", **_tenant_headers("t1")}
         r1 = client.post("/echo", headers=headers, json={"payload": 1})
         r2 = client.post("/echo", headers=headers, json={"payload": 1})
 
@@ -511,7 +584,7 @@ class TestDispatchCacheHit:
         client = TestClient(app)
         client.post(
             "/echo",
-            headers={"Idempotency-Key": "stored-key", "X-Tenant-ID": "tenant-x"},
+            headers={"Idempotency-Key": "stored-key", **_tenant_headers("tenant-x")},
             content=b"payload",
         )
 
@@ -528,7 +601,7 @@ class TestDispatchCacheHit:
         client = TestClient(app)
         client.post(
             "/echo",
-            headers={"Idempotency-Key": "ttl-key", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": "ttl-key", **_tenant_headers("t")},
             content=b"payload",
         )
 
@@ -546,7 +619,7 @@ class TestDispatchCacheHit:
         client = TestClient(app)
         client.post(
             "/echo",
-            headers={"Idempotency-Key": "inspect", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": "inspect", **_tenant_headers("t")},
             content=b"hello",
         )
 
@@ -578,7 +651,7 @@ class TestDispatch2xxOnlyCaching:
         client = TestClient(app)
         resp = client.post(
             "/echo",
-            headers={"Idempotency-Key": f"ok-{status}", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": f"ok-{status}", **_tenant_headers("t")},
             content=b"x",
         )
         assert resp.status_code == status
@@ -600,7 +673,7 @@ class TestDispatch2xxOnlyCaching:
         client = TestClient(app)
         resp = client.post(
             "/echo",
-            headers={"Idempotency-Key": f"err-{status}", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": f"err-{status}", **_tenant_headers("t")},
             content=b"x",
         )
         assert resp.status_code == status
@@ -619,7 +692,7 @@ class TestDispatchCrossTenantIsolation:
         invocations: Dict[str, int] = {"tenant-a": 0, "tenant-b": 0}
 
         async def handler(request):
-            tenant = request.headers.get("X-Tenant-ID")
+            tenant = request.headers.get("X-RegEngine-Tenant-ID")
             invocations[tenant] += 1
             return {"tenant": tenant, "n": invocations[tenant]}
 
@@ -629,12 +702,12 @@ class TestDispatchCrossTenantIsolation:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             r_a = await client.post(
                 "/echo",
-                headers={"Idempotency-Key": "same", "X-Tenant-ID": "tenant-a"},
+                headers={"Idempotency-Key": "same", **_tenant_headers("tenant-a")},
                 json={"x": 1},
             )
             r_b = await client.post(
                 "/echo",
-                headers={"Idempotency-Key": "same", "X-Tenant-ID": "tenant-b"},
+                headers={"Idempotency-Key": "same", **_tenant_headers("tenant-b")},
                 json={"x": 1},
             )
 
@@ -647,7 +720,7 @@ class TestDispatchCrossTenantIsolation:
         """Attack scenario (#1237): attacker supplies a JSON body with
         ``tenant_id`` aiming to pin the cache key into a namespace they
         don't own. The middleware must ignore body content and key on
-        the authenticated principal / X-Tenant-ID header only.
+        the authenticated principal / secret-gated internal header only.
         """
         fake = _FakeAsyncRedis()
         _patched_middleware(monkeypatch, fake)
@@ -669,15 +742,14 @@ class TestDispatchCrossTenantIsolation:
                 "/echo",
                 headers={
                     "Idempotency-Key": "spoof-key",
-                    "X-Tenant-ID": "attacker-tenant",
+                    **_tenant_headers("attacker-tenant"),
                 },
                 json={"tenant_id": "victim-tenant"},
             )
 
-        # The stored Redis key must be namespaced under the HEADER
-        # tenant, NOT the body tenant. If this fails, an attacker could
-        # read victims' cached responses by replaying the same key with
-        # the victim's X-Tenant-ID.
+        # The stored Redis key must be namespaced under the AUTHENTICATED
+        # tenant, NOT the body tenant. (#2841 closed the sibling vector: the
+        # raw X-Tenant-ID header is no longer a namespace source either.)
         stored = [k.decode() for k in fake.store]
         assert any("attacker-tenant" in k for k in stored), stored
         assert not any("victim-tenant" in k for k in stored), (
@@ -733,7 +805,7 @@ class TestDispatchCacheErrorResilience:
         client = TestClient(app)
         resp = client.post(
             "/echo",
-            headers={"Idempotency-Key": "k", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": "k", **_tenant_headers("t")},
             content=b"x",
         )
         assert resp.status_code == 200
@@ -754,7 +826,7 @@ class TestDispatchCacheErrorResilience:
         client = TestClient(app)
         resp = client.post(
             "/echo",
-            headers={"Idempotency-Key": "k", "X-Tenant-ID": "t"},
+            headers={"Idempotency-Key": "k", **_tenant_headers("t")},
             content=b"hello",
         )
         assert resp.status_code == 200

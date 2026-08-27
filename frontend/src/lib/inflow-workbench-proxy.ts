@@ -6,7 +6,7 @@ import {
     resolveOpaqueSessionTenantId,
     validateUuid,
 } from './api-proxy';
-import { applyFirstPartyServiceCredentials } from './proxy-factory';
+import { applyFirstPartyServiceCredentialsForSession } from './proxy-factory';
 
 const READINESS_SUMMARY_PATH = 'api/v1/inflow-workbench/readiness/summary';
 const AUTH_SESSION_COOKIE = '__Host-regengine_session';
@@ -27,7 +27,12 @@ export async function applyInflowWorkbenchReadCredentials(
     path: string,
 ): Promise<NextResponse | null> {
     if (path !== READINESS_SUMMARY_PATH) {
-        return applyFirstPartyServiceCredentials(headers, request);
+        // #2806: every other ingestion path falls through to the master key.
+        // Use the session-resolving form so an opaque-session caller's tenant is
+        // derived from /auth/me rather than from the forgeable re_tenant_id
+        // cookie — the readiness route below has always done this; the
+        // fall-through did not.
+        return applyFirstPartyServiceCredentialsForSession(headers, request);
     }
 
     // Cookie-backed and direct API-key integrations remain authoritative at

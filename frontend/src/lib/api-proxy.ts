@@ -127,6 +127,10 @@ export async function resolveOpaqueSessionTenantId(sessionToken: string): Promis
  *    cookie is NEVER trusted as an authorization input (it is set
  *    `httpOnly:false` and is forgeable from `document.cookie`). We fail closed
  *    when no server-derived tenant is available (#2501).
+ *  - API-key callers (`re_api_key` / `x-regengine-api-key` / `x-api-key`): the
+ *    caller's key is never forwarded upstream by these routes, so the backend
+ *    cannot bind key→tenant and the path `tenantId` would be unchecked. Fails
+ *    closed with `E_APIKEY_TENANT_UNVERIFIABLE` (#2896).
  *
  * Returns a 403 `NextResponse` on mismatch, or `null` when access is allowed.
  * Callers must still run `requireProxyAuth` + `validateProxySession` first.
@@ -166,23 +170,68 @@ export async function enforceTenantMatch(
     return null;
   }
 
-  // API-key caller (re_api_key cookie / x-regengine-api-key header): the
-  // backend binds tenant to the key's server-side row and rejects a conflicting
-  // client-asserted tenant (resolve_tenant_context → 409 E_TENANT_MISMATCH), so
-  // the path tenantId cannot cross tenants. Let the backend remain authoritative
-  // here rather than fail closed and break legitimate API-key integrations.
+  // API-key caller (re_api_key cookie / x-regengine-api-key / x-api-key
+  // header). This branch used to return null (ALLOW), justified by the claim
+  // that the backend binds tenant to the key's server-side row. That
+  // justification is unreachable on these routes (#2896): the `[tenantId]`
+  // proxies never forward the caller's key — they attach the server's own
+  // privileged `REGENGINE_API_KEY` / `ADMIN_MASTER_KEY` (see
+  // `app/api/v1/compliance/snapshots/[tenantId]/route.ts`, which calls
+  // `getServerApiKey()` right after this guard). The backend therefore never
+  // sees the caller's key and cannot bind key→tenant, so any non-empty string
+  // in one of these slots authorized a cross-tenant read/write of another
+  // tenant's frozen compliance evidence. `x-api-key` is not even a backend auth
+  // header (services/shared/auth.py reads `X-RegEngine-API-Key`).
+  //
+  // Fail closed, with a distinct code so API-key integrations get a documented
+  // rejection instead of silent cross-tenant access. Restoring API-key support
+  // here requires forwarding the caller's own key upstream instead of the
+  // first-party key, which is a route-level change.
   if (
     isUsableCallerCredential(request.cookies.get('re_api_key')?.value) ||
     isUsableCallerCredential(request.headers.get('x-regengine-api-key')) ||
     isUsableCallerCredential(request.headers.get('x-api-key'))
   ) {
-    return null;
+    return NextResponse.json(
+      {
+        error:
+          'API-key callers cannot be bound to a tenant on this route — use a session-authenticated request',
+        code: 'E_APIKEY_TENANT_UNVERIFIABLE',
+      },
+      { status: 403 },
+    );
   }
 
   // No authoritative, server-validated tenant signal available. The
   // client-writable `re_tenant_id` cookie is never trusted here (#2501), so we
   // fail closed for cross-tenant path access by default.
   return mismatch;
+}
+
+/**
+ * Resolve the caller's authoritative tenant id from server-verifiable signals
+ * only: the RegEngine JWT `tenant_id` claim (issuer/audience/exp already checked
+ * by `decodeRegEngineClaims`), or the backend `/auth/me` lookup for an opaque
+ * `__Host-regengine_session`. The client-writable `re_tenant_id` cookie is never
+ * consulted. Returns `null` when no server-derived tenant is available, so
+ * callers forward no tenant header rather than a forgeable one.
+ */
+export async function resolveCallerTenantId(request: NextRequest): Promise<string | null> {
+  const regengineToken = request.cookies.get('re_access_token')?.value;
+  if (isUsableCallerCredential(regengineToken)) {
+    const payload = decodeRegEngineClaims(regengineToken);
+    if (payload) {
+      const tokenTenantId = extractRegEngineTenantId(payload);
+      if (tokenTenantId) return tokenTenantId.toLowerCase();
+    }
+  }
+
+  const sessionToken = request.cookies.get('__Host-regengine_session')?.value;
+  if (isUsableCallerCredential(sessionToken)) {
+    return resolveOpaqueSessionTenantId(sessionToken);
+  }
+
+  return null;
 }
 
 /** Percent-encode a path segment after validating it is URL-safe.
@@ -358,12 +407,51 @@ export function hasSupabaseSessionCookies(request: NextRequest): boolean {
   });
 }
 
+/**
+ * Constant-time string equality.
+ *
+ * Compares every position rather than exiting at the first difference, so the
+ * time taken does not reveal how much of a guess was correct. Written against
+ * WebCrypto-era primitives only (no `node:crypto`) so this module stays usable
+ * from an Edge route; the length of the configured key is not treated as a
+ * secret, its contents are.
+ */
+function constantTimeEquals(candidate: string, expected: string): boolean {
+  const length = Math.max(candidate.length, expected.length);
+  let difference = candidate.length ^ expected.length;
+  for (let i = 0; i < length; i += 1) {
+    difference |= (candidate.charCodeAt(i) || 0) ^ (expected.charCodeAt(i) || 0);
+  }
+  return difference === 0;
+}
+
+/** True only when `value` IS the configured admin master key.
+ *
+ *  #2825: presence used to be enough. Neither slot is a secret the caller had
+ *  to know — `POST /api/session` writes any `admin_key` string from the request
+ *  body straight into the `re_admin_key` cookie without validating it, and the
+ *  `x-admin-key` header needs no `/api/session` call at all. The review proxies
+ *  then swap in the real `ADMIN_MASTER_KEY` via `getAdminMasterKey()`, so a
+ *  self-asserted capability was unlocking a server-held secret. Requiring the
+ *  caller to already hold that secret makes the substitution a no-op for them
+ *  and a 403 for everyone else; session-authenticated admins without the key go
+ *  through `requireFreshAdminCapability`'s `/auth/me` lookup instead.
+ */
+function isAdminMasterKey(value: string | null | undefined): boolean {
+  if (!isUsableCallerCredential(value)) return false;
+  const expected = getAdminMasterKey();
+  // Unconfigured server: nothing to match, and every consumer of this gate
+  // fails with a 500 immediately afterwards. Never fall back to presence.
+  if (!expected) return false;
+  return constantTimeEquals(value, expected);
+}
+
 export function hasAdminCapability(request: NextRequest): boolean {
-  if (isUsableCallerCredential(request.cookies.get('re_admin_key')?.value)) {
+  if (isAdminMasterKey(request.cookies.get('re_admin_key')?.value)) {
     return true;
   }
 
-  if (isUsableCallerCredential(request.headers.get('x-admin-key'))) {
+  if (isAdminMasterKey(request.headers.get('x-admin-key'))) {
     return true;
   }
 

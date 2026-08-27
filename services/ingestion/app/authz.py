@@ -331,6 +331,13 @@ async def get_ingestion_principal(
     - If ``API_KEY`` is configured: require either that legacy master key or a
       valid scoped key from the API key store.
     - If ``API_KEY`` is not configured: keep local-dev behavior open.
+
+    The direct ``api_keys`` table lookup is a fallback for **authentication**
+    only — it covers a valid scoped key that the key store could not validate
+    because the store is not enabled. It is NOT a general retry: a non-401
+    refusal from ``require_api_key`` (notably the 429 that carries both the
+    per-key rate limit and the store's Redis-down fail-closed denial) is
+    re-raised untouched (#2847).
     """
     settings = _current_settings()
     configured_api_key = getattr(settings, "api_key", None)
@@ -362,6 +369,29 @@ async def get_ingestion_principal(
             )
             return _principal_from_api_key(api_key)
         except HTTPException as exc:
+            # SECURITY (#2847): only a genuine *authentication* failure may
+            # fall through to the direct table lookup.
+            #
+            # This was a bare ``except HTTPException``, so ``require_api_key``'s
+            # 429 (shared/auth.py raises HTTP_429_TOO_MANY_REQUESTS when the
+            # store's check_rate_limit denies) was caught and the very same key
+            # re-validated by ``_lookup_scoped_key_from_db`` — which checks only
+            # key-hash / enabled / expires_at and consults no rate limiter. The
+            # bypass completed cleanly: 429 → caught → re-validated → admitted,
+            # nullifying the per-key ``rate_limit_per_minute`` budget on every
+            # route guarded by this dependency.
+            #
+            # It also inverted the store's deliberate posture:
+            # ``DatabaseAPIKeyStore.check_rate_limit`` returns allowed=False
+            # when Redis is absent ("Fail closed: no Redis means no distributed
+            # rate limiting"), so during a Redis outage these routes admitted
+            # everything — the opposite of the design.
+            #
+            # 401 still falls back, which is the case the fallback exists for:
+            # the key store not being enabled, leaving a valid scoped key with
+            # no validator. Everything else (429, 403, 5xx) is terminal.
+            if exc.status_code != 401:
+                raise
             principal = _lookup_scoped_key_from_db(x_regengine_api_key)
             if principal:
                 return principal
@@ -395,7 +425,13 @@ async def get_ingestion_principal(
             x_regengine_api_key=x_regengine_api_key,
         )
         return _principal_from_api_key(api_key)
-    except HTTPException:
+    except HTTPException as exc:
+        # #2847: same narrowing as the configured-API_KEY branch above, so the
+        # two paths cannot drift. A rate-limit denial is terminal even in dev —
+        # otherwise this branch reintroduces the bypass on any deployment that
+        # leaves API_KEY unset.
+        if exc.status_code != 401:
+            raise
         principal = _lookup_scoped_key_from_db(x_regengine_api_key)
         if principal:
             return principal

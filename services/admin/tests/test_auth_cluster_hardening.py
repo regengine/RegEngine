@@ -335,10 +335,15 @@ async def test_accept_invite_existing_user_with_token_succeeds(monkeypatch):
         _FakeResult(existing_user),  # user lookup
         _FakeResult(None),  # membership lookup — no existing
     ]
-    # AuditLogger.log_event is idempotent for our purposes
+    # This test is about token / expiry handling, not the audit chain, so the
+    # logger is stubbed out. It must return a truthy entry id: since #2857,
+    # ``accept_invite`` treats a ``None`` return as a failed audit-chain write
+    # and aborts the acceptance. The previous ``return_value=None`` was an
+    # incidental MagicMock default, not an assertion that audit failure is
+    # tolerated — every assertion below is unchanged.
     monkeypatch.setattr(
         "services.admin.app.invite_routes.AuditLogger",
-        MagicMock(log_event=MagicMock(return_value=None)),
+        MagicMock(log_event=MagicMock(return_value=uuid.uuid4())),
     )
     monkeypatch.setattr(
         "services.admin.app.invite_routes.supplier_graph_sync",
@@ -379,9 +384,10 @@ async def test_accept_invite_existing_user_with_naive_expiry_succeeds(monkeypatc
         _FakeResult(existing_user),
         _FakeResult(None),
     ]
+    # Truthy entry id required since #2857 — see the note above.
     monkeypatch.setattr(
         "services.admin.app.invite_routes.AuditLogger",
-        MagicMock(log_event=MagicMock(return_value=None)),
+        MagicMock(log_event=MagicMock(return_value=uuid.uuid4())),
     )
     monkeypatch.setattr(
         "services.admin.app.invite_routes.supplier_graph_sync",

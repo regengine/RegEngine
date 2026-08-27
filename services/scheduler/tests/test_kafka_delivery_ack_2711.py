@@ -4,6 +4,14 @@ Pre-fix, ``_send`` returned True on local enqueue and the batch emitters
 acked on that — async delivery failures only surfaced in flush() logs.
 Send futures now carry an errback; the batch emitters reconcile the
 observed failures into (success, failures) after flush.
+
+NOTE (#2969): the tests below drive a ``MagicMock`` whose ``send`` returns a
+future the test itself supplies, so they stayed green for the whole period
+in which ``KafkaProducerCompat.send()`` returned ``None`` and the errback was
+never registered at all. They are kept as coverage of the batch
+reconciliation arithmetic; the end-to-end guarantee is pinned by
+``test_kafka_producer_delivery_handle_2969.py``, which drives the real
+``KafkaProducerCompat`` against a fake confluent ``Producer``.
 """
 
 from __future__ import annotations

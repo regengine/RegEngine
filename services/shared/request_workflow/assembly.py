@@ -16,6 +16,18 @@ from .utils import format_countdown, row_to_dict, row_to_serializable
 
 logger = structlog.get_logger("request-workflow")
 
+# #2908: ``check_deadline_status`` used to return EVERY non-submitted
+# request case for a tenant with no LIMIT, materialised in one go. The
+# scheduler calls it once per tenant every 5 minutes on a session drawn
+# from the pool that serves API traffic, so tick memory and duration grew
+# with open-case count.
+#
+# The LIMIT is applied AFTER ``ORDER BY response_due_at ASC``, so what a
+# truncation drops is always the *least* urgent tail — never an overdue
+# case. Hitting it is logged at ERROR, because a silently shortened
+# deadline sweep is a compliance control failing open.
+DEADLINE_STATUS_MAX_CASES = 500
+
 
 class AssemblyMixin:
     """Methods for package assembly, signoff, and blocking defect checks."""
@@ -717,6 +729,7 @@ class AssemblyMixin:
     def check_deadline_status(
         self,
         tenant_id: str,
+        limit: int = DEADLINE_STATUS_MAX_CASES,
     ) -> List[Dict[str, Any]]:
         """Check all active cases for deadline urgency.
 
@@ -727,6 +740,13 @@ class AssemblyMixin:
         - 'normal': >6 hours remaining
 
         Use this in a background job or health check to drive alerts.
+
+        #2908 — bounded by ``limit`` (default
+        :data:`DEADLINE_STATUS_MAX_CASES`). ``ORDER BY response_due_at
+        ASC`` runs before the LIMIT, so truncation can only ever drop the
+        least-urgent tail; overdue and critical cases are always inside
+        the window. Reaching the limit is logged at ERROR rather than
+        silently accepted.
         """
         result = self.db.execute(
             text("""
@@ -741,8 +761,9 @@ class AssemblyMixin:
                 WHERE tenant_id = :tenant_id
                   AND package_status NOT IN ('submitted', 'amended')
                 ORDER BY response_due_at ASC
+                LIMIT :limit
             """),
-            {"tenant_id": tenant_id},
+            {"tenant_id": tenant_id, "limit": int(limit)},
         )
 
         cases = []
@@ -770,6 +791,19 @@ class AssemblyMixin:
                     "gap_count": row["gap_count"],
                     "active_exception_count": row["active_exception_count"],
                 }
+            )
+
+        if len(cases) >= int(limit):
+            # #2908: never let a shortened sweep pass as a complete one.
+            logger.error(
+                "deadline_status_truncated",
+                tenant_id=tenant_id,
+                limit=int(limit),
+                detail=(
+                    "Open request cases for this tenant exceed the deadline "
+                    "sweep limit; the least-urgent tail was not evaluated. "
+                    "Raise the limit or page the sweep."
+                ),
             )
 
         overdue_count = sum(1 for c in cases if c["urgency"] == "overdue")

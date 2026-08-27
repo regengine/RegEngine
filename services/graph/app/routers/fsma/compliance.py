@@ -126,7 +126,7 @@ async def export_fda_request_sheet(
         writer.writerow(
             [
                 "Traceability Lot Code",
-                "Traceability Lot Code Description",
+                "Event Type (CTE)",
                 "Product Description",
                 "Quantity",
                 "Unit of Measure",
@@ -146,7 +146,7 @@ async def export_fda_request_sheet(
             writer.writerow(
                 [
                     csv_safe(event.get("tlc", "")),
-                    "",  # Description of the code itself (optional)
+                    csv_safe(event.get("type", "")),
                     csv_safe(event.get("product_description", "")),
                     csv_safe(event.get("quantity", "")),
                     csv_safe(event.get("unit_of_measure", "")),

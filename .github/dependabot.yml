@@ -282,7 +282,6 @@ updates:
       nlp-models:
         # NLP/ML libraries
         patterns:
-          - "spacy*"
           - "transformers"
           - "torch"
           - "scikit-learn"

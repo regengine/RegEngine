@@ -39,6 +39,29 @@ _DEFAULT_HEARTBEAT_MAX_FAILURES = 3
 _HEARTBEAT_SHUTDOWN_JOIN_TIMEOUT_SECONDS = 5.0
 
 
+def _release_election_connection(conn) -> None:
+    """Hand the dedicated advisory-lock connection back to the pool (#2882).
+
+    ``wait_for_leadership`` opens ONE connection per election pass and holds
+    it open for the entire leadership term (``keepalives=1``, so the OS will
+    not reap it). Every exit path has to release it: the ``return`` taken
+    when the callback finishes, the same ``return`` reached when the
+    workload crashes (the ``return`` sits in a ``finally``, so it swallows
+    the exception), and the generic retry handler that loops back to
+    ``conn = None``. None of them did, and the scheduler runs inside the
+    process that serves API traffic — every leadership flap stranded one
+    more connection from the pool the request handlers share.
+
+    Idempotent and never raises: teardown must not become the failure.
+    """
+    if conn is None:
+        return
+    try:
+        conn.close()
+    except Exception as close_error:  # noqa: BLE001 — teardown must not raise
+        logger.error("leadership_conn_close_failed", error=str(close_error))
+
+
 class DistributedContext:
     """Manages distributed leadership via database locks."""
 
@@ -303,18 +326,28 @@ class DistributedContext:
             except SQLAlchemyError as e:
                 logger.error("db_connection_lost_retrying", error=str(e))
                 self._is_leader = False
-                if conn:
-                    try:
-                        conn.close()
-                    except Exception as close_error:
-                        logger.error("leadership_conn_close_failed", error=str(close_error))
+                # Release eagerly, BEFORE the backoff sleep — no point
+                # holding a broken connection for poll_interval seconds.
+                _release_election_connection(conn)
+                conn = None
                 # Exponential backoff?
                 time.sleep(poll_interval)
             except Exception as e:
                 logger.exception("unexpected_error_in_election", error=str(e))
                 self._is_leader = False
+                # #2882: this handler used to loop straight back to
+                # ``conn = None``, stranding the connection it had open.
+                _release_election_connection(conn)
+                conn = None
                 # Avoid tight loop on crash
                 time.sleep(poll_interval)
+            finally:
+                # #2882: backstop for the paths that leave the function
+                # rather than the loop — the ``return`` after the callback
+                # finishes (or crashes). Both handlers above have already
+                # nulled ``conn``, so this is a no-op on the retry paths.
+                _release_election_connection(conn)
+                conn = None
 
     # ── #1142: heartbeat implementation ────────────────────────────────────
     def _run_heartbeat(

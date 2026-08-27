@@ -23,7 +23,7 @@ import {
 } from '@/lib/api-proxy';
 import {
     applyCookieCredentials,
-    applyFirstPartyServiceCredentials,
+    applyFirstPartyServiceCredentialsForSession,
 } from '@/lib/proxy-factory';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (requestId) forwardHeaders.set('X-Request-ID', requestId);
 
     applyCookieCredentials(forwardHeaders, request);
-    const credentialError = applyFirstPartyServiceCredentials(forwardHeaders, request);
+    const credentialError = await applyFirstPartyServiceCredentialsForSession(forwardHeaders, request);
     if (credentialError) return credentialError;
 
     const upstreamUrl = `${nlpBaseUrl.replace(/\/$/, '')}/query/traceability`;

@@ -113,7 +113,9 @@ RETURN
 
 
 @router.get(
-    "/lineage/{tlc}/history",
+    # Mounted under prefix="/lineage" in services/graph/app/routes.py — the
+    # segment must not be repeated here or the served path doubles (#2946).
+    "/{tlc}/history",
     response_model=FactLineageResponse,
     summary="Get fact version history",
     description=(
@@ -229,7 +231,14 @@ async def get_fact_lineage(
         # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            get_audit_log().log(
+            # #2848: ``log`` drives synchronous psycopg2 inserts with retry.
+            # Called inline from this ``async def`` handler it blocked the
+            # whole Uvicorn event loop — every concurrent request, health
+            # probes included — for as long as Postgres was slow. ``alog``
+            # runs the same write (and its full retry/backoff policy) on a
+            # worker thread. This was the last unconverted async call site;
+            # the four in routers/fsma/traceability.py already use it.
+            await get_audit_log().alog(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
                 target_id=tlc,

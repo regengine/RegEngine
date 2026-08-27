@@ -15,6 +15,23 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from shared.idempotency import IDEMPOTENCY_KEY_PREFIX, IdempotencyMiddleware
 
+# #2841: the raw ``X-Tenant-ID`` header is no longer a tenant source. Tests
+# that only need *a* tenant present the secret-gated internal service header
+# that ``shared/middleware/tenant_context.py`` already treats as trustworthy.
+_INTERNAL_SECRET = "test-internal-secret-2841"
+
+
+@pytest.fixture(autouse=True)
+def _internal_secret_configured(monkeypatch):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+
+
+def _tenant_headers(tenant: str) -> dict[str, str]:
+    return {
+        "X-RegEngine-Tenant-ID": tenant,
+        "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
+    }
+
 # ---------------------------------------------------------------------------
 # Cache-key composition (#1237)
 # ---------------------------------------------------------------------------
@@ -56,12 +73,31 @@ def test_resolve_tenant_prefers_principal_over_header():
     assert mw._resolve_tenant_id(request) == "principal-tenant"
 
 
-def test_resolve_tenant_uses_header_when_no_principal():
+def test_resolve_tenant_refuses_the_raw_header_when_no_principal(monkeypatch):
+    """#2841: ``X-Tenant-ID`` is unauthenticated client input.
+
+    This case previously asserted ``== "only-header"`` — it encoded the
+    vulnerability. The middleware serves cache hits before authentication
+    runs, so a header-named namespace let any caller replay another
+    tenant's cached POST response. Resolution must now fail closed.
+    """
     mw = IdempotencyMiddleware(app=MagicMock())
     request = MagicMock(spec=Request)
     request.state = MagicMock()
     request.state.principal = None
     request.headers = {"X-Tenant-ID": "only-header"}
+
+    assert mw._resolve_tenant_id(request) is None
+
+
+def test_resolve_tenant_uses_secret_gated_internal_header(monkeypatch):
+    """Internal service-to-service callers keep a namespace."""
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+    mw = IdempotencyMiddleware(app=MagicMock())
+    request = MagicMock(spec=Request)
+    request.state = MagicMock()
+    request.state.principal = None
+    request.headers = _tenant_headers("only-header")
 
     assert mw._resolve_tenant_id(request) == "only-header"
 
@@ -147,7 +183,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
 
     @app.post("/echo")
     async def echo(body: dict, request: Request):
-        tenant = request.headers.get("X-Tenant-ID")
+        tenant = request.headers.get("X-RegEngine-Tenant-ID")
         call_counts[tenant[-1]] += 1  # last char (a/b)
         return {"tenant": tenant, "n": call_counts[tenant[-1]]}
 
@@ -170,7 +206,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp_a = await client.post(
             "/echo",
-            headers={"Idempotency-Key": "same-key", "X-Tenant-ID": "tenant-a"},
+            headers={"Idempotency-Key": "same-key", **_tenant_headers("tenant-a")},
             json={"x": 1},
         )
         assert resp_a.status_code == 200
@@ -180,7 +216,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
         # Same Idempotency-Key, different tenant — should NOT return tenant-a's body.
         resp_b = await client.post(
             "/echo",
-            headers={"Idempotency-Key": "same-key", "X-Tenant-ID": "tenant-b"},
+            headers={"Idempotency-Key": "same-key", **_tenant_headers("tenant-b")},
             json={"x": 1},
         )
         assert resp_b.status_code == 200
@@ -190,7 +226,7 @@ async def test_middleware_isolates_tenants_on_shared_key(monkeypatch):
         # Tenant A retry: should hit its own cached response (not tenant B's).
         resp_a_retry = await client.post(
             "/echo",
-            headers={"Idempotency-Key": "same-key", "X-Tenant-ID": "tenant-a"},
+            headers={"Idempotency-Key": "same-key", **_tenant_headers("tenant-a")},
             json={"x": 1},
         )
         assert resp_a_retry.status_code == 200

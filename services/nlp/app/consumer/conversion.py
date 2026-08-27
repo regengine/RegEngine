@@ -18,14 +18,81 @@ from shared.schemas import (
 )
 
 from ..classification import SignalClassifier
-from ..resolution import EntityResolver
+from ..extractor import infer_obligation_type
+from ..resolution import MASTER_DATA_SOURCE, EntityResolver
 
-from .constants import _LEGACY_HEURISTIC_CONFIDENCE_CAP
+from .constants import (
+    _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+    _LLM_EXTRACTION_CONFIDENCE_CAP,
+)
 
 logger = structlog.get_logger("nlp-consumer")
 
 RESOLVER = EntityResolver()
 CLASSIFIER = SignalClassifier()
+
+# The single legal mapping from the extractor's modality vocabulary onto the
+# canonical ObligationType (#2942). This module used to re-derive modality with
+# a backward-only negation window that could never see the "not" in "shall
+# not", so every prohibition was persisted as MUST — the inversion of the rule.
+# Modality is owned by ``extractor.infer_obligation_type``; this table is the
+# only thing that stands between its verdict and the canonical enum.
+#
+# PROHIBITED deliberately splits by ``negation_scope``: a ban is MUST_NOT,
+# while a lifted duty ("small farms are not required to file") is a permission.
+# Typing an exemption MUST_NOT would forbid conduct the regulation merely
+# stopped mandating — the same inversion, pointed the other way.
+_MODALITY_TO_OBLIGATION_TYPE = {
+    ("MANDATORY", None): ObligationType.MUST,
+    ("PERMITTED", None): ObligationType.MAY,
+    ("CONDITIONAL", None): ObligationType.SHOULD,
+    ("PROHIBITED", "prohibition"): ObligationType.MUST_NOT,
+    ("PROHIBITED", "exemption"): ObligationType.MAY,
+}
+
+_MODALITIES_WITH_SCOPE = {"PROHIBITED"}
+
+
+def _modality_verdict(entity: dict) -> dict:
+    """Return the extractor's modality verdict for an OBLIGATION *entity*.
+
+    ``extract_entities`` already stamps the verdict onto ``attrs`` (#1299), so
+    the normal path is a read. Entities hand-built by other producers carry no
+    ``attrs``; those are re-scored by calling the same function rather than by
+    re-implementing it here.
+    """
+
+    attrs = entity.get("attrs") or {}
+    modality = attrs.get("obligation")
+    scope = attrs.get("negation_scope")
+    if (modality, scope if modality in _MODALITIES_WITH_SCOPE else None) in (
+        _MODALITY_TO_OBLIGATION_TYPE
+    ):
+        return {
+            "obligation": modality,
+            "negation_detected": bool(attrs.get("negation_detected")),
+            "negation_scope": scope,
+        }
+    return infer_obligation_type(entity.get("text") or "")
+
+
+def _obligation_type_for(verdict: dict) -> ObligationType:
+    """Map a modality verdict onto the canonical ObligationType."""
+
+    modality = verdict.get("obligation")
+    scope = verdict.get("negation_scope") if modality in _MODALITIES_WITH_SCOPE else None
+    try:
+        return _MODALITY_TO_OBLIGATION_TYPE[(modality, scope)]
+    except KeyError:
+        # An unmapped verdict must not silently become a mandate. SHOULD
+        # asserts neither a duty nor a ban, and the review reason below makes
+        # the gap visible to the reviewer.
+        logger.warning(
+            "obligation_modality_unmapped",
+            modality=modality,
+            negation_scope=scope,
+        )
+        return ObligationType.SHOULD
 
 
 def _now_iso() -> str:
@@ -63,59 +130,12 @@ def _convert_entities_to_extraction(
         action_words = ["shall", "must", "required to", "has to", "should", "may"]
         action = next((w for w in action_words if w in text.lower()), "must")
 
-        # Determine obligation type with negation and modality detection (#1299).
-        #
-        # Negation detection: if a matched keyword is immediately preceded by
-        # a negation token ("not", "no", "never", "without") within 3 tokens,
-        # the match is skipped — "must not report" should NOT infer MANDATORY.
-        # We tokenise on whitespace and check the 3 tokens before the keyword.
-        #
-        # Modality detection:
-        #   MANDATORY  ← "must", "shall", "required"
-        #   RECOMMENDED ← "may", "should"
-        # We use ObligationType.MUST for MANDATORY and ObligationType.SHOULD for
-        # RECOMMENDED; ObligationType.MAY maps to the weakest recommendation.
-        _NEGATION_TOKENS = {"not", "no", "never", "without"}
-
-        def _keyword_is_negated(full_text: str, keyword: str) -> bool:
-            """Return True if ``keyword`` appears preceded by a negation token
-            within 3 whitespace-delimited tokens in ``full_text``."""
-            tokens = full_text.lower().split()
-            for idx, tok in enumerate(tokens):
-                # Strip punctuation from token for comparison.
-                clean_tok = tok.strip(".,;:()[]\"'")
-                if clean_tok == keyword:
-                    preceding = tokens[max(0, idx - 3): idx]
-                    preceding_clean = {t.strip(".,;:()[]\"'") for t in preceding}
-                    if preceding_clean & _NEGATION_TOKENS:
-                        return True
-            return False
-
-        text_lower = text.lower()
-
-        # MANDATORY keywords — "must", "shall", "required", "mandatory" (#1299)
-        _MANDATORY_KEYWORDS = ["must", "shall", "required", "mandatory"]
-        # RECOMMENDED keywords — "may", "should", "can", "recommend" (#1299)
-        _RECOMMENDED_KEYWORDS = ["should", "can", "may", "recommend"]
-
-        obl_type = None
-        # Check MANDATORY first (higher precedence).
-        for kw in _MANDATORY_KEYWORDS:
-            if kw in text_lower and not _keyword_is_negated(text, kw):
-                obl_type = ObligationType.MUST
-                break
-
-        if obl_type is None:
-            for kw in _RECOMMENDED_KEYWORDS:
-                if kw in text_lower and not _keyword_is_negated(text, kw):
-                    # "should"/"can"/"recommend" → RECOMMENDED (SHOULD);
-                    # "may" → weakest recommendation (MAY).
-                    obl_type = ObligationType.MAY if kw == "may" else ObligationType.SHOULD
-                    break
-
-        if obl_type is None:
-            # Default when no keyword matched or all were negated.
-            obl_type = ObligationType.MUST
+        # Obligation modality (#1299, #2942). Read the verdict the extractor
+        # already computed instead of re-deriving it; see
+        # ``_MODALITY_TO_OBLIGATION_TYPE`` above for why there is exactly one
+        # implementation of this.
+        verdict = _modality_verdict(obl)
+        obl_type = _obligation_type_for(verdict)
 
         # Find associated thresholds (within proximity)
         associated_thresholds = []
@@ -168,13 +188,28 @@ def _convert_entities_to_extraction(
                 }
 
                 if resolution:
-                    entity_info["entity_id"] = resolution["id"]
                     entity_info["normalized_name"] = resolution["name"]
                     entity_info["entity_type"] = resolution["type"]
                     entity_info["match_strategy"] = resolution.get(
                         "match_strategy", "unknown"
                     )
                     entity_info["match_score"] = resolution.get("match_score")
+                    source = resolution.get("source")
+                    entity_info["resolution_source"] = source or "unknown"
+                    if source and source != MASTER_DATA_SOURCE:
+                        # A real master-data lookup: the identifier is
+                        # authoritative and belongs in the audit trail.
+                        entity_info["entity_id"] = resolution["id"]
+                    else:
+                        # #2944 — the id would be a repository literal
+                        # (``duns:007874200``). Persisting it into FSMA
+                        # compliance evidence fabricates provenance that looks
+                        # like an MDM resolution, so the field is omitted
+                        # rather than stubbed. The raw name, the candidate
+                        # name and the match score still reach the reviewer.
+                        entity_info["entity_id_withheld_reason"] = (
+                            "stub_master_data_is_not_an_authoritative_identifier"
+                        )
 
                 resolved_entities.append(entity_info)
 
@@ -191,7 +226,14 @@ def _convert_entities_to_extraction(
             "risk_level": risk,
             "extractor": "legacy_regex_v1",
             "confidence_capped_at": _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+            # Modality provenance (#2942) so a reviewer can see that the
+            # obligation direction came from a negated reading, and so an
+            # inverted value is detectable in stored data.
+            "obligation_modality": verdict.get("obligation"),
+            "negation_detected": bool(verdict.get("negation_detected")),
         }
+        if verdict.get("negation_scope"):
+            attributes["negation_scope"] = verdict["negation_scope"]
         if resolved_entities:
             attributes["resolved_entities"] = resolved_entities
 
@@ -246,6 +288,125 @@ def _convert_entities_to_extraction(
 
     return extractions
 
+
+# ---------------------------------------------------------------------------
+# Generative-LLM results → canonical ExtractionPayload (#2947)
+# ---------------------------------------------------------------------------
+
+# LLMExtraction.obligation_type vocabulary → canonical enum. PROHIBITION maps
+# to MUST_NOT for the same reason the regex path does (#2942): a ban stored as
+# a mandate is the inversion of the rule. EXEMPTION lifts a duty, so it is a
+# permission, not a ban. UNKNOWN asserts neither and is flagged for the
+# reviewer instead of defaulting to a mandate.
+_LLM_OBLIGATION_TYPE = {
+    "REQUIREMENT": ObligationType.MUST,
+    "PROHIBITION": ObligationType.MUST_NOT,
+    "REPORTING": ObligationType.REPORTING,
+    "EXEMPTION": ObligationType.MAY,
+    "UNKNOWN": ObligationType.SHOULD,
+}
+
+_LLM_ACTION = {
+    ObligationType.MUST: "must",
+    ObligationType.MUST_NOT: "must not",
+    ObligationType.REPORTING: "must report",
+    ObligationType.MAY: "may",
+    ObligationType.SHOULD: "should",
+}
+
+
+def _llm_field(item, name: str, default=None):
+    """Read *name* off an LLMExtraction or an equivalent mapping."""
+
+    if isinstance(item, dict):
+        value = item.get(name, default)
+    else:
+        value = getattr(item, name, default)
+    return default if value is None else value
+
+
+def _convert_llm_results_to_extractions(
+    llm_results: list, doc_id: str, source_url: str
+) -> list[ExtractionPayload]:
+    """Bridge ``LLMGenerativeExtractor`` output into canonical extractions.
+
+    Before this existed the consumer called the extractor, logged
+    ``result_count``, and dropped the list on the floor: the routing loop
+    iterated only the regex path's ``extractions``, so an operator who enabled
+    ``NLP_ENABLE_LLM_EXTRACTOR`` paid a third-party provider per document for
+    output nothing read, and the hallucination, provenance, injection-marker
+    and truncation guardrails in ``llm_extractor.py`` protected nothing (#2947).
+
+    Fail-closed by construction:
+
+    * confidence is capped at :data:`_LLM_EXTRACTION_CONFIDENCE_CAP`, below the
+      medium routing threshold, so nothing here can auto-publish to the graph
+      on an LLM's self-reported score;
+    * an item with no ``provision_text`` is dropped, because there is no span a
+      reviewer could check against the source document;
+    * ``needs_review`` / ``review_reason`` / ``truncated_input`` ride along in
+      ``attributes`` and become review-reason codes.
+    """
+
+    extractions: list[ExtractionPayload] = []
+    dropped = 0
+
+    for item in llm_results or []:
+        provision_text = str(_llm_field(item, "provision_text", "")).strip()
+        if not provision_text:
+            dropped += 1
+            continue
+
+        raw_type = str(_llm_field(item, "obligation_type", "UNKNOWN"))
+        obl_type = _LLM_OBLIGATION_TYPE.get(raw_type, ObligationType.SHOULD)
+
+        try:
+            reported_confidence = float(_llm_field(item, "confidence", 0.0))
+        except (TypeError, ValueError):
+            reported_confidence = 0.0
+        confidence = max(
+            0.0, min(reported_confidence, _LLM_EXTRACTION_CONFIDENCE_CAP)
+        )
+
+        span_start = _llm_field(item, "source_span_start", 0)
+        parts = provision_text.split()
+        attributes = {
+            "document_id": doc_id,
+            "source_url": source_url,
+            "extractor": "llm_generative_v1",
+            "confidence_capped_at": _LLM_EXTRACTION_CONFIDENCE_CAP,
+            "llm_reported_confidence": reported_confidence,
+            "llm_obligation_type": raw_type,
+            "llm_source_document_id": _llm_field(item, "source_document_id"),
+            "llm_source_span_end": _llm_field(item, "source_span_end"),
+            "llm_needs_review": bool(_llm_field(item, "needs_review", False)),
+            "llm_review_reason": _llm_field(item, "review_reason"),
+            "llm_truncated_input": bool(_llm_field(item, "truncated_input", False)),
+        }
+        if raw_type not in _LLM_OBLIGATION_TYPE:
+            attributes["llm_obligation_type_unmapped"] = True
+
+        extractions.append(
+            ExtractionPayload(
+                subject=" ".join(parts[: min(3, len(parts))]),
+                action=_LLM_ACTION.get(obl_type, "must"),
+                object=None,
+                obligation_type=obl_type,
+                confidence_score=confidence,
+                source_text=provision_text,
+                source_offset=int(span_start or 0),
+                attributes=attributes,
+            )
+        )
+
+    if dropped:
+        logger.warning(
+            "llm_results_dropped_no_provenance_span",
+            document_id=doc_id,
+            dropped=dropped,
+        )
+
+    return extractions
 
 def _score_regulatory_date(date_value: Optional[str], attrs: dict) -> float:
     """Score a REGULATORY_DATE match by signal quality (#1206).

@@ -23,9 +23,11 @@ This module freezes:
 2. An end-to-end ``/document`` mapping test per set asserting the
    resulting ``IngestEvent`` CTE KDEs (quantity, product, location_gln,
    timestamp/event_date).
-3. An explicit test pinning the SN1 (fallback 1.0) vs PO1/IT1/RCD
-   (fallback 0.0) quantity-fallback divergence, so the difference is a
-   documented decision rather than an accident.
+3. An explicit test pinning the quantity-fallback semantics shared by
+   SN1/PO1/IT1/RCD, so a future change to any of them is a deliberate,
+   reviewed decision rather than an accident. (Until #2974 the 856 SN1
+   handler diverged with ``fallback=1.0``; that divergence synthesized a
+   quantity the document never stated and has been removed.)
 
 Regenerating the snapshots
 --------------------------
@@ -63,6 +65,7 @@ from app.edi_ingestion.extractors import _extract_fields_for_set  # noqa: E402
 from app.edi_ingestion.parser import (  # noqa: E402
     _detect_transaction_set,
     _parse_x12_segments,
+    _split_transaction_sets,
 )
 from app.webhook_models import EventResult, IngestResponse  # noqa: E402
 
@@ -73,11 +76,20 @@ TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
 _VALID_FSMA_TLC = "00012345678901-LOT001"
 
 # Map fixture stem -> expected transaction set, for the end-to-end loop.
+# One ST/SE pair each; ``_MULTI_SET_FIXTURES`` below covers batched
+# interchanges, which snapshot a list rather than a single dict.
 _FIXTURES = {
     "asn_856": "856",
+    # #2974: three item-level SN1 lines in one ASN, in cartons (CT).
+    "asn_856_multi_line": "856",
     "po_850": "850",
     "invoice_810": "810",
     "receiving_861": "861",
+}
+
+# #2976: fixture stem -> the transaction set every ST/SE pair carries.
+_MULTI_SET_FIXTURES = {
+    "asn_856_batch": "856",
 }
 
 
@@ -117,6 +129,60 @@ def test_edi_extractor_golden(name: str) -> None:
     )
 
 
+@pytest.mark.parametrize("name", sorted(_MULTI_SET_FIXTURES))
+def test_edi_multi_set_extractor_golden(name: str) -> None:
+    """#2976: a batched interchange snapshots one extraction PER ST/SE
+    pair, and no slice may read a body segment from another set.
+
+    Before #2976 the corpus had no multi-ST fixture at all, so the
+    silent collapse of a batched file into one merged event had no test
+    that could fail.
+    """
+    raw = (_CORPUS_DIR / f"{name}.edi").read_text(encoding="utf-8")
+    segments = _parse_x12_segments(raw)
+    set_slices = _split_transaction_sets(segments)
+    assert len(set_slices) > 1, f"{name}.edi must carry more than one ST/SE pair"
+
+    actual = []
+    for slice_segments in set_slices:
+        transaction_set = _detect_transaction_set(slice_segments)
+        assert transaction_set == _MULTI_SET_FIXTURES[name]
+        actual.append(_extract_fields_for_set(transaction_set, slice_segments))
+
+    expected_path = _CORPUS_DIR / f"{name}.expected.json"
+    if os.getenv("REGEN_EDI_GOLDEN"):
+        expected_path.write_text(json.dumps(actual, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        pytest.skip(f"Regenerated snapshot for {name}")
+
+    assert expected_path.exists(), (
+        f"Missing golden snapshot {expected_path.name}. Generate it with "
+        "REGEN_EDI_GOLDEN=1 and review the diff before committing."
+    )
+    expected = json.loads(expected_path.read_text(encoding="utf-8"))
+    assert actual == expected, (
+        f"EDI extraction for {name!r} drifted from the committed golden snapshot.\n"
+        f"expected={json.dumps(expected, indent=2, sort_keys=True)}\n"
+        f"actual={json.dumps(actual, indent=2, sort_keys=True)}"
+    )
+
+    # Every set must be distinguishable — a merged extraction would
+    # collapse these into one repeated value.
+    asn_numbers = [item["asn_number"] for item in actual]
+    assert len(set(asn_numbers)) == len(asn_numbers), "#2976: ASN numbers bled across ST/SE boundaries"
+    ship_from = [item["ship_from_name"] for item in actual]
+    assert len(set(ship_from)) == len(ship_from), "#2976: N1 ship-from bled across ST/SE boundaries"
+
+
+def test_856_multi_sn1_quantity_is_the_line_sum() -> None:
+    """#2974 acceptance: the multi-line ASN fixture's quantity is the sum
+    of its SN1 lines (120 + 80 + 40), not its last line's 40.
+    """
+    raw = (_CORPUS_DIR / "asn_856_multi_line.edi").read_text(encoding="utf-8")
+    extracted = _extract_fields_for_set("856", _parse_x12_segments(raw))
+    assert extracted["quantity"] == 240.0
+    assert extracted["unit_of_measure"] == "CT"
+
+
 def test_810_total_amount_is_tds_over_100() -> None:
     """#2536 acceptance: 810 ``total_amount == TDS[1] / 100.0``. The
     fixture's TDS is ``186000`` -> ``1860.00``. A change to the /100.0
@@ -129,7 +195,7 @@ def test_810_total_amount_is_tds_over_100() -> None:
 
 def test_861_condition_code_is_rcd_index_5() -> None:
     """#2536 acceptance: 861 ``condition_code == RCD[5]``. The fixture's
-    RCD is ``RCD*1*118*CA**4`` -> condition_code ``4`` at index 5.
+    RCD is ``RCD*1*118*CT**4`` -> condition_code ``4`` at index 5.
     """
     raw = (_CORPUS_DIR / "receiving_861.edi").read_text(encoding="utf-8")
     extracted = _extract_fields_for_set("861", _parse_x12_segments(raw))
@@ -181,18 +247,21 @@ def test_offset_shift_changes_extracted_output() -> None:
 
 
 def test_sn1_vs_po1_quantity_fallback_divergence() -> None:
-    """#2536 acceptance: pin the documented divergence in quantity
-    fallback between transaction sets.
+    """#2536 acceptance, updated by #2974: pin the quantity-fallback
+    semantics shared by every transaction set.
 
-    When a quantity element is PRESENT but non-numeric:
-      * 856 SN1 uses ``_safe_float(..., fallback=1.0)`` -> quantity 1.0
-      * 850 PO1 / 810 IT1 / 861 RCD use ``fallback=0.0`` -> the running
-        total stays 0, so ``quantity`` is left None.
+    When a quantity element is PRESENT but non-numeric, all four
+    handlers use ``_safe_float(..., fallback=0.0)``, so the running
+    total stays 0 and ``quantity`` is left None.
 
-    This asymmetry is intentional (a shipment notice implies at least
-    one unit shipped; an order/invoice/receipt line should not invent a
-    quantity). Pinning it here makes a future change to either fallback
-    a deliberate, reviewed decision.
+    This test previously pinned the opposite for 856 — ``fallback=1.0``,
+    justified as "a shipment notice implies at least one unit shipped".
+    #2974 removed that divergence: the value is not in the document, so
+    inventing 1.0 fabricates an FSMA 204 quantity KDE, which is the
+    exact failure class ``_legacy_856_placeholder_errors`` was added to
+    stop. The route now fails closed instead (see
+    ``routes._build_ingest_event_for_set``), so a real quantity is still
+    required — it just is not synthesized.
     """
     isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000009*0*P*>~"
 
@@ -223,7 +292,7 @@ def test_sn1_vs_po1_quantity_fallback_divergence() -> None:
     q810 = _extract_fields_for_set("810", _parse_x12_segments(e810))["quantity"]
     q861 = _extract_fields_for_set("861", _parse_x12_segments(e861))["quantity"]
 
-    assert q856 == 1.0, "856 SN1 falls back to 1.0 for a non-numeric quantity"
+    assert q856 is None, "#2974: 856 SN1 falls back to 0.0 -> quantity left None"
     assert q850 is None, "850 PO1 falls back to 0.0 -> quantity left None"
     assert q810 is None, "810 IT1 falls back to 0.0 -> quantity left None"
     assert q861 is None, "861 RCD falls back to 0.0 -> quantity left None"
@@ -291,7 +360,15 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
     "asn_856": {
         "cte_type": "shipping",
         "quantity": 200.0,
-        "unit_of_measure": "cases",
+        "unit_of_measure": "cases",  # SN1 "CA"
+        "product_description": "ROMAINE-12CT",
+        "location_gln": "6141410000014",  # ship_from_gln
+        "event_date": "2026-03-10",
+    },
+    "asn_856_multi_line": {
+        "cte_type": "shipping",
+        "quantity": 240.0,  # #2974: 120 + 80 + 40, not the last line's 40
+        "unit_of_measure": "cartons",  # #2978: SN1 "CT"
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # ship_from_gln
         "event_date": "2026-03-10",
@@ -299,7 +376,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
     "po_850": {
         "cte_type": "shipping",
         "quantity": 200.0,
-        "unit_of_measure": "cases",
+        "unit_of_measure": "boxes",  # #2978: PO1 "BX"
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # seller_gln
         "event_date": "2026-03-09",  # po_date_raw
@@ -307,7 +384,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
     "invoice_810": {
         "cte_type": "shipping",
         "quantity": 120.0,
-        "unit_of_measure": "cases",
+        "unit_of_measure": "cases",  # #2978: IT1 "CS"
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # seller_gln
         "event_date": "2026-03-11",  # invoice_date_raw
@@ -315,7 +392,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
     "receiving_861": {
         "cte_type": "receiving",
         "quantity": 118.0,
-        "unit_of_measure": "cases",
+        "unit_of_measure": "cartons",  # #2978: RCD "CT"
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000069",  # receiving_location_gln
         "event_date": "2026-03-12",  # receive_date_raw

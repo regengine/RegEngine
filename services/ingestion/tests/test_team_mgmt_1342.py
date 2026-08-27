@@ -517,17 +517,30 @@ class TestUpdateRoleEndpoint:
         assert resp.status_code == 200
         assert _team_store["t1"][0].role == "admin"
 
-    def test_update_role_unknown_member_returns_error(self, client, monkeypatch):
+    def test_update_role_unknown_member_returns_404(self, client, monkeypatch):
+        """#2865: an unknown member must be a 404 in FastAPI's ``detail``
+        envelope, not HTTP 200 with a bare top-level ``error`` string.
+
+        This test previously pinned the defect (``status_code == 200`` and
+        ``{"error": "Member not found"}``), so a client checking
+        ``response.ok`` — the normal pattern — recorded a role change that
+        never happened. The literal was the bug #2865 reports, so it is
+        replaced rather than relaxed: the assertions below are strictly
+        stronger, covering the status code AND the response shape.
+        """
         monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
         resp = client.put("/api/v1/team/t1/nonexistent/role", params={"role": "admin"})
-        assert resp.status_code == 200
-        assert resp.json() == {"error": "Member not found"}
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body["detail"] == "Member not found"
+        assert "error" not in body, "the bare top-level `error` shape must be gone"
 
-    def test_update_role_db_none_no_memory_returns_error(self, client, monkeypatch):
+    def test_update_role_db_none_no_memory_returns_404(self, client, monkeypatch):
+        """#2865: same for the DB-unavailable/no-memory fall-through."""
         monkeypatch.setattr(tm, "_db_get_team", lambda tid: None)
         resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
-        assert resp.status_code == 200
-        assert resp.json() == {"error": "Member not found"}
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Member not found"
 
     def test_update_role_db_write_failure_no_memory_still_returns_updated(self, client, monkeypatch):
         # DB read succeeds, DB write fails, memory not initialized — still returns updated=True

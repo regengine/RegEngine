@@ -11,7 +11,7 @@ const path = require('path');
 
 const SCRIPTS = [
   { name: 'compliance', script: 'fsma-lite-check.js', category: 'compliance' },
-  { name: 'tenant', script: 'tenant-test.js', category: 'security' },
+  { name: 'frontend-security', script: 'frontend-security-scan.js', category: 'security' },
   { name: 'full-flow', script: 'full-flow.js', category: 'pipeline' },
   { name: 'bad-data', script: 'bad-data.js', category: 'pipeline' },
   { name: 'export', script: 'export-validate.js', category: 'pipeline' },
