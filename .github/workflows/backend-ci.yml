@@ -250,14 +250,33 @@ jobs:
             graph)      THRESHOLD=60 ;;  # was 50; actual 64%
             ingestion)  THRESHOLD=48 ;;  # was 42; actual ~50% on CI
             nlp)        THRESHOLD=65 ;;  # was 50; actual 68%
-            shared)     THRESHOLD=35; COV_TARGET=. ;;  # measured ~44% locally; floor 35 absorbs CI-vs-local variance, ratchet to 40 after a stable run.
+            # #2891: the 35 floor was set from an INFLATED basis. --cov=. with
+            # no omit put services/shared's own 53 test modules in the
+            # denominator, fully executed by definition. Measured in one
+            # environment before and after the fix below: 16,747 statements /
+            # 51% (5,460 of those statements were test code) -> 11,287
+            # statements / 33% product-only. The floor is deliberately NOT
+            # lowered to 33 to make this green: 33% is the real number and it
+            # is BELOW the floor the repo believed it was clearing. Raise
+            # actual shared coverage; do not move the floor.
+            shared)     THRESHOLD=35; COV_TARGET=. ;;  # product-only; see #2891
           esac
           # NOTE: --ignore=tests/integration/ is intentionally removed so that
           # integration tests contribute to the coverage report when they run.
           # Tests that require live external services should be marked with
           # @pytest.mark.integration and can be skipped via -m "not integration"
           # in environments without those services.
+          #
+          # --cov-config is REQUIRED, not decorative (#2891): this step cd's
+          # into services/<svc>, and coverage.py looks for its config only in
+          # the current directory. Without the explicit path the repo-root
+          # [tool.coverage.run] omit is silently ignored and test modules go
+          # straight back into the denominator. Verified: the same command
+          # without this flag still reports tests/test_build_info.py at 100%.
+          # No-op for the six app-targeted legs (services/<svc>/app contains no
+          # tests/ or conftest.py) — graph measured 66% both with and without.
           pytest tests/ -v --cov=$COV_TARGET --cov-report=term \
+            --cov-config="${repo_root}/pyproject.toml" \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=$THRESHOLD \
             -o "testpaths=tests"
