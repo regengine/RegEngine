@@ -353,17 +353,22 @@ class TestIdempotencyFailMode:
         return app
 
     def _headers(self):
+        # #2841: the raw X-Tenant-ID header no longer names a cache namespace,
+        # so authenticate the tenant through the secret-gated internal header.
         return {
             "Idempotency-Key": "11111111-1111-1111-1111-111111111111",
-            "X-Tenant-ID": "tenant-1",
+            "X-RegEngine-Tenant-ID": "tenant-1",
+            "X-RegEngine-Internal-Secret": "test-internal-secret-2841",
         }
 
     def test_degrade_reexecutes_request(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "test-internal-secret-2841")
         client = TestClient(self._app(monkeypatch, None))
         resp = client.post("/submit", headers=self._headers())
         assert resp.status_code == 200
 
     def test_closed_returns_503(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "test-internal-secret-2841")
         client = TestClient(self._app(monkeypatch, "closed"))
         resp = client.post("/submit", headers=self._headers())
         assert resp.status_code == 503

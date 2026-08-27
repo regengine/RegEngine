@@ -7,10 +7,15 @@ Gracefully degrades if Redis is unavailable.
 Tenant isolation (#1237): cache keys are composed as
 ``idempotency:{tenant_id}:{idempotency_key}`` so that two tenants who
 happen to choose the same key (``daily-batch-2026-04-17``) cannot see
-each other's cached responses. The tenant is sourced from the
-authenticated principal / ``X-Tenant-ID`` header, NOT the request body
-— the body is read once per request and cannot be used to spoof cache
-keys.
+each other's cached responses.
+
+The tenant is sourced ONLY from authenticated context: the RBAC principal,
+``request.state.tenant_id``, the secret-gated ``X-RegEngine-Tenant-ID``
+internal header, or a scoped API-key lookup. Neither the request body
+(#1237) nor the raw ``X-Tenant-ID`` header (#2841) may name the namespace —
+both are client-controlled, and this middleware serves cache hits before any
+authentication runs. When no authenticated tenant is available the request
+is simply not cached.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from uuid import UUID
 import redis.asyncio as redis
 import structlog
 from fastapi import Request, Response
+from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import StreamingResponse
 
@@ -148,13 +154,30 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         return f"{IDEMPOTENCY_KEY_PREFIX}{safe_tenant}:{idempotency_key}"
 
     def _resolve_tenant_id(self, request: Request) -> Optional[str]:
-        """Resolve tenant from authenticated context — never from body.
+        """Resolve tenant from AUTHENTICATED context only — never client input.
 
         Order: RBAC principal (when an outer auth middleware set it) >
-        request.state.tenant_id > X-Tenant-ID header > scoped API-key
-        lookup. The request body is NOT consulted: if we did, an attacker
-        could include ``tenant_id`` in their JSON payload and spoof the
-        cache namespace.
+        request.state.tenant_id > secret-gated internal tenant header >
+        scoped API-key lookup. Returns ``None`` when none of those yield a
+        tenant, and ``dispatch`` then skips the cache entirely.
+
+        SECURITY (#2841): this used to consult the raw ``X-Tenant-ID``
+        header, and to consult it *ahead of* the authenticated API-key
+        lookup below. In the production monolith this middleware is
+        installed outside ``TenantContextMiddleware`` and outside all route
+        dependencies (``server/main.py``), so the first two sources are
+        always unset here and the header was the first populated one — a
+        caller could name any tenant and, because ``dispatch`` serves a
+        cache hit before ``call_next``, be handed that tenant's cached 2xx
+        body with no credential at all. The request body was already
+        excluded for exactly this reason (#1237); the header vector was
+        left open.
+
+        ``X-Tenant-ID`` is now ignored outright. The trusted-tenant path in
+        ``shared/middleware/tenant_context.py`` refuses that header too, so
+        this aligns the two. Genuine service-to-service callers keep a
+        namespace via ``X-RegEngine-Tenant-ID`` + the internal secret, the
+        same gate ``tenant_context.py`` applies.
         """
         principal = getattr(request.state, "principal", None)
         principal_tenant = getattr(principal, "tenant_id", None) if principal else None
@@ -165,9 +188,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         tenant = _tenant_value_to_str(state_tenant)
         if tenant:
             return tenant
-        header_tenant = request.headers.get("X-Tenant-ID")
-        if header_tenant:
-            return header_tenant.strip()
+        internal_tenant = internal_tenant_id(request.headers)
+        if internal_tenant:
+            return internal_tenant
         raw_api_key = request.headers.get("X-RegEngine-API-Key")
         if raw_api_key:
             return _lookup_tenant_id_for_api_key(raw_api_key)

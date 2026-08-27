@@ -1,0 +1,305 @@
+"""#2841 — cross-tenant idempotency replay via the unauthenticated X-Tenant-ID header.
+
+These tests run against the REAL production monolith stack
+(``server.main.app``), where ``IdempotencyMiddleware`` is registered
+*outside* ``TenantContextMiddleware`` and outside every route dependency
+(``server/main.py``: TenantContext added before Idempotency, and Starlette
+wraps later-added middleware outermost). That ordering is what makes the
+bug exploitable: ``_resolve_tenant_id`` consults the raw ``X-Tenant-ID``
+header before the authenticated API-key lookup, and ``dispatch`` returns a
+cache hit *before* ``call_next``, so no auth dependency ever runs.
+
+The exploit demonstrated here is a genuine replay, not a description:
+a caller with **no credentials at all** — only a forged header — receives
+the victim tenant's cached 2xx response body.
+"""
+
+from __future__ import annotations
+
+import importlib
+from typing import Dict, Optional
+
+import pytest
+from fastapi import Depends, HTTPException, Request
+from fastapi.testclient import TestClient
+
+_VICTIM_PATH = "/__test__/2841/evidence"
+
+# Real tenant ids are UUIDs; using UUIDs keeps the forged header indistinguishable
+# from a legitimate one to every layer that validates format.
+_VICTIM_TENANT = "11111111-1111-4111-8111-111111111111"
+_ATTACKER_TENANT = "22222222-2222-4222-8222-222222222222"
+
+# Simulated api_keys table: raw key -> tenant it belongs to.
+_KEY_TO_TENANT = {
+    "victim-key": _VICTIM_TENANT,
+    "attacker-key": _ATTACKER_TENANT,
+}
+
+
+@pytest.fixture(scope="module")
+def server_main():
+    return importlib.import_module("server.main")
+
+
+class _FakeAsyncRedis:
+    def __init__(self) -> None:
+        self.store: Dict[bytes, bytes] = {}
+
+    async def ping(self):
+        return True
+
+    async def get(self, key):
+        if isinstance(key, str):
+            key = key.encode()
+        return self.store.get(key)
+
+    async def setex(self, key, ttl, value):
+        if isinstance(key, str):
+            key = key.encode()
+        if isinstance(value, str):
+            value = value.encode()
+        self.store[key] = value
+
+
+@pytest.fixture
+def fake_redis(monkeypatch):
+    import shared.idempotency as idemp_mod
+
+    fake = _FakeAsyncRedis()
+
+    async def _fake_get_client(self):
+        self._redis_available = True
+        return fake
+
+    monkeypatch.setattr(idemp_mod.IdempotencyMiddleware, "_get_client", _fake_get_client)
+    # Stand in for the real ``api_keys`` DB lookup the middleware performs for
+    # API-key-authenticated requests (no principal available pre-auth).
+    monkeypatch.setattr(
+        idemp_mod,
+        "_lookup_tenant_id_for_api_key",
+        lambda raw: _KEY_TO_TENANT.get(raw),
+    )
+    return fake
+
+
+class _Principal:
+    def __init__(self, tenant_id: str, key_id: str) -> None:
+        self.tenant_id = tenant_id
+        self.key_id = key_id
+
+
+@pytest.fixture
+def victim_route(server_main):
+    """A realistically-protected POST route mounted on the real monolith app.
+
+    The auth dependency 401s without a recognised API key, exactly like the
+    production ingest routes guarded by ``require_permission`` — so a 200 for
+    an unauthenticated caller can only have come from the idempotency cache.
+    """
+    app = server_main.app
+    calls: Dict[str, int] = {}
+
+    async def _auth(request: Request) -> _Principal:
+        raw = request.headers.get("X-RegEngine-API-Key")
+        tenant = _KEY_TO_TENANT.get(raw or "")
+        if tenant is None:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        principal = _Principal(tenant_id=tenant, key_id=str(raw))
+        request.state.principal = principal
+        return principal
+
+    @app.post(_VICTIM_PATH)
+    async def _evidence(principal: _Principal = Depends(_auth)):
+        calls[principal.tenant_id] = calls.get(principal.tenant_id, 0) + 1
+        # Stands in for the FSMA traceability payload a real ingest returns.
+        return {
+            "tenant": principal.tenant_id,
+            "traceability_lot_code": f"LOT-SECRET-{principal.tenant_id}",
+            "calls": calls[principal.tenant_id],
+        }
+
+    yield calls
+    app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != _VICTIM_PATH]
+
+
+def _victim_seeds_cache(client: TestClient, key: str) -> dict:
+    """Victim authenticates normally; its 2xx response lands in the cache."""
+    resp = client.post(
+        _VICTIM_PATH,
+        headers={"Idempotency-Key": key, "X-RegEngine-API-Key": "victim-key"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["tenant"] == _VICTIM_TENANT
+    return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# The exploit
+# ---------------------------------------------------------------------------
+
+
+def test_unauthenticated_forged_tenant_header_cannot_replay_victim_response(
+    server_main, fake_redis, victim_route
+):
+    """A caller with NO credentials must not read the victim's cached body.
+
+    Pre-fix this returned 200 with the victim's ``LOT-SECRET-<uuid>``: the header
+    branch of ``_resolve_tenant_id`` selected the victim's namespace and the
+    cache hit short-circuited before the 401-raising auth dependency ran.
+    """
+    client = TestClient(server_main.app)
+    victim_body = _victim_seeds_cache(client, "replay-2841-a")
+
+    attacker = client.post(
+        _VICTIM_PATH,
+        headers={
+            "Idempotency-Key": "replay-2841-a",
+            # The entire attack payload: one forged header, no credential.
+            "X-Tenant-ID": _VICTIM_TENANT,
+        },
+    )
+
+    assert attacker.status_code == 401, (
+        "CROSS-TENANT REPLAY: an unauthenticated caller received "
+        f"{attacker.status_code} {attacker.text!r} by forging X-Tenant-ID"
+    )
+    assert f"LOT-SECRET-{_VICTIM_TENANT}" not in attacker.text
+    assert attacker.json() != victim_body
+    # The handler ran exactly once — for the victim.
+    assert victim_route == {_VICTIM_TENANT: 1}
+
+
+def test_authenticated_tenant_cannot_redirect_cache_namespace_with_header(
+    server_main, fake_redis, victim_route
+):
+    """Tenant A authenticates with its own key but forges ``X-Tenant-ID: B``.
+
+    Pre-fix the header branch outranked the authenticated API-key lookup, so
+    A's request was namespaced into B's cache and served B's stored response.
+    """
+    client = TestClient(server_main.app)
+    victim_body = _victim_seeds_cache(client, "replay-2841-b")
+
+    attacker = client.post(
+        _VICTIM_PATH,
+        headers={
+            "Idempotency-Key": "replay-2841-b",
+            "X-RegEngine-API-Key": "attacker-key",  # genuinely tenant-attacker
+            "X-Tenant-ID": _VICTIM_TENANT,  # forged namespace override
+        },
+    )
+
+    assert attacker.status_code == 200, attacker.text
+    assert attacker.json()["tenant"] == _ATTACKER_TENANT, (
+        "CROSS-TENANT REPLAY: the authenticated attacker tenant was served "
+        f"the victim's cached response: {attacker.text!r}"
+    )
+    assert f"LOT-SECRET-{_VICTIM_TENANT}" not in attacker.text
+    assert attacker.json() != victim_body
+    assert victim_route == {_VICTIM_TENANT: 1, _ATTACKER_TENANT: 1}
+
+
+def test_forged_header_cannot_poison_another_tenants_namespace(
+    server_main, fake_redis, victim_route
+):
+    """Write side: the attacker's own response must not land in B's namespace.
+
+    Otherwise the attacker could pre-seed a key the victim is about to use and
+    have the victim served attacker-authored content.
+    """
+    client = TestClient(server_main.app)
+
+    resp = client.post(
+        _VICTIM_PATH,
+        headers={
+            "Idempotency-Key": "poison-2841",
+            "X-RegEngine-API-Key": "attacker-key",
+            "X-Tenant-ID": _VICTIM_TENANT,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    stored = [k.decode() for k in fake_redis.store]
+    assert not any(_VICTIM_TENANT in k for k in stored), (
+        f"Attacker wrote into the victim's cache namespace: {stored}"
+    )
+    assert stored == [f"idempotency:{_ATTACKER_TENANT}:poison-2841"], stored
+
+
+def test_namespace_derives_from_authenticated_key_not_header(server_main, fake_redis, victim_route):
+    """The surviving namespace source is the authenticated API-key lookup."""
+    client = TestClient(server_main.app)
+
+    first = client.post(
+        _VICTIM_PATH,
+        headers={"Idempotency-Key": "dedup-2841", "X-RegEngine-API-Key": "victim-key"},
+    )
+    retry = client.post(
+        _VICTIM_PATH,
+        headers={"Idempotency-Key": "dedup-2841", "X-RegEngine-API-Key": "victim-key"},
+    )
+
+    assert first.status_code == retry.status_code == 200
+    assert first.json() == retry.json()
+    assert victim_route == {_VICTIM_TENANT: 1}, "legitimate dedup must still work"
+    stored = [k.decode() for k in fake_redis.store]
+    assert f"idempotency:{_VICTIM_TENANT}:dedup-2841" in stored
+
+
+def test_bare_tenant_header_alone_does_not_create_a_cache_namespace(
+    server_main, fake_redis, victim_route
+):
+    """No authenticated tenant → no cache read and no cache write (fail closed)."""
+    client = TestClient(server_main.app)
+
+    r1 = client.post(_VICTIM_PATH, headers={"Idempotency-Key": "nocache-2841", "X-Tenant-ID": _VICTIM_TENANT})
+    r2 = client.post(_VICTIM_PATH, headers={"Idempotency-Key": "nocache-2841", "X-Tenant-ID": _VICTIM_TENANT})
+
+    assert r1.status_code == r2.status_code == 401
+    assert fake_redis.store == {}, fake_redis.store
+
+
+# ---------------------------------------------------------------------------
+# Internal service-to-service callers keep a namespace, but only behind the
+# secret gate that TenantContextMiddleware already applies (#2841 fix option 3).
+# ---------------------------------------------------------------------------
+
+
+def _internal_headers(secret: Optional[str], tenant: str, key: str) -> Dict[str, str]:
+    headers = {"Idempotency-Key": key, "X-RegEngine-Tenant-ID": tenant}
+    if secret is not None:
+        headers["X-RegEngine-Internal-Secret"] = secret
+    return headers
+
+
+def test_internal_tenant_header_requires_the_internal_secret(
+    server_main, fake_redis, victim_route, monkeypatch
+):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "s3cr3t-internal")
+    client = TestClient(server_main.app)
+
+    # Without the secret the internal header is ignored → no namespace, no cache.
+    no_secret = client.post(_VICTIM_PATH, headers=_internal_headers(None, _VICTIM_TENANT, "int-2841"))
+    assert no_secret.status_code == 401
+    assert fake_redis.store == {}
+
+    # A wrong secret is likewise ignored.
+    wrong = client.post(_VICTIM_PATH, headers=_internal_headers("nope", _VICTIM_TENANT, "int-2841"))
+    assert wrong.status_code == 401
+    assert fake_redis.store == {}
+
+
+def test_internal_tenant_header_with_secret_scopes_the_cache(
+    server_main, fake_redis, victim_route, monkeypatch
+):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", "s3cr3t-internal")
+    client = TestClient(server_main.app)
+
+    headers = _internal_headers("s3cr3t-internal", _VICTIM_TENANT, "int-ok-2841")
+    headers["X-RegEngine-API-Key"] = "victim-key"
+    resp = client.post(_VICTIM_PATH, headers=headers)
+
+    assert resp.status_code == 200, resp.text
+    stored = [k.decode() for k in fake_redis.store]
+    assert f"idempotency:{_VICTIM_TENANT}:int-ok-2841" in stored, stored
