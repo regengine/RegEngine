@@ -65,7 +65,15 @@ jobs:
           # first ERROR and the summary line is never printed.
           # No -q so the "N tests collected, M errors" line survives.
           set +e
-          OUTPUT=$(python3 -m pytest --collect-only --continue-on-collection-errors 2>&1)
+          # ``-q`` is passed EXPLICITLY, not inherited from pyproject addopts.
+          # The root-representation grep below is path-anchored ("^tests/"),
+          # which only holds while collection prints nodeids; stock pytest
+          # --collect-only prints an indented <Module> tree with no anchored
+          # lines, and every root would then read as missing and fail the job
+          # on every run. Flagged by review on #2990 — refuted today only
+          # because addopts happens to carry -q, so pin it here instead of
+          # depending on that.
+          OUTPUT=$(python3 -m pytest --collect-only -q --continue-on-collection-errors 2>&1)
           STATUS=$?
           set -e
           echo "--- pytest output (tail) ---"
