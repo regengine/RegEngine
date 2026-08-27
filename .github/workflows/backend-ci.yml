@@ -149,18 +149,15 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      neo4j:
-        image: neo4j:5.24-community
-        env:
-          NEO4J_AUTH: neo4j/test-password-for-ci
-        ports:
-          - 7687:7687
-          - 7474:7474
-        options: >-
-          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+      # NOTE (#2877): the neo4j:5.24-community service container used to be
+      # provisioned here, on all seven matrix legs, and NO test in any leg
+      # ever dialed it — the only Neo4j-touching graph test outside the
+      # integration file patches AsyncGraphDatabase with a MagicMock. The
+      # container now lives in the dedicated `graph-neo4j-integration` job,
+      # which is the one place a test actually connects. The NEO4J_* env
+      # vars below stay: several modules branch on their presence and every
+      # suite is green with them pointing at nothing (verified by running
+      # the graph and admin suites with an unreachable NEO4J_URI).
 
       localstack:
         image: localstack/localstack:3
@@ -273,6 +270,73 @@ jobs:
           path: services/${{ matrix.service }}/coverage.xml
           retention-days: 14
           if-no-files-found: ignore
+
+  # ── Neo4j integration (the ONLY job that needs a Neo4j) ──
+  # #2877: services/graph/tests/test_neo4j_integration_testcontainers.py was
+  # double-guarded and ran nowhere — the graph-tree conftest auto-skipped it
+  # locally (integration marker, no --run-integration) and an `_IN_CI` guard
+  # skipped it in CI with the reason "uses CI service container instead",
+  # which was false: nothing connected to the container.
+  #
+  # This job makes that reason true. It provisions the Neo4j the test dials
+  # via NEO4J_URI, passes --run-integration so the conftest gate stands down,
+  # and sets REGENGINE_REQUIRE_NEO4J=1 so an unreachable Neo4j FAILS instead
+  # of skipping — the container can never be provisioned for a test that
+  # then does not run.
+  graph-neo4j-integration:
+    name: Graph Neo4j integration (live)
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/test-password-for-ci
+        ports:
+          - 7687:7687
+          - 7474:7474
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: test-password-for-ci
+      REGENGINE_REQUIRE_NEO4J: "1"
+      PYTHONDONTWRITEBYTECODE: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v5
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.lock') }}
+          restore-keys: |
+            pip-
+
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Real-Neo4j traceability tests
+        run: |
+          repo_root="$(pwd)"
+          export PYTHONPATH="${repo_root}:${PYTHONPATH}"
+          cd services/graph
+          pytest tests/test_neo4j_integration_testcontainers.py \
+            --run-integration -v --no-cov -o "testpaths=tests"
 
   # ── Lint ─────────────────────────────────────────────────
   lint:
@@ -1247,7 +1311,7 @@ jobs:
     # frontend-only SHA satisfy the deploy gate with no backend run (#2537).
     name: Backend CI Status Gate
     if: always()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
+    needs: [dependency-lock, test, graph-neo4j-integration, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check, regenerate-public-samples]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -1255,6 +1319,7 @@ jobs:
         run: |
           echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
           echo "Test:              ${{ needs.test.result }}"
+          echo "Neo4j integration: ${{ needs.graph-neo4j-integration.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
           echo "Lint shared/:      ${{ needs.lint-shared.result }}"
           echo "Lint repo roots:   ${{ needs.lint-repo-roots.result }}"
@@ -1275,6 +1340,7 @@ jobs:
           # the next occurrence trips on PR open rather than in prod.
           if [[ "${{ needs.dependency-lock.result }}" != "success" \
              || "${{ needs.test.result }}" != "success" \
+             || "${{ needs.graph-neo4j-integration.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \
              || "${{ needs.lint-repo-roots.result }}" != "success" \
