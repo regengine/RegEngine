@@ -18,6 +18,7 @@ from shared.schemas import (
 )
 
 from ..classification import SignalClassifier
+from ..extractor import infer_obligation_type
 from ..resolution import EntityResolver
 
 from .constants import _LEGACY_HEURISTIC_CONFIDENCE_CAP
@@ -26,6 +27,69 @@ logger = structlog.get_logger("nlp-consumer")
 
 RESOLVER = EntityResolver()
 CLASSIFIER = SignalClassifier()
+
+# The single legal mapping from the extractor's modality vocabulary onto the
+# canonical ObligationType (#2942). This module used to re-derive modality with
+# a backward-only negation window that could never see the "not" in "shall
+# not", so every prohibition was persisted as MUST — the inversion of the rule.
+# Modality is owned by ``extractor.infer_obligation_type``; this table is the
+# only thing that stands between its verdict and the canonical enum.
+#
+# PROHIBITED deliberately splits by ``negation_scope``: a ban is MUST_NOT,
+# while a lifted duty ("small farms are not required to file") is a permission.
+# Typing an exemption MUST_NOT would forbid conduct the regulation merely
+# stopped mandating — the same inversion, pointed the other way.
+_MODALITY_TO_OBLIGATION_TYPE = {
+    ("MANDATORY", None): ObligationType.MUST,
+    ("PERMITTED", None): ObligationType.MAY,
+    ("CONDITIONAL", None): ObligationType.SHOULD,
+    ("PROHIBITED", "prohibition"): ObligationType.MUST_NOT,
+    ("PROHIBITED", "exemption"): ObligationType.MAY,
+}
+
+_MODALITIES_WITH_SCOPE = {"PROHIBITED"}
+
+
+def _modality_verdict(entity: dict) -> dict:
+    """Return the extractor's modality verdict for an OBLIGATION *entity*.
+
+    ``extract_entities`` already stamps the verdict onto ``attrs`` (#1299), so
+    the normal path is a read. Entities hand-built by other producers carry no
+    ``attrs``; those are re-scored by calling the same function rather than by
+    re-implementing it here.
+    """
+
+    attrs = entity.get("attrs") or {}
+    modality = attrs.get("obligation")
+    scope = attrs.get("negation_scope")
+    if (modality, scope if modality in _MODALITIES_WITH_SCOPE else None) in (
+        _MODALITY_TO_OBLIGATION_TYPE
+    ):
+        return {
+            "obligation": modality,
+            "negation_detected": bool(attrs.get("negation_detected")),
+            "negation_scope": scope,
+        }
+    return infer_obligation_type(entity.get("text") or "")
+
+
+def _obligation_type_for(verdict: dict) -> ObligationType:
+    """Map a modality verdict onto the canonical ObligationType."""
+
+    modality = verdict.get("obligation")
+    scope = verdict.get("negation_scope") if modality in _MODALITIES_WITH_SCOPE else None
+    try:
+        return _MODALITY_TO_OBLIGATION_TYPE[(modality, scope)]
+    except KeyError:
+        # An unmapped verdict must not silently become a mandate. SHOULD
+        # asserts neither a duty nor a ban, and the review reason below makes
+        # the gap visible to the reviewer.
+        logger.warning(
+            "obligation_modality_unmapped",
+            modality=modality,
+            negation_scope=scope,
+        )
+        return ObligationType.SHOULD
 
 
 def _now_iso() -> str:
@@ -63,59 +127,12 @@ def _convert_entities_to_extraction(
         action_words = ["shall", "must", "required to", "has to", "should", "may"]
         action = next((w for w in action_words if w in text.lower()), "must")
 
-        # Determine obligation type with negation and modality detection (#1299).
-        #
-        # Negation detection: if a matched keyword is immediately preceded by
-        # a negation token ("not", "no", "never", "without") within 3 tokens,
-        # the match is skipped — "must not report" should NOT infer MANDATORY.
-        # We tokenise on whitespace and check the 3 tokens before the keyword.
-        #
-        # Modality detection:
-        #   MANDATORY  ← "must", "shall", "required"
-        #   RECOMMENDED ← "may", "should"
-        # We use ObligationType.MUST for MANDATORY and ObligationType.SHOULD for
-        # RECOMMENDED; ObligationType.MAY maps to the weakest recommendation.
-        _NEGATION_TOKENS = {"not", "no", "never", "without"}
-
-        def _keyword_is_negated(full_text: str, keyword: str) -> bool:
-            """Return True if ``keyword`` appears preceded by a negation token
-            within 3 whitespace-delimited tokens in ``full_text``."""
-            tokens = full_text.lower().split()
-            for idx, tok in enumerate(tokens):
-                # Strip punctuation from token for comparison.
-                clean_tok = tok.strip(".,;:()[]\"'")
-                if clean_tok == keyword:
-                    preceding = tokens[max(0, idx - 3): idx]
-                    preceding_clean = {t.strip(".,;:()[]\"'") for t in preceding}
-                    if preceding_clean & _NEGATION_TOKENS:
-                        return True
-            return False
-
-        text_lower = text.lower()
-
-        # MANDATORY keywords — "must", "shall", "required", "mandatory" (#1299)
-        _MANDATORY_KEYWORDS = ["must", "shall", "required", "mandatory"]
-        # RECOMMENDED keywords — "may", "should", "can", "recommend" (#1299)
-        _RECOMMENDED_KEYWORDS = ["should", "can", "may", "recommend"]
-
-        obl_type = None
-        # Check MANDATORY first (higher precedence).
-        for kw in _MANDATORY_KEYWORDS:
-            if kw in text_lower and not _keyword_is_negated(text, kw):
-                obl_type = ObligationType.MUST
-                break
-
-        if obl_type is None:
-            for kw in _RECOMMENDED_KEYWORDS:
-                if kw in text_lower and not _keyword_is_negated(text, kw):
-                    # "should"/"can"/"recommend" → RECOMMENDED (SHOULD);
-                    # "may" → weakest recommendation (MAY).
-                    obl_type = ObligationType.MAY if kw == "may" else ObligationType.SHOULD
-                    break
-
-        if obl_type is None:
-            # Default when no keyword matched or all were negated.
-            obl_type = ObligationType.MUST
+        # Obligation modality (#1299, #2942). Read the verdict the extractor
+        # already computed instead of re-deriving it; see
+        # ``_MODALITY_TO_OBLIGATION_TYPE`` above for why there is exactly one
+        # implementation of this.
+        verdict = _modality_verdict(obl)
+        obl_type = _obligation_type_for(verdict)
 
         # Find associated thresholds (within proximity)
         associated_thresholds = []
@@ -191,7 +208,14 @@ def _convert_entities_to_extraction(
             "risk_level": risk,
             "extractor": "legacy_regex_v1",
             "confidence_capped_at": _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+            # Modality provenance (#2942) so a reviewer can see that the
+            # obligation direction came from a negated reading, and so an
+            # inverted value is detectable in stored data.
+            "obligation_modality": verdict.get("obligation"),
+            "negation_detected": bool(verdict.get("negation_detected")),
         }
+        if verdict.get("negation_scope"):
+            attributes["negation_scope"] = verdict["negation_scope"]
         if resolved_entities:
             attributes["resolved_entities"] = resolved_entities
 

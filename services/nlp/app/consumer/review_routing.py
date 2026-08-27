@@ -72,6 +72,24 @@ def _build_review_reasons(extraction: ExtractionPayload, tier: str) -> list[dict
                 "severity": "error",
             }
         )
+    if attributes.get("negation_detected"):
+        # #2942 — the obligation direction was derived from a negated reading
+        # ("shall not", "not required to"). A reviewer skimming the structured
+        # field must be told to check the direction against source_text.
+        obligation_type = getattr(
+            extraction.obligation_type, "value", extraction.obligation_type
+        )
+        scope = attributes.get("negation_scope") or "negation"
+        reasons.append(
+            {
+                "reason_code": "negated_obligation",
+                "description": (
+                    f"Source text reads as a {scope}; modality resolved to "
+                    f"{obligation_type} — confirm the direction against source_text"
+                ),
+                "severity": "warning",
+            }
+        )
     return reasons
 
 
