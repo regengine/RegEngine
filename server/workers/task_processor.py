@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
 import structlog
+from shared.task_types import NON_WORKER_TASK_TYPES as _SHARED_NON_WORKER_TASK_TYPES
 from shared.tenant_context import system_scope, tenant_scope
 
 logger = structlog.get_logger("task-processor")
@@ -414,14 +415,15 @@ TASK_HANDLERS: Dict[str, Callable[[Dict[str, Any], Optional[str]], None]] = {
 # #1199: recall_drill and recall (the state machine row) are persisted in
 # fsma.task_queue for historical/state tracking, NOT as background work.
 # The worker must never claim them even if they somehow end up with
-# status='pending'. Keep this list narrowly scoped and update it when a
-# new non-handler task_type starts sharing the queue.
-NON_WORKER_TASK_TYPES = frozenset(
-    {
-        "recall_drill",  # #1199 — recall drill history rows
-        "recall",  # #1199 — recall state machine rows (future)
-    }
-)
+# status='pending'.
+#
+# #2903: this set used to be defined here and read only here, while the
+# scheduler's 30-day retention purge deleted by ``status`` alone with no
+# task_type predicate — so the purge destroyed the very rows this set
+# exists to protect. The classification now lives in ONE module and is
+# imported by both sides; re-exported here so existing
+# ``task_processor.NON_WORKER_TASK_TYPES`` readers keep working.
+NON_WORKER_TASK_TYPES = _SHARED_NON_WORKER_TASK_TYPES
 
 
 # ── Core worker loop ─────────────────────────────────────────────

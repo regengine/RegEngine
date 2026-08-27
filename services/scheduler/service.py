@@ -886,15 +886,35 @@ class SchedulerService:
             logger.info("webhook_outbox_drain_tick", **counter)
 
     def purge_old_tasks(self) -> None:
-        """Purge completed/dead ``fsma.task_queue`` rows older than 30 days.
+        """Purge disposable ``fsma.task_queue`` rows older than 30 days.
 
         Closes #1382. Without this, completed and dead rows accumulate
         forever: index bloat on ``idx_task_queue_tenant``, slower ad-hoc
         observability queries, and ever-growing storage cost on Railway
         Postgres.
+
+        #2903 — the purge is scoped by ``task_type``, not by ``status``
+        alone. ``fsma.task_queue`` is shared by two populations: real
+        background work, and rows that merely live there. Recall drills
+        (``task_type='recall_drill'``) are parked at
+        ``status='completed'`` by ``services/graph/app/fsma_recall/
+        persistence.py`` *specifically so the worker skips them* (#1199),
+        and that table is their ONLY store. Reading ``status`` as "this
+        row is garbage" destroyed FSMA 204 mock-recall evidence — a hard
+        DELETE with no archive table and no audit trigger, so the loss
+        was silent and unrecoverable.
+
+        The scope is a positive ALLOWLIST bound from
+        :mod:`shared.task_types` (so an unclassified future task type is
+        RETAINED, not deleted) plus an explicit denylist of the protected
+        evidence types (so a careless allowlist edit cannot re-expose
+        them). Both sides of the drift — this job and
+        ``server/workers/task_processor.py`` — now import the same
+        constants.
         """
         try:
             from shared.database import SessionLocal
+            from shared.task_types import protected_task_types, purgeable_task_types  # noqa: PLC0415
             from shared.tenant_context import system_scope  # noqa: PLC0415
             from sqlalchemy import text as _sqltext
 
@@ -910,16 +930,33 @@ class SchedulerService:
                             """
                             DELETE FROM fsma.task_queue
                             WHERE status IN ('completed', 'dead')
+                              AND task_type = ANY(:purgeable_task_types)
+                              AND task_type <> ALL(:protected_task_types)
                               AND COALESCE(completed_at, created_at)
                                   < NOW() - INTERVAL '30 days'
-                            RETURNING id
+                            RETURNING id, task_type
                             """
-                        )
+                        ),
+                        {
+                            "purgeable_task_types": purgeable_task_types(),
+                            "protected_task_types": protected_task_types(),
+                        },
                     )
                     rows = result.fetchall()
                     db.commit()
                 if rows:
-                    logger.info("task_queue_purged", rows=len(rows))
+                    # #2903: per-task_type breakdown so a future
+                    # mis-scoped purge is visible in telemetry instead of
+                    # hiding behind a bare row count.
+                    by_task_type: dict = {}
+                    for row in rows:
+                        task_type = row[1] if len(row) > 1 else "unknown"
+                        by_task_type[task_type] = by_task_type.get(task_type, 0) + 1
+                    logger.info(
+                        "task_queue_purged",
+                        rows=len(rows),
+                        by_task_type=by_task_type,
+                    )
                 else:
                     logger.debug("task_queue_purge_noop")
             finally:
