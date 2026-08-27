@@ -25,6 +25,21 @@ class TraceResult:
     # Physics Engine additions
     time_violations: Optional[List[Dict[str, Any]]] = None
     risk_flags: Optional[List[str]] = None
+    # #2945: ``facilities``/``events``/``lots`` above are three independent
+    # *deduplicated* lists, so the lot<->event<->facility association present
+    # in the traversed path is lost by the time an exporter sees the result.
+    # The FDA trace CSV compensated by pairing every lot with every event and
+    # stamping the first GLN-bearing facility on the row — fabricating
+    # associations rather than omitting them.
+    #
+    # ``trace_rows`` preserves the association at the source: one entry per
+    # (lot, event) edge the graph actually records, carrying that event's own
+    # ``OCCURRED_AT`` facility (or ``None``). Shape:
+    #     {"lot": {...}, "event": {...}, "facility": {...} | None}
+    # ``None`` (rather than ``[]``) means "the tracer did not supply
+    # associations", which consumers must treat as unknown — never as a
+    # licence to guess.
+    trace_rows: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass

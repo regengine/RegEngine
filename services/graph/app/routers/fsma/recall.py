@@ -57,9 +57,13 @@ def get_recall_engine():
         # canonical `async with` rather than a hand-rolled
         # try/finally so no future edit can drop it.
         async with Neo4jClient(database=db_name) as client:
-            res = await trace_forward(client, tlc, tenant_id=tenant_str)
-            # Convert TraceResult to dict for engine compatibility if needed
-            return res.__dict__ if hasattr(res, "__dict__") else res
+            # #2943: hand the engine the TraceResult itself. Flattening it to
+            # `__dict__` here is what let the engine read `lots_count` /
+            # `max_depth` — keys the dataclass has never had — and silently
+            # record 0 lots traced and 0 depth on every drill. Passing the
+            # object turns a renamed field into an AttributeError at test time
+            # instead of a zero in an FDA evidence record.
+            return await trace_forward(client, tlc, tenant_id=tenant_str)
 
     async def wrapped_backward(tlc, tenant_id=None):
         # #2540: require the tenant — see wrapped_forward.
@@ -76,8 +80,8 @@ def get_recall_engine():
         # canonical `async with` rather than a hand-rolled
         # try/finally so no future edit can drop it.
         async with Neo4jClient(database=db_name) as client:
-            res = await trace_backward(client, tlc, tenant_id=tenant_str)
-            return res.__dict__ if hasattr(res, "__dict__") else res
+            # #2943: return the TraceResult — see wrapped_forward.
+            return await trace_backward(client, tlc, tenant_id=tenant_str)
 
     _recall_engine = MockRecallEngine(
         trace_forward_fn=wrapped_forward,
