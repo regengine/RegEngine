@@ -22,12 +22,35 @@ from fastapi import Depends, Request
 from fastapi.testclient import TestClient
 
 _ECHO_PATH = "/__test__/idempotency-echo"
+
+# #2841: the raw ``X-Tenant-ID`` header is no longer a tenant source — it is
+# client input and this middleware serves cache hits before authentication.
+# These tests only need *a* tenant, so they present the secret-gated internal
+# service header that ``shared/middleware/tenant_context.py`` already trusts.
+_INTERNAL_SECRET = "test-internal-secret-2841"
+# TenantContextMiddleware validates the internal header as a UUID, so use real
+# tenant-shaped ids here rather than the short labels the raw header allowed.
+_TENANT_TEST = "33333333-3333-4333-8333-333333333333"
+_TENANT_T = "44444444-4444-4444-8444-444444444444"
 _PRINCIPAL_ECHO_PATH = "/__test__/idempotency-principal-echo"
 
 
 @pytest.fixture(scope="module")
 def server_main():
     return importlib.import_module("server.main")
+
+
+@pytest.fixture(autouse=True)
+def _internal_secret_configured(monkeypatch):
+    monkeypatch.setenv("REGENGINE_INTERNAL_SECRET", _INTERNAL_SECRET)
+
+
+def _tenant_headers(tenant: str) -> Dict[str, str]:
+    """Headers that authenticate an internal caller as ``tenant``."""
+    return {
+        "X-RegEngine-Tenant-ID": tenant,
+        "X-RegEngine-Internal-Secret": _INTERNAL_SECRET,
+    }
 
 
 class _FakeAsyncRedis:
@@ -158,7 +181,7 @@ def test_server_stack_relative_ordering_matches_ingestion(server_main):
 def test_idempotency_key_dedup_through_server_app(server_main, fake_redis, echo_route):
     """Two POSTs with the same Idempotency-Key + tenant hit the handler once."""
     client = TestClient(server_main.app)
-    headers = {"Idempotency-Key": "server-dedup-1", "X-Tenant-ID": "tenant-test"}
+    headers = {"Idempotency-Key": "server-dedup-1", **_tenant_headers(_TENANT_TEST)}
 
     r1 = client.post(_ECHO_PATH, headers=headers)
     r2 = client.post(_ECHO_PATH, headers=headers)
@@ -170,14 +193,14 @@ def test_idempotency_key_dedup_through_server_app(server_main, fake_redis, echo_
 
     # Cache key is tenant-scoped (#1237).
     stored = [k.decode() for k in fake_redis.store]
-    assert "idempotency:tenant-test:server-dedup-1" in stored
+    assert f"idempotency:{_TENANT_TEST}:server-dedup-1" in stored
 
 
 def test_distinct_idempotency_keys_are_not_deduped(server_main, fake_redis, echo_route):
     client = TestClient(server_main.app)
 
-    r1 = client.post(_ECHO_PATH, headers={"Idempotency-Key": "key-a", "X-Tenant-ID": "t"})
-    r2 = client.post(_ECHO_PATH, headers={"Idempotency-Key": "key-b", "X-Tenant-ID": "t"})
+    r1 = client.post(_ECHO_PATH, headers={"Idempotency-Key": "key-a", **_tenant_headers(_TENANT_T)})
+    r2 = client.post(_ECHO_PATH, headers={"Idempotency-Key": "key-b", **_tenant_headers(_TENANT_T)})
 
     assert r1.status_code == r2.status_code == 200
     assert echo_route["n"] == 2
@@ -186,8 +209,8 @@ def test_distinct_idempotency_keys_are_not_deduped(server_main, fake_redis, echo
 def test_post_without_idempotency_key_is_not_cached(server_main, fake_redis, echo_route):
     client = TestClient(server_main.app)
 
-    client.post(_ECHO_PATH, headers={"X-Tenant-ID": "t"})
-    client.post(_ECHO_PATH, headers={"X-Tenant-ID": "t"})
+    client.post(_ECHO_PATH, headers=_tenant_headers(_TENANT_T))
+    client.post(_ECHO_PATH, headers=_tenant_headers(_TENANT_T))
 
     assert echo_route["n"] == 2
     assert fake_redis.store == {}

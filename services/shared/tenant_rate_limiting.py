@@ -9,6 +9,7 @@ import redis
 import structlog
 from fastapi import HTTPException, Request
 from prometheus_client import REGISTRY, Counter
+from shared.internal_caller import internal_tenant_id
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -246,17 +247,62 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
         self.tenant_overrides = tenant_overrides or {}
         self.exempt_paths = {"/health", "/ready", "/readiness", "/metrics", "/"}
 
+    def _trusted_tenant_id(self, request: Request) -> Optional[str]:
+        """Resolve a tenant from AUTHENTICATED context only, or None.
+
+        SECURITY (#2844): this middleware used to read the raw ``X-Tenant-ID``
+        header. That header is unauthenticated client input and this
+        middleware runs before route auth (``server/main.py`` registers it
+        outside every route dependency, and ``TenantContextMiddleware`` is
+        registered *inner* of it), so the value was attacker-chosen on every
+        request. Three consequences, all reproduced in
+        ``tests/unit/test_tenant_rate_limit_header_spoof_2844.py``: a caller
+        could mint a fresh budget per request by rotating the value; a caller
+        could drain a victim tenant's shared ``tenant:{id}`` counter and 429
+        their real traffic; and a caller could claim another tenant's higher
+        ``tenant_overrides`` limit by naming it.
+
+        ``services/ingestion/app/authz.py`` already states the governing
+        principle — "attacker-controllable input must not determine the
+        rate-limit bucket".
+
+        The remaining trusted sources are the authenticated principal (only
+        populated if this middleware is ever mounted inner of auth), and the
+        secret-gated internal service header that
+        ``shared/middleware/tenant_context.py`` treats as the sole
+        trustworthy pre-auth tenant claim. When neither is available the
+        caller gets an IP bucket — the middleware's pre-existing
+        ``anonymous`` branch — and the per-tenant budget is supplied
+        post-auth by ``consume_tenant_rate_limit`` in ``require_permission``
+        (``services/ingestion/app/authz.py:459``), where the tenant comes
+        from the validated principal.
+        """
+        principal = getattr(request.state, "principal", None)
+        principal_tenant = getattr(principal, "tenant_id", None) if principal else None
+        if principal_tenant:
+            return str(principal_tenant)
+        state_tenant = getattr(request.state, "tenant_id", None)
+        if state_tenant:
+            return str(state_tenant)
+        return internal_tenant_id(request.headers)
+
     async def dispatch(self, request: Request, call_next):
         if request.url.path in self.exempt_paths:
             return await call_next(request)
 
-        tenant_id = request.headers.get("X-Tenant-ID", "anonymous")
-        if tenant_id != "anonymous":
+        tenant_id = self._trusted_tenant_id(request)
+        if tenant_id:
             key = f"tenant:{tenant_id}"
         else:
             key = f"ip:{request.client.host if request.client else 'unknown'}"
 
-        limit = self.tenant_overrides.get(tenant_id, self.default_rpm)
+        # Reported/labelled tenant. Never the raw header: it would reflect an
+        # attacker-chosen value back in ``X-RateLimit-Tenant`` and mint an
+        # unbounded Prometheus time series per spoofed id (same unbounded
+        # attacker-controlled label class as #2858).
+        reported_tenant = tenant_id or "anonymous"
+
+        limit = self.tenant_overrides.get(tenant_id, self.default_rpm) if tenant_id else self.default_rpm
         window = 60
         reset_epoch = rate_limit_reset_epoch(window)
         try:
@@ -270,20 +316,20 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
                 content={"error": "rate_limit_backend_unavailable", "detail": exc.detail},
                 headers=dict(exc.headers or {}),
             )
-        record_rate_limit(tenant_id, allowed)
+        record_rate_limit(reported_tenant, allowed)
 
         if not allowed:
             return JSONResponse(
                 status_code=429,
                 content={
                     "error": "rate_limit_exceeded",
-                    "detail": f"Limit of {limit}/min exceeded for {tenant_id}",
+                    "detail": f"Limit of {limit}/min exceeded for {reported_tenant}",
                 },
                 headers={
                     "X-RateLimit-Limit": str(limit),
                     "X-RateLimit-Remaining": "0",
                     "X-RateLimit-Reset": str(reset_epoch),
-                    "X-RateLimit-Tenant": tenant_id,
+                    "X-RateLimit-Tenant": reported_tenant,
                     "X-RateLimit-Scope": "global",
                 },
             )
@@ -292,7 +338,7 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Limit"] = str(getattr(request.state, "rate_limit_limit", limit))
         response.headers["X-RateLimit-Remaining"] = str(getattr(request.state, "rate_limit_remaining", remaining))
         response.headers["X-RateLimit-Reset"] = str(getattr(request.state, "rate_limit_reset", reset_epoch))
-        response.headers["X-RateLimit-Tenant"] = str(getattr(request.state, "rate_limit_tenant", tenant_id))
+        response.headers["X-RateLimit-Tenant"] = str(getattr(request.state, "rate_limit_tenant", reported_tenant))
         response.headers["X-RateLimit-Scope"] = str(getattr(request.state, "rate_limit_scope", "global"))
         if rate_limiter_degraded():
             # #2699: visible marker that the per-process fallback is in
