@@ -55,6 +55,13 @@ testpaths = [
     "services/ingestion/tests",
     "services/nlp/tests",
     "services/scheduler/tests",
+    # services/shared/tests was absent until #2923. The repo-wide
+    # ``pytest --collect-only`` import guard in test-suite-check.yml runs with
+    # no path arguments, so it resolved from this list and never imported those
+    # 53 files — auth fail-closed, pre-shared tenant requirements, API-key store
+    # tenant context, live RLS enforcement. Its collected-test floor could not
+    # see them drop out either.
+    "services/shared/tests",
 ]
 asyncio_mode = "auto"
 python_files = "test_*.py"

@@ -353,8 +353,18 @@ jobs:
 
   # ── RLS fallback-UUID guard (hard gate) ──────────────────
   # Scans migrations for the fail-open RLS pattern that #1091 fixed.
-  # Any new migration that reintroduces `COALESCE(..., <fallback-UUID>)`
+  # Any migration that reintroduces `COALESCE(..., <constant tenant>)`
   # or `COALESCE(current_setting(...), tenant_id)` will fail CI.
+  #
+  # #2935 widened this in three ways, each of which had admitted the exact
+  # pattern the guard exists to reject: the scan now covers alembic/sql/
+  # (23 live CREATE POLICY statements that live revisions op.execute, and
+  # that the guard never opened); the primary regex now tolerates the
+  # nested NULLIF(current_setting(...)) of the canonical form, which its
+  # [^)]* window could never span; and both arms of a policy are inspected,
+  # not just USING — WITH CHECK governs writes INTO another tenant.
+  # A fallback to ANY constant tenant now fails, not just the sandbox UUID.
+  # Known-bad fixtures live in scripts/fixtures/rls_failopen/.
   rls-fallback-check:
     name: RLS fail-open migration guard
     runs-on: ubuntu-latest
@@ -422,9 +432,16 @@ jobs:
         run: python scripts/check_orphan_migrations.py
 
   # ── Dep version drift guard (hard gate) ─────────────────
-  # Scans services/*/requirements*.txt to ensure no per-service file
-  # lowers the floor for shared packages below pyproject.toml. Prevents
-  # the pydantic-settings 2.1 vs 2.6 class of drift — see #1886.
+  # Asserts every direct requirement in requirements.in has a pin in
+  # requirements.lock that satisfies its declared floor AND cap, and
+  # re-checks any surviving services/*/requirements*.txt against the same
+  # floors. Prevents the pydantic-settings 2.1 vs 2.6 class of drift — #1886.
+  #
+  # #2936: this guard used to read [tool.poetry.dependencies] from
+  # pyproject.toml, a table that has never existed there (pyproject says so
+  # in a comment), so it printed a WARNING and exited 0 before opening a
+  # single requirements file — a hard gate that passed on every PR while
+  # checking nothing. Empty inputs are now fatal.
   dep-version-check:
     name: Dep version drift guard
     runs-on: ubuntu-latest
@@ -866,8 +883,15 @@ jobs:
           # Needs the Redis service (job env REDIS_URL) for the job-status
           # tenant-scoping tests; no Postgres — every assertion resolves
           # before DB access. An unreachable Redis FAILS these tests.
+          # test_fsma_204_phase_2b_structure.py added in #2924: it used to be
+          # two pass-only bodies contributing a green PASS while asserting
+          # nothing, and ran in no blocking job. It now asserts the FSMA-204
+          # golden corpus (V036 obligations + V037 obligation-CTE rules)
+          # against the ingest-time checker that consumes it, offline — so an
+          # obligation-mapping regression turns a PR red here.
           pytest tests/security/test_security_audit_fixes.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
+            tests/data_integrity/test_fsma_204_phase_2b_structure.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
@@ -901,8 +925,10 @@ jobs:
           set -o pipefail
           repo_root="$(pwd)"
           export PYTHONPATH="${repo_root}:${repo_root}/services:${PYTHONPATH}"
-          # services/shared/tests is covered by NO other job — `lint-shared`
-          # runs ruff only — so until now all 12 tests in
+          # (Corrected in #2923: this comment used to claim services/shared/tests
+          # was covered by NO other job. It is not — the `test` matrix above
+          # includes `shared`, and since #2923 pyproject `testpaths` does too.
+          # What was true, and still is, is the point below.) All 12 tests in
           # test_rls_enforcement_live.py skipped everywhere: locally for want of
           # DATABASE_URL, and in CI because the step above only passes tests/…
           # paths. They are the sole end-to-end proof that an unset
