@@ -354,39 +354,21 @@ class WritePathMixin:
         )
 
         # --- Insert alerts (non-fatal: savepoint so event still persists) ---
-        _VALID_ALERT_TYPES = {
-            "missing_kde", "temperature_excursion", "deadline_approaching",
-            "supplier_non_compliant", "chain_break", "export_failure",
-        }
+        # SQL / accepted-type set / parameter shape live in ``core`` so the
+        # batch path writes byte-identical rows for identical input (#2902).
         for alert in alerts:
-            raw_type = alert.get("alert_type", "missing_kde")
-            alert_type = raw_type if raw_type in _VALID_ALERT_TYPES else "missing_kde"
             nested = self.session.begin_nested()
             try:
                 self.session.execute(
-                    text("""
-                        INSERT INTO fsma.compliance_alerts (
-                            tenant_id, org_id, event_id, severity, alert_type,
-                            title, message
-                        ) VALUES (
-                            :tenant_id, :org_id, :event_id, :severity, :alert_type,
-                            :title, :message
-                        )
-                    """),
-                    {
-                        "tenant_id": tenant_id,
-                        "org_id": tenant_id,  # scope alerts to tenant until org model exists
-                        "event_id": event_id,
-                        "severity": alert.get("severity", "warning"),
-                        "alert_type": alert_type,
-                        "title": alert.get("alert_type", "Compliance Alert"),
-                        "message": alert.get("message", ""),
-                    },
+                    text(_core.ALERT_INSERT_SQL),
+                    _core._alert_insert_params(tenant_id, event_id, alert),
                 )
             except Exception as exc:
                 nested.rollback()
                 _core.logger.warning("alert_insert_failed", extra={
-                    "event_id": event_id, "alert_type": raw_type, "error": str(exc),
+                    "event_id": event_id,
+                    "alert_type": alert.get("alert_type", "missing_kde"),
+                    "error": str(exc),
                 })
 
         _core.logger.info(
