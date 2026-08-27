@@ -44,6 +44,16 @@ Verified by grep + manual read on 2026-07-14. "Canonical" means
 | Frontend proxies | `frontend/src/app/api/**` | none direct (proxy to backend routes above) | inherit their upstream's cutover | ✅ indirect |
 | Reconciliation script | `scripts/validate_data_integrity.py` (#2521) | both (compensating control) | retire from runbooks at WS-1d acceptance | ⬜ WS-1d |
 
+### Reading the reconciliation script's result (#2934)
+
+Exit 0 from `scripts/validate_data_integrity.py` is evidence **only** when the
+output printed a `[PASS]` line for all four named checks — Hash Chain
+Continuity, Orphaned Records, Dual-Write Reconciliation, Tenant Isolation.
+Record the printed check table, not just the exit status. When the script
+cannot reach the database it exits `2` (or `64` when `DATABASE_URL` is unset),
+prints the underlying cause and runs no check at all — that is a NO-GO for the
+cutover, never a pass.
+
 ## Intentional `dual_write=False` canonical-only writers
 
 `webhook_compat`, `epcis`, `canonical_router`, `auditor_router`,

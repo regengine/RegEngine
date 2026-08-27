@@ -406,6 +406,9 @@ class TestHandleCheckoutCompleted:
             "id": "cs_test_123",
             "subscription": "sub_test_456",
             "customer": "cus_test_789",
+            # #2930: a settled checkout — an entitling status is only written
+            # for a payment Stripe reports as actually collected.
+            "payment_status": "paid",
             "customer_details": {"email": "user@example.com"},
             "metadata": {
                 "tenant_id": "tenant-abc",

@@ -136,6 +136,29 @@ def test_861_condition_code_is_rcd_index_5() -> None:
     assert extracted["condition_code"] == "4"
 
 
+def test_861_bra_element_offsets_match_x12_layout() -> None:
+    """#2973: BRA01 is the receiving advice number and BRA02 the date.
+
+    BRA is the outlier among X12 beginning segments — the Transaction Set
+    Purpose Code sits at BRA03, not first as in BSN01/BEG01 — so reading
+    ``bra[2]``/``bra[3]`` (the 856 BSN offsets) filed the date as the
+    advice number and the two-character purpose code as the date, which
+    ``_parse_edi_date_digits`` rejects with a 400.
+    """
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000011*0*P*>~"
+    raw = (
+        isa
+        + "GS*RC*SENDERID*RECEIVERID*20260310*1200*1*X*004010~ST*861*0001~"
+        + "BRA*RA-9090*20260312*00*1~SE*3*0001~GE*1*1~IEA*1*000000011~"
+    )
+
+    extracted = _extract_fields_for_set("861", _parse_x12_segments(raw))
+
+    assert extracted["receiving_advice_number"] == "RA-9090"
+    assert extracted["receive_date_raw"] == "20260312"
+    assert extracted["reference_document_number"] == "RA-9090"
+
+
 def test_offset_shift_changes_extracted_output() -> None:
     """#2536 acceptance: a one-element offset in a reader (here BSN[3]
     -> BSN[4] for the 856 ship date) produces a different value than the
@@ -192,7 +215,7 @@ def test_sn1_vs_po1_quantity_fallback_divergence() -> None:
     e861 = (
         isa
         + "GS*RC*S*R*20260310*1200*1*X*004010~ST*861*0001~"
-        + "BRA*00*RA-1*20260312~RCD*1*ABC*CA~SE*5*0001~GE*1*1~IEA*1*000000009~"
+        + "BRA*RA-1*20260312*00*1~RCD*1*ABC*CA~SE*5*0001~GE*1*1~IEA*1*000000009~"
     )
 
     q856 = _extract_fields_for_set("856", _parse_x12_segments(e856))["quantity"]
@@ -337,3 +360,26 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     assert event.kdes["event_date"] == exp["event_date"]
     # Timestamp is a non-empty ISO string for every set.
     assert isinstance(event.timestamp, str) and event.timestamp
+
+
+def test_861_bsn_ordered_bra_is_rejected(client: TestClient) -> None:
+    """#2973: an 861 carrying the old purpose-code-first (BSN-style) BRA
+    must be rejected with ``invalid_edi_date`` rather than silently
+    filing the purpose code as the receive date.
+    """
+    conformant = (_CORPUS_DIR / "receiving_861.edi").read_text(encoding="utf-8")
+    legacy = conformant.replace("BRA*RA-9090*20260312*00*1~", "BRA*00*RA-9090*20260312~")
+    assert legacy != conformant, "corpus fixture must use the conformant BRA element order"
+
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={
+            "traceability_lot_code": _VALID_FSMA_TLC,
+            "tenant_id": TEST_TENANT_ID,
+        },
+        files={"file": ("receiving_861_legacy.edi", legacy.encode("utf-8"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"]["error"] == "invalid_edi_date"

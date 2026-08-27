@@ -149,6 +149,44 @@ def _release_event_claim(event_id: str) -> None:
         )
 
 
+def _bind_tenant_lookups(
+    tenant_id: str,
+    session_id: str | None = None,
+    customer_id: str | None = None,
+) -> None:
+    """Persist the session/customer -> tenant lookups on their own (#2930).
+
+    ``_store_subscription_mapping`` writes these keys too, but only at the
+    very end of ``_handle_checkout_completed`` — after the Stripe
+    ``Subscription.retrieve``. Since that retrieve can now fail the ack so
+    Stripe redelivers, a freshly provisioned tenant must be discoverable
+    before it: otherwise every redelivery finds no binding and provisions
+    another tenant, orphaning the previous one.
+
+    Best-effort by design. A Redis error here is logged, not raised: the
+    caller has already created the tenant, and converting that into a
+    different exception would lose the original failure. The cost of a
+    missed write is the duplicate-provisioning this exists to prevent, not
+    a wrong entitlement.
+    """
+    if not tenant_id:
+        return
+
+    client = _redis_client()
+    try:
+        if session_id:
+            client.set(_session_lookup_key(session_id), tenant_id)
+        if customer_id:
+            client.set(_customer_lookup_key(customer_id), tenant_id)
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
+        logger.error(
+            "stripe_tenant_lookup_bind_failed tenant_id=%s session_id=%s error=%s",
+            tenant_id,
+            session_id,
+            exc,
+        )
+
+
 def _store_subscription_mapping(tenant_id: str, payload: dict[str, str]) -> None:
     client = _redis_client()
     key = _tenant_subscription_key(tenant_id)

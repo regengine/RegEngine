@@ -289,6 +289,10 @@ class TestHandleCheckoutCompleted:
             "id": "cs_super",
             "customer": "cus_super",
             "subscription": "sub_super",
+            # #2930: a settled checkout — Stripe always stamps
+            # ``payment_status`` and only a settled one may carry an
+            # entitling status through to the mapping.
+            "payment_status": "paid",
             "metadata": {"plan_id": "growth"},
         }
         await webhooks_mod._handle_checkout_completed(session, event_created=1_000_000)
@@ -1152,5 +1156,348 @@ class TestSubscriptionUpdatedCorruptWatermark:
         assert mapping["current_period_end"].startswith("20")
 
 
+# ── #2930: checkout must never grant an entitlement it did not verify ──────
+
+
+class _NxFakeRedis(_FakeRedis):
+    """``_FakeRedis`` with real ``SET NX`` semantics.
+
+    ``_mark_event_seen`` claims a dedup slot with ``SET NX``; proving that
+    a *released* claim lets Stripe's redelivery through needs a fake that
+    actually refuses the second claim.
+    """
+
+    def set(self, key: str, value: str, **kwargs: Any) -> Any:
+        if kwargs.get("nx") and key in self.values:
+            return None
+        self.values[key] = value
+        return True
+
+
+def _stripe_error(_sid: str) -> Any:
+    raise stripe.error.APIConnectionError("stripe unreachable")
+
+
+class TestCheckoutEntitlementSafety2930:
+    """#2930: ``checkout.session.completed`` pre-set ``status="active"``
+    and only *downgraded* it from a successful ``Subscription.retrieve``.
+    A swallowed ``StripeError`` therefore persisted a fully entitling
+    status — and because the dedup slot was claimed and the endpoint
+    acked 200, Stripe never redelivered and nothing self-healed."""
+
+    @pytest.mark.asyncio
+    async def test_subscription_lookup_failure_never_persists_active(
+        self, fake_redis: _FakeRedis, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ``StripeError`` must abort the handler, not fall through to
+        the permissive default."""
+        fake_redis.values["billing:session:cs_boom"] = "tenant-boom"
+        monkeypatch.setattr(stripe.Subscription, "retrieve", _stripe_error)
+
+        session = {
+            "id": "cs_boom",
+            "customer": "cus_boom",
+            "subscription": "sub_boom",
+            "payment_status": "paid",
+            "metadata": {"plan_id": "growth"},
+        }
+
+        with pytest.raises(HTTPException) as excinfo:
+            await webhooks_mod._handle_checkout_completed(session, event_created=100)
+
+        assert excinfo.value.status_code >= 500
+        # Nothing entitling was written — in fact nothing was written at all.
+        assert fake_redis.hashes.get("billing:tenant:tenant-boom", {}).get("status") != "active"
+
+    @pytest.mark.asyncio
+    async def test_lookup_failure_acks_non_2xx_and_releases_dedup_for_retry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """End-to-end: the failed delivery answers non-2xx AND frees its
+        dedup slot, so Stripe's redelivery of the *same* event id is
+        processed rather than short-circuited as a duplicate."""
+        monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+        fake = _NxFakeRedis()
+        monkeypatch.setattr(state_mod, "_redis_client", lambda: fake)
+        fake.values["billing:session:cs_retry"] = "tenant-retry"
+
+        event = {
+            "id": "evt_retry",
+            "type": "checkout.session.completed",
+            "created": 1_700_000_000,
+            "data": {
+                "object": {
+                    "id": "cs_retry",
+                    "customer": "cus_retry",
+                    "subscription": "sub_retry",
+                    "payment_status": "paid",
+                    "metadata": {"plan_id": "growth"},
+                }
+            },
+        }
+        monkeypatch.setattr(stripe.Webhook, "construct_event", lambda **_: event)
+
+        request = MagicMock()
+        request.body = AsyncMock(return_value=b'{"id":"evt_retry"}')
+
+        # 1st delivery: Stripe is down.
+        monkeypatch.setattr(stripe.Subscription, "retrieve", _stripe_error)
+        with pytest.raises(HTTPException) as excinfo:
+            await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=ok")
+        assert excinfo.value.status_code >= 500
+        assert "billing:tenant:tenant-retry" not in fake.hashes
+        # Dedup claim released, otherwise the retry can never do anything.
+        assert state_mod._event_dedup_key("evt_retry") not in fake.values
+
+        # 2nd delivery: Stripe recovered — the retry is what heals the state.
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda sid: {"status": "active", "current_period_end": 1_800_000_000},
+        )
+        response = await webhooks_mod._process_stripe_webhook(request, stripe_signature="t=1,v1=ok")
+
+        assert response == {"received": True, "event_type": "checkout.session.completed"}
+        assert fake.hashes["billing:tenant:tenant-retry"]["status"] == "active"
+
+    @pytest.mark.asyncio
+    async def test_unpaid_checkout_is_not_entitling_and_gate_returns_402(
+        self, fake_redis: _FakeRedis, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Delayed payment methods (ACH/SEPA/Bacs) complete checkout with
+        ``payment_status="unpaid"``. That must not unlock paid surfaces."""
+        from types import SimpleNamespace
+
+        from app import subscription_gate as gate_mod
+        from shared.circuit_breaker import redis_circuit
+
+        fake_redis.values["billing:session:cs_ach_unpaid"] = "tenant-ach-unpaid"
+        # Worst case: Stripe itself reports an entitling status while the
+        # money has not settled.
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda sid: {"status": "active", "current_period_end": 1_800_000_000},
+        )
+
+        session = {
+            "id": "cs_ach_unpaid",
+            "customer": "cus_ach_unpaid",
+            "subscription": "sub_ach_unpaid",
+            "payment_status": "unpaid",
+            "metadata": {"plan_id": "growth"},
+        }
+        await webhooks_mod._handle_checkout_completed(session, event_created=100)
+
+        stored_status = fake_redis.hashes["billing:tenant:tenant-ach-unpaid"]["status"]
+        assert stored_status not in {"active", "trialing"}
+
+        # The gate reads exactly this hash — it must refuse the tenant.
+        monkeypatch.delenv("SUBSCRIPTION_GATE_FAIL_OPEN", raising=False)
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        gate_client = MagicMock()
+        gate_client.hget.side_effect = lambda key, field: fake_redis.hashes.get(key, {}).get(field)
+        monkeypatch.setattr("redis.from_url", lambda *a, **k: gate_client)
+        redis_circuit.reset()
+
+        request = SimpleNamespace(state=SimpleNamespace(api_key=SimpleNamespace(tenant_id="tenant-ach-unpaid")))
+        try:
+            with pytest.raises(HTTPException) as excinfo:
+                await gate_mod.require_active_subscription(request)
+        finally:
+            redis_circuit.reset()
+        assert excinfo.value.status_code == 402
+
+    @pytest.mark.asyncio
+    async def test_async_payment_succeeded_promotes_settled_checkout(
+        self, fake_redis: _FakeRedis, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The delayed-payment settlement event is what grants access —
+        the dispatcher ignored it entirely before #2930."""
+        fake_redis.values["billing:session:cs_ach"] = "tenant-ach"
+        session = {
+            "id": "cs_ach",
+            "customer": "cus_ach",
+            "subscription": "sub_ach",
+            "payment_status": "unpaid",
+            "metadata": {"plan_id": "growth"},
+        }
+
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda sid: {"status": "incomplete", "current_period_end": None},
+        )
+        await webhooks_mod._handle_stripe_event(
+            {
+                "id": "evt_ach_1",
+                "type": "checkout.session.completed",
+                "created": 100,
+                "data": {"object": session},
+            }
+        )
+        assert fake_redis.hashes["billing:tenant:tenant-ach"]["status"] == "incomplete"
+
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda sid: {"status": "active", "current_period_end": 1_800_000_000},
+        )
+        await webhooks_mod._handle_stripe_event(
+            {
+                "id": "evt_ach_2",
+                "type": "checkout.session.async_payment_succeeded",
+                "created": 200,
+                "data": {"object": {**session, "payment_status": "paid"}},
+            }
+        )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-ach"]
+        assert mapping["status"] == "active"
+        assert mapping["last_event_created"] == "200"
+
+    @pytest.mark.asyncio
+    async def test_async_payment_failed_leaves_tenant_non_entitling(self, fake_redis: _FakeRedis) -> None:
+        """A failed delayed payment must revoke, not be ignored."""
+        state_mod._store_subscription_mapping(
+            "tenant-ach-fail",
+            {
+                "tenant_id": "tenant-ach-fail",
+                "subscription_id": "sub_ach_fail",
+                "customer_id": "cus_ach_fail",
+                "status": "active",
+                "last_event_created": "100",
+            },
+        )
+
+        await webhooks_mod._handle_stripe_event(
+            {
+                "id": "evt_ach_fail",
+                "type": "checkout.session.async_payment_failed",
+                "created": 200,
+                "data": {
+                    "object": {
+                        "id": "cs_ach_fail",
+                        "customer": "cus_ach_fail",
+                        "subscription": "sub_ach_fail",
+                        "payment_status": "unpaid",
+                    }
+                },
+            }
+        )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-ach-fail"]
+        assert mapping["status"] not in {"active", "trialing"}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestNewSignupBindingBeforeLookup2930:
+    """#2930 follow-up: failing the ack on a ``StripeError`` gave Stripe a
+    reason to redeliver — but tenant provisioning happens *before* that
+    lookup and the session/customer bindings were only written *after* it.
+    A brand-new self-serve signup that hit a transient Stripe outage
+    therefore minted a fresh orphaned tenant on every single redelivery.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retry_after_lookup_failure_reuses_provisioned_tenant(
+        self, fake_redis: _FakeRedis, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        created: list[str] = []
+
+        async def _fake_create_tenant(name: str) -> str:
+            created.append(name)
+            return f"tenant-new-{len(created)}"
+
+        monkeypatch.setattr(customers_mod, "_create_tenant_via_admin", _fake_create_tenant)
+
+        # Brand-new signup: no session binding and no customer binding.
+        session = {
+            "id": "cs_fresh",
+            "customer": "cus_fresh",
+            "subscription": "sub_fresh",
+            "payment_status": "paid",
+            "metadata": {"plan_id": "growth", "tenant_name": "Acme"},
+        }
+
+        # 1st delivery: Stripe is unreachable, so the ack fails.
+        monkeypatch.setattr(stripe.Subscription, "retrieve", _stripe_error)
+        with pytest.raises(HTTPException) as excinfo:
+            await webhooks_mod._handle_checkout_completed(session, event_created=100)
+        assert excinfo.value.status_code >= 500
+
+        assert created == ["Acme"]
+
+        # 2nd delivery: Stripe recovered. No second tenant may be minted —
+        # this is the harm the binding exists to prevent.
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            lambda sid: {"status": "active", "current_period_end": 1_800_000_000},
+        )
+        await webhooks_mod._handle_checkout_completed(session, event_created=100)
+
+        assert created == ["Acme"], "redelivery provisioned a duplicate tenant"
+        assert fake_redis.hashes["billing:tenant:tenant-new-1"]["status"] == "active"
+        # ...because the retry found the tenant via BOTH lookups the
+        # handler consults before deciding to provision.
+        assert fake_redis.values[state_mod._session_lookup_key("cs_fresh")] == "tenant-new-1"
+        assert fake_redis.values[state_mod._customer_lookup_key("cus_fresh")] == "tenant-new-1"
+
+    @pytest.mark.asyncio
+    async def test_binding_survives_when_only_customer_id_is_present(
+        self, fake_redis: _FakeRedis, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Some checkout sessions arrive without an ``id`` we can key on.
+        The customer binding alone must still stop duplicate provisioning.
+        """
+        created: list[str] = []
+
+        async def _fake_create_tenant(name: str) -> str:
+            created.append(name)
+            return f"tenant-cust-{len(created)}"
+
+        monkeypatch.setattr(customers_mod, "_create_tenant_via_admin", _fake_create_tenant)
+        monkeypatch.setattr(stripe.Subscription, "retrieve", _stripe_error)
+
+        session = {
+            "id": None,
+            "customer": "cus_only",
+            "subscription": "sub_only",
+            "payment_status": "paid",
+            "metadata": {"plan_id": "growth", "tenant_name": "Solo"},
+        }
+
+        with pytest.raises(HTTPException):
+            await webhooks_mod._handle_checkout_completed(session, event_created=1)
+
+        assert fake_redis.values[state_mod._customer_lookup_key("cus_only")] == "tenant-cust-1"
+        assert state_mod._session_lookup_key("") not in fake_redis.values
+
+        with pytest.raises(HTTPException):
+            await webhooks_mod._handle_checkout_completed(session, event_created=1)
+        assert created == ["Solo"], "redelivery provisioned a duplicate tenant"
+
+    def test_bind_tenant_lookups_swallows_redis_errors(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The caller has already provisioned a tenant; a Redis failure
+        here must not replace the outage it was defending against with a
+        different, more confusing exception."""
+        import redis as redis_mod
+
+        class _BrokenRedis:
+            def set(self, *_a: Any, **_k: Any) -> Any:
+                raise redis_mod.RedisError("redis down")
+
+        monkeypatch.setattr(state_mod, "_redis_client", lambda: _BrokenRedis())
+        state_mod._bind_tenant_lookups("tenant-x", session_id="cs_x", customer_id="cus_x")
+
+    def test_bind_tenant_lookups_ignores_empty_tenant(
+        self, fake_redis: _FakeRedis
+    ) -> None:
+        state_mod._bind_tenant_lookups("", session_id="cs_empty", customer_id="cus_empty")
+        assert fake_redis.values == {}
