@@ -1,245 +1,294 @@
-import pytest
+"""Cross-tenant RLS isolation on the admin surface, proven against a REAL Postgres (#2876).
 
-# Skip if testcontainers is not installed (requires Docker, not available in standard CI)
-tc = pytest.importorskip("testcontainers")
+What this file used to be
+-------------------------
+A "pilot" that skipped unconditionally (its fixture required six
+``V*.sql`` files that ``services/admin/migrations/`` has never
+contained) and, underneath the skip, ended in ``assert True`` after
+printing the *same* ``results`` variable twice. It could not fail even
+if it ran, so the single most important property in a multi-tenant
+compliance product — a tenant cannot see another tenant's rows — was
+certified by a tautology.
 
+What it is now
+--------------
+A behavioural test against a live PostgreSQL. It asserts the isolation
+contract the admin surface depends on, using **production artefacts**
+rather than re-implementations:
 
-def _docker_available() -> bool:
-    """Return True if the local Docker daemon is reachable.
+* ``get_tenant_context()`` is installed by executing the real SQL from
+  the v097 migration module (``_PIN_FAIL_HARD``) — not a copy pasted
+  into this file. Same technique as
+  ``tests/migrations/test_v097_pin_get_tenant_context.py``.
+* ``app.tenant_id`` is set through the real production primitive
+  ``shared.tenant_context.set_tenant_guc``. If that helper starts
+  writing the wrong GUC name, the wrong scope, or nothing, these tests
+  go red.
+* The policy predicate is the canonical repo shape
+  ``USING (tenant_id = get_tenant_context())`` with ``ENABLE`` +
+  ``FORCE ROW LEVEL SECURITY``, applied ``TO`` a **non-superuser,
+  NOBYPASSRLS** role — because RLS is a no-op for superusers, and
+  running the old "pilot" as the container superuser is exactly why it
+  could never have observed isolation even with the migrations present.
 
-    testcontainers raises ``DockerException`` at fixture setup when the
-    daemon is down, which turns into a hard ERROR rather than a clean
-    skip. Probe the socket up-front so the whole module skips.
-    """
-    try:
-        import docker  # type: ignore[import-untyped]
+Everything is built inside a throwaway schema and a throwaway role,
+both dropped on teardown, so the suite is safe to point at a shared CI
+database.
 
-        client = docker.from_env()
-        client.ping()
-        return True
-    except Exception:
-        return False
+Infrastructure gate
+-------------------
+Postgres acquisition goes through ``tests.migrations.rls_db`` — the
+repo's existing policy helper: CI's service-container ``DATABASE_URL``,
+else an explicitly designated ``REGENGINE_MIGRATION_TEST_DB``, else
+testcontainers, else skip. Under ``REGENGINE_REQUIRE_DB=1`` (set by the
+``repo-root-suite`` job) an unavailable database is a **hard failure**,
+so this gate can never report green by not running.
+"""
 
+from __future__ import annotations
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not _docker_available(),
-        reason="Docker daemon not reachable — skipping testcontainers RLS isolation test",
-    ),
-]
-
+import importlib.util
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from testcontainers.postgres import PostgresContainer
+import pytest
+from shared.tenant_context import set_tenant_guc
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DatabaseError
+from sqlalchemy.orm import Session
 
+from tests.migrations.rls_db import rls_postgres_or_skip
 
-@pytest.fixture(scope="session")
-def postgres_container():
-    """Start a real Postgres container for integration testing."""
-    with PostgresContainer("postgres:16", driver="psycopg") as postgres:
-        yield postgres
+pytestmark = pytest.mark.integration
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+V097_PATH = REPO_ROOT / "alembic" / "versions" / "20260721_e4d7b2a9c561_v097_pin_get_tenant_context_fail_hard.py"
 
-@pytest.fixture(scope="session")
-def db_engine(postgres_container):
-    """Create a database engine pointing to the test container."""
-    url = postgres_container.get_connection_url()
-    # Ensure we use psycopg (v3) driver
-    url = url.replace("postgresql+psycopg2://", "postgresql+psycopg://")
-    engine = create_engine(url)
-    return engine
+TABLE = "admin_rls_probe"
 
 
-@pytest.fixture(scope="session")
-def apply_migrations(db_engine):
-    """Apply core migrations to the test container database."""
-    migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
+def _load_v097():
+    """Import the v097 migration module by path for its canonical SQL.
 
-    # List of critical migrations to apply for RLS testing
-    # In a full migration, we would run ALL migrations using a tool like alembic or a loop
-    core_migrations = [
-        "V1__init_schema.sql",  # Base tables
-        "V3__tenant_isolation.sql",  # Basic RLS
-        "V12__production_compliance_init.sql",  # PCOS tables
-        "V27__rls_core_security_tables.sql",
-        "V28__rls_pcos_vertical_tables.sql",
-        "V29__jwt_rls_integration.sql",
-    ]
+    Loading the module (rather than copying the DDL) is what keeps this
+    test honest: if the pinned ``get_tenant_context()`` body ever goes
+    back to fail-soft, the assertions below break here rather than in
+    production.
+    """
+    spec = importlib.util.spec_from_file_location("v097_pin_get_tenant_context", V097_PATH)
+    assert spec is not None and spec.loader is not None, f"cannot load {V097_PATH}"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-    with db_engine.connect() as conn:
-        # Create 'auth' schema and 'uid()' function to mock Supabase environment
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth;"))
+
+@pytest.fixture(scope="module")
+def rls_fixture() -> Iterator[tuple[Engine, str, str]]:
+    """Yield ``(engine, schema, app_role)`` for a live, RLS-protected table.
+
+    Skips (or FAILS under ``REGENGINE_REQUIRE_DB=1``) when no real
+    Postgres is reachable — see the module docstring.
+    """
+    with rls_postgres_or_skip() as (_plain_url, engine):
+        suffix = uuid.uuid4().hex[:12]
+        schema = f"admin_rls_{suffix}"
+        app_role = f"admin_rls_app_{suffix}"
+        try:
+            _bootstrap(engine, schema, app_role)
+            yield engine, schema, app_role
+        finally:
+            _teardown(engine, schema, app_role)
+
+
+def _bootstrap(engine: Engine, schema: str, app_role: str) -> None:
+    v097 = _load_v097()
+    with engine.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+        # search_path first: v097's DO block installs the function into the
+        # first schema of current_schemas(true) that already holds one, so
+        # seeding a placeholder here keeps the canonical function inside our
+        # throwaway schema instead of touching public.
+        conn.execute(text(f'SET LOCAL search_path TO "{schema}"'))
         conn.execute(
             text(
-                "CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS 'SELECT ''00000000-0000-0000-0000-000000000000''::UUID' LANGUAGE SQL;"
+                # The deliberately WRONG pre-v097 fail-soft shape. v097's job
+                # is to replace exactly this; installing it first means the
+                # migration's real CREATE OR REPLACE branch is what produces
+                # the function these tests then rely on.
+                f"""
+                CREATE FUNCTION "{schema}".get_tenant_context() RETURNS UUID AS $fn$
+                BEGIN
+                    RETURN NULLIF(current_setting('app.tenant_id', TRUE), '')::UUID;
+                EXCEPTION WHEN OTHERS THEN
+                    RETURN NULL;
+                END;
+                $fn$ LANGUAGE plpgsql;
+                """
             )
         )
-        conn.execute(
-            text("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-                    CREATE ROLE authenticated;
-                END IF;
-            END
-            $$;
-        """)
-        )
-        conn.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS users (
-                id UUID PRIMARY KEY,
-                email TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        )
-        conn.execute(
-            text("""
-            INSERT INTO users (id, email)
-            VALUES ('00000000-0000-0000-0000-000000000000', 'ci-test-user@regengine.local')
-            ON CONFLICT (id) DO NOTHING;
-        """)
-        )
-        conn.commit()
+        conn.execute(text(v097._PIN_FAIL_HARD))
 
-        missing_migrations = [migration for migration in core_migrations if not (migrations_dir / migration).exists()]
-        if missing_migrations:
-            pytest.skip(
-                "Legacy service migrations are not available for the Testcontainers "
-                f"RLS fixture: {', '.join(missing_migrations)}"
+        conn.execute(text(f'CREATE ROLE "{app_role}" NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT'))
+        conn.execute(
+            text(
+                f"""
+                CREATE TABLE "{schema}"."{TABLE}" (
+                    id        UUID PRIMARY KEY,
+                    tenant_id UUID NOT NULL,
+                    name      TEXT NOT NULL
+                )
+                """
             )
+        )
+        conn.execute(text(f'ALTER TABLE "{schema}"."{TABLE}" ENABLE ROW LEVEL SECURITY'))
+        conn.execute(text(f'ALTER TABLE "{schema}"."{TABLE}" FORCE ROW LEVEL SECURITY'))
+        conn.execute(
+            text(
+                f"""
+                CREATE POLICY tenant_isolation_{TABLE} ON "{schema}"."{TABLE}"
+                    FOR ALL TO "{app_role}"
+                    USING (tenant_id = "{schema}".get_tenant_context())
+                """
+            )
+        )
+        conn.execute(text(f'GRANT USAGE ON SCHEMA "{schema}" TO "{app_role}"'))
+        conn.execute(text(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{schema}"."{TABLE}" TO "{app_role}"'))
+        conn.execute(text(f'GRANT EXECUTE ON FUNCTION "{schema}".get_tenant_context() TO "{app_role}"'))
 
-        for migration in core_migrations:
-            path = migrations_dir / migration
-            sql = path.read_text()
-            # Split migrations by sections if they use BEGIN/COMMIT internally or just execute the whole block
-            # Postgres supports multiple statements in one call
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-            except Exception as e:
-                print(f"Error applying {migration}: {e}")
-                conn.rollback()
-    return True
+
+def _teardown(engine: Engine, schema: str, app_role: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        conn.execute(text(f'DROP OWNED BY "{app_role}" CASCADE'))
+        conn.execute(text(f'DROP ROLE IF EXISTS "{app_role}"'))
 
 
-def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
+@pytest.fixture(scope="module")
+def seeded(rls_fixture) -> Iterator[dict]:
+    """Insert one row per tenant as the (RLS-bypassing) owner."""
+    engine, schema, app_role = rls_fixture
+    rows = {
+        "tenant_a": uuid.uuid4(),
+        "tenant_b": uuid.uuid4(),
+        "row_a": uuid.uuid4(),
+        "row_b": uuid.uuid4(),
+    }
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                INSERT INTO "{schema}"."{TABLE}" (id, tenant_id, name) VALUES
+                    (:row_a, :tenant_a, 'Project A'),
+                    (:row_b, :tenant_b, 'Project B')
+                """
+            ),
+            {str(k): v for k, v in rows.items()},
+        )
+    yield rows
+
+
+@contextmanager
+def _tenant_session(engine: Engine, schema: str, app_role: str, tenant_id) -> Iterator[Session]:
+    """A transaction running as the app role with ``app.tenant_id`` set.
+
+    ``tenant_id=None`` means "no tenant context at all" — the
+    untenanted-access case that must fail closed.
     """
-    Verify that RLS isolation works as expected in a real Postgres environment.
-    This test proves that app.tenant_id correctly isolates records.
+    session = Session(bind=engine)
+    try:
+        session.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+        session.execute(text(f'SET LOCAL ROLE "{app_role}"'))
+        if tenant_id is not None:
+            # Production primitive, not a hand-rolled SET LOCAL.
+            set_tenant_guc(session, str(tenant_id))
+        yield session
+    finally:
+        session.rollback()
+        session.close()
+
+
+def _visible_names(session: Session, schema: str) -> set[str]:
+    return {row[0] for row in session.execute(text(f'SELECT name FROM "{schema}"."{TABLE}"')).all()}
+
+
+# ---------------------------------------------------------------------------
+# The isolation contract
+# ---------------------------------------------------------------------------
+
+
+def test_app_role_is_actually_subject_to_rls(rls_fixture):
+    """Guard against the failure that made the old pilot meaningless.
+
+    If the session runs as a superuser or a BYPASSRLS role, every
+    isolation assertion below becomes vacuous. Assert the precondition.
     """
-    Session = sessionmaker(bind=db_engine)
-    tenant_a = uuid.uuid4()
-    tenant_b = uuid.uuid4()
-    slug_a = f"tenant-a-{tenant_a.hex[:8]}"
-    slug_b = f"tenant-b-{tenant_b.hex[:8]}"
+    engine, schema, app_role = rls_fixture
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = :r"),
+            {"r": app_role},
+        ).one()
+    assert row.rolsuper is False, f"{app_role} is a superuser — RLS would be bypassed and these tests vacuous"
+    assert row.rolbypassrls is False, f"{app_role} has BYPASSRLS — RLS would be bypassed and these tests vacuous"
 
-    with Session() as session:
-        # 1. Insert data as a superuser (bypass RLS)
-        # We need a table that has RLS enabled. pcos_projects is a good candidate.
-        project_id_a = uuid.uuid4()
-        project_id_b = uuid.uuid4()
-        company_id_a = uuid.uuid4()
-        company_id_b = uuid.uuid4()
 
-        session.execute(
-            text(
-                """
-                INSERT INTO tenants (id, name, slug, status)
-                VALUES (:id_a, 'Tenant A', :slug_a, 'active'),
-                       (:id_b, 'Tenant B', :slug_b, 'active')
-                ON CONFLICT (id) DO NOTHING
-                """
-            ),
-            {
-                "id_a": tenant_a,
-                "slug_a": slug_a,
-                "id_b": tenant_b,
-                "slug_b": slug_b,
-            },
-        )
+def test_tenant_a_sees_only_its_own_rows(rls_fixture, seeded):
+    engine, schema, app_role = rls_fixture
+    with _tenant_session(engine, schema, app_role, seeded["tenant_a"]) as session:
+        assert _visible_names(session, schema) == {"Project A"}
 
-        session.execute(
-            text(
-                """
-                INSERT INTO pcos_companies (id, tenant_id, legal_name, entity_type)
-                VALUES (:id_a, :tid_a, 'Company A', 'llc_single_member'),
-                       (:id_b, :tid_b, 'Company B', 'llc_single_member')
-                """
-            ),
-            {
-                "id_a": company_id_a,
-                "tid_a": tenant_a,
-                "id_b": company_id_b,
-                "tid_b": tenant_b,
-            },
-        )
 
-        # Disable RLS for insertion or use a superuser session (Testcontainers is superuser)
-        session.execute(
-            text(
-                """
-                INSERT INTO pcos_projects (id, tenant_id, company_id, name, project_type, is_commercial)
-                VALUES (:id, :tid, :company_id, :name, 'commercial', TRUE)
-                """
-            ),
-            {
-                "id": project_id_a,
-                "tid": tenant_a,
-                "company_id": company_id_a,
-                "name": "Project A",
-            },
-        )
+def test_tenant_b_sees_only_its_own_rows(rls_fixture, seeded):
+    engine, schema, app_role = rls_fixture
+    with _tenant_session(engine, schema, app_role, seeded["tenant_b"]) as session:
+        assert _visible_names(session, schema) == {"Project B"}
 
-        session.execute(
-            text(
-                """
-                INSERT INTO pcos_projects (id, tenant_id, company_id, name, project_type, is_commercial)
-                VALUES (:id, :tid, :company_id, :name, 'commercial', TRUE)
-                """
-            ),
-            {
-                "id": project_id_b,
-                "tid": tenant_b,
-                "company_id": company_id_b,
-                "name": "Project B",
-            },
-        )
 
-        session.commit()
+def test_cross_tenant_row_is_invisible_even_by_primary_key(rls_fixture, seeded):
+    """A direct PK lookup must not be a way around the policy."""
+    engine, schema, app_role = rls_fixture
+    with _tenant_session(engine, schema, app_role, seeded["tenant_a"]) as session:
+        leaked = session.execute(
+            text(f'SELECT name FROM "{schema}"."{TABLE}" WHERE id = :id'),
+            {"id": seeded["row_b"]},
+        ).all()
+    assert leaked == [], f"tenant A read tenant B's row by primary key: {leaked!r}"
 
-        # 2. Test Tenant A context
-        session.execute(text(f"SELECT set_config('app.tenant_id', :tid, FALSE)"), {"tid": str(tenant_a)})
 
-        # Use get_tenant_context() if it exists to verify setup
-        ctx = session.execute(text("SELECT get_tenant_context()")).scalar()
-        assert ctx == tenant_a
+def test_tenant_cannot_write_a_row_owned_by_another_tenant(rls_fixture, seeded):
+    """``FOR ALL ... USING`` supplies the WITH CHECK, so forged writes fail."""
+    engine, schema, app_role = rls_fixture
+    with _tenant_session(engine, schema, app_role, seeded["tenant_a"]) as session:
+        with pytest.raises(DatabaseError) as excinfo:
+            session.execute(
+                text(f'INSERT INTO "{schema}"."{TABLE}" (id, tenant_id, name) VALUES (:id, :tid, :name)'),
+                {"id": uuid.uuid4(), "tid": seeded["tenant_b"], "name": "Forged for B"},
+            )
+    assert "row-level security" in str(excinfo.value).lower()
 
-        # Query projects - should ONLY see Project A
-        # Note: We must ensure RLS is ENABLED for this to work
-        session.execute(text("ALTER TABLE pcos_projects ENABLE ROW LEVEL SECURITY"))
-        session.execute(text("ALTER TABLE pcos_projects FORCE ROW LEVEL SECURITY"))
 
-        # Note: Policies must be created. V28 should have done this.
-        # If V28 didn't create the perfect policy for Testcontainers (which is a superuser),
-        # we might need to test as a different role.
+def test_untenanted_session_fails_closed_rather_than_leaking(rls_fixture, seeded):
+    """No ``app.tenant_id`` must RAISE, not quietly return rows.
 
-        results = session.execute(text("SELECT name FROM pcos_projects")).all()
-        # If running as superuser, RLS might be bypassed unless FORCE RLS is on.
-        # Even with FORCE RLS, the table owner might bypass it.
-        # A better test is to create a 'regengine_user' role.
+    This is the #2461 contract: a fail-soft ``get_tenant_context()``
+    returns NULL, ``tenant_id = NULL`` is NULL, and the query succeeds
+    empty — silent, not loud. Either an empty success *or* a leak fails
+    this test.
+    """
+    engine, schema, app_role = rls_fixture
+    with _tenant_session(engine, schema, app_role, None) as session:
+        with pytest.raises(DatabaseError) as excinfo:
+            session.execute(text(f'SELECT name FROM "{schema}"."{TABLE}"')).all()
+    assert "app.tenant_id not set" in str(excinfo.value)
 
-        # For simplicity in this pilot, we just show the setup.
-        print(f"Projects visible to Tenant A: {[r[0] for r in results]}")
 
-        # 3. Test Tenant B context
-        session.execute(text(f"SELECT set_config('app.tenant_id', :tid, FALSE)"), {"tid": str(tenant_b)})
-        results = session.execute(text("SELECT name FROM pcos_projects")).all()
-        print(f"Projects visible to Tenant B: {[r[0] for r in results]}")
-
-    assert True  # Pilot successfully demonstrated
+def test_tenant_context_round_trips_through_the_production_helper(rls_fixture, seeded):
+    """``set_tenant_guc`` must be what ``get_tenant_context()`` reads."""
+    engine, schema, app_role = rls_fixture
+    tenant_a = seeded["tenant_a"]
+    with _tenant_session(engine, schema, app_role, tenant_a) as session:
+        observed = session.execute(text(f'SELECT "{schema}".get_tenant_context()')).scalar()
+    assert observed == tenant_a

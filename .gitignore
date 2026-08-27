@@ -76,6 +76,10 @@ frontend/out/
 *.sqlite3
 /data/
 secrets.md
+# Plaintext credential bundles. scripts/export_env_bundle.py no longer
+# writes these (#2938) - this is belt-and-braces for hand-made copies.
+secrets.json
+*.secrets.json
 
 # Artifacts that should never be tracked
 *.zip
@@ -201,6 +205,14 @@ frontend/android/
 # Generated test/QA artifacts (not source — qa/qa-health/latest.json IS tracked)
 frontend/test-results/
 .qa-health/
+
+# launch_orchestrator run artifacts (#2958).
+# README.md:90 documents `generated/` as gitignored; it was not, so a `git add -A`
+# after a non-dry-run would have committed a credential file. The orchestrator no
+# longer writes full API keys anywhere, but the run artifacts still do not belong
+# in version control.
+launch_orchestrator/generated/
+launch_orchestrator/orchestration_result.json
 
 # ── Re-includes for already-tracked paths (#2873) ────────────────────────────
 # `git ls-files | git check-ignore` reported 80 tracked files as ignored. Most

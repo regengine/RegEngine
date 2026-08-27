@@ -319,15 +319,21 @@ class TestToggleChannelEndpoint:
         assert resp.json() == {"channel": "email", "enabled": False}
         assert _prefs_store["t1"].channels[0].enabled is False
 
-    def test_toggle_unknown_channel_returns_error(self, client, fake_jsonb):
+    def test_toggle_unknown_channel_returns_404(self, client, fake_jsonb):
+        """#2865: an unknown channel must be a 404 in the ``detail``
+        envelope. This test previously pinned the defect (HTTP 200 with a
+        bare top-level ``error`` string), which made a preference change
+        that never persisted look successful to any ``response.ok`` check.
+        """
         _prefs_store["t1"] = _default_preferences("t1")
         resp = client.put(
             "/api/v1/notifications/t1/preferences/channel/carrier-pigeon",
             params={"enabled": True},
         )
-        assert resp.status_code == 200
-        assert "error" in resp.json()
-        assert "carrier-pigeon" in resp.json()["error"]
+        assert resp.status_code == 404
+        body = resp.json()
+        assert "carrier-pigeon" in body["detail"]
+        assert "error" not in body, "the bare top-level `error` shape must be gone"
 
     def test_toggle_initializes_defaults_when_tenant_unseen(self, client, fake_jsonb):
         resp = client.put(
@@ -382,15 +388,19 @@ class TestToggleAlertRuleEndpoint:
         assert resp.status_code == 200
         assert resp.json() == {"rule_id": "kde-missing", "enabled": False}
 
-    def test_toggle_unknown_rule_returns_error(self, client, fake_jsonb):
+    def test_toggle_unknown_rule_returns_404(self, client, fake_jsonb):
+        """#2865: see ``test_toggle_unknown_channel_returns_404`` — the
+        alert-rule fall-through had the same HTTP-200-with-error-body bug.
+        """
         _prefs_store["t1"] = _default_preferences("t1")
         resp = client.put(
             "/api/v1/notifications/t1/preferences/alert/phantom-rule",
             params={"enabled": True},
         )
-        assert resp.status_code == 200
-        assert "error" in resp.json()
-        assert "phantom-rule" in resp.json()["error"]
+        assert resp.status_code == 404
+        body = resp.json()
+        assert "phantom-rule" in body["detail"]
+        assert "error" not in body, "the bare top-level `error` shape must be gone"
 
     def test_toggle_rule_initializes_defaults_when_tenant_unseen(self, client, fake_jsonb):
         resp = client.put(

@@ -3,20 +3,24 @@
 Gates ``@pytest.mark.integration`` tests in the graph tree behind an
 opt-in flag so ``pytest services/graph/tests`` stays fast for local
 iteration. The single existing integration test
-(``test_neo4j_integration_testcontainers.py``) spins up a Neo4j
-testcontainer and dominates the suite runtime.
+(``test_neo4j_integration_testcontainers.py``) needs a live Neo4j and
+dominates the suite runtime.
 
 Activation:
 - ``pytest services/graph/tests --run-integration`` — runs everything,
-  including the testcontainers test.
+  including the Neo4j integration test.
 - ``pytest services/graph/tests -m integration`` — runs only the
   integration tests (selection via marker, no gating applied).
 - Default ``pytest services/graph/tests`` — auto-skips integration tests.
 
-CI is unaffected: backend-ci.yml runs ``pytest tests/`` without
-``-m "not integration"``, and the testcontainers test has its own
-``_IN_CI`` skip guard inside the fixture, so CI behaviour is identical
-to before this change.
+CI (corrected, #2877): this gate DOES apply to the ``Test graph`` matrix
+leg — an earlier version of this docstring claimed CI was unaffected,
+which was wrong and was half of the double guard that made the Neo4j
+test run nowhere. The matrix leg still skips it (no ``--run-integration``,
+and that leg has no Neo4j). It is run for real by the dedicated
+``graph-neo4j-integration`` job, which provisions Neo4j, passes
+``--run-integration``, and sets ``REGENGINE_REQUIRE_NEO4J=1`` so a
+missing Neo4j fails instead of skipping.
 """
 
 from __future__ import annotations

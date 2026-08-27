@@ -13,10 +13,53 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import qrcode
-from PIL import Image, ImageDraw, ImageFont
+if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
+    from PIL import Image
+
+# #2957: qrcode / Pillow / fpdf2 are NOT unconditional dependencies of the
+# SDK. This module is swept into the distribution by
+# ``package_dir={"regengine": "."}``, so a module-level ``import qrcode`` made
+# ``import regengine.labels`` raise ModuleNotFoundError for a package the
+# wheel never declared. They are declared as the ``labels`` extra in setup.py
+# and imported lazily, so importing this module always succeeds and only the
+# label functions raise — with a message naming the extra to install.
+_LABELS_EXTRA = 'pip install "regengine[labels]"'
+
+
+def _missing(package: str) -> ImportError:
+    return ImportError(
+        f"regengine.labels requires the '{package}' package, which is not installed. "
+        f"Install the labels extra: {_LABELS_EXTRA}"
+    )
+
+
+def _require_qrcode():
+    """Import ``qrcode`` on demand (labels extra)."""
+    try:
+        import qrcode
+    except ImportError as e:  # pragma: no cover - depends on environment
+        raise _missing("qrcode") from e
+    return qrcode
+
+
+def _require_pillow():
+    """Import Pillow's drawing primitives on demand (labels extra)."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as e:  # pragma: no cover - depends on environment
+        raise _missing("Pillow") from e
+    return Image, ImageDraw, ImageFont
+
+
+def _require_fpdf():
+    """Import ``fpdf2``'s FPDF on demand (labels extra)."""
+    try:
+        from fpdf import FPDF
+    except ImportError as e:
+        raise _missing("fpdf2") from e
+    return FPDF
 
 
 @dataclass
@@ -39,8 +82,9 @@ class LabelData:
 # ─── QR Code ─────────────────────────────────────────────────────────────────
 
 
-def generate_qr(data: str, box_size: int = 8) -> Image.Image:
+def generate_qr(data: str, box_size: int = 8) -> "Image.Image":
     """Generate a QR code image from string data."""
+    qrcode = _require_qrcode()
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -71,6 +115,8 @@ def generate_label_png(label: LabelData) -> bytes:
     │  regengine.co/v/TLC             │
     └─────────────────────────────────┘
     """
+    Image, ImageDraw, ImageFont = _require_pillow()
+
     # Dimensions: 4x2 inches at 203 DPI (standard Zebra label)
     W, H = 812, 406
     img = Image.new("RGB", (W, H), "white")
@@ -182,14 +228,16 @@ def generate_label_zpl(label: LabelData) -> str:
 
 
 def generate_label_pdf(label: LabelData) -> bytes:
-    """Generate a PDF label (single label per page, 4x2 inches)."""
-    # Use PNG-in-PDF approach for simplicity
-    try:
-        from fpdf import FPDF
-    except ImportError:
-        # Fallback: return PNG wrapped in a minimal PDF
-        png_bytes = generate_label_png(label)
-        return _png_to_simple_pdf(png_bytes)
+    """Generate a PDF label (single label per page, 4x2 inches).
+
+    Raises:
+        ImportError: if fpdf2 is not installed. #2957: this used to fall back
+            to ``_png_to_simple_pdf``, which returned the raw PNG bytes
+            unchanged — ``generate_batch_labels(fmt="pdf")`` then wrote them
+            under a ``.pdf`` filename, producing a file no PDF reader opens.
+            Failing loudly is the only honest option; there is no PDF here.
+    """
+    FPDF = _require_fpdf()
 
     pdf = FPDF(orientation="L", unit="in", format=(2, 4))
     pdf.add_page()
@@ -231,12 +279,6 @@ def generate_label_pdf(label: LabelData) -> bytes:
     pdf.cell(1.4, 0.15, "FSMA 204 Compliant", align="R")
 
     return pdf.output()
-
-
-def _png_to_simple_pdf(png_bytes: bytes) -> bytes:
-    """Minimal fallback: wrap PNG in a single-page PDF."""
-    # For simplicity, just return the PNG — caller can handle
-    return png_bytes
 
 
 # ─── Batch Generation ────────────────────────────────────────────────────────

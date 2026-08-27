@@ -7,6 +7,15 @@ import structlog
 
 logger = structlog.get_logger("nlp.resolution")
 
+# Provenance marker stamped on every record this module returns (#2944).
+# MASTER_DATA below is a ten-row literal in the repository, not an MDM or DUNS
+# lookup, so the ``duns:NNNNNNNNN`` strings in it are placeholders. Callers that
+# persist resolution results into compliance evidence must read ``source`` and
+# refuse to write the ``id`` as an authoritative identifier while it is this
+# value. When a real master-data source is wired in, it sets its own ``source``
+# and its ids flow through.
+MASTER_DATA_SOURCE = "stub_master_data"
+
 # Stubbed Master Data (Simulating a MDM System / DUNS Database)
 MASTER_DATA = {
     "WALMART": {"id": "duns:007874200", "name": "Walmart Inc.", "type": "RETAILER"},
@@ -58,7 +67,7 @@ def _token_set_ratio(a: str, b: str) -> float:
     Jaccard similarity on token sets, scaled to [0, 100]. Matches exactly
     when token sets are identical and degrades gracefully when one side has
     extra tokens. This is NOT a substring check — "KROGER-FAKE-BRAND" vs
-    "KROGER" gives 1/3 = 33%, well below the 90% threshold (#1269).
+    "KROGER" gives 1/3 = 33%, well below the 60% threshold (#1269).
     """
 
     tokens_a = set(_tokens(a))
@@ -77,6 +86,19 @@ def _token_set_ratio(a: str, b: str) -> float:
 # a subset match but only 33% token_set_ratio, which fails here.
 # Legitimate extensions like "Wal-Mart Stores Inc." → "WAL MART STORES" vs
 # "WAL-MART" key → "WAL MART" score 66.6% and resolve correctly.
+#
+# 60.0 is the in-force value and is load-bearing for that case (see
+# ``test_walmart_variants_resolve``); the prose here and on ``EntityResolver``
+# used to claim 90%, which nothing ever enforced (#2944). The number is now
+# stated once, correctly, rather than retuned to match the prose.
+#
+# Known limitation, deliberately not closed here: against a TWO-token key the
+# ratio cannot separate a legitimate extension from a hostile one. "Wal Mart
+# Stores" and "Wal Mart Fake" both score 66.7% against the "WAL-MART" key, so
+# raising the threshold to 90 would reject both. The mitigation is downstream —
+# ``MASTER_DATA_SOURCE`` keeps a mis-resolution from being written into
+# compliance evidence as a DUNS identifier — and a real fix needs master data
+# with legitimate alias keys, not a different constant.
 _FUZZY_RATIO_THRESHOLD = 60.0
 
 # Max number of additional non-suffix tokens we tolerate beyond the key's
@@ -92,13 +114,17 @@ class EntityResolver:
 
     1. Exact normalized match (strip punctuation, casefold, strip corporate
        suffixes). ``Wal-Mart Stores Inc.`` → ``WAL MART STORES`` → lookup.
-    2. Token-set ratio fallback with a 90% threshold, PLUS a requirement
+    2. Token-set ratio fallback with a 60% threshold, PLUS a requirement
        that every master-record token appears in the supplied name. This
        prevents a single common token from resolving to the full record.
 
     The previous implementation used substring ``in`` matching, which let an
     attacker launder confidence by embedding a known brand substring in a
     hostile name (e.g. ``KROGER-FAKE-BRAND`` resolved to Kroger's DUNS).
+
+    Every returned record carries ``source=MASTER_DATA_SOURCE`` (#2944). While
+    that is ``"stub_master_data"`` the ``id`` is a repository literal, not a
+    DUNS resolution, and callers must not persist it as an identifier.
     """
 
     def __init__(self) -> None:
@@ -113,10 +139,11 @@ class EntityResolver:
             raw_name: The extracted text (e.g. ``Wal-Mart Stores``).
 
         Returns:
-            ``{"id", "name", "type", "match_strategy", "match_score"}`` on a
-            resolved match, or ``None`` if confidence is insufficient.
-            ``match_strategy`` is one of ``exact``, ``fuzzy`` so callers can
-            audit which path was taken.
+            ``{"id", "name", "type", "match_strategy", "match_score",
+            "source"}`` on a resolved match, or ``None`` if confidence is
+            insufficient. ``match_strategy`` is one of ``exact``, ``fuzzy`` so
+            callers can audit which path was taken; ``source`` says where the
+            record came from (#2944).
         """
 
         if not raw_name or not isinstance(raw_name, str):
@@ -132,6 +159,7 @@ class EntityResolver:
             record = dict(self._records[original_key])
             record["match_strategy"] = "exact"
             record["match_score"] = 100.0
+            record["source"] = MASTER_DATA_SOURCE
             logger.info(
                 "entity_resolved_exact",
                 raw=raw_name,
@@ -167,6 +195,7 @@ class EntityResolver:
             record = dict(self._records[best[1]])
             record["match_strategy"] = "fuzzy"
             record["match_score"] = best[0]
+            record["source"] = MASTER_DATA_SOURCE
             logger.info(
                 "entity_resolved_fuzzy",
                 raw=raw_name,

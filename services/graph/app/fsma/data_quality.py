@@ -84,6 +84,24 @@ async def find_orphaned_lots(
     # Parenthesizing the inbound OR restores the intended
     #   tenant_ok AND (inbound_a OR inbound_b) AND NOT ...
     # shape.
+    #
+    # #2949 — DIRECTION. The outbound-consumption guard used to read
+    # ``MATCH (l)-[:CONSUMED]->(trans:TraceEvent)`` — lot -> event — while
+    # ``FSMARelationships.EVENT_CONSUMED_LOT`` persists the edge as
+    # ``MERGE (e)-[:CONSUMED]->(l)`` — event -> lot. No writer creates the
+    # edge in the queried direction, so the ``NOT EXISTS`` was unconditionally
+    # true and the guard was dead code: every raw-material and WIP lot
+    # consumed by a TRANSFORMATION would be reported as stagnant inventory in
+    # ``GET /fsma/compliance/gaps/orphans``, burying the genuine orphans
+    # (received-and-never-moved lots) the check exists to surface. Note the
+    # inbound branch immediately above already matched the writer's direction,
+    # which is what makes this an inversion rather than a local convention.
+    #
+    # #2949 — SCOPE. The sub-query nodes (``e``, ``trans``, ``ship``,
+    # ``last_event``) carried no tenant predicate; the #1270 fix scoped only
+    # the outer lot. A cross-tenant event could therefore suppress an orphan
+    # classification (or supply the "most recent event" that decides
+    # stagnation). Each sub-query node is now scoped explicitly.
     query = """
     MATCH (l:Lot)
     WHERE l.tenant_id = $tenant_id
@@ -92,23 +110,28 @@ async def find_orphaned_lots(
     AND (
         EXISTS {
             MATCH (l)-[:UNDERWENT]->(e:TraceEvent)
-            WHERE e.type IN ['RECEIVING', 'CREATION']
+            WHERE e.tenant_id = $tenant_id
+              AND e.type IN ['RECEIVING', 'CREATION']
         }
         OR EXISTS {
             MATCH (trans:TraceEvent)-[:PRODUCED]->(l)
+            WHERE trans.tenant_id = $tenant_id
         }
     )
 
     // Must NOT have any outbound events
     AND NOT EXISTS {
         MATCH (l)-[:UNDERWENT]->(ship:TraceEvent {type: 'SHIPPING'})
+        WHERE ship.tenant_id = $tenant_id
     }
     AND NOT EXISTS {
-        MATCH (l)-[:CONSUMED]->(trans:TraceEvent)
+        MATCH (trans:TraceEvent)-[:CONSUMED]->(l)
+        WHERE trans.tenant_id = $tenant_id
     }
 
     // Get the most recent event for this lot
     OPTIONAL MATCH (l)-[:UNDERWENT]->(last_event:TraceEvent)
+    WHERE last_event.tenant_id = $tenant_id
     WITH l, last_event
     ORDER BY last_event.event_date DESC
     WITH l, collect(last_event)[0] as most_recent_event

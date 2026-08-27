@@ -3,6 +3,7 @@ Tests for Mobile Field Capture CTE Ingestion Endpoint.
 """
 
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -11,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from neo4j.exceptions import ClientError
 
 # Add local path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -177,3 +179,146 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
 
     # Verify no persistence occurred
     mock_neo4j_client.session.return_value.__aenter__.return_value.run.assert_not_called()
+
+
+# =============================================================================
+# #2941 — Cypher parameter-binding regression net
+#
+# The ``mock_neo4j_client`` fixture above stubs ``session.run`` with a bare
+# ``AsyncMock()``, which accepts any kwargs. That is what let the mobile
+# capture handler ship while binding none of the ``$tenant_id`` parameters
+# its MERGE templates declare: the suite could not observe the omission.
+#
+# The stub below mirrors real Neo4j instead — a RUN whose statement
+# references a ``$param`` that is absent from the bound parameter set is
+# answered with ``Neo.ClientError.Statement.ParameterMissing``.
+# =============================================================================
+
+_CYPHER_PARAM_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
+
+_MOBILE_TENANT = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
+class _ParameterCheckingRun:
+    """Async ``session.run`` double that enforces Neo4j's binding contract.
+
+    Records every ``(query, params)`` pair, and raises the same error class
+    the driver raises when a referenced parameter was never bound. Because
+    ``ClientError`` is a ``neo4j.exceptions.Neo4jError``, the route's
+    ``except (neo4j.exceptions.Neo4jError, ConnectionError)`` handler turns
+    it into the same HTTP 500 a real database would produce.
+    """
+
+    def __init__(self):
+        self.calls: list[tuple[str, dict]] = []
+
+    async def __call__(self, query, **params):
+        missing = sorted(set(_CYPHER_PARAM_RE.findall(query)) - set(params))
+        if missing:
+            raise ClientError(f"Expected parameter(s): {', '.join(missing)}")
+        self.calls.append((query, params))
+        return MagicMock()
+
+
+@pytest.fixture
+def strict_neo4j_client():
+    """Neo4j client mock whose session enforces Cypher parameter binding."""
+    with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock:
+        runner = _ParameterCheckingRun()
+        mock_instance = MagicMock()
+        mock_instance.close = AsyncMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_instance.session.return_value.__aenter__.return_value.run = runner
+        mock.return_value = mock_instance
+        mock.get_tenant_database_name.return_value = "test-db"
+        yield runner
+
+
+def _build_mobile_app() -> FastAPI:
+    from shared.auth import require_api_key
+    from shared.middleware import get_current_tenant_id
+    from shared.rate_limit import add_rate_limiting
+
+    from services.graph.app.routers.fsma.traceability import router
+
+    app = FastAPI()
+    add_rate_limiting(app)
+    app.include_router(router)
+    app.dependency_overrides[require_api_key] = lambda: {"tenant_id": str(_MOBILE_TENANT)}
+    app.dependency_overrides[get_current_tenant_id] = lambda: _MOBILE_TENANT
+    return app
+
+
+_MOBILE_PAYLOAD = {
+    "event_type": "RECEIVING",
+    "event_date": "2026-02-22",
+    "tlc": "TLC-2024-001",
+    "location_identifier": "0614141000036",
+    "responsible_party_contact": "Jane Doe, 555-0100, jane@example.com",
+    "product_description": "Green Spinach 10oz",
+    "gtin": "10614141000019",
+    # Exercises the Document.merge_cypher() call site as well.
+    "image_data": "iVBORw0KGgoAAAANSUhEUg==",
+}
+
+
+def test_mobile_capture_binds_every_parameter_its_cypher_declares(strict_neo4j_client, mock_validation):
+    """#2941: every ``$param`` in each statement must be bound at the call site.
+
+    On unfixed source the Lot/Facility/Document MERGE templates declare
+    ``$tenant_id`` that the handler never binds, so a real Neo4j answers
+    ``ParameterMissing`` and the endpoint 500s on every request -- after the
+    TraceEvent CREATE has already deposited an orphan node.
+    """
+    client = TestClient(_build_mobile_app())
+
+    with (
+        patch("shared.canonical_persistence.CanonicalEventStore"),
+        patch("shared.database.SessionLocal") as mock_session_local,
+    ):
+        mock_session_local.return_value = MagicMock()
+        response = client.post("/event", json=_MOBILE_PAYLOAD, headers=_AUTH_HEADERS)
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+
+    # Belt and braces: assert the contract directly rather than trusting that
+    # the stub was reached, so the test cannot pass by never running Cypher.
+    assert strict_neo4j_client.calls, "no Cypher was executed"
+    for query, params in strict_neo4j_client.calls:
+        missing = sorted(set(_CYPHER_PARAM_RE.findall(query)) - set(params))
+        assert not missing, f"unbound parameter(s) {missing} in statement:\n{query}"
+
+
+def test_mobile_capture_binds_authenticated_tenant_to_merge_templates(strict_neo4j_client, mock_validation):
+    """#2941: the bound ``tenant_id`` must come from the authenticated context.
+
+    Guards the isolation property, not just the presence of the kwarg: a
+    body-supplied or placeholder tenant would let a caller MERGE into another
+    tenant's Lot/Facility/Document namespace.
+    """
+    client = TestClient(_build_mobile_app())
+
+    with (
+        patch("shared.canonical_persistence.CanonicalEventStore"),
+        patch("shared.database.SessionLocal") as mock_session_local,
+    ):
+        mock_session_local.return_value = MagicMock()
+        response = client.post("/event", json=_MOBILE_PAYLOAD, headers=_AUTH_HEADERS)
+
+    assert response.status_code == 200, response.text
+
+    merges = {
+        label: params
+        for label, marker in (
+            ("Lot", "MERGE (l:Lot"),
+            ("Facility", "MERGE (f:Facility"),
+            ("Document", "MERGE (d:Document"),
+        )
+        for query, params in strict_neo4j_client.calls
+        if marker in query
+    }
+    assert set(merges) == {"Lot", "Facility", "Document"}, f"missing MERGE call sites: {sorted(merges)}"
+
+    for label, params in merges.items():
+        assert params["tenant_id"] == str(_MOBILE_TENANT), f"{label} MERGE bound the wrong tenant: {params!r}"

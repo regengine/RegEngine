@@ -29,31 +29,72 @@ Each design partner receives a dedicated sandbox environment with:
 
 ### 2. Automated Provisioning
 
-**Using the Launch Orchestrator**:
+> **There is no partner-scoped provisioning command.** The orchestrator has no
+> `provision_sandbox` mode and no `--partner-id` flag, and it ignores partner
+> identity entirely. To provision a sandbox *for a named partner*, use the
+> manual steps in section 3. This section documents only what the orchestrator
+> actually does.
+
+**What the orchestrator does**: as one phase of a launch run, it pre-provisions a
+fixed pool of generic sandboxes — `dp-sandbox-1` through `dp-sandbox-N`, where N
+is `design_partner_program.max_partners` in `launch_orchestrator_spec.yaml`
+(default 5). Partner names are never used.
+
+**Prerequisites**: the run aborts environment validation unless these are set —
+`OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`,
+`OBJECT_STORAGE_REGION`, `CRM_API_TOKEN`, `EMAIL_PROVIDER_API_KEY`,
+`LINKEDIN_AUTOMATION_TOKEN`.
+
+**Preview the run** (writes nothing except `orchestration_result.json`):
 
 ```bash
 # From launch_orchestrator directory
-python orchestrator.py --mode provision_sandbox --partner-id "acme-corp"
+python orchestrator.py --mode dry_run
 ```
 
-This will:
-1. Create dedicated sandbox namespace: `dp-sandbox-{partner-id}`
-2. Generate API key: `dp_sandbox_{random_32_chars}`
-3. Set rate limits: 60 RPM (configurable)
-4. Set document quota: 1,000 docs (configurable)
-5. Load sample data: US SEC, EU MiFID, UK FCA
-6. Create monitoring dashboard
-7. Send welcome email with credentials
+**Execute it** (writes tenant configs and keys to disk):
 
-**Expected output**:
+```bash
+# From launch_orchestrator directory
+python orchestrator.py --mode full_launch
 ```
-✓ Sandbox provisioned: dp-sandbox-acme-corp
-✓ API Key generated: dp_sandbox_a1b2c3... (sent via 1Password)
-✓ Rate limit set: 60 RPM
-✓ Document quota: 1000
-✓ Sample data loaded: 45 documents, 327 obligations
-✓ Dashboard created: https://sandbox.regengine.ai/dashboard/acme-corp
+
+`--mode` accepts exactly `full_launch`, `sales_only`, `infra_only` and `dry_run`;
+`dry_run` is the default. The design-partner phase runs only under `full_launch`
+and `dry_run`. Run `python orchestrator.py --help` for the authoritative list.
+
+For each of the N sandboxes, a `full_launch` run:
+
+1. Generates a sandbox id of the form `dp-sandbox-N` (sequential, not partner-scoped).
+2. Generates an API key: `sk_test_` followed by 32 random alphanumeric characters.
+3. Sets the rate limit from `sandbox.rate_limits.rpm_per_api_key` (default 60 RPM).
+4. Sets the document quota from `sandbox.max_docs_per_partner` (1,000 in the
+   shipped spec; the in-code default when the key is absent is 100).
+5. Writes `generated/tenants/dp-sandbox-N.json` and appends the key to
+   `generated/sandbox_keys.txt`.
+
+**It does not** create a namespace, load sample data, create a dashboard, or send
+a welcome email — those steps are manual (section 3 and the checklist below).
+The generated key is only written to those local files; it is not registered with
+any running service, so it will not authenticate until an operator creates a real
+key via the Admin API in section 3.1.
+
+**Expected output** (`--mode dry_run`, abridged):
+
 ```
+INFO - === Phase: Design Partner Provisioning ===
+INFO - Provisioning sandbox: dp-sandbox-1
+INFO - [design_partner_provisioning] provision_sandbox_dp-sandbox-1: success
+...
+INFO - Provisioning sandbox: dp-sandbox-5
+INFO - [design_partner_provisioning] provision_sandbox_dp-sandbox-5: success
+INFO - Success: True
+INFO - Result written to: orchestration_result.json
+```
+
+Exit status is 0 on success and 1 if any phase recorded an error — including the
+environment-validation failure above, which is the most common cause of a
+non-zero exit on a first run.
 
 ### 3. Manual Provisioning (if automated fails)
 

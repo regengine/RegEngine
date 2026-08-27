@@ -5,6 +5,41 @@
 
 set -e
 
+# #2967: anchor the CWD. Both sides of the `cp .env.example .env` below are
+# relative, so running this from the repository root used to copy the ROOT
+# .env.example over the developer's real root .env.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# #2967: write a KEY=VALUE pair without letting the value be interpreted.
+# This previously used `sed -i "s/KEY=.*/KEY=$value/"`, which breaks two ways:
+# a value containing `/` makes the expression malformed (sed exits non-zero,
+# and `set -e` then aborts the run part-configured), and a value containing `&`
+# silently expands to the whole matched line. Both are routine in base64
+# secret access keys. Nothing here interprets the value at all.
+set_env_var() {
+    local key="$1" value="$2" file="${3:-.env}"
+    local tmp found=0 line
+    tmp="$(mktemp)"
+    chmod 600 "$tmp"
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" == "$key="* ]]; then
+            printf '%s=%s\n' "$key" "$value"
+            found=1
+        else
+            printf '%s\n' "$line"
+        fi
+    done < "$file" > "$tmp"
+    if [ "$found" -eq 0 ]; then
+        printf '%s=%s\n' "$key" "$value" >> "$tmp"
+    fi
+    mv "$tmp" "$file"
+}
+
+# Allow tests to source the helpers without running the interactive flow.
+if [[ "${1:-}" == "--source-only" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+
 echo "========================================="
 echo "  RegEngine Launch Orchestrator Setup"
 echo "========================================="
@@ -45,20 +80,21 @@ echo "  Object Storage Configuration"
 echo "========================================="
 echo ""
 
-read -p "Object Storage Access Key ID: " storage_key
+read -sp "Object Storage Access Key ID: " storage_key
+echo
 if [ ! -z "$storage_key" ]; then
-    sed -i "s/OBJECT_STORAGE_ACCESS_KEY_ID=.*/OBJECT_STORAGE_ACCESS_KEY_ID=$storage_key/" .env
+    set_env_var OBJECT_STORAGE_ACCESS_KEY_ID "$storage_key" .env
 fi
 
 read -sp "Object Storage Secret Access Key: " storage_secret
 echo ""
 if [ ! -z "$storage_secret" ]; then
-    sed -i "s/OBJECT_STORAGE_SECRET_ACCESS_KEY=.*/OBJECT_STORAGE_SECRET_ACCESS_KEY=$storage_secret/" .env
+    set_env_var OBJECT_STORAGE_SECRET_ACCESS_KEY "$storage_secret" .env
 fi
 
 read -p "Object Storage Region (default: us-east-1): " storage_region
 if [ ! -z "$storage_region" ]; then
-    sed -i "s/OBJECT_STORAGE_REGION=.*/OBJECT_STORAGE_REGION=$storage_region/" .env
+    set_env_var OBJECT_STORAGE_REGION "$storage_region" .env
 fi
 
 echo ""
@@ -78,17 +114,19 @@ read -p "Choice (1-3): " crm_choice
 
 case $crm_choice in
     1)
-        read -p "HubSpot API Key: " hubspot_key
+        read -sp "HubSpot API Key: " hubspot_key
+echo
         if [ ! -z "$hubspot_key" ]; then
-            sed -i "s/CRM_API_TOKEN=.*/CRM_API_TOKEN=$hubspot_key/" .env
-            sed -i "s/CRM_PROVIDER=.*/CRM_PROVIDER=hubspot/" .env
+            set_env_var CRM_API_TOKEN "$hubspot_key" .env
+            set_env_var CRM_PROVIDER "hubspot" .env
         fi
         ;;
     2)
-        read -p "Salesforce OAuth Token: " sf_token
+        read -sp "Salesforce OAuth Token: " sf_token
+echo
         if [ ! -z "$sf_token" ]; then
-            sed -i "s/CRM_API_TOKEN=.*/CRM_API_TOKEN=$sf_token/" .env
-            sed -i "s/CRM_PROVIDER=.*/CRM_PROVIDER=salesforce/" .env
+            set_env_var CRM_API_TOKEN "$sf_token" .env
+            set_env_var CRM_PROVIDER "salesforce" .env
         fi
         read -p "Salesforce Instance URL: " sf_url
         if [ ! -z "$sf_url" ]; then
@@ -118,17 +156,19 @@ read -p "Choice (1-4): " email_choice
 
 case $email_choice in
     1)
-        read -p "SendGrid API Key: " sendgrid_key
+        read -sp "SendGrid API Key: " sendgrid_key
+echo
         if [ ! -z "$sendgrid_key" ]; then
-            sed -i "s/EMAIL_PROVIDER_API_KEY=.*/EMAIL_PROVIDER_API_KEY=$sendgrid_key/" .env
-            sed -i "s/EMAIL_PROVIDER=.*/EMAIL_PROVIDER=sendgrid/" .env
+            set_env_var EMAIL_PROVIDER_API_KEY "$sendgrid_key" .env
+            set_env_var EMAIL_PROVIDER "sendgrid" .env
         fi
         ;;
     2)
-        read -p "Mailchimp API Key: " mailchimp_key
+        read -sp "Mailchimp API Key: " mailchimp_key
+echo
         if [ ! -z "$mailchimp_key" ]; then
-            sed -i "s/EMAIL_PROVIDER_API_KEY=.*/EMAIL_PROVIDER_API_KEY=$mailchimp_key/" .env
-            sed -i "s/EMAIL_PROVIDER=.*/EMAIL_PROVIDER=mailchimp/" .env
+            set_env_var EMAIL_PROVIDER_API_KEY "$mailchimp_key" .env
+            set_env_var EMAIL_PROVIDER "mailchimp" .env
         fi
         read -p "Mailchimp List ID: " mailchimp_list
         if [ ! -z "$mailchimp_list" ]; then
@@ -136,7 +176,7 @@ case $email_choice in
         fi
         ;;
     3)
-        sed -i "s/EMAIL_PROVIDER=.*/EMAIL_PROVIDER=ses/" .env
+        set_env_var EMAIL_PROVIDER "ses" .env
         echo "Using existing platform credentials already configured"
         ;;
     *)
@@ -146,7 +186,7 @@ esac
 
 read -p "Email From Address (e.g., hello@regengine.ai): " email_from
 if [ ! -z "$email_from" ]; then
-    sed -i "s/EMAIL_FROM_ADDRESS=.*/EMAIL_FROM_ADDRESS=$email_from/" .env
+    set_env_var EMAIL_FROM_ADDRESS "$email_from" .env
 fi
 
 echo ""
@@ -163,14 +203,15 @@ echo ""
 read -p "Do you have an approved LinkedIn API token? (y/N): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "LinkedIn API Token: " linkedin_token
+    read -sp "LinkedIn API Token: " linkedin_token
+echo
     if [ ! -z "$linkedin_token" ]; then
-        sed -i "s/LINKEDIN_AUTOMATION_TOKEN=.*/LINKEDIN_AUTOMATION_TOKEN=$linkedin_token/" .env
-        sed -i "s/ENABLE_LINKEDIN_AUTOMATION=.*/ENABLE_LINKEDIN_AUTOMATION=true/" .env
+        set_env_var LINKEDIN_AUTOMATION_TOKEN "$linkedin_token" .env
+        set_env_var ENABLE_LINKEDIN_AUTOMATION "true" .env
     fi
 else
     echo "LinkedIn automation will be disabled"
-    sed -i "s/ENABLE_LINKEDIN_AUTOMATION=.*/ENABLE_LINKEDIN_AUTOMATION=false/" .env
+    set_env_var ENABLE_LINKEDIN_AUTOMATION "false" .env
 fi
 
 echo ""
@@ -183,7 +224,7 @@ echo ""
 
 read -p "Calendly booking link: " calendly_link
 if [ ! -z "$calendly_link" ]; then
-    sed -i "s|CALENDLY_LINK=.*|CALENDLY_LINK=$calendly_link|" .env
+    set_env_var CALENDLY_LINK "$calendly_link" .env
 fi
 
 echo ""
@@ -194,12 +235,13 @@ echo "  Slack Notifications (Optional)"
 echo "========================================="
 echo ""
 
-read -p "Slack Webhook URL (or press ENTER to skip): " slack_webhook
+read -sp "Slack Webhook URL (or press ENTER to skip): " slack_webhook
+echo
 if [ ! -z "$slack_webhook" ]; then
-    sed -i "s|SLACK_WEBHOOK_URL=.*|SLACK_WEBHOOK_URL=$slack_webhook|" .env
-    sed -i "s/ENABLE_SLACK_NOTIFICATIONS=.*/ENABLE_SLACK_NOTIFICATIONS=true/" .env
+    set_env_var SLACK_WEBHOOK_URL "$slack_webhook" .env
+    set_env_var ENABLE_SLACK_NOTIFICATIONS "true" .env
 else
-    sed -i "s/ENABLE_SLACK_NOTIFICATIONS=.*/ENABLE_SLACK_NOTIFICATIONS=false/" .env
+    set_env_var ENABLE_SLACK_NOTIFICATIONS "false" .env
 fi
 
 echo ""
@@ -238,7 +280,7 @@ if command -v python3 &> /dev/null; then
         echo -e "${GREEN}✓ PyYAML installed${NC}"
     else
         echo -e "${YELLOW}⚠ PyYAML not installed${NC}"
-        echo "   Run: pip install -r requirements.txt"
+        echo "   Run: pip install pyyaml   # the orchestrator's only third-party import"
     fi
 else
     echo -e "${RED}✗ Python 3 not found${NC}"

@@ -83,6 +83,20 @@ def _mock_session_with_queries(results_by_sql):
     return session
 
 
+def _stub_counts(monkeypatch, *, admin=0, cte=0, exports=0, alerts=0):
+    """Pin the per-source COUNT(*) helpers the endpoint uses for ``total``.
+
+    #2864 gave the audit-log endpoint real row counts, so ``total`` no longer
+    equals ``len(entries)``. Tests that stub ``_query_*`` now stub the
+    matching ``_count_*`` the same way, otherwise a bare MagicMock session
+    answers the COUNT queries with fabricated values.
+    """
+    monkeypatch.setattr(al, "_count_admin_audit_logs", lambda s, t: admin)
+    monkeypatch.setattr(al, "_count_cte_events", lambda s, t: cte)
+    monkeypatch.setattr(al, "_count_exports", lambda s, t: exports)
+    monkeypatch.setattr(al, "_count_alert_events", lambda s, t: alerts)
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -653,6 +667,7 @@ class TestGetAuditLogEndpoint:
     def test_admin_session_none_skips_admin_query(self, client, monkeypatch):
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        _stub_counts(monkeypatch)
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
@@ -670,6 +685,7 @@ class TestGetAuditLogEndpoint:
 
         monkeypatch.setattr(al, "_query_admin_audit_logs", boom)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        _stub_counts(monkeypatch)
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])
@@ -819,6 +835,7 @@ class TestGetAuditLogEndpoint:
         ]
         monkeypatch.setattr(al, "_get_admin_db_session", lambda: None)
         monkeypatch.setattr(al, "get_db_safe", lambda: MagicMock())
+        _stub_counts(monkeypatch, cte=1)
         monkeypatch.setattr(al, "_query_cte_events", lambda s, t, limit: entries)
         monkeypatch.setattr(al, "_query_exports", lambda s, t, limit: [])
         monkeypatch.setattr(al, "_query_alert_events", lambda s, t, limit: [])

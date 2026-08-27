@@ -136,6 +136,8 @@ async def list_entities(
     tenant_id: Optional[str] = Query(None),
     entity_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
     db_session=Depends(get_db_session),
 ):
@@ -143,31 +145,54 @@ async def list_entities(
     set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
     svc = _get_service(db_session, principal)
     if search:
+        # Ranked match lookup, not a paginated listing: the service returns
+        # its own bounded candidate set, so ``total`` is that set's size.
         entities = svc.find_potential_matches(tid, search, entity_type=entity_type)
-    else:
-        # List all entities of a type
-        from sqlalchemy import text
+        return {"tenant_id": tid, "entities": entities, "total": len(entities)}
 
-        query = "SELECT entity_id, entity_type, canonical_name, gln, gtin, verification_status, confidence_score FROM fsma.canonical_entities WHERE tenant_id = :tid AND is_active = TRUE"
-        params: Dict[str, Any] = {"tid": tid}
-        if entity_type:
-            query += " AND entity_type = :etype"
-            params["etype"] = entity_type
-        query += " ORDER BY canonical_name LIMIT 100"
-        rows = db_session.execute(text(query), params).fetchall()
-        entities = [
-            {
-                "entity_id": str(r[0]),
-                "entity_type": r[1],
-                "canonical_name": r[2],
-                "gln": r[3],
-                "gtin": r[4],
-                "verification_status": r[5],
-                "confidence_score": float(r[6]) if r[6] else 1.0,
-            }
-            for r in rows
-        ]
-    return {"tenant_id": tid, "entities": entities, "total": len(entities)}
+    # List all entities of a type
+    from sqlalchemy import text
+
+    where = "tenant_id = :tid AND is_active = TRUE"
+    params: Dict[str, Any] = {"tid": tid, "lim": limit, "off": offset}
+    if entity_type:
+        where += " AND entity_type = :etype"
+        params["etype"] = entity_type
+
+    # #2864: this endpoint had no pagination parameters and hard-coded
+    # ``LIMIT 100``, then reported ``total = len(entities)`` — so a tenant
+    # with 400 entities was told it had exactly 100 and had seen them all.
+    # ``where`` is assembled from literal fragments above; every value is a
+    # bound parameter.
+    count_row = db_session.execute(
+        text("SELECT COUNT(*) FROM fsma.canonical_entities WHERE " + where),
+        params,
+    ).fetchone()
+    total = count_row[0] if count_row else 0
+
+    rows = db_session.execute(
+        text(
+            "SELECT entity_id, entity_type, canonical_name, gln, gtin,"
+            " verification_status, confidence_score"
+            " FROM fsma.canonical_entities"
+            " WHERE " + where + " ORDER BY canonical_name"
+            " LIMIT :lim OFFSET :off"
+        ),
+        params,
+    ).fetchall()
+    entities = [
+        {
+            "entity_id": str(r[0]),
+            "entity_type": r[1],
+            "canonical_name": r[2],
+            "gln": r[3],
+            "gtin": r[4],
+            "verification_status": r[5],
+            "confidence_score": float(r[6]) if r[6] else 1.0,
+        }
+        for r in rows
+    ]
+    return {"tenant_id": tid, "entities": entities, "total": total}
 
 
 @router.post(

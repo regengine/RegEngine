@@ -64,6 +64,8 @@ class ExportLogMixin:
         query_end_date: Optional[str] = None,
         generated_by: Optional[str] = None,
         export_type: str = "fda_spreadsheet",
+        include_pii: bool = False,
+        query_event_type: Optional[str] = None,
     ) -> str:
         """Log an FDA export event and return the export log ID.
 
@@ -74,6 +76,16 @@ class ExportLogMixin:
         migrated to add the ``export_fingerprint`` column still work —
         the ``INSERT ... ON CONFLICT`` clause degrades to a plain
         insert and the idempotency is simply not enforced.
+
+        ``include_pii`` and ``query_event_type`` are the remaining inputs
+        that change the exported bytes (#2898): ``include_pii`` swaps
+        ``[REDACTED]`` into five columns, ``query_event_type`` narrows the
+        seed set of a full-tenant export. ``/export/verify`` cannot
+        regenerate a byte-identical CSV without them, and an export it
+        cannot regenerate must fail closed rather than be reported as
+        tampered — so both are recorded on the audit row. A schema that
+        predates the v113 migration falls back to the legacy insert below,
+        leaving them NULL, which the verifier reads as "not reproducible".
         """
         export_id = str(uuid4())
         fingerprint = self._compute_export_fingerprint(
@@ -92,10 +104,11 @@ class ExportLogMixin:
                     INSERT INTO fsma.fda_export_log (
                         id, tenant_id, export_type, query_tlc,
                         query_start_date, query_end_date, record_count,
-                        export_hash, generated_by, export_fingerprint
+                        export_hash, generated_by, export_fingerprint,
+                        include_pii, query_event_type
                     ) VALUES (
                         :id, :tid, :etype, :tlc, :start, :end, :count,
-                        :hash, :by, :fp
+                        :hash, :by, :fp, :pii, :qetype
                     )
                     ON CONFLICT (tenant_id, export_fingerprint)
                         WHERE export_fingerprint IS NOT NULL
@@ -114,6 +127,8 @@ class ExportLogMixin:
                     "hash": export_hash,
                     "by": generated_by,
                     "fp": fingerprint,
+                    "pii": bool(include_pii),
+                    "qetype": query_event_type,
                 },
             ).fetchone()
         except Exception:

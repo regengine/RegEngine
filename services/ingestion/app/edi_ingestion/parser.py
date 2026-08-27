@@ -189,3 +189,72 @@ def _detect_transaction_set(segments: list[list[str]]) -> str | None:
         if ts in _SUPPORTED_TRANSACTION_SETS:
             return ts
     return None
+
+
+# Segments that belong to the interchange/functional-group envelope
+# rather than to any one transaction set. Every transaction-set slice
+# carries a copy so ``_extract_envelope_ids`` keeps working per slice.
+_ENVELOPE_SEGMENT_IDS = {"ISA", "GS", "GE", "IEA"}
+
+
+def _count_segments(segments: list[list[str]], segment_id: str) -> int:
+    wanted = segment_id.upper()
+    return sum(1 for segment in segments if segment and segment[0].upper() == wanted)
+
+
+def _declared_transaction_set_count(segments: list[list[str]]) -> Optional[int]:
+    """Sum GE01 (Number of Transaction Sets Included) across every GE.
+
+    Returns ``None`` when no GE segment carries a parseable count, so the
+    caller can skip the comparison rather than reject on a missing
+    element. Summing handles a multi-functional-group interchange and
+    degenerates to GE01 for the single-group case.
+    """
+    total: Optional[int] = None
+    for segment in segments:
+        if not segment or segment[0].upper() != "GE" or len(segment) < 2:
+            continue
+        try:
+            declared = int(segment[1].strip())
+        except (AttributeError, TypeError, ValueError):
+            continue
+        total = declared if total is None else total + declared
+    return total
+
+
+def _split_transaction_sets(segments: list[list[str]]) -> list[list[list[str]]]:
+    """Slice a flat interchange into one segment list per ST/SE pair.
+
+    #2976: the parser never decomposed an interchange, so every extractor
+    walked the whole flat list and the N1/SN1/LIN/REF segments of
+    transaction sets 2..N folded into the extraction for #1 while those
+    sets produced no event at all.
+
+    Each returned slice is ``[envelope segments] + [ST .. SE]``. Carrying
+    the envelope means ``_extract_envelope_ids`` still resolves ISA/GS
+    per slice; carrying only that slice's body means an extractor can
+    never read a segment belonging to a different transaction set.
+    """
+    envelope = [segment for segment in segments if segment and segment[0].upper() in _ENVELOPE_SEGMENT_IDS]
+
+    slices: list[list[list[str]]] = []
+    current: Optional[list[list[str]]] = None
+    for segment in segments:
+        if not segment:
+            continue
+        seg_id = segment[0].upper()
+
+        if seg_id == "ST":
+            current = list(envelope)
+            current.append(segment)
+            slices.append(current)
+        elif seg_id == "SE":
+            if current is not None:
+                current.append(segment)
+                current = None
+        elif seg_id in _ENVELOPE_SEGMENT_IDS:
+            continue
+        elif current is not None:
+            current.append(segment)
+
+    return slices

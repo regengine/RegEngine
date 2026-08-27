@@ -145,6 +145,9 @@ class BatchWritePathMixin:
         event_rows = []
         kde_rows = []
         chain_rows = []
+        # (event_id, alert) pairs — written after the events INSERT so we only
+        # emit rows for events that actually landed (#2902).
+        alert_rows: List[Tuple[str, Dict[str, Any]]] = []
         results: List[StoreResult] = []
 
         for p in prepared:
@@ -253,6 +256,13 @@ class BatchWritePathMixin:
                     "previous_chain_hash": previous_chain_hash,
                     "chain_hash": chain_hash,
                 })
+
+                # #2902 — the batch path had no fsma.compliance_alerts writer
+                # at all, so every alert generated upstream was discarded here
+                # while the single-event path persisted it. Queue them for the
+                # post-INSERT write below.
+                for alert in alerts:
+                    alert_rows.append((event_id, alert))
 
                 results.append(_core.StoreResult(
                     success=True, event_id=event_id, sha256_hash=sha256_hash,
@@ -435,6 +445,39 @@ class BatchWritePathMixin:
                     row,
                 )
 
+        # --- Compliance alerts (fix #2902) ---
+        # Mirrors the single-event path (writes.store_event): each alert gets
+        # its own savepoint so a bad alert row can never take down the event
+        # and hash-chain evidence that was already written.
+        #
+        # Only events whose INSERT actually landed get alerts. A row that lost
+        # the ON CONFLICT race was reconciled to the *winner's* event_id above;
+        # writing our alert against our own discarded uuid would orphan it
+        # against a row that does not exist — the same defect #1307 fixed for
+        # fsma.hash_chain — and the winning writer persists its own alerts.
+        alerts_written = 0
+        for event_id, alert in alert_rows:
+            if str(event_id) not in inserted_ids:
+                continue
+            nested = self.session.begin_nested()
+            try:
+                self.session.execute(
+                    text(_core.ALERT_INSERT_SQL),
+                    _core._alert_insert_params(tenant_id, event_id, alert),
+                )
+                # Release the savepoint. A batch can carry many alerts, so
+                # unlike the single-event path we must not leave one open per
+                # alert for the outer transaction to unwind.
+                nested.commit()
+                alerts_written += 1
+            except Exception as exc:
+                nested.rollback()
+                _core.logger.warning("alert_insert_failed", extra={
+                    "event_id": event_id,
+                    "alert_type": alert.get("alert_type", "missing_kde"),
+                    "error": str(exc),
+                })
+
         _core.logger.info(
             "batch_events_persisted",
             extra={
@@ -443,6 +486,7 @@ class BatchWritePathMixin:
                 "new": len(event_rows),
                 "idempotent": len(events) - len(event_rows),
                 "kdes": len(kde_rows),
+                "alerts": alerts_written,
             },
         )
 
