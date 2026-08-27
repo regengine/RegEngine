@@ -15,7 +15,16 @@ spec:
   # Allow ingress only from the NGINX ingress controller and the ingestion service
   ingress:
     - from:
-        - podSelector:
+        # The ingress controller runs in its OWN namespace, so this peer needs
+        # BOTH selectors inside ONE list element (they AND together). A bare
+        # podSelector matches only the policy's own namespace (regengine-prod),
+        # which matched zero pods and denied all Ingress traffic (#2959).
+        # Splitting these into two list elements would OR them and admit every
+        # pod in the ingress-nginx namespace - do not do that.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: ingress-nginx
         - podSelector:
