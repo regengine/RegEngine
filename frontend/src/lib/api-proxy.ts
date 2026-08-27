@@ -407,12 +407,51 @@ export function hasSupabaseSessionCookies(request: NextRequest): boolean {
   });
 }
 
+/**
+ * Constant-time string equality.
+ *
+ * Compares every position rather than exiting at the first difference, so the
+ * time taken does not reveal how much of a guess was correct. Written against
+ * WebCrypto-era primitives only (no `node:crypto`) so this module stays usable
+ * from an Edge route; the length of the configured key is not treated as a
+ * secret, its contents are.
+ */
+function constantTimeEquals(candidate: string, expected: string): boolean {
+  const length = Math.max(candidate.length, expected.length);
+  let difference = candidate.length ^ expected.length;
+  for (let i = 0; i < length; i += 1) {
+    difference |= (candidate.charCodeAt(i) || 0) ^ (expected.charCodeAt(i) || 0);
+  }
+  return difference === 0;
+}
+
+/** True only when `value` IS the configured admin master key.
+ *
+ *  #2825: presence used to be enough. Neither slot is a secret the caller had
+ *  to know — `POST /api/session` writes any `admin_key` string from the request
+ *  body straight into the `re_admin_key` cookie without validating it, and the
+ *  `x-admin-key` header needs no `/api/session` call at all. The review proxies
+ *  then swap in the real `ADMIN_MASTER_KEY` via `getAdminMasterKey()`, so a
+ *  self-asserted capability was unlocking a server-held secret. Requiring the
+ *  caller to already hold that secret makes the substitution a no-op for them
+ *  and a 403 for everyone else; session-authenticated admins without the key go
+ *  through `requireFreshAdminCapability`'s `/auth/me` lookup instead.
+ */
+function isAdminMasterKey(value: string | null | undefined): boolean {
+  if (!isUsableCallerCredential(value)) return false;
+  const expected = getAdminMasterKey();
+  // Unconfigured server: nothing to match, and every consumer of this gate
+  // fails with a 500 immediately afterwards. Never fall back to presence.
+  if (!expected) return false;
+  return constantTimeEquals(value, expected);
+}
+
 export function hasAdminCapability(request: NextRequest): boolean {
-  if (isUsableCallerCredential(request.cookies.get('re_admin_key')?.value)) {
+  if (isAdminMasterKey(request.cookies.get('re_admin_key')?.value)) {
     return true;
   }
 
-  if (isUsableCallerCredential(request.headers.get('x-admin-key'))) {
+  if (isAdminMasterKey(request.headers.get('x-admin-key'))) {
     return true;
   }
 

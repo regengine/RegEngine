@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import html
 import sys
 import time
@@ -234,7 +235,19 @@ def verify_admin_key(
 
     settings = get_settings()
 
-    if not x_admin_key or x_admin_key != settings.admin_master_key:
+    # #2807: constant-time comparison. ``!=`` short-circuits at the first
+    # differing byte, so its duration leaks how much of a guess was correct on
+    # the credential that mints API keys for arbitrary tenants. The empty-key
+    # guard stays first: ``compare_digest`` would happily match an empty
+    # candidate against an unset/empty ``admin_master_key``. Both sides are
+    # encoded because ``compare_digest`` raises TypeError on non-ASCII ``str``
+    # operands and this header is caller-controlled.
+    expected_admin_key = settings.admin_master_key or ""
+    if (
+        not x_admin_key
+        or not expected_admin_key
+        or not hmac.compare_digest(x_admin_key.encode("utf-8"), expected_admin_key.encode("utf-8"))
+    ):
         count = _record_admin_failure(ip)
         logger.warning(
             "unauthorized_admin_access_attempt",
