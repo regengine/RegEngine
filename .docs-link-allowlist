@@ -1,0 +1,30 @@
+# Documentation link-check exemptions — scripts/check_docs_links.py
+#
+# Format: <doc-path>::<referenced-path>      ("*" as doc-path exempts everywhere)
+#
+# A path belongs here ONLY when the document names it deliberately in order to
+# say it was removed, or when the document is explicitly marked as describing a
+# retired topology. It is NOT a parking lot for references someone has not got
+# round to fixing: an entry without a reason below should be treated as a bug.
+
+# --- Named in order to state that the module no longer exists ---
+# ARCHITECTURE.md:157 reads "... `kernel/reporting/fsma_engine.py` (since removed) ...".
+ARCHITECTURE.md::kernel/reporting/fsma_engine.py
+# ASYNC_PROCESSES.md names the deleted drain worker to explain WHY the Redis
+# `neo4j-sync` list accumulates unread — removing the name would remove the point.
+ASYNC_PROCESSES.md::services/graph/scripts/fsma_sync_worker.py
+# ASYNC_PROCESSES.md:131 reads "(The `server/workers/lot_tracing.py` module this
+# doc used to name ...)" — an explicit correction of an earlier revision.
+ASYNC_PROCESSES.md::server/workers/lot_tracing.py
+# FOUNDER_KNOWLEDGE.md names the retired DLQ module to explain that the two
+# durable paths which replaced it are not interchangeable.
+FOUNDER_KNOWLEDGE.md::shared/webhook_dlq.py
+
+# --- Retired k8s/6-service topology ---
+# Every file in runbooks/ opens with a "LEGACY:" banner stating it describes the
+# retired k8s topology. These paths were real in that topology. The correct fix
+# is to rewrite or retire the runbooks, not to repoint individual lines; until
+# then, flagging them on every CI run would train reviewers to ignore the gate.
+runbooks/neo4j-disaster-recovery.md::infrastructure/neo4j/cluster.yaml
+runbooks/rollback-procedure.md::migrations/revert_audit_log_schema.sql
+runbooks/rollback-procedure.md::migrations/revert_rls_sysadmin_audit.sql

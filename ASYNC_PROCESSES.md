@@ -57,7 +57,7 @@ guard). In the default Railway deployment **no Kafka consumers run**:
 - The NLP Kafka consumer pipeline (`services/nlp/app/consumer/`) is deprecated; its
   consumer thread starts only from the legacy standalone `services/nlp/main.py` with
   `EVENT_BACKBONE=kafka` — neither condition holds in production.
-- `shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
+- `services/shared/kafka_compat.py` keeps a confluent-kafka compatibility layer alive for the
   opt-in path. Opt-in-alive, not deleted — but vestigial for the default deployment.
 
 ## Scheduler (embedded in the monolith)
@@ -107,15 +107,25 @@ Redis-backed.
   list.** The draining worker this doc previously named
   (`services/graph/scripts/fsma_sync_worker.py`) no longer exists in the tree,
   so enqueued entries accumulate unread rather than merely going undeployed.
-- **Hidden dependency:** the monolith `/readiness` probe pings Neo4j when `NEO4J_URI` is
-  set — a down Neo4j can fail the Railway healthcheck.
+- **Neo4j is NOT on the deploy-gating path.** `/readiness` probes Neo4j only when the
+  graph subsystem is actually mounted (`_subsystem_active("graph")`). Graph routers are
+  experimental and auto-disabled in production, so on the production path Neo4j is
+  reported `not_probed` and never contacted, even though `NEO4J_URI` is set there for the
+  admin supplier-graph mirror (`server/main.py:1116-1140`, WS-6). When the graph
+  subsystem *is* active the probe runs with bounded 2.0s connect/acquisition timeouts and
+  a failure records status `error`, which degrades the payload but still returns 200.
+  **Postgres is the only component that can return 503** (`server/main.py:1020-1034`).
+  - *Operational consequence:* a Neo4j outage is **invisible in `/readiness`**. Do not
+    look there during a Neo4j incident, and do not roll back a healthy deploy on its
+    account. Neo4j health is observed through the `shared.circuit_breaker.neo4j_circuit`
+    metrics instead.
 
 ## Health Checks
 
 | Endpoint | Where | What It Monitors |
 |----------|-------|------------------|
 | `GET /health` | monolith | Liveness; always 200 |
-| `GET /readiness` | monolith | Postgres (required; 503 if down), Redis, Neo4j (when configured) — Railway healthcheckPath |
+| `GET /readiness` | monolith | Postgres (required; **only** component that 503s), Redis, background runners — all optional components report per-component status and degrade to 200 `degraded`. Neo4j only when the graph subsystem is mounted (never in production). Railway healthcheckPath |
 
 There is no port-8600 scheduler health endpoint in production (standalone mode only).
 
