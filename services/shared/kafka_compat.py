@@ -59,6 +59,32 @@ class ConsumerRecord:
     headers: list[tuple[str, bytes | None]]
 
 
+# Legacy ``KafkaProducer`` kwarg -> librdkafka property (#2977). The old code
+# translated four keys and dropped the rest of ``**config`` silently, so the
+# scheduler's ``max_in_flight_requests_per_connection=5`` never reached
+# librdkafka (which kept its default of 1000000).
+_PRODUCER_CONFIG_TRANSLATION: dict[str, str] = {
+    "acks": "acks",
+    "retries": "message.send.max.retries",
+    "retry_backoff_ms": "retry.backoff.ms",
+    "request_timeout_ms": "request.timeout.ms",
+    "max_in_flight_requests_per_connection": "max.in.flight.requests.per.connection",
+    "enable_idempotence": "enable.idempotence",
+    "linger_ms": "linger.ms",
+    "compression_type": "compression.type",
+}
+
+# Options the legacy client accepted that librdkafka has no equivalent for.
+# Recognised on purpose so they are warned about rather than either dropped
+# in silence or treated as a typo.
+_PRODUCER_CONFIG_NO_LIBRDKAFKA_EQUIVALENT: dict[str, str] = {
+    "max_block_ms": (
+        "librdkafka's produce() raises BufferError immediately instead of "
+        "blocking, so there is no equivalent property"
+    ),
+}
+
+
 class DeliveryHandle:
     """Future-like handle returned by :meth:`KafkaProducerCompat.send` (#2969).
 
@@ -135,14 +161,28 @@ class KafkaProducerCompat:
     ) -> None:
         bootstrap = ",".join(bootstrap_servers) if not isinstance(bootstrap_servers, str) else bootstrap_servers
         producer_config: dict[str, Any] = {"bootstrap.servers": bootstrap}
-        if "acks" in config:
-            producer_config["acks"] = config["acks"]
-        if "retries" in config:
-            producer_config["message.send.max.retries"] = config["retries"]
-        if "retry_backoff_ms" in config:
-            producer_config["retry.backoff.ms"] = config["retry_backoff_ms"]
-        if "request_timeout_ms" in config:
-            producer_config["request.timeout.ms"] = config["request_timeout_ms"]
+        unknown: list[str] = []
+        for key, value in config.items():
+            librdkafka_key = _PRODUCER_CONFIG_TRANSLATION.get(key)
+            if librdkafka_key is not None:
+                producer_config[librdkafka_key] = value
+            elif key in _PRODUCER_CONFIG_NO_LIBRDKAFKA_EQUIVALENT:
+                logger.warning(
+                    "kafka_producer_option_not_supported",
+                    option=key,
+                    reason=_PRODUCER_CONFIG_NO_LIBRDKAFKA_EQUIVALENT[key],
+                )
+            else:
+                unknown.append(key)
+        if unknown:
+            # #2977: unrecognised kwargs used to be dropped with no warning
+            # and no error, so a typo'd or unimplemented option was a no-op.
+            raise TypeError(
+                "KafkaProducerCompat received unsupported keyword argument(s): "
+                + ", ".join(sorted(unknown))
+                + " — add an explicit librdkafka translation in "
+                "shared/kafka_compat.py rather than passing it blindly."
+            )
 
         self._producer = Producer(producer_config)
         self._value_serializer = value_serializer or _json_serializer

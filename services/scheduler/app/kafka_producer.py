@@ -68,10 +68,20 @@ class KafkaEventProducer:
         - ``acks="all"``: wait for all in-sync replicas
         - ``retries=10`` (was 3) and ``retry_backoff_ms=500`` for
           exponential-ish backoff on transient broker errors
-        - ``max_in_flight_requests_per_connection=5`` (was 1) — with
-          retries>0 and acks=all this is still ordered per partition
-          via Confluent's producer ordering
+        - ``max_in_flight_requests_per_connection=5`` (was 1)
         - ``request_timeout_ms=30000``
+
+        Ordering (#2977): librdkafka preserves produce order across retries
+        only when ``enable_idempotence`` is on — ``acks=all`` plus
+        ``retries>0`` alone does NOT give per-partition ordering, and until
+        #2977 the in-flight limit was silently discarded by the compat layer,
+        leaving librdkafka's default of 1000000. With idempotence enabled
+        librdkafka enforces ``acks=all``, ``max.in.flight<=5`` and
+        ``queuing.strategy=fifo``, which is exactly what the values above ask
+        for, so each event key stays ordered per partition and retries cannot
+        duplicate a record. The cost is a hard cap of 5 in-flight requests per
+        connection (peak per-connection throughput) and a mandatory wait for
+        all in-sync replicas.
         """
         if self._producer is None:
             try:
@@ -84,6 +94,7 @@ class KafkaEventProducer:
                     retry_backoff_ms=500,  # #1147
                     max_in_flight_requests_per_connection=5,  # #1147
                     request_timeout_ms=30000,
+                    enable_idempotence=True,  # #2977 — what actually orders
                 )
                 self._initialized = True
                 logger.info(
