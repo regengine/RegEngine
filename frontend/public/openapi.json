@@ -406,6 +406,53 @@
         "title": "ChainVerifyResponse",
         "type": "object"
       },
+      "CsvIngestResponse": {
+        "description": "Response from POST /api/v1/ingest/csv (#2892).\n\nThe CSV path is the only ingest surface that computes per-row KDE\nwarnings, so the two extra fields live here rather than on the shared\n``IngestResponse`` \u2014 the webhook endpoint would otherwise advertise a\nsignal it never produces.\n\nBoth fields carry defaults, so they stay out of the schema's\n``required`` set: a body cached by the idempotency middleware before\nthis shipped (24h TTL) still validates against the new schema when it\nis replayed.",
+        "properties": {
+          "accepted": {
+            "default": 0,
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventResult"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "ingestion_timestamp": {
+            "title": "Ingestion Timestamp",
+            "type": "string"
+          },
+          "kde_warning_count": {
+            "default": 0,
+            "description": "Number of entries in kde_warnings.",
+            "title": "Kde Warning Count",
+            "type": "integer"
+          },
+          "kde_warnings": {
+            "description": "Per-row warnings for rows missing required FSMA key data elements.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Kde Warnings",
+            "type": "array"
+          },
+          "rejected": {
+            "default": 0,
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "CsvIngestResponse",
+        "type": "object"
+      },
       "DocumentAnalysisResponse": {
         "description": "Response from GET /v1/ingest/documents/{document_id}/analysis.",
         "properties": {
@@ -3764,7 +3811,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IngestResponse"
+                  "$ref": "#/components/schemas/CsvIngestResponse"
                 }
               }
             },
@@ -4756,7 +4803,7 @@
     },
     "/health": {
       "get": {
-        "description": "Health-check endpoint.\n\nReturns ``\"healthy\"`` when all dependencies are reachable, or\n``\"degraded\"`` when optional dependencies (e.g. Kafka) are\nunavailable.  Monitoring tools can alert on *degraded* without\ntreating the service as fully down.",
+        "description": "Liveness / ingestion-posture endpoint.\n\nReturns ``\"healthy\"`` when all dependencies are reachable, or\n``\"degraded\"`` when optional dependencies (e.g. Kafka) are\nunavailable.  Monitoring tools can alert on *degraded* without\ntreating the service as fully down.\n\nThis is deliberately shallow: ``/readiness`` (server/main.py) is the\ndependency-gated probe Railway polls, and ``/health/deep`` verifies\nPostgres/Neo4j/Redis connectivity.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
