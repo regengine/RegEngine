@@ -1,18 +1,42 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# backup_neo4j.sh — Export Neo4j graph data to Cypher dump files
+# backup_neo4j.sh — Offline Neo4j backup via neo4j-admin (#2939)
 #
-# Since Neo4j Community Edition doesn't support online backup, this script
-# exports all nodes and relationships as Cypher statements using APOC
-# procedures, then compresses and stores the dump.
+# Neo4j Community Edition has no online backup, so this takes the *offline*
+# dump that docs/runbooks/disaster-recovery.md §3.1 documents and that its
+# §4.1 restore consumes:
 #
-# Requirements:
-#   - NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD env vars
-#   - Neo4j APOC plugin installed (standard in most deployments)
-#   - Python 3 with neo4j driver
+#     neo4j-admin database dump neo4j --to-path=<dir>
+#     neo4j-admin database load neo4j --from-path=<dir> --overwrite-destination=true
+#
+# FORMAT CONTRACT: the artifact is a binary `neo4j-admin` dump named
+# `<database>.dump`, written inside a per-run timestamped directory so the
+# documented `--from-path=<dir>` restore finds it under the name it expects.
+# This mirrors the S3 layout the runbook already uses
+# (s3://regengine-backups/neo4j/<date>/neo4j.dump).
+#
+# This script previously hand-rolled a `.cypher.gz` export. Nothing could
+# restore it: the documented consumer reads only a binary neo4j-admin dump,
+# and the generated Cypher was itself unsound — node identity was discarded,
+# so relationships were rebuilt by MATCHing non-unique properties
+# (fabricating or dropping edges), and temporal values were emitted as bare
+# unquoted literals, which is a Cypher syntax error. Do not reintroduce it.
+#
+# Requirements (either one):
+#   - `neo4j-admin` on PATH (Neo4j installed on this host), or
+#   - `docker` plus the Neo4j data volume (default: regengine_neo4j_data)
+#
+# Environment:
+#   BACKUP_DIR        — local directory (default: ./backups/neo4j)
+#   NEO4J_DATABASE    — database to dump (default: neo4j)
+#   NEO4J_DATA_VOLUME — docker volume holding /data (default: regengine_neo4j_data)
+#   NEO4J_IMAGE       — image used for the docker path (default: neo4j:5.24-community)
+#   NEO4J_COMPOSE_SERVICE — compose service to stop/start (default: neo4j)
+#   RETAIN_BACKUPS    — how many dumps to keep (default: 7)
+#   SKIP_SERVICE_CONTROL — set to 1 if Neo4j is already stopped
 #
 # Usage:
-#   ./scripts/backup_neo4j.sh                    # writes to ./backups/neo4j/
+#   ./scripts/backup_neo4j.sh
 #   BACKUP_DIR=/mnt/backups ./scripts/backup_neo4j.sh
 #
 # Schedule via APScheduler, cron, or Railway cron job.
@@ -20,128 +44,84 @@
 set -euo pipefail
 
 BACKUP_DIR="${BACKUP_DIR:-./backups/neo4j}"
+NEO4J_DATABASE="${NEO4J_DATABASE:-neo4j}"
+NEO4J_DATA_VOLUME="${NEO4J_DATA_VOLUME:-regengine_neo4j_data}"
+NEO4J_IMAGE="${NEO4J_IMAGE:-neo4j:5.24-community}"
+NEO4J_COMPOSE_SERVICE="${NEO4J_COMPOSE_SERVICE:-neo4j}"
+RETAIN_BACKUPS="${RETAIN_BACKUPS:-7}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-DUMP_FILE="${BACKUP_DIR}/neo4j_dump_${TIMESTAMP}.cypher"
-COMPRESSED_FILE="${DUMP_FILE}.gz"
 
-# Ensure backup directory exists
-mkdir -p "${BACKUP_DIR}"
+# One directory per run, holding `<database>.dump` under the exact name the
+# documented `--from-path` restore looks for.
+DUMP_DIR="${BACKUP_DIR}/${TIMESTAMP}"
+DUMP_FILE="${DUMP_DIR}/${NEO4J_DATABASE}.dump"
+
+mkdir -p "${DUMP_DIR}"
+
+# A failed dump must never leave a plausible-looking backup behind.
+cleanup_failed_dump() {
+    local status=$?
+    if [ "${status}" -ne 0 ] && [ -d "${DUMP_DIR}" ]; then
+        rm -rf "${DUMP_DIR}"
+        echo "==> Removed incomplete backup ${DUMP_DIR}" >&2
+    fi
+    return "${status}"
+}
+trap cleanup_failed_dump EXIT
 
 echo "==> Starting Neo4j backup at ${TIMESTAMP}..."
+echo "    Database: ${NEO4J_DATABASE}"
+echo "    Target:   ${DUMP_FILE}"
 
-python3 -c "
-import os
-import sys
-from neo4j import GraphDatabase
+service_control() {
+    # $1 is "stop" or "start"
+    if [ "${SKIP_SERVICE_CONTROL:-0}" = "1" ]; then
+        return 0
+    fi
+    if command -v docker >/dev/null 2>&1; then
+        echo "==> docker compose ${1} ${NEO4J_COMPOSE_SERVICE}"
+        docker compose "${1}" "${NEO4J_COMPOSE_SERVICE}" || true
+    fi
+}
 
-uri = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
-user = os.environ.get('NEO4J_USER', 'neo4j')
-password = os.environ.get('NEO4J_PASSWORD', '')
+# Community Edition dumps must be taken offline for a consistent snapshot.
+service_control stop
 
-if not password:
-    print('ERROR: NEO4J_PASSWORD not set', file=sys.stderr)
-    sys.exit(1)
+if command -v neo4j-admin >/dev/null 2>&1; then
+    echo "==> Using local neo4j-admin"
+    neo4j-admin database dump "${NEO4J_DATABASE}" --to-path="${DUMP_DIR}"
+elif command -v docker >/dev/null 2>&1; then
+    echo "==> Using ${NEO4J_IMAGE} against volume ${NEO4J_DATA_VOLUME}"
+    docker run --rm \
+        -v "${NEO4J_DATA_VOLUME}:/data" \
+        -v "$(cd "${DUMP_DIR}" && pwd):/backups" \
+        "${NEO4J_IMAGE}" \
+        neo4j-admin database dump "${NEO4J_DATABASE}" --to-path=/backups
+else
+    echo "ERROR: neither neo4j-admin nor docker is available; cannot take a dump." >&2
+    exit 1
+fi
 
-driver = GraphDatabase.driver(uri, auth=(user, password))
+service_control start
 
-dump_file = '${DUMP_FILE}'
-node_count = 0
-rel_count = 0
+# Verify the artifact before calling it a backup.
+echo "==> Verifying backup..."
+if [ ! -s "${DUMP_FILE}" ]; then
+    echo "ERROR: expected a non-empty dump at ${DUMP_FILE}; none was produced." >&2
+    exit 1
+fi
+echo "    Verified: ${DUMP_FILE} exists and is non-empty."
 
-with driver.session() as session, open(dump_file, 'w') as f:
-    f.write('// Neo4j backup: ${TIMESTAMP}\n')
-    f.write('// Generated by scripts/backup_neo4j.sh\n\n')
+echo "==> Backup complete: ${DUMP_FILE}"
+echo "    Size: $(du -h "${DUMP_FILE}" | cut -f1)"
 
-    # Export all nodes
-    f.write('// === NODES ===\n')
-    result = session.run(
-        'MATCH (n) '
-        'RETURN labels(n) AS labels, properties(n) AS props, elementId(n) AS eid'
-    )
-    for record in result:
-        labels = ':'.join(record['labels'])
-        props = record['props']
-        eid = record['eid']
-        # Escape string values
-        prop_parts = []
-        for k, v in props.items():
-            if isinstance(v, str):
-                escaped = v.replace(\"'\", \"\\\\'\")
-                prop_parts.append(f\"{k}: '{escaped}'\")
-            elif v is None:
-                continue
-            else:
-                prop_parts.append(f'{k}: {v}')
-        props_str = ', '.join(prop_parts)
-        f.write(f'CREATE (:{labels} {{{props_str}}});\n')
-        node_count += 1
+# Cleanup old backups (keep the most recent RETAIN_BACKUPS run directories)
+echo "==> Cleaning up old backups (keeping last ${RETAIN_BACKUPS})..."
+# shellcheck disable=SC2012
+ls -1d "${BACKUP_DIR}"/*/ 2>/dev/null \
+    | sort -r \
+    | tail -n "+$((RETAIN_BACKUPS + 1))" \
+    | xargs -r rm -rf
 
-    # Export all relationships
-    f.write('\n// === RELATIONSHIPS ===\n')
-    result = session.run(
-        'MATCH (a)-[r]->(b) '
-        'RETURN labels(a) AS a_labels, properties(a) AS a_props, '
-        '       type(r) AS r_type, properties(r) AS r_props, '
-        '       labels(b) AS b_labels, properties(b) AS b_props'
-    )
-    for record in result:
-        r_type = record['r_type']
-        # Use a unique property to MATCH nodes (prefer 'id' or 'gln')
-        a_props = record['a_props']
-        b_props = record['b_props']
-        r_props = record['r_props']
-
-        def match_clause(labels, props):
-            label_str = ':'.join(labels)
-            # Try to find a unique identifier
-            for key in ['id', 'gln', 'lot_code', 'name', 'uid']:
-                if key in props:
-                    val = props[key]
-                    if isinstance(val, str):
-                        val = val.replace(\"'\", \"\\\\'\")
-                        return f\"(:{label_str} {{{key}: '{val}'}})\"
-                    return f'(:{label_str} {{{key}: {val}}})'
-            # Fallback: use all props
-            parts = []
-            for k, v in list(props.items())[:3]:
-                if isinstance(v, str):
-                    v = v.replace(\"'\", \"\\\\'\")
-                    parts.append(f\"{k}: '{v}'\")
-                elif v is not None:
-                    parts.append(f'{k}: {v}')
-            return f\"(:{label_str} {{{', '.join(parts)}}})\"
-
-        a_clause = match_clause(record['a_labels'], a_props)
-        b_clause = match_clause(record['b_labels'], b_props)
-
-        r_prop_parts = []
-        for k, v in r_props.items():
-            if isinstance(v, str):
-                v = v.replace(\"'\", \"\\\\'\")
-                r_prop_parts.append(f\"{k}: '{v}'\")
-            elif v is not None:
-                r_prop_parts.append(f'{k}: {v}')
-        r_props_str = ', '.join(r_prop_parts)
-        r_props_clause = f' {{{r_props_str}}}' if r_props_str else ''
-
-        f.write(
-            f'MATCH (a{a_clause.replace(\"(\", \"\").replace(\")\", \"\")}), '
-            f'(b{b_clause.replace(\"(\", \"\").replace(\")\", \"\")}) '
-            f'CREATE (a)-[:{r_type}{r_props_clause}]->(b);\n'
-        )
-        rel_count += 1
-
-driver.close()
-print(f'Exported {node_count} nodes and {rel_count} relationships to {dump_file}')
-"
-
-# Compress
-echo "==> Compressing backup..."
-gzip "${DUMP_FILE}"
-
-# Cleanup old backups (keep last 7)
-echo "==> Cleaning up old backups (keeping last 7)..."
-ls -t "${BACKUP_DIR}"/neo4j_dump_*.cypher.gz 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
-
-echo "==> Backup complete: ${COMPRESSED_FILE}"
-echo "    Size: $(du -h "${COMPRESSED_FILE}" | cut -f1)"
+echo "==> Restore with:"
+echo "    neo4j-admin database load ${NEO4J_DATABASE} --from-path=${DUMP_DIR} --overwrite-destination=true"

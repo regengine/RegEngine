@@ -36,6 +36,12 @@
     # 4. Upload to S3 (Secure Offsite Storage)
     aws s3 cp backups/neo4j/neo4j.dump s3://regengine-backups/neo4j/$(date +%Y-%m-%d)/
     ```
+*   **Automation**: `scripts/backup_neo4j.sh` performs exactly this dump,
+    writing `backups/neo4j/<timestamp>/neo4j.dump` — one directory per run, so
+    the `--from-path=<dir>` restore in 4.1 finds the dump under the name it
+    expects, matching the dated S3 layout above. The artifact is a **binary
+    `neo4j-admin` dump**; a Cypher export cannot be restored by that command —
+    see #2939.
 
 ### 3.2 PostgreSQL
 *   **Strategy**: `pg_dump` (Logical Backup) + WAL Archiving (if PITR needed).
