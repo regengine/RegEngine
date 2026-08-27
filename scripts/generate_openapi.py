@@ -238,6 +238,76 @@ def _prune_components(spec: dict[str, Any]) -> None:
     spec["components"]["schemas"] = {name: schema for name, schema in schemas.items() if name in used}
 
 
+# --- Real error envelope (#2863) ------------------------------------------
+#
+# FastAPI auto-documents 422 as HTTPValidationError -> {"detail": [...]}, but
+# this application installs its own handlers (shared/error_handling.py:
+# install_exception_handlers), so NOTHING ever returns a top-level `detail`.
+# Publishing FastAPI's default meant every generated SDK parsed a field that
+# is never present, and error handling silently degraded to "unknown error"
+# on the most common 4xx.
+#
+# Three producers reach a client error, and after #2863's normalization they
+# share one envelope -- `error.type` and `error.message` are always present:
+#
+#   RequestValidationError handler  -> type "validation_error", plus `details`
+#   HTTPException(422, "text")      -> type "http_422"
+#   HTTPException(422, {...})       -> the dict's own `type`/`code`, preserved
+#
+# `additionalProperties: true` on the inner object is deliberate: dict-detail
+# call sites keep their bespoke fields (`code`, `errors`, ...), and a schema
+# that forbade them would be a second inaccurate spec.
+
+_ERROR_ENVELOPE_SCHEMA_NAME = "ErrorEnvelope"
+
+_ERROR_ENVELOPE_SCHEMA: dict[str, Any] = {
+    "title": "ErrorEnvelope",
+    "type": "object",
+    "required": ["error"],
+    "properties": {
+        "error": {
+            "type": "object",
+            "required": ["type", "message"],
+            "additionalProperties": True,
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": (
+                        "Machine-readable error class. 'validation_error' for request "
+                        "validation failures, 'http_<status>' for unclassified errors, "
+                        "or a domain code such as 'E_NO_TENANT'."
+                    ),
+                },
+                "message": {"type": "string", "description": "Human-readable summary."},
+                "details": {
+                    "type": "array",
+                    "description": "Per-field validation errors. Present for 'validation_error'.",
+                    "items": {"type": "object", "additionalProperties": True},
+                },
+            },
+        }
+    },
+}
+
+
+def _apply_real_error_envelope(spec: dict[str, Any]) -> None:
+    """Point every documented 4xx/5xx response at the envelope actually returned."""
+    schemas = spec.setdefault("components", {}).setdefault("schemas", {})
+    schemas[_ERROR_ENVELOPE_SCHEMA_NAME] = _ERROR_ENVELOPE_SCHEMA
+    ref = {"$ref": f"#/components/schemas/{_ERROR_ENVELOPE_SCHEMA_NAME}"}
+
+    for path_item in spec.get("paths", {}).values():
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            for status, response in (operation.get("responses") or {}).items():
+                if not (isinstance(status, str) and status[:1] in {"4", "5"}):
+                    continue
+                if not isinstance(response, dict):
+                    continue
+                response["content"] = {"application/json": {"schema": dict(ref)}}
+
+
 def build_public_spec() -> dict[str, Any]:
     app = _load_ingestion_app()
     spec = app.openapi()
@@ -263,6 +333,7 @@ def build_public_spec() -> dict[str, Any]:
     spec["servers"] = [{"url": PUBLIC_SERVER_URL, "description": PUBLIC_SERVER_DESCRIPTION}]
 
     spec["paths"] = _filter_paths(spec.get("paths", {}))
+    _apply_real_error_envelope(spec)
     _prune_components(spec)
 
     # Sort top-level keys for stable diffs.
