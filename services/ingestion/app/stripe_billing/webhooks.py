@@ -113,6 +113,17 @@ async def _handle_checkout_completed(
             tenant_id=tenant_id,
             session_id=session_id,
         )
+        # #2930: bind the new tenant to this session/customer immediately.
+        # Provisioning is an external side effect that Stripe's redelivery
+        # cannot undo, and the mapping write that normally records these
+        # lookups happens further down — past the Subscription.retrieve that
+        # may now fail the ack. Without this, every retry of a failed lookup
+        # would provision another tenant and orphan this one.
+        _state_mod._bind_tenant_lookups(
+            tenant_id,
+            session_id=session_id,
+            customer_id=customer_id,
+        )
 
     subscription_id = session.get("subscription")
 
