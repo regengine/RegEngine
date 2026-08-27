@@ -42,21 +42,22 @@ def test_producer_uses_confluent_config_and_serializes(monkeypatch):
         retries=7,
     )
 
-    producer.send("topic", key="id", value="body", headers=[("h", b"v")])
+    handle = producer.send("topic", key="id", value="body", headers=[("h", b"v")])
 
     fake = _FakeProducer.instances[0]
     assert fake.config["bootstrap.servers"] == "a:9092,b:9092"
     assert fake.config["message.send.max.retries"] == 7
-    assert fake.produce_calls == [
-        (
-            "topic",
-            {
-                "key": b"k:id",
-                "value": b"v:body",
-                "headers": [("h", b"v")],
-            },
-        )
-    ]
+    assert len(fake.produce_calls) == 1
+    produced_topic, produced_kwargs = fake.produce_calls[0]
+    assert produced_topic == "topic"
+    assert produced_kwargs["key"] == b"k:id"
+    assert produced_kwargs["value"] == b"v:body"
+    assert produced_kwargs["headers"] == [("h", b"v")]
+    # #2969: produce() must carry the delivery report callback, and send()
+    # must return the handle the legacy `add_errback` call sites need —
+    # without it the scheduler's delivery-failure accounting is dead code.
+    assert produced_kwargs["on_delivery"] == handle._on_delivery
+    assert set(produced_kwargs) == {"key", "value", "headers", "on_delivery"}
     assert fake.poll_calls == [0]
     assert producer.bootstrap_connected() is True
 

@@ -316,10 +316,14 @@ class KafkaEventProducer:
             # Don't block here - let caller flush if needed. Async delivery
             # failures surface via the errback and are reconciled by the
             # batch emitters after flush() (#2711).
-            try:
-                future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
-            except Exception:  # pragma: no cover — test doubles without futures
-                pass
+            #
+            # #2969: this used to sit inside `except Exception: pass`, which
+            # swallowed the AttributeError raised on every send while
+            # KafkaProducerCompat.send() returned None — the whole #2711 fix
+            # was dead code for the life of the fix. A producer that yields no
+            # delivery handle is now a FAILED send (caught below), never a
+            # silent success.
+            future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
             return True
 
         except KafkaError as e:
@@ -343,6 +347,13 @@ class KafkaEventProducer:
     def flush(self, timeout: int = 30) -> None:
         """Flush all pending messages.
 
+        A flush that times out means messages are still buffered and
+        UNACKNOWLEDGED. #2969: that used to be logged and discarded, so the
+        batch emitters reconciled against a zero failure count and reported a
+        broker-side loss as complete success. It now counts as a delivery
+        failure, which is what ``services/scheduler/service.py`` reads when it
+        decides whether items are safe to mark seen.
+
         Args:
             timeout: Maximum time to wait in seconds
         """
@@ -350,6 +361,7 @@ class KafkaEventProducer:
             try:
                 self._producer.flush(timeout=timeout)
             except Exception as e:
+                self._note_delivery_failure("<flush>", e)
                 logger.error("kafka_flush_failed", error=str(e))
 
     def close(self) -> None:

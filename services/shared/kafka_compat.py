@@ -59,6 +59,69 @@ class ConsumerRecord:
     headers: list[tuple[str, bytes | None]]
 
 
+class DeliveryHandle:
+    """Future-like handle returned by :meth:`KafkaProducerCompat.send` (#2969).
+
+    Legacy call sites do ``producer.send(...).add_errback(cb)`` to learn about
+    *delivery* failures — enqueueing is not delivery. ``send()`` used to
+    return ``None``, so every such registration raised ``AttributeError`` and
+    the failure counter it fed never moved off zero.
+
+    confluent-kafka reports delivery asynchronously through the
+    ``on_delivery`` callback handed to ``produce()``; this object bridges that
+    callback to the legacy errback API. Because librdkafka may report delivery
+    before the caller has registered anything (``produce()`` is followed by
+    ``poll(0)``), a callback registered after the fact is invoked immediately
+    with the recorded outcome.
+    """
+
+    __slots__ = ("topic", "_errbacks", "_callbacks", "_error", "_resolved")
+
+    def __init__(self, topic: str) -> None:
+        self.topic = topic
+        self._errbacks: list[Callable[[BaseException], Any]] = []
+        self._callbacks: list[Callable[[Any], Any]] = []
+        self._error: Optional[BaseException] = None
+        self._resolved = False
+
+    def add_errback(self, errback: Callable[[BaseException], Any]) -> "DeliveryHandle":
+        if self._resolved:
+            if self._error is not None:
+                _invoke_delivery_callback(errback, self._error)
+        else:
+            self._errbacks.append(errback)
+        return self
+
+    def add_callback(self, callback: Callable[[Any], Any]) -> "DeliveryHandle":
+        if self._resolved:
+            if self._error is None:
+                _invoke_delivery_callback(callback, self.topic)
+        else:
+            self._callbacks.append(callback)
+        return self
+
+    def _on_delivery(self, err: Any, msg: Any) -> None:
+        """librdkafka delivery report — ``err`` is None on success."""
+        self._resolved = True
+        if err is not None:
+            self._error = KafkaError(str(err))
+            for errback in self._errbacks:
+                _invoke_delivery_callback(errback, self._error)
+        else:
+            for callback in self._callbacks:
+                _invoke_delivery_callback(callback, msg)
+        self._errbacks.clear()
+        self._callbacks.clear()
+
+
+def _invoke_delivery_callback(fn: Callable[..., Any], arg: Any) -> None:
+    """Run a delivery callback without letting it escape into librdkafka."""
+    try:
+        fn(arg)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("kafka_delivery_callback_failed", error=str(exc))
+
+
 class KafkaProducerCompat:
     """Subset of the legacy ``KafkaProducer`` API implemented with Confluent."""
 
@@ -92,19 +155,28 @@ class KafkaProducerCompat:
         key: Any = None,
         value: Any = None,
         headers: Optional[list[tuple[str, bytes | None]]] = None,
-    ) -> None:
+    ) -> DeliveryHandle:
+        """Enqueue a record and return a handle for its delivery report.
+
+        The returned handle is what makes ``send(...).add_errback(...)`` work
+        (#2969); enqueueing successfully here says nothing about whether the
+        broker ever acknowledged the record.
+        """
+        handle = DeliveryHandle(topic)
         try:
             self._producer.produce(
                 topic,
                 key=self._key_serializer(key),
                 value=self._value_serializer(value),
                 headers=headers,
+                on_delivery=handle._on_delivery,
             )
             self._producer.poll(0)
         except BufferError as exc:
             raise KafkaError(str(exc)) from exc
         except KafkaException as exc:
             raise KafkaError(str(exc)) from exc
+        return handle
 
     def flush(self, timeout: Optional[float] = None) -> None:
         remaining = self._producer.flush(timeout if timeout is not None else -1)
