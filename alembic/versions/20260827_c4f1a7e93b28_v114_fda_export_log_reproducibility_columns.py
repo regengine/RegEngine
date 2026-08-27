@@ -1,4 +1,4 @@
-"""v113 — record the FDA export inputs that determine the exported bytes.
+"""v114 — record the FDA export inputs that determine the exported bytes.
 
 ``POST /api/v1/fda/export/verify`` regenerates a previous export from its
 ``fsma.fda_export_log`` row and compares SHA-256 digests; a mismatch is
@@ -48,7 +48,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c4f1a7e93b28"  # pragma: allowlist secret
-down_revision = "d8b2056471a7"  # pragma: allowlist secret
+down_revision = "4e9c1f7a02b6"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
@@ -97,7 +97,7 @@ def _require_destructive_downgrade_ack() -> None:
     if env in {"development", "dev", "test", "ci"} and ack == "1":
         return
     raise RuntimeError(
-        "v113 downgrade blocked (#2898). Dropping "
+        "v114 downgrade blocked (#2898). Dropping "
         "fsma.fda_export_log.include_pii destroys the record of whether each "
         "regulator-facing export disclosed customer facility names — FSMA 204 "
         "§1.1455(c) audit evidence that cannot be reconstructed from the "
