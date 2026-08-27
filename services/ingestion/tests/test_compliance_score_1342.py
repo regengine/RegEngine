@@ -79,12 +79,18 @@ def _row(*values):
 class _FakeResult:
     """Mimics the result object returned by SQLAlchemy's execute()."""
 
-    def __init__(self, *, row=None, scalar_value=None):
+    def __init__(self, *, row=None, scalar_value=None, rows=None):
         self._row = row
         self._scalar = scalar_value
+        self._rows = list(rows) if rows is not None else []
 
     def fetchone(self):
         return self._row
+
+    def fetchall(self):
+        # #2962: the required-KDE coverage reads are multi-row. Unrouted
+        # statements yield an empty result set rather than raising.
+        return self._rows
 
     def scalar(self):
         return self._scalar
@@ -94,13 +100,16 @@ class _RouteSession:
     """Session that dispatches execute() by SQL substring.
 
     Construct with a mapping of substring → row (or RuntimeError to raise).
-    Also accepts ``raise_on`` for substring-matched exceptions.
+    Also accepts ``raise_on`` for substring-matched exceptions and
+    ``rows_route`` for statements read via ``.fetchall()``.
     """
 
-    def __init__(self, route=None, raise_on=None, scalar_route=None):
+    def __init__(self, route=None, raise_on=None, scalar_route=None, rows_route=None):
         self.route = route or {}
         self.raise_on = raise_on or {}
         self.scalar_route = scalar_route or {}
+        # #2962: substring -> list-of-rows, for .fetchall() consumers.
+        self.rows_route = rows_route or {}
         self.closed = False
         self.rolled_back = 0
         self.executed: list[str] = []
@@ -111,6 +120,10 @@ class _RouteSession:
         for pat, exc in self.raise_on.items():
             if pat in sql:
                 raise exc
+        # multi-row routes take precedence for .fetchall() consumers
+        for pat, rows in self.rows_route.items():
+            if pat in sql:
+                return _FakeResult(rows=rows)
         # scalar routes take precedence for .scalar() consumers
         for pat, value in self.scalar_route.items():
             if pat in sql:
@@ -172,6 +185,13 @@ def _base_data(**overrides) -> dict:
         "active_cte_types": None,
         "total_kdes": 50,
         "filled_kdes": 50,
+        # #2962: KDE completeness is scored against the FSMA-required KDE set
+        # for each event's CTE type, not against the KDEs that happen to be
+        # recorded. A fully-covered tenant: every required check satisfied.
+        "required_kde_checks_total": 50,
+        "required_kde_checks_passed": 50,
+        "events_unchecked_type": 0,
+        "unchecked_event_types": [],
         "chain_length": 10,
         "last_chain_hash": "a" * 64,
         "chain_gaps": 0,
@@ -274,27 +294,69 @@ class TestComputeScoresChainIntegrity:
 
 
 class TestComputeScoresKdeCompleteness:
+    """#2962: the ratio is required-KDEs-present / required-KDEs-for-the-CTE-type.
+
+    These cases previously drove the dimension with ``total_kdes`` /
+    ``filled_kdes`` — a COUNT(*) over the KDEs that happen to be recorded,
+    which reports 100% for an event missing most of its required KDEs. They
+    now drive it with the required-KDE checks; ``total_kdes``/``filled_kdes``
+    are still queried and returned but no longer score the dimension.
+    """
+
     def test_no_kdes(self):
-        scores = _compute_scores(_base_data(total_kdes=0, filled_kdes=0))
-        assert scores["kde_completeness"][0] == 0
-
-    def test_all_filled_no_time_issue(self):
-        scores = _compute_scores(_base_data(total_kdes=10, filled_kdes=10, events_missing_time=0))
-        assert scores["kde_completeness"][0] == 100
-        assert "All 10 KDE fields populated" in scores["kde_completeness"][1]
-
-    def test_partial_missing(self):
-        scores = _compute_scores(_base_data(total_kdes=10, filled_kdes=6, events_missing_time=0))
-        # 60% → 60
-        assert scores["kde_completeness"][0] == 60
-        assert "6/10" in scores["kde_completeness"][1]
-        assert "4 blank" in scores["kde_completeness"][1]
-
-    def test_all_filled_with_time_penalty(self):
         scores = _compute_scores(
             _base_data(
-                total_kdes=10,
-                filled_kdes=10,
+                total_kdes=0,
+                filled_kdes=0,
+                required_kde_checks_total=0,
+                required_kde_checks_passed=0,
+            )
+        )
+        assert scores["kde_completeness"][0] == 0
+
+    def test_all_required_present_no_time_issue(self):
+        scores = _compute_scores(
+            _base_data(
+                required_kde_checks_total=10,
+                required_kde_checks_passed=10,
+                events_missing_time=0,
+            )
+        )
+        assert scores["kde_completeness"][0] == 100
+        assert "All 10 required KDE fields present" in scores["kde_completeness"][1]
+
+    def test_partial_required_missing(self):
+        scores = _compute_scores(
+            _base_data(
+                required_kde_checks_total=10,
+                required_kde_checks_passed=6,
+                events_missing_time=0,
+            )
+        )
+        # 60% → 60
+        assert scores["kde_completeness"][0] == 60
+        assert "6/10 required" in scores["kde_completeness"][1]
+        assert "4 missing" in scores["kde_completeness"][1]
+
+    def test_recorded_kde_counts_no_longer_score_the_dimension(self):
+        """The reported defect: 2 recorded KDEs, both non-blank, but only 2 of
+        the CTE type's 7 required KDEs present. Pre-fix this read 100."""
+        scores = _compute_scores(
+            _base_data(
+                total_kdes=2,
+                filled_kdes=2,
+                required_kde_checks_total=7,
+                required_kde_checks_passed=2,
+                events_missing_time=0,
+            )
+        )
+        assert scores["kde_completeness"][0] == 28
+
+    def test_all_required_present_with_time_penalty(self):
+        scores = _compute_scores(
+            _base_data(
+                required_kde_checks_total=10,
+                required_kde_checks_passed=10,
                 events_missing_time=5,
                 event_count=10,
             )
@@ -306,8 +368,8 @@ class TestComputeScoresKdeCompleteness:
     def test_partial_with_time_penalty(self):
         scores = _compute_scores(
             _base_data(
-                total_kdes=10,
-                filled_kdes=8,
+                required_kde_checks_total=10,
+                required_kde_checks_passed=8,
                 events_missing_time=10,
                 event_count=10,
             )
@@ -519,12 +581,14 @@ class TestComputeScoresExportReadiness:
         assert "chain integrity" in scores["export_readiness"][1]
 
     def test_kde_gap_flagged(self):
+        # #2962: the KDE credit is driven by the required-KDE checks, not by
+        # the recorded-KDE counts.
         scores = _compute_scores(
             _base_data(
                 event_count=10,
                 chain_verified=True,
-                total_kdes=10,
-                filled_kdes=5,  # 0.5 ratio
+                required_kde_checks_total=10,
+                required_kde_checks_passed=5,  # 0.5 ratio
                 distinct_cte_types=5,
             )
         )
@@ -540,8 +604,8 @@ class TestComputeScoresExportReadiness:
                 chain_verified=None,
                 chain_length=10,
                 chain_gaps=0,
-                total_kdes=10,
-                filled_kdes=3,  # 0.3 → 9 pts
+                required_kde_checks_total=10,
+                required_kde_checks_passed=3,  # 0.3 → 9 pts
                 distinct_cte_types=2,  # 15 pts
             )
         )
@@ -557,6 +621,8 @@ class TestComputeScoresExportReadiness:
                 chain_verified=True,
                 total_kdes=0,
                 filled_kdes=0,
+                required_kde_checks_total=0,
+                required_kde_checks_passed=0,
                 distinct_cte_types=5,
             )
         )
