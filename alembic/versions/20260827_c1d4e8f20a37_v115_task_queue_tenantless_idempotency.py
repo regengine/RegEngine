@@ -1,4 +1,4 @@
-"""v113 — task_queue idempotency index dedupes tenantless rows (#2852).
+"""v115 — task_queue idempotency index dedupes tenantless rows (#2852).
 
 Revision ID: c1d4e8f20a37
 Revises: d8b2056471a7
@@ -56,7 +56,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "c1d4e8f20a37"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "d8b2056471a7"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "c4f1a7e93b28"  # pragma: allowlist secret
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -75,7 +75,7 @@ def _require_nulls_not_distinct_support() -> None:
     server_version = bind.exec_driver_sql("SHOW server_version_num").scalar()
     if int(server_version) < 150000:
         raise RuntimeError(
-            "v113 requires PostgreSQL 15+ for NULLS NOT DISTINCT "
+            "v115 requires PostgreSQL 15+ for NULLS NOT DISTINCT "
             f"(server_version_num={server_version}). Upgrade the server, or "
             "adopt a sentinel tenant id for system-scoped tasks instead."
         )
