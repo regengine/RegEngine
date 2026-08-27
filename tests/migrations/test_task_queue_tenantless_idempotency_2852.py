@@ -35,7 +35,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from tests.migrations.rls_db import rls_engine_or_skip, skip_or_fail_db
+from tests.migrations.rls_db import skip_or_fail_db
+from tests.migrations.scratch_db import scratch_database_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -96,14 +97,18 @@ def _effective_index_ddl() -> str:
 
 @pytest.fixture(scope="module")
 def enqueue_session_factory() -> Iterator[object]:
-    """A live Postgres carrying fsma.task_queue + the shipped dedup index."""
-    with rls_engine_or_skip() as engine:
+    """A disposable database carrying fsma.task_queue + the shipped index.
+
+    Isolated rather than shared: this suite creates ``fsma.task_queue``
+    itself, which must not disturb the migration gates running against the
+    same server.
+    """
+    with scratch_database_engine("regengine_scratch_tq_2852") as engine:
         with engine.connect() as conn:
             version = conn.exec_driver_sql("SHOW server_version_num").scalar()
             if int(version) < 150000:
                 skip_or_fail_db(f"#2852 needs PostgreSQL 15+ for NULLS NOT DISTINCT (got {version})")
             conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS fsma")
-            conn.exec_driver_sql("DROP TABLE IF EXISTS fsma.task_queue CASCADE")
             conn.exec_driver_sql(_TABLE_DDL)
             conn.exec_driver_sql(_effective_index_ddl())
             conn.commit()

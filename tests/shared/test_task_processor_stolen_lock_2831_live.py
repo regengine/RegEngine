@@ -38,7 +38,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from tests.migrations.rls_db import rls_engine_or_skip
+from tests.migrations.scratch_db import scratch_database_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -69,10 +69,11 @@ _TABLE_DDL = """
 
 @pytest.fixture(scope="module")
 def session_factory() -> Iterator[object]:
-    with rls_engine_or_skip() as engine:
+    """A disposable database — this suite creates fsma.task_queue itself,
+    which must not disturb anything else running on the same server."""
+    with scratch_database_engine("regengine_scratch_tq_2831") as engine:
         with engine.connect() as conn:
             conn.exec_driver_sql("CREATE SCHEMA IF NOT EXISTS fsma")
-            conn.exec_driver_sql("DROP TABLE IF EXISTS fsma.task_queue CASCADE")
             conn.exec_driver_sql(_TABLE_DDL)
             conn.commit()
         yield sessionmaker(autocommit=False, autoflush=False, bind=engine)
