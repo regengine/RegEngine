@@ -1,13 +1,21 @@
 name: Public OpenAPI Spec Drift
 
 # Closes #2308. Fails the build if `frontend/public/openapi.json` is stale
-# relative to the ingestion FastAPI app. Devs adding/modifying public routes
-# must run `python scripts/generate_openapi.py` and commit the result.
+# relative to the PRODUCTION monolith (`server/main.py`). Devs adding or
+# modifying public routes must run `python scripts/generate_openapi.py` and
+# commit the result.
+#
+# #2861: the generator used to build from `services/ingestion/main.py`, which
+# has no experimental-router gate, so this job enforced a spec containing 9
+# paths production does not mount. `server/**` is in the path filters below
+# because the mount set now depends on it — without that, a router change
+# would alter the spec without triggering this check.
 
 on:
   pull_request:
     branches: [main]
     paths:
+      - 'server/**'
       - 'services/ingestion/**'
       - 'services/shared/**'
       - 'shared/**'
@@ -18,6 +26,7 @@ on:
   push:
     branches: [main, develop]
     paths:
+      - 'server/**'
       - 'services/ingestion/**'
       - 'services/shared/**'
       - 'shared/**'
