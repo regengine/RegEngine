@@ -121,6 +121,26 @@ class TestGetServiceNoDb:
 # --------------------------------------------------------------------------- #
 
 
+def _routed_entity_db(count: int, rows: list) -> MagicMock:
+    """Fake db_session answering the COUNT(*) and the listing query separately.
+
+    ``list_entities`` runs both since #2864; a single MagicMock return value
+    would otherwise answer the COUNT with a MagicMock.
+    """
+    db = MagicMock()
+
+    def _execute(sql, params=None, *_a, **_kw):
+        result = MagicMock()
+        if "COUNT(*)" in str(sql):
+            result.fetchone.return_value = (count,)
+        else:
+            result.fetchall.return_value = rows
+        return result
+
+    db.execute.side_effect = _execute
+    return db
+
+
 def _build_client_with_stubbed_service(mock_svc: MagicMock, mock_db: MagicMock | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(identity_router.router)
@@ -140,11 +160,12 @@ class TestListEntitiesEntityTypeFilter:
         # The service isn't used here — list_entities does a raw SQL
         # query through db_session.execute() when no ``search`` is given.
         mock_svc = MagicMock()
-        mock_db = MagicMock()
-        # Provide two rows so we exercise the list comprehension.
+        # Provide two rows so we exercise the list comprehension. #2864: the
+        # endpoint also issues a COUNT(*), which the fake answers separately
+        # so ``total`` is a real count rather than ``len(entities)``.
         row_1 = ("ent-1", "firm", "Acme Farms", "gln-1", None, "verified", 0.95)
         row_2 = ("ent-2", "firm", "Beta Packing", None, None, None, None)
-        mock_db.execute.return_value.fetchall.return_value = [row_1, row_2]
+        mock_db = _routed_entity_db(count=2, rows=[row_1, row_2])
 
         client = _build_client_with_stubbed_service(mock_svc, mock_db)
         response = client.get("/api/v1/identity/entities?entity_type=firm")

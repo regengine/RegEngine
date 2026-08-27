@@ -166,6 +166,7 @@ async def list_ingestion_runs(
     tenant_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
+    offset: int = Query(0, ge=0),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
     db_session=Depends(get_db_session),
 ):
@@ -176,7 +177,7 @@ async def list_ingestion_runs(
     from sqlalchemy import text
 
     where_parts = ["tenant_id = :tid"]
-    params: Dict[str, Any] = {"tid": tid, "lim": limit}
+    params: Dict[str, Any] = {"tid": tid, "lim": limit, "off": offset}
     if status:
         where_parts.append("status = :status")
         params["status"] = status
@@ -186,6 +187,16 @@ async def list_ingestion_runs(
     )
     where = " AND ".join(where_parts)
 
+    # #2864: ``total`` used to be ``len(runs)``, which never exceeded ``limit``
+    # — a client paging to the end was told the truncated view was complete.
+    # Count the real matching rows, same pattern as ``list_records`` above.
+    # WHERE clause is built from _ALLOWED_WHERE_FRAGMENTS only (asserted above)
+    count_row = db_session.execute(
+        text("SELECT COUNT(*) FROM fsma.ingestion_runs WHERE " + where),
+        params,
+    ).fetchone()
+    total = count_row[0] if count_row else 0
+
     rows = db_session.execute(
         text(
             "SELECT id, source_system, source_file_name, record_count,"
@@ -193,7 +204,7 @@ async def list_ingestion_runs(
             " initiated_by, started_at, completed_at"
             " FROM fsma.ingestion_runs"
             " WHERE " + where + " ORDER BY started_at DESC"
-            " LIMIT :lim"
+            " LIMIT :lim OFFSET :off"
         ),
         params,
     ).fetchall()
@@ -214,7 +225,7 @@ async def list_ingestion_runs(
         }
         for r in rows
     ]
-    return {"tenant_id": tid, "runs": runs, "total": len(runs)}
+    return {"tenant_id": tid, "runs": runs, "total": total}
 
 
 @router.get(
