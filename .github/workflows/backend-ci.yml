@@ -866,8 +866,14 @@ jobs:
           # Needs the Redis service (job env REDIS_URL) for the job-status
           # tenant-scoping tests; no Postgres — every assertion resolves
           # before DB access. An unreachable Redis FAILS these tests.
+          # test_fsma_204_phase_2b_structure shipped two pass-only bodies and
+          # ran in no blocking step (#2924). Its obligation-mapping test is now
+          # a real in-process golden-corpus check (no Redis, no Postgres), so a
+          # regression in extracted-fact -> compliance-obligation mapping turns
+          # a PR red here.
           pytest tests/security/test_security_audit_fixes.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
+            tests/data_integrity/test_fsma_204_phase_2b_structure.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
