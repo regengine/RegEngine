@@ -94,6 +94,26 @@ def _856_set(
     return "".join(body)
 
 
+def _interchange_856_two_sn1_units(uom_a: str, uom_b: str) -> bytes:
+    """A single conformant 856 whose two SN1 lines carry the given units.
+
+    Used by the PR #2991 review-finding tests: 120 + 80 = 200 whenever the
+    two codes resolve to the same FSMA unit.
+    """
+    return _interchange(
+        [
+            _856_set(
+                control="0001",
+                asn="ASN-UOM",
+                ship_from="Valley Fresh Farms",
+                bol="BOL-UOM",
+                sn1_lines=(("120", uom_a), ("80", uom_b)),
+            )
+        ],
+        isa13="000029911",
+    )
+
+
 def _interchange(sets: list[str], *, isa13: str, ge01: str | None = None) -> bytes:
     """Wrap transaction sets in one ISA/GS ... GE/IEA interchange.
 
@@ -154,12 +174,18 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
         yield test_client
 
 
-def _post(client: TestClient, raw: bytes, name: str = "batch.edi"):
+def _post(
+    client: TestClient,
+    raw: bytes,
+    name: str = "batch.edi",
+    extra_data: dict[str, str] | None = None,
+):
     return client.post(
         "/api/v1/ingest/edi/document",
         data={
             "traceability_lot_code": _VALID_FSMA_TLC,
             "tenant_id": TEST_TENANT_ID,
+            **(extra_data or {}),
         },
         files={"file": (name, raw, "application/edi-x12")},
         headers={"X-Partner-ID": "WALMART"},
@@ -502,3 +528,111 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
 
     # One audit record per failing transaction set, not one per file.
     assert len(list_edi_rejections(TEST_TENANT_ID)) == 2
+
+
+# ── Review findings on PR #2991 ───────────────────────────────────────────
+# Both are consequences of features this PR introduced, caught in review.
+
+
+def test_sn1_equivalent_unit_codes_are_not_falsely_rejected():
+    """CA and CS both resolve to "cases" (constants.py:20-21), so an 856
+    whose SN1 lines use both genuinely agrees on the unit and must sum.
+
+    The guard originally compared raw element-355 codes, which made this a
+    422. This PR is what added CS to the map, so raw comparison would have
+    created the false rejection it is now guarded against.
+    """
+    from app.edi_ingestion.extractors import _extract_856_fields
+    from app.edi_ingestion.parser import _parse_x12_segments
+    from app.edi_ingestion.utils import _resolve_unit_code
+
+    segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "CS").decode())
+    data = _extract_856_fields(segments)
+
+    assert data["quantity"] == 200.0, "equivalent unit codes must still sum"
+    # The extractor keeps the raw element-355 code; normalization to the
+    # FSMA vocabulary happens downstream. What matters here is that both
+    # codes resolve to the same unit, which is why the sum is legitimate.
+    assert data["unit_of_measure"] == "CA"
+    assert _resolve_unit_code("CA") == _resolve_unit_code("CS") == "cases"
+
+
+def test_sn1_genuinely_different_units_are_still_rejected():
+    """The relaxation must not weaken the real guard: cases vs pounds is
+    still not 200 of anything."""
+    from fastapi import HTTPException
+
+    from app.edi_ingestion.extractors import _extract_856_fields
+    from app.edi_ingestion.parser import _parse_x12_segments
+
+    segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "LB").decode())
+    with pytest.raises(HTTPException) as exc:
+        _extract_856_fields(segments)
+    assert exc.value.detail["error"] == "edi_856_mixed_units_of_measure"
+
+
+def test_two_unmappable_but_different_codes_still_refuse():
+    """A code resolving to nothing keeps its raw form, so two different
+    unmappable codes must not silently collapse into one unit."""
+    from fastapi import HTTPException
+
+    from app.edi_ingestion.extractors import _extract_856_fields
+    from app.edi_ingestion.parser import _parse_x12_segments
+
+    segments = _parse_x12_segments(_interchange_856_two_sn1_units("QQ", "ZZ").decode())
+    with pytest.raises(HTTPException) as exc:
+        _extract_856_fields(segments)
+    assert exc.value.detail["error"] == "edi_856_mixed_units_of_measure"
+
+
+def test_scalar_overrides_are_refused_for_a_batched_interchange(
+    client: TestClient, captured_payload: dict
+):
+    """A scalar form override describes ONE shipment.
+
+    Applying it across a batch would overwrite each transaction set's own
+    extracted values with a single value — reintroducing, through the
+    override path, exactly the cross-shipment field bleed #2976 fixes.
+    Refuse rather than silently collapse.
+    """
+    raw = _interchange(
+        [
+            _856_set(control="0001", asn="ASN-A", ship_from="Valley Fresh Farms", bol="BOL-A"),
+            _856_set(control="0002", asn="ASN-B", ship_from="Coastal Greens", bol="BOL-B"),
+        ],
+        isa13="000029912",
+    )
+
+    response = _post(
+        client,
+        raw,
+        name="batch-with-override.edi",
+        extra_data={"quantity_override": "42"},
+    )
+
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "edi_overrides_with_multiple_transaction_sets"
+    assert detail["overrides"] == ["quantity_override"]
+    assert detail["transaction_set_count"] == 2
+    assert "payload" not in captured_payload, "nothing may land when overrides are refused"
+
+
+def test_scalar_overrides_still_work_for_a_single_transaction_set(
+    client: TestClient, captured_payload: dict
+):
+    """The guard must not break the ordinary single-shipment override path."""
+    raw = _interchange(
+        [_856_set(control="0001", asn="ASN-SOLO", ship_from="Valley Fresh Farms", bol="BOL-SOLO")],
+        isa13="000029913",
+    )
+
+    response = _post(
+        client,
+        raw,
+        name="single-with-override.edi",
+        extra_data={"quantity_override": "42"},
+    )
+
+    assert response.status_code in (200, 201), response.text
+    assert captured_payload["payload"].events[0].quantity == 42.0

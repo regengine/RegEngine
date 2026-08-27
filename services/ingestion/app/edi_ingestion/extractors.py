@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from .constants import _FROM_ENTITY_CODES, _TO_ENTITY_CODES
 from .parser import _first_segment
-from .utils import _safe_float
+from .utils import _resolve_unit_code, _safe_float
 
 
 def _extract_envelope_ids(segments: list[list[str]]) -> dict[str, Any]:
@@ -185,7 +185,16 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
     # measures in the same unit. 120 cases + 80 pounds is not 200 of
     # anything, so refuse rather than pair the total with whichever unit
     # happened to come first.
-    distinct_units = {unit for unit in sn1_units if unit}
+    # Review on #2991: compare RESOLVED units, not raw element-355 codes.
+    # Several codes resolve to the same FSMA unit -- CA and CS both mean
+    # "cases" -- so comparing raw codes rejects an interchange whose lines
+    # genuinely agree. This PR is what added CS to the map, so raw
+    # comparison would have created that false rejection. A code that
+    # resolves to nothing keeps its raw form so two unmappable-but-
+    # different codes still refuse rather than silently collapsing.
+    distinct_units = {
+        (_resolve_unit_code(unit) or unit) for unit in sn1_units if unit
+    }
     if len(distinct_units) > 1:
         raise HTTPException(
             status_code=422,
@@ -197,7 +206,13 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                     "into a single shipping CTE; split the ASN or correct "
                     "the SN1 unit codes."
                 ),
-                "units": sorted(distinct_units),
+                # Report the RAW element-355 codes the partner actually
+                # sent, not the resolved names: they debug against the
+                # interchange they transmitted. The comparison above is on
+                # resolved units so equivalent codes don't false-reject;
+                # the diagnostic stays in their vocabulary.
+                "units": sorted({unit for unit in sn1_units if unit}),
+                "resolved_units": sorted(distinct_units),
             },
         )
 

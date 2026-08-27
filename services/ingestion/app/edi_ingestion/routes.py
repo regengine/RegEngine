@@ -1078,6 +1078,47 @@ async def ingest_edi_document(
             },
         )
 
+    # Review on #2991: scalar form overrides describe ONE shipment. Applying
+    # them across a batch would overwrite each transaction set's distinct
+    # extracted values with a single value -- reintroducing, through the
+    # override path, exactly the cross-shipment field bleed #2976 fixes.
+    # Refuse rather than silently collapse; a caller who means it can post
+    # each transaction set separately.
+    if len(slice_sets) > 1:
+        _supplied_overrides = [
+            name
+            for name, value in (
+                ("product_description", product_description),
+                ("quantity_override", quantity_override),
+                ("unit_of_measure_override", unit_of_measure_override),
+                ("location_override", location_override),
+            )
+            if value is not None
+        ]
+        if _supplied_overrides:
+            logger.warning(
+                "edi_overrides_rejected_for_batch partner=%s sets=%d overrides=%s",
+                x_partner_id,
+                len(slice_sets),
+                ",".join(_supplied_overrides),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "edi_overrides_with_multiple_transaction_sets",
+                    "message": (
+                        "Field overrides apply to a single shipment, but this "
+                        "interchange carries "
+                        f"{len(slice_sets)} transaction sets. Applying one "
+                        "override across all of them would overwrite each "
+                        "set's own values. Post each transaction set "
+                        "separately, or resubmit without overrides."
+                    ),
+                    "overrides": _supplied_overrides,
+                    "transaction_set_count": len(slice_sets),
+                },
+            )
+
     events = [
         _build_ingest_event_for_set(
             transaction_set=slice_set,
