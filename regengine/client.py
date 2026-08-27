@@ -82,12 +82,16 @@ class RegEngineClient:
         self.retry_backoff_factor = retry_backoff_factor
         self._session = httpx.Client()
 
-    def _headers(self) -> Dict[str, str]:
-        """Build request headers."""
+    def _headers(self, accept: str = "application/json") -> Dict[str, str]:
+        """Build request headers.
+
+        ``accept`` is parameterised (#2956) so a file download can ask for the
+        media type it actually wants instead of advertising JSON.
+        """
         headers = {
             "X-RegEngine-API-Key": self.api_key,
             "Content-Type": "application/json",
-            "Accept": "application/json",
+            "Accept": accept,
         }
         if self.tenant_id:
             headers["X-Tenant-ID"] = self.tenant_id
@@ -99,11 +103,26 @@ class RegEngineClient:
         path: str,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        *,
+        parse: str = "json",
+        accept: str = "application/json",
+        expected_content_type: Optional[str] = None,
+    ) -> Any:
         """Make an API request with automatic retry on transient failures.
 
         Retries on 429, 500, 502, 503 with exponential backoff.
         Respects the Retry-After header when present.
+
+        Args:
+            parse: ``"json"`` (default) to decode the body as JSON, or
+                ``"bytes"`` to return the raw ``response.content`` for file
+                downloads. #2956: the bytes mode lives here rather than in a
+                separate transport path so downloads get the same retry loop
+                and the same 401/404/429 exception mapping as every other call.
+            accept: value for the ``Accept`` request header.
+            expected_content_type: when set (bytes mode), the response
+                ``Content-Type`` must match it, or ``RegEngineError`` is raised
+                rather than handing an HTML/JSON error body back as a file.
         """
         url = f"{self.base_url}{path}"
         last_exc: Optional[Exception] = None
@@ -113,7 +132,7 @@ class RegEngineClient:
                 response = self._session.request(
                     method=method,
                     url=url,
-                    headers=self._headers(),
+                    headers=self._headers(accept),
                     params=params,
                     json=json,
                     timeout=self.timeout,
@@ -170,6 +189,16 @@ class RegEngineClient:
                 raise RegEngineError(f"API error ({response.status_code}): {error}")
 
             # Success
+            if parse == "bytes":
+                if expected_content_type and response.status_code != 204:
+                    content_type = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                    if content_type != expected_content_type.lower():
+                        raise RegEngineError(
+                            f"Unexpected Content-Type from {path}: expected "
+                            f"{expected_content_type!r}, got {content_type or '(none)'!r}. "
+                            "Refusing to return the body as a file."
+                        )
+                return response.content
             if response.status_code == 204:
                 return {}
             return response.json()
@@ -177,22 +206,32 @@ class RegEngineClient:
         # Exhausted retries — raise last status error
         raise RegEngineError(f"Request to {path} failed after {self.max_retries + 1} attempts")
 
-    def _request_bytes(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> bytes:
-        """Make an API request that returns raw bytes (for file downloads)."""
-        url = f"{self.base_url}{path}"
+    def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        *,
+        accept: str = "application/json",
+        expected_content_type: Optional[str] = None,
+    ) -> bytes:
+        """Make an API request that returns raw bytes (for file downloads).
 
-        try:
-            response = self._session.request(
-                method=method,
-                url=url,
-                headers=self._headers(),
-                params=params,
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            return response.content
-        except httpx.HTTPError as e:
-            raise RegEngineError(f"Request failed: {e}")
+        #2956: this used to be a second, bare transport path — one attempt,
+        ``raise_for_status()``, and a blanket ``except httpx.HTTPError`` that
+        collapsed 401/404/429 into a generic ``RegEngineError``. It now
+        delegates to ``_request``, so downloads share the retry loop,
+        ``Retry-After`` handling and the documented status-to-exception
+        mapping.
+        """
+        return self._request(
+            method,
+            path,
+            params=params,
+            parse="bytes",
+            accept=accept,
+            expected_content_type=expected_content_type,
+        )
 
     # =========================================================================
     # Record Management
@@ -396,10 +435,25 @@ class RegEngineClient:
 
         Returns:
             CSV file content as bytes
+
+        Raises:
+            AuthenticationError: on HTTP 401 (expired or invalid key).
+            NotFoundError: on HTTP 404 (endpoint not mounted / no such lot).
+            RateLimitError: on HTTP 429 after retries are exhausted.
+            RegEngineError: on other errors, or if the 200 response is not
+                ``text/csv``.
         """
         params = {
             "tlc": tlc,
             "start_date": start_date,
             "end_date": end_date,
         }
-        return self._request_bytes("GET", "/api/v1/fsma/compliance/export/fda-request", params=params)
+        return self._request_bytes(
+            "GET",
+            "/api/v1/fsma/compliance/export/fda-request",
+            params=params,
+            # The server streams this as media_type="text/csv"
+            # (services/graph/app/routers/fsma/compliance.py:169-173).
+            accept="text/csv",
+            expected_content_type="text/csv",
+        )
