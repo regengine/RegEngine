@@ -356,6 +356,32 @@ FULL_EXPORT_TYPES = frozenset(
 )
 
 
+class ExportOverflowError(RuntimeError):
+    """The ``/export/all`` package cannot be delivered complete (#2860).
+
+    ``query_events_by_tlcs`` truncates server-side with ``LIMIT`` and returns a
+    bare list, so a package cut at the limit was indistinguishable from one that
+    fit. Worse, the ``X-Truncated`` header was computed from the *seed* count
+    while the bytes were built from the strictly larger transformation-link
+    expansion — so the common case was an incomplete FSMA 204 records-request
+    package that reported itself complete.
+
+    Refusing with 413 matches the rest of the export surface (``/export/v2`` and
+    ``/v1/fsma/audit/spreadsheet`` both refuse rather than truncate). For a
+    regulatory package a refusal the caller must handle is strictly safer than a
+    silent partial the recipient would have to notice a header to detect.
+    """
+
+    def __init__(self, *, available: int, limit: int, stage: str) -> None:
+        self.available = available
+        self.limit = limit
+        self.stage = stage
+        super().__init__(
+            f"FDA export exceeds the {limit}-event synchronous limit "
+            f"(at least {available} events matched at the {stage} stage)."
+        )
+
+
 def reconstruct_full_export_events(
     persistence,
     *,
@@ -386,17 +412,33 @@ def reconstruct_full_export_events(
         event_type=event_type,
         limit=limit,
     )
+    # ``total`` is a true COUNT(*), independent of ``limit`` — so a seed set
+    # larger than the limit means the package would be built from a partial
+    # seed list. Refuse rather than deliver it (#2860).
+    # ``total`` is Optional in practice: some persistence backends (and the
+    # spreadsheet path's stub) return None rather than a count. Only refuse on a
+    # count we actually have — the expansion guard below is unconditional and
+    # still bounds the delivered package.
+    if total is not None and total > limit:
+        raise ExportOverflowError(available=total, limit=limit, stage="seed query")
 
     # Expand every distinct seed TLC through transformation_links in a
     # bounded number of round-trips.
     tlcs = list(dict.fromkeys(evt["traceability_lot_code"] for evt in seed_events))
+    # Request one row past the limit purely as an overflow sentinel: the
+    # expansion returns strictly more events than the seed set, so a seed count
+    # within the limit does not bound this query (#2860).
     full_events = persistence.query_events_by_tlcs(
         tenant_id=tenant_id,
         tlcs=tlcs,
         start_date=start_date,
         end_date=end_date,
-        limit=limit,
+        limit=limit + 1,
     )
+    if len(full_events) > limit:
+        raise ExportOverflowError(
+            available=len(full_events), limit=limit, stage="transformation-link expansion"
+        )
 
     # Deduplicate by event id (defensive — the set-based query returns each
     # event once, but a transformation link shared by two seeds must not

@@ -16,7 +16,11 @@ from ..authz import require_permission
 from ..export_models import ExportVerifyResponse
 from ..fda_export_service import _generate_csv
 from ..subscription_gate import require_active_subscription
-from .queries import FULL_EXPORT_TYPES, reconstruct_full_export_events
+from .queries import (
+    FULL_EXPORT_TYPES,
+    ExportOverflowError,
+    reconstruct_full_export_events,
+)
 
 logger = logging.getLogger("fda-export")
 
@@ -111,13 +115,26 @@ async def verify_export_handler(
             )
         else:
             # Same helper the exporter uses — one algorithm, one row order.
-            events, _total = reconstruct_full_export_events(
-                persistence,
-                tenant_id=tenant_id,
-                start_date=start,
-                end_date=end,
-                event_type=query_event_type,
-            )
+            try:
+                events, _total = reconstruct_full_export_events(
+                    persistence,
+                    tenant_id=tenant_id,
+                    start_date=start,
+                    end_date=end,
+                    event_type=query_event_type,
+                )
+            except ExportOverflowError as exc:
+                # #2860: the stored export's scope no longer fits the synchronous
+                # limit, so the bytes cannot be regenerated. Say that plainly —
+                # reporting MISMATCH_DETECTED here would accuse an untampered
+                # export of corruption, the same false alarm #2898 fixed.
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"{exc} The export cannot be re-verified synchronously; "
+                        "this is a scope limit, not an integrity failure."
+                    ),
+                ) from exc
 
         csv_content = _generate_csv(events, include_pii=include_pii)
         regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()

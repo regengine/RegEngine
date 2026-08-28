@@ -63,7 +63,6 @@ from .formatters import (
 )
 from .merkle import get_merkle_proof_handler, get_merkle_root_handler
 from .queries import (
-    FULL_EXPORT_LIMIT,
     AuditLogWriteError,
     _verify_chain_for_export,
     build_recall_where_clause,
@@ -75,6 +74,7 @@ from .queries import (
     format_export_log_rows,
     log_recall_export,
     log_v2_export,
+    ExportOverflowError,
     reconstruct_full_export_events,
     rows_to_event_dicts,
     v2_rows_to_event_dicts,
@@ -576,13 +576,23 @@ def export_all_events(
         # their events in a *bounded* number of DB round-trips (#2515), via
         # the helper ``/export/verify`` also calls so the two can never
         # reconstruct the same export differently (#2898).
-        deduped, total = reconstruct_full_export_events(
-            persistence,
-            tenant_id=tenant_id,
-            start_date=start_date,
-            end_date=end_date,
-            event_type=event_type,
-        )
+        try:
+            deduped, total = reconstruct_full_export_events(
+                persistence,
+                tenant_id=tenant_id,
+                start_date=start_date,
+                end_date=end_date,
+                event_type=event_type,
+            )
+        except ExportOverflowError as exc:
+            # #2860: refuse rather than deliver a silently truncated regulatory
+            # package, matching /export/v2's 413 above.
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"{exc} Narrow the date range or request a paginated/offline export."
+                ),
+            ) from exc
 
         # EPIC-L (#1655): no empty-success exports. An FDA-oriented CSV
         # with zero data rows looks identical to a complete "no compliance
@@ -680,11 +690,9 @@ def export_all_events(
             "X-Total-Count": str(total),
             "X-PII-Redacted": "false" if include_pii else "true",
         }
-        if total > FULL_EXPORT_LIMIT:
-            compliance_headers["X-Truncated"] = (
-                f"Result set truncated to {FULL_EXPORT_LIMIT} events out of {total}. "
-                "Use date filters to narrow the query."
-            )
+        # No X-Truncated header: as of #2860 an over-limit export is refused with
+        # 413 above rather than delivered partial, so this path cannot be reached
+        # with a seed count over the export limit.
         if kde_coverage < 0.80:
             compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
 
