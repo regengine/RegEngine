@@ -15,6 +15,21 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
+
+# The 7 FSMA 204 s1.1310 CTEs the ``cte_events`` schema accepts. Deliberately
+# a copy of ``cte_persistence.core._ALLOWED_CTE_TYPES``; a drift test pins
+# them together.
+_PERSISTABLE_CTE_TYPES = frozenset(
+    {
+        "harvesting",
+        "cooling",
+        "initial_packing",
+        "first_land_based_receiving",
+        "shipping",
+        "receiving",
+        "transformation",
+    }
+)
 from shared.database import get_db_safe
 from sqlalchemy import text
 
@@ -237,13 +252,18 @@ def _parse_epcis_document(kdes: dict[str, Any], normalized: dict[str, Any]) -> d
     if normalized.get("tlc"):
         ilmd["fsma:traceabilityLotCode"] = normalized["tlc"]
 
+    event_type = normalized.get("epcis_event_type") or "ObjectEvent"
     event: dict[str, Any] = {
-        "type": normalized.get("epcis_event_type") or "ObjectEvent",
+        "type": event_type,
         "eventTime": normalized.get("event_time") or datetime.now(timezone.utc).isoformat(),
-        "action": normalized.get("epcis_action") or "OBSERVE",
         "bizStep": normalized.get("epcis_biz_step") or "urn:epcglobal:cbv:bizstep:receiving",
         "ilmd": ilmd,
     }
+    # #2970: EPCIS 2.0 TransformationEvent has no ``action`` member — a
+    # rebuilt transformation must not round-trip out carrying a
+    # fabricated "OBSERVE".
+    if event_type != "TransformationEvent":
+        event["action"] = normalized.get("epcis_action") or "OBSERVE"
     if normalized.get("source_location_id"):
         event["sourceList"] = [
             {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": normalized["source_location_id"]}
@@ -523,6 +543,31 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
     )
 
 
+def _unsupported_cte_type_error(event_type: Any) -> Optional[dict]:
+    """Return an error detail when ``event_type`` is not a persistable CTE.
+
+    Mirrors ``cte_persistence.core._ALLOWED_CTE_TYPES`` — the 7 FSMA 204
+    s1.1310 CTEs the ``cte_events`` schema actually accepts. Kept as a
+    lightweight local check rather than importing that private set, because
+    that module is slated for retirement (#1335) and importing it here would
+    couple the EPCIS path to its lifetime.
+
+    Returns ``None`` for anything valid, so callers stay a plain ``if``.
+    """
+    if event_type in _PERSISTABLE_CTE_TYPES:
+        return None
+    return {
+        "error": "unsupported_cte_type",
+        "message": (
+            f"event_type {event_type!r} is not one of the 7 FSMA 204 "
+            "Critical Tracking Events and cannot be persisted. Recognized "
+            "bizSteps that map to it (e.g. FSMA 'growing', CBV 'planting') "
+            "must be rejected or reclassified upstream. (#2815)"
+        ),
+        "allowed": sorted(_PERSISTABLE_CTE_TYPES),
+    }
+
+
 def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
     """Pre-DB validation + normalization pipeline.
 
@@ -539,6 +584,29 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
 
     idempotency_key = _event_idempotency_key(event)
     normalized = _normalize_epcis_to_cte(event)
+
+    # Reject a recognized-but-non-CTE activity HERE, in phase 1, where a
+    # rejection belongs.
+    #
+    # `_normalize_epcis_to_cte` maps FSMA `growing` and CBV `planting` to the
+    # event_type "growing" — real bizSteps that are simply not among the 7
+    # s1.1310 CTEs. Nothing in phase 1 checked the resulting event_type, so
+    # such an event reached phase 2 and blew up there instead: the legacy
+    # write's `_validate_event_type` raises a bare ValueError, and the
+    # canonical dual-write raises `UnmappedBizStepError` (#2815) for the same
+    # input. In `_ingest_batch_events_db_atomic` that lands in the phase-2
+    # handler, which frames ANY exception as `batch_persistence_failed`
+    # ("Persistence failed mid-batch") — a persistence-crash story for what is
+    # really a validation rejection, and it rolls back the whole batch without
+    # telling the client which event was at fault.
+    #
+    # Raising HTTPException here instead means phase 1 collects it into the
+    # per-index `batch_validation_failed` map like every other validation
+    # failure, and the single-event path re-raises it unchanged as a 422.
+    _unsupported = _unsupported_cte_type_error(normalized.get("event_type"))
+    if _unsupported is not None:
+        raise HTTPException(status_code=422, detail=_unsupported)
+
     kdes = _extract_kdes(event)
     alerts = _compliance_alerts(normalized, kdes)
     # #1259: fail-closed on malformed mandatory GLNs before persistence.
@@ -671,9 +739,21 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
     )
 
     if current_mode() != EnforcementMode.OFF:
+        # Bound before the try so the handler below can reference it even if
+        # the import itself is what failed. isinstance(x, ()) is False, so the
+        # empty tuple is a safe "no match" sentinel. Imported lazily on purpose:
+        # shared.canonical_event has a documented circular-import hazard that
+        # breaks BOTH import orders (#2815), so it must not be imported at
+        # module scope here.
+        _unmapped_bizstep_exc: Any = ()
         try:
-            from shared.canonical_event import normalize_epcis_event  # noqa: PLC0415
+            from shared.canonical_event import (  # noqa: PLC0415
+                UnmappedBizStepError,
+                normalize_epcis_event,
+            )
             from shared.rules_engine import RulesEngine  # noqa: PLC0415
+
+            _unmapped_bizstep_exc = UnmappedBizStepError
 
             _pre_canonical = normalize_epcis_event(event, tenant_id)
             _pre_engine = RulesEngine(db_session)
@@ -696,6 +776,20 @@ def _persist_prepared_event_in_session(db_session, tenant_id: str, prepared: dic
                 tenant_id=tenant_id,
             )
         except (ImportError, ValueError, TypeError, RuntimeError, AttributeError, KeyError) as _pre_err:
+            # A bizStep the legacy gate accepts but that has no canonical CTE
+            # -- FSMA ``growing`` and CBV ``planting`` are real, legitimate
+            # bizSteps that are simply not among the 7 s1.1310 CTEs -- is a
+            # VALIDATION REJECTION, not a crash. UnmappedBizStepError subclasses
+            # ValueError, so without this it falls into the broad handler below
+            # and ``handle_preeval_exception`` turns a well-formed client event
+            # into a 500 (plus Sentry noise) under cte_only/all. Surface it as
+            # the same 422 a rules-engine rejection uses, so the batch
+            # orchestrator records it as a per-event error and keeps going.
+            if isinstance(_pre_err, _unmapped_bizstep_exc):
+                raise HTTPException(
+                    status_code=422,
+                    detail={"errors": [str(_pre_err)]},
+                ) from _pre_err
             # Finding A — under enforcement modes a pre-eval crash must
             # become a 5xx, NOT a silent accept. ``handle_preeval_exception``
             # logs+Sentry+raises HTTPException(500) under cte_only/all
@@ -994,6 +1088,33 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
                         "not persisted. Set STRICT_FSMA_VALIDATION=false "
                         "only for temporary migration windows."
                     ),
+                },
+            ) from exc
+        # An event whose CTE type is not supported is a client-actionable
+        # REJECTION, not a server fault — but every other ValueError below
+        # falls through to a bare ``raise`` and surfaces as an unhandled 500.
+        # Two distinct paths produce one:
+        #   * the legacy write, where ``_validate_event_type`` refuses a
+        #     non-CTE ``event_type`` (FSMA ``growing`` / CBV ``planting`` are
+        #     real bizSteps that are simply not among the 7 s1.1310 CTEs), and
+        #   * the canonical dual-write, which raises ``UnmappedBizStepError``
+        #     (a ValueError subclass) for the same inputs (#2815).
+        # The canonical path runs unguarded whenever the event is not
+        # idempotent, so this is reachable under the DEFAULT
+        # ``RULES_ENGINE_ENFORCE=off`` too, not only under enforcement.
+        if type(exc).__name__ == "UnmappedBizStepError" or (
+            "is not a recognized FSMA 204 CTE type" in str(exc)
+        ):
+            logger.warning(
+                "epcis_ingest_refused_unsupported_cte_type tenant=%s error=%s",
+                tenant_id,
+                str(exc),
+            )
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "unsupported_cte_type",
+                    "message": str(exc),
                 },
             ) from exc
         raise

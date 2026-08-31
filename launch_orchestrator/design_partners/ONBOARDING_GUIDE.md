@@ -271,7 +271,7 @@ Response shows:
 All API requests require the `X-RegEngine-API-Key` header:
 
 ```bash
-X-RegEngine-API-Key: dp_sandbox_abc123...
+X-RegEngine-API-Key: rge_abc123....xyz789...
 ```
 
 ### Rate Limits

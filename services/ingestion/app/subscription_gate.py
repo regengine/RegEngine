@@ -19,12 +19,84 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+import threading
+from typing import Any, Optional
 
 from fastapi import HTTPException, Request
+from starlette.concurrency import run_in_threadpool
+
 from shared.circuit_breaker import CircuitOpenError, redis_circuit
 
 logger = logging.getLogger("subscription-gate")
+
+# #2849: the Redis client is process-wide and cached. It used to be built
+# inline in ``_check_subscription_and_redis_health``, so every gated request
+# constructed a fresh client *and* a fresh ConnectionPool, opened a TCP (and,
+# for ``rediss://``, TLS) connection, issued one HGET, and dropped the client
+# without closing it. On the ingest hot path that is a connection per request
+# against Redis' connection limit, plus the full setup cost on every call.
+# redis-py clients are thread-safe and pool internally, so one client per URL
+# is the intended usage.
+_redis_client: Any = None
+_redis_client_url: Optional[str] = None
+_redis_client_lock = threading.Lock()
+
+
+def _get_redis_client(redis_url: str) -> Any:
+    """Return the cached Redis client for ``redis_url``, building it once.
+
+    Re-keyed on the URL so a changed ``REDIS_URL`` (tests, credential
+    rotation) rebuilds rather than silently keeping a client pointed at the
+    old host.
+    """
+    global _redis_client, _redis_client_url
+
+    client = _redis_client
+    if client is not None and _redis_client_url == redis_url:
+        return client
+
+    with _redis_client_lock:
+        # Re-check under the lock: another thread may have won the race.
+        if _redis_client is not None and _redis_client_url == redis_url:
+            return _redis_client
+
+        import redis as redis_lib
+
+        stale = _redis_client
+        _redis_client = redis_lib.from_url(
+            redis_url,
+            decode_responses=True,
+            # #2849: bound both halves of the round-trip. This call runs in a
+            # worker thread now, and an unbounded client would pin one of the
+            # (finite) threadpool threads for as long as Redis hangs.
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        _redis_client_url = redis_url
+        if stale is not None:
+            try:
+                stale.close()
+            except Exception:  # pragma: no cover - best-effort pool teardown
+                pass
+        return _redis_client
+
+
+def reset_redis_client() -> None:
+    """Drop the cached client so the next check rebuilds it.
+
+    Used by tests (each of which patches ``redis.from_url`` with its own
+    mock) and available to operators after a credential rotation.
+    """
+    global _redis_client, _redis_client_url
+
+    with _redis_client_lock:
+        client, _redis_client, _redis_client_url = _redis_client, None, None
+
+    if client is not None:
+        try:
+            client.close()
+        except Exception:  # pragma: no cover - best-effort pool teardown
+            pass
 
 
 def _fail_open_override_enabled() -> bool:
@@ -75,6 +147,11 @@ def _check_subscription_and_redis_health(tenant_id: str) -> tuple[Optional[str],
     can distinguish "no key" from "Redis down" — the former is 402, the
     latter is 503). A ``None`` status with ``redis_available=True`` means
     Redis is healthy but the tenant has no billing key.
+
+    This is synchronous and blocking on purpose — it is the sync half of the
+    gate, shared with ``supplier_portal``. Async callers must not call it
+    directly; ``require_active_subscription`` offloads it to a threadpool
+    (#2849).
     """
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
@@ -82,10 +159,10 @@ def _check_subscription_and_redis_health(tenant_id: str) -> tuple[Optional[str],
         return None, False
 
     try:
-        import redis as redis_lib
-
+        # The circuit check stays ahead of client construction so an open
+        # breaker still short-circuits without touching Redis at all.
         redis_circuit._check_state()
-        client = redis_lib.from_url(redis_url, decode_responses=True)
+        client = _get_redis_client(redis_url)
         status = client.hget(f"billing:tenant:{tenant_id}", "status")
         redis_circuit._record_success()
         return status, True
@@ -138,7 +215,13 @@ async def require_active_subscription(request: Request) -> None:
         return
 
     try:
-        status, redis_available = _check_subscription_and_redis_health(tenant_id)
+        # #2849: ``_check_subscription_and_redis_health`` is synchronous
+        # redis-py. Running it inline on the event loop — which this
+        # ``async def`` dependency used to do — serialized the whole worker
+        # behind one blocking TCP round-trip per gated ingest request. The
+        # module attribute is looked up at call time so tests that patch it
+        # still take effect.
+        status, redis_available = await run_in_threadpool(_check_subscription_and_redis_health, tenant_id)
     except CircuitOpenError:
         logger.warning(
             "subscription_gate_circuit_open tenant_id=%s (denying paid access)",

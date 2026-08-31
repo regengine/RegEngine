@@ -1,21 +1,35 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3, Clock, Tag } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { BLOG_POST_TITLES, type BlogPostSlug } from '@/lib/blog-posts';
 
 export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
   description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
   openGraph: {
+    url: 'https://regengine.co/blog',
+    siteName: 'RegEngine',
     title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
     description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
     type: 'website',
   },
 };
 
-const BLOG_POSTS = [
+type BlogPost = {
+  slug: BlogPostSlug;
+  excerpt: string;
+  icon: LucideIcon;
+  date: string;
+  readTime: string;
+};
+
+// Slugs are typed against BLOG_POST_SLUGS so a post added here without being
+// added to the shared list (and therefore the sitemap) fails typecheck.
+// Titles live in that shared list too — the social cards render from them.
+const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'fsma-204-compliance-guide',
-    title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
     excerpt: 'What is FSMA 204? Requirements, deadlines, Critical Tracking Events, and what your food business needs to do to comply.',
     icon: BookOpen,
     date: 'April 2026',
@@ -23,7 +37,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'fsma-204-mid-market-guide',
-    title: 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
     excerpt: 'How mid-market companies (10-500 employees) navigate FSMA 204 without disrupting operations or breaking the budget.',
     icon: Users,
     date: 'April 2026',
@@ -31,7 +44,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'fda-food-traceability-requirements',
-    title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
     excerpt: 'Understand FDA requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement in detail.',
     icon: FileText,
     date: 'April 2026',
@@ -39,7 +51,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'fsma-204-compliance-checklist-2026',
-    title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
     excerpt: 'A step-by-step checklist to prepare for FSMA 204. What to do now before the July 2028 deadline.',
     icon: CheckSquare,
     date: 'April 2026',
@@ -47,7 +58,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'regengine-vs-spreadsheets-traceability',
-    title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
     excerpt: 'Why spreadsheets fail at FSMA 204 compliance and how RegEngine solves the audit trail, scale, and 24-hour response problems.',
     icon: BarChart3,
     date: 'April 2026',
@@ -55,7 +65,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'food-traceability-software',
-    title: 'Food Traceability Software: How to Choose the Right Platform',
     excerpt: 'Evaluate food traceability platforms by capability, integration, compliance coverage, and total cost of ownership.',
     icon: Database,
     date: 'April 2026',
@@ -63,7 +72,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'fsma-204-cte-kde-guide',
-    title: 'CTEs and KDEs Explained: A Practical Guide to FSMA 204 Data Requirements',
     excerpt: 'Deep dive into the 7 Critical Tracking Events and Key Data Elements your system needs to capture.',
     icon: Leaf,
     date: 'April 2026',
@@ -71,7 +79,6 @@ const BLOG_POSTS = [
   },
   {
     slug: 'fsma-204-traceability-lot-codes',
-    title: 'FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide',
     excerpt: 'Learn how to assign, track, and maintain Traceability Lot Codes under FSMA 204. Covers TLC requirements, best practices, and common mistakes for food businesses.',
     icon: Tag,
     date: 'March 2026',
@@ -79,7 +86,6 @@ const BLOG_POSTS = [
   },
   {
     slug: '24-hour-rule',
-    title: 'The FSMA 204 24-Hour Rule Explained',
     excerpt: 'The FDA can request your traceability records within 24 hours of a recall or outbreak. Learn what records you need, how to organize them, and how to respond in time.',
     icon: Clock,
     date: 'March 2026',
@@ -126,7 +132,7 @@ export default function BlogPage() {
 
                   {/* Content */}
                   <h3 className="text-lg sm:text-xl font-semibold text-[var(--re-text-primary)] mb-3 group-hover:text-[var(--re-brand)] transition-colors duration-300 line-clamp-3">
-                    {post.title}
+                    {BLOG_POST_TITLES[post.slug]}
                   </h3>
                   <p className="text-[var(--re-text-secondary)] leading-relaxed mb-6 flex-grow line-clamp-2">
                     {post.excerpt}

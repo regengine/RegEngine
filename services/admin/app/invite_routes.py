@@ -16,7 +16,7 @@ from shared.pagination import PaginationParams
 from shared.permissions import can_invite_role
 from shared.pii import mask_email
 from shared.rate_limit import limiter
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
@@ -270,7 +270,7 @@ async def create_invite(
     db.flush()  # Ensure ID is generated
 
     # Audit Log
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
         event_type="invite.create",
@@ -281,6 +281,26 @@ async def create_invite(
         actor_id=current_user.id,
         metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_create_audit_chain_write_failed_aborting",
+            tenant_id=str(tenant_id),
+            invite_id=str(new_invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite creation was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
     db.refresh(new_invite)
@@ -374,7 +394,7 @@ async def revoke_invite(
 
     invite.revoked_at = datetime.now(timezone.utc)
 
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
         event_type="invite.revoke",
@@ -385,9 +405,59 @@ async def revoke_invite(
         actor_id=current_user.id,
         metadata={"revoked_by": str(current_user.id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_revoke_audit_chain_write_failed_aborting",
+            tenant_id=str(tenant_id),
+            invite_id=str(invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite revocation was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
     return {"status": "revoked"}
+
+
+def _uses_postgres(db: Session) -> bool:
+    """True only for a real PostgreSQL bind.
+
+    Opt-IN rather than opt-out: RLS and the v113 function exist on PostgreSQL
+    and nowhere else, so the SQLite fixture (and any test double) keeps the
+    direct read it has always had.
+    """
+    bind = getattr(db, "bind", None)
+    return bool(bind) and getattr(getattr(bind, "dialect", None), "name", None) == "postgresql"
+
+
+def _resolve_invite_tenant(db: Session, token_hash: str) -> UUID | None:
+    """Resolve an invite's tenant from its token hash, before tenant context.
+
+    Returns ``None`` when the token matches no still-usable invite, and on any
+    non-PostgreSQL bind, which has neither RLS nor the v113 function — there
+    the caller reads ``invites`` directly, as before.
+    """
+    if not _uses_postgres(db):
+        return None
+
+    row = db.execute(
+        text("SELECT get_invite_tenant_by_token_hash(:token_hash)"),
+        {"token_hash": token_hash},
+    ).scalar()
+    if row is None:
+        return None
+    return row if isinstance(row, UUID) else UUID(str(row))
 
 
 # --- Public Endpoint ---
@@ -412,6 +482,23 @@ async def accept_invite(
 
     # Verify Token (hashed lookup; tokens stay opaque at rest).
     token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+
+    # #2899: this route is unauthenticated, so no tenant context exists yet —
+    # and public.invites is FORCE RLS under tenant_isolation_invites, whose
+    # get_tenant_context() RAISES when app.tenant_id is unset (v097). Reading
+    # the table directly therefore 500'd for every invitee. v113 adds a
+    # SELECT-only policy arm keyed on the token hash; the function below arms
+    # it for one statement and returns nothing but the invite's tenant_id.
+    # Binding that tenant is what makes every statement after this point
+    # authorised by the ordinary tenant policies.
+    invite_tenant_id = _resolve_invite_tenant(db, token_hash)
+    if invite_tenant_id is not None:
+        TenantContext.set_tenant_context(db, invite_tenant_id)
+    elif _uses_postgres(db):
+        # Fail closed: unknown, revoked, accepted or expired token. Proceeding
+        # would read invites with no tenant context and 500 instead of
+        # returning the uniform 400 (#1337).
+        raise generic_400
 
     invite = db.execute(select(InviteModel).where(InviteModel.token_hash == token_hash)).scalar_one_or_none()
 
@@ -485,7 +572,7 @@ async def accept_invite(
     accepted_at = datetime.now(timezone.utc)
     invite.accepted_at = accepted_at
 
-    AuditLogger.log_event(
+    audit_entry_id = AuditLogger.log_event(
         db,
         tenant_id=invite.tenant_id,
         event_type="invite.accept",
@@ -496,6 +583,26 @@ async def accept_invite(
         actor_id=user.id,
         metadata={"role_id": str(invite.role_id)},
     )
+    if audit_entry_id is None:
+        logger.error(
+            "invite_accept_audit_chain_write_failed_aborting",
+            tenant_id=str(invite.tenant_id),
+            invite_id=str(invite.id),
+        )
+        # ``log_event`` may have left the session in an aborted transaction;
+        # roll back before raising so no partial work is committed.
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "audit_write_failed",
+                "message": (
+                    "Could not write the required audit-chain entry. "
+                    "Invite acceptance was aborted — no change was committed."
+                ),
+            },
+        )
+
 
     db.commit()
 

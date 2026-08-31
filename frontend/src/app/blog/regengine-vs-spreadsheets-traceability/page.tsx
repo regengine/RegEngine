@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
   description: 'Why spreadsheets fail for FSMA 204 compliance. Learn how RegEngine solves the audit trail, scale, and 24-hour response problems.',
   openGraph: {
+    url: 'https://regengine.co/blog/regengine-vs-spreadsheets-traceability',
+    siteName: 'RegEngine',
     title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
     description: 'Why spreadsheets fail for FSMA 204 compliance. Learn how RegEngine solves the audit trail, scale, and 24-hour response problems.',
     type: 'article',

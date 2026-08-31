@@ -52,8 +52,11 @@ This document defines procedures to recover RegEngine services in the event of s
 ### 3.1 PostgreSQL
 
 ```bash
-# Automated daily backup (via cron or ECS scheduled task)
-pg_dump -h $DB_HOST -U regengine regengine_admin | \
+# Automated daily backup (via cron or ECS scheduled task).
+# The consolidated monolith keeps ALL tables — including the admin
+# subsystem's — in the 'regengine' database; no migration chain populates
+# the legacy 'regengine_admin' database, so dumping it backs up nothing.
+pg_dump -h $DB_HOST -U regengine regengine | \
   gzip | \
   aws s3 cp - s3://regengine-backups/postgres/$(date +%Y-%m-%d).sql.gz
 ```

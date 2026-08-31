@@ -133,6 +133,10 @@ export function DrillSimulatorClient() {
         if (files && files[0]) {
             processFile(files[0]);
         }
+        // processFile is a stable component-scope handler recreated each render;
+        // listing it here would give this drop handler a new identity on every
+        // render and defeat the useCallback that keeps the drop zone stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {

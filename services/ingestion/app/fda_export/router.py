@@ -74,6 +74,8 @@ from .queries import (
     format_export_log_rows,
     log_recall_export,
     log_v2_export,
+    ExportOverflowError,
+    reconstruct_full_export_events,
     rows_to_event_dicts,
     v2_rows_to_event_dicts,
 )
@@ -332,6 +334,7 @@ def export_fda_spreadsheet(
                 query_end_date=end_date,
                 generated_by=generated_by,
                 export_type="fda_spreadsheet_package" if format == "package" else "fda_spreadsheet",
+                include_pii=include_pii,
             )
             db_session.commit()
         except Exception as exc:
@@ -569,41 +572,27 @@ def export_all_events(
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
 
-        _EXPORT_LIMIT = 10000
-        events, total = persistence.query_all_events(
-            tenant_id=tenant_id,
-            start_date=start_date,
-            end_date=end_date,
-            event_type=event_type,
-            limit=_EXPORT_LIMIT,
-        )
-
         # Expand all distinct seed TLCs through transformation_links and fetch
-        # their events in a *bounded* number of DB round-trips (#2515). The
-        # previous implementation looped ``query_events_by_tlc`` once per
-        # distinct TLC — one recursive-CTE traversal + one unbounded events
-        # SELECT per lot — which fanned out into O(distinct_TLCs) sequential
-        # queries on a single pooled connection. ``query_events_by_tlcs`` does
-        # the same transformation-link expansion and event fetch as a single
-        # set-based query, capped at ``_EXPORT_LIMIT`` rows.
-        tlcs = list({evt["traceability_lot_code"] for evt in events})
-        full_events = persistence.query_events_by_tlcs(
-            tenant_id=tenant_id,
-            tlcs=tlcs,
-            start_date=start_date,
-            end_date=end_date,
-            limit=_EXPORT_LIMIT,
-        )
-
-        # Deduplicate by event ID (defensive — the set-based query returns each
-        # event once, but keep the guard so output is identical to the prior
-        # per-TLC implementation).
-        seen = set()
-        deduped = []
-        for e in full_events:
-            if e["id"] not in seen:
-                seen.add(e["id"])
-                deduped.append(e)
+        # their events in a *bounded* number of DB round-trips (#2515), via
+        # the helper ``/export/verify`` also calls so the two can never
+        # reconstruct the same export differently (#2898).
+        try:
+            deduped, total = reconstruct_full_export_events(
+                persistence,
+                tenant_id=tenant_id,
+                start_date=start_date,
+                end_date=end_date,
+                event_type=event_type,
+            )
+        except ExportOverflowError as exc:
+            # #2860: refuse rather than deliver a silently truncated regulatory
+            # package, matching /export/v2's 413 above.
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"{exc} Narrow the date range or request a paginated/offline export."
+                ),
+            ) from exc
 
         # EPIC-L (#1655): no empty-success exports. An FDA-oriented CSV
         # with zero data rows looks identical to a complete "no compliance
@@ -642,6 +631,8 @@ def export_all_events(
                 query_end_date=end_date,
                 generated_by=generated_by,
                 export_type="fda_export_all_package" if format == "package" else "fda_export_all",
+                include_pii=include_pii,
+                query_event_type=event_type,
             )
             db_session.commit()
         except Exception as exc:
@@ -699,10 +690,9 @@ def export_all_events(
             "X-Total-Count": str(total),
             "X-PII-Redacted": "false" if include_pii else "true",
         }
-        if total > _EXPORT_LIMIT:
-            compliance_headers["X-Truncated"] = (
-                f"Result set truncated to {_EXPORT_LIMIT} events out of {total}. Use date filters to narrow the query."
-            )
+        # No X-Truncated header: as of #2860 an over-limit export is refused with
+        # 413 above rather than delivered partial, so this path cannot be reached
+        # with a seed count over the export limit.
         if kde_coverage < 0.80:
             compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
 
@@ -1228,6 +1218,7 @@ def export_fda_spreadsheet_v2(
 async def get_merkle_root(
     tenant_id: str = Query(..., description="Tenant identifier"),
     principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Return the current Merkle root for a tenant's hash chain."""
     # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.
@@ -1248,6 +1239,7 @@ async def get_merkle_proof(
     tenant_id: str = Query(..., description="Tenant identifier"),
     event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
     principal: IngestionPrincipal = Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Return a Merkle inclusion proof for a specific event."""
     # #2461 / EPIC-A: bind query tenant to principal + seed RLS contextvar.

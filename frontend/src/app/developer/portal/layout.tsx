@@ -1,12 +1,12 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { DeveloperPortalShell } from '@/components/developer/DeveloperPortalShell';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export default async function DeveloperPortalLayout({ children }: { children: React.ReactNode }) {
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('re_access_token')?.value;
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (!accessToken) {
+    if (!user) {
         redirect('/login?next=/developer/portal');
     }
 

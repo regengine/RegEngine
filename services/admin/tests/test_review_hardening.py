@@ -96,6 +96,13 @@ class CapturingFakeSession:
         return _Result()
 
     def flush(self):
+        # A real flush assigns AuditLogModel's autoincrement BigInteger PK.
+        # #2857 makes review decisions abort when log_event returns None, and
+        # log_event returns entry.id — so a fake flush that never assigns an id
+        # makes a successful write indistinguishable from a failed one.
+        for entry in self.audit_sink:
+            if getattr(entry, "id", None) is None:
+                entry.id = len(self.audit_sink)
         return None
 
     def refresh(self, item):
@@ -153,8 +160,9 @@ def tracker_with_audit():
         hallucination_events_total,
     )
 
+    # #2867: hallucination_active_reviews is unlabelled now — no ._metrics.
     hallucination_events_total._metrics.clear()  # type: ignore[attr-defined]
-    hallucination_active_reviews._metrics.clear()  # type: ignore[attr-defined]
+    hallucination_active_reviews.set(0)
 
     storage: dict[UUID, object] = {}
     audit_sink: list = []

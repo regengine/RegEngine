@@ -46,6 +46,57 @@ class UserActionResponse(BaseModel):
     status: str
 
 
+def _other_authenticating_owners(db: Session, tenant_id: UUID, exclude_user_id: UUID) -> list:
+    """Lock and return this tenant's Owner memberships, excluding ``exclude_user_id``,
+    that belong to someone who can actually authenticate.
+
+    #2906: the last-Owner invariant used to count every Owner *row*. Deactivation
+    is a soft delete (``membership.is_active = False`` below), so an already
+    offboarded Owner still satisfied the guard and an admin could strip the
+    tenant of every Owner who can log in — a self-sealing lockout, because
+    ``reactivate_user`` is itself gated by ``users.manage_roles``.
+
+    "Can authenticate" is taken from the auth code, not invented here:
+
+    * ``dependencies.get_current_user`` rejects the request (logging
+      ``deactivated_user_access_attempt``) when ``not membership.is_active``, so
+      an inactive membership confers zero capability on any admin route.
+    * every credential-establishing path — ``auth/session_auth``,
+      ``auth/webauthn_router``, ``auth/challenges_router``,
+      ``auth/email_code_router`` — additionally requires
+      ``users.global_status == 'active'`` and ``users.status == 'active'``, so a
+      globally disabled user can never obtain a new session. The scheduler's
+      ``disable_inactive_accounts`` sweep sets ``users.status = 'disabled'``
+      automatically after 90 days (NIST AC-2(3)) and ``invite_routes`` refuses to
+      reinstate a non-active user, so that state arrives without an admin acting
+      and is not repairable from this surface.
+
+    The guard therefore fails closed. It does not wedge a tenant: the *stale*
+    Owner is the excluded target, so cleaning one up is always allowed while a
+    healthy Owner remains, and promoting a replacement Owner is ungated.
+
+    ``of=MembershipModel`` keeps #1083's ``SELECT ... FOR UPDATE`` serialization
+    on the membership rows only. Without it PostgreSQL would also lock the joined
+    ``roles`` row (system roles are shared across every tenant) and the joined
+    ``users`` rows (written by every login), turning the guard into a
+    cross-tenant contention and deadlock surface.
+    """
+    return db.execute(
+        select(MembershipModel)
+        .join(RoleModel, MembershipModel.role_id == RoleModel.id)
+        .join(UserModel, MembershipModel.user_id == UserModel.id)
+        .where(
+            MembershipModel.tenant_id == tenant_id,
+            RoleModel.name == "Owner",
+            MembershipModel.user_id != exclude_user_id,
+            MembershipModel.is_active.is_(True),
+            UserModel.status == "active",
+            UserModel.global_status == "active",
+        )
+        .with_for_update(of=MembershipModel)
+    ).all()
+
+
 # --- Endpoints ---
 
 
@@ -144,18 +195,9 @@ async def update_user_role(
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner" and target_role.name != "Owner":
         # Lock every Owner membership for this tenant so another
-        # concurrent demotion can't commit in parallel.
-        locked_owners = db.execute(
-            select(MembershipModel)
-            .join(RoleModel)
-            .where(
-                MembershipModel.tenant_id == tenant_id,
-                RoleModel.name == "Owner",
-                MembershipModel.user_id != user_id,
-            )
-            .with_for_update()
-        ).all()
-        if not locked_owners:
+        # concurrent demotion can't commit in parallel, and count only
+        # the Owners who can actually authenticate (#2906).
+        if not _other_authenticating_owners(db, tenant_id, user_id):
             raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
 
     # Update
@@ -207,17 +249,7 @@ async def deactivate_user(
 
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner":
-        locked_owners = db.execute(
-            select(MembershipModel)
-            .join(RoleModel)
-            .where(
-                MembershipModel.tenant_id == tenant_id,
-                RoleModel.name == "Owner",
-                MembershipModel.user_id != user_id,
-            )
-            .with_for_update()
-        ).all()
-        if not locked_owners:
+        if not _other_authenticating_owners(db, tenant_id, user_id):
             raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
 
     # Soft delete (tenant-scoped deactivation, not global user disable).

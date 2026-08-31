@@ -19,6 +19,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 QA_HEALTH_SCHEMA_VERSION = "1.0"
 QA_HEALTH_MAX_BYTES = 256 * 1024
 
+# How old the artifact may be before the dashboard refuses to present it as
+# current. ``qa-health.yml`` rebuilds on every push to main and develop, so a
+# healthy artifact is hours old; anything measured in days means the pipeline
+# that produces it is not reaching this deployment. Seven days is deliberately
+# generous — this must catch "nothing has refreshed this in weeks", not flag a
+# quiet weekend.
+QA_HEALTH_MAX_AGE_DAYS = float(os.getenv("QA_HEALTH_MAX_AGE_DAYS", "7"))
+
 QAHealthStatus = Literal["passing", "failing", "degraded", "unavailable", "invalid_artifact"]
 QASuiteStatus = Literal["passed", "failed", "degraded", "skipped", "unavailable"]
 QASeverity = Literal["critical", "high", "medium", "low", "info"]
@@ -176,8 +184,55 @@ def load_qa_health_summary(path: Path | None = None) -> QAHealthResponse:
             path=summary_path,
         )
 
+    stale_note = _staleness_note(summary.generated_at)
+    if stale_note:
+        # A snapshot that nothing has refreshed is not "the latest CI
+        # artifact", and presenting one as current is worse than presenting
+        # nothing: the numbers look authoritative and are simply old. This
+        # deployment shipped a build-time copy frozen at 2026-07-23 for weeks,
+        # labelled "Latest CI artifact", because the only freshness check on
+        # the file was a size cap.
+        #
+        # ``unavailable`` rather than a new status value on purpose. It is
+        # already in ``QAHealthStatus`` and already handled by every consumer,
+        # so the honest answer needs no contract change to be understood — and
+        # the note carries the age for whoever is looking.
+        return _fallback_summary(
+            status="unavailable",
+            note=stale_note,
+            path=summary_path,
+        )
+
     sanitized = _scrub_value(summary.model_dump(mode="json"))
     return QAHealthResponse.model_validate(sanitized)
+
+
+def _staleness_note(generated_at: str) -> str | None:
+    """Return an explanatory note when ``generated_at`` is too old, else None.
+
+    An unparseable timestamp is treated as stale. The alternative — trusting a
+    value we could not read — is how a frozen artifact passes for a fresh one.
+    """
+    if QA_HEALTH_MAX_AGE_DAYS <= 0:
+        return None
+
+    try:
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return "QA health summary artifact has an unreadable generated_at timestamp."
+
+    if generated.tzinfo is None:
+        generated = generated.replace(tzinfo=timezone.utc)
+
+    age_days = (datetime.now(timezone.utc) - generated).total_seconds() / 86400
+    if age_days <= QA_HEALTH_MAX_AGE_DAYS:
+        return None
+
+    return (
+        f"QA health summary artifact is stale — generated {age_days:.0f} days ago "
+        f"({generated_at}), past the {QA_HEALTH_MAX_AGE_DAYS:.0f}-day limit. "
+        "Nothing has refreshed it, so its results are not reported."
+    )
 
 
 def _fallback_summary(*, status: QAHealthStatus, note: str, path: Path) -> QAHealthResponse:

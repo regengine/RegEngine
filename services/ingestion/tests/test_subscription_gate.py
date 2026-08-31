@@ -40,6 +40,21 @@ async def protected_route():
     return {"ok": True}
 
 
+@pytest.fixture(autouse=True)
+def _fresh_redis_client():
+    """#2849: the gate now caches one pooled Redis client per process.
+
+    Every test below patches ``redis.from_url`` with its own mock, so the
+    cache has to be dropped between them or the second test would keep
+    answering from the first test's mock.
+    """
+    from app.subscription_gate import reset_redis_client
+
+    reset_redis_client()
+    yield
+    reset_redis_client()
+
+
 @pytest.fixture
 def fresh_circuit():
     """Provide a fresh redis_circuit and reset it after each test."""

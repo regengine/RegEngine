@@ -112,11 +112,15 @@ async def trace_forward_endpoint(
     """
     start_time = time.time()
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        result = await trace_forward(client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            result = await trace_forward(client, tlc, max_depth, str(tenant_id), enforce_time_arrow=enforce_time_arrow)
 
         # Record metrics
         duration = time.time() - start_time
@@ -131,7 +135,8 @@ async def trace_forward_endpoint(
         # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            get_audit_log().log(
+            # #2848: dispatch the blocking audit write off the event loop.
+            await get_audit_log().alog(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
                 target_id=tlc,
@@ -233,11 +238,15 @@ async def trace_backward_endpoint(
     """
     start_time = time.time()
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        result = await trace_backward(client, tlc, max_depth, str(tenant_id))
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            result = await trace_backward(client, tlc, max_depth, str(tenant_id))
 
         # Record metrics
         duration = time.time() - start_time
@@ -252,7 +261,8 @@ async def trace_backward_endpoint(
         # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            get_audit_log().log(
+            # #2848: dispatch the blocking audit write off the event loop.
+            await get_audit_log().alog(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
                 target_id=tlc,
@@ -307,16 +317,21 @@ async def lot_timeline_endpoint(
     with associated facility information.
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        timeline = await get_lot_timeline(client, tlc, str(tenant_id))
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            timeline = await get_lot_timeline(client, tlc, str(tenant_id))
 
         # #1033 + RE-SEC-006: KDE_READ audit (FSMA 204 / NIST AU-2)
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         try:
-            get_audit_log().log(
+            # #2848: dispatch the blocking audit write off the event loop.
+            await get_audit_log().alog(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
                 target_id=tlc,
@@ -442,7 +457,6 @@ async def search_traceability_events(
     This endpoint is optimized for NLP query adapters and dashboard search UIs.
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     now = datetime.now(timezone.utc).date()
     effective_end = end_date or now.isoformat()
@@ -450,18 +464,23 @@ async def search_traceability_events(
     normalized_cte = cte_type.upper() if cte_type else None
 
     try:
-        events = await query_events_by_range(
-            client,
-            effective_start,
-            effective_end,
-            str(tenant_id),
-            product_contains=product_contains,
-            facility_contains=facility_contains,
-            cte_type=normalized_cte,
-            limit=limit + 1,
-            starting_after=starting_after,
-        )
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            events = await query_events_by_range(
+                client,
+                effective_start,
+                effective_end,
+                str(tenant_id),
+                product_contains=product_contains,
+                facility_contains=facility_contains,
+                cte_type=normalized_cte,
+                limit=limit + 1,
+                starting_after=starting_after,
+            )
 
         has_more = len(events) > limit
         page_events = events[:limit]
@@ -471,7 +490,8 @@ async def search_traceability_events(
         _actor = getattr(api_key, "key_id", str(api_key)) if api_key else "API"
         _search_target = f"search:{effective_start}:{effective_end}"
         try:
-            get_audit_log().log(
+            # #2848: dispatch the blocking audit write off the event loop.
+            await get_audit_log().alog(
                 action=FSMAAuditAction.KDE_READ,
                 target_type="KDE",
                 target_id=_search_target,
@@ -599,7 +619,17 @@ async def log_traceability_event(
     event_id = str(uuid.uuid4())
 
     try:
-        async with client.session() as session:
+        # #2833: entering the client as a context manager closes the
+        # driver — and its connection pool — on every exit path. The
+        # explicit close that used to sit inside the try was skipped
+        # whenever the session work or the canonical bridge below it
+        # raised, leaking a driver (and pool) per failed request behind
+        # the generic 500 handler.
+        # `async with client` rather than `async with Neo4jClient(...) as
+        # client`: __aenter__ returns self, so the two are equivalent for
+        # the real client, and this form keeps working for callers that
+        # hold the constructed instance (test doubles included).
+        async with client, client.session() as session:
             # Create TraceEvent
             trace_event = TraceEvent(
                 event_id=event_id,
@@ -619,7 +649,12 @@ async def log_traceability_event(
                 unit_of_measure=payload.uom,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Lot.merge_cypher(), tlc=payload.tlc, properties=lot.node_properties)
+            await session.run(
+                Lot.merge_cypher(),
+                tlc=payload.tlc,
+                tenant_id=str(tenant_id),
+                properties=lot.node_properties,
+            )
 
             # Create/Merge Facility
             facility = Facility(
@@ -627,7 +662,10 @@ async def log_traceability_event(
                 tenant_id=str(tenant_id),
             )
             await session.run(
-                Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties
+                Facility.merge_cypher(),
+                gln=payload.location_identifier,
+                tenant_id=str(tenant_id),
+                properties=facility.node_properties,
             )
 
             # Link Relationships
@@ -659,7 +697,12 @@ async def log_traceability_event(
                     extraction_timestamp=datetime.now().isoformat(),
                     tenant_id=str(tenant_id),
                 )
-                await session.run(Document.merge_cypher(), document_id=doc_id, properties=document.node_properties)
+                await session.run(
+                    Document.merge_cypher(),
+                    document_id=doc_id,
+                    tenant_id=str(tenant_id),
+                    properties=document.node_properties,
+                )
                 # Link Document to Event — tenant-scoped to prevent cross-tenant
                 # edges when a document_id or event_id collides across tenants (#1284).
                 await session.run(
@@ -669,8 +712,6 @@ async def log_traceability_event(
                     tenant_id=str(tenant_id),
                 )
                 logger.info("secured_evidence_payload", doc_id=doc_id, event_id=event_id)
-
-        await client.close()
 
         # Bridge to canonical pipeline so mobile events are visible to
         # FDA export, compliance scoring, and the canonical records API.
@@ -758,6 +799,5 @@ async def log_traceability_event(
         }
 
     except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
-        await client.close()
         logger.error("mobile_event_logging_failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to persist event: {str(e)}")

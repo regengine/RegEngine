@@ -4,6 +4,12 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'FSMA 204 Developer Integration Guide | RegEngine',
   description: 'Build your FSMA 204 traceability program on RegEngine APIs. CTEs, KDEs, FDA Request Mode, supply chain tracing, and hash-manifest verification.',
+  openGraph: {
+    title: 'FSMA 204 Developer Integration Guide | RegEngine',
+    description: 'Build your FSMA 204 traceability program on RegEngine APIs: CTEs, KDEs, FDA Request Mode, and hash-manifest verification.',
+    url: 'https://regengine.co/docs/fsma-204',
+    type: 'article',
+  },
 };
 import { ArrowLeft, Utensils, CheckCircle, Clock, FileText, Zap, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 import { T as _T } from '@/lib/design-tokens';
@@ -360,7 +366,7 @@ export default function FSMA204GuidePage() {
                         color: 'var(--re-text-tertiary)',
                         overflowX: 'auto',
                     }}>
-                        <code>Traceability Lot Code, Traceability Lot Code Description, Product Description, Quantity, Unit of Measure, Location Description, Location Identifier (GLN), Date, Time, Reference Document Type, Reference Document Number</code>
+                        <code>Traceability Lot Code, Event Type (CTE), Product Description, Quantity, Unit of Measure, Location Description, Location Identifier (GLN), Date, Time, Reference Document Type, Reference Document Number</code>
                     </div>
                 </section>
 

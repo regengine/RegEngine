@@ -434,6 +434,9 @@ class TestPendingDrainedOnCheckout_Issue1196:
                     "id": "cs_test",
                     "customer": "cus_OLD",
                     "subscription": "sub_OLD",
+                    # #2930: a settled checkout — an entitling status is only
+                    # written for a payment Stripe reports as collected.
+                    "payment_status": "paid",
                     "metadata": {"plan_id": "growth", "billing_period": "monthly", "tenant_id": "tenant-OLD"},
                     "customer_email": "user@example.com",
                 },
@@ -466,6 +469,9 @@ class TestPendingDrainedOnCheckout_Issue1196:
                     "id": "cs_plain",
                     "customer": "cus_PLAIN",
                     "subscription": "sub_PLAIN",
+                    # #2930: a settled checkout — an entitling status is only
+                    # written for a payment Stripe reports as collected.
+                    "payment_status": "no_payment_required",
                     "metadata": {"plan_id": "growth", "billing_period": "monthly", "tenant_id": "tenant-PLAIN"},
                     "customer_email": "user@example.com",
                 },

@@ -30,6 +30,56 @@ def set_tenant_context(tenant_id: str, request_id: str) -> None:
     _request_id_ctx.set(request_id)
 
 
+def bind_tenant_log_context(tenant_id: str) -> Optional[contextvars.Token]:
+    """Bind ``tenant_id`` so every subsequent log line in this request carries it.
+
+    #2859: ``merge_contextvars`` now runs first in the processor chain, so
+    ``correlation_id`` and ``request_id`` reach log lines via the bindings
+    made by CorrelationIdMiddleware / RequestIDMiddleware. Nothing performed
+    the equivalent binding for ``tenant_id``, so ``_inject_service_context``
+    fell through to the ``"unknown"`` placeholder on every request even when
+    TenantContextMiddleware had successfully resolved a tenant.
+
+    Both mechanisms this module supports are seeded, because they feed
+    different consumers:
+
+    * ``structlog.contextvars`` — merged into the event dict by
+      ``merge_contextvars``, which is what puts the value on the log line.
+    * the raw :data:`_tenant_id_ctx` ContextVar — read by
+      :func:`_capture_observability_context`, so a background task or
+      APScheduler job enqueued during this request inherits the tenant
+      instead of recording ``"unknown"``.
+
+    Returns the ContextVar token to hand back to
+    :func:`unbind_tenant_log_context`, or ``None`` if ``tenant_id`` is empty.
+    """
+    if tenant_id is None:
+        return None
+    tenant_id = str(tenant_id)
+    if not tenant_id:
+        return None
+    token = _tenant_id_ctx.set(tenant_id)
+    structlog.contextvars.bind_contextvars(tenant_id=tenant_id)
+    return token
+
+
+def unbind_tenant_log_context(token: Optional[contextvars.Token] = None) -> None:
+    """Undo :func:`bind_tenant_log_context` (#2859).
+
+    Mirrors the ``finally`` cleanup RequestIDMiddleware / CorrelationIdMiddleware
+    perform, so one request's tenant can never bleed into the next request
+    served on the same context.
+    """
+    structlog.contextvars.unbind_contextvars("tenant_id")
+    if token is not None:
+        try:
+            _tenant_id_ctx.reset(token)
+        except ValueError:
+            # Token was created in a different Context (task boundary); that
+            # Context — and the value set in it — is discarded anyway.
+            pass
+
+
 # ---------------------------------------------------------------------------
 # Context propagation helpers for background tasks and APScheduler jobs.
 #
@@ -187,22 +237,56 @@ def _inject_service_context(logger_instance, method_name, event_dict):
     """Inject service name, tenant_id, and request_id into every log record.
 
     These fields are required for multi-tenant isolation audit compliance.
+
+    Resolution order per field (#2859):
+      1. Whatever ``structlog.contextvars.merge_contextvars`` already merged
+         into the event dict — that processor runs *first* in the chain, so
+         bindings made by CorrelationIdMiddleware / RequestIDMiddleware /
+         TenantContextMiddleware are authoritative.
+      2. The raw ContextVars seeded by :func:`set_tenant_context` /
+         :func:`_restore_observability_context` (background jobs, worker
+         threads, Kafka consumers).
+      3. The literal ``"unknown"`` placeholder, so the audit fields are
+         never simply absent from a record.
+
+    A previously-bound literal ``"unknown"`` is treated as "no value" so a
+    real ContextVar value still wins over a stale placeholder.
     """
     event_dict.setdefault("service", os.getenv("SERVICE_NAME", "regengine"))
-    event_dict.setdefault("tenant_id", _tenant_id_ctx.get("unknown"))
-    event_dict.setdefault("request_id", _request_id_ctx.get("unknown"))
+
+    for key, ctx_var in (("tenant_id", _tenant_id_ctx), ("request_id", _request_id_ctx)):
+        bound = event_dict.get(key)
+        if bound and bound != "unknown":
+            # merge_contextvars (or an explicit bind on the call) already
+            # supplied a real value — never clobber it.
+            continue
+        value = ctx_var.get("unknown")
+        event_dict[key] = value if value else "unknown"
+
     return event_dict
 
 
 # Configure base structlog processors with JSON output and audit fields
 structlog.configure(
     processors=[
+        # #2859: MUST be first. Without it every binding made by
+        # CorrelationIdMiddleware / RequestIDMiddleware / TenantContextMiddleware
+        # via structlog.contextvars.bind_contextvars is silently discarded and
+        # every log line reads tenant_id="unknown" / request_id="unknown".
+        # Running first also means _inject_service_context sees the real values
+        # already present in the event dict and leaves them alone.
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
         _inject_service_context,
+        # #2855: MUST run before the renderer. logger.exception() sets
+        # exc_info=True; without this processor JSONRenderer emits a bare
+        # {"exc_info": true} and the traceback never reaches production logs.
+        # (log_config.configure_logging has always had this — see #556.)
+        structlog.processors.format_exc_info,
         structlog.processors.JSONRenderer(),
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),

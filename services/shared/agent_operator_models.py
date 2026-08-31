@@ -127,8 +127,13 @@ class AgentArtifactModel(Base):
             name="fk_agent_artifacts_run_tenant",
             ondelete="RESTRICT",
         ),
-        CheckConstraint("artifact_version = 'agent-artifact.v1'", name="ck_agent_artifacts_version"),
-        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="ck_agent_artifacts_confidence"),
+        # Names match the v080 DDL that actually created these constraints.
+        # They used to be ck_agent_artifacts_version / _confidence, which meant
+        # autogenerate saw an ORM constraint the database did not have and a
+        # database constraint the ORM did not claim — invisible while alembic
+        # ignored CHECK constraints, an add/remove pair from 1.19 onward.
+        CheckConstraint("artifact_version = 'agent-artifact.v1'", name="agent_artifacts_artifact_version_check"),
+        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="agent_artifacts_confidence_check"),
         # NOTE: the database versions of these indexes order created_at DESC
         # (v080). SQLAlchemy reflection cannot round-trip the DESC element,
         # so they are name-quarantined from the drift gate in alembic/env.py.
@@ -193,9 +198,10 @@ class AgentArtifactReviewModel(Base):
             name="fk_agent_reviews_receipt_tenant",
             ondelete="RESTRICT",
         ),
+        # Name matches the v080 DDL — see the note on agent_artifacts above.
         CheckConstraint(
             "status IN ('pending', 'accepted', 'rejected', 'needs_more_evidence')",
-            name="ck_agent_reviews_status",
+            name="agent_artifact_reviews_status_check",
         ),
         # Database version orders created_at DESC (v080) — name-quarantined
         # from the drift gate (see alembic/env.py).

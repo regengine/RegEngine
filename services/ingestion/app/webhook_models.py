@@ -320,6 +320,30 @@ class IngestResponse(BaseModel):
     ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+class CsvIngestResponse(IngestResponse):
+    """Response from POST /api/v1/ingest/csv (#2892).
+
+    The CSV path is the only ingest surface that computes per-row KDE
+    warnings, so the two extra fields live here rather than on the shared
+    ``IngestResponse`` — the webhook endpoint would otherwise advertise a
+    signal it never produces.
+
+    Both fields carry defaults, so they stay out of the schema's
+    ``required`` set: a body cached by the idempotency middleware before
+    this shipped (24h TTL) still validates against the new schema when it
+    is replayed.
+    """
+
+    kde_warnings: List[str] = Field(
+        default_factory=list,
+        description="Per-row warnings for rows missing required FSMA key data elements.",
+    )
+    kde_warning_count: int = Field(
+        default=0,
+        description="Number of entries in kde_warnings.",
+    )
+
+
 class RecentEventsResponse(BaseModel):
     """Response from the /recent events endpoint."""
 

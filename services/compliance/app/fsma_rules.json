@@ -174,8 +174,8 @@
         },
         {
           "id": "da-5",
-          "title": "Packing CTE Records",
-          "description": "Record TLC, pack date, package size, and production line at the PACKING CTE.",
+          "title": "Finished Product Packaging Records",
+          "description": "Record the new TLC, pack date, package size, and production line for finished dairy product at the TRANSFORMATION CTE.",
           "category": "CTE",
           "priority": "HIGH"
         },
@@ -279,7 +279,7 @@
         {
           "id": "eg-5",
           "title": "Packing CTE Records",
-          "description": "Record pack date, facility registration, lot size, and carton count at packing.",
+          "description": "Record pack date, facility registration, lot size, and carton count at the INITIAL_PACKING CTE.",
           "category": "CTE",
           "priority": "HIGH"
         },

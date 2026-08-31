@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 import uuid as uuid_module
 from datetime import datetime, timezone
@@ -124,25 +125,101 @@ def _detect_default(docker_name: str) -> str:
     return docker_name
 
 
+# Former standalone services now consolidated into THIS FastAPI process.
+# On Railway their routers are mounted in-process, so a loopback /health
+# call is a tautological self-check (#2750): it returns 200 whenever this
+# app can answer at all, so ingestion/compliance could never be reported
+# unhealthy even with, say, an exhausted DB pool. In the consolidated
+# topology we probe their REAL dependencies (DB, Redis) instead.
+_CONSOLIDATED_ROUTERS = ("ingestion", "compliance")
+
+
+def _is_consolidated() -> bool:
+    """True when running as the consolidated monolith (Railway).
+
+    Mirrors the Railway detection in ``_detect_default`` so the two stay in
+    lockstep: whenever ``_detect_default`` would resolve a former standalone
+    service to loopback (i.e. it lives in THIS process), this returns True.
+    """
+    return bool(
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_ENVIRONMENT_NAME")
+        or os.getenv("RAILWAY_PROJECT_ID")
+    )
+
+
 def _get_service_urls() -> Dict[str, str]:
-    """Build service health-check URLs from env vars or fallback to Docker/Railway defaults."""
-    ingestion = os.getenv(
-        "INGESTION_SERVICE_URL",
-        _detect_default("http://ingestion-api:8002"),
-    )
-    compliance = os.getenv(
-        "COMPLIANCE_SERVICE_URL",
-        _detect_default("http://compliance-api:8500"),
-    )
-    urls = {
-        "ingestion": f"{ingestion.rstrip('/')}/health",
-        "compliance": f"{compliance.rstrip('/')}/health",
-    }
-    # Graph service is optional — only check if explicitly configured
+    """Build health-check URLs for genuinely REMOTE services only.
+
+    In the consolidated (Railway) topology the ingestion and compliance
+    routers run in THIS process; their health is checked via real
+    dependency probes in ``get_system_status`` rather than a loopback HTTP
+    self-check (#2750). An explicit INGESTION_SERVICE_URL /
+    COMPLIANCE_SERVICE_URL override (e.g. a real separate deployment) is
+    still honored as a genuine remote HTTP check.
+    """
+    urls: Dict[str, str] = {}
+    consolidated = _is_consolidated()
+
+    ingestion_override = os.getenv("INGESTION_SERVICE_URL")
+    compliance_override = os.getenv("COMPLIANCE_SERVICE_URL")
+
+    # Only emit an HTTP check when the target is genuinely remote: either
+    # not consolidated (docker-compose, where _detect_default returns a real
+    # peer hostname) or an explicit override pointing at a real deployment.
+    if ingestion_override or not consolidated:
+        ingestion = ingestion_override or _detect_default("http://ingestion-api:8002")
+        urls["ingestion"] = f"{ingestion.rstrip('/')}/health"
+    if compliance_override or not consolidated:
+        compliance = compliance_override or _detect_default("http://compliance-api:8500")
+        urls["compliance"] = f"{compliance.rstrip('/')}/health"
+
+    # Graph service is optional and genuinely remote — keep the real HTTP
+    # check whenever it is explicitly configured.
     graph = os.getenv("GRAPH_SERVICE_URL")
     if graph:
         urls["graph"] = f"{graph.rstrip('/')}/v1/labels/health"
     return urls
+
+
+def _probe_database(db: Session) -> tuple[bool, str]:
+    """Real DB connectivity probe (``SELECT 1``) via the admin session.
+
+    This is the dependency a degraded ingestion/compliance path actually
+    relies on — unlike the old loopback self-check, it goes red when the
+    database is unreachable.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        return True, "ok"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("system_status_db_probe_failed", error=str(exc))
+        return False, f"error: {type(exc).__name__}"
+
+
+async def _probe_redis(redis_url: str) -> tuple[bool, str]:
+    """PING Redis and report (ok, detail).
+
+    ``redis.asyncio`` is imported lazily so environments without redis
+    installed (and without REDIS_URL set) are entirely unaffected — the
+    probe only runs when REDIS_URL is configured.
+    """
+    try:
+        import redis.asyncio as aioredis  # noqa: PLC0415
+
+        client = aioredis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+        try:
+            await client.ping()
+            return True, "ok"
+        finally:
+            close = getattr(client, "aclose", None) or getattr(client, "close", None)
+            if close is not None:
+                res = close()
+                if inspect.isawaitable(res):
+                    await res
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("system_status_redis_probe_failed", error=str(exc))
+        return False, f"error: {type(exc).__name__}"
 
 
 def _get_ingestion_base() -> str:
@@ -195,15 +272,52 @@ async def _get_internal_no_redirect(client, url: str, **kwargs):
 
 
 @router.get("/status", response_model=SystemStatusResponse)
-async def get_system_status(current_user: UserModel = Depends(get_current_user)):
+async def get_system_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
     service_urls = _get_service_urls()
 
-    async with resilient_client(timeout=10.0, circuit_name="system-health") as client:
-        tasks = []
-        for name, url in service_urls.items():
-            tasks.append(check_service_health(client, name, url))
+    results: List[ServiceHealth] = []
+    if service_urls:
+        async with resilient_client(timeout=10.0, circuit_name="system-health") as client:
+            tasks = [check_service_health(client, name, url) for name, url in service_urls.items()]
+            results = list(await asyncio.gather(*tasks))
 
-        results = await asyncio.gather(*tasks)
+    # In the consolidated (Railway) topology the ingestion and compliance
+    # routers run in THIS process. The old loopback /health self-check was a
+    # tautology — 200 whenever the app could answer at all (#2750). Report
+    # them as in-process and back their status with REAL dependency probes:
+    # a DB SELECT 1 and, when configured, a Redis PING. The entry goes
+    # unhealthy when a downstream dependency is down, not when a separate
+    # HTTP service (that no longer exists) is unreachable.
+    if _is_consolidated():
+        db_ok, db_detail = _probe_database(db)
+
+        redis_url = os.getenv("REDIS_URL")
+        redis_ok, redis_detail = True, None
+        if redis_url:
+            redis_ok, redis_detail = await _probe_redis(redis_url)
+
+        deps_healthy = db_ok and redis_ok
+        for name in _CONSOLIDATED_ROUTERS:
+            # An explicit *_SERVICE_URL override already produced a genuine
+            # remote entry above — don't shadow it with an in-process one.
+            if any(r.name == name for r in results):
+                continue
+            details: Dict[str, Any] = {
+                "mode": "in-process (consolidated)",
+                "database": db_detail,
+            }
+            if redis_url:
+                details["redis"] = redis_detail
+            results.append(
+                ServiceHealth(
+                    name=name,
+                    status="healthy" if deps_healthy else "unhealthy",
+                    details=details,
+                )
+            )
 
     # "unavailable" means unreachable from this host (not a real outage)
     # Only count truly "unhealthy" services as degraded

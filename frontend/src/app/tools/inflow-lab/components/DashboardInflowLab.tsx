@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
-    CheckCircle2,
     ChevronRight,
     ClipboardList,
     GraduationCap,
@@ -20,7 +19,6 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Tutorial } from "@/components/ui/tutorial";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
@@ -35,10 +33,12 @@ import {
     summarizeSourceSuppliers,
     type ExceptionPatternId,
 } from "../lib/exception-grouping";
+import { EvidenceChain } from "./EvidenceChain";
 import {
-    INFLOW_LAB_TUTORIAL_STEPS,
     INFLOW_LAB_TUTORIAL_STORAGE_KEY,
     InflowLabTutorialBanner,
+    buildInflowLabTutorialSteps,
+    dismissInflowLabTutorialBanner,
 } from "./InflowLabTutorial";
 
 type CteState = "complete" | "missing";
@@ -181,26 +181,6 @@ cooling,TLC-SBX-20260506-021,Spring Mix,184,cases,Salinas Cooling Hub,2026-05-06
 initial_packing,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Packing House,2026-05-06T14:31:00Z,,,PACK-021
 shipping,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Shipping Dock,2026-05-06T18:06:00Z,GreenLeaf Packing House,North Bay DC,BOL-021
 receiving,TLC-SBX-20260506-021,Spring Mix,182,cases,North Bay DC,2026-05-07T01:14:00Z,GreenLeaf Shipping Dock,North Bay DC,REC-021`;
-const EXPLAINER_STEPS = [
-    {
-        title: "What goes in",
-        detail: "Supplier CSV rows with lot codes, CTE timestamps, facilities, and shipping references.",
-    },
-    {
-        title: "What the machine does",
-        detail: "Normalizes row formats, reconstructs each lot lifecycle, and groups the missing KDE or handoff defects.",
-    },
-    {
-        title: "What comes out",
-        detail: "A readiness score, a fix queue by pattern, and a lot-by-lot trace that shows where evidence dropped.",
-    },
-] as const;
-const DEFAULT_PROOF_INPUTS = [
-    "Harvest timestamp from supplier field team",
-    "Cooling confirmation from pre-cool facility",
-    "Packing and shipping handoff from pack house",
-    "DC receiving confirmation before export staging",
-] as const;
 const FILTER_CHIPS: { id: "all" | ExceptionPatternId; label: string }[] = [
     { id: "all", label: "all" },
     { id: "handoff", label: "handoff" },
@@ -422,6 +402,63 @@ function toTraceEvent(record: InflowRecord): TraceEvent {
     };
 }
 
+// The sandbox response carries no location/timestamp, so recover them from the
+// submitted CSV when it is simple enough to split safely. Quoted fields mean a
+// naive split would mangle rows — in that case fall back to row labels.
+function csvRowMetaByIndex(csv: string): { location?: string; timestamp?: string }[] {
+    if (csv.includes('"')) return [];
+    const lines = csv
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.length < 2) return [];
+    const header = lines[0].split(",").map((column) => column.trim().toLowerCase());
+    const locationIdx = header.indexOf("location_name");
+    const timestampIdx = header.indexOf("timestamp");
+    return lines.slice(1).map((line) => {
+        const cells = line.split(",");
+        return {
+            location: locationIdx >= 0 ? cells[locationIdx]?.trim() || undefined : undefined,
+            timestamp: timestampIdx >= 0 ? cells[timestampIdx]?.trim() || undefined : undefined,
+        };
+    });
+}
+
+// Turn a sandbox evaluation into the same TraceEvent shape the simulator feed
+// uses, so one evaluation lights up the funnel, exceptions, and lot-trace
+// panels instead of leaving them at zero.
+function sandboxResultToTraceEvents(result: SandboxEvaluationResult, csv: string): TraceEvent[] {
+    const rowMeta = csvRowMetaByIndex(csv);
+    return result.events.map((event) => {
+        const meta = rowMeta[event.event_index] ?? {};
+        const parsedTimestamp = meta.timestamp ? Date.parse(meta.timestamp) : Number.NaN;
+        return {
+            id: event.event_index + 1,
+            cte: event.cte_type,
+            lotCode: event.traceability_lot_code || `row-${event.event_index + 1}`,
+            product: event.product_description || "Uploaded traceability record",
+            location: meta.location || `Uploaded row ${event.event_index + 1}`,
+            timestamp: Number.isNaN(parsedTimestamp)
+                ? formatServiceTime(new Date().toISOString())
+                : formatServiceTime(new Date(parsedTimestamp).toISOString()),
+            mode: "uploaded",
+            attempts: 1,
+            deliveryStatus: event.compliant ? "posted" : "generated",
+        };
+    });
+}
+
+function lineageByLotFromEvents(traceEvents: TraceEvent[]): Record<string, LineageNode[]> {
+    return traceEvents.reduce<Record<string, LineageNode[]>>((current, event) => {
+        if (!current[event.lotCode]) {
+            current[event.lotCode] = toLineage(
+                traceEvents.filter((candidate) => candidate.lotCode === event.lotCode),
+            );
+        }
+        return current;
+    }, {});
+}
+
 function toLineage(eventsForLot: TraceEvent[]): LineageNode[] {
     const byCte = new Map(eventsForLot.map((event) => [event.cte, event]));
     return REQUIRED_CTES.map((cte) => {
@@ -496,6 +533,9 @@ function buildLotSummary(lotCode: string, lotEvents: TraceEvent[], lineage: Line
         lastLocation: lotEvents[0]?.location ?? "No location",
         supplier: supplier ?? undefined,
         cases: cases ?? undefined,
+        // Highest ingest sequence for the lot — the recency proxy the mixed
+        // group's "Sort by recency" uses (timestamps are display strings).
+        latestEventId: lotEvents.reduce((max, event) => Math.max(max, event.id), 0),
     };
 }
 
@@ -565,12 +605,21 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         source: false,
         mixed: false,
     });
-    const [selectedLotIds, setSelectedLotIds] = useState<Record<string, boolean>>({});
+    const [expandedLotGroups, setExpandedLotGroups] = useState<Partial<Record<ExceptionPatternId, boolean>>>({});
+    const [mixedLotSort, setMixedLotSort] = useState<"cases" | "recency" | null>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [showCsvDrawer, setShowCsvDrawer] = useState(false);
     const [isTutorialOpen, setIsTutorialOpen] = useState(false);
     const [proofLeadPulse, setProofLeadPulse] = useState(0);
     const [isProofLeadHighlighted, setIsProofLeadHighlighted] = useState(false);
+    // Remount key for the evidence chain. `animate-in` only fires on mount, so
+    // the staggered reveal needs a fresh key each time an evaluation lands —
+    // otherwise re-running just swaps classes and nothing moves.
+    const [chainRunKey, setChainRunKey] = useState(0);
+    useEffect(() => {
+        setChainRunKey((key) => key + 1);
+    }, [serviceEvents]);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const exceptionsSectionRef = useRef<HTMLDivElement>(null);
     const selectedLotPanelRef = useRef<HTMLDivElement>(null);
@@ -735,6 +784,23 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     const exportReadyCount = exportReadyLots.length;
 
     const exceptionGroups = useMemo(() => groupExceptionsByPattern(exceptionLots), [exceptionLots]);
+
+    // Groups default to only "handoff" open; if the data's exceptions live in
+    // another pattern the panel would render nothing but a collapsed heading.
+    // Open every group that actually has lots when the grouping changes.
+    useEffect(() => {
+        setOpenGroups((current) => {
+            let changed = false;
+            const next = { ...current };
+            for (const group of exceptionGroups) {
+                if (group.lots.length > 0 && !next[group.id]) {
+                    next[group.id] = true;
+                    changed = true;
+                }
+            }
+            return changed ? next : current;
+        });
+    }, [exceptionGroups]);
     const sourceSupplierBreakdown = useMemo(() => {
         const sourceGroup = exceptionGroups.find((group) => group.id === "source");
         return sourceGroup ? summarizeSourceSuppliers(sourceGroup.lots) : null;
@@ -789,9 +855,11 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             ? Math.round((feederResult.compliant_events / feederResult.total_events) * 100)
             : 0
         : null;
-    const connectionHealth = engineConnected ? 100 : 0;
+    // The simulator sidecar is an optional service: absent is "not measured",
+    // not a red 0% that silently drags the composite score down.
+    const connectionHealth = engineConnected ? 100 : null;
 
-    const readinessFactors: { id: string; label: string; value: number | null; tone: "ok" | "warn" | "bad" | "locked" }[] = [
+    const readinessFactors: { id: string; label: string; value: number | null; tone: "ok" | "warn" | "bad" | "locked"; lockedLabel?: string }[] = [
         {
             id: "kde",
             label: "KDE completeness",
@@ -815,12 +883,14 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             label: "Sandbox pass rate",
             value: sandboxPassRate,
             tone: sandboxPassRate === null ? "locked" : sandboxPassRate >= 75 ? "ok" : sandboxPassRate >= 50 ? "warn" : "bad",
+            lockedLabel: "not run",
         },
         {
             id: "connection",
             label: "Connection health",
             value: connectionHealth,
-            tone: connectionHealth >= 75 ? "ok" : connectionHealth >= 50 ? "warn" : "bad",
+            tone: connectionHealth === null ? "locked" : "ok",
+            lockedLabel: "offline",
         },
     ];
 
@@ -837,12 +907,25 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         : measuredFactors.length
         ? Math.round(measuredFactors.reduce((acc, f) => acc + f.value, 0) / measuredFactors.length)
         : 0;
-    const biggestGap = measuredFactors.length
+    // Before any data exists every measured factor ties at zero and "biggest
+    // gap" would land arbitrarily on the first one — suppress it until there
+    // is something real to rank.
+    const hasAnyRunData = totalLotCount > 0 || feederResult !== null;
+    const biggestGap = hasAnyRunData && measuredFactors.length
         ? measuredFactors.reduce((min, f) => (f.value < min.value ? f : min), measuredFactors[0])
         : null;
+    const scoreBadge = !hasAnyRunData
+        ? { label: "no data yet", className: "border-slate-200 bg-slate-50 text-slate-500" }
+        : compositeScore >= 80
+        ? { label: "export-ready", className: "border-emerald-200 bg-emerald-50 text-emerald-800" }
+        : compositeScore >= 50
+        ? { label: "needs work", className: "border-amber-200 bg-amber-50 text-amber-800" }
+        : { label: "at risk", className: "border-rose-200 bg-rose-50 text-rose-800" };
 
     const passingCount = exportReadyCount;
-    const previewReadyCount = feederResult ? feederResult.compliant_events : 0;
+    // Lots, not events — the funnel's earlier stages count lots, and mixing
+    // units let "Preview-ready 5" materialize out of a 1-lot pipeline.
+    const previewReadyCount = feederResult ? exportReadyCount : 0;
 
     const openFixCount = savedRun
         ? savedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
@@ -851,21 +934,35 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         ? latestSavedRun.fix_queue.filter((item) => item.status === "open" || item.status === "waiting").length
         : 0;
 
+    // Clears the pending evaluation, but deliberately NOT ``loadedRun`` — the
+    // "Latest saved workbench run" banner reflects server state and must not
+    // vanish just because the user typed in the CSV editor.
     const resetFeederPreview = () => {
         setFeederResult(null);
         setBackendReadiness(null);
         setFeederError(null);
         setIsSavingRun(false);
         setSavedRun(null);
-        setLoadedRun(null);
         setWorkbenchSaveNote(null);
         setWorkbenchSaveError(null);
+    };
+
+    // Opens the CSV editor and brings it into view — the header buttons that
+    // trigger it sit a full viewport above where the drawer mounts, and an
+    // off-screen state change reads as "the button did nothing".
+    const openCsvDrawer = () => {
+        setShowCsvDrawer(true);
+        requestAnimationFrame(() => {
+            document
+                .querySelector("[data-csv-drawer]")
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
     };
 
     const loadRealisticSample = () => {
         setFeederCsv(REALISTIC_SAMPLE_CSV);
         resetFeederPreview();
-        setShowCsvDrawer(true);
+        openCsvDrawer();
     };
 
     const handleFeederFile = (file: File | null) => {
@@ -874,7 +971,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         reader.onload = () => {
             setFeederCsv(String(reader.result || ""));
             resetFeederPreview();
-            setShowCsvDrawer(true);
+            openCsvDrawer();
         };
         reader.onerror = () => setFeederError("Could not read the selected CSV file.");
         reader.readAsText(file);
@@ -884,7 +981,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         const csvToEvaluate = csvOverride ?? feederCsv;
         if (!csvToEvaluate.trim()) {
             setFeederError("Paste CSV text or upload a CSV file before evaluating.");
-            setShowCsvDrawer(true);
+            openCsvDrawer();
             return;
         }
         if (csvOverride !== undefined) {
@@ -913,6 +1010,17 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             }
             const result = (await response.json()) as SandboxEvaluationResult;
             setFeederResult(result);
+            // Feed the evaluation into the same stores the simulator uses, so
+            // the funnel, exceptions, score, and lot-trace panels show the run
+            // the user just made instead of staying at zero.
+            const evaluatedEvents = sandboxResultToTraceEvents(result, csvToEvaluate);
+            if (evaluatedEvents.length) {
+                setServiceEvents(evaluatedEvents);
+                setServiceLineage(lineageByLotFromEvents(evaluatedEvents));
+                const evaluatedLots = Array.from(new Set(evaluatedEvents.map((event) => event.lotCode)));
+                const firstBlocked = evaluatedEvents.find((event) => event.deliveryStatus !== "posted")?.lotCode;
+                setSelectedLot(firstBlocked ?? evaluatedLots[0] ?? null);
+            }
             if (isAuthenticated && activeTenantId) {
                 try {
                     const readiness = await fetchWithCsrf("/api/ingestion/api/v1/inflow-workbench/readiness/preview", {
@@ -936,11 +1044,29 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         }
     };
 
-    const runGuidedProof = () => {
+    const runGuidedProof = async () => {
         resetFeederPreview();
         setShowCsvDrawer(true);
-        void evaluateFeederData(REALISTIC_SAMPLE_CSV);
+        await evaluateFeederData(REALISTIC_SAMPLE_CSV);
+        // Outside the walkthrough (which handles its own scrolling per step),
+        // bring the newly lit pipeline into view so the click has a visible
+        // consequence.
+        if (!isTutorialOpen) {
+            document
+                .querySelector('[data-testid="inflow-funnel"]')
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
     };
+
+    // The tutorial's "Run guided proof" action reads through a ref so the step
+    // array can stay referentially stable while the action always sees fresh
+    // component state.
+    const runGuidedProofRef = useRef(runGuidedProof);
+    runGuidedProofRef.current = runGuidedProof;
+    const tutorialSteps = useMemo(
+        () => buildInflowLabTutorialSteps({ runGuidedProof: () => void runGuidedProofRef.current() }),
+        [],
+    );
 
     const saveWorkbenchRun = async () => {
         if (!feederResult || !feederCsv.trim()) {
@@ -985,8 +1111,27 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         }
     };
 
-    const toggleLotSelection = (lotCode: string, checked: boolean) => {
-        setSelectedLotIds((current) => ({ ...current, [lotCode]: checked }));
+    // Serialize a group's blocked lots for the "Export to CSV" action —
+    // client-side download, no backend involved.
+    const exportGroupCsv = (groupId: ExceptionPatternId, lots: LotSummary[]) => {
+        const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+        const rows = [
+            ["lot_code", "product", "pattern", "missing_ctes", "delivery"],
+            ...lots.map((lot) => [
+                lot.lotCode,
+                lot.product,
+                groupId,
+                lot.missingCtes.join("; "),
+                lot.readiness.deliveryLabel,
+            ]),
+        ];
+        const csv = rows.map((row) => row.map(escape).join(",")).join("\n");
+        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `inflow-lab-${groupId}-exceptions.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
     };
 
     const focusProofLead = (target: "exceptions" | "selected" = "exceptions") => {
@@ -1021,9 +1166,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             : leadProofGroup?.id === "source"
             ? "Push the missing harvest or cooling KDEs back to the supplier feed, then re-test before promotion."
             : "Triage the lot individually, patch the missing KDEs, and confirm the lifecycle closes end to end.";
-    const proofAfterState = leadProofLot
-        ? `Once corrected, ${leadProofLot.product} moves from blocked evidence to preview-ready traceability.`
-        : "Once corrected, the blocked lot moves into the preview-ready path without touching production exports.";
     const leadLotLabel = leadProofLot ? leadProofLot.lotCode.slice(-6) : "active";
     const leadProductLabel = leadProofLot?.product ?? "Supplier lot";
     const leadPatternLabel = leadProofGroup?.label ?? "Missing handoff evidence";
@@ -1031,6 +1173,19 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         ? `Proof lead lot ${leadLotLabel} is dragging down ${biggestGap?.label?.toLowerCase() ?? "readiness"} because ${leadMissingEvidence} is still missing.`
         : "The current proof lead is the blocked lot holding readiness below export confidence.";
     const selectedLotIsProofLead = selectedLotData?.lotCode === leadProofLot?.lotCode;
+    // The walkthrough panel must never invent a defect: with no data it shows
+    // a get-started state, with clean data it reports the pass, and only a
+    // genuinely blocked lot produces the red defect breakdown.
+    const hasLotData = totalLotCount > 0;
+    const hasBlockedLead = Boolean(leadProofLot && !leadProofLot.readiness.exportReady);
+    // The five-CTE chain for whichever lot is leading the proof. Falls back to
+    // an all-missing skeleton so the chain still renders its five slots before
+    // any data arrives — EvidenceChain greys those out rather than reading them
+    // as defects.
+    const leadLineage = leadProofLot
+        ? serviceLineage[leadProofLot.lotCode] ??
+          toLineage(activeEvents.filter((event) => event.lotCode === leadProofLot.lotCode))
+        : toLineage([]);
 
     return (
         <main
@@ -1131,232 +1286,34 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     </div>
                 )}
 
-                <section
-                    aria-label="How Inflow Lab works"
-                    className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.9fr)]"
-                >
-                    <div
-                        className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                        style={{ display: "block" }}
-                    >
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                                    How it works
-                                </div>
-                                <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                                    Real supplier activity in. Clear failure evidence out.
-                                </h2>
-                                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                    Inflow Lab replays believable farm-to-DC lot activity, reconstructs the evidence
-                                    trail, and flags the exact missing KDEs blocking readiness. We show the evidence and
-                                    the fix recommendation, not the internal scoring recipe.
-                                </p>
-                            </div>
-                            <Badge
-                                variant="outline"
-                                className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700"
-                            >
-                                Trade-secret safe
-                            </Badge>
-                        </div>
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
-                            {EXPLAINER_STEPS.map((step) => (
-                                <div key={step.title} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                                    <div className="text-sm font-semibold text-slate-900">{step.title}</div>
-                                    <p className="mt-1 text-xs leading-5 text-slate-600">{step.detail}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div
-                        className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                        style={{ display: "block" }}
-                    >
-                        <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                            Example business activity
-                        </div>
-                        <h2 className="mt-1 text-base font-semibold text-slate-950">
-                            A produce handoff a buyer can recognize in seconds
-                        </h2>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-                            <KdeTile label="Product" value="Spring Mix" />
-                            <KdeTile label="Quantity" value="184 cases" />
-                            <KdeTile label="Supplier" value="Riverbend Organics" />
-                            <KdeTile label="Destination" value="North Bay DC" />
-                        </div>
-                        <p className="mt-3 text-xs leading-5 text-slate-600">
-                            Load a fabricated sample based on a common farm-to-DC trace so buyers can see the input
-                            shape, the caught break, and the fix path before any production feed is connected.
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2" data-tutorial="inflow-guided-proof">
-                            <Button
-                                type="button"
-                                className="h-8 bg-emerald-700 px-3 text-xs text-white hover:bg-emerald-800"
-                                onClick={runGuidedProof}
-                                disabled={isFeederEvaluating || isRunning}
-                            >
-                                {isFeederEvaluating ? (
-                                    <>
-                                        <RefreshCcw className="mr-2 h-3.5 w-3.5 animate-spin" />
-                                        Running
-                                    </>
-                                ) : (
-                                    <>
-                                        <Play className="mr-2 h-3.5 w-3.5" />
-                                        Run guided proof
-                                    </>
-                                )}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="h-8 border-slate-300 bg-white px-3 text-xs"
-                                onClick={loadRealisticSample}
-                            >
-                                Load sample flow
-                            </Button>
-                            <span className="text-xs text-slate-500">
-                                Harvest → cool → pack → ship → receive
-                            </span>
-                        </div>
-                    </div>
-                </section>
-
-                <section
-                    aria-label="Proof walkthrough"
-                    className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                    style={{ display: "block" }}
-                >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                            <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-                                Proof walkthrough
-                            </div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                                See the lot, the break, and the fastest path to clear it
-                            </h2>
-                            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                This should read like product proof: normal supplier activity comes in, the broken
-                                handoff is isolated, and the operator gets the next fix to unblock readiness.
-                            </p>
-                        </div>
-                        <Badge
-                            variant="outline"
-                            className="border-slate-200 bg-slate-50 text-[10px] text-slate-700"
-                        >
-                            Buyer-readable
-                        </Badge>
-                    </div>
-
-                    <div className="mt-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.35fr)]">
-                        <div className="space-y-3">
-                            <div className="rounded-md border border-slate-200 bg-white p-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                    Current proof point
-                                </div>
-                                <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
-                                    </div>
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-slate-500">Product</div>
-                                        <div className="mt-1 text-sm font-semibold text-slate-950">{leadProductLabel}</div>
-                                    </div>
-                                    <div className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2">
-                                        <div className="text-[11px] uppercase tracking-wider text-rose-700">Status</div>
-                                        <div className="mt-1 text-sm font-semibold text-rose-900">Readiness blocked</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="block rounded-md border border-slate-200 bg-white p-3">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                                    1. Incoming business activity
-                                </div>
-                                <p className="mt-2 text-xs leading-5 text-slate-600">
-                                    A normal leafy-greens handoff arrives as supplier rows, not perfect structured truth.
-                                </p>
-                                <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
-                                    {DEFAULT_PROOF_INPUTS.map((item) => (
-                                        <li key={item}>{item}</li>
-                                    ))}
-                                </ul>
-                            </div>
-
-                            <div className="block rounded-md border border-emerald-200 bg-emerald-50 p-3">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                    <Lightbulb className="h-4 w-4 text-emerald-700" />
-                                    3. Recommended fix path
-                                </div>
-                                <p className="mt-2 text-xs leading-5 text-slate-700">{leadFixPath}</p>
-                                <div className="mt-2 rounded-md border border-emerald-200 bg-white px-2.5 py-2 text-xs text-slate-700">
-                                    {proofAfterState}
-                                </div>
-                                {leadProofGroup && (
-                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            className="h-7 border-slate-300 bg-white px-2 text-xs"
-                                            onClick={() => focusProofLead("exceptions")}
-                                        >
-                                            Focus this defect
-                                        </Button>
-                                        <span className="text-[11px] text-slate-500">
-                                            Jumps to the exact pattern group already visible below.
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="block rounded-md border border-rose-200 bg-rose-50 p-4 shadow-sm shadow-rose-100/70">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                                        <AlertTriangle className="h-4 w-4 text-rose-600" />
-                                        2. Caught defect
-                                    </div>
-                                    <h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
-                                        Missing evidence stops this lot before export.
-                                    </h3>
-                                </div>
-                                <Badge className="border-0 bg-rose-600 text-[10px] text-white hover:bg-rose-600">
-                                    Blocked now
-                                </Badge>
-                            </div>
-
-                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Lot</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadLotLabel}</div>
-                                </div>
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Pattern</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadPatternLabel}</div>
-                                </div>
-                                <div className="rounded-md border border-rose-200 bg-white px-3 py-2">
-                                    <div className="text-[11px] uppercase tracking-wider text-slate-500">Missing</div>
-                                    <div className="mt-1 text-sm font-semibold text-slate-950">{leadMissingEvidence}</div>
-                                </div>
-                            </div>
-
-                            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-700">
-                                {leadProofLot
-                                    ? `${leadProductLabel} lot ${leadLotLabel} is blocked because ${leadMissingEvidence} is missing from the handoff chain.`
-                                    : `The current test set is blocked because ${leadMissingEvidence} is missing from the handoff chain.`}
-                            </p>
-                            <div className="mt-3 rounded-md border border-rose-200 bg-white px-3 py-3 text-sm text-slate-700">
-                                RegEngine reconstructs the lifecycle, isolates the exact break, and points the operator to
-                                the missing evidence instead of returning a generic failure.
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                <EvidenceChain
+                    nodes={leadLineage}
+                    hasData={hasLotData}
+                    isBlocked={hasBlockedLead}
+                    isBusy={isFeederEvaluating || isRunning}
+                    lot={
+                        leadProofLot
+                            ? {
+                                  code: leadProofLot.lotCode,
+                                  product: leadProofLot.product,
+                                  supplier: leadProofLot.supplier,
+                                  cases: leadProofLot.cases,
+                              }
+                            : null
+                    }
+                    missingEvidence={leadMissingEvidence}
+                    patternLabel={leadPatternLabel}
+                    fixPath={leadFixPath}
+                    lotsAffected={leadProofGroup?.lots.length ?? null}
+                    rowsRead={activeEvents.length}
+                    lotCount={totalLotCount}
+                    runKey={chainRunKey}
+                    onRun={() => void runGuidedProof()}
+                    onLoadSample={loadRealisticSample}
+                    onFocusDefect={
+                        hasBlockedLead && leadProofGroup ? () => focusProofLead("exceptions") : null
+                    }
+                />
 
                 <section aria-label="Pipeline funnel" data-testid="inflow-funnel">
                     <div className="flex items-center justify-between">
@@ -1377,8 +1334,8 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                         <FunnelStep
                             id="validated"
                             label="Validated"
-                            value={String(totalLotCount)}
-                            sub="parse-clean"
+                            value={String(activeEvents.length)}
+                            sub="rows parse-clean"
                             tone="ok"
                             tag="schema"
                         />
@@ -1444,21 +1401,27 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         <span className="text-sm text-slate-500">/ 100</span>
                                         <Badge
                                             variant="outline"
-                                            className="ml-1 border-amber-200 bg-amber-50 text-[10px] text-amber-800"
+                                            className={`ml-1 text-[10px] ${scoreBadge.className}`}
                                         >
-                                            needs work
+                                            {scoreBadge.label}
                                         </Badge>
                                     </div>
-                                    <p className="mt-1 text-xs text-slate-500">Lowest factor sets the next fix.</p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        {hasAnyRunData
+                                            ? "Lowest factor sets the next fix."
+                                            : "Load data or run the guided proof to measure readiness."}
+                                    </p>
                                 </div>
                                 <div className="text-right text-xs text-slate-500">
-                                    <div>Δ since last run</div>
-                                    <div className="text-sm text-emerald-600">
-                                        {feederResult ? `${feederResult.compliant_events} passing` : "+0 (first run pending)"}
+                                    <div>Latest sandbox run</div>
+                                    <div className={feederResult ? "text-sm text-slate-700" : "text-sm text-slate-400"}>
+                                        {feederResult
+                                            ? `${feederResult.compliant_events} of ${feederResult.total_events} events passing`
+                                            : "not run yet"}
                                     </div>
                                     </div>
                                 </div>
-                            {leadProofLot && (
+                            {hasBlockedLead && (
                                 <div className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
                                     <span className="font-medium">Proof lead:</span> {readinessLeadNote}
                                     <div className="mt-2">
@@ -1488,7 +1451,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             variant="outline"
                                                             className="border-slate-200 bg-slate-50 text-[10px] text-slate-500"
                                                         >
-                                                            not run
+                                                            {factor.lockedLabel ?? "not run"}
                                                         </Badge>
                                                     )}
                                                     {isBiggestGap && (
@@ -1611,8 +1574,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                             </div>
                                             {group.bulkActionable && group.lots.length > 0 ? (
                                                 <Button
-                                                    type="button"
-                                                    onClick={(event) => event.preventDefault()}
+                                                    asChild
                                                     className={cn(
                                                         "h-8 px-3 text-xs",
                                                         group.id === "handoff"
@@ -1620,15 +1582,23 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                                                     )}
                                                 >
-                                                    {group.id === "handoff"
-                                                        ? `Fix all ${group.lots.length}`
-                                                        : `Fix all ${group.lots.length}`}
+                                                    <Link href="/exceptions" onClick={(event) => event.stopPropagation()}>
+                                                        {`Fix all ${group.lots.length}`}
+                                                    </Link>
                                                 </Button>
                                             ) : (
                                                 group.lots.length > 0 && (
                                                     <Button
                                                         type="button"
-                                                        onClick={(event) => event.preventDefault()}
+                                                        onClick={(event) => {
+                                                            // Inside <summary>: keep the click from toggling
+                                                            // the group closed while we open and focus it.
+                                                            event.preventDefault();
+                                                            setOpenGroups((current) => ({ ...current, [group.id]: true }));
+                                                            setActiveFilter(group.id);
+                                                            const firstLot = group.lots[0];
+                                                            if (firstLot) setSelectedLot(firstLot.lotCode);
+                                                        }}
                                                         variant="outline"
                                                         className="h-8 border-slate-300 bg-white px-3 text-xs"
                                                     >
@@ -1651,28 +1621,43 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             group.id === "source" ? sourceSupplierBreakdown : null
                                                         }
                                                         lotCount={group.lots.length}
+                                                        onUploadCsv={() => fileInputRef.current?.click()}
+                                                        onViewExample={loadRealisticSample}
+                                                        activeSort={mixedLotSort}
+                                                        onSortChange={setMixedLotSort}
+                                                        onExportCsv={() => exportGroupCsv(group.id, group.lots)}
                                                     />
                                                     <div className="overflow-hidden rounded-md border border-slate-200">
-                                                        {group.lots.slice(0, 6).map((lot) => (
+                                                        {(group.id === "mixed" && mixedLotSort
+                                                            ? [...group.lots].sort((a, b) =>
+                                                                  mixedLotSort === "cases"
+                                                                      ? (b.cases ?? 0) - (a.cases ?? 0) || b.events - a.events
+                                                                      : b.latestEventId - a.latestEventId,
+                                                              )
+                                                            : group.lots
+                                                        )
+                                                            .slice(0, expandedLotGroups[group.id] ? group.lots.length : 6)
+                                                            .map((lot) => (
                                                             <LotRow
                                                                 key={lot.lotCode}
                                                                 lot={lot}
                                                                 groupId={group.id}
                                                                 isSelected={lot.lotCode === selectedLot}
-                                                                checked={Boolean(selectedLotIds[lot.lotCode])}
-                                                                onCheckedChange={(checked) =>
-                                                                    toggleLotSelection(lot.lotCode, checked)
-                                                                }
                                                                 onSelect={() => setSelectedLot(lot.lotCode)}
                                                             />
                                                         ))}
-                                                        {group.lots.length > 6 && (
+                                                        {group.lots.length > 6 && !expandedLotGroups[group.id] && (
                                                             <div className="bg-slate-50 px-3 py-2 text-center text-xs text-slate-500">
                                                                 + {group.lots.length - 6} more lots in this pattern ·{" "}
                                                                 <button
                                                                     type="button"
                                                                     className="font-medium text-emerald-700 hover:underline"
-                                                                    onClick={() => undefined}
+                                                                    onClick={() =>
+                                                                        setExpandedLotGroups((current) => ({
+                                                                            ...current,
+                                                                            [group.id]: true,
+                                                                        }))
+                                                                    }
                                                                 >
                                                                     show all
                                                                 </button>
@@ -1726,7 +1711,16 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         Selected lot
                                     </div>
                                     {selectedLotData && (
-                                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900">
+                                        <Button
+                                            variant="ghost"
+                                            className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900"
+                                            onClick={() =>
+                                                exceptionsSectionRef.current?.scrollIntoView({
+                                                    behavior: "smooth",
+                                                    block: "start",
+                                                })
+                                            }
+                                        >
                                             Change
                                         </Button>
                                     )}
@@ -1832,7 +1826,24 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                         </div>
 
                                         <div className="mt-4 flex gap-2">
-                                            <Button className="h-9 flex-1 bg-emerald-700 text-xs text-white hover:bg-emerald-800">
+                                            <Button
+                                                className="h-9 flex-1 bg-emerald-700 text-xs text-white hover:bg-emerald-800"
+                                                onClick={() => {
+                                                    const group = exceptionGroups.find((candidate) =>
+                                                        candidate.lots.some(
+                                                            (lot) => lot.lotCode === selectedLotData?.lotCode,
+                                                        ),
+                                                    );
+                                                    if (group) {
+                                                        setActiveFilter(group.id);
+                                                        setOpenGroups((current) => ({ ...current, [group.id]: true }));
+                                                    }
+                                                    exceptionsSectionRef.current?.scrollIntoView({
+                                                        behavior: "smooth",
+                                                        block: "start",
+                                                    });
+                                                }}
+                                            >
                                                 Fix this lot
                                             </Button>
                                             <Button asChild variant="outline" className="h-9 border-slate-300 bg-white text-xs">
@@ -1858,6 +1869,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                 {showCsvDrawer && (
                     <section
                         aria-label="CSV input"
+                        data-csv-drawer
                         className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                     >
                         <div className="flex items-center justify-between">
@@ -1950,9 +1962,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             </div>
 
             <Tutorial
-                steps={INFLOW_LAB_TUTORIAL_STEPS}
+                steps={tutorialSteps}
                 isOpen={isTutorialOpen}
                 onClose={() => setIsTutorialOpen(false)}
+                onComplete={dismissInflowLabTutorialBanner}
                 storageKey={INFLOW_LAB_TUTORIAL_STORAGE_KEY}
             />
         </main>
@@ -2018,16 +2031,31 @@ function FunnelStep({
     );
 }
 
+// The FDA's traceability-rule page listing the required KDEs per CTE — the
+// authoritative reference the "View FSMA 204 KDE list" action points at.
+const FSMA_204_KDE_REFERENCE_URL =
+    "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods";
+
 function GroupRootCausePanel({
     groupId,
     sourceSupplierBreakdown,
     lotCount,
+    onUploadCsv,
+    onViewExample,
+    activeSort,
+    onSortChange,
+    onExportCsv,
 }: {
     groupId: ExceptionPatternId;
     sourceSupplierBreakdown:
         | ReturnType<typeof summarizeSourceSuppliers>
         | null;
     lotCount: number;
+    onUploadCsv: () => void;
+    onViewExample: () => void;
+    activeSort: "cases" | "recency" | null;
+    onSortChange: (sort: "cases" | "recency") => void;
+    onExportCsv: () => void;
 }) {
     if (groupId === "handoff") {
         return (
@@ -2042,14 +2070,19 @@ function GroupRootCausePanel({
                             Map the <code className="font-mono text-xs text-slate-800">handoff_evidence</code> column from your shipping CSV, or upload a corrected file with packing/shipping/DC-receive timestamps.
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                Map handoff fields
-                            </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                            <Button
+                                variant="outline"
+                                className="h-7 border-slate-300 bg-white px-2 text-xs"
+                                onClick={onUploadCsv}
+                            >
                                 Upload corrected CSV
                             </Button>
-                            <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                View example
+                            <Button
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-slate-500"
+                                onClick={onViewExample}
+                            >
+                                View a complete example
                             </Button>
                         </div>
                     </div>
@@ -2108,18 +2141,38 @@ function GroupRootCausePanel({
                             </div>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                <Mail className="mr-1.5 h-3.5 w-3.5" />
-                                Email suppliers
+                            <Button asChild variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                                <a
+                                    href={`mailto:?subject=${encodeURIComponent(
+                                        "Missing traceability timestamps in your supplier feed",
+                                    )}&body=${encodeURIComponent(
+                                        "Our preflight check found lots from your feed missing required timestamps:\n\n" +
+                                            [
+                                                ...(sourceSupplierBreakdown?.harvestSuppliers.map(
+                                                    (s) => `- ${s.supplier}: harvest timestamp missing on ${s.lotCount} lot(s)`,
+                                                ) ?? []),
+                                                ...(sourceSupplierBreakdown?.coolingSuppliers.map(
+                                                    (s) => `- ${s.supplier}: cooling timestamp missing on ${s.lotCount} lot(s)`,
+                                                ) ?? []),
+                                            ].join("\n") +
+                                            "\n\nPlease include these fields in the next file so the lots can pass traceability preflight.",
+                                    )}`}
+                                >
+                                    <Mail className="mr-1.5 h-3.5 w-3.5" />
+                                    Email suppliers
+                                </a>
                             </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
-                                Map source columns
-                            </Button>
-                            <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                            <Button
+                                variant="outline"
+                                className="h-7 border-slate-300 bg-white px-2 text-xs"
+                                onClick={onUploadCsv}
+                            >
                                 Upload supplier CSV
                             </Button>
-                            <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                View FSMA 204 KDE list
+                            <Button asChild variant="ghost" className="h-7 px-2 text-xs text-slate-500">
+                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noreferrer">
+                                    View FSMA 204 KDE list
+                                </a>
                             </Button>
                         </div>
                     </div>
@@ -2141,13 +2194,29 @@ function GroupRootCausePanel({
                         Each lot has a different combination of missing KDEs. A bulk fix would either over-match or under-match. Recommend triaging individually — start with the largest case counts.
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                        <Button
+                            variant="outline"
+                            aria-pressed={activeSort === "cases"}
+                            className={cn(
+                                "h-7 border-slate-300 bg-white px-2 text-xs",
+                                activeSort === "cases" && "border-emerald-300 bg-emerald-50 text-emerald-800",
+                            )}
+                            onClick={() => onSortChange("cases")}
+                        >
                             Sort by case count
                         </Button>
-                        <Button variant="outline" className="h-7 border-slate-300 bg-white px-2 text-xs">
+                        <Button
+                            variant="outline"
+                            aria-pressed={activeSort === "recency"}
+                            className={cn(
+                                "h-7 border-slate-300 bg-white px-2 text-xs",
+                                activeSort === "recency" && "border-emerald-300 bg-emerald-50 text-emerald-800",
+                            )}
+                            onClick={() => onSortChange("recency")}
+                        >
                             Sort by recency
                         </Button>
-                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500">
+                        <Button variant="ghost" className="h-7 px-2 text-xs text-slate-500" onClick={onExportCsv}>
                             <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
                             Export to CSV
                         </Button>
@@ -2162,15 +2231,11 @@ function LotRow({
     lot,
     groupId,
     isSelected,
-    checked,
-    onCheckedChange,
     onSelect,
 }: {
     lot: LotSummary;
     groupId: ExceptionPatternId;
     isSelected: boolean;
-    checked: boolean;
-    onCheckedChange: (checked: boolean) => void;
     onSelect: () => void;
 }) {
     const missingFieldsLabel = lot.missingCtes.length
@@ -2188,12 +2253,6 @@ function LotRow({
                 isSelected && "bg-emerald-50/40 outline outline-1 outline-emerald-200"
             )}
         >
-            <Checkbox
-                checked={checked}
-                onCheckedChange={(value) => onCheckedChange(value === true)}
-                aria-label={`Select ${lot.lotCode}`}
-                className="h-4 w-4 shrink-0"
-            />
             <button
                 type="button"
                 onClick={onSelect}
@@ -2228,7 +2287,11 @@ function LotRow({
             </button>
             <span className="ml-auto truncate text-xs text-slate-500">{missingFieldsLabel}</span>
             {groupId === "mixed" && (
-                <Button variant="ghost" className="h-6 px-2 text-[11px] text-slate-500 hover:text-slate-900">
+                <Button
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px] text-slate-500 hover:text-slate-900"
+                    onClick={onSelect}
+                >
                     Triage
                 </Button>
             )}

@@ -25,14 +25,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health-metrics"])
 
 
+# #2856: this is now the SOLE owner of ``GET /health``. Three handlers used to
+# claim that path — this one, ``admin_deep_health`` in
+# services/admin/app/routes.py, and a root liveness probe in server/main.py.
+# Starlette resolves first-match while FastAPI's OpenAPI ``paths`` dict is
+# last-write-wins, so the monolith served this handler and documented another.
+#
+# This handler kept the path (rather than the root one) because
+# ``services/ingestion/main.py`` has no ``/health`` of its own: the Inflow Lab
+# contract workflow boots that entrypoint and gates on ``GET /health`` both as
+# its readiness wait and as the source of ``inflow_contract_version``
+# (.github/workflows/inflow-contract-ci.yml). The other two moved instead —
+# root liveness to ``/health/live``, the admin dependency probe to
+# ``/health/deep``.
 @router.get("/health")
 def health() -> dict[str, object]:
-    """Health-check endpoint.
+    """Liveness / ingestion-posture endpoint.
 
     Returns ``"healthy"`` when all dependencies are reachable, or
     ``"degraded"`` when optional dependencies (e.g. Kafka) are
     unavailable.  Monitoring tools can alert on *degraded* without
     treating the service as fully down.
+
+    This is deliberately shallow: ``/readiness`` (server/main.py) is the
+    dependency-gated probe Railway polls, and ``/health/deep`` verifies
+    Postgres/Neo4j/Redis connectivity.
     """
     # Kafka is optional — only check if explicitly configured
     kafka_servers = _os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
@@ -67,12 +84,20 @@ def health() -> dict[str, object]:
     # cross-deploy contract skew instead of failing silently on live posts.
     from .webhook_models import INFLOW_CONTRACT_VERSION
 
+    # Which commit is answering. Without this, a rollout that fails its
+    # healthcheck and reverts under railway.toml's ON_FAILURE restart policy
+    # is invisible: the deploy workflow has already gone green and every probe
+    # afterwards asserts behaviour an old image satisfies perfectly. This is
+    # the field deploy.yml's post-deploy check compares against github.sha.
+    from shared.build_info import current_build_info
+
     return {
         "status": overall_status,
         "service": "regengine",
         "kafka": kafka_status,
         "webhook_hmac_configured": hmac_configured,
         "inflow_contract_version": INFLOW_CONTRACT_VERSION,
+        "build": current_build_info().public_dict(),
     }
 
 

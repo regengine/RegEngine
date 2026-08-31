@@ -268,32 +268,34 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.queryByText('Sandbox diagnosis')).not.toBeInTheDocument();
     });
 
-    it('shows a realistic business explainer without exposing internal scoring details', async () => {
+    it('shows the business activity as a traced chain without exposing internal scoring details', async () => {
         renderDashboardInflowLabPage();
 
+        const chain = await screen.findByTestId('inflow-evidence-chain');
+        // The handoff is shown as evidence rather than described in prose: every
+        // CTE from harvest to receive, ending in the consequence.
+        // Matched loosely because each label carries an sr-only state suffix,
+        // and the mock's location names ("cooling station") repeat the CTE word.
+        for (const cte of ['Harvesting', 'Cooling', 'Initial packing', 'Shipping', 'DC receiving']) {
+            expect(within(chain).getAllByText(cte, { exact: false }).length).toBeGreaterThan(0);
+        }
+        expect(within(chain).getByText('Export gate')).toBeInTheDocument();
+
+        // The scoring recipe stays internal — the chain reports what is missing
+        // and what to do about it, never how readiness is computed.
         expect(
-            await screen.findByRole('heading', {
-                name: 'Real supplier activity in. Clear failure evidence out.',
-            }),
-        ).toBeInTheDocument();
-        expect(screen.getByText('Trade-secret safe')).toBeInTheDocument();
-        expect(screen.getByText('What goes in')).toBeInTheDocument();
-        expect(screen.getByText('What the machine does')).toBeInTheDocument();
-        expect(screen.getByText('What comes out')).toBeInTheDocument();
-        expect(screen.getByText('A produce handoff a buyer can recognize in seconds')).toBeInTheDocument();
+            within(chain).queryByText(/weighting|coefficient|scoring model|formula/i),
+        ).not.toBeInTheDocument();
     });
 
-    it('renders a proof walkthrough with one defect and one fix path', async () => {
+    it('reports one lead defect and one fix path', async () => {
         renderDashboardInflowLabPage();
 
-        expect(
-            await screen.findByRole('heading', {
-                name: 'See the lot, the break, and the fastest path to clear it',
-            }),
-        ).toBeInTheDocument();
-        expect(screen.getByText('1. Incoming business activity')).toBeInTheDocument();
-        expect(screen.getByText('2. Caught defect')).toBeInTheDocument();
-        expect(screen.getByText('3. Recommended fix path')).toBeInTheDocument();
+        const chain = await screen.findByTestId('inflow-evidence-chain');
+        expect(await within(chain).findByText(/records? never arrived\./)).toBeInTheDocument();
+        expect(within(chain).getByText('Missing')).toBeInTheDocument();
+        expect(within(chain).getByText('Pattern')).toBeInTheDocument();
+        expect(within(chain).getByText('Lots affected')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Focus this defect' })).toBeInTheDocument();
     });
 
@@ -384,7 +386,10 @@ describe('Dashboard Inflow Lab', () => {
             if (!node) throw new Error('handoff group not rendered');
             return node as HTMLElement;
         });
-        expect(within(handoff).getByRole('button', { name: /^Fix all /i })).toBeInTheDocument();
+        // "Fix all" is a navigation into the fix queue, so it renders as a
+        // link (role=link) rather than an inert button.
+        const fixAll = within(handoff).getByRole('link', { name: /^Fix all /i });
+        expect(fixAll).toHaveAttribute('href', '/exceptions');
 
         // The mixed group, even when populated, must never carry a Fix all
         // bulk CTA per the audit (per-lot triage only). Filter to mixed and
@@ -452,7 +457,7 @@ describe('Dashboard Inflow Lab', () => {
 
         renderDashboardInflowLabPage();
 
-        await user.click(screen.getByRole('button', { name: 'Run guided proof' }));
+        await user.click(screen.getByRole('button', { name: /Run trace/ }));
 
         const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
         const textareaValue = (textarea as HTMLTextAreaElement).value;
@@ -490,7 +495,7 @@ describe('Dashboard Inflow Lab', () => {
         const user = userEvent.setup();
         renderDashboardInflowLabPage();
 
-        await user.click(screen.getByRole('button', { name: 'Run guided proof' }));
+        await user.click(screen.getByRole('button', { name: /Run trace/ }));
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenCalledWith(
@@ -689,7 +694,7 @@ describe('Dashboard Inflow Lab', () => {
         );
 
         expect(await screen.findByText('Step 1 of 7')).toBeInTheDocument();
-        expect(screen.getByText('Bring supplier data in')).toBeInTheDocument();
+        expect(screen.getByText('What Inflow Lab is')).toBeInTheDocument();
     });
 
     it('walks forward through the tutorial steps', async () => {
@@ -704,7 +709,7 @@ describe('Dashboard Inflow Lab', () => {
 
         await user.click(screen.getByRole('button', { name: /Next/i }));
         expect(await screen.findByText('Step 2 of 7')).toBeInTheDocument();
-        expect(screen.getByText('Know what the lab does')).toBeInTheDocument();
+        expect(screen.getByText('Bring supplier data in')).toBeInTheDocument();
     });
 
     it('dismisses the tutorial banner without disabling the How to use entry point', async () => {

@@ -120,6 +120,39 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *  is already in place and the request carries a valid X-CSRF-Token header
  *  like every other mutating endpoint. The Origin allowlist on POST
  *  /api/session (RE-SEC-003) remains as defense-in-depth.
+ *
+ *  #2885 MATCHING RULE — read this before adding an entry. isCsrfExempt() is
+ *  called from src/proxy.ts with `request.nextUrl.pathname`, i.e. the path the
+ *  BROWSER requested, before any rewrite or proxy runs. An entry only ever
+ *  matches if it is a real frontend path — either a next.config.js rewrite
+ *  source or a route under src/app/api. A backend path does NOT match the
+ *  same-origin BFF path that proxies to it: '/api/v1/webhooks/' does not
+ *  prefix-match '/api/ingestion/api/v1/webhooks/ingest'. That mismatch is what
+ *  403'd every developer-playground POST (#2885); the fix was to send the CSRF
+ *  header via fetchWithCsrf, NOT to widen this list.
+ *
+ *  Verified 2026-08-26 — each entry against next.config.js and src/app/api:
+ *    /api/auth/                        rewrite source (next.config.js:229) ✓
+ *    /api/admin/auth/                  src/app/api/admin/[...path] ✓
+ *    /api/admin/v1/auth/accept-invite  src/app/api/admin/[...path] ✓
+ *    /api/v1/webhooks/                 rewrite source (next.config.js:240) ✓
+ *    /api/v1/records/                  rewrite source (next.config.js:208,212) ✓
+ *    /api/v1/fda/                      rewrite source (next.config.js:222) ✓
+ *    /api/ingestion/api/v1/sandbox/    proxied path, correct form ✓
+ *    /api/ingestion/api/v1/proof/      proxied path, correct form ✓
+ *    /api/inflow-lab/                  src/app/api/inflow-lab/[...path] ✓
+ *    /api/tools/check-access           src/app/api/tools/check-access ✓
+ *    /api/tools/verify                 src/app/api/tools/verify ✓
+ *    /api/webhooks/                    DEAD — no rewrite source and no handler
+ *                                      under src/app/api/webhooks. It matches
+ *                                      nothing today, so it grants nothing;
+ *                                      it is kept only because removing an
+ *                                      entry requires the deliberate snapshot
+ *                                      update in
+ *                                      src/__tests__/lib/csrf-exempt-prefixes.test.ts.
+ *                                      If you add a local webhook handler
+ *                                      there, that handler becomes CSRF-exempt
+ *                                      silently — decide then, on purpose.
  */
 export type CsrfExemptionRule = Readonly<{
     methods: readonly string[];

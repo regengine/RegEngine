@@ -1,0 +1,244 @@
+name: Production Uptime
+
+# regengine.co was down for 45+ minutes on 2026-08-18 (Vercel
+# DEPLOYMENT_PAUSED) and nothing reported it.
+#
+# An earlier revision of this comment claimed no scheduled workflow probed
+# production. That was wrong: public-api-surface.yml runs nightly at 06:30 UTC
+# against regengine.co. What it lacks is an alert — `permissions: contents:
+# read`, no issue on failure — and a nightly cadence means up to 24 hours of
+# silence. Detection at minutes-scale, and an alert someone actually receives,
+# are the two things that were genuinely missing.
+#
+# This is deliberately NOT Demo Smoke on a timer. Demo Smoke is a deep
+# Playwright run needing API-key secrets and ~15 minutes; a credential rotation
+# would page us about an outage that is not happening. Uptime has to be cheap,
+# frequent, and secretless so its only possible failure is "production is not
+# serving".
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub delays or drops scheduled runs under load, so
+    # treat this as best-effort minutes-scale detection, not an SLA clock.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Base URL to probe
+        required: false
+        type: string
+        default: https://regengine.co
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      failed: ${{ steps.probe.outputs.failed }}
+      detail: ${{ steps.probe.outputs.detail }}
+    steps:
+      - name: Probe
+        id: probe
+        env:
+          BASE_URL: ${{ inputs.base_url || 'https://regengine.co' }}
+        run: |
+          set -uo pipefail
+
+          # Each probe is "path|forbidden-regex". A 200 is necessary but NOT
+          # always sufficient: /api/inflow-lab/* is a Next.js proxy that
+          # deliberately DEGRADES to HTTP 200 with {"offline":true} when the
+          # Inflow Lab backend is unreachable — see optionalOfflineResponse in
+          # frontend/src/app/api/inflow-lab/[...path]/route.ts, which fires for
+          # GET on the health/status/records contracts. Probing status alone
+          # would report a healthy site while its backend was gone: exactly the
+          # silent failure this workflow exists to catch. Caught in review of
+          # this file by the Vercel review bot before it ever ran.
+          #
+          # Probe selection matters more than probe count. `/` is a statically
+          # prerendered page served from the CDN — it returns 200 with every
+          # serverless function and every backend dead, so on its own it proves
+          # only that the deployment exists. `/api/inflow-lab/*` reaches the
+          # Inflow Lab demo's Railway service, not the product backend.
+          # `/api/health` is the one that covers the product: it is
+          # `force-dynamic`, so it fails outright if functions are not serving,
+          # and it returns 503 unless every configured backend answers
+          # (frontend/src/app/api/health/route.ts).
+          #
+          # Known limit, stated rather than papered over: a service whose URL is
+          # unset reports `not_configured` and is excluded from the tally, so a
+          # 200 here means "every backend that is configured answers", not
+          # "every backend exists". Alerting on `not_configured` would page on
+          # deployments that legitimately omit a service, and a probe that cries
+          # wolf gets muted — which is how monitoring dies. Configuration drift
+          # belongs to the deploy gate, not the uptime probe.
+          PROBES=(
+            "/|"
+            "/api/health|"
+            '/api/inflow-lab/api/healthz|"offline"[[:space:]]*:[[:space:]]*true'
+          )
+
+          probe_path() {
+            local path="$1" forbidden="$2" code="" body="" bodyfile degraded=0
+            bodyfile=$(mktemp)
+            for attempt in 1 2 3; do
+              # Truncate first: a connection-level failure never writes the file,
+              # and a leftover body from an earlier probe would be quoted into the
+              # outage issue as evidence — a healthy payload cited to prove an outage.
+              : > "$bodyfile"
+              # No `|| echo 000` here: curl's own -w already prints 000 when it
+              # cannot connect, so a fallback echo produces "000000".
+              code=$(curl -sS --max-time 20 -o "$bodyfile" -w '%{http_code}' "${BASE_URL}${path}" || true)
+              code="${code:-000}"
+              if [ "$code" = "200" ]; then
+                if [ -z "$forbidden" ] || ! grep -Eq "$forbidden" "$bodyfile"; then
+                  rm -f "$bodyfile"
+                  echo "OK ${path} (attempt ${attempt})"
+                  return 0
+                fi
+                # 200 but self-reported degraded. Keep retrying: a brief upstream
+                # flap should not page anyone.
+                degraded=1
+              else
+                degraded=0
+              fi
+              sleep 10
+            done
+            body=$(head -c 200 "$bodyfile" 2>/dev/null | tr '\n' ' ' | tr -s ' ')
+            rm -f "$bodyfile"
+            if [ "$degraded" = "1" ]; then
+              echo "DEGRADED ${path} status=200 but the proxy reports its backend offline body=${body:-(empty)}"
+            else
+              echo "DOWN ${path} last_status=${code} body=${body:-(empty)}"
+            fi
+            return 1
+          }
+
+          failures=""
+          for spec in "${PROBES[@]}"; do
+            probe_target="${spec%%|*}"
+            probe_forbidden="${spec#*|}"
+            if ! out=$(probe_path "$probe_target" "$probe_forbidden"); then
+              failures="${failures}${out}"$'\n'
+            fi
+            echo "$out"
+          done
+
+          if [ -n "$failures" ]; then
+            {
+              echo "failed=true"
+              echo "detail<<PROBE_EOF"
+              printf '%s' "$failures"
+              echo
+              echo "PROBE_EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "::error::Production probe failed"$'\n'"$failures"
+            exit 1
+          fi
+
+          echo "failed=false" >> "$GITHUB_OUTPUT"
+          echo "All probes returned 200 and none reported a degraded backend."
+
+      - name: Open or update the outage issue
+        if: failure()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          DETAIL: ${{ steps.probe.outputs.detail }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BASE_URL: ${{ inputs.base_url || 'https://regengine.co' }}
+        with:
+          script: |
+            // Match on an invisible marker, not the title, so retitling by hand
+            // does not orphan the thread and spawn a duplicate every 15 minutes.
+            const MARKER = '<!-- production-uptime-outage -->';
+            const detail = (process.env.DETAIL || '(no detail captured)').trim();
+            const runUrl = process.env.RUN_URL;
+            const baseUrl = process.env.BASE_URL;
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const open = existing.find((i) => !i.pull_request && (i.body || '').includes(MARKER));
+
+            const body = [
+              `**${baseUrl} is not serving.**`,
+              '',
+              '```',
+              detail,
+              '```',
+              '',
+              `Failing run: ${runUrl}`,
+              '',
+              'A `DEPLOYMENT_PAUSED` body means Vercel is refusing at the platform, not a',
+              'code fault — check the project for a spend-limit pause, a manual pause, or a',
+              'billing issue. This check closes itself automatically once the site recovers.',
+              '',
+              MARKER,
+            ].join('\n');
+
+            if (open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body: `Still down as of ${runUrl}\n\n\`\`\`\n${detail}\n\`\`\``,
+              });
+              core.notice(`Commented on existing outage issue #${open.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `${baseUrl} is not serving`,
+                body,
+              });
+              core.notice(`Opened outage issue #${created.data.number}`);
+            }
+
+      - name: Close the outage issue on recovery
+        if: success()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            // Auto-close on recovery. The inflow-lab smoke issues (#80/#81) stayed
+            // open for days after the underlying failure was fixed and had to be
+            // closed by hand, because nothing told them the signal had cleared.
+            const MARKER = '<!-- production-uptime-outage -->';
+            const runUrl = process.env.RUN_URL;
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const open = existing.filter((i) => !i.pull_request && (i.body || '').includes(MARKER));
+
+            for (const issue of open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Recovered — all probes returned 200. Verified by ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+              core.notice(`Closed recovered outage issue #${issue.number}`);
+            }

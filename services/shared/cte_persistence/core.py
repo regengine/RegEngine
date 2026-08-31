@@ -127,6 +127,56 @@ def _derive_validation_status(
 
 
 # ---------------------------------------------------------------------------
+# Compliance-alert rows (fix #2902)
+# ---------------------------------------------------------------------------
+# Both write paths persist alerts into fsma.compliance_alerts and MUST produce
+# identical rows for identical input. Before #2902 the single-event path
+# (writes.store_event) owned a private copy of this mapping and the batch path
+# had no alerts writer at all, so which internal path ran decided whether a
+# compliance alert was durably recorded. Keeping the SQL, the accepted-type set
+# and the parameter shape here is what stops the two paths drifting again.
+
+_VALID_ALERT_TYPES: frozenset[str] = frozenset({
+    "missing_kde", "temperature_excursion", "deadline_approaching",
+    "supplier_non_compliant", "chain_break", "export_failure",
+})
+
+ALERT_INSERT_SQL = """
+    INSERT INTO fsma.compliance_alerts (
+        tenant_id, org_id, event_id, severity, alert_type,
+        title, message
+    ) VALUES (
+        :tenant_id, :org_id, :event_id, :severity, :alert_type,
+        :title, :message
+    )
+"""
+
+
+def _normalize_alert_type(raw_type: str) -> str:
+    """Fold an unrecognised ``alert_type`` to ``missing_kde``.
+
+    An alert generator emitting a type the table does not accept must not be
+    able to wedge the INSERT and lose the alert entirely.
+    """
+    return raw_type if raw_type in _VALID_ALERT_TYPES else "missing_kde"
+
+
+def _alert_insert_params(
+    tenant_id: str, event_id: str, alert: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Build the bind parameters for one ``fsma.compliance_alerts`` row."""
+    return {
+        "tenant_id": tenant_id,
+        "org_id": tenant_id,  # scope alerts to tenant until org model exists
+        "event_id": event_id,
+        "severity": alert.get("severity", "warning"),
+        "alert_type": _normalize_alert_type(alert.get("alert_type", "missing_kde")),
+        "title": alert.get("alert_type", "Compliance Alert"),
+        "message": alert.get("message", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Timestamp Validation (fix #1308)
 # ---------------------------------------------------------------------------
 

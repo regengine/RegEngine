@@ -11,9 +11,28 @@ import structlog
 from fastapi import HTTPException, Request
 from shared import funnel_events as _funnel_mod
 
-from . import customers as _customers_mod, helpers as _helpers_mod, plans as _plans_mod, state as _state_mod
+from . import (
+    customers as _customers_mod,
+    helpers as _helpers_mod,
+    plans as _plans_mod,
+    rate_limiting as _rate_limiting_mod,
+    state as _state_mod,
+)
 
 logger = structlog.get_logger("stripe-billing")
+
+# #2930: the only statuses ``subscription_gate`` admits (see
+# ``subscription_gate.py`` ``allowed_statuses``). Anything the checkout
+# handler writes from this set unlocks every paid surface, so it must be
+# reached only from a verified Stripe read of a settled payment.
+_ENTITLING_STATUSES = {"active", "trialing"}
+
+# Checkout ``payment_status`` values that mean the money actually moved
+# (or none was owed). Delayed payment methods — ACH/SEPA/Bacs, common in
+# B2B food distribution — report ``"unpaid"`` on
+# ``checkout.session.completed`` and only settle later via
+# ``checkout.session.async_payment_succeeded``.
+_SETTLED_PAYMENT_STATUSES = {"paid", "no_payment_required"}
 
 
 async def _handle_checkout_completed(
@@ -100,25 +119,67 @@ async def _handle_checkout_completed(
             tenant_id=tenant_id,
             session_id=session_id,
         )
+        # #2930: bind the new tenant to this session/customer immediately.
+        # Provisioning is an external side effect that Stripe's redelivery
+        # cannot undo, and the mapping write that normally records these
+        # lookups happens further down — past the Subscription.retrieve that
+        # may now fail the ack. Without this, every retry of a failed lookup
+        # would provision another tenant and orphan this one.
+        _state_mod._bind_tenant_lookups(
+            tenant_id,
+            session_id=session_id,
+            customer_id=customer_id,
+        )
 
     subscription_id = session.get("subscription")
 
     plan_id = _plans_mod._normalize_plan_id(str(metadata.get("plan_id", "growth")))
     billing_period = _plans_mod._normalize_billing_period(str(metadata.get("billing_period", "monthly")))
 
-    subscription_status = "active"
+    # #2930: never pre-set an entitling status. This value is persisted to
+    # the very hash the subscription gate reads, so the pre-verification
+    # default must be one the gate denies — a session with no subscription
+    # (or one we could not verify) entitles nothing.
+    subscription_status = "incomplete"
     current_period_end = None
+    payment_status = str(session.get("payment_status") or "")
     if subscription_id:
         try:
             subscription = stripe.Subscription.retrieve(subscription_id)
-            subscription_status = subscription.get("status", subscription_status)
-            current_period_end = _helpers_mod._format_period_end(subscription.get("current_period_end"))
-        except stripe.error.StripeError as exc:  # pragma: no cover - network/API errors
-            logger.warning(
+        except stripe.error.StripeError as exc:
+            # #2930: do NOT fall through with the default and ack 200 — the
+            # dedup slot is already claimed, so a swallowed error would be
+            # final. Fail the ack instead; ``_process_stripe_webhook``
+            # releases the claim and Stripe redelivers.
+            logger.error(
                 "subscription_lookup_failed",
                 subscription_id=subscription_id,
+                session_id=session_id,
                 error=str(exc),
             )
+            raise HTTPException(
+                status_code=503,
+                detail="Stripe subscription lookup failed; webhook not processed",
+            ) from exc
+        subscription_status = subscription.get("status", subscription_status)
+        # #2951: read the period end from wherever the negotiated API version
+        # puts it — it lives on the subscription items now, not the
+        # subscription — so the first mapping write no longer stores "".
+        current_period_end = _helpers_mod._extract_subscription_period_end(subscription)
+
+    # #2930: ``checkout.session.completed`` also fires for payments that have
+    # not settled. Until the money lands the tenant is entitled to nothing,
+    # whatever the subscription object says — ``async_payment_succeeded``
+    # (handled in the dispatcher) is what promotes it.
+    if subscription_status in _ENTITLING_STATUSES and payment_status not in _SETTLED_PAYMENT_STATUSES:
+        logger.warning(
+            "checkout_payment_not_settled",
+            session_id=session_id,
+            subscription_id=subscription_id,
+            payment_status=payment_status or "(missing)",
+            stripe_status=subscription_status,
+        )
+        subscription_status = "incomplete"
 
     # #1196: the checkout event itself is the first write that establishes
     # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
@@ -484,6 +545,22 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
         await _handle_checkout_completed(data_object, event_created=event_created)
         return
 
+    # #2930: delayed payment methods settle after checkout completes. These
+    # two events are the only thing that resolves the non-entitling status
+    # written above, so the dispatcher must not ignore them.
+    if event_type == "checkout.session.async_payment_succeeded":
+        await _handle_checkout_completed(data_object, event_created=event_created)
+        return
+
+    if event_type == "checkout.session.async_payment_failed":
+        _update_subscription_status(
+            subscription_id=data_object.get("subscription"),
+            customer_id=data_object.get("customer"),
+            status="incomplete",
+            event_created=event_created,
+        )
+        return
+
     if event_type == "invoice.payment_failed":
         _update_subscription_status(
             subscription_id=data_object.get("subscription"),
@@ -545,10 +622,15 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             except (ValueError, TypeError):
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
-                existing["current_period_end"] = (
-                    _helpers_mod._format_period_end(data_object.get("current_period_end")) or ""
-                )
-                _state_mod._store_subscription_mapping(tenant_id, existing)
+                # #2951: same relocated field on the event's subscription
+                # payload. Persist only a value we actually resolved — a
+                # missing period end means "unknown", not "cleared", and
+                # blanking it here would destroy the renewal date the
+                # ``invoice.paid`` handler derived from the invoice.
+                event_period_end = _helpers_mod._extract_subscription_period_end(data_object)
+                if event_period_end:
+                    existing["current_period_end"] = event_period_end
+                    _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 
     # #1189: trial expiration notice (~3 days before trial_end).
@@ -579,7 +661,14 @@ async def _process_stripe_webhook(
     if not webhook_secret:
         raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
 
+    # #2929: the rate limiter used to run in the route, BEFORE this point, on
+    # a bucket keyed by client IP — which behind a shared reverse proxy is one
+    # bucket for Stripe and every anonymous caller alike. Verification gates
+    # first now: unverified traffic is charged to its own budget only once it
+    # has been shown not to be Stripe, so a junk flood can no longer 429 a
+    # genuine delivery and stall billing-state transitions.
     if not stripe_signature:
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
 
     body = await request.body()
@@ -591,10 +680,17 @@ async def _process_stripe_webhook(
             secret=webhook_secret,
         )
     except ValueError as exc:
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
     except stripe.error.SignatureVerificationError as exc:
         logger.warning("stripe_webhook_signature_invalid", error=str(exc))
+        _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
         raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
+
+    # #2929: only a delivery Stripe actually signed consumes the genuine-
+    # traffic budget, and its bucket key comes from the verified envelope —
+    # never from a client-supplied header.
+    _rate_limiting_mod._check_verified_stripe_webhook_rate_limit(event)
 
     # #1076: Stripe retries any webhook that doesn't ack within a few seconds
     # (and for up to 3 days on 5xx/timeouts), so the same real-world event
@@ -620,6 +716,27 @@ async def _process_stripe_webhook(
             "duplicate": True,
         }
 
-    await _handle_stripe_event(event)
+    # #2818: the dedup claim above is taken BEFORE the handler runs (it has
+    # to be — the gate must close before any side effect). But it was never
+    # released when the handler raised, so the failed event stayed "seen"
+    # for the full 24h TTL and every Stripe retry short-circuited into the
+    # duplicate branch above with 200 {"duplicate": true}. The event was
+    # permanently dropped: a failed checkout.session.completed left a paying
+    # tenant with no subscription mapping, a failed invoice.paid left them
+    # stuck past_due.
+    #
+    # Releasing the claim ONLY on the failure path keeps duplicate
+    # suppression intact for events that actually completed, while letting
+    # Stripe's at-least-once retry do its job for the ones that did not.
+    try:
+        await _handle_stripe_event(event)
+    except BaseException:
+        _state_mod._release_event_claim(event_id or "")
+        logger.warning(
+            "stripe_webhook_handler_failed_claim_released",
+            event_id=event_id,
+            event_type=event_type,
+        )
+        raise
     logger.info("stripe_webhook_processed", event_type=event_type)
     return {"received": True, "event_type": event_type}

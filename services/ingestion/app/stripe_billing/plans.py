@@ -111,15 +111,17 @@ def _resolve_price_id(plan_id: str, billing_period: str) -> tuple[dict[str, Any]
     price_env_var = plan[f"stripe_price_env_{billing_period}"]
     price_id = os.getenv(price_env_var) if price_env_var else None
 
-    # Allow annual billing requests to fall back to monthly price IDs if annual IDs are not configured.
-    if not price_id and billing_period == "annual":
-        monthly_env_var = plan["stripe_price_env_monthly"]
-        price_id = os.getenv(monthly_env_var) if monthly_env_var else None
-
+    # #2928: never substitute another period's price ID here. Billing an
+    # annual request against the monthly Price silently enrolls the customer
+    # on the wrong interval while the response and stored mapping both say
+    # "annual" — an unconfigured price must fail loudly instead.
     if not price_id:
         raise HTTPException(
             status_code=500,
-            detail=(f"Stripe price ID is not configured for plan '{normalized_plan}' ({billing_period})."),
+            detail=(
+                f"Stripe price ID is not configured for plan '{normalized_plan}' ({billing_period}). "
+                f"Set {price_env_var}."
+            ),
         )
 
     amount = plan[f"price_{billing_period}"]

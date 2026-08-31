@@ -11,9 +11,15 @@ Design
   partial index ``idx_audit_log_buffer_unreplayed`` (oldest first).
 * For each row attempt to write to the primary audit log via a pluggable
   ``primary_writer`` callable. The default writer calls the global
-  :class:`FSMAAuditLog` from :mod:`services.graph.app.fsma_audit`.
-* On success -> ``UPDATE ... SET replayed_at = now()`` (idempotent: rows
-  already stamped are filtered by the WHERE clause).
+  :class:`FSMAAuditLog` from :mod:`services.graph.app.fsma_audit` with
+  ``require_persistence=True``.
+* On *confirmed* success -> ``UPDATE ... SET replayed_at = now()``
+  (idempotent: rows already stamped are filtered by the WHERE clause).
+  A writer signals failure by raising or by returning ``False``; a
+  plain return (legacy ``None``) still counts as success. #2829: the
+  default writer used to return normally even when nothing reached
+  Postgres, so rows were stamped replayed and the buffered evidence was
+  lost with every counter reading clean.
 * On failure AND ``replay_attempts < max_attempts`` -> ``UPDATE ... SET
   replay_attempts = replay_attempts + 1``; the row stays unreplayed and will
   be reattempted next run (exponential backoff is implicit in cron cadence).
@@ -93,14 +99,22 @@ def _default_primary_writer(
     event_type: str,
     payload: dict[str, Any],
     originally_failed_at: datetime,
-) -> None:
+) -> bool:
     """Default replay path: write to the FSMA audit log.
 
     The buffered events were generated from KDE_READ failures; we replay
-    them as best-effort SYSTEM-actor entries tagged with the original
-    ``originally_failed_at`` so the chain is auditable. If the primary
-    log is still unavailable this raises and the caller increments the
-    attempt counter.
+    them as SYSTEM-actor entries tagged with the original
+    ``originally_failed_at`` so the chain is auditable.
+
+    #2829: this asks the audit log to *confirm* the write
+    (``require_persistence=True``). Without it the call returned
+    normally whether or not anything reached Postgres — an unconfigured
+    engine returned immediately, and an exhausted retry budget only
+    logged — so the reconciler stamped ``replayed_at`` on events that
+    were never written and the buffer's whole purpose (forensic
+    retention until the primary catches up) was defeated. If the primary
+    is still unavailable this now raises and the caller increments the
+    attempt counter / dead-letters.
     """
     # Imported lazily so importing this module does not require the
     # graph app's full dependency tree.
@@ -114,9 +128,20 @@ def _default_primary_writer(
     target_id = str(payload.get("target_id") or payload.get("resource_id") or payload.get("kde_id") or "unknown")
     correlation_id = payload.get("correlation_id")
 
-    # Map our generic event_type onto the closest FSMAAuditAction. KDE_READ
-    # is the dominant case; anything else falls back to ACCESSED.
-    action = FSMAAuditAction.ACCESSED if hasattr(FSMAAuditAction, "ACCESSED") else FSMAAuditAction.EXTRACTED
+    # Map our generic event_type onto the closest FSMAAuditAction.
+    # FSMAAuditAction has no ACCESSED member, so the old
+    # ``ACCESSED if hasattr(...) else EXTRACTED`` guard ALWAYS fell
+    # through and relabelled every replayed KDE_READ event as EXTRACTED
+    # — an extraction event in the FDA-facing trail that never happened.
+    # Everything in this buffer comes from KDE_READ failures
+    # (audit_failure_policy is the only producer), so KDE_READ is the
+    # honest default; a future producer whose event_type names a real
+    # action ("exported", "traced", ...) keeps that action.
+    action = getattr(
+        FSMAAuditAction,
+        str(event_type or "").strip().upper(),
+        FSMAAuditAction.KDE_READ,
+    )
 
     get_audit_log().log(
         action=action,
@@ -126,11 +151,14 @@ def _default_primary_writer(
         actor_type=FSMAAuditActorType.SYSTEM,
         tenant_id=tenant_id,
         correlation_id=correlation_id,
+        # #2829: fail loudly rather than pretending the replay landed.
+        require_persistence=True,
         # Stash the replay metadata so an investigator can correlate.
         replayed_from_buffer=True,
         originally_failed_at=originally_failed_at.isoformat(),
         replayed_payload=payload,
     )
+    return True
 
 
 # ----------------------------------------------------------------------------
@@ -167,7 +195,7 @@ def reconcile_audit_buffer(
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_attempts_per_event: int = DEFAULT_MAX_ATTEMPTS,
     max_age_hours: int = DEFAULT_MAX_AGE_HOURS,
-    primary_writer: Optional[Callable[..., None]] = None,
+    primary_writer: Optional[Callable[..., Any]] = None,
     session_factory: Optional[Callable[[], Any]] = None,
     now_fn: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
 ) -> ReconcileResult:
@@ -266,15 +294,27 @@ def reconcile_audit_buffer(
             if not isinstance(payload_dict, dict):
                 payload_dict = {"_value": payload_dict}
 
+            # #2829: a return is not proof of a write. The writer either
+            # raises or reports its outcome; anything that is not an
+            # explicit ``False`` (including the legacy ``None``) counts
+            # as success, so custom writers keep working while the
+            # default writer now confirms durability.
+            replay_error: Optional[BaseException] = None
             try:
-                writer(
+                outcome = writer(
                     tenant_id=tenant_id,
                     actor=actor,
                     event_type=event_type,
                     payload=payload_dict,
                     originally_failed_at=ofa,
                 )
+                if outcome is False:
+                    replay_error = RuntimeError("primary writer reported an unconfirmed write")
             except Exception as exc:
+                replay_error = exc
+
+            if replay_error is not None:
+                exc = replay_error
                 # Failure: bump the attempt counter; dead-letter if exhausted.
                 new_attempts = (replay_attempts or 0) + 1
                 _update_attempts(session, row_id, new_attempts)

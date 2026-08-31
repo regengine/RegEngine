@@ -65,11 +65,75 @@ class EmbeddedSchedulerRunner:
         )
         self._thread.start()
 
+    # SchedulerService attributes that own a SQLAlchemy Engine. Each
+    # engine holds its own pool, so a service that is dropped without
+    # ``dispose()`` leaks those connections until the process exits
+    # (#2882): DistributedContext at pool_size=2/max_overflow=1 and
+    # StateManager at pool_size=5/max_overflow=10 — up to 18 connections
+    # stranded per leadership flap, per gunicorn worker.
+    _ENGINE_OWNING_ATTRS = ("state_manager", "distributed_context")
+
+    @classmethod
+    def _dispose_engines(cls, service) -> None:
+        """Dispose every SQLAlchemy pool a retired service owns (#2882).
+
+        ``SchedulerService.shutdown()`` closes the APScheduler, the Kafka
+        producer and the webhook HTTP session, but nothing disposes its
+        two engines — and those files are outside this module. Reach in
+        from here rather than leaking the pools.
+        """
+        for attr in cls._ENGINE_OWNING_ATTRS:
+            engine = getattr(getattr(service, attr, None), "engine", None)
+            if engine is None:
+                continue
+            try:
+                engine.dispose()
+                logger.info("embedded_scheduler_engine_disposed", component=attr)
+            except Exception as exc:  # noqa: BLE001 — teardown must not raise
+                logger.warning(
+                    "embedded_scheduler_engine_dispose_failed",
+                    component=attr,
+                    error=str(exc),
+                )
+
+    def _retire_service(self) -> None:
+        """Fully tear down the current service before it is replaced (#2882).
+
+        Called at the top of every election pass. A no-op on the first
+        pass; on every re-election it shuts the previous service down and
+        disposes its pools.
+
+        Why replace rather than reuse: a ``SchedulerService`` owns a
+        ``BlockingScheduler`` whose ``ThreadPoolExecutor`` is built once
+        in ``__init__``. Restarting a shut-down APScheduler *appears* to
+        work (``scheduler.running`` flips back to True) but every job
+        submission then dies with ``RuntimeError: cannot schedule new
+        futures after shutdown`` — a re-elected leader would hold the
+        advisory lock and silently run zero jobs. Rebuilding is correct;
+        the leak was only ever the missing teardown of the old one.
+        """
+        service = self._service
+        if service is None:
+            return
+        # Clear first: `current_service` / `is_leader` must not hand out a
+        # service that is mid-teardown.
+        self._service = None
+        try:
+            service.shutdown()
+        except Exception as exc:  # noqa: BLE001 — teardown must not raise
+            logger.warning("embedded_scheduler_service_shutdown_failed", error=str(exc))
+        self._dispose_engines(service)
+        logger.info("embedded_scheduler_service_retired")
+
     def _run(self) -> None:
         while not self._stop_event.is_set():
             try:
                 from services.scheduler.service import SchedulerService
 
+                # #2882: release the previous pass's service (engines,
+                # Kafka producer, HTTP session) before building its
+                # replacement. No-op on the first pass.
+                self._retire_service()
                 self._service = SchedulerService()
             except Exception:
                 # Misconfiguration (e.g. SCHEDULER_API_KEY unset while
@@ -147,6 +211,12 @@ class EmbeddedSchedulerRunner:
                 service.scheduler.shutdown(wait=False)
         except Exception as exc:
             logger.warning("embedded_scheduler_stop_failed", error=str(exc))
+        # #2882: hand the connection pools back on the way out. Note this
+        # deliberately does NOT call ``service.shutdown()`` — that waits
+        # for in-flight jobs and would eat the graceful-timeout window.
+        # ``dispose()`` only closes *idle* pooled connections, so a
+        # connection the standby-poll thread still holds is untouched.
+        self._dispose_engines(service)
 
 
 def start_embedded_scheduler() -> Optional[EmbeddedSchedulerRunner]:

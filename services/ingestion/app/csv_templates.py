@@ -27,8 +27,8 @@ from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limi
 from .webhook_compat import ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
+    CsvIngestResponse,
     IngestEvent,
-    IngestResponse,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -519,7 +519,7 @@ def _check_lot_code_integrity(lot_code: str) -> list[str]:
 
 @router.post(
     "/ingest/csv",
-    response_model=IngestResponse,
+    response_model=CsvIngestResponse,
     summary="Upload and ingest a CSV file",
     description=(
         "Parse a CSV file, validate rows, and persist CTE events to the database. "
@@ -707,12 +707,13 @@ async def ingest_csv(
         len(kde_warnings),
     )
 
-    # Attach KDE warnings as extra response metadata via JSONResponse
-    # so callers can see which events are missing required fields
-    from fastapi.responses import JSONResponse
-
-    response_data = response.model_dump()
-    if kde_warnings:
-        response_data["kde_warnings"] = kde_warnings
-        response_data["kde_warning_count"] = len(kde_warnings)
-    return JSONResponse(content=response_data)
+    # #2892: return the declared model rather than a raw JSONResponse.
+    # A JSONResponse bypasses FastAPI serialization entirely, so these two
+    # fields went out on the wire but never appeared in the published
+    # OpenAPI schema — generated SDKs dropped the only signal telling an
+    # integrator which rows are missing required FSMA key data elements.
+    return CsvIngestResponse(
+        **response.model_dump(),
+        kde_warnings=kde_warnings,
+        kde_warning_count=len(kde_warnings),
+    )

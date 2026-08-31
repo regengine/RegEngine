@@ -26,6 +26,18 @@ _MANDATORY_GLN_FIELDS: tuple[str, ...] = (
     "dest_location_id",
 )
 
+# #2970: EPCIS 2.0 does not define ``action`` on TransformationEvent — the
+# type is identified by ``transformationID`` and/or its input/output lists.
+# At least one of these must be present, otherwise the event carries no
+# transformation at all.
+_TRANSFORMATION_IDENTITY_FIELDS: tuple[str, ...] = (
+    "transformationID",
+    "inputEPCList",
+    "outputEPCList",
+    "inputQuantityList",
+    "outputQuantityList",
+)
+
 
 def _audit_log_validation_failure(
     errors: list[dict],
@@ -165,12 +177,23 @@ def _validate_tlc_format(tlc: str) -> bool:
 
 def _validate_epcis(event: dict) -> list[str]:
     errors: list[str] = []
-    required = ["type", "eventTime", "action", "bizStep"]
+    event_type = event.get("type")
+    # #2970: ``action`` is a member of ObjectEvent / AggregationEvent /
+    # TransactionEvent only. An EPCIS 2.0 TransformationEvent carries
+    # ``transformationID`` and input/output lists instead, so demanding
+    # ``action`` rejected every conformant FSMA 204 transformation CTE.
+    is_transformation = event_type == "TransformationEvent"
+    required = ["type", "eventTime", "bizStep"] if is_transformation else ["type", "eventTime", "action", "bizStep"]
     for field in required:
         if not event.get(field):
             errors.append(f"Missing required EPCIS field '{field}'")
 
-    event_type = event.get("type")
+    if is_transformation and not any(event.get(field) for field in _TRANSFORMATION_IDENTITY_FIELDS):
+        errors.append(
+            "TransformationEvent requires 'transformationID' or a non-empty "
+            "input/output list (inputEPCList, outputEPCList, inputQuantityList, outputQuantityList)"
+        )
+
     if not isinstance(event_type, str) or event_type not in {
         "ObjectEvent",
         "AggregationEvent",

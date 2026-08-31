@@ -76,8 +76,43 @@ def _safe_http_error_content(status_code: int, detail: object) -> dict:
         return {"type": f"http_{status_code}", "message": message}
 
     if isinstance(detail, dict):
-        return detail
+        return _normalized_dict_detail(status_code, detail)
     return {"type": f"http_{status_code}", "message": str(detail)}
+
+
+def _normalized_dict_detail(status_code: int, detail: dict) -> dict:
+    """Give every client-error envelope a ``type`` and a ``message`` (#2863).
+
+    ``HTTPException(detail={...})`` used to be forwarded verbatim, so the
+    ~70 call sites that pass a dict each defined their own envelope. Three
+    incompatible shapes reached clients: ``{"type", "message", "details"}``
+    from the RequestValidationError handler, ``{"type", "message"}`` from a
+    string detail, and the raw dict from a dict detail — which commonly
+    carries ``code`` where the others carry ``type``. A client could not use
+    one code path for all errors, and the published spec matched none of them.
+
+    Every original key is preserved, so callers reading ``code``, ``errors``
+    or any bespoke field keep working; this only guarantees that ``type`` and
+    ``message`` are also present. ``type`` prefers an explicit ``type``, then
+    ``code`` (the common alternative spelling), then ``http_<status>``.
+    """
+    normalized = {
+        "type": _dict_detail_type(status_code, detail),
+        "message": _detail_message(detail, f"HTTP {status_code}"),
+    }
+    # Preserve every original field, including `code`, so existing consumers
+    # of the bespoke shapes are unaffected.
+    for key, value in detail.items():
+        normalized.setdefault(key, value)
+    return normalized
+
+
+def _dict_detail_type(status_code: int, detail: dict) -> str:
+    for key in ("type", "code"):
+        value = detail.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return f"http_{status_code}"
 
 
 def _json_safe(value: object) -> object:

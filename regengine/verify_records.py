@@ -34,7 +34,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 try:
     import requests
@@ -185,17 +185,82 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.re
         )
 
 
-def verify_file(file_path: Path) -> list[VerificationResult]:
-    """Verify all records in a JSON file."""
+# Envelope keys under which the platform's own export surfaces publish the
+# record array. ``records`` is the SDK/audit-pack shape; ``events`` is what
+# the canonical list endpoint returns
+# (services/ingestion/app/canonical_router.py:158 —
+# ``{"tenant_id": ..., "events": [...], "total": N}``). Before #2955 only
+# ``records`` was recognised, so a real canonical export fell through to a
+# ``[data]`` fallback and the whole envelope dict was hashed as one record.
+RECORD_ENVELOPE_KEYS = ("records", "events")
+
+# A bare dict is only treated as a single record if it actually looks like
+# one — i.e. it carries a per-record digest. Anything else is an
+# unrecognised envelope and is rejected loudly rather than hashed whole.
+_RECORD_HASH_KEYS = ("sha256_hash", "hash")
+
+
+class UnrecognizedExportError(ValueError):
+    """Raised when an input file is not a shape the verifier can verify."""
+
+
+def extract_records(data: object) -> List[dict]:
+    """Pull the record array out of a parsed export file.
+
+    Accepts a bare JSON array, or an object carrying the array under one of
+    :data:`RECORD_ENVELOPE_KEYS`. A bare object that looks like a single
+    record (it has a ``sha256_hash``/``hash``) is treated as a one-record
+    input. Anything else raises :class:`UnrecognizedExportError` instead of
+    silently hashing the envelope as if it were a record (#2955).
+    """
+    if isinstance(data, list):
+        return data
+
+    if isinstance(data, dict):
+        for key in RECORD_ENVELOPE_KEYS:
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+            if value is not None:
+                raise UnrecognizedExportError(
+                    f'Export key "{key}" is a {type(value).__name__}, expected a list of records.'
+                )
+        if any(key in data for key in _RECORD_HASH_KEYS):
+            return [data]
+        raise UnrecognizedExportError(
+            "Unrecognized export envelope: expected a JSON array, or an object with a "
+            f"record list under one of {list(RECORD_ENVELOPE_KEYS)}, or a single record "
+            f"carrying one of {list(_RECORD_HASH_KEYS)}. Got an object with keys: "
+            f"{sorted(data)}"
+        )
+
+    raise UnrecognizedExportError(
+        f"Unrecognized export structure: expected a JSON array or object, got {type(data).__name__}."
+    )
+
+
+def verify_file(file_path: Path) -> List[VerificationResult]:
+    """Verify all records in a JSON file.
+
+    Raises:
+        UnrecognizedExportError: if the file is not a shape whose records
+            can be located. Callers must not treat that as "verified".
+    """
     with open(file_path, "r") as f:
         data = json.load(f)
 
-    records = data if isinstance(data, list) else data.get("records", [data])
+    records = extract_records(data)
     return [verify_record_offline(r) for r in records]
 
 
-def print_results(results: list[VerificationResult]) -> int:
-    """Print verification results and return exit code."""
+def print_results(results: List[VerificationResult]) -> int:
+    """Print verification results and return exit code.
+
+    Returns non-zero when nothing was verified (#2955): an empty result set
+    used to print ``SUMMARY: 0 passed, 0 failed, 0 total`` and return 0, so a
+    scripted auditor check could not distinguish "every record verified" from
+    "there was nothing to verify".
+    """
     passed = 0
     failed = 0
 
@@ -204,6 +269,18 @@ def print_results(results: list[VerificationResult]) -> int:
     print("=" * 60)
     print(f"Verified at: {datetime.utcnow().isoformat()}Z")
     print("-" * 60)
+
+    if not results:
+        print("\nNO RECORDS VERIFIED")
+        print(
+            "  No records were found in the input. Nothing was verified — this is NOT a pass.\n"
+            f"  Looked for: a JSON array, or an object with a record list under one of "
+            f"{list(RECORD_ENVELOPE_KEYS)}."
+        )
+        print("\n" + "-" * 60)
+        print("SUMMARY: 0 passed, 0 failed, 0 total — NO RECORDS VERIFIED")
+        print("=" * 60 + "\n")
+        return 1
 
     for r in results:
         status = "✓ VALID" if r.valid else "✗ INVALID"
@@ -271,10 +348,25 @@ Examples:
     results = []
 
     if args.file:
+        # #2955: --file and --tlc select different verification modes; before,
+        # --tlc (and --offline) were silently ignored when --file was given, so
+        # the exit status did not say which mode actually ran.
+        if args.tlc:
+            print(
+                "Error: --file and --tlc are mutually exclusive (choose file or online verification)", file=sys.stderr
+            )
+            sys.exit(1)
         if not args.file.exists():
             print(f"Error: File not found: {args.file}", file=sys.stderr)
             sys.exit(1)
-        results = verify_file(args.file)
+        try:
+            results = verify_file(args.file)
+        except UnrecognizedExportError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"Error: {args.file} is not valid JSON: {e}", file=sys.stderr)
+            sys.exit(1)
 
     elif args.tlc:
         if args.offline:

@@ -50,7 +50,7 @@ export default function ErrorBoundary({
                 <div className="flex items-center justify-center gap-3">
                     <button
                         onClick={reset}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--re-brand)] text-[var(--re-surface-base)] text-sm font-medium hover:opacity-90 transition-opacity"
                     >
                         <RefreshCw className="h-4 w-4" />
                         Try Again

@@ -336,8 +336,20 @@ export function SupplyChainKnowledgeGraphBuilder() {
         ctx.restore();
     }
 
+    // `draw` is a plain render-scope function that reads the canvas and every
+    // piece of view state. The dependency list below is the state it actually
+    // paints from; adding `draw` itself would change identity on every render
+    // and repaint in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { draw(); }, [nodes, edges, vp, selNode, selEdge, trace, visNodes, visEdges]);
-    useEffect(() => { const h = () => draw(); if (typeof window !== 'undefined') window.addEventListener("resize", h); return () => { if (typeof window !== 'undefined') window.removeEventListener("resize", h); }; }, []);
+    // Keep a ref pointing at the latest `draw` so the once-bound resize listener
+    // below always repaints from current state instead of the first render's
+    // stale closure.
+    const drawRef = useRef(draw);
+    drawRef.current = draw;
+    // The resize listener is bound once (empty deps) — the `drawRef` indirection
+    // lets it read fresh state without re-registering on every render.
+    useEffect(() => { const h = () => drawRef.current(); if (typeof window !== 'undefined') window.addEventListener("resize", h); return () => { if (typeof window !== 'undefined') window.removeEventListener("resize", h); }; }, []);
 
     const fitView = () => {
         if (!containerRef.current || !visNodes.length) return;
@@ -347,6 +359,10 @@ export function SupplyChainKnowledgeGraphBuilder() {
         const scale = clamp(Math.min(rect.width / (Mx - mx + 140), rect.height / (My - my + 140)), 0.5, 2);
         setVp({ scale, panX: rect.width / 2 - ((mx + Mx) / 2) * scale, panY: rect.height / 2 - ((my + My) / 2) * scale });
     };
+    // One-shot initial framing after the container has been laid out. fitView
+    // calls setVp, so depending on it would re-frame the graph on every pan or
+    // zoom and fight the user's own view changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { setTimeout(fitView, 50); }, []);
 
     const onWheel = (e: React.WheelEvent) => { e.preventDefault(); const f = e.deltaY < 0 ? 1.08 : 0.92; const ns = clamp(vp.scale * f, 0.4, 2.6); const r = canvasRef.current?.getBoundingClientRect(); if (!r) return; const cx = e.clientX - r.left, cy = e.clientY - r.top; const wx = (cx - vp.panX) / vp.scale, wy = (cy - vp.panY) / vp.scale; setVp({ scale: ns, panX: cx - wx * ns, panY: cy - wy * ns }); };

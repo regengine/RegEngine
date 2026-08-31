@@ -35,6 +35,17 @@ _EVENT_DEDUP_TTL_SECONDS = 24 * 60 * 60
 # through the cracks if checkout processing itself is delayed.
 _PENDING_SUB_UPDATE_TTL_SECONDS = 72 * 60 * 60
 
+# #2953: statuses after which the tenant's Stripe identifiers are dead. The
+# ``customer.deleted`` handler deletes the ``billing:customer:{id}`` and
+# ``billing:subscription:{id}`` lookups precisely so a later out-of-order
+# webhook carrying those stale ids cannot silently re-bind to the tenant —
+# while deliberately preserving the tenant hash (and therefore those ids) as
+# an audit record. Any writer that persists that hash back would otherwise
+# rebuild the lookups from it and reverse the cleanup; the guard in
+# ``_store_subscription_mapping`` makes the deletion stick for every caller,
+# not just the one that was found reversing it (``routes.get_subscription``).
+_TERMINAL_STATUSES = frozenset({"customer_deleted"})
+
 
 def _redis_client() -> redis.Redis:
     settings = get_settings()
@@ -114,12 +125,99 @@ def _mark_event_seen(event_id: str) -> bool:
     return bool(claimed)
 
 
+def _release_event_claim(event_id: str) -> None:
+    """Release the dedup claim taken by :func:`_mark_event_seen`.
+
+    #2818: the claim is a ``SET NX EX`` with a 24h TTL and was never
+    released when the handler raised. Because the claim is taken BEFORE
+    the handler runs, a handler failure left the key in place, so every
+    one of Stripe's retries hit the duplicate branch and got
+    ``200 {"duplicate": true}`` — the event was permanently dropped. A
+    failed ``checkout.session.completed`` leaves a paying tenant with no
+    subscription mapping; a failed ``invoice.paid`` leaves them stuck
+    ``past_due``, for 24 hours, silently.
+
+    Deleting the key on failure re-opens the event for Stripe's next
+    retry. Genuine duplicates are unaffected: the claim is only released
+    on the path where the handler did NOT complete, so a concurrent or
+    repeat delivery of an event that DID process still finds the key.
+
+    Best-effort by design: a Redis error here is logged, not raised —
+    ``_mark_event_seen`` already fails OPEN on Redis errors, and we must
+    not convert a handler exception into a different exception and lose
+    the original traceback.
+    """
+    if not event_id:
+        return
+    client = _redis_client()
+    try:
+        client.delete(_event_dedup_key(event_id))
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
+        logger.error(
+            "stripe_webhook_dedup_release_redis_error event_id=%s error=%s",
+            event_id,
+            exc,
+        )
+
+
+def _bind_tenant_lookups(
+    tenant_id: str,
+    session_id: str | None = None,
+    customer_id: str | None = None,
+) -> None:
+    """Persist the session/customer -> tenant lookups on their own (#2930).
+
+    ``_store_subscription_mapping`` writes these keys too, but only at the
+    very end of ``_handle_checkout_completed`` — after the Stripe
+    ``Subscription.retrieve``. Since that retrieve can now fail the ack so
+    Stripe redelivers, a freshly provisioned tenant must be discoverable
+    before it: otherwise every redelivery finds no binding and provisions
+    another tenant, orphaning the previous one.
+
+    Best-effort by design. A Redis error here is logged, not raised: the
+    caller has already created the tenant, and converting that into a
+    different exception would lose the original failure. The cost of a
+    missed write is the duplicate-provisioning this exists to prevent, not
+    a wrong entitlement.
+    """
+    if not tenant_id:
+        return
+
+    client = _redis_client()
+    try:
+        if session_id:
+            client.set(_session_lookup_key(session_id), tenant_id)
+        if customer_id:
+            client.set(_customer_lookup_key(customer_id), tenant_id)
+    except redis.RedisError as exc:  # pragma: no cover - logged for ops
+        logger.error(
+            "stripe_tenant_lookup_bind_failed tenant_id=%s session_id=%s error=%s",
+            tenant_id,
+            session_id,
+            exc,
+        )
+
+
 def _store_subscription_mapping(tenant_id: str, payload: dict[str, str]) -> None:
     client = _redis_client()
     key = _tenant_subscription_key(tenant_id)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     client.hset(key, mapping=payload)
+
+    # #2953: the audit hash is always written; the lookup keys are not.
+    # Re-creating them for a terminal status would restore exactly the
+    # routing ``_handle_customer_deleted`` removed, so a delayed webhook
+    # carrying the deleted customer/subscription id could mutate this
+    # tenant's entitlement state again.
+    status = str(payload.get("status") or "")
+    if status in _TERMINAL_STATUSES:
+        logger.info(
+            "stripe_lookup_bind_skipped_terminal_status",
+            tenant_id=tenant_id,
+            status=status,
+        )
+        return
 
     subscription_id = payload.get("subscription_id")
     if subscription_id:

@@ -21,7 +21,6 @@ from . import (
     customers as _customers_mod,
     helpers as _helpers_mod,
     plans as _plans_mod,
-    rate_limiting as _rate_limiting_mod,
     state as _state_mod,
     webhooks as _webhooks_mod,
 )
@@ -285,15 +284,39 @@ async def get_subscription(
     current_period_end = mapping.get("current_period_end") or None
     subscription_id = mapping.get("subscription_id")
 
-    if subscription_id:
+    if subscription_id and status in _state_mod._TERMINAL_STATUSES:
+        # #2953: ``customer_deleted`` is terminal and sticky. Refreshing from
+        # Stripe here would overwrite the audit marker with the subscription's
+        # current status (Stripe keeps canceled subscriptions retrievable), and
+        # the write-back would re-create the very lookup keys the
+        # ``customer.deleted`` handler deleted. A GET must not reverse a
+        # security cleanup.
+        logger.info(
+            "subscription_refresh_skipped_terminal_status",
+            tenant_id=resolved_tenant_id,
+            subscription_id=subscription_id,
+            status=status,
+        )
+    elif subscription_id:
         try:
             _helpers_mod._configure_stripe()
             subscription = stripe.Subscription.retrieve(subscription_id)
             status = subscription.get("status", status)
-            current_period_end = _format_period_end(subscription.get("current_period_end"))
+            # #2951: ``current_period_end`` moved onto the subscription items
+            # in the API version the pinned SDK sends, so the old top-level
+            # read returned None for every live subscription and the write-back
+            # stored "" over the renewal date the ``invoice.paid`` handler
+            # derived from the invoice. Read both shapes, and write only a
+            # value we actually resolved — a GET must never destroy persisted
+            # billing state (the webhook path already refuses that write, see
+            # ``_update_subscription_status``).
+            refreshed_period_end = _helpers_mod._extract_subscription_period_end(subscription)
+            if refreshed_period_end:
+                current_period_end = refreshed_period_end
 
             mapping["status"] = status
-            mapping["current_period_end"] = current_period_end or ""
+            if refreshed_period_end:
+                mapping["current_period_end"] = refreshed_period_end
             _state_mod._store_subscription_mapping(resolved_tenant_id, mapping)
         except HTTPException as exc:
             if getattr(exc, "status_code", None) != 500:
@@ -330,8 +353,16 @@ async def stripe_webhooks(
     request: Request,
     stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
 ) -> dict[str, Any]:
-    """Primary Stripe webhook endpoint."""
-    _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
+    """Primary Stripe webhook endpoint.
+
+    #2929: the rate limiter used to run here, ahead of signature
+    verification, on a route with no auth dependency — so unsigned junk and
+    genuine Stripe deliveries shared one per-proxy-peer bucket and an
+    anonymous caller could 429 every billing webhook. The limiter now lives
+    inside ``_process_stripe_webhook``, on the far side of
+    ``stripe.Webhook.construct_event``, with separate budgets for verified
+    and unverified traffic.
+    """
     return await _webhooks_mod._process_stripe_webhook(request, stripe_signature)
 
 
@@ -345,8 +376,10 @@ async def stripe_webhook_legacy(
     request: Request,
     stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
 ) -> dict[str, Any]:
-    """Legacy Stripe webhook path retained for backward compatibility."""
-    _rate_limiting_mod._check_stripe_webhook_rate_limit(request)
+    """Legacy Stripe webhook path retained for backward compatibility.
+
+    #2929: same reordering as the primary route — verification gates first.
+    """
     return await _webhooks_mod._process_stripe_webhook(request, stripe_signature)
 
 

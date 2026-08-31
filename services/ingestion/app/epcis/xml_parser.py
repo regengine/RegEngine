@@ -233,7 +233,19 @@ def _xml_event_to_dict(ev_element) -> dict:
     event: dict[str, Any] = {"type": event_type}
 
     # Core scalar fields
-    for field_name in ("eventTime", "eventTimeZoneOffset", "action", "bizStep", "disposition", "eventID", "recordTime"):
+    # #2970: ``transformationID`` identifies a TransformationEvent, which
+    # has no ``action``; without it the XML path cannot satisfy the
+    # structural validator for a conformant transformation.
+    for field_name in (
+        "eventTime",
+        "eventTimeZoneOffset",
+        "action",
+        "bizStep",
+        "disposition",
+        "eventID",
+        "recordTime",
+        "transformationID",
+    ):
         val = _xml_child_text(ev_element, field_name)
         if val:
             event[field_name] = val

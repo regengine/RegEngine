@@ -31,16 +31,22 @@ import importlib
 import json
 import os
 
-from fastapi.routing import APIRoute
-
 module = importlib.import_module(os.environ["REGENGINE_ROUTE_MODULE"])
+
+from shared.paths import ensure_shared_importable
+
+ensure_shared_importable()
+# Flattening lives in shared.route_introspection: since fastapi 0.137 a
+# walk of module.app.routes sees included routers as single opaque entries,
+# which would make both apps look like they mount almost nothing and let
+# this parity check pass on two empty sets.
+from shared.route_introspection import iter_effective_routes
+
 route_keys = set()
-for route in module.app.routes:
-    if not isinstance(route, APIRoute):
-        continue
+for path, route in iter_effective_routes(module.app):
     for method in route.methods or ():
         if method not in {"HEAD", "OPTIONS"}:
-            route_keys.add(f"{method} {route.path}")
+            route_keys.add(f"{method} {path}")
 
 print("ROUTE_KEYS_JSON=" + json.dumps(sorted(route_keys)))
 """

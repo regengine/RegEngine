@@ -34,7 +34,7 @@ from fastapi.testclient import TestClient
 from shared.auth import require_api_key
 from shared.middleware import get_current_tenant_id
 
-from services.graph.app.routers.lineage_traversal import router as lineage_router
+from services.graph.app.routes import router as graph_router
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -43,8 +43,19 @@ _AUTH_HEADERS = {"X-RegEngine-API-Key": os.getenv("AUTH_TEST_BYPASS_TOKEN", "tes
 
 
 def _build_app(tenant_id: uuid.UUID) -> FastAPI:
+    """Mount the lineage router exactly the way production mounts it.
+
+    #2946: this helper used to do ``app.include_router(lineage_router,
+    prefix="/api/v1")``, skipping the ``prefix="/lineage"`` nesting that
+    ``services/graph/app/routes.py`` adds. That divergence is what made the
+    doubled ``/api/v1/lineage/lineage/{tlc}/history`` path invisible: the
+    suite asserted a single-segment URL that only resolved under the test's
+    own flatter mounting. Assembling through ``services.graph.app.routes``
+    — the same router ``server/main.py`` includes at ``prefix="/api/v1"`` —
+    means any future prefix drift fails here instead of in production.
+    """
     app = FastAPI()
-    app.include_router(lineage_router, prefix="/api/v1")
+    app.include_router(graph_router, prefix="/api/v1")
     app.dependency_overrides[require_api_key] = lambda: {
         "tenant_id": str(tenant_id),
         "key_id": "test-key",
@@ -212,3 +223,70 @@ def test_lineage_history_invariant_rejects_cross_tenant_record():
     # broad ``except Exception`` (line 237) does NOT swallow HTTPException
     # because of the re-raise on line 235, so the original 500 propagates.
     assert response.status_code == 500
+
+
+# =============================================================================
+# #2946 — route-inventory net over the assembled graph app
+# =============================================================================
+
+
+def _assembled_paths() -> list[str]:
+    """Every path the graph router serves under production's ``/api/v1`` mount."""
+    app = FastAPI()
+    app.include_router(graph_router, prefix="/api/v1")
+    return [getattr(route, "path", "") for route in app.routes]
+
+
+def test_lineage_history_is_served_at_its_documented_path():
+    """#2946: the documented single-segment path must exist on the real mounting.
+
+    ``routes.py`` includes this router under ``prefix="/lineage"``; the route
+    decorator must therefore not repeat the segment. Asserted against the
+    assembled route table rather than via a request, so a failure reports the
+    served path instead of a bare 404.
+    """
+    paths = _assembled_paths()
+    assert "/api/v1/lineage/{tlc}/history" in paths, (
+        "documented lineage history path is not served; lineage paths present: "
+        f"{[p for p in paths if 'lineage' in p]}"
+    )
+    assert "/api/v1/lineage/lineage/{tlc}/history" not in paths, "doubled /lineage/lineage segment is still served"
+
+
+# Doubled adjacent segments that exist elsewhere in the graph router today.
+# These are the same class of defect as #2946 but live in routers outside its
+# scope, so they are recorded here rather than silently tolerated: the check
+# below fails on any duplicate NOT in this set, so a new one cannot land
+# unnoticed, and it also fails if an entry here is fixed without being
+# removed, so the list cannot rot into a permanent exemption.
+#
+#   /api/v1/fsma/traceability/traceability/*  -> traceability.py:358,378,398
+#   /api/v1/fsma/metrics/metrics*             -> metrics.py:43,59
+_KNOWN_DOUBLED_SEGMENT_PATHS = {
+    "/api/v1/fsma/traceability/traceability/regulations",
+    "/api/v1/fsma/traceability/traceability/impacted-lots",
+    "/api/v1/fsma/traceability/traceability/link/{obligation_id}",
+    "/api/v1/fsma/metrics/metrics",
+    "/api/v1/fsma/metrics/metrics/quality",
+}
+
+
+def _has_repeated_adjacent_segment(path: str) -> bool:
+    segments = [s for s in path.split("/") if s]
+    return any(a == b for a, b in zip(segments, segments[1:]))
+
+
+def test_assembled_graph_routes_have_no_new_duplicated_segment():
+    """#2946: no route may repeat an adjacent path segment.
+
+    A doubled segment means the ``include_router`` prefix and the route
+    decorator both carry it, which serves a URL that appears in no test and
+    no doc while the documented one returns a routing 404.
+    """
+    duplicated = {p for p in _assembled_paths() if _has_repeated_adjacent_segment(p)}
+
+    new = sorted(duplicated - _KNOWN_DOUBLED_SEGMENT_PATHS)
+    assert not new, f"new route(s) with a duplicated adjacent segment: {new}"
+
+    fixed = sorted(_KNOWN_DOUBLED_SEGMENT_PATHS - duplicated)
+    assert not fixed, f"no longer duplicated — drop from _KNOWN_DOUBLED_SEGMENT_PATHS: {fixed}"

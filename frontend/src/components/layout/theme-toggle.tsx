@@ -7,6 +7,10 @@ export function ThemeToggle() {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
+    // next-themes cannot know the resolved theme during SSR, so the documented
+    // pattern is to render a placeholder until mount. The flag flip must happen
+    // after hydration by definition — that is the point of the guard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setMounted(true), []);
 
     if (!mounted) {

@@ -8,9 +8,14 @@ import { AlertTriangle, CheckCircle, Clock, Activity, XCircle } from 'lucide-rea
 import { motion } from 'framer-motion';
 
 export function DriftAlertsWidget() {
-    const { data: health, isLoading } = useDriftHealth();
+    // #2837 This used to destructure only { data, isLoading } and branch on
+    // `isLoading || !health`, so ANY failure — 404, 500, network drop — fell
+    // into the skeleton branch and the card animated "Monitoring system
+    // health..." forever. The skeleton is now reserved for isLoading; every
+    // non-success path renders an explicit, honest state.
+    const { data: health, isLoading, isError, error } = useDriftHealth();
 
-    if (isLoading || !health) {
+    if (isLoading) {
         return (
             <Card>
                 <CardHeader>
@@ -22,6 +27,51 @@ export function DriftAlertsWidget() {
                         <div className="h-4 bg-muted rounded w-3/4" />
                         <div className="h-8 bg-muted rounded" />
                         <div className="h-4 bg-muted rounded w-1/2" />
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // #2836 + #2837 This widget's data source (GET /api/fsma/drift/health) has
+    // NO backend implementation. There is no drift router anywhere in
+    // services/ or server/ — `grep -rn "/drift" services/ server/` returns zero
+    // results — so the request cannot succeed in any environment. It is
+    // therefore reported as an unavailable capability, not a transient error:
+    // a "retry" affordance here would be a lie. Delete this widget or point
+    // useDriftHealth() at a real endpoint once a drift backend exists.
+    if (isError || !health) {
+        return (
+            <Card className="h-full">
+                <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-muted-foreground" />
+                            Compliance Drift
+                        </CardTitle>
+                        <Badge variant="outline" className="text-muted-foreground">
+                            Unavailable
+                        </Badge>
+                    </div>
+                    <CardDescription>Real-time FSMA 204 compliance metrics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div
+                        role="status"
+                        className="flex items-start gap-2 rounded-md border border-re-warning bg-re-warning-muted p-3 text-sm text-re-warning"
+                    >
+                        <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                            <p className="font-medium">Drift monitoring is not available</p>
+                            <p>
+                                This deployment has no compliance-drift service, so live drift
+                                metrics and alerts cannot be shown. Nothing is wrong with your
+                                data — the capability simply is not connected yet.
+                            </p>
+                            {isError && error instanceof Error && error.message ? (
+                                <p className="text-xs opacity-80">Details: {error.message}</p>
+                            ) : null}
+                        </div>
                     </div>
                 </CardContent>
             </Card>

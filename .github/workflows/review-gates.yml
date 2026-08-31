@@ -18,6 +18,7 @@ jobs:
   supabase-patterns:
     name: Supabase Query Patterns
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -64,6 +65,7 @@ jobs:
   source-hygiene:
     name: Source Hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -115,8 +117,13 @@ jobs:
   audit-trail:
     name: Audit Trail Protection
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          # Issue #2810: migration gates diff against origin/main; the default
+          # shallow clone leaves origin/main absent and the diff silently no-ops.
+          fetch-depth: 0
 
       - name: No mutations on append-only tables (frontend)
         run: |
@@ -154,15 +161,38 @@ jobs:
 
       - name: No destructive migrations on audit tables
         run: |
+          # Issue #2810: migrations live in alembic/versions/*.py (Python), not
+          # migrations/*.sql. A missing origin/main must fail loudly, not no-op.
+          git rev-parse --verify origin/main >/dev/null
           # Only check migration files changed in this PR (not all historical migrations)
-          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null || true)
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
           if [ -z "$CHANGED_MIGRATIONS" ]; then
             echo "No migration files changed — skipping"
             exit 0
           fi
-          MATCHES=$(echo "$CHANGED_MIGRATIONS" | xargs grep -li 'DROP\|TRUNCATE' 2>/dev/null | xargs grep -li 'audit\|evidence_log\|compliance_status_log\|task_event' 2>/dev/null || true)
-          if [ -n "$MATCHES" ]; then
-            echo "$MATCHES"
+          # Destructive Alembic operations, plus raw DDL inside op.execute(...).
+          # Matched per-LINE so the destructive op and the audit table have to be
+          # the same statement — a file-wide AND flags almost every migration.
+          DESTRUCTIVE_RE='op\.drop_table|op\.drop_column|op\.drop_constraint|DROP +TABLE|DROP +COLUMN|TRUNCATE'
+          AUDIT_RE='audit|evidence_log|compliance_status_log|task_event'
+          # Statements that merely contain a destructive keyword but destroy no data.
+          BENIGN_RE='REVOKE|DROP +TRIGGER|DROP +POLICY|DROP +INDEX|^[0-9]+:[[:space:]]*#'
+          # Blank out the downgrade() body — a downgrade dropping what its own
+          # upgrade created is expected. Lines are blanked, not deleted, so the
+          # line numbers reported below still match the real file. Helper
+          # functions defined after downgrade() are still scanned.
+          UPGRADE_ONLY='/^def downgrade/{d=1} d && /^[A-Za-z@_]/ && !/^def downgrade/{d=0} {print (d ? "" : $0)}'
+          FAILED=0
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            HITS=$(awk "$UPGRADE_ONLY" "$f" | grep -Eni "$DESTRUCTIVE_RE" | grep -Ei "$AUDIT_RE" | grep -Eiv "$BENIGN_RE" || true)
+            if [ -n "$HITS" ]; then
+              echo "$f:"
+              echo "$HITS"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
             echo "::error::Found destructive migration on audit tables — requires manual review"
             exit 1
           fi
@@ -173,6 +203,7 @@ jobs:
   sql-safety:
     name: SQL Injection Defense
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -195,14 +226,27 @@ jobs:
   tenant-isolation:
     name: Tenant Isolation Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          # Issue #2810: migration gates diff against origin/main; the default
+          # shallow clone leaves origin/main absent and the diff silently no-ops.
+          fetch-depth: 0
 
       - name: New migrations include tenant_id where expected
         run: |
-          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
-            if grep -qi "CREATE TABLE.*pcos_\|CREATE TABLE.*compliance\|CREATE TABLE.*evidence" "$f" 2>/dev/null; then
-              if ! grep -qi "tenant_id" "$f" 2>/dev/null; then
+          # Issue #2810: migrations are alembic/versions/*.py. In Alembic the table
+          # name usually sits on the line AFTER op.create_table(, so match the
+          # operation and the quoted table name independently.
+          git rev-parse --verify origin/main >/dev/null
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
+          CREATE_RE='op\.create_table\(|CREATE TABLE'
+          SCOPED_TABLE_RE="[\"'](fsma\.)?(pcos_|compliance_|evidence_)[a-z0-9_]*[\"']|CREATE TABLE +[a-z0-9_.\"']*(pcos_|compliance_|evidence_)"
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            if grep -Eq "$CREATE_RE" "$f" && grep -Eqi "$SCOPED_TABLE_RE" "$f"; then
+              if ! grep -q "tenant_id" "$f"; then
                 echo "::error::Migration $f creates a compliance/pcos table without tenant_id column"
                 exit 1
               fi
@@ -211,10 +255,16 @@ jobs:
 
       - name: New migrations enable RLS on new tables
         run: |
-          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
-            if grep -qi "CREATE TABLE" "$f" 2>/dev/null; then
-              if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f" 2>/dev/null; then
-                echo "::error::Migration $f creates a table without enabling RLS"
+          # Issue #2810: RLS is turned on from Alembic via
+          # op.execute("ALTER TABLE ... ENABLE ROW LEVEL SECURITY").
+          git rev-parse --verify origin/main >/dev/null
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
+          CREATE_RE='op\.create_table\(|CREATE TABLE'
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            if grep -Eq "$CREATE_RE" "$f"; then
+              if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f"; then
+                echo "::error::Migration $f creates a table without enabling RLS — add op.execute(\"ALTER TABLE ... ENABLE ROW LEVEL SECURITY\")"
                 exit 1
               fi
             fi
@@ -234,6 +284,7 @@ jobs:
   react-patterns:
     name: React Patterns
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 

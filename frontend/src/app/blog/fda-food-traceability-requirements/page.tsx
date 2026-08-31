@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
   description: 'Understand FDA food traceability requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement for FSMA 204 compliance.',
   openGraph: {
+    url: 'https://regengine.co/blog/fda-food-traceability-requirements',
+    siteName: 'RegEngine',
     title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
     description: 'Understand FDA food traceability requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement for FSMA 204 compliance.',
     type: 'article',

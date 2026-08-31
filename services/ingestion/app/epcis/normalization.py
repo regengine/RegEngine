@@ -86,7 +86,21 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
 
     quantity = None
     unit = None
-    quantity_list = event.get("extension", {}).get("quantityList", [])
+    # #2968: the GS1 EPCIS 2.0 JSON/JSON-LD binding carries ``quantityList``
+    # as a direct member of the event — the ``extension`` wrapper is the
+    # EPCIS 1.x XML construct that ``xml_parser`` still writes. Read both,
+    # extension first, so this agrees with
+    # ``shared.canonical_event._extract_epcis_quantity`` on every event.
+    # #2970: TransformationEvent has no ``quantityList`` at all; its
+    # quantities live in the input/output lists. Prefer the output list —
+    # for a transformation CTE the FSMA quantity is the lot it creates.
+    quantity_list = (
+        event.get("extension", {}).get("quantityList")
+        or event.get("quantityList")
+        or event.get("outputQuantityList")
+        or event.get("inputQuantityList")
+        or []
+    )
     if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
         quantity = quantity_list[0].get("quantity")
         unit = quantity_list[0].get("uom")

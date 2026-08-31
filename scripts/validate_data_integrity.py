@@ -11,6 +11,7 @@ Exit codes:
   0 = all checks passed
   1 = one or more checks failed
   2 = could not connect to database
+  64 = usage error (DATABASE_URL not set)
 """
 
 import argparse
@@ -18,25 +19,48 @@ import os
 import sys
 from datetime import datetime, timezone
 
+# Exit codes — see the module docstring.
+EXIT_OK = 0
+EXIT_CHECKS_FAILED = 1
+EXIT_NO_DATABASE = 2
+EXIT_USAGE = 64
+
+
+class DatabaseUnavailable(RuntimeError):
+    """No check could run because there is no usable database connection.
+
+    ``exit_code`` carries the status the module docstring reserves for the
+    cause, so the caller reports the real reason instead of treating an
+    unverified run as a pass (#2934).
+    """
+
+    def __init__(self, message: str, exit_code: int = EXIT_NO_DATABASE) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
 
 def get_db_connection():
-    """Create a database connection from DATABASE_URL env var."""
+    """Create a database connection from DATABASE_URL env var.
+
+    Raises DatabaseUnavailable carrying the real cause instead of
+    collapsing an unset DATABASE_URL, a missing driver and a failed
+    connect into a silent (None, None) the caller cannot tell apart.
+    """
     try:
         from sqlalchemy import create_engine, text
+    except ImportError as e:
+        raise DatabaseUnavailable("sqlalchemy not installed — run: pip install sqlalchemy") from e
 
-        db_url = os.getenv("DATABASE_URL")
-        if not db_url:
-            print("ERROR: DATABASE_URL environment variable not set")
-            return None, None
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise DatabaseUnavailable("DATABASE_URL environment variable not set", EXIT_USAGE)
+
+    try:
         engine = create_engine(db_url)
         conn = engine.connect()
-        return conn, text
-    except ImportError:
-        print("ERROR: sqlalchemy not installed — run: pip install sqlalchemy")
-        return None, None
     except Exception as e:
-        print(f"ERROR: Could not connect to database: {e}")
-        return None, None
+        raise DatabaseUnavailable(f"Could not connect to database: {e}") from e
+    return conn, text
 
 
 def check_hash_chain_continuity(conn, text_fn) -> tuple[bool, str]:
@@ -214,11 +238,18 @@ def main():
     print(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
     print()
 
-    conn, text_fn = get_db_connection()
+    try:
+        conn, text_fn = get_db_connection()
+    except DatabaseUnavailable as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        print("\nResult: NOT VERIFIED — no integrity check ran (no database connection)")
+        return e.exit_code
     if conn is None:
-        print("\nSkipping database checks (no connection available)")
-        print("Result: PASS (no database — integrity checks not applicable)")
-        return 0
+        # Defensive: a helper that yields no connection must never be read
+        # as "nothing to check, therefore fine".
+        print("ERROR: no database connection available", file=sys.stderr)
+        print("\nResult: NOT VERIFIED — no integrity check ran (no database connection)")
+        return EXIT_NO_DATABASE
 
     checks = [
         ("Hash Chain Continuity", check_hash_chain_continuity),
@@ -240,7 +271,7 @@ def main():
     conn.close()
     print()
     print(f"Overall: {'PASS' if all_passed else 'FAIL'}")
-    return 0 if all_passed else 1
+    return EXIT_OK if all_passed else EXIT_CHECKS_FAILED
 
 
 if __name__ == "__main__":

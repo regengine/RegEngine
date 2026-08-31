@@ -53,6 +53,36 @@ _TENANT_EXEMPT_PATHS: frozenset[str] = frozenset(
 )
 
 
+def _bind_tenant_log_context(tenant_id: uuid.UUID):
+    """Bind the resolved tenant into logging context for this request (#2859).
+
+    Imported lazily: ``shared.observability.context`` runs ``structlog.configure``
+    at import time, and this middleware module is imported far more widely than
+    that side effect should reach.
+
+    Never raises. This middleware runs before auth on every request, so a
+    logging-context failure must degrade to an unlabelled log line rather than
+    turning a good request into a 500.
+    """
+    try:
+        from shared.observability.context import bind_tenant_log_context
+
+        return bind_tenant_log_context(str(tenant_id))
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Could not bind tenant log context: %s", e)
+        return None
+
+
+def _unbind_tenant_log_context(token) -> None:
+    """Release the binding made by :func:`_bind_tenant_log_context` (#2859)."""
+    try:
+        from shared.observability.context import unbind_tenant_log_context
+
+        unbind_tenant_log_context(token)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("Could not unbind tenant log context: %s", e)
+
+
 def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter:
     """Return an existing Prometheus Counter when this module is re-imported."""
     try:
@@ -66,11 +96,19 @@ def _safe_counter(name: str, description: str, labelnames: list[str]) -> Counter
         return Counter(name, description, labelnames, registry=None)
 
 
-# Track spoofing attempts for alerting
+# Track spoofing attempts for alerting.
+#
+# #2858: deliberately UNLABELLED. This counter is incremented from PRE-AUTH
+# middleware, so any label derived from the request (previously the raw peer
+# IP via ``client_host``) is attacker-controlled and unbounded — a remote host
+# can mint a new Prometheus time series per source address and grow the
+# registry without limit. The rejected peer IP is still recorded, at full
+# fidelity and with retention limits, on the structured warning log emitted
+# next to the ``.inc()`` in ``_extract_tenant_id``.
 tenant_header_rejected_total = _safe_counter(
     "tenant_header_rejected_total",
     "Unauthenticated X-RegEngine-Tenant-ID header rejections",
-    ["client_host"],
+    [],
 )
 
 tenant_extraction_failed_total = _safe_counter(
@@ -104,6 +142,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         # authoritative and re-seed downstream.
         set_rls_tenant_id(None)
 
+        # #2859: token for the tenant logging binding released in the finally
+        # below. Stays None whenever no tenant was resolved, so exempt paths
+        # and rejected requests unbind nothing.
+        tenant_log_token = None
+
         try:
             tenant_id = await self._extract_tenant_id(request)
 
@@ -116,6 +159,10 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # this with the authoritative principal tenant.
             if tenant_id is not None:
                 set_rls_tenant_id(tenant_id)
+                # #2859: without this, every log line emitted while serving
+                # this request reads tenant_id="unknown" — the resolved tenant
+                # was stored on request.state and never reached the logger.
+                tenant_log_token = _bind_tenant_log_context(tenant_id)
 
             # Log tenant context
             logger.debug(f"Request {request.method} {request.url.path} for tenant {tenant_id}")
@@ -148,8 +195,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Unable to establish tenant context"},
                 )
 
-        response = await call_next(request)
-        return response
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            # #2859: always release, even when the handler raised, so the
+            # tenant cannot leak into the next request on this context.
+            if tenant_log_token is not None:
+                _unbind_tenant_log_context(tenant_log_token)
 
     async def _extract_tenant_id(self, request: Request) -> Optional[uuid.UUID]:
         """
@@ -207,7 +260,8 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         "attempted_tenant": tenant_header,
                     },
                 )
-                tenant_header_rejected_total.labels(client_host=client_host).inc()
+                # #2858: no client_host label — the IP lives in the log line above.
+                tenant_header_rejected_total.inc()
 
         return None
 

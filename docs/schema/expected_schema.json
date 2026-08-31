@@ -1417,9 +1417,17 @@
         "nullable": false,
         "type": "uuid"
       },
+      "include_pii": {
+        "nullable": true,
+        "type": "boolean"
+      },
       "query_end_date": {
         "nullable": true,
         "type": "date"
+      },
+      "query_event_type": {
+        "nullable": true,
+        "type": "text"
       },
       "query_start_date": {
         "nullable": true,

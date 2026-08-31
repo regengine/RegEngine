@@ -36,18 +36,34 @@
     # 4. Upload to S3 (Secure Offsite Storage)
     aws s3 cp backups/neo4j/neo4j.dump s3://regengine-backups/neo4j/$(date +%Y-%m-%d)/
     ```
+*   **Automation**: `scripts/backup_neo4j.sh` performs exactly this dump,
+    writing `backups/neo4j/<timestamp>/neo4j.dump` — one directory per run, so
+    the `--from-path=<dir>` restore in 4.1 finds the dump under the name it
+    expects, matching the dated S3 layout above. The artifact is a **binary
+    `neo4j-admin` dump**; a Cypher export cannot be restored by that command —
+    see #2939.
 
 ### 3.2 PostgreSQL
 *   **Strategy**: `pg_dump` (Logical Backup) + WAL Archiving (if PITR needed).
 *   **Frequency**: Daily full dump at 03:00 UTC.
 *   **Procedure**:
     ```bash
-    # Non-blocking backup
-    docker exec regengine-postgres-1 pg_dump -U regengine regengine_admin | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
+    # Non-blocking backup. The consolidated monolith keeps ALL tables —
+    # including the admin subsystem's — in the 'regengine' database; no
+    # migration chain populates the legacy 'regengine_admin' database.
+    # If your stack predates the consolidation and legacy tooling wrote
+    # real rows into regengine_admin, take ONE final dump of it before
+    # adopting this procedure — after that, only 'regengine' is covered.
+    docker exec regengine-postgres-1 pg_dump -U regengine regengine | gzip > backups/postgres/regengine_$(date +%Y-%m-%d).sql.gz
     
     # Upload
     aws s3 cp backups/postgres/*.gz s3://regengine-backups/postgres/
     ```
+*   **Automation**: `scripts/backup_postgres.sh` produces the *same* artifact
+    (plain SQL piped through gzip, named `*.sql.gz`) and is restored by the
+    identical command in 4.1 below. Both sides must stay on this format: a
+    `pg_dump --format=custom` archive is binary, is not gzip, and is readable
+    only by `pg_restore` — see #2937.
 
 ### 3.3 Redis
 *   **Strategy**: AOF (Append Only File) persistence is enabled (`appendonly yes`).
@@ -85,16 +101,17 @@
 6.  **Verify**: Run `MATCH (n) RETURN count(n)` and compare with metrics.
 
 #### PostgreSQL Recovery
-1.  **Stop**: `docker compose stop admin-api` (Prevent new writes)
+1.  **Stop**: stop the backend monolith (the local `uvicorn`/`gunicorn server.main:app` process, or the app container if one is running) to prevent new writes.
 2.  **Restore**:
     ```bash
     # Drop/Create DB
-    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine_admin; CREATE DATABASE regengine_admin;"
+    docker exec -i regengine-postgres-1 psql -U regengine postgres -c "DROP DATABASE regengine; CREATE DATABASE regengine;"
     
-    # Import Dump
-    gunzip -c backups/postgres/latest.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine_admin
+    # Import Dump (substitute the date of the dump you are restoring —
+    # the backup procedure above writes regengine_YYYY-MM-DD.sql.gz)
+    gunzip -c backups/postgres/regengine_YYYY-MM-DD.sql.gz | docker exec -i regengine-postgres-1 psql -U regengine regengine
     ```
-3.  **Restart Services**: `docker compose restart`
+3.  **Restart**: bring dependencies back if stopped (`docker compose -f docker-compose.dev.yml up -d`), then start the backend monolith again (`uvicorn server.main:app --port 8000`, or your process manager's equivalent).
 
 ### 4.2 Scenario: Region/Data Center Failure
 1.  **Switch Context**: Update `AWS_DEFAULT_REGION` in `.env`.

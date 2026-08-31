@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements Guide | RegEngine',
   description: 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 formats.',
   openGraph: {
+    url: 'https://regengine.co/blog/fsma-204-cte-kde-guide',
+    siteName: 'RegEngine',
     title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements',
     description: 'Understand the 7 Critical Tracking Events and Key Data Elements required by FDA FSMA 204 rules. Technical guide with data mapping and implementation examples.',
     type: 'article',

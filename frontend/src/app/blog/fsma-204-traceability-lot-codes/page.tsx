@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description:
     "Learn how to assign, track, and maintain Traceability Lot Codes under FSMA 204. Covers TLC requirements, best practices, and common mistakes for food businesses.",
   openGraph: {
+    url: "https://regengine.co/blog/fsma-204-traceability-lot-codes",
+    siteName: "RegEngine",
     title: "FSMA 204 Traceability Lot Codes (TLCs): A Complete Guide",
     description: "Everything food businesses need to know about TLCs under the FDA Food Traceability Rule.",
     type: "article",

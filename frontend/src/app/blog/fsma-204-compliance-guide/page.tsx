@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
   description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.',
   openGraph: {
+    url: 'https://regengine.co/blog/fsma-204-compliance-guide',
+    siteName: 'RegEngine',
     title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
     description: 'FDA FSMA 204 requirements, deadlines, CTEs, KDEs, and what your food business must do to comply with food traceability rules by July 2028.',
     type: 'article',

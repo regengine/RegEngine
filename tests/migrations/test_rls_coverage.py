@@ -23,6 +23,22 @@ TABLES_EXEMPT is the only escape hatch — add a table here only if it
 genuinely is not tenant-scoped (e.g. lookup tables, system catalogs)
 with a comment explaining why. Keep the list small.
 
+#2828 — the same three checks now also run over the tenant-scoped tables
+in the ``public`` schema. The fsma sweep above enumerates
+``pg_tables WHERE schemaname = 'fsma'``, so no public-schema table was
+ever examined, and ``public.controls`` / ``public.regulations`` sat on
+``ENABLE`` without ``FORCE`` from v056 until v111 — meaning the table
+owner (which in backend CI is the app role ``regengine`` itself, see
+``.github/workflows/backend-ci.yml`` lines 525-526) read and wrote every
+tenant's rows with RLS inert. The public half is a curated list rather
+than a schema sweep: ``public`` also holds admin/auth, outbox and
+migration-infra tables whose isolation stories are deliberately
+different (v092 gives some of them a permissive ``USING (true)``
+app-role policy, and leaves ``alembic_version`` ENABLE-without-FORCE on
+purpose so the migration role cannot lock itself out). Only tables whose
+required posture is "FORCE + a real tenant predicate" belong in
+PUBLIC_TENANT_SCOPED_TABLES.
+
 Needs a real Postgres. Reuses ``DATABASE_URL`` when set (CI service
 container), else spins up a disposable testcontainers Postgres. With
 ``REGENGINE_REQUIRE_DB=1`` an unavailable Postgres (or a failed
@@ -71,6 +87,41 @@ TABLES_EXEMPT: Set[str] = {
     # must ship a two-party RLS design before either role receives access.
     "exchange_packages",
 }
+
+# #2828: public-schema tables whose required posture is identical to the
+# fsma sweep above — NOT NULL tenant_id, FORCE ROW LEVEL SECURITY, and at
+# least one policy carrying a real tenant predicate. Curated on purpose;
+# see the module docstring for why the public schema is not swept wholesale.
+PUBLIC_TENANT_SCOPED_TABLES: Set[str] = {
+    # Regulatory control plane. v056 Part 4 gives all three the same
+    # tenant_isolation_* policy TO regengine/regengine_sysadmin, but only
+    # obligations was ever FORCEd (v051 line 461, v056 line 296); v111
+    # closes controls/regulations. Created NOT NULL by the baseline
+    # (alembic/sql/V036__fsma_204_regulatory_seed_data.sql).
+    "obligations",
+    "controls",
+    "regulations",
+    # Supplier portal slice — v077 lines 294-343 create each with
+    # tenant_id UUID NOT NULL and arm ENABLE + FORCE + a
+    # get_tenant_context() policy in one block.
+    "supplier_facilities",
+    "supplier_facility_ftl_categories",
+    "supplier_traceability_lots",
+    "supplier_cte_events",
+    "supplier_funnel_events",
+}
+
+# Tenant-scoped public tables that reach their tenant through a parent row
+# instead of carrying tenant_id themselves. FORCE and the policy predicate
+# still apply; the NOT NULL tenant_id check does not.
+PUBLIC_TABLES_SCOPED_VIA_PARENT: Set[str] = {
+    # obligation_id -> obligations.tenant_id. FORCE from v051 line 483; the
+    # policy that makes it readable is v104's (the incident that established
+    # "a conditional CREATE POLICY is what caused this incident").
+    "obligation_cte_rules",
+}
+
+PUBLIC_RLS_TABLES: Set[str] = PUBLIC_TENANT_SCOPED_TABLES | PUBLIC_TABLES_SCOPED_VIA_PARENT
 
 
 def _provision_app_roles(database_url: str) -> None:
@@ -180,24 +231,33 @@ def _fsma_tables(engine: Engine) -> list[str]:
     return [r[0] for r in rows]
 
 
-def _table_has_tenant_id_not_null(engine: Engine, table: str) -> bool:
+def _table_exists(engine: Engine, table: str, schema: str) -> bool:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT to_regclass(:q) IS NOT NULL"),
+            {"q": f"{schema}.{table}"},
+        ).fetchone()
+    return bool(row and row[0])
+
+
+def _table_has_tenant_id_not_null(engine: Engine, table: str, schema: str = "fsma") -> bool:
     with engine.connect() as conn:
         row = conn.execute(
             text(
                 """
                 SELECT is_nullable = 'NO' AS not_null
                 FROM information_schema.columns
-                WHERE table_schema = 'fsma'
+                WHERE table_schema = :s
                   AND table_name = :t
                   AND column_name = 'tenant_id'
                 """
             ),
-            {"t": table},
+            {"t": table, "s": schema},
         ).fetchone()
     return bool(row and row[0])
 
 
-def _table_has_force_rls(engine: Engine, table: str) -> bool:
+def _table_has_force_rls(engine: Engine, table: str, schema: str = "fsma") -> bool:
     with engine.connect() as conn:
         row = conn.execute(
             text(
@@ -205,15 +265,15 @@ def _table_has_force_rls(engine: Engine, table: str) -> bool:
                 SELECT c.relrowsecurity AND c.relforcerowsecurity
                 FROM pg_class c
                 JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE n.nspname = 'fsma' AND c.relname = :t
+                WHERE n.nspname = :s AND c.relname = :t
                 """
             ),
-            {"t": table},
+            {"t": table, "s": schema},
         ).fetchone()
     return bool(row and row[0])
 
 
-def _table_has_tenant_policy(engine: Engine, table: str) -> bool:
+def _table_has_tenant_policy(engine: Engine, table: str, schema: str = "fsma") -> bool:
     """Return True if at least one policy on the table references
     ``get_tenant_context()`` or ``app.tenant_id`` in its expression —
     i.e., the policy is actually doing tenant isolation rather than
@@ -224,10 +284,10 @@ def _table_has_tenant_policy(engine: Engine, table: str) -> bool:
                 """
                 SELECT qual, with_check
                 FROM pg_policies
-                WHERE schemaname = 'fsma' AND tablename = :t
+                WHERE schemaname = :s AND tablename = :t
                 """
             ),
-            {"t": table},
+            {"t": table, "s": schema},
         ).fetchall()
     if not rows:
         return False
@@ -306,4 +366,66 @@ class TestRLSCoverage_EPIC_B:
             "referencing get_tenant_context() or app.tenant_id. This is "
             "the empty-fortress anti-pattern (#1217). Offenders: "
             f"{failures}"
+        )
+
+
+class TestPublicSchemaRLSCoverage_2828:
+    """The same three layers, over the tenant-scoped ``public`` tables.
+
+    ``TestRLSCoverage_EPIC_B`` enumerates ``pg_tables WHERE schemaname =
+    'fsma'`` and therefore never looked at the public schema, which is how
+    ``public.controls`` and ``public.regulations`` carried ENABLE-without-
+    FORCE from v056 all the way to v111 (#2828).
+    """
+
+    def test_listed_tables_all_exist(self, upgraded_engine: Engine):
+        """A renamed or dropped table must break this gate, not empty it.
+
+        Without this, a typo in PUBLIC_RLS_TABLES would make every
+        assertion below vacuously true.
+        """
+        missing = sorted(t for t in PUBLIC_RLS_TABLES if not _table_exists(upgraded_engine, t, "public"))
+        assert not missing, (
+            "PUBLIC_RLS_TABLES names public tables that do not exist after "
+            f"alembic upgrade head: {missing}. Fix the name or remove the entry "
+            "— a stale entry silently hollows out this gate."
+        )
+
+    def test_every_public_tenant_scoped_table_has_tenant_id_not_null(self, upgraded_engine: Engine):
+        failures = [
+            t
+            for t in sorted(PUBLIC_TENANT_SCOPED_TABLES)
+            if not _table_has_tenant_id_not_null(upgraded_engine, t, schema="public")
+        ]
+        assert not failures, (
+            "public.* tenant-scoped tables missing NOT NULL tenant_id "
+            f"(an INSERT that forgets tenant_id would slip through): {failures}"
+        )
+
+    def test_every_public_tenant_scoped_table_has_force_rls(self, upgraded_engine: Engine):
+        """The #2828 regression lock.
+
+        ENABLE alone leaves the table OWNER outside RLS. Backend CI makes the
+        app role ``regengine`` the owner of the database it migrates
+        (.github/workflows/backend-ci.yml lines 525-526), so on these tables
+        the application role WAS the owner and the tenant predicate never
+        applied to it.
+        """
+        failures = [
+            t for t in sorted(PUBLIC_RLS_TABLES) if not _table_has_force_rls(upgraded_engine, t, schema="public")
+        ]
+        assert not failures, (
+            "public.* tables with RLS enabled but not FORCED. Without FORCE the "
+            "table owner role bypasses RLS entirely, and the owner is the app "
+            f"role under the CI/production layout (#2828): {failures}"
+        )
+
+    def test_every_public_tenant_scoped_table_has_tenant_isolation_policy(self, upgraded_engine: Engine):
+        failures = [
+            t for t in sorted(PUBLIC_RLS_TABLES) if not _table_has_tenant_policy(upgraded_engine, t, schema="public")
+        ]
+        assert not failures, (
+            "public.* tables with RLS enabled but no policy referencing "
+            "get_tenant_context() or app.tenant_id — the empty-fortress "
+            f"anti-pattern (#1217, and #2880 for the conditional-policy shape): {failures}"
         )

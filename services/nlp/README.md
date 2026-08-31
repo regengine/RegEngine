@@ -23,54 +23,116 @@ consolidated monolith (`server/main.py`) at `/api/v1`:
 
 - Header `X-Request-ID`: Provide a UUID to correlate logs across ingestion → NLP → graph. If omitted, services generate one and echo it back.
 - Logging: Services bind `request_id` into structured logs via `structlog`, visible in all entries during the request.
-- Demo: `scripts/demo/run_state_llm_e2e.py` sends `X-Request-ID` to ingestion and reuses it for extractor calls.
+- Demo: `scripts/verify_inflow_to_regengine_e2e.py` sends `X-Request-ID` through the ingestion path. (The previously referenced `scripts/demo/run_state_llm_e2e.py` was removed; the `scripts/demo/` directory no longer exists.)
 
 ## LLM Extractor Wiring
 
-The `LLMGenerativeExtractor` uses a minimal wrapper `SimpleLLMClient` with env-configurable model selection via `LLM_MODEL` (defaults to `gemini-3-pro`). Replace `SimpleLLMClient.generate_json(prompt)` with the actual SDK call (Gemini 3 Pro / GPT-5) and ensure it returns a JSON string per the expected schema.
+`LLMGenerativeExtractor` (`app/extractors/llm_extractor.py:396`) does not wrap a
+single client. It builds one at construction time through
+`LLMClientFactory.create()` (`llm_extractor.py:367`), which picks one of three
+concrete clients by substring-matching `LLM_MODEL`:
+
+| `LLM_MODEL` contains | Client | Also required |
+|----------------------|--------|---------------|
+| `gpt` | `OpenAILegacyClient` (`llm_extractor.py:257`) | `OPENAI_API_KEY` |
+| `gemini` | `VertexAIClient` (`llm_extractor.py:289`) | `GOOGLE_CLOUD_PROJECT` (+ optional `GOOGLE_CLOUD_LOCATION`, default `us-central1`) |
+| anything else | `OllamaClient` (`llm_extractor.py:318`) | `OLLAMA_HOST` (default `http://localhost:11434`) |
+
+The default `LLM_MODEL` is **`llama3:8b`**, so with no configuration at all the
+factory returns `OllamaClient` pointed at localhost.
+
+**Selection is a fallthrough, not a dispatch.** If the "Also required" variable
+for the matched provider is missing, the factory does *not* raise — it falls
+through to `OllamaClient`. Setting `LLM_MODEL=gpt-5` without `OPENAI_API_KEY`
+therefore silently runs against a local Ollama endpoint rather than OpenAI. The
+one exception is production: `REGENGINE_ENV=production` with a loopback
+`OLLAMA_HOST` raises `RuntimeError` at construction rather than starting
+(`llm_extractor.py:385`).
+
+There is no `SimpleLLMClient` and no `generate_json` method. To add a provider,
+subclass `BaseLLMClient` (`llm_extractor.py:245`), implement
+`generate(prompt, system_prompt) -> str`, and add a branch to
+`LLMClientFactory.create()`.
 
 ### Expected JSON Output Schema
 
+The contract is enforced at runtime by a `Draft202012Validator` built from
+`LLMGenerativeExtractor.JSON_SCHEMA` (`llm_extractor.py:448`). It is a JSON
+**object** with a required `results` array — not a bare array — and
+`additionalProperties` is `false` at both levels:
+
 ```json
-[
-  {
-    "provision_text": "Exact quote from text",
-    "obligation_type": "REPORTING|RESTRICTION|etc",
-    "confidence": 0.0-1.0
-  }
-]
+{
+  "results": [
+    {
+      "provision_text": "Exact quote from text",
+      "obligation_type": "REQUIREMENT",
+      "confidence": 0.87
+    }
+  ],
+  "warnings": []
+}
 ```
+
+- `obligation_type` must be one of exactly `REQUIREMENT`, `PROHIBITION`,
+  `REPORTING`, `EXEMPTION`, `UNKNOWN`. Any other value (`RESTRICTION`, for
+  example) fails validation.
+- `provision_text` is 5–4000 characters; `confidence` is a number in `[0.0, 1.0]`.
+- All three item fields are required. `warnings` is optional.
+
+Output that fails validation is retried up to `LLM_MAX_RETRIES` times with the
+validation error fed back to the model; exhausting the budget yields no
+extractions.
 
 ### Hallucination Guard
 
-The extractor validates that `provision_text` appears in the source `text` before including it in results. Consider adding stricter validations (e.g., fuzzy matching, span offsets) for noisy sources.
+The extractor drops any item whose `provision_text` does not appear in the
+original, non-redacted source text (`_quote_in_original`), and records
+`source_span_start` / `source_span_end` offsets for the items it keeps. Items
+carrying SQL sentinels are dropped; items carrying prompt-injection markers are
+kept but flagged `needs_review` for HITL rather than silently discarded.
 
 ### Environment
 
-- `LLM_MODEL`: model id string (e.g., `gemini-3-pro`, `gpt-5`).
-- `LLM_API_KEY`: provider API key (OpenAI for `gpt-*`).
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LLM_MODEL` | `llama3:8b` | Model id; also selects the provider (see table above). |
+| `OPENAI_API_KEY` | unset | Required for the OpenAI client. **Not** `LLM_API_KEY` — no code reads that name. |
+| `GOOGLE_CLOUD_PROJECT` | unset | Required for the Vertex client. |
+| `GOOGLE_CLOUD_LOCATION` | `us-central1` | Vertex region. |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama endpoint; loopback is refused in production. |
+| `LLM_TIMEOUT_S` | `45` | Per-request timeout, seconds. |
+| `LLM_MAX_RETRIES` | `3` | Self-correction attempts on invalid JSON. |
+| `LLM_MAX_INPUT_CHARS` | `50000` | Input truncation cap. |
 
 ### Testing
 
-Unit tests under `tests/nlp/test_llm_extractor.py` validate JSON parsing and quote checks by injecting a dummy client.
+```zsh
+python -m pytest services/nlp/tests/test_llm_extractor_agent.py -v
+```
+
+Related suites: `services/nlp/tests/test_llm_prompt_injection.py` (delimiter and
+guardrail behavior) and `services/nlp/tests/test_llm_resilience.py` (retry and
+failure paths). All inject a stub client, so none of them require a provider
+key or a running Ollama.
 
 ## Installation
 
-Install the NLP optional dependency group to enable OpenAI SDK:
+There is no `[nlp]` extras group and the root package is not installable — see
+the note at the top of `pyproject.toml`. Dependencies come from
+`requirements.lock` (compiled from `requirements.in`), which already includes
+`openai`, `jsonschema` and `pdfminer.six` unconditionally.
 
-```zsh
-pip install -e .[nlp]
-```
+The Vertex path is the exception: `vertexai` is **not** in `requirements.in`, so
+`VertexAIClient` raises `ImportError` on construction unless the SDK is
+installed separately.
 
-Then set environment variables and run tests or the demo:
+To exercise the OpenAI path locally:
 
 ```zsh
 export LLM_MODEL="gpt-5"
-export LLM_API_KEY="sk-proj-<your-key>"
-python -m pytest tests/nlp/test_llm_extractor.py -v
+export OPENAI_API_KEY="sk-proj-<your-key>"
 ```
-
-For PDF text extraction, `pdfminer.six` is included in the `[nlp]` extras.
 
 ## Traceability Query API (Phase 4)
 

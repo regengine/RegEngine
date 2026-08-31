@@ -139,7 +139,7 @@ curl -X GET "https://sandbox.regengine.ai/provenance/{OBLIGATION_ID}" \
 ### Issue: "Invalid API Key" (401 error)
 
 **Solution**:
-1. Verify you're using the correct API key (starts with `dp_sandbox_`)
+1. Verify you're using the whole API key, including the `.` separator (issued keys look like `rge_<id>.<secret>`)
 2. Check that header is `X-RegEngine-API-Key` (case-sensitive)
 3. Ensure no extra whitespace in API key
 4. Contact us in Slack if issue persists

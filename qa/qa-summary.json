@@ -1,7 +1,7 @@
 {
   "verdict": "WARN",
-  "timestamp": "2026-03-19T08:22:06.419Z",
-  "checks": 174,
+  "timestamp": "2026-08-27T14:34:34.827Z",
+  "checks": 184,
   "failures": 0,
   "warnings": 2,
   "categories": {
@@ -13,8 +13,8 @@
       "status": "PASS"
     },
     "security": {
-      "total": 15,
-      "passed": 15,
+      "total": 25,
+      "passed": 25,
       "failed": 0,
       "warnings": 0,
       "status": "PASS"
@@ -49,9 +49,9 @@
       "warnings": 0,
       "exitCode": 0
     },
-    "tenant": {
+    "frontend-security": {
       "status": "PASS",
-      "passed": 15,
+      "passed": 25,
       "failed": 0,
       "warnings": 0,
       "exitCode": 0

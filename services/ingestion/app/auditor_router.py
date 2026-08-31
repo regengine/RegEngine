@@ -232,7 +232,20 @@ async def audit_events(
     elif compliance_status == "unevaluated":
         query += " AND COALESCE(eval_summary.total_rules, 0) = 0"
 
-    query += " ORDER BY e.event_timestamp DESC LIMIT :lim OFFSET :off"
+    # ``event_timestamp`` is indexed (idx_trace_events_timestamp) but not
+    # unique, so it cannot order a LIMIT/OFFSET scan on its own — an index on
+    # a non-unique key still leaves tied rows in an unspecified order, and
+    # each page is planned independently. Tied rows therefore land in a
+    # different order per page: some duplicated across pages, others never
+    # returned at all. Ties are routine here, not exotic:
+    # ``csv_templates._parse_date_flexible`` stamps every unparseable or
+    # empty date with the epoch sentinel (:449), and both
+    # ``supplier_portal`` (:539) and ``sensitech_parser`` (:160) normalise
+    # date-only values to midnight. Under DESC the epoch rows sort onto the
+    # final pages, which is exactly where an auditor paginating to
+    # exhaustion arrives. ``event_id`` is the table's primary key, so
+    # appending it makes the total order deterministic.
+    query += " ORDER BY e.event_timestamp DESC, e.event_id DESC LIMIT :lim OFFSET :off"
 
     rows = db.execute(text(query), params).fetchall()
 

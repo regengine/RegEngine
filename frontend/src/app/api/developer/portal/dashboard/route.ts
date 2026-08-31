@@ -3,15 +3,9 @@ import { getDeveloperPortalContext, withDeveloperCookies } from '../_utils';
 
 export async function GET(request: NextRequest) {
     const context = await getDeveloperPortalContext(request);
-    if ('response' in context) return context.response;
+    if (!context.ok) return context.response;
 
     const { profile, client } = context;
-    if (!profile) {
-        return withDeveloperCookies(context, NextResponse.json({
-            profile: null,
-            stats: { totalKeys: 0, activeKeys: 0, totalRequests: 0 },
-        }));
-    }
 
     const { data: keys, error } = await client.supabase
         .from('developer_api_keys')

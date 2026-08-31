@@ -35,6 +35,18 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
+      # Majors that cannot go green on this toolchain yet. Remove an entry once
+      # its blocker below clears, then let CI judge the upgrade on its own.
+      #   eslint 10   — eslint-config-next 16.2.12 calls the pre-10 scope-manager
+      #                 API (scopeManager.addGlobals); `eslint .` crashes outright.
+      #   jsdom 30    — requires Node >=22.22.2; CI runs Node 20.
+      #   jest-dom 7  — requires Node >=22 and a new @testing-library/dom peer.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/jest-dom"
+        update-types: ["version-update:semver-major"]
 
   # Python services — security-critical packages get solo PRs (no group entry
   # means Dependabot opens one PR per package). Dev/test tooling is grouped to
@@ -44,6 +56,20 @@ updates:
   # Security-critical (solo PRs): cryptography, pyjwt, python-jose, sqlalchemy,
   # alembic, fastapi, starlette, stripe, httpx, opentelemetry-*
 
+  # KNOWN LIMITATION — a root-pip PR from Dependabot is never mergeable as
+  # opened. It edits requirements.in and leaves requirements.lock untouched,
+  # so the "Verify requirements.lock freshness" gate in backend-ci.yml fails
+  # until someone recompiles the lock into the PR branch by hand.
+  #
+  # This is a filename problem, not a Dependabot bug. The compiled output is
+  # named requirements.lock; Dependabot's pip-compile support looks for the
+  # conventional requirements.txt. #2780 shows both behaviours in one PR: it
+  # updated cli/requirements.txt and did not update requirements.lock.
+  # #2780-#2784 all landed this way, and #2787 had to resync afterwards.
+  #
+  # Durable fix is to rename requirements.lock -> requirements.txt, which
+  # touches the Dockerfile and ten workflows and so wants its own PR. Until
+  # then: expect the red gate, run the pip-compile command it prints, push.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -256,7 +282,6 @@ updates:
       nlp-models:
         # NLP/ML libraries
         patterns:
-          - "spacy*"
           - "transformers"
           - "torch"
           - "scikit-learn"

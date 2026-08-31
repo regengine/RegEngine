@@ -355,22 +355,22 @@ export default function SettingsPage() {
                                     <div className="flex items-start gap-3">
                                         <Key className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
                                         <div>
-                                            <h4 className="text-sm font-semibold">No API credentials shown</h4>
+                                            <h4 className="text-sm font-semibold">Generate a sandbox API key</h4>
                                             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                                                API credentials are provisioned with your agreement — contact us to enable API access. Once enabled for this workspace, keys appear here. Sandbox keys for exploration are available in the developer preview.
+                                                API credentials are provisioned with your agreement — contact us to enable API access. Once enabled for this workspace, keys appear here. Sandbox keys for exploration are available in the developer portal.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <Link href="/developers" className="flex-1">
+                                    <Link href="/developer/portal" className="flex-1">
                                         <Button variant="outline" className="w-full rounded-xl min-h-[48px]">
-                                            <ExternalLink className="h-4 w-4 mr-1" /> Developer Preview
+                                            <ExternalLink className="h-4 w-4 mr-1" /> Developer Portal
                                         </Button>
                                     </Link>
-                                    <Link href="/contact" className="flex-1">
+                                    <Link href="/developer/portal/keys" className="flex-1">
                                         <Button variant="outline" className="w-full rounded-xl min-h-[48px]">
-                                            <ArrowRight className="h-4 w-4 mr-1" /> Request API Setup
+                                            <ArrowRight className="h-4 w-4 mr-1" /> Generate Sandbox Key
                                         </Button>
                                     </Link>
                                 </div>

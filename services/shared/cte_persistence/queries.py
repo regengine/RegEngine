@@ -10,6 +10,7 @@ this code exactly as before the split.
 
 from __future__ import annotations
 
+from datetime import date as _date, datetime as _datetime, time as _time, timedelta as _timedelta, timezone as _timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -18,6 +19,39 @@ from sqlalchemy.exc import (
     OperationalError,
     ProgrammingError,
 )
+
+
+def _end_bound_utc(end_date: str) -> str:
+    """Convert a user-supplied ``YYYY-MM-DD`` end-date to a strict
+    UTC-based upper bound at the NEXT day 00:00.
+
+    Callers use the returned value in a strict ``<`` comparison, which
+    captures every event with ``event_timestamp`` on ``end_date`` in any
+    timezone. If the supplied value is not ISO ``YYYY-MM-DD`` we fall back
+    to the raw string so upstream validation remains the authoritative
+    source of 4xx responses.
+
+    #2817: the three read-path queries below used ``event_timestamp <=
+    :end_date`` with the bare ``YYYY-MM-DD`` string. Postgres casts that to
+    midnight, so EVERY event ON the end date was excluded from the result
+    set — an FDA export for 2026-06-01..2026-06-15 silently omitted all of
+    June 15.
+
+    Semantics are deliberately identical to
+    ``services/ingestion/app/fda_export/queries.py::_end_bound_utc``
+    (issue #1224), which already fixed the same class of bug on the FDA
+    export read path. It is duplicated rather than imported because
+    ``shared`` must not depend on a specific service package: this module is
+    also loaded by admin / compliance / graph, where ``app`` resolves to a
+    different service entirely. If the helper is ever promoted to a neutral
+    shared module, both copies should be replaced by that import.
+    """
+    try:
+        parsed = _date.fromisoformat(end_date)
+    except (TypeError, ValueError):
+        return end_date
+    bound = _datetime.combine(parsed + _timedelta(days=1), _time(0, 0, 0), tzinfo=_timezone.utc)
+    return bound.isoformat()
 
 
 def _is_missing_table_error(exc: DatabaseError) -> bool:
@@ -94,22 +128,28 @@ class QueryPathMixin:
             # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
             # text() parameter parser misidentifies :param::cast as a single token,
             # silently dropping the :tlc binding and producing a SyntaxError.
+            #
+            # The recursive term MUST be a single branch. Postgres splits a
+            # recursive CTE at the LAST top-level UNION, so writing the walk as
+            # seed UNION forward UNION backward puts the forward branch inside
+            # the non-recursive term and every execution fails with
+            # InvalidRecursion ("recursive reference ... must not appear within
+            # its non-recursive term"). Both directions are therefore walked in
+            # one branch: join a link whichever side matches, emit the other.
             rows = self.session.execute(
                 text("""
                     WITH RECURSIVE tlc_graph(tlc, depth) AS (
                         -- Seed
                         SELECT CAST(:tlc AS text), 0
                         UNION
-                        -- Forward: seed was an input → walk to outputs
-                        SELECT tl.output_tlc, tg.depth + 1
+                        -- Walk both directions: input → output and output → input
+                        SELECT CASE WHEN tg.tlc = tl.input_tlc
+                                    THEN tl.output_tlc
+                                    ELSE tl.input_tlc
+                               END,
+                               tg.depth + 1
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
-                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
-                        UNION
-                        -- Backward: seed is an output → walk to inputs
-                        SELECT tl.input_tlc, tg.depth + 1
-                        FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
                     SELECT DISTINCT tlc FROM tlc_graph
@@ -219,8 +259,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
 
         where = " AND ".join(where_clauses)
 
@@ -349,6 +391,10 @@ class QueryPathMixin:
             params[f"seed_{i}"] = s
 
         try:
+            # Single recursive branch for the same reason as the single-seed
+            # twin above: Postgres splits a recursive CTE at the LAST top-level
+            # UNION, so a seed/forward/backward three-branch UNION fails with
+            # InvalidRecursion on every execution.
             rows = self.session.execute(
                 text(f"""
                     WITH RECURSIVE seeds(tlc) AS (
@@ -358,16 +404,14 @@ class QueryPathMixin:
                         -- Seed set
                         SELECT CAST(tlc AS text), 0 FROM seeds
                         UNION
-                        -- Forward: input → outputs
-                        SELECT tl.output_tlc, tg.depth + 1
+                        -- Walk both directions: input → output and output → input
+                        SELECT CASE WHEN tg.tlc = tl.input_tlc
+                                    THEN tl.output_tlc
+                                    ELSE tl.input_tlc
+                               END,
+                               tg.depth + 1
                         FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
-                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
-                        UNION
-                        -- Backward: output → inputs
-                        SELECT tl.input_tlc, tg.depth + 1
-                        FROM   fsma.transformation_links tl
-                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        JOIN   tlc_graph tg ON tg.tlc IN (tl.input_tlc, tl.output_tlc)
                         WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
                     )
                     SELECT DISTINCT tlc FROM tlc_graph
@@ -466,8 +510,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
 
         where = " AND ".join(where_clauses)
 
@@ -578,8 +624,10 @@ class QueryPathMixin:
             where_clauses.append("event_timestamp >= :start_date")
             params["start_date"] = start_date
         if end_date:
-            where_clauses.append("event_timestamp <= :end_date")
-            params["end_date"] = end_date
+            # #2817: strict ``<`` against the next-day UTC bound so events
+            # ON ``end_date`` are included. See ``_end_bound_utc``.
+            where_clauses.append("event_timestamp < :end_date")
+            params["end_date"] = _end_bound_utc(end_date)
         if event_type:
             where_clauses.append("event_type = :event_type")
             params["event_type"] = event_type

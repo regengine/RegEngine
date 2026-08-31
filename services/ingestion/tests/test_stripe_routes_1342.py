@@ -37,6 +37,7 @@ from app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
     helpers as helpers_mod,
     plans as plans_mod,
+    rate_limiting as rate_limiting_mod,
     routes as routes_mod,
     state as state_mod,
 )
@@ -322,6 +323,77 @@ class TestCreateCheckoutErrorBranches:
         assert response.session_id == "cs_hint_failed"
 
 
+# ── create_checkout — billing period must match the price ID used ──────────
+
+
+class TestCheckoutBillingPeriodMatchesPriceId:
+    """#2928: the ``billing_period`` stamped into Stripe metadata (and from
+    there into the persisted ``billing:tenant:{tenant_id}`` mapping) must
+    always describe the Price ID actually sent in ``line_items``, and the
+    returned ``amount`` must be that Price's amount."""
+
+    @pytest.fixture(autouse=True)
+    def _stub_customer_lookups(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
+
+    @pytest.mark.asyncio
+    async def test_annual_checkout_uses_the_annual_price_and_amount(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Both price envs configured: annual must win end to end."""
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_ANNUAL", "price_growth_annual")
+
+        captured: dict[str, Any] = {}
+
+        class _Session:
+            id = "cs_annual"
+            url = "https://checkout.stripe.com/c/pay/cs_annual"
+
+        def _create(**kwargs: Any) -> _Session:
+            captured.update(kwargs)
+            return _Session()
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _create)
+
+        response = await routes_mod.create_checkout(
+            CheckoutRequest(plan_id="growth", billing_period="annual"),
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-annual"),
+        )
+
+        assert captured["line_items"] == [{"price": "price_growth_annual", "quantity": 1}]
+        # Metadata travels to the webhook, which persists billing_period.
+        assert captured["metadata"]["billing_period"] == "annual"
+        assert captured["subscription_data"]["metadata"]["billing_period"] == "annual"
+        assert response.billing_period == "annual"
+        assert response.amount == plans_mod.PLANS["growth"]["price_annual"]
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_annual_price_500s_without_creating_a_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The regression itself: with only the monthly env set, an annual
+        checkout used to succeed against the monthly Price. It must now
+        fail before Stripe is ever called."""
+        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+        monkeypatch.delenv("STRIPE_PRICE_GROWTH_ANNUAL", raising=False)
+
+        def _must_not_run(**_kwargs: Any) -> Any:
+            raise AssertionError("no Stripe session may be created for an unresolved price")
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _must_not_run)
+
+        with pytest.raises(Exception) as excinfo:
+            await routes_mod.create_checkout(
+                CheckoutRequest(plan_id="growth", billing_period="annual"),
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-annual"),
+            )
+        exc = excinfo.value
+        assert getattr(exc, "status_code", None) == 500
+        assert "STRIPE_PRICE_GROWTH_ANNUAL" in getattr(exc, "detail", "")
+
+
 # ── get_subscription ───────────────────────────────────────────────────────
 
 
@@ -460,7 +532,18 @@ class TestGetSubscription:
 class TestWebhookRouteWrappers:
     """Lines 297 and 311 are the one-line bodies of the two webhook routes.
     They both delegate to ``_webhooks_mod._process_stripe_webhook``. Cover
-    both so future refactors don't silently drop one endpoint."""
+    both so future refactors don't silently drop one endpoint.
+
+    #2929: these two tests used to stub out
+    ``routes._rate_limiting_mod._check_stripe_webhook_rate_limit`` because
+    each route consumed the limiter as its first statement — before
+    signature verification, on a bucket that collapses to the shared proxy
+    peer, which is what let an anonymous caller 429 every genuine Stripe
+    delivery. The routes no longer rate-limit at all; the limiter moved
+    inside ``_process_stripe_webhook``, past
+    ``stripe.Webhook.construct_event``. The stub is replaced by a spy that
+    asserts the route does NOT consume the unverified budget on the way in.
+    """
 
     @pytest.mark.asyncio
     async def test_primary_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -472,10 +555,11 @@ class TestWebhookRouteWrappers:
             return {"received": True}
 
         monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        limiter_calls: list[Any] = []
         monkeypatch.setattr(
-            routes_mod._rate_limiting_mod,
+            rate_limiting_mod,
             "_check_stripe_webhook_rate_limit",
-            lambda _request: None,
+            limiter_calls.append,
         )
 
         request = MagicMock()
@@ -483,6 +567,7 @@ class TestWebhookRouteWrappers:
         assert result == {"received": True}
         assert called["request"] is request
         assert called["sig"] == "t=1,v1=fake"
+        assert limiter_calls == [], "#2929: the route must not rate-limit ahead of signature verification"
 
     @pytest.mark.asyncio
     async def test_legacy_webhook_delegates_to_processor(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -496,16 +581,18 @@ class TestWebhookRouteWrappers:
             return {"received": True, "legacy": True}
 
         monkeypatch.setattr(routes_mod._webhooks_mod, "_process_stripe_webhook", _fake_process)
+        limiter_calls: list[Any] = []
         monkeypatch.setattr(
-            routes_mod._rate_limiting_mod,
+            rate_limiting_mod,
             "_check_stripe_webhook_rate_limit",
-            lambda _request: None,
+            limiter_calls.append,
         )
 
         request = MagicMock()
         result = await routes_mod.stripe_webhook_legacy(request, stripe_signature="t=2,v1=fake")
         assert result == {"received": True, "legacy": True}
         assert called["sig"] == "t=2,v1=fake"
+        assert limiter_calls == [], "#2929: the legacy route must not rate-limit ahead of verification"
 
 
 # ── create_portal_session_for_tenant ───────────────────────────────────────

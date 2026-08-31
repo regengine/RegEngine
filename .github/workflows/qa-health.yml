@@ -19,8 +19,22 @@ name: QA Health Summary
 # signal that the real "PR Gate: *" checks do not already provide — while
 # being one of the most expensive jobs in the repo. Its full-suite cost on
 # every PR push was a material contributor to exhausting the org's Actions
-# budget on 2026-08-03. The artifact tracks default-branch health, which is
-# what the sysadmin dashboard actually reports.
+# budget on 2026-08-03. The artifact tracks default-branch health.
+#
+# It does NOT reach the dashboard. This job uploads a GitHub Actions artifact;
+# nothing downloads it at runtime. `services/admin/app/qa_health.py` reads
+# `qa/qa-health/latest.json`, a file checked into the repo and baked into the
+# image by `Dockerfile`, which no workflow writes — and `qa/**` is not in
+# `deploy.yml`'s path filter, so even committing a refresh by hand ships no
+# redeploy. An earlier version of this comment claimed the artifact was "what
+# the sysadmin dashboard actually reports"; it never was.
+#
+# Production consequently served a snapshot frozen at 2026-07-23 labelled
+# "Latest CI artifact". The loader now refuses to present an artifact older
+# than QA_HEALTH_MAX_AGE_DAYS as current, so the stale file reads as
+# `unavailable` rather than as month-old results stated with confidence.
+# Closing the loop properly means publishing this artifact somewhere the
+# service can read at runtime.
 on:
   workflow_dispatch:
   push:
@@ -41,9 +55,12 @@ jobs:
     # is a backstop rather than the thing that actually stops a runaway run —
     # two observed runs burned 57 and 72 minutes and produced no artifact at
     # all because the job timeout was the only limit in play.
-    timeout-minutes: 35
+    # The job ceiling is a pure backstop and must sit above the sum of the
+    # step bounds (15 + 28 + 5 = 48, plus setup overhead) — a ceiling below
+    # that sum can only ever cancel healthy runs, never catch a runaway
+    # before a step bound does (runs 30973063688/30979898499 proved it).
+    timeout-minutes: 55
     env:
-      NODE_VERSION: "24"
       PYTHON_VERSION: "3.11"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -56,7 +73,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -128,7 +145,15 @@ jobs:
       - name: Run Playwright E2E
         if: always()
         continue-on-error: true
-        timeout-minutes: 22
+        # 28, not 22: the suite ran ~20m before the inflow-lab tour spec added
+        # six geometry tests (~2m of real coverage). 22m left no headroom and
+        # would cancel healthy runs — the same trap the job ceiling fell into.
+        # (Correction: that "~20m" was not the suite finishing — it was the
+        # inner `timeout "$playwright_timeout"` below firing at its 20m cap;
+        # see the comment on playwright_timeout. 28 remains correct as the
+        # OUTER bound: it must exceed the inner cap by enough for the
+        # exit-124 fallback to write the timeout marker into the report.)
+        timeout-minutes: 28
         env:
           AUTH_SECRET_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
           JWT_SIGNING_KEY: playwright-local-jwt-signing-key-2026 # pragma: allowlist secret
@@ -138,7 +163,22 @@ jobs:
         run: |
           cd frontend
           set +e
-          playwright_timeout="20m"
+          # 24m, up from 20m — and 20m was never the suite's honest runtime.
+          # Three consecutive main runs (08-06, 08-11, 08-15) ended this step
+          # at exactly 20m00–20m01s: the signature of `timeout` firing, not a
+          # suite landing on a round number, and job cleanup logged orphaned
+          # next-server/npm-dev/backend processes each time. Since #2748 cut
+          # this cap from 30m to 20m the suite has NOT ONCE been observed to
+          # complete; every run took the exit-124 path below, which replaces
+          # the report with "suites": [] — so the dashboard has been reading
+          # zero E2E coverage while continue-on-error kept the step green.
+          # #2766 then raised the step bound 22m->28m to chase that "~20m
+          # runtime", which changed nothing because THIS value is the actual
+          # limiter. The two must move together: keep this a few minutes
+          # under timeout-minutes above so the fallback write still runs.
+          # If the suite hits 24m too, treat it as a hang to profile — do
+          # not raise this again on the assumption the suite is just slow.
+          playwright_timeout="24m"
           timeout "$playwright_timeout" npm run test:e2e -- --reporter=json > ../.qa-health/playwright.json &
           playwright_pid=$!
           while kill -0 "$playwright_pid" 2>/dev/null; do

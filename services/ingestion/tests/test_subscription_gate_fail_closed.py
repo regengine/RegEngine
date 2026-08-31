@@ -33,6 +33,17 @@ async def paid_route():
     return {"ok": True}
 
 
+@pytest.fixture(autouse=True)
+def _fresh_redis_client():
+    """#2849: drop the gate's cached pooled client between tests — each one
+    patches ``redis.from_url`` with its own mock."""
+    from app.subscription_gate import reset_redis_client
+
+    reset_redis_client()
+    yield
+    reset_redis_client()
+
+
 @pytest.fixture
 def fresh_circuit():
     from shared.circuit_breaker import redis_circuit

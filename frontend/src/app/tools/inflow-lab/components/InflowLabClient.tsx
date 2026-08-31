@@ -12,6 +12,7 @@ import {
     FileJson,
     FileSpreadsheet,
     GitBranch,
+    GraduationCap,
     Info,
     PackageCheck,
     Play,
@@ -40,6 +41,14 @@ import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
+import { Tutorial } from "@/components/ui/tutorial";
+import {
+    INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY,
+    INFLOW_LAB_CLIENT_TUTORIAL_STORAGE_KEY,
+    InflowLabTutorialBanner,
+    buildInflowLabClientTutorialSteps,
+    dismissInflowLabTutorialBanner,
+} from "./InflowLabTutorial";
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
 type EventStatus = "posted" | "validated" | "queued" | "generated" | "failed";
@@ -796,6 +805,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const primaryTab = isStandalone ? "Control room" : "Overview";
     const tabs = isStandalone ? standaloneTabs : dashboardTabs;
     const [activeTab, setActiveTab] = useState(primaryTab);
+    const [isTutorialOpen, setIsTutorialOpen] = useState(false);
     const [selectedLot, setSelectedLot] = useState(lotCodes[0]);
     const [traceInput, setTraceInput] = useState(lotCodes[0]);
     const [runStage, setRunStage] = useState<RunStage>("complete");
@@ -1234,6 +1244,26 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setActiveTab(isStandalone ? "Event log" : "Record log");
     };
 
+    // The tour's demo action reads through a ref so the step array stays
+    // referentially stable while the action always sees fresh state.
+    const startMachineDemoRef = useRef(startMachineDemo);
+    startMachineDemoRef.current = startMachineDemo;
+    const tutorialSteps = useMemo(
+        () =>
+            buildInflowLabClientTutorialSteps({
+                runDemo: () => void startMachineDemoRef.current(),
+                isStandalone,
+            }),
+        [isStandalone],
+    );
+
+    const startTutorial = () => {
+        // Reset to the primary tab so every step's anchor is where the copy
+        // says it is, regardless of where the user wandered beforehand.
+        setActiveTab(primaryTab);
+        setIsTutorialOpen(true);
+    };
+
     const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const engineConnected = Boolean(health?.ok && !serviceError);
@@ -1422,7 +1452,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                         Diagnose CSV data, run a mock FSMA 204 feed, and keep test records separate from signed-in production imports.
                                     </p>
                                 </div>
-                                <div className="mt-5 flex flex-wrap gap-2">
+                                <div data-tutorial="lab-primary-actions" className="mt-5 flex flex-wrap gap-2">
                                     <Button
                                         variant="ghost"
                                         className="h-10 border-slate-600 bg-slate-800 text-white hover:bg-slate-700"
@@ -1456,6 +1486,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     >
                                         <ArrowDownToLine className="mr-2 h-4 w-4" />
                                         Preview test filters
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-10 border-slate-600 bg-slate-800 text-white hover:bg-slate-700"
+                                        onClick={startTutorial}
+                                    >
+                                        <GraduationCap className="mr-2 h-4 w-4" />
+                                        How to use
                                     </Button>
                                 </div>
                             </div>
@@ -1494,10 +1532,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
                                     Test supplier traceability data before production import. This lab uses mock or uploaded test records only; formal production records start after signed-in import.
                                 </p>
-                                <div data-dashboard-actions className="mt-3 flex flex-wrap gap-2">
+                                <div data-dashboard-actions data-tutorial="lab-primary-actions" className="mt-3 flex flex-wrap gap-2">
                                     <Button className="h-9 bg-emerald-700 text-white hover:bg-emerald-800" onClick={startMachineDemo} disabled={isBusy}>
                                         <Play className="mr-2 h-4 w-4" />
                                         Start guided test run
+                                    </Button>
+                                    <Button variant="outline" className="h-9 border-slate-300 bg-white" onClick={startTutorial}>
+                                        <GraduationCap className="mr-2 h-4 w-4" />
+                                        How to use
                                     </Button>
                                 </div>
                             </div>
@@ -1522,6 +1564,12 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                         </div>
                     </section>
                 )}
+
+                <InflowLabTutorialBanner
+                    onStart={startTutorial}
+                    dismissKey={INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY}
+                    description="A guided walkthrough: run the mock demo, find each workspace, and read pipeline results."
+                />
 
                 <section
                     aria-label="Inflow Lab environment boundary"
@@ -1583,8 +1631,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             </div>
                         </CardHeader>
                         <CardContent className={cn(isStandalone ? "p-4" : "p-3 sm:p-4")}>
-                            <div>
-                                <div className={cn("flex h-auto justify-start gap-1 rounded-md bg-slate-100 p-1", isStandalone ? "flex-wrap" : "overflow-x-auto")}>
+                            <div data-tutorial="lab-workspace">
+                                <div data-tutorial="lab-tabs" className={cn("flex h-auto justify-start gap-1 rounded-md bg-slate-100 p-1", isStandalone ? "flex-wrap" : "overflow-x-auto")}>
                                     {tabs.map((tab) => (
                                         <button
                                             key={tab}
@@ -2822,6 +2870,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                     </aside>
                 </section>
             </div>
+
+            <Tutorial
+                steps={tutorialSteps}
+                isOpen={isTutorialOpen}
+                onClose={() => setIsTutorialOpen(false)}
+                onComplete={() => dismissInflowLabTutorialBanner(INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY)}
+                storageKey={INFLOW_LAB_CLIENT_TUTORIAL_STORAGE_KEY}
+            />
         </main>
     );
 }

@@ -19,6 +19,7 @@ jobs:
   pr-size:
     name: PR Size Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -48,6 +49,7 @@ jobs:
   commit-lint:
     name: Commit Message Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -86,6 +88,7 @@ jobs:
   copy-lint-tools-grade-verdicts:
     name: Copy Lint — ban A-F grade/verdict UIs in /tools
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
@@ -116,6 +119,7 @@ jobs:
   label:
     name: Auto-Label PR
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 

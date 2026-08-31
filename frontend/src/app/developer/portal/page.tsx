@@ -23,25 +23,36 @@ interface DashboardStats {
 }
 
 export default function DeveloperPortalDashboard() {
-    const { user: authUser } = useAuth();
+    const { user: authUser, isHydrated } = useAuth();
     const [profile, setProfile] = useState<DeveloperProfile | null>(null);
     const [stats, setStats] = useState<DashboardStats>({ totalKeys: 0, activeKeys: 0, totalRequests: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function load() {
-            if (!authUser) return;
-
-            const response = await fetch('/api/developer/portal/dashboard', { credentials: 'include' });
-            if (response.ok) {
-                const data = await response.json();
-                setProfile(data.profile);
-                setStats(data.stats);
+            // The server verifies Supabase auth; hydration supplies the client profile.
+            if (!isHydrated) return;
+            if (!authUser) {
+                setLoading(false);
+                return;
             }
-            setLoading(false);
+
+            try {
+                const response = await fetch('/api/developer/portal/dashboard', { credentials: 'include' });
+                if (response.ok) {
+                    const data = await response.json();
+                    setProfile(data.profile);
+                    setStats(data.stats);
+                }
+            } catch {
+                // Network failure: fall through to the zero-state rather than
+                // hanging on the spinner.
+            } finally {
+                setLoading(false);
+            }
         }
         load();
-    }, [authUser]);
+    }, [authUser, isHydrated]);
 
     const greeting = profile?.display_name || profile?.email?.split('@')[0] || 'Developer';
 
@@ -66,6 +77,26 @@ export default function DeveloperPortalDashboard() {
         );
     }
 
+    // Hydrated with no session: say so instead of rendering a fabricated
+    // zero-state dashboard for nobody.
+    if (!authUser) {
+        return (
+            <div className="rounded-lg p-8 text-center" style={{ background: 'var(--re-surface-card)', border: '1px solid var(--re-surface-border)' }}>
+                <h1 className="text-lg font-semibold" style={{ color: 'var(--re-text-primary)' }}>Your session has expired</h1>
+                <p className="text-sm mt-2" style={{ color: 'var(--re-text-muted)' }}>
+                    Sign in again to open your developer dashboard.
+                </p>
+                <Link
+                    href="/login?next=/developer/portal"
+                    className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md text-sm font-semibold no-underline"
+                    style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
+                >
+                    Sign in
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8">
             {/* Welcome */}
@@ -81,8 +112,8 @@ export default function DeveloperPortalDashboard() {
             {/* Onboarding checklist */}
             {completedSteps < onboardingSteps.length && (
                 <div className="rounded-lg p-5" style={{
-                    background: 'rgba(16,185,129,0.04)',
-                    border: '1px solid rgba(16,185,129,0.12)',
+                    background: 'var(--re-success-bg)',
+                    border: '1px solid var(--re-success-border)',
                 }}>
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -92,7 +123,7 @@ export default function DeveloperPortalDashboard() {
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--re-surface-border)' }}>
                                 <div className="h-full rounded-full transition-all" style={{
                                     width: `${progress}%`,
                                     background: 'var(--re-brand)',
@@ -137,12 +168,17 @@ export default function DeveloperPortalDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                     { label: 'Active API Keys', value: stats.activeKeys, sub: `${stats.totalKeys} total`, color: 'var(--re-brand)' },
-                    { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), sub: 'all time', color: '#60a5fa' },
-                    { label: 'Account Status', value: 'Active', sub: `since ${profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}`, color: 'var(--re-brand)' },
+                    // Sandbox keys don't record traffic — say so instead of implying an all-time count of zero.
+                    { label: 'Total Requests', value: stats.totalRequests.toLocaleString(), sub: 'sandbox telemetry not yet recorded', color: 'var(--re-signal-blue)' },
+                    // A signed-in console user without a developer profile is NOT an
+                    // active developer account — don't claim otherwise.
+                    profile
+                        ? { label: 'Account Status', value: 'Active', sub: `since ${new Date(profile.created_at).toLocaleDateString()}`, color: 'var(--re-brand)' }
+                        : { label: 'Account Status', value: 'Not provisioned', sub: 'developer access is enabled during onboarding', color: 'var(--re-text-muted)' },
                 ].map((card) => (
                     <div key={card.label} className="rounded-lg p-5" style={{
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid rgba(255,255,255,0.06)',
+                        background: 'var(--re-surface-card)',
+                        border: '1px solid var(--re-surface-border)',
                     }}>
                         <p className="text-xs font-medium mb-2" style={{ color: 'var(--re-text-muted)' }}>{card.label}</p>
                         <p className="text-2xl font-bold" style={{ color: card.color }}>{card.value}</p>
@@ -166,8 +202,8 @@ export default function DeveloperPortalDashboard() {
                         { label: 'Webhook Ingestion', desc: 'Send events into RegEngine', href: '/docs/webhooks', icon: Webhook },
                     ].map((item) => (
                         <Link key={item.href} href={item.href} className="group flex items-center gap-3 rounded-lg p-4 no-underline transition-all" style={{
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid rgba(255,255,255,0.06)',
+                            background: 'var(--re-surface-card)',
+                            border: '1px solid var(--re-surface-border)',
                         }}>
                             <item.icon className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--re-brand)' }} />
                             <div className="flex-1 min-w-0">

@@ -77,11 +77,15 @@ async def get_data_quality_metrics(
     - Data entry quality issues requiring training
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        report = await analyze_kde_completeness(client, str(tenant_id), confidence_threshold)
-        await client.close()
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            report = await analyze_kde_completeness(client, str(tenant_id), confidence_threshold)
 
         return {
             "total_events": report.total_events,
@@ -118,19 +122,22 @@ async def fsma_dashboard(tenant_id: uuid.UUID = Depends(get_current_tenant_id), 
     for dashboard display.
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    client = Neo4jClient(database=db_name)
 
     try:
-        # Get gap metrics
-        gaps = await find_gaps(client, str(tenant_id))
+        # #2833: `async with` closes the driver — and its connection
+        # pool — on every exit path. The explicit close that used to
+        # sit inside the try was skipped whenever the query or the
+        # serialization below it raised, leaking a driver (and pool)
+        # per failed request behind the generic 500 handler.
+        async with Neo4jClient(database=db_name) as client:
+            # Get gap metrics
+            gaps = await find_gaps(client, str(tenant_id))
 
-        # Get orphan metrics
-        orphans = await find_orphaned_lots(client, str(tenant_id))
+            # Get orphan metrics
+            orphans = await find_orphaned_lots(client, str(tenant_id))
 
-        # Get KDE completeness
-        completeness = await analyze_kde_completeness(client, str(tenant_id))
-
-        await client.close()
+            # Get KDE completeness
+            completeness = await analyze_kde_completeness(client, str(tenant_id))
 
         # Update Prometheus gauges
         record_gap_detection(len(gaps), "all")

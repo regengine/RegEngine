@@ -45,133 +45,32 @@ body[data-inflow-lab="true"] {
     gap: 20px;
 }
 
-[data-inflow-lab-app] .grid { display: grid; }
-[data-inflow-lab-app] .flex { display: flex; }
-[data-inflow-lab-app] .inline-flex { display: inline-flex; }
-[data-inflow-lab-app] .hidden { display: none; }
-[data-inflow-lab-app] .block { display: block; }
-[data-inflow-lab-app] .items-center { align-items: center; }
-[data-inflow-lab-app] .items-start { align-items: flex-start; }
-[data-inflow-lab-app] .justify-between { justify-content: space-between; }
-[data-inflow-lab-app] .justify-center { justify-content: center; }
-[data-inflow-lab-app] .flex-col { flex-direction: column; }
-[data-inflow-lab-app] .flex-wrap { flex-wrap: wrap; }
-[data-inflow-lab-app] .shrink-0 { flex-shrink: 0; }
-[data-inflow-lab-app] .min-w-0 { min-width: 0; }
-[data-inflow-lab-app] .w-full { width: 100%; }
-[data-inflow-lab-app] .max-w-2xl { max-width: 672px; }
-[data-inflow-lab-app] .max-w-3xl { max-width: 768px; }
-[data-inflow-lab-app] .max-w-none { max-width: none; }
-[data-inflow-lab-app] .gap-1 { gap: 4px; }
-[data-inflow-lab-app] .gap-2 { gap: 8px; }
-[data-inflow-lab-app] .gap-3 { gap: 12px; }
-[data-inflow-lab-app] .gap-4 { gap: 16px; }
-[data-inflow-lab-app] .gap-5 { gap: 20px; }
-[data-inflow-lab-app] .space-y-2 > * + * { margin-top: 8px; }
-[data-inflow-lab-app] .space-y-3 > * + * { margin-top: 12px; }
-[data-inflow-lab-app] .space-y-4 > * + * { margin-top: 16px; }
-[data-inflow-lab-app] .mt-0\.5 { margin-top: 2px; }
-[data-inflow-lab-app] .mt-1 { margin-top: 4px; }
-[data-inflow-lab-app] .mt-2 { margin-top: 8px; }
-[data-inflow-lab-app] .mt-3 { margin-top: 12px; }
-[data-inflow-lab-app] .mt-4 { margin-top: 16px; }
-[data-inflow-lab-app] .mt-5 { margin-top: 20px; }
-[data-inflow-lab-app] .mb-3 { margin-bottom: 12px; }
-[data-inflow-lab-app] .mr-2 { margin-right: 8px; }
-[data-inflow-lab-app] .ml-1\.5 { margin-left: 6px; }
-[data-inflow-lab-app] .p-1 { padding: 4px; }
-[data-inflow-lab-app] .p-2 { padding: 8px; }
-[data-inflow-lab-app] .p-3 { padding: 12px; }
-[data-inflow-lab-app] .p-4 { padding: 16px; }
-[data-inflow-lab-app] .p-5 { padding: 20px; }
-[data-inflow-lab-app] .p-8 { padding: 32px; }
-[data-inflow-lab-app] .px-3 { padding-left: 12px; padding-right: 12px; }
-[data-inflow-lab-app] .px-4 { padding-left: 16px; padding-right: 16px; }
-[data-inflow-lab-app] .py-2 { padding-top: 8px; padding-bottom: 8px; }
-[data-inflow-lab-app] .py-3 { padding-top: 12px; padding-bottom: 12px; }
-[data-inflow-lab-app] .pb-2 { padding-bottom: 8px; }
-[data-inflow-lab-app] .pt-4 { padding-top: 16px; }
-[data-inflow-lab-app] .rounded-md { border-radius: 6px; }
-[data-inflow-lab-app] .rounded-lg { border-radius: 8px; }
-[data-inflow-lab-app] .rounded-xl { border-radius: 18px; }
-[data-inflow-lab-app] .rounded-full { border-radius: 9999px; }
-[data-inflow-lab-app] .border { border: 1px solid #e2e8f0; }
-[data-inflow-lab-app] .border-b { border-bottom: 1px solid #e2e8f0; }
-[data-inflow-lab-app] .border-t { border-top: 1px solid #e2e8f0; }
-[data-inflow-lab-app] .border-dashed { border-style: dashed; }
-[data-inflow-lab-app] .border-slate-100 { border-color: #f1f5f9; }
-[data-inflow-lab-app] .border-slate-200 { border-color: #e2e8f0; }
-[data-inflow-lab-app] .border-slate-300 { border-color: #cbd5e1; }
-[data-inflow-lab-app] .border-emerald-200 { border-color: #a7f3d0; }
-[data-inflow-lab-app] .border-emerald-300,
-[data-inflow-lab-app] .border-emerald-400 { border-color: #6ee7b7; }
-[data-inflow-lab-app] .border-amber-200 { border-color: #fde68a; }
-[data-inflow-lab-app] .border-blue-200 { border-color: #bfdbfe; }
-[data-inflow-lab-app] .border-white\/10 { border-color: rgba(255, 255, 255, 0.1); }
-[data-inflow-lab-app] .border-white\/20 { border-color: rgba(255, 255, 255, 0.2); }
-[data-inflow-lab-app] .shadow-sm { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
-[data-inflow-lab-app] .bg-white { background: #fff; }
-[data-inflow-lab-app] .bg-slate-50 { background: #f8fafc; }
-[data-inflow-lab-app] .bg-slate-100 { background: #f1f5f9; }
-[data-inflow-lab-app] .bg-slate-950 { background: #020617; }
-[data-inflow-lab-app] .bg-black\/20 { background: rgba(0, 0, 0, 0.2); }
+/* What remains of the utility shim. Tailwind now generates the ~140 plain
+   utilities this block used to restate, so only the rules that deliberately
+   DIFFER from Tailwind's own value are kept — each one changes the rendering
+   if dropped, verified by computed-style diff against the previous bundle.
+   These stay unlayered so they continue to win over the utilities layer. */
+
+/* Softened surface tints: the flat palette entries read as solid blocks against
+   the tab's #f8fafc ground, so these are alpha-tinted. Tailwind's own
+   `bg-emerald-50` / `bg-amber-50` are opaque. */
 [data-inflow-lab-app] .bg-emerald-50,
 [data-inflow-lab-app] .bg-emerald-50\/70 { background: rgba(236, 253, 245, 0.78); }
-[data-inflow-lab-app] .bg-emerald-700 { background: #047857; }
-[data-inflow-lab-app] .bg-emerald-600 { background: #059669; }
 [data-inflow-lab-app] .bg-amber-50,
 [data-inflow-lab-app] .bg-amber-50\/70 { background: rgba(255, 251, 235, 0.86); }
-[data-inflow-lab-app] .bg-blue-50 { background: #eff6ff; }
-[data-inflow-lab-app] .bg-white\/10 { background: rgba(255, 255, 255, 0.1); }
-[data-inflow-lab-app] .bg-white\/15 { background: rgba(255, 255, 255, 0.15); }
-[data-inflow-lab-app] .bg-white\/\[0\.04\] { background: rgba(255, 255, 255, 0.04); }
-[data-inflow-lab-app] .text-white { color: #fff; }
-[data-inflow-lab-app] .text-slate-950 { color: #020617; }
-[data-inflow-lab-app] .text-slate-900 { color: #0f172a; }
-[data-inflow-lab-app] .text-slate-800 { color: #1e293b; }
-[data-inflow-lab-app] .text-slate-700 { color: #334155; }
-[data-inflow-lab-app] .text-slate-600 { color: #475569; }
-[data-inflow-lab-app] .text-slate-500 { color: #64748b; }
-[data-inflow-lab-app] .text-slate-400 { color: #94a3b8; }
-[data-inflow-lab-app] .text-slate-300 { color: #cbd5e1; }
-[data-inflow-lab-app] .text-emerald-700 { color: #047857; }
-[data-inflow-lab-app] .text-emerald-200 { color: #a7f3d0; }
-[data-inflow-lab-app] .text-amber-950 { color: #451a03; }
-[data-inflow-lab-app] .text-amber-800 { color: #92400e; }
-[data-inflow-lab-app] .text-amber-700,
+
+/* amber-600 is darkened to the amber-700 value; true amber-600 is noticeably
+   lighter against the light ground. */
 [data-inflow-lab-app] .text-amber-600 { color: #b45309; }
-[data-inflow-lab-app] .text-blue-700 { color: #1d4ed8; }
-[data-inflow-lab-app] .text-2xl { font-size: 24px; line-height: 32px; }
-[data-inflow-lab-app] .text-sm { font-size: 14px; line-height: 20px; }
-[data-inflow-lab-app] .text-xs { font-size: 12px; line-height: 16px; }
+
+/* Arbitrary font sizes carry no paired line-height in Tailwind, so this would
+   fall back to the 1.5 default and loosen every 11px badge by 2.5px. */
 [data-inflow-lab-app] .text-\[11px\] { font-size: 11px; line-height: 14px; }
-[data-inflow-lab-app] .font-semibold { font-weight: 600; }
-[data-inflow-lab-app] .font-medium { font-weight: 500; }
-[data-inflow-lab-app] .font-mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
-[data-inflow-lab-app] .uppercase { text-transform: uppercase; }
-[data-inflow-lab-app] .leading-5 { line-height: 20px; }
-[data-inflow-lab-app] .leading-6 { line-height: 24px; }
-[data-inflow-lab-app] .tracking-normal { letter-spacing: 0; }
-[data-inflow-lab-app] .text-left { text-align: left; }
-[data-inflow-lab-app] .text-center { text-align: center; }
-[data-inflow-lab-app] .h-3\.5,
-[data-inflow-lab-app] .w-3\.5 { width: 14px; height: 14px; }
-[data-inflow-lab-app] .h-4 { height: 16px; }
-[data-inflow-lab-app] .w-4 { width: 16px; }
-[data-inflow-lab-app] .h-5 { height: 20px; }
-[data-inflow-lab-app] .w-5 { width: 20px; }
-[data-inflow-lab-app] .h-7 { height: 28px; }
-[data-inflow-lab-app] .w-7 { width: 28px; }
-[data-inflow-lab-app] .h-8 { height: 32px; }
-[data-inflow-lab-app] .w-8 { width: 32px; }
-[data-inflow-lab-app] .h-9 { height: 36px; }
-[data-inflow-lab-app] .h-10 { height: 40px; }
-[data-inflow-lab-app] .relative { position: relative; }
-[data-inflow-lab-app] .absolute { position: absolute; }
-[data-inflow-lab-app] .overflow-hidden { overflow: hidden; }
-[data-inflow-lab-app] .overflow-x-auto { overflow-x: auto; }
-[data-inflow-lab-app] .break-all { word-break: break-all; }
-[data-inflow-lab-app] .break-words { overflow-wrap: break-word; }
+
+/* Renders emerald-400 at the emerald-300 value. Preserved deliberately: it is
+   the current appearance, and correcting it is a visual change, not a cleanup. */
+[data-inflow-lab-app] .border-emerald-400 { border-color: #6ee7b7; }
+
 [data-inflow-lab-app] button,
 [data-inflow-lab-app] input,
 [data-inflow-lab-app] select {
@@ -205,6 +104,18 @@ body[data-inflow-lab="true"] {
     border-color: transparent;
     color: #fff;
 }
+/* The standalone hero's dark action buttons. Without this the generic
+   button rule above paints them white while .text-white keeps the label
+   white — white-on-white, i.e. invisible. */
+[data-inflow-lab-app] button.bg-slate-800 {
+    background: #1e293b;
+    border-color: #475569;
+    color: #fff;
+}
+[data-inflow-lab-app] button.bg-slate-800:hover {
+    background: #334155;
+    border-color: #64748b;
+}
 [data-inflow-lab-app] button.bg-white\/10 {
     border-color: rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.1);
@@ -228,14 +139,25 @@ body[data-inflow-lab="true"] {
     border-bottom: 1px solid #e2e8f0;
     text-align: left;
 }
-[data-inflow-lab-app] section:first-of-type {
+/* These three rules are indexed by document POSITION, so they land on whatever
+   section happens to occupy the slot rather than on a section that asked for
+   the layout. That is only safe where the section order is fixed — the
+   standalone client. The dashboard composes its own sections and reorders them,
+   so there the rules force `display: grid` onto component internals that never
+   opted in (a card's own header row gets re-flowed into grid tracks, and the
+   heading, badge and body land in separate columns). The dashboard was already
+   fighting this with inline `style={{ display: "block" }}` escape hatches
+   rather than relying on it, so scope the rules to the standalone modes
+   ("simulation" | "preflight" | "staging" | "production_evidence") and let
+   dashboard sections lay themselves out. */
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:first-of-type {
     overflow: hidden;
 }
-[data-inflow-lab-app] section:first-of-type > div {
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:first-of-type > div {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
 }
-[data-inflow-lab-app] section:nth-of-type(2) {
+[data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:nth-of-type(2) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
@@ -271,36 +193,9 @@ body[data-inflow-lab="true"] {
     }
 }
 
-@media (min-width: 640px) {
-    [data-inflow-lab-app] .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .sm\:flex-row { flex-direction: row; }
-    [data-inflow-lab-app] .sm\:items-center { align-items: center; }
-    [data-inflow-lab-app] .sm\:justify-between { justify-content: space-between; }
-    [data-inflow-lab-app] .sm\:w-\[290px\] { width: 290px; }
-    [data-inflow-lab-app] .sm\:px-6 { padding-left: 24px; padding-right: 24px; }
-    [data-inflow-lab-app] .sm\:p-4 { padding: 16px; }
-    [data-inflow-lab-app] .sm\:p-6 { padding: 24px; }
-    [data-inflow-lab-app] .sm\:text-3xl { font-size: 30px; line-height: 36px; }
-}
-
-@media (min-width: 768px) {
-    [data-inflow-lab-app] .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .md\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-
 @media (min-width: 1024px) {
-    [data-inflow-lab-app] .lg\:items-start { align-items: flex-start; }
-    [data-inflow-lab-app] .lg\:flex-row { flex-direction: row; }
-    [data-inflow-lab-app] .lg\:items-center { align-items: center; }
-    [data-inflow-lab-app] .lg\:justify-between { justify-content: space-between; }
-    [data-inflow-lab-app] .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    [data-inflow-lab-app] .lg\:w-auto { width: auto; }
-    [data-inflow-lab-app] .lg\:min-w-\[480px\] { min-width: 480px; }
     [data-inflow-lab-app] .lg\:grid-cols-\[minmax\(0\,1fr\)_420px\],
-    [data-inflow-lab-app] section:first-of-type > div {
+    [data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:first-of-type > div {
         grid-template-columns: minmax(0, 1fr) 420px;
     }
 }
@@ -310,13 +205,27 @@ body[data-inflow-lab="true"] {
         grid-template-columns: 360px minmax(0, 1fr);
     }
     [data-inflow-lab-app] .xl\:grid-cols-\[minmax\(0\,1fr\)_380px\],
-    [data-inflow-lab-app] section:nth-of-type(2) {
+    [data-inflow-lab-app]:not([data-inflow-lab-mode="dashboard"]) section:nth-of-type(2) {
         grid-template-columns: minmax(0, 1fr) 380px;
     }
 }
 
 
 @layer base {
+
+    /* Tailwind v4 defaults an unspecified border-color to `currentColor`, where
+       v3's preflight defaulted it to gray-200. The inflow-lab markup was written
+       against the v3 behaviour: it writes bare `border` / `border-t` / `border-l`
+       and expects a hairline, not a rule in the near-black body text colour. The
+       old shim covered this for `border`, `border-t` and `border-b` only, so the
+       sides it missed (`border-l`, `border-2`, `border-l-[3px]`, `border-t-2`,
+       `lg:border-l`) were already painting dark. This restores the v3 default for
+       the whole tab, which also settles those. It sits in `base` so any explicit
+       `border-*` utility still wins — utilities are a later layer. */
+    [data-inflow-lab-app],
+    [data-inflow-lab-app] * {
+        border-color: #e2e8f0;
+    }
 
     /*
    * RegEngine Theme System
@@ -679,6 +588,13 @@ body.barcode-scanner-active .barcode-scanner-ui {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+        /* Zeroing only the duration leaves staggered reveals (an element per
+           step, each with a longer `animation-delay`) invisible for the whole
+           delay before popping in — `fill-mode: backwards` holds the hidden
+           first frame. The delay has to go too, or "reduced motion" reads as
+           "content missing". */
+        animation-delay: 0ms !important;
+        transition-delay: 0ms !important;
     }
 
 }
@@ -822,6 +738,19 @@ html.a11y-focus-highlight *:focus-visible {
     outline: 3px solid var(--re-brand) !important;
     outline-offset: 3px !important;
     box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* `--re-brand` is defined only on `:root, .light` (#101828 — the light-mode
+   ink). No `.dark` block redefines it, so in dark mode this outline
+   resolves to near-black against `--re-surface-base` (#0b1220): about
+   1.05:1, i.e. the enhanced focus indicator is invisible for precisely the
+   users who switched it on. Fixed here rather than by giving `--re-brand` a
+   dark value, because that token is consumed as both foreground (552 call
+   sites) and background (285), so flipping it would invert filled controls
+   across the app. */
+html.a11y-focus-highlight.dark *:focus,
+html.a11y-focus-highlight.dark *:focus-visible {
+    outline-color: var(--re-text-primary) !important;
 }
 
 /* ─── Large Cursor ─── */
@@ -1246,9 +1175,22 @@ html.a11y-cursor-large input[type="submit"] {
 }
 
 .re-app-surface :is(h1, h2, h3) {
-    color: var(--re-text-primary);
     font-family: var(--re-font-display);
     letter-spacing: 0;
+}
+
+/* The colour defaults below are UNLAYERED, so they outrank every Tailwind
+   utility (which lives in `@layer utilities`) no matter how specific the
+   utility is. Left unguarded they repaint text that a page coloured on
+   purpose: a `text-white` heading on a dark hero came out as
+   `--re-text-primary` — on /supplier-compliance that is rgb(16,24,40),
+   the exact first stop of the section's own background gradient, i.e.
+   invisible. Exclude the utilities pages use deliberately on dark
+   sections: white/near-white copy (`text-white`, `text-white/90`) and
+   transparent text paired with `bg-clip-text` gradients. Typography
+   (font, tracking) still applies to every heading. */
+.re-app-surface :is(h1, h2, h3):not([class*="text-white"]):not([class*="text-transparent"]) {
+    color: var(--re-text-primary);
 }
 
 .re-app-surface h1 {
@@ -1256,8 +1198,11 @@ html.a11y-cursor-large input[type="submit"] {
 }
 
 .re-app-surface :is(p, li, dd, dt, label) {
-    color: inherit;
     letter-spacing: 0;
+}
+
+.re-app-surface :is(p, li, dd, dt, label):not([class*="text-white"]):not([class*="text-transparent"]) {
+    color: inherit;
 }
 
 .re-app-surface :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-slate-700, .text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600) {
@@ -1529,7 +1474,11 @@ body,
 }
 
 .re-panel,
-.re-app-surface :is(.re-panel, .bg-card, [class*="bg-card"], [class*="bg-white"], [class*="bg-slate-50"], [class*="bg-gray-50"], [class*="bg-zinc-50"]) {
+/* Substring matches need guards: "bg-white" must not catch translucent
+   overlays like bg-white/10 (glass over dark heroes), and "bg-slate-50"
+   is a substring of bg-slate-500 — solidifying those to an elevated white
+   panel makes white-on-dark text unreadable. */
+.re-app-surface :is(.re-panel, .bg-card, [class*="bg-card"], [class*="bg-white"]:not([class*="bg-white/"]), [class*="bg-slate-50"]:not([class*="bg-slate-500"]), [class*="bg-gray-50"]:not([class*="bg-gray-500"]), [class*="bg-zinc-50"]:not([class*="bg-zinc-500"])) {
     border-color: var(--re-surface-border) !important;
     border-radius: var(--re-radius-lg) !important;
     background-color: var(--re-surface-elevated) !important;
@@ -1786,4 +1735,105 @@ body,
         max-height: min(70vh, 34rem) !important;
         transform: none !important;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Developer Portal — committed dark developer identity
+   ═══════════════════════════════════════════════════════════ */
+
+/* The portal keeps its own dark, terminal-adjacent chrome regardless of the
+   app's light/dark preference — the visual signal that you've left the
+   compliance console and entered the API surface. Every token the portal
+   pages consume is redefined here, on the shell wrapper, so the values win
+   over both `:root` and `.dark` by DOM proximity and nothing leaks out.
+
+   Forced high contrast is a user's accessibility choice and outranks the
+   committed look, so the whole block is gated on :not(.a11y-high-contrast):
+   in that mode none of these tokens apply and the portal inherits the
+   user's forced scheme wholesale. Gating beats a token-by-token `inherit`
+   escape hatch because it cannot drift when tokens are added here. */
+html:not(.a11y-high-contrast) .re-devportal {
+    color-scheme: dark;
+
+    /* shadcn primitives (Card, Button, Input, Badge inside the portal) */
+    --background: 214 40% 6%;
+    --foreground: 210 40% 96%;
+    --card: 218 41% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 218 41% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 166 91% 5%;
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 214 21% 68%;
+    --accent: 160 84% 39%;
+    --accent-foreground: 166 91% 5%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 34% 19%;
+    --input: 217 34% 23%;
+    --ring: 160 84% 39%;
+
+    /* Brand: the API accent. Bright enough to read as text on the dark base
+       (7.1:1) and dark text on a brand fill clears 8:1 — unlike the app's
+       ink-colored `--re-brand`, which vanishes on dark surfaces. */
+    --re-brand: #10b981;
+    --re-brand-dark: #059669;
+    --re-brand-light: #34d399;
+    --re-brand-muted: rgba(16, 185, 129, 0.12);
+
+    --re-signal-red: #f87171;
+    --re-signal-yellow: #fbbf24;
+    --re-signal-green: #34d399;
+    --re-signal-blue: #60a5fa;
+
+    --re-surface-base: #090e15;
+    --re-surface-card: #101826;
+    --re-surface-border: #1e2b40;
+    --re-surface-elevated: #0d1420;
+    --re-surface-overlay: #090e15f2;
+    --re-sticky-bg: #090e15f2;
+    /* Inset wells (inputs, revealed keys) — darker than the page base so form
+       fields read as fields rather than holes in the card they sit on. */
+    --re-surface-inset: #05080d;
+    /* Pillar token consumed by the usage page; :root's #475569 is invisible here. */
+    --re-linkage: #93a4b8;
+
+    --re-text-primary: #f1f5f9;
+    --re-text-secondary: #dbe4ee;
+    --re-text-tertiary: #b9c5d4;
+    --re-text-muted: #93a4b8;
+    /* #7d8fa6 clears WCAG AA (4.5:1) on all three portal surfaces — a darker
+       value fails on --re-surface-elevated/-card even though it passes on base. */
+    --re-text-disabled: #7d8fa6;
+
+    --re-border-default: #24344d;
+    --re-border-subtle: #16202f;
+    --re-border-strong: #35496a;
+
+    --re-success: #34d399;
+    --re-success-muted: rgba(52, 211, 153, 0.14);
+    --re-success-bg: rgba(52, 211, 153, 0.07);
+    --re-success-border: rgba(52, 211, 153, 0.25);
+    --re-warning: #fbbf24;
+    --re-warning-muted: rgba(251, 191, 36, 0.14);
+    --re-warning-bg: rgba(251, 191, 36, 0.07);
+    --re-warning-border: rgba(251, 191, 36, 0.3);
+    --re-danger: #f87171;
+    --re-danger-muted: rgba(248, 113, 113, 0.14);
+    --re-danger-bg: rgba(248, 113, 113, 0.08);
+    --re-danger-border: rgba(248, 113, 113, 0.3);
+    --re-info: #60a5fa;
+    --re-info-muted: rgba(96, 165, 250, 0.14);
+    --re-info-bg: rgba(96, 165, 250, 0.08);
+    --re-info-border: rgba(96, 165, 250, 0.3);
+
+    color: var(--re-text-primary);
+    /* Fine dot grid — deliberately different from the app shell's 48px line
+       grid so the two surfaces never read as the same place. */
+    background:
+        radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1.5px) 0 0 / 26px 26px,
+        var(--re-surface-base);
 }

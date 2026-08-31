@@ -415,8 +415,28 @@ def _parse_csv_to_events(
             col_map.setdefault(alias.lower(), canonical)
 
     reader = csv.DictReader(io.StringIO(csv_text))
+
+    # #2819: distinguish the two failure shapes that used to look identical.
+    #
+    #   * The cte_type COLUMN is absent from the header entirely (or is an
+    #     alias we don't recognise). The file is structurally unusable —
+    #     there is no per-row information to preserve, every row is equally
+    #     unevaluable, and the caller needs to be told to add the column.
+    #     ``sandbox/router.py`` turns the empty result into a 400 naming the
+    #     missing column, which is the right answer; we keep that contract.
+    #
+    #   * The column EXISTS but individual cells are blank. This is the
+    #     #2819 data-integrity bug: those rows used to vanish silently, so a
+    #     10-row upload was scored as 7 rows and readiness came back
+    #     "100% compliant" over a reduced record set. Those rows are now
+    #     counted and flagged.
+    _header_maps_cte_type = any(
+        col_map.get((col or "").strip().lower().replace(" ", "_")) == "cte_type" for col in (reader.fieldnames or [])
+    )
+
     events = []
     normalizations: List[Dict[str, Any]] = []
+    row_errors: List[Dict[str, Any]] = []
     header_aliases_logged: set = set()
     row_index = 0
 
@@ -485,6 +505,23 @@ def _parse_csv_to_events(
             event["timestamp"] = datetime.now(timezone.utc).isoformat()
 
         # Normalize CTE type value aliases (e.g., "receipt" → "receiving")
+        #
+        # #2819: ``events.append(event)`` and ``row_index += 1`` used to live
+        # INSIDE this ``if``, so any row whose CTE-type column was blank or
+        # missing vanished from the result with no error and no count. Blank
+        # cells are stripped above (the ``not value.strip()`` guard), so an
+        # empty cell arrives here as a MISSING key, not an empty string —
+        # which meant a 10-row file with 3 blank cte_type cells was reported
+        # as 7 rows, and ``inflow_workbench.build_readiness_summary`` /
+        # ``decide_commit_gate`` then scored "100% compliant" over the
+        # silently reduced record set.
+        #
+        # Every row is now emitted and counted. Rows that carry no cte_type
+        # are additionally recorded as an explicit per-row parse error so the
+        # gap is visible rather than inferred, and — because the event is now
+        # present — ``_validate_kdes`` raises its own
+        # "Invalid CTE type ''" error for the row downstream, which flows
+        # into total_kde_errors / blocking_reasons / the readiness score.
         if "cte_type" in event:
             raw_cte = event["cte_type"]
             cte_lower = raw_cte.strip().lower().replace(" ", "_").replace("-", "_")
@@ -501,12 +538,43 @@ def _parse_csv_to_events(
                     }
                 )
             event["cte_type"] = canonical_cte
-            events.append(event)
-            row_index += 1
+        else:
+            row_errors.append(
+                {
+                    "field": "cte_type",
+                    "original": None,
+                    "normalized": None,
+                    "action_type": "missing_required_field",
+                    "reasoning": (
+                        "Row has no CTE type — the column is absent or the cell is blank. "
+                        "FSMA 204 rule evaluation (21 CFR 1.1310) is CTE-specific, so this "
+                        "row cannot be evaluated. Supply one of: "
+                        f"{', '.join(sorted(set(_CTE_TYPE_ALIASES.values())))}."
+                    ),
+                    "event_index": row_index,
+                }
+            )
+
+        events.append(event)
+        row_index += 1
+
+    # #2819: no CTE-type column at all → structurally unusable file. Return
+    # empty so the caller surfaces a single actionable "add a cte_type
+    # column" error instead of N identical per-row errors. Rows are only
+    # dropped here when EVERY row is equally unevaluable, so a readiness
+    # score can never be computed over a partially-reduced record set.
+    if not _header_maps_cte_type:
+        return []
 
     # Attach normalizations to be retrieved by caller
     if track_normalizations and events:
         events[0]["__normalizations__"] = normalizations
+
+    # #2819: surface per-row parse errors on the same side-channel used for
+    # normalizations. Always attached (never gated on track_normalizations)
+    # so a caller cannot lose the signal by opting out of tracking.
+    if row_errors and events:
+        events[0]["__row_errors__"] = row_errors
 
     return events
 

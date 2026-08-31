@@ -28,6 +28,12 @@ export const metadata: Metadata = {
   title: "Integrations - Supplier Data Intake | RegEngine",
   description:
     "RegEngine accepts supplier data via CSV, API, webhook, EPCIS, and SFTP, with custom-scoped connectors for ERP, food-safety, and retailer systems.",
+  openGraph: {
+    title: 'Integrations — Supplier Data Intake | RegEngine',
+    description: 'CSV, API, webhook, EPCIS, and SFTP intake, plus custom-scoped connectors for ERP, food-safety, and retailer systems.',
+    url: 'https://regengine.co/integrations',
+    type: 'website',
+  },
 };
 
 const CATEGORY_ORDER: CapabilityCategory[] = [

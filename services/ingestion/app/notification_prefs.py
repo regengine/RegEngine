@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
@@ -253,7 +253,10 @@ async def toggle_channel(
 
             return {"channel": channel, "enabled": enabled}
 
-    return {"error": f"Channel '{channel}' not found"}
+    # #2865: previously returned HTTP 200 with a bare top-level ``error``
+    # string — neither the platform envelope nor FastAPI's ``detail`` —
+    # so no client error handler caught it.
+    raise HTTPException(status_code=404, detail=f"Channel '{channel}' not found")
 
 
 @router.put(
@@ -289,4 +292,6 @@ async def toggle_alert_rule(
 
             return {"rule_id": rule_id, "enabled": enabled}
 
-    return {"error": f"Rule '{rule_id}' not found"}
+    # #2865: see toggle_channel — HTTP 200 with an error body meant a
+    # preference change was reported as persisted when it was not.
+    raise HTTPException(status_code=404, detail=f"Rule '{rule_id}' not found")

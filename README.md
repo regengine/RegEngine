@@ -183,6 +183,17 @@ export REDIS_URL="redis://localhost:6379/0"
 ./scripts/run-migrations.sh
 ```
 
+Mint a local test API key against this stack (seeds the test tenant and its
+`trialing` billing status too, so subscription-gated routes work):
+
+```bash
+./venv/bin/python scripts/create_test_api_key.py
+```
+
+The raw key is printed once — pass it in the `X-RegEngine-API-Key` header.
+In development the backend validates DB-backed keys only when the server
+process runs with `ENABLE_DB_API_KEYS=true`.
+
 To exercise the full customer experience against this stack — provisioning a
 tenant and API key, activating billing, ingesting from a simulated customer
 system, and verifying evidence — run the customer-journey harness in the
@@ -345,7 +356,9 @@ These are current repo facts, not speculation:
 
 ## License
 
-RegEngine is proprietary, source-visible software — all rights reserved by RegEngine LLC ([LICENSE](LICENSE)). The repository is public for transparency and audit (see the public proof surface above), not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+RegEngine is proprietary, source-visible software — all rights reserved by RegEngine LLC ([LICENSE](LICENSE)). **This repository is private.** Transparency and audit are served by the public proof surface above, which requires no source access; where source is shared it is shared under licence, not as an open-source project: viewing the source is welcome, but no rights to use, modify, or redistribute are granted. External pull requests are not accepted ([CONTRIBUTING.md](CONTRIBUTING.md)). Licensing inquiries: legal@regengine.co.
+
+> **Before changing this repository's visibility**, work through [docs/security/PRE_PUBLIC_CHECKLIST.md](docs/security/PRE_PUBLIC_CHECKLIST.md). Confidential business material is currently tracked in-tree, and `git rm` removes it from `HEAD` only — every prior revision stays readable.
 
 Permissive exceptions — the public verifier tools are **Apache 2.0** (declared in [LICENSE](LICENSE)) so anyone can use, copy, and embed them: the `/proof` Merkle bundle verifier ([frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py)) and the `regengine-verify` per-record CLI ([regengine/verify_records.py](regengine/verify_records.py)). [Inflow Lab](https://github.com/regengine/inflow-lab), the integration simulator, is Apache 2.0 in its own repository for the same reason.
 
