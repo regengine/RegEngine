@@ -6,6 +6,7 @@ import type {
   APIKeyResponse,
   IngestURLRequest,
   IngestURLResponse,
+  IngestCSVResponse,
   ComplianceChecklist,
   Industry,
   TenantResponse,
@@ -420,7 +421,7 @@ class APIClient {
   }
 
 
-  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
+  async ingestFile(apiKey: string | null | undefined, file: File, sourceSystem: string = 'csv_upload', cteType?: string): Promise<IngestCSVResponse> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', sourceSystem);
@@ -429,15 +430,62 @@ class APIClient {
       formData.append('cte_type', cteType);
     }
 
-    const response = await this.ingestionClient.post<IngestURLResponse>(
-      '/api/v1/ingest/csv',
-      formData,
-      {
-        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
-        timeout: 300000 // Longer timeout for large files (5 minutes)
+    try {
+      const response = await this.ingestionClient.post<IngestCSVResponse>(
+        '/api/v1/ingest/csv',
+        formData,
+        {
+          headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+          timeout: 300000 // Longer timeout for large files (5 minutes)
+        }
+      );
+      const result = response.data;
+      const countsAreValid = result
+        && [result.total, result.accepted, result.rejected].every(
+          value => Number.isInteger(value) && value >= 0,
+        )
+        && result.total > 0
+        && result.accepted + result.rejected === result.total;
+      const eventsAreValid = Array.isArray(result?.events)
+        && result.events.length === result.total
+        && result.events.every(event => event
+          && typeof event.traceability_lot_code === 'string'
+          && typeof event.cte_type === 'string'
+          && (event.status === 'accepted' || event.status === 'rejected')
+          && Array.isArray(event.errors)
+          && event.errors.every(error => typeof error === 'string')
+          && [event.event_id, event.sha256_hash, event.chain_hash].every(
+            value => value === undefined || value === null || typeof value === 'string',
+          ))
+        && result.events.filter(event => event.status === 'accepted').length === result.accepted
+        && result.events.filter(event => event.status === 'rejected').length === result.rejected;
+      const warningsAreValid = result?.kde_warnings === undefined
+        || (Array.isArray(result.kde_warnings)
+          && result.kde_warnings.every(warning => typeof warning === 'string'));
+      const warningCountIsValid = result?.kde_warning_count === undefined
+        || (Number.isInteger(result.kde_warning_count)
+          && result.kde_warning_count >= 0
+          && result.kde_warning_count === (result.kde_warnings?.length ?? 0));
+      if (!countsAreValid || !eventsAreValid
+        || typeof result.ingestion_timestamp !== 'string' || !result.ingestion_timestamp.trim()
+        || !warningsAreValid || !warningCountIsValid) {
+        throw new Error('Unexpected CSV ingestion response');
       }
-    );
-    return response.data;
+      return result;
+    } catch (error) {
+      // CSV parsing uses a detail object; request validation uses a detail array.
+      // Keep the original HTTP response for callers while making its message safe to render.
+      if (error instanceof Error) {
+        const detail = asRecord(asRecord(asRecord(error).response).data).detail;
+        const detailRecord = asRecord(detail);
+        const messages = typeof detail === 'string' ? [detail]
+          : Array.isArray(detail) ? detail.map(item => asRecord(item).msg)
+          : [detailRecord.message, ...(Array.isArray(detailRecord.errors) ? detailRecord.errors : [])];
+        const message = messages.filter((value): value is string => typeof value === 'string').join(': ');
+        if (message) error.message = message;
+      }
+      throw error;
+    }
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {

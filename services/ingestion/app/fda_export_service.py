@@ -18,6 +18,7 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from shared.fda_export import safe_filename_token as _shared_safe_filename_token
+from shared.merkle_tree import MerkleTree
 
 from .shared.csv_safety import sanitize_cell
 from .webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
@@ -719,17 +720,36 @@ def _build_fda_package(
         + pii_note
         + "\n"
         "Verification:\n"
-        "- Compare manifest file hashes with local SHA-256 calculations.\n"
-        "- Validate chain_verification.verification_status == VERIFIED or PARTIAL.\n"
+        "- Recompute each manifest file hash and the Merkle root to confirm "
+        "the package bytes are internally consistent.\n"
+        "- This integrity check does not authenticate the package issuer or "
+        "establish source-data accuracy.\n"
+        "- Read verification_status in chain_verification_*.json.\n"
+        "- VERIFIED means the persisted chain check passed and row hashes are present.\n"
+        "- PARTIAL means the persisted chain check passed but one or more row hashes are missing.\n"
+        "- UNVERIFIED means the chain check failed; do not treat this package as verified.\n"
     ).encode("utf-8")
 
-    file_hashes = {
-        csv_name: hashlib.sha256(csv_bytes).hexdigest(),
-        chain_name: hashlib.sha256(chain_bytes).hexdigest(),
-        readme_name: hashlib.sha256(readme_bytes).hexdigest(),
-    }
+    manifest_file_payloads = [
+        (csv_name, csv_bytes),
+        (chain_name, chain_bytes),
+        (readme_name, readme_bytes),
+    ]
     if validation_bytes:
-        file_hashes[validation_name] = hashlib.sha256(validation_bytes).hexdigest()
+        manifest_file_payloads.append((validation_name, validation_bytes))
+
+    manifest_files = [
+        {
+            # ``name`` is retained for existing export-package consumers;
+            # ``path`` and ``size`` implement the public verifier contract.
+            "name": name,
+            "path": name,
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+        for name, content in manifest_file_payloads
+    ]
+    merkle_leaves = [entry["sha256"] for entry in manifest_files]
 
     event_types: dict[str, int] = {}
     tlc_counts: dict[str, int] = {}
@@ -783,7 +803,15 @@ def _build_fda_package(
             "chain_valid": chain_payload.get("chain_verification", {}).get("valid"),
             "chain_length": chain_payload.get("chain_verification", {}).get("chain_length"),
         },
-        "files": [{"name": name, "sha256": digest} for name, digest in file_hashes.items()],
+        "files": manifest_files,
+        "merkle": {
+            "algorithm": "sha256",
+            "leaf_prefix": "leaf|",
+            "node_separator": "|",
+            "padding": "duplicate-last",
+            "leaves": merkle_leaves,
+            "root": MerkleTree(merkle_leaves).root,
+        },
     }
     # Do not include a manifest self-hash entry: self-referential hashes cannot be
     # recomputed from final bytes without special canonicalization rules.

@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import type { IngestCSVResponse } from '@/types/api';
 import { useIngestURL, useIngestFile } from '@/hooks/use-api';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import {
@@ -73,6 +74,8 @@ export default function IngestPage() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('url');
   const [file, setFile] = useState<File | null>(null);
+  const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
@@ -81,6 +84,8 @@ export default function IngestPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      setCsvResult(null);
+      setCsvError(null);
     }
   };
 
@@ -128,6 +133,8 @@ export default function IngestPage() {
     setJobId(null);
     setJobStatus('queued');
     setStatusError(null);
+    setCsvResult(null);
+    setCsvError(null);
 
     // Demonstration Override for the Sales Demo flow
     if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
@@ -141,15 +148,16 @@ export default function IngestPage() {
     }
 
     try {
-      let result;
-      if (activeTab === 'url') {
-        result = await ingestMutation.mutateAsync({ apiKey, url });
-      } else {
+      if (activeTab === 'file') {
         if (!file) return;
-        result = await ingestFileMutation.mutateAsync({ apiKey, file });
+        const result = await ingestFileMutation.mutateAsync({ apiKey, file });
+        setCsvResult(result);
+        if (result.accepted > 0) notifyDashboardRefresh();
+        return;
       }
 
-      const returnedJobId = (result as any)?.job_id || (result as any)?.doc_id || null;
+      const result = await ingestMutation.mutateAsync({ apiKey, url });
+      const returnedJobId = result.job_id || result.doc_id || null;
       if (returnedJobId) {
         setJobId(returnedJobId);
         setJobStatus('queued');
@@ -157,7 +165,11 @@ export default function IngestPage() {
         notifyDashboardRefresh();
       }
     } catch (error) {
-      console.error('Ingestion failed:', error);
+      if (activeTab === 'file') {
+        setCsvError(error instanceof Error ? error.message : 'CSV upload failed');
+      } else {
+        console.error('Ingestion failed:', error);
+      }
     }
   };
 
@@ -216,7 +228,7 @@ export default function IngestPage() {
                     Normal import
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Use this page for customer documents, CSV, XML, spreadsheets, and file uploads that need parsing.
+                    Use URL ingestion for public documents, or File Upload for CSV traceability events.
                   </p>
                 </div>
                 {experimentalFeaturesEnabled() && (
@@ -495,8 +507,8 @@ export default function IngestPage() {
                       <div>
                         <label className="text-sm font-medium mb-2 block">
                           <span className="inline-flex items-center gap-1">
-                            <span>Select Document</span>
-                            <HelpTooltip content="Upload PDF, DOCX, HTML, JSON, or XML file." />
+                            <span>Select CSV</span>
+                            <HelpTooltip content="Upload traceability events as CSV with a cte_type or event_type column." />
                           </span>
                         </label>
                         <div className="border-2 border-dashed rounded-lg p-8 text-center hover:bg-muted/50 transition-colors">
@@ -506,7 +518,7 @@ export default function IngestPage() {
                             disabled={isPending}
                             className="hidden"
                             id="file-upload"
-                            accept=".pdf,.html,.json,.xml,.docx,.txt"
+                            accept=".csv,text/csv"
                           />
                           <label htmlFor="file-upload" className="cursor-pointer block">
                             <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -514,7 +526,7 @@ export default function IngestPage() {
                               {file ? file.name : 'Click to select or drag file here'}
                             </div>
                             <div className="text-xs text-muted-foreground mt-2">
-                              Max size: 20MB
+                              CSV files up to 5MB
                             </div>
                           </label>
                         </div>
@@ -538,6 +550,20 @@ export default function IngestPage() {
                   </Button>
                 </form>
 
+                {activeTab === 'file' && csvResult && (
+                  <div role="status" className="mt-6 p-4 rounded-lg border bg-muted/40">
+                    <h3 className="font-semibold">
+                      {csvResult.accepted === 0 ? 'No rows accepted' : csvResult.rejected > 0 ? 'CSV partially accepted' : 'CSV processed'}
+                    </h3>
+                    <p className="text-sm mt-1">{csvResult.accepted} of {csvResult.total} rows accepted; {csvResult.rejected} rejected.</p>
+                    {csvResult.events.filter(event => event.status === 'rejected').flatMap(event => event.errors).map((error, index) => (
+                      <p key={index} className="text-sm text-re-danger mt-2">{error}</p>
+                    ))}
+                    {csvResult.kde_warnings?.map((warning, index) => (
+                      <p key={index} className="text-sm text-re-warning mt-2">{warning}</p>
+                    ))}
+                  </div>
+                )}
                 {jobId && (
                   <div className="mt-6 p-4 rounded-lg border bg-muted/40">
                     {jobId === 'demo-job-123' && (
@@ -600,7 +626,7 @@ export default function IngestPage() {
                 )}
 
                 {/* Error Message */}
-                {(ingestMutation.isError || ingestFileMutation.isError) && (
+                {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError)) && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -613,15 +639,24 @@ export default function IngestPage() {
                           Ingestion Failed
                         </h4>
                         <p className="text-sm text-re-danger dark:text-re-danger mt-1">
-                          {(ingestMutation.error as any)?.message || (ingestFileMutation.error as any)?.message || 'An error occurred during ingestion'}
+                          {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
                         </p>
                         <p className="text-sm text-re-danger dark:text-re-danger mt-2">
                           Common issues:
                         </p>
                         <ul className="text-sm text-re-danger dark:text-re-danger list-disc list-inside">
                           <li>Invalid or expired API key</li>
-                          <li>URL is not publicly accessible</li>
-                          <li>Document format not supported (see the Supported Document Formats list below)</li>
+                          {activeTab === 'file' ? (
+                            <>
+                              <li>CSV must include a cte_type or event_type column</li>
+                              <li>Upload a CSV file up to 5MB</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>URL is not publicly accessible</li>
+                              <li>Document format not supported (see the Supported Document Formats list below)</li>
+                            </>
+                          )}
                         </ul>
                       </div>
                     </div>
