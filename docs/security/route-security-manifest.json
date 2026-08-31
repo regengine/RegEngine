@@ -3956,13 +3956,13 @@
       "probe_path": "/api/v1/labels/health"
     },
     {
-      "operation": "graph:GET:/api/v1/lineage/lineage/{tlc}/history",
+      "operation": "graph:GET:/api/v1/lineage/{tlc}/history",
       "owner": "graph",
       "method": "GET",
-      "path": "/api/v1/lineage/lineage/{tlc}/history",
+      "path": "/api/v1/lineage/{tlc}/history",
       "inventory_source": "development-route-table",
       "probe_method": "GET",
-      "probe_path": "/api/v1/lineage/lineage/disabled-probe/history"
+      "probe_path": "/api/v1/lineage/disabled-probe/history"
     },
     {
       "operation": "graph:GET:/api/v1/metrics",
