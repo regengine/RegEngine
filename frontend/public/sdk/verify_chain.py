@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """RegEngine /proof bundle verifier.
 
-Recomputes every per-file SHA-256 and the Merkle root inside an audit
-bundle and compares them against the values RegEngine signed into
-manifest.json. Exits non-zero on any mismatch.
+Recomputes each manifest-declared file's SHA-256 and the Merkle root inside
+an audit bundle, then compares them with the values in that same manifest.
+Exits non-zero on any mismatch. These checks establish internal consistency;
+they do not authenticate the issuer or establish that source data is accurate.
+No digital signature or independently trusted hash is verified.
 
 The Merkle algorithm matches services/shared/merkle_tree.py in production:
     leaf  = sha256("leaf|" + hex_file_sha256)

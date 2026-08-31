@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import runpy
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from app.proof_verify_router import (
     MAX_BUNDLE_BYTES,
     router as proof_verify_router,
 )
+from app.fda_export_service import _build_fda_package
 from shared.merkle_tree import MerkleTree
 from shared.rate_limit import limiter
 
@@ -410,3 +412,87 @@ class TestZipRoundTrip:
         assert data["verified"] is False
         names = {c["name"]: c for c in data["checks"]}
         assert names["file_hashes_match_manifest"]["passed"] is False
+
+    def test_generated_fda_package_round_trips_through_both_public_verifiers(
+        self,
+        client: TestClient,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """The production package builder and both published verifiers share one contract."""
+        csv_content = "Event ID,Traceability Lot Code\nsynthetic-event-1,SYNTHETIC-LOT-1\n"
+        csv_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        completeness = {
+            "required_checks_total": 1,
+            "required_checks_passed": 1,
+            "required_checks_missing": 0,
+            "required_kde_coverage_ratio": 1.0,
+            "events_with_missing_required_fields": 0,
+            "missing_required_by_field": {},
+            "missing_required_events": [],
+        }
+        package_bytes, package_meta = _build_fda_package(
+            events=[
+                {
+                    "id": "synthetic-event-1",
+                    "event_type": "RECEIVING",
+                    "traceability_lot_code": "SYNTHETIC-LOT-1",
+                }
+            ],
+            csv_content=csv_content,
+            csv_hash=csv_hash,
+            chain_payload={
+                "version": "1.0",
+                "verification_status": "VERIFIED",
+                "chain_verification": {
+                    "valid": True,
+                    "chain_length": 1,
+                    "errors": [],
+                    "checked_at": "2026-08-31T00:00:00+00:00",
+                },
+            },
+            completeness_summary=completeness,
+            tenant_id="synthetic-tenant",
+            tlc="SYNTHETIC-LOT-1",
+            query_start_date=None,
+            query_end_date=None,
+        )
+
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package.zip", package_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is True, response.json()
+
+        sdk_verify_bundle = runpy.run_path(
+            str(REPO_ROOT / "frontend/public/sdk/verify_chain.py")
+        )["verify_bundle"]
+        package_path = tmp_path / "fda-package.zip"
+        package_path.write_bytes(package_bytes)
+        assert sdk_verify_bundle(str(package_path)) == 0
+
+        csv_name = package_meta["csv_name"]
+        tampered = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(package_bytes), "r") as source:
+            with zipfile.ZipFile(tampered, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename == csv_name:
+                        data += b"TAMPERED"
+                    target.writestr(member, data)
+
+        tampered_bytes = tampered.getvalue()
+        response = client.post(
+            "/api/v1/proof/verify",
+            files={"bundle": ("fda-package-tampered.zip", tampered_bytes, "application/zip")},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["verified"] is False
+        checks = {check["name"]: check for check in response.json()["checks"]}
+        assert checks["file_hashes_match_manifest"]["passed"] is False
+
+        tampered_path = tmp_path / "fda-package-tampered.zip"
+        tampered_path.write_bytes(tampered_bytes)
+        assert sdk_verify_bundle(str(tampered_path)) == 1
+        assert "verify: FAILED" in capsys.readouterr().out

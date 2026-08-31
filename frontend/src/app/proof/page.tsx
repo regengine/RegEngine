@@ -58,7 +58,7 @@ const ARTIFACTS: Artifact[] = [
         formatLabel: "ZIP · SHA-256 + Merkle root",
         summary:
             "The CSV and EPCIS payload plus a manifest.json with per-file SHA-256 hashes and a Merkle root computed by production code.",
-        why: "Auditors and insurers increasingly want evidence the dashboard cannot lie. The bundle lets a third party verify the export matches what RegEngine signed — without trusting our database, our UI, or our word.",
+        why: "Compare each declared file's SHA-256 hash and the bundle's Merkle root with its included manifest. These checks establish internal consistency; they do not authenticate the issuer or establish that the source data is accurate.",
     },
 ];
 
@@ -162,10 +162,10 @@ export default function ProofPage() {
                     <div>
                         <p className="re-label mb-4">Run it yourself</p>
                         <h2 className="text-3xl font-semibold leading-tight">
-                            The verifier is sixty lines of Python.
+                            Inspect the Python verifier.
                         </h2>
                         <p className="mt-5 text-sm leading-6 text-[var(--re-text-muted)]">
-                            <code className="font-mono text-[12px]">verify_chain.py</code> reads the manifest, recomputes every SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[12px]">services/shared/merkle_tree.py</code>. If anything drifts, the script exits non-zero.
+                            <code className="font-mono text-[12px]">verify_chain.py</code> reads the manifest, recomputes each declared file&apos;s SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[12px]">services/shared/merkle_tree.py</code>. If those values disagree with the included manifest, the script exits non-zero.
                         </p>
                         <Link
                             href="/sdk/verify_chain.py"
@@ -199,7 +199,7 @@ export default function ProofPage() {
                             A tampered bundle is published next to the real one.
                         </h2>
                         <p className="mt-5 text-sm leading-6 text-[var(--re-text-muted)]">
-                            <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> is byte-for-byte identical to the real bundle except a single byte in the CSV has been flipped. The manifest&apos;s declared hash was left untouched. Run the verifier against it and watch it exit non-zero. If the script ever passed a tampered bundle, the entire proof on this page would be worthless.
+                            <code className="font-mono text-[12px]">audit-bundle-tampered.zip</code> contains a changed CSV while the manifest&apos;s declared hash remains unchanged. Run the verifier against it and watch it exit non-zero. This demonstrates detection of changed file bytes against an unchanged manifest; replacing both the file and manifest is outside this check.
                         </p>
                         <Link
                             href="/proof/audit-bundle-tampered.zip"
